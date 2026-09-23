@@ -936,8 +936,6 @@ object CloudRestore {
             spanMm = mm("spanMm"),
             widthMm = mm("widthMm"),
             thicknessMm = mm("thicknessMm"),
-            momentArmMm = mm("momentArmMm"),
-            diameterMm = mm("diameterMm"),
         )
     }
 

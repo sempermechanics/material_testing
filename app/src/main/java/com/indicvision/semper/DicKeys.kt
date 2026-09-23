@@ -37,7 +37,7 @@ object DicKeys {
 
     /**
      * [com.indicvision.semper.data.SpecimenGeometry.toArray] — the bending /
-     * torsion dimensions; all zero on other tests.
+     * dimensions; all zero on a tensile test.
      */
     const val SPECIMEN_GEOMETRY = "SPECIMEN_GEOMETRY"
 

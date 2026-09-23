@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Machine load card: step 1 of the wizard, below the deformed frames, for
      tests that take a load per frame (every type today). The dimension rows
-     below the log are shown per test: cross-section for tensile / compression,
-     span / width / thickness for bending, moment arm / diameter for torsion.
+     below the log are shown per test: cross-section for tensile, span /
+     width / thickness for bending.
      Inflated through a ViewStub so the host layout stays under lint's
      TooManyViews cap. -->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -195,7 +195,7 @@
                 android:textSize="14sp" />
         </LinearLayout>
 
-        <!-- Bending: span / width / thickness. Torsion: moment arm / diameter. -->
+        <!-- Bending: span / width / thickness. -->
         <include
             android:id="@+id/rowSpan"
             layout="@layout/row_specimen_dimension"
@@ -214,22 +214,6 @@
 
         <include
             android:id="@+id/rowThickness"
-            layout="@layout/row_specimen_dimension"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:visibility="gone" />
-
-        <include
-            android:id="@+id/rowMomentArm"
-            layout="@layout/row_specimen_dimension"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:visibility="gone" />
-
-        <include
-            android:id="@+id/rowDiameter"
             layout="@layout/row_specimen_dimension"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -41,8 +41,8 @@ data class MachineLoadTable(
  * Matches a parsed load log to the deformed frames. Pure; re-run on the cached
  * [ParsedLoadCsv] whenever the frames change rather than re-reading the file.
  *
- * Loads are never made absolute: a compression log is negative and stays so,
- * which is what puts its stress–strain curve in the third quadrant.
+ * Loads are never made absolute: a log that is negative stays so, which is
+ * what puts its stress–strain curve in the third quadrant.
  */
 object MachineLoadMapper {
 
@@ -141,8 +141,7 @@ object MachineLoadMapper {
         if (nonZero.isEmpty()) return false
         return when (testType) {
             TestType.TENSILE -> nonZero.all { it < 0f }
-            TestType.COMPRESSION -> nonZero.all { it > 0f }
-            TestType.BENDING, TestType.TORSION -> false
+            TestType.BENDING -> false
         }
     }
 }

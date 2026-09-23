@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- One specimen dimension on the load card (span, width, thickness, moment
-     arm, diameter): label, number field, unit. Included once per dimension;
+     thickness): label, number field, unit. Included once per dimension;
      the card shows only the rows the chosen test's stress model needs. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"

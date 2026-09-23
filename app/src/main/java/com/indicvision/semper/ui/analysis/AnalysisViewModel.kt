@@ -151,7 +151,7 @@ class AnalysisViewModel : ViewModel() {
     /** Strain axis for the stress–strain curve: Exx (true) or Eyy. */
     var loadAxisX: Boolean = true
 
-    /** Bending / torsion dimensions typed on the load card; [SpecimenGeometry.NONE] until they are. */
+    /** Bending dimensions typed on the load card; [SpecimenGeometry.NONE] until they are. */
     var geometry: SpecimenGeometry = SpecimenGeometry.NONE
 
     /** How the logged loads will become stress, given what is entered so far. */

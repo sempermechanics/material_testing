@@ -90,60 +90,27 @@ class StressStrainTest {
     }
 
     @Test
-    fun `torsional stress is the surface shear of a solid round bar with gamma as strain`() {
-        // T = P r = 100 · 50 = 5000 N·mm; τ = 16 T / (π d³) = 80000 / (π · 1000) = 25.4648 MPa
-        val model = StressStrain.Model.Torsional(momentArmMm = 50f, diameterMm = 10f)
-
-        assertTrue(model.isComplete)
-        assertEquals(5000f, model.torqueNmm(100f), 1e-3f)
-        assertEquals(25.4648f, model.stressMPa(100f), 1e-3f)
-        // γ = 2 · Exy, in mε.
-        assertEquals(1.5f, model.strainMilli(shearField(exy = 0.00075f))!!, 1e-4f)
-        assertNull(model.strainMilli(shearField(exy = 0.1f, accepted = false)))
-    }
-
-    @Test
     fun `a model with a missing dimension is incomplete and gives NaN, never a stress`() {
         assertFalse(StressStrain.Model.Axial(0f, true).isComplete)
         assertTrue(StressStrain.Model.Axial(0f, true).stressMPa(10f).isNaN())
         assertFalse(StressStrain.Model.Flexural(80f, 0f, 4f, true).isComplete)
         assertTrue(StressStrain.Model.Flexural(80f, 0f, 4f, true).stressMPa(10f).isNaN())
-        assertFalse(StressStrain.Model.Torsional(50f, 0f).isComplete)
-        assertTrue(StressStrain.Model.Torsional(50f, 0f).stressMPa(10f).isNaN())
     }
 
     @Test
     fun `the model follows the stored test type and falls back to axial`() {
-        val geometry = SpecimenGeometry(
-            spanMm = 80f,
-            widthMm = 10f,
-            thicknessMm = 4f,
-            momentArmMm = 50f,
-            diameterMm = 10f,
-        )
+        val geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f)
 
         assertEquals(
             StressStrain.Model.Flexural(80f, 10f, 4f, axisX = false),
             StressStrain.Model.of("bending", 12.5f, loadAxisX = false, geometry),
         )
-        assertEquals(StressStrain.Model.Torsional(50f, 10f), StressStrain.Model.of("torsion", 12.5f, true, geometry))
         assertEquals(StressStrain.Model.Axial(12.5f, true), StressStrain.Model.of("tensile", 12.5f, true, geometry))
-        assertEquals(StressStrain.Model.Axial(12.5f, true), StressStrain.Model.of("compression", 12.5f, true, geometry))
         assertEquals(StressStrain.Model.Axial(12.5f, true), StressStrain.Model.of("", 12.5f, true, geometry))
+        // A session stored as a test this build no longer offers is not mistaken
+        // for another test: it reads as no type, which is axial.
+        assertEquals(StressStrain.Model.Axial(12.5f, true), StressStrain.Model.of("torsion", 12.5f, true, geometry))
         assertEquals("axial", StressStrain.Model.of("", 0f, true, SpecimenGeometry.NONE).wireName)
         assertEquals("flexural", StressStrain.Model.of("bending", 0f, true, geometry).wireName)
-        assertEquals("torsional", StressStrain.Model.of("torsion", 0f, true, geometry).wireName)
-    }
-
-    /** A field of [n] accepted points with uniform Exy (in strain, not mε). */
-    private fun shearField(exy: Float, n: Int = 4, accepted: Boolean = true): FloatArray {
-        val data = FloatArray(n * DicResult.STRIDE)
-        var i = 0
-        repeat(n) {
-            data[i + DicResult.IDX_EXY] = exy
-            data[i + DicResult.IDX_ZNSSD] = if (accepted) 0.05f else -1f
-            i += DicResult.STRIDE
-        }
-        return data
     }
 }

@@ -43,9 +43,9 @@ object SessionUploadMetadata {
     const val SCHEMA_MECHANICAL_TEST = 4
 
     /**
-     * Version that added `test.geometry` (bending span / width / thickness,
-     * torsion moment arm / diameter). Additive like `/4`: absent on other
-     * tests and on every earlier file, and read back as "not entered".
+     * Version that added `test.geometry` (the bending span / width /
+     * thickness). Additive like `/4`: absent on a tensile test and on every
+     * earlier file, and read back as "not entered".
      */
     const val SCHEMA_SPECIMEN_GEOMETRY = 5
 
@@ -155,8 +155,6 @@ object SessionUploadMetadata {
         putIf("spanMm", geometry.spanMm)
         putIf("widthMm", geometry.widthMm)
         putIf("thicknessMm", geometry.thicknessMm)
-        putIf("momentArmMm", geometry.momentArmMm)
-        putIf("diameterMm", geometry.diameterMm)
         return json
     }
 

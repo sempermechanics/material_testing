@@ -254,17 +254,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="setting_load">Machine load</string>
     <string name="setting_stress">Stress</string>
     <string name="setting_stress_flexural">Flexural stress</string>
-    <string name="setting_stress_shear">Shear stress</string>
-    <string name="setting_torque">Torque</string>
     <string name="setting_span">Support span</string>
     <string name="setting_width">Width</string>
     <string name="setting_thickness">Thickness</string>
-    <string name="setting_moment_arm">Moment arm</string>
-    <string name="setting_diameter">Diameter</string>
     <string name="setting_mm2_fmt">%1$s mm²</string>
     <string name="setting_mm_fmt">%1$s mm</string>
     <string name="setting_n_fmt">%1$s N</string>
-    <string name="setting_nmm_fmt">%1$s N·mm</string>
     <string name="setting_mpa_fmt">%1$s MPa</string>
     <string name="setting_subset">Subset size</string>
     <string name="setting_step">Step size</string>
@@ -613,12 +608,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="test_type_title">Which test?</string>
     <string name="test_type_subtitle">Chosen once per analysis; it decides what the wizard asks for.</string>
     <string name="test_type_tensile">Tensile test</string>
-    <string name="test_type_compression">Compression test</string>
     <string name="test_type_bending">Bending test</string>
-    <string name="test_type_torsion">Torsion test</string>
     <string name="test_type_sub_loads">Imports the machine’s load log and plots stress against strain.</string>
     <string name="test_type_sub_flexural">Imports the load log; three-point flexural stress from span, width and thickness.</string>
-    <string name="test_type_sub_torsional">Imports the load log; shear stress of a round bar from moment arm and diameter.</string>
 
     <!-- Machine load import (wizard step 1, every test type) -->
     <string name="load_card_title">Machine load</string>
@@ -647,13 +639,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_span">Support span</string>
     <string name="load_width">Width</string>
     <string name="load_thickness">Thickness</string>
-    <string name="load_moment_arm">Moment arm</string>
-    <string name="load_diameter">Diameter</string>
     <string name="load_axis">Strain axis</string>
     <string name="info_load_title">Machine load</string>
-    <string name="info_load_body">Import the load log the testing machine exported (CSV). One load per deformed frame is ideal; a longer log is matched by time for video frames, or resampled evenly for photos. Loads keep their sign — compression stays negative. Cross-section is the specimen area the load acts on, so stress = load ÷ area. The strain axis is the direction of loading in the image.</string>
+    <string name="info_load_body">Import the load log the testing machine exported (CSV). One load per deformed frame is ideal; a longer log is matched by time for video frames, or resampled evenly for photos. Loads keep their sign, exactly as the machine logged them. Cross-section is the specimen area the load acts on, so stress = load ÷ area. The strain axis is the direction of loading in the image.</string>
     <string name="info_load_body_bending">Import the load log the testing machine exported (CSV). One load per deformed frame is ideal; a longer log is matched by time for video frames, or resampled evenly for photos. Three-point bending: flexural stress = 3 × load × span ÷ (2 × width × thickness²), the outer-fibre stress under the loading nose. Span is the distance between the supports, thickness is in the loading direction. The strain axis is the beam’s length in the image; the camera should see the tension or compression face.</string>
-    <string name="info_load_body_torsion">Import the load log the testing machine exported (CSV). One load per deformed frame is ideal; a longer log is matched by time for video frames, or resampled evenly for photos. Torque = load × moment arm; for a solid round bar, shear stress = 16 × torque ÷ (π × diameter³) at the surface. Strain is the engineering shear strain, 2 × the mean Exy over the region. If the machine logs torque directly in N·m, use a moment arm of 1000 mm.</string>
     <plurals name="load_warn_resampled_fmt">
         <item quantity="one">%1$d row resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>
         <item quantity="other">%1$d rows resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>
@@ -664,7 +653,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_warn_time_aligned">Frames matched to the log by time, assuming the video and the log started together.</string>
     <string name="load_warn_time_ignored">The log’s time column does not increase, so it was ignored.</string>
     <string name="load_warn_sign_tensile">All loads are negative for a tensile test — check the machine’s sign convention.</string>
-    <string name="load_warn_sign_compression">All loads are positive for a compression test — check the machine’s sign convention.</string>
     <string name="load_err_title">Couldn’t read the load log</string>
     <string name="load_err_empty">The file has no load rows.</string>
     <string name="load_err_too_many_rows">The file has more than %1$s rows.</string>
@@ -678,8 +666,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="stress_strain_axis_strain">Strain (mε)</string>
     <string name="stress_strain_axis_stress">Stress (MPa)</string>
     <string name="stress_strain_axis_flexural_stress">Flexural stress (MPa)</string>
-    <string name="stress_strain_axis_shear_stress">Shear stress (MPa)</string>
-    <string name="stress_strain_axis_shear_strain">Shear strain γ (mε)</string>
     <string name="stress_strain_progress_fmt">Reading strain %1$d / %2$d…</string>
     <string name="stress_strain_caption_fmt">Frame %1$d · %2$s N · %3$s MPa · %4$s mε</string>
     <string name="stress_strain_frame_skipped">This frame has no accepted points, so it is not on the curve.</string>

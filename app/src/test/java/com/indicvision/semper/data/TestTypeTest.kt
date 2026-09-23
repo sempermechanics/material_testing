@@ -14,9 +14,8 @@ class TestTypeTest {
     @Test
     fun `wire names are stable and round-trip`() {
         assertEquals("tensile", TestType.TENSILE.wireName)
-        assertEquals("compression", TestType.COMPRESSION.wireName)
         assertEquals("bending", TestType.BENDING.wireName)
-        assertEquals("torsion", TestType.TORSION.wireName)
+        assertEquals(2, TestType.entries.size)
         TestType.entries.forEach { assertEquals(it, TestType.fromWire(it.wireName)) }
     }
 
@@ -31,5 +30,8 @@ class TestTypeTest {
         assertNull(TestType.fromWire(""))
         assertNull(TestType.fromWire("Tensile"))
         assertNull(TestType.fromWire("shear"))
+        // Types this build no longer offers read as "no type", not as another test.
+        assertNull(TestType.fromWire("compression"))
+        assertNull(TestType.fromWire("torsion"))
     }
 }

@@ -43,9 +43,6 @@ class ViewerStressStrainHelper(
                 if (value > 0f) add(row(dimensionLabelRes(dimension), unitRes(dimension), value))
             }
             add(row(R.string.setting_load, R.string.setting_n_fmt, loadN))
-            if (model is StressStrain.Model.Torsional) {
-                add(row(R.string.setting_torque, R.string.setting_nmm_fmt, model.torqueNmm(loadN)))
-            }
             if (!stress.isNaN()) add(row(stressLabelRes(model), R.string.setting_mpa_fmt, stress))
         }
     }
@@ -142,7 +139,7 @@ class ViewerStressStrainHelper(
     private fun fmt(value: Float): String = String.format(Locale.US, "%.3f", value).trimEnd('0').trimEnd('.')
 
     companion object {
-        /** Plot axis titles (strain, stress) worded for the model — shear for torsion. */
+        /** Plot axis titles (strain, stress) worded for the model. */
         fun axisLabels(context: Context, model: StressStrain.Model): Pair<String, String> = when (model) {
             is StressStrain.Model.Axial ->
                 context.getString(R.string.stress_strain_axis_strain) to
@@ -150,15 +147,11 @@ class ViewerStressStrainHelper(
             is StressStrain.Model.Flexural ->
                 context.getString(R.string.stress_strain_axis_strain) to
                     context.getString(R.string.stress_strain_axis_flexural_stress)
-            is StressStrain.Model.Torsional ->
-                context.getString(R.string.stress_strain_axis_shear_strain) to
-                    context.getString(R.string.stress_strain_axis_shear_stress)
         }
 
         fun stressLabelRes(model: StressStrain.Model): Int = when (model) {
             is StressStrain.Model.Axial -> R.string.setting_stress
             is StressStrain.Model.Flexural -> R.string.setting_stress_flexural
-            is StressStrain.Model.Torsional -> R.string.setting_stress_shear
         }
 
         fun dimensionLabelRes(dimension: StressStrain.Dimension): Int = when (dimension) {
@@ -166,8 +159,6 @@ class ViewerStressStrainHelper(
             StressStrain.Dimension.SPAN -> R.string.setting_span
             StressStrain.Dimension.WIDTH -> R.string.setting_width
             StressStrain.Dimension.THICKNESS -> R.string.setting_thickness
-            StressStrain.Dimension.MOMENT_ARM -> R.string.setting_moment_arm
-            StressStrain.Dimension.DIAMETER -> R.string.setting_diameter
         }
 
         private fun unitRes(dimension: StressStrain.Dimension): Int =

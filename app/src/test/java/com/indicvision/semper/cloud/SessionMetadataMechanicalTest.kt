@@ -23,7 +23,7 @@ import java.io.File
  * `metadata.json` is the only place a cloud backup keeps the test type and the
  * machine loads, so these pin both halves: what an upload writes for a typed
  * and an untyped session, and what a restore reads back from `/3`, `/4`
- * and `/5` (which adds the bending / torsion geometry).
+ * and `/5` (which adds the bending geometry).
  */
 @RunWith(RobolectricTestRunner::class)
 // Robolectric supplies org.json; sdk pinned like every other Robolectric test.
@@ -70,18 +70,18 @@ class SessionMetadataMechanicalTest {
     }
 
     @Test
-    fun `torsion geometry round-trips and a schema-4 test object restores as no geometry`() {
-        val geometry = SpecimenGeometry(momentArmMm = 50f, diameterMm = 10f)
-        val record = record(testType = "torsion", loadsN = listOf(0f, 10f, 20f)).copy(geometry = geometry)
+    fun `a half-entered geometry round-trips and a schema-4 test object restores as no geometry`() {
+        val geometry = SpecimenGeometry(spanMm = 50f)
+        val record = record(testType = "bending", loadsN = listOf(0f, 10f, 20f)).copy(geometry = geometry)
         val test = SessionUploadMetadata.testJson(record)!!
-        assertEquals(setOf("momentArmMm", "diameterMm"), test.getJSONObject("geometry").keys().asSequence().toSet())
+        assertEquals(setOf("spanMm"), test.getJSONObject("geometry").keys().asSequence().toSet())
 
         val restored = CloudRestore.recordFrom(JSONObject().put("test", test), target())
         assertEquals(geometry, restored.geometry)
 
         test.remove("geometry")
         val older = CloudRestore.recordFrom(JSONObject().put("test", test), target())
-        assertEquals("torsion", older.testType)
+        assertEquals("bending", older.testType)
         assertEquals(SpecimenGeometry.NONE, older.geometry)
     }
 

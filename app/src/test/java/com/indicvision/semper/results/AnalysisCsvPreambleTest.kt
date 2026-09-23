@@ -192,44 +192,8 @@ class AnalysisCsvPreambleTest {
         assertTrue(text.contains("# stress_model,flexural\n"))
         assertTrue(text.contains("# span_mm,80.0000\n# width_mm,10.0000\n# thickness_mm,4.0000\n"))
         assertTrue(!text.contains("cross_section_mm2"))
-        assertTrue(!text.contains("moment_arm_mm"))
         // 3 · 200 · 80 / (2 · 10 · 16) = 150 MPa
         assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",200.000,150.0000") })
-    }
-
-    @Test
-    fun `a torsion session writes moment arm and diameter and a shear stress per row`() {
-        val out = File.createTempFile("semper_csv_tors", ".csv")
-        out.deleteOnExit()
-        val data = translatedGrid()
-        val frames = listOf(
-            AnalysisCsvWriter.Frame(
-                image = "frame_a.jpg",
-                subset = 41,
-                step = 5,
-                strainWindow = 15,
-                data = { data },
-                loadN = 100f,
-            ),
-        )
-        val metadata = AnalysisCsvWriter.Metadata(
-            referenceName = "ref.jpg",
-            strainMethod = "VSG",
-            imgW = 640,
-            imgH = 480,
-            roiX = 0,
-            roiY = 0,
-            roiW = 640,
-            roiH = 480,
-            testType = "torsion",
-            geometry = SpecimenGeometry(momentArmMm = 50f, diameterMm = 10f),
-        )
-        AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
-        val text = out.readText()
-        assertTrue(text.contains("# stress_model,torsional\n"))
-        assertTrue(text.contains("# moment_arm_mm,50.0000\n# diameter_mm,10.0000\n"))
-        assertTrue(!text.contains("span_mm"))
-        assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",100.000,25.4648") })
     }
 
     /**

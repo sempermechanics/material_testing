@@ -29,9 +29,9 @@ import java.util.Locale
 
 /**
  * The machine-load card on wizard step 1: import / clear the load log, the
- * specimen dimensions the test's stress needs (cross-section, or the
- * bending / torsion rows of [SpecimenGeometryFields]), strain axis, and the
- * chips explaining how the log's rows were matched to the frames. Owns
+ * specimen dimensions the test's stress needs (cross-section, or the bending
+ * rows of [SpecimenGeometryFields]), strain axis, and the chips explaining
+ * how the log's rows were matched to the frames. Owns
  * nothing the ViewModel does not already hold; [refresh] redraws from it.
  * The document picker itself stays on the Activity (Activity Result
  * launchers must be registered there).
@@ -71,11 +71,8 @@ class AnalysisLoadCard(
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
         }
-        // Tensile / compression enter an area; bending and torsion their own
-        // dimensions. Torsion pairs shear stress with Exy, so it has no axis.
-        val axial = viewModel.testType == TestType.TENSILE || viewModel.testType == TestType.COMPRESSION
-        root.findViewById<View>(R.id.rowCrossSection).isVisible = axial
-        root.findViewById<View>(R.id.rowLoadAxis).isVisible = viewModel.testType != TestType.TORSION
+        // Tensile enters an area; bending its own dimensions.
+        root.findViewById<View>(R.id.rowCrossSection).isVisible = viewModel.testType == TestType.TENSILE
         SpecimenGeometryFields(root, viewModel, onChanged)
         warnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
             confirmOpenFaq(activity.getString(R.string.url_faq_load_csv))
@@ -212,19 +209,12 @@ class AnalysisLoadCard(
         LoadMapWarning.RESAMPLED ->
             activity.resources.getQuantityString(R.plurals.load_warn_resampled_fmt, rows, rows, frames)
         LoadMapWarning.TIME_ALIGNED -> activity.getString(R.string.load_warn_time_aligned)
-        LoadMapWarning.SIGN_UNEXPECTED -> activity.getString(
-            if (viewModel.testType == TestType.COMPRESSION) {
-                R.string.load_warn_sign_compression
-            } else {
-                R.string.load_warn_sign_tensile
-            },
-        )
+        LoadMapWarning.SIGN_UNEXPECTED -> activity.getString(R.string.load_warn_sign_tensile)
     }
 
     private fun infoBodyRes(testType: TestType): Int = when (testType) {
-        TestType.TENSILE, TestType.COMPRESSION -> R.string.info_load_body
+        TestType.TENSILE -> R.string.info_load_body
         TestType.BENDING -> R.string.info_load_body_bending
-        TestType.TORSION -> R.string.info_load_body_torsion
     }
 
     private fun mappingRes(mapping: LoadMapping): Int = when (mapping) {

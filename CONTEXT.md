@@ -55,8 +55,7 @@ Home → TestTypeSheet → StaticAnalysisActivity (wizard) → ResultViewerActiv
      → open session → ResultViewerActivity | VsgLatticeActivity
 ```
 
-The test type (`data/TestType`: tensile / compression / bending / torsion) is
-chosen on Home and rides `DicKeys.TEST_TYPE` into the wizard; the run commits
+The test type (`data/TestType`: tensile / bending) is chosen on Home and rides `DicKeys.TEST_TYPE` into the wizard; the run commits
 it, the specimen dimensions and the per-frame machine loads through
 `MechanicalTestInputs` → `SessionRecord` → `metadata.json` schema `/5`.
 
@@ -136,19 +135,19 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-21)
+## Current state (2026-09-23)
 
 **This is `material_testing`, pushed from `semperdic-app` `main` at `bfe00e5` on
 2026-09-21.** Same `applicationId`, Firebase app and backend as the parent; only
 `app_name` ("Material Testing"), `rootProject.name` and the README changed. The
 parent repo owns backend deploys. Scope of this repo: a test-type chooser
-(Tensile / Compression / Bending / Torsion) ahead of the wizard, machine-load CSV
+(Tensile / Bending) ahead of the wizard, machine-load CSV
 import with the specimen dimensions each test's stress needs, and stress–strain
 outputs in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was written
 in the parent repo and still applies. The first four PRs (#1, #5, #3, #4) are
 merged, the fork's branches are swept (only `main` remains on the remote), and
 the repo is public with a `main` ruleset requiring `CI OK` and a pull request.
-Bending and torsion inputs follow in `feat/bending-torsion-inputs`.
+Bending inputs follow in `feat/bending-torsion-inputs`.
 
 **Test type (PR #5, `feat/test-type`; first opened as #2).** `TestTypeSheet`
 sits between the Home **+** and the media picker. The choice is stored inline
@@ -157,7 +156,7 @@ on `SessionRecord` (`testType`, `crossSectionMm2`, `loadAxisX`, `loadsN`,
 unchanged) and shipped in `metadata.json` as schema `/4` (`test` object +
 `frames[i].loadN`), which `CloudRestore` reads back. Backend and DTOs are
 untouched. This PR recorded the type only; the inputs each test needs came
-with PRs #3 / #4 (tensile, compression) and `feat/bending-torsion-inputs`.
+with PRs #3 / #4 (tensile) and `feat/bending-torsion-inputs`.
 
 **Machine load import (PR #3, `feat/load-csv`).** Step 1 gains a load card:
 `AnalysisLoadCard` (ViewStub `stubLoadCard`) with
@@ -182,14 +181,12 @@ without a log), typed sessions add `# test_type` / `# cross_section_mm2` /
 all-frames report with the curve (rendered off screen by `ShareCenter`) and a
 per-frame table. `.dat` is untouched.
 
-**Bending and torsion inputs (`feat/bending-torsion-inputs`).** Every test now
-imports a load log; what differs is how the load becomes a stress, which is a
+**Bending inputs (`feat/bending-torsion-inputs`).** Both tests import a load
+log; what differs is how the load becomes a stress, which is a
 `StressStrain.Model`: `Axial` (σ = P/A, strain along the load axis) for tensile
-and compression, `Flexural` (three-point, σ = 3PL/2bh² from span / width /
-thickness) for bending, and `Torsional` (T = P·r, τ = 16T/πd³ on a solid round
-bar, paired with the engineering shear strain γ = 2·Exy) for torsion. The two
-new dimension sets live in `data/SpecimenGeometry` — one defaulted field per
-dimension, carried inline on `SessionRecord`, as a `FloatArray` extra
+and `Flexural` (three-point, σ = 3PL/2bh² from span / width / thickness) for
+bending. Bending's dimensions live in `data/SpecimenGeometry` — one defaulted
+field per dimension, carried inline on `SessionRecord`, as a `FloatArray` extra
 (`DicKeys.SPECIMEN_GEOMETRY`) and as `test.geometry` in `metadata.json` schema
 `/5` (entered dimensions only, so a tensile backup is byte-identical to `/4`).
 The wizard reuses the load card: `ui/analysis/SpecimenGeometryFields` shows the
@@ -197,8 +194,18 @@ rows the chosen model needs (`row_specimen_dimension` includes), the ready gate
 turns on `Model.isComplete`, and the ⓘ dialog gives that test's formula. The
 model also names its own rows, axes and CSV keys, so the viewer sheet, the CSV
 preamble (`# stress_model` plus that model's dimensions) and the PDF cover /
-curve page read "Flexural stress" or "Shear stress" — and torsion's cover adds
-the frame's torque — without a second code path.
+curve page read "Flexural stress" without a second code path.
+
+**Tensile and bending only.** The chooser offered four tests while the branch
+was being built; the app ships **Tensile** and **Bending**. Compression and
+torsion, and the torsion stress model, dimensions and strings, are gone from
+`TestType`, `SpecimenGeometry` and `StressStrain` — recoverable at `45d2310`
+if they are wanted back. The two wire names stay unclaimed, so a session an
+earlier build stored as `compression` or `torsion` reads as **no type** and
+falls back to the axial model, which is what every reader already shows for an
+untyped session. No released build wrote either, and the `/5` geometry is
+unmerged, so nothing on a phone or in a backup carries a moment arm or a
+diameter.
 
 Not yet done: a Home row badge for the test type; virtual-extensometer strain
 (mean-over-ROI understates strain after necking); a manual load / time column

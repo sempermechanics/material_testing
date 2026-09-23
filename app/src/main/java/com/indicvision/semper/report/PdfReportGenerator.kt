@@ -221,9 +221,6 @@ object PdfReportGenerator {
         layout.drawKeyValue("Strain:", m.model.strainName)
         m.loadN?.let { loadN ->
             layout.drawKeyValue("Machine Load:", "%.2f N".format(Locale.US, loadN))
-            (m.model as? StressStrain.Model.Torsional)?.let {
-                layout.drawKeyValue("Torque:", "%.2f N·mm".format(Locale.US, it.torqueNmm(loadN)))
-            }
         }
         m.stressMPa?.let {
             layout.drawKeyValue("${m.model.stressName}:", "%.3f MPa".format(Locale.US, it))

@@ -128,7 +128,7 @@ data class SessionRecord(
     /** Strain axis for the stress–strain curve: Exx when true, Eyy when false. */
     val loadAxisX: Boolean = true,
 
-    /** Bending / torsion dimensions; [SpecimenGeometry.NONE] on every other session. */
+    /** Bending dimensions; [SpecimenGeometry.NONE] on every other session. */
     val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
 
     /** Signed load in newtons per deformed frame, index-aligned with [defNames]. */

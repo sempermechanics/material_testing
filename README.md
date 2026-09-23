@@ -1,7 +1,7 @@
 <p align="center">
   <img src="docs/images/semper-mark.png" width="72" alt="Semper mark">
   <br><br>
-  <strong>Material Testing</strong> — Semper DIC for tensile, compression, bending and torsion tests
+  <strong>Material Testing</strong> — Semper DIC for tensile and bending tests
   <br>
   <a href="https://github.com/sempermechanics/material_testing/actions/workflows/ci.yml"><img src="https://github.com/sempermechanics/material_testing/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
@@ -15,11 +15,11 @@
 > no environments configured and will fail if dispatched. A branch ruleset on
 > `main` requires a pull request and a green `CI OK`.
 >
-> What this repo adds: **New analysis** first asks for the test type — Tensile,
-> Compression, Bending, Torsion — then imports the testing machine's load log
-> (CSV) and the specimen dimensions that test's stress needs (cross-section;
-> span / width / thickness; moment arm / diameter) to produce a **stress–strain
-> curve** — engineering, flexural or shear — in the viewer, CSV and PDF.
+> What this repo adds: **New analysis** first asks for the test type — Tensile
+> or Bending — then imports the testing machine's load log (CSV) and the
+> specimen dimensions that test's stress needs (cross-section; span / width /
+> thickness) to produce a **stress–strain curve** — engineering or flexural —
+> in the viewer, CSV and PDF.
 
 <p align="center">
   <img src="docs/images/result-viewer.png" width="220" alt="Interactive strain heatmap in the result viewer">

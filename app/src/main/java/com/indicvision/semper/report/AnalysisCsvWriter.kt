@@ -61,8 +61,8 @@ object AnalysisCsvWriter {
 
     /**
      * 2: `load_N,stress_MPa` trail every point row; typed sessions add `# test_type…`.
-     * Bending / torsion sessions add `# stress_model` and their dimensions to
-     * the preamble without a version bump: `stress_MPa` is the model's stress
+     * A bending session adds `# stress_model` and its dimensions to the
+     * preamble without a version bump: `stress_MPa` is the model's stress
      * either way, and a reader that ignores unknown `#` lines is unaffected.
      */
     private const val CSV_VERSION = 2
@@ -158,7 +158,7 @@ object AnalysisCsvWriter {
             w.append("# test_type,").append(escape(metadata.testType)).append('\n')
             w.append("# stress_model,").append(model.wireName).append('\n')
             // Cross-section is written even at 0, as the first version-2 files
-            // did; the bending / torsion dimensions only once entered.
+            // did; the bending dimensions only once entered.
             model.dimensions.forEach { (dimension, value) ->
                 if (dimension == StressStrain.Dimension.CROSS_SECTION || value > 0f) {
                     w.append("# ").append(dimension.csvKey).append(',')

@@ -3,19 +3,18 @@ package com.indicvision.semper.report
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
-import kotlin.math.PI
 import kotlin.math.abs
 
 /**
  * Stress–strain from a machine load per frame and the DIC field. Which
  * stress a load becomes, and which strain component pairs with it, is the
- * test's [Model]: load over cross-section for tensile and compression,
- * three-point flexural stress for bending, and torsional shear stress for
- * torsion. Strain is always the mean over the frame's accepted points, in
- * millistrain. Pure — the viewer, the CSV and the PDF all read one [Curve].
+ * test's [Model]: load over cross-section for tensile, three-point flexural
+ * stress for bending. Strain is always the mean over the frame's accepted
+ * points, in millistrain. Pure — the viewer, the CSV and the PDF all read one
+ * [Curve].
  *
- * Loads keep the sign they were logged with, so a compression test logged
- * negative plots in the third quadrant. Nothing here takes an absolute value.
+ * Loads keep the sign they were logged with, so a test logged negative plots
+ * in the third quadrant. Nothing here takes an absolute value.
  */
 object StressStrain {
 
@@ -28,8 +27,6 @@ object StressStrain {
         SPAN("Support span", "mm", "span_mm"),
         WIDTH("Width", "mm", "width_mm"),
         THICKNESS("Thickness", "mm", "thickness_mm"),
-        MOMENT_ARM("Moment arm", "mm", "moment_arm_mm"),
-        DIAMETER("Diameter", "mm", "diameter_mm"),
     }
 
     /**
@@ -38,7 +35,7 @@ object StressStrain {
      * NaN, and the wizard will not go on.
      */
     sealed class Model(
-        /** Wire name in the CSV preamble: `axial`, `flexural` or `torsional`. */
+        /** Wire name in the CSV preamble: `axial` or `flexural`. */
         val wireName: String,
         /** Report wording, e.g. "Engineering stress". */
         val stressName: String,
@@ -52,7 +49,7 @@ object StressStrain {
         /** The dimensions this model was built from, entered or not, in display order. */
         abstract val dimensions: List<Pair<Dimension, Float>>
 
-        /** Tensile / compression: σ = P / A, strain along the load axis. */
+        /** Tensile: σ = P / A, strain along the load axis. */
         data class Axial(val areaMm2: Float, val axisX: Boolean) :
             Model(
                 wireName = "axial",
@@ -87,41 +84,11 @@ object StressStrain {
             )
         }
 
-        /**
-         * Torsion of a solid round bar: torque T = P · r, surface shear stress
-         * τ = 16 T / (π d³), paired with the engineering shear strain
-         * γ = 2 · Exy (the DIC field holds the tensor shear, half of γ).
-         */
-        data class Torsional(val momentArmMm: Float, val diameterMm: Float) :
-            Model(
-                wireName = "torsional",
-                stressName = "Shear stress",
-                strainName = "2 × mean Exy (engineering shear)",
-            ) {
-            override val isComplete: Boolean get() = momentArmMm > 0f && diameterMm > 0f
-
-            /** Torque in N·mm for a logged load. */
-            fun torqueNmm(loadN: Float): Float = loadN * momentArmMm
-
-            override fun stressMPa(loadN: Float): Float =
-                if (isComplete) {
-                    (SIXTEEN * torqueNmm(loadN) / (PI * diameterMm * diameterMm * diameterMm)).toFloat()
-                } else {
-                    Float.NaN
-                }
-            override fun strainMilli(data: FloatArray): Float? =
-                DicResult.fieldStats(data, DicResult.IDX_EXY)?.get(MEAN)?.let { it * 2f }
-            override val dimensions get() = listOf(
-                Dimension.MOMENT_ARM to momentArmMm,
-                Dimension.DIAMETER to diameterMm,
-            )
-        }
-
         companion object {
             /**
              * The model for a stored session. A blank or unknown type reads
-             * as axial, which is what every session before bending and torsion
-             * had inputs for.
+             * as axial, which is what every session before bending had inputs
+             * for — including one stored as a test this build no longer offers.
              */
             fun of(
                 testType: String,
@@ -130,8 +97,7 @@ object StressStrain {
                 geometry: SpecimenGeometry,
             ): Model = when (TestType.fromWire(testType)) {
                 TestType.BENDING -> Flexural(geometry.spanMm, geometry.widthMm, geometry.thicknessMm, loadAxisX)
-                TestType.TORSION -> Torsional(geometry.momentArmMm, geometry.diameterMm)
-                TestType.TENSILE, TestType.COMPRESSION, null -> Axial(crossSectionMm2, loadAxisX)
+                TestType.TENSILE, null -> Axial(crossSectionMm2, loadAxisX)
             }
         }
     }
@@ -198,5 +164,4 @@ object StressStrain {
 
     private const val MEAN = 2
     private const val THREE = 3f
-    private const val SIXTEEN = 16.0
 }

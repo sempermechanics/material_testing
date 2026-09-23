@@ -11,9 +11,9 @@ import com.indicvision.semper.data.TestType
 import java.util.Locale
 
 /**
- * The bending / torsion dimension rows of the load card. Each row is one
- * `row_specimen_dimension` include; only the rows the test's stress model
- * uses are shown, and every edit writes straight back to
+ * The bending dimension rows of the load card. Each row is one
+ * `row_specimen_dimension` include; only the rows the test's stress model uses
+ * are shown, and every edit writes straight back to
  * [AnalysisViewModel.geometry] so a recreated Activity redraws from it.
  */
 class SpecimenGeometryFields(
@@ -35,22 +35,13 @@ class SpecimenGeometryFields(
             g.copy(thicknessMm = v)
         },
     )
-    private val torsion = listOf(
-        Row(root.findViewById(R.id.rowMomentArm), R.string.load_moment_arm, { it.momentArmMm }) { g, v ->
-            g.copy(momentArmMm = v)
-        },
-        Row(root.findViewById(R.id.rowDiameter), R.string.load_diameter, { it.diameterMm }) { g, v ->
-            g.copy(diameterMm = v)
-        },
-    )
 
     init {
         val shown = when (viewModel.testType) {
             TestType.BENDING -> bending
-            TestType.TORSION -> torsion
-            TestType.TENSILE, TestType.COMPRESSION -> emptyList()
+            TestType.TENSILE -> emptyList()
         }
-        (bending + torsion).forEach { it.view.isVisible = it in shown }
+        bending.forEach { it.view.isVisible = it in shown }
         shown.forEach(::bind)
     }
 
