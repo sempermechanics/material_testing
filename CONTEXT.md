@@ -231,6 +231,9 @@ successful mint answered 500 and the licence existed anyway — and #134,
 splits `env_vars` pairs on commas and the list now names two operators.
 #133 made the emulator tier's two invite races deterministic: a round the
 emulator starves grants nothing, so it is re-raced rather than asserted on.
+`fix/deflake-individual-licence-test` does the same for
+`test_one_individual_licence_reaches_exactly_one_account` (test-only; a
+starved round must answer `_contended` to all and leave the licence unused).
 The repository is public as of 2026-09-22 (CI minutes; the engine submodule
 was already public), and `damodar@indicvision.com` is the second operator.
 
