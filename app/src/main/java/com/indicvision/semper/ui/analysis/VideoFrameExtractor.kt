@@ -19,7 +19,6 @@ import android.net.Uri
 import androidx.core.graphics.scale
 import com.indicvision.semper.R
 import com.indicvision.semper.imaging.BitmapDecode
-import com.indicvision.semper.imaging.GrayPngEncoder
 import com.indicvision.semper.imaging.ImageEncode
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -37,6 +36,8 @@ data class VideoMeta(
     val width: Int,
     val height: Int,
     val rotationDegrees: Int = 0,
+    /** FourCC of a stream that opened but has no decoder here, for the error. */
+    val unsupportedCodec: String? = null,
 )
 
 /**
@@ -54,6 +55,11 @@ object VideoFrameExtractor {
     fun formatClock(ms: Long): String = VideoKeyframeHelper.formatClock(ms)
 
     fun readMeta(context: Context, uri: Uri): VideoMeta {
+        // An AVI, which no platform API can open, answers for itself; anything
+        // else falls through to the retriever below.
+        AviVideoDecoder.create(context, uri)?.use { avi ->
+            return if (avi.canDecode) avi.meta else avi.meta.copy(unsupportedCodec = avi.fourcc)
+        }
         var meta = VideoMeta(0L, 30.0, false, 0, 0, 0)
         val retriever = MediaMetadataRetriever()
         try {
@@ -113,11 +119,23 @@ object VideoFrameExtractor {
         var completed = false
         var refPreview: Bitmap? = null
         try {
-            val meta = readMeta(context, uri)
-            val hwResult = extractWithHardwareDecoder(
+            // Three rungs, tried in order: the AVI demuxer, which is the only
+            // thing that can open that container; the hardware decoder; and the
+            // retriever, which crashes on nothing.
+            val result = extractWithAvi(
                 context = context,
                 uri = uri,
-                rotationDegrees = meta.rotationDegrees,
+                fpsExtract = fpsExtract,
+                startMs = startMs,
+                endMs = endMs,
+                maxFrames = maxFrames,
+                cacheDir = cacheDir,
+                stagingDir = stagingDir,
+                onProgress = onProgress,
+            ) ?: extractWithHardwareDecoder(
+                context = context,
+                uri = uri,
+                rotationDegrees = readMeta(context, uri).rotationDegrees,
                 fpsExtract = fpsExtract,
                 startMs = startMs,
                 endMs = endMs,
@@ -126,15 +144,7 @@ object VideoFrameExtractor {
                 stagingDir = stagingDir,
                 preferKeyframes = preferKeyframes,
                 onProgress = onProgress,
-            )
-            if (hwResult != null) {
-                refPreview = hwResult.refPreview
-                completed = true
-                return hwResult
-            }
-
-            Timber.i("Falling back to MediaMetadataRetriever for video frame extraction")
-            val fallbackResult = extractWithRetriever(
+            ) ?: extractWithRetriever(
                 context = context,
                 uri = uri,
                 fpsExtract = fpsExtract,
@@ -144,13 +154,11 @@ object VideoFrameExtractor {
                 cacheDir = cacheDir,
                 stagingDir = stagingDir,
                 onProgress = onProgress,
-            )
-            if (fallbackResult != null) {
-                refPreview = fallbackResult.refPreview
-                completed = true
-                return fallbackResult
-            }
-            return null
+            ) ?: return null
+
+            refPreview = result.refPreview
+            completed = true
+            return result
         } finally {
             stagingDir.deleteRecursively()
             if (!completed) refPreview?.recycle()
@@ -191,10 +199,10 @@ object VideoFrameExtractor {
                 )
                 if (plan.timestampsUs.size < 2) return null
 
-                decodePlanToBatch(
+                VideoFrameBatchWriter.write(
                     context = context,
-                    decoder = dec,
-                    plan = plan,
+                    count = plan.timestampsUs.size,
+                    lumaAt = { i -> dec.decodeFrameAt(plan.timestampsUs[i]) },
                     startMs = startMs,
                     cacheDir = cacheDir,
                     stagingDir = stagingDir,
@@ -207,57 +215,45 @@ object VideoFrameExtractor {
         }
     }
 
-    private suspend fun decodePlanToBatch(
+    /**
+     * Frames of an AVI. `MediaExtractor` cannot open the container at all, so
+     * [AviVideoDecoder] demuxes it and decodes each frame by its FourCC.
+     * Null when [uri] is not an AVI, or holds a codec this device cannot decode.
+     */
+    private suspend fun extractWithAvi(
         context: Context,
-        decoder: HardwareVideoDecoder,
-        plan: VideoKeyframeHelper.ExtractionPlan,
+        uri: Uri,
+        fpsExtract: Double,
         startMs: Long,
+        endMs: Long,
+        maxFrames: Int,
         cacheDir: File,
         stagingDir: File,
         onProgress: (percent: Int, status: String) -> Unit,
     ): ExtractionResult? {
-        val defPaths = mutableListOf<String>()
-        var refPng: ByteArray? = null
-        var refWidth = 0
-        var refHeight = 0
-        var refPreview: Bitmap? = null
-        val count = plan.timestampsUs.size
-
-        for ((i, timeUs) in plan.timestampsUs.withIndex()) {
-            currentCoroutineContext().ensureActive()
-            val luma = decoder.decodeFrameAt(timeUs) ?: return null
-            currentCoroutineContext().ensureActive()
-
-            if (i == 0) {
-                refWidth = luma.outWidth
-                refHeight = luma.outHeight
-                val out = ByteArrayOutputStream()
-                GrayPngEncoder.encode(out, luma)
-                refPng = out.toByteArray()
-                refPreview = BitmapDecode.decodeByteArrayCapped(refPng, PREVIEW_MAX_EDGE)
+        val decoder = AviVideoDecoder.create(context, uri) ?: return null
+        return decoder.use { avi ->
+            // An AVI has no seekable timeline of its own: sampling times map
+            // onto frame indices, and repeats collapse so a rate above the
+            // stream's own cannot ask for the same frame twice.
+            val indices = VideoKeyframeHelper
+                .uniformTimestampsUs(startMs, endMs, fpsExtract, maxFrames)
+                .map { avi.video.frameIndexAt(it) }
+                .distinct()
+            if (!avi.canDecode || indices.size < 2) {
+                null
             } else {
-                val f = File(stagingDir, String.format(Locale.US, "%04d_frame.png", i))
-                FileOutputStream(f).use { out -> GrayPngEncoder.encode(out, luma) }
-                defPaths.add(f.absolutePath)
+                VideoFrameBatchWriter.write(
+                    context = context,
+                    count = indices.size,
+                    lumaAt = { i -> avi.decodeFrame(indices[i]) },
+                    startMs = startMs,
+                    cacheDir = cacheDir,
+                    stagingDir = stagingDir,
+                    onProgress = onProgress,
+                )
             }
-
-            val status = context.getString(R.string.video_extracting_progress_fmt, i + 1, count)
-            onProgress((i + 1) * 100 / count, status)
         }
-
-        val pngBytes = refPng ?: return null
-        if (defPaths.isEmpty()) return null
-
-        return assembleExtractionResult(
-            cacheDir = cacheDir,
-            stagingDir = stagingDir,
-            refPng = pngBytes,
-            refWidth = refWidth,
-            refHeight = refHeight,
-            refPreview = refPreview,
-            startMs = startMs,
-            defPaths = defPaths,
-        )
     }
 
     private suspend fun extractWithRetriever(
@@ -271,6 +267,7 @@ object VideoFrameExtractor {
         stagingDir: File,
         onProgress: (percent: Int, status: String) -> Unit,
     ): ExtractionResult? {
+        Timber.i("Falling back to MediaMetadataRetriever for video frame extraction")
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, uri)
@@ -314,7 +311,7 @@ object VideoFrameExtractor {
             val pngBytes = refPng ?: return null
             if (defPaths.isEmpty()) return null
 
-            return assembleExtractionResult(
+            return VideoFrameBatchWriter.assemble(
                 cacheDir = cacheDir,
                 stagingDir = stagingDir,
                 refPng = pngBytes,
@@ -331,41 +328,6 @@ object VideoFrameExtractor {
             runCatching { retriever.release() }
                 .onFailure { Timber.w(it, "MediaMetadataRetriever.release failed") }
         }
-    }
-
-    private suspend fun assembleExtractionResult(
-        cacheDir: File,
-        stagingDir: File,
-        refPng: ByteArray,
-        refWidth: Int,
-        refHeight: Int,
-        refPreview: Bitmap?,
-        startMs: Long,
-        defPaths: List<String>,
-    ): ExtractionResult {
-        val sortedDefPaths = defPaths.sorted()
-        val videoFrameSize = refWidth to refHeight
-        val stagedBatch = ImportedBatch(
-            filePaths = sortedDefPaths,
-            originalNames = sortedDefPaths.mapIndexed { idx, _ ->
-                String.format(Locale.US, "frame_%04d.png", idx + 1)
-            },
-            frameSizes = sortedDefPaths.associateWith { videoFrameSize },
-            fromVideo = true,
-        )
-        currentCoroutineContext().ensureActive()
-        val batch = requireNotNull(
-            FrameImportHelper.commitStagedBatch(cacheDir, stagingDir, stagedBatch),
-        )
-
-        return ExtractionResult(
-            refPng = refPng,
-            refWidth = refWidth,
-            refHeight = refHeight,
-            refName = "video @ ${formatClock(startMs)}",
-            refPreview = refPreview,
-            batch = batch,
-        )
     }
 
     private fun getFrameHybrid(retriever: MediaMetadataRetriever, timeUs: Long): Bitmap? =

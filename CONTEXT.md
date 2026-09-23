@@ -131,10 +131,27 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-22)
+## Current state (2026-09-23)
 
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
+
+**Video import reads AVI (#136, #137, #139, merged 2026-09-23).** #136 landed
+the keyframe/uniform extraction path that pulls frames out of the raw Y plane;
+#137 fixed its fixed-interval mode, which had returned the preceding I-frame
+for every sample (the decoder now decodes forward to the requested timestamp);
+#139 adds the container Android itself cannot open. `AviReader` demuxes RIFF,
+`AviLuma` reads the uncompressed layouts losslessly, `MjpegHuffman` repairs
+tableless motion-JPEG frames and `AviCodecDecoder` hands Xvid/H.264 samples to
+the platform codecs — no new dependency, no APK growth. A codec the device
+cannot decode is now named in the error instead of failing blank. On an emulator
+(`VideoFrameExtractionDeviceTest`) two more decoder faults surfaced and are fixed on
+`test/video-extraction-emulator`: a fixed-interval segment ending at the clip's
+duration asked for a time past the last frame, failed, and dropped the whole batch
+to the retriever's I-frame seek; and a flush before the codec's first output lost
+its SPS/PPS, so an extraction intermittently fell back the same way. Neither path
+has run on a physical device yet (vendor strides, crop; a real camera AVI):
+[docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a. The same change is being ported to `sempermechanics/material_testing`.
 
 **Licensing is live in production (2026-09-21/22).** `indic-api` serves
 `d6b1b64` (`main` after #116) behind the `semper-gw` gateway config

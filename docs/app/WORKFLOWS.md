@@ -342,11 +342,22 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.1a.1 | Pick a video (a badged tile in the grid, or via Files) | Sampling sheet opens with resolution, source fps and duration |
-| [ ] 5.1a.2 | Drag the **fps** slider | The estimated frame count updates live |
+| [ ] 5.1a.2 | Switch the mode between **Keyframes (DIC)** and **Fixed interval** | Keyframes hides the fps slider and notes it extracts sync I-frames; Fixed interval shows the slider, and dragging it updates the estimated frame count live |
+| [ ] 5.1a.2a | Extract in **Fixed interval** over the whole clip, then scrub the deformed frames | Consecutive frames differ — not runs of repeats of the same I-frame |
 | [ ] 5.1a.3 | Drag the time-segment handles | Estimate updates; the button relabels to "Extract N frames" |
 | [ ] 5.1a.4 | Choose settings that exceed *Max frames* | The estimate shows the cap being applied |
 | [ ] 5.1a.5 | Tap **Extract** | Progress overlay; frame 0 becomes the reference, the rest deformed |
 | [ ] 5.1a.6 | Look for the sort control afterwards | Hidden — video frames are already in time order |
+| [ ] 5.1a.7 | Pick an `.avi` from a lab or UTM camera (uncompressed or motion-JPEG) | Sampling sheet opens with its resolution, rate and duration; **Extract** writes the same lossless grayscale frames an MP4 does |
+| [ ] 5.1a.8 | Pick an `.avi` whose codec this device has no decoder for (Xvid on a device without MPEG-4 ASP) | Snackbar naming the four-letter codec and what to do instead, with **Why?** → video-read FAQ |
+| [ ] 5.1a.9 | Pick an `.avi` that is truncated or not a video at all | The ordinary "could not read this video" snackbar — no crash |
+
+`VideoFrameExtractionDeviceTest` (instrumented) covers the extraction itself on an
+emulator: it encodes MP4 and AVI (Y800, MJPG, H.264) clips whose frames are stamped
+with their own index, and checks keyframe and fixed-interval picks, portrait
+rotation, and that every PNG came from the lossless Y-plane path rather than the
+retriever fallback. Rows 5.1a.1–9 remain for the sheet itself and for real
+vendor decoders and camera AVIs.
 
 ### 5.2 Step 2 — Confirm settings
 
