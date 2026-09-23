@@ -312,6 +312,13 @@ pre-licensing documents)
 - [ ] `APP_CHECK_MODE` stays `off`. Move to `monitor` only once an App Check
       build is the fleet; **never** `enforce` while a pre-App-Check build is
       installed (every request from it would 403).
+- [x] App Check APIs (`firebaseappcheck`, `playintegrity`) enabled on
+      `indicvision-dic-app-auth` and the Android app registered with Play
+      Integrity (2026-09-23); Firebase Auth enforcement stays `UNENFORCED`.
+- [ ] Play developer account → link the project in Play Console → App
+      integrity, and add the Play app-signing SHA-256 to the Firebase Android
+      app ([AUTH_SETUP.md §3.2](../backend/AUTH_SETUP.md)). Until then no build
+      can get a token and `monitor` would count 100 % missing.
 - [ ] §20.5 skew fallbacks (`plan` mirror, `/v1/campus/*` aliases) stay until
       adoption of a `mode`-reading build is high enough; retire in that order.
 - [ ] Gateway deploy job (TD-27): manual runbook for now.
@@ -369,9 +376,11 @@ pre-licensing documents)
 - [x] Prune the tagged `cand-*` revisions so none holds a warm instance.
       Every deploy re-created one, so the promote now removes them
       (`chore/prune-cand-tags`, TD-32).
-- [ ] The first staging deploy after `chore/prune-cand-tags` promotes with
+- [x] The first staging deploy after `chore/prune-cand-tags` promotes with
       `--to-latest` and leaves no `cand-*` tag (`gcloud run services describe
       semper-api-staging --format='value(spec.traffic)'`); then production.
+      2026-09-23 (#151, `b65ff66`): `semper-api-staging-35856393597-1` and
+      `semper-api-35856726929-1`, both `latestRevision` 100 %, no tags.
 
 ## Contention fixes found by the emulator tier
 
