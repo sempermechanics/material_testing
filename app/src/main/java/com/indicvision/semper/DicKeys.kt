@@ -62,6 +62,13 @@ object DicKeys {
 
     /** 0–100 percent for the current [UPLOAD_PHASE]. */
     const val UPLOAD_PERCENT = "UPLOAD_PERCENT"
+
+    // ── DicRestoreWorker / DicBundleDownloadWorker → UI
+    /** The [UPLOAD_PHASE] a restore or bundle download reports while fetching. */
+    const val PHASE_DOWNLOAD = "download"
+
+    /** Reason on a download worker's terminal Result.failure(). */
+    const val DOWNLOAD_ERROR = "error"
     const val STEP = "STEP"
     const val SUBSET = "SUBSET"
     const val STRAIN_WIN = "STRAIN_WIN"

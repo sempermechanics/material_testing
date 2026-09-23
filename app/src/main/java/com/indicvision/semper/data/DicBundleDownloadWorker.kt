@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,7 @@ class DicBundleDownloadWorker(
         val displayName = inputData.getString(KEY_DISPLAY_NAME).orEmpty()
         val localSessionId = inputData.getString(KEY_LOCAL_SESSION_ID).orEmpty()
         val destUri = inputData.getString(KEY_DEST_URI)?.let(Uri::parse)
-            ?: return@withContext Result.failure(workDataOf(KEY_ERROR to "no_dest"))
+            ?: return@withContext Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to "no_dest"))
 
         var staged: File? = null
         var releaseGrant = true
@@ -63,7 +64,7 @@ class DicBundleDownloadWorker(
                     mapOf("kind" to "bundle_download", "reason" to "empty"),
                 )
                 deleteDestDocument(destUri)
-                return@withContext Result.failure(workDataOf(KEY_ERROR to "empty"))
+                return@withContext Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to "empty"))
             }
             if (!copyToDest(staged, destUri)) {
                 SemperAnalytics.event(
@@ -72,7 +73,7 @@ class DicBundleDownloadWorker(
                     mapOf("kind" to "bundle_download", "reason" to "write"),
                 )
                 deleteDestDocument(destUri)
-                return@withContext Result.failure(workDataOf(KEY_ERROR to "write"))
+                return@withContext Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to "write"))
             }
             SemperAnalytics.event(
                 applicationContext,
@@ -85,7 +86,7 @@ class DicBundleDownloadWorker(
             deleteDestDocument(destUri)
             throw e
         } catch (e: IndicApi.ApiException) {
-            if (e.code == 404 || e.code == 403) {
+            if (e.code == HttpStatus.NOT_FOUND || e.code == HttpStatus.FORBIDDEN) {
                 Timber.e(e, "Bundle download rejected — giving up")
                 TransferLog.phase(
                     TransferLog.PhaseFields(
@@ -103,7 +104,7 @@ class DicBundleDownloadWorker(
                 deleteDestDocument(destUri)
                 // The body, not the message: LicenseErrors parses the `detail` code
                 // out of it to say *why* (demo mode) instead of "check your connection".
-                Result.failure(workDataOf(KEY_ERROR to e.body))
+                Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to e.body))
             } else {
                 Timber.w(e, "Bundle download failed; will retry")
                 TransferLog.phase(
@@ -127,7 +128,7 @@ class DicBundleDownloadWorker(
                     mapOf("kind" to "bundle_download", "reason" to "corrupt"),
                 )
                 deleteDestDocument(destUri)
-                Result.failure(workDataOf(KEY_ERROR to (e.message ?: e.javaClass.simpleName)))
+                Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to (e.message ?: e.javaClass.simpleName)))
             } else {
                 Timber.w(e, "Bundle download failed; will retry")
                 TransferLog.phase(TransferLog.PhaseFields("bundle_download", "retry"))
@@ -204,24 +205,12 @@ class DicBundleDownloadWorker(
     }
 
     private suspend fun publishProgress(done: Long, total: Long) {
-        val percent = if (total > 0L) {
-            ((done.coerceAtLeast(0L) * 100L) / total).toInt().coerceIn(0, 100)
-        } else {
-            0
-        }
-        setProgress(
-            workDataOf(
-                DicKeys.UPLOAD_PHASE to PHASE_DOWNLOAD,
-                DicKeys.UPLOAD_PERCENT to percent,
-            ),
-        )
+        setProgress(DownloadProgress.data(done, total))
     }
 
     companion object {
         const val KEY_DISPLAY_NAME = "DISPLAY_NAME"
         const val KEY_LOCAL_SESSION_ID = "LOCAL_SESSION_ID"
         const val KEY_DEST_URI = "DEST_URI"
-        const val KEY_ERROR = "error"
-        const val PHASE_DOWNLOAD = "download"
     }
 }

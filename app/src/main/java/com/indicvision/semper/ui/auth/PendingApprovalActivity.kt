@@ -3,25 +3,23 @@
 
 package com.indicvision.semper.ui.auth
 
-import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
-import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.DeviceKeyManager
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.SupportMail
 import com.indicvision.semper.ui.home.HomeActivity
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -30,6 +28,7 @@ import timber.log.Timber
  * Holding screen for authenticated accounts whose backend access_status is
  * still PENDING. Polls for approval and routes onward once granted.
  */
+@MainThread
 class PendingApprovalActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }
@@ -81,23 +80,14 @@ class PendingApprovalActivity : AppCompatActivity() {
             append("I'd like access to Semper.\n\n")
             append("Account: ").append(email).append('\n')
             append("Device ID: ").append(deviceId).append('\n')
-            append("App: ").append(BuildConfig.VERSION_NAME).append(" (").append(BuildConfig.VERSION_CODE).append(")\n")
-            append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
-                .append(" — Android ").append(Build.VERSION.RELEASE)
+            append(SupportMail.deviceLines())
         }
-        val support = getString(R.string.support_email)
-        val intent = Intent(Intent.ACTION_SENDTO).apply {
-            data = "mailto:".toUri()
-            putExtra(Intent.EXTRA_EMAIL, arrayOf(support))
-            putExtra(Intent.EXTRA_SUBJECT, getString(R.string.request_access_subject) + " — " + email)
-            putExtra(Intent.EXTRA_TEXT, body)
-        }
-        try {
-            startActivity(intent)
-        } catch (e: ActivityNotFoundException) {
-            Timber.w(e, "No email app to send the access request")
-            Toast.makeText(this, getString(R.string.request_access_none, support), Toast.LENGTH_LONG).show()
-        }
+        SupportMail.open(
+            this,
+            subject = getString(R.string.request_access_subject) + " — " + email,
+            body = body,
+            purpose = "the access request",
+        )
     }
 
     private fun loadProfileData() {

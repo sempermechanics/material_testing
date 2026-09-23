@@ -5,6 +5,7 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -37,7 +38,7 @@ object SessionEverythingExporter {
         val sessions = SessionStore.list(app).filter { it.hasLocalData() }
         if (sessions.isEmpty()) return@withContext null
 
-        val outDir = File(app.cacheDir, "share").apply { mkdirs() }
+        val outDir = CacheJanitor.shareDir(app.cacheDir)
         outDir.listFiles()
             ?.filter { it.name.startsWith(MASTER_PREFIX) || it.name.startsWith(SESSION_PREFIX) }
             ?.forEach { it.delete() }
@@ -89,17 +90,14 @@ object SessionEverythingExporter {
         record: SessionRecord,
     ): File? = withContext(Dispatchers.IO) {
         val app = context.applicationContext
-        val outDir = File(app.cacheDir, "share").apply { mkdirs() }
+        val outDir = CacheJanitor.shareDir(app.cacheDir)
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val stagingRoot = File(outDir, "export_one_$ts").apply { mkdirs() }
         try {
             buildSessionEverythingZip(app, record, stagingRoot, 0, ts)?.also { built ->
                 val named = File(outDir, sanitizeZipName(record.name, record.id) + ".zip")
                 named.delete()
-                if (!built.renameTo(named)) {
-                    built.copyTo(named, overwrite = true)
-                    built.delete()
-                }
+                AtomicFiles.promote(built, named)
                 return@withContext named.takeIf { it.exists() && it.length() > 0L }
             }
             null

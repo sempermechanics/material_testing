@@ -25,20 +25,31 @@ object CacheJanitor {
     /** Scratch files workers write straight into `cacheDir`, by name prefix. */
     private val WORKER_SCRATCH_PREFIXES = listOf("restore_", "upload_")
 
-    /** Share/export bundles, which the user may still be picking a target for. */
-    private const val SHARE_SUBDIR = "share"
+    /**
+     * Share/export bundles, which the user may still be picking a target for.
+     * Also the FileProvider `cache-path` in `res/xml/share_paths.xml`.
+     */
+    const val SHARE_SUBDIR = "share"
+
+    /** The ROI mask `RoiDrawActivity` hands back to the wizard. */
+    const val ROI_MASK_CACHE = "roi_mask_cache.bin"
+
+    /** The reference image `StaticAnalysisActivity` hands to `RoiDrawActivity`. */
+    const val TEMP_ROI_REF = "temp_roi_ref.bin"
+
+    /** The cloud account export, before the user picks where to save it. */
+    const val ACCOUNT_EXPORT = "semper-account-export.json"
 
     /**
      * Regenerable top-level cache files that are safe to drop on an explicit
-     * clear (ROI mask, temp ROI ref, account export). They are not covered by
-     * the worker-scratch prefixes and used to inflate the Temporary files size
-     * while Clear left them untouched.
+     * clear. They are not covered by the worker-scratch prefixes and used to
+     * inflate the Temporary files size while Clear left them untouched. Named
+     * here and used by their writers, so a rename cannot leave one unreclaimed.
      */
-    private val REGENERABLE_FILE_NAMES = setOf(
-        "roi_mask_cache.bin",
-        "temp_roi_ref.bin",
-        "semper-account-export.json",
-    )
+    private val REGENERABLE_FILE_NAMES = setOf(ROI_MASK_CACHE, TEMP_ROI_REF, ACCOUNT_EXPORT)
+
+    /** The directory share and export bundles are written to, created if missing. */
+    fun shareDir(cacheDir: File): File = File(cacheDir, SHARE_SUBDIR).apply { mkdirs() }
 
     /**
      * A worker can be running in a freshly started process, so its scratch file

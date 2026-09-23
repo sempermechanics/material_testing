@@ -15,6 +15,15 @@ log = logging.getLogger("indic")
 router = APIRouter()
 
 
+def _owned_file(file_id: str, user: dict) -> dict:
+    """The caller's file [file_id]. Someone else's reads as absent, not 403, so
+    a file id cannot be probed for existence (as `sessions._owned_session`)."""
+    rec = repo.get_file(file_id)
+    if not rec or rec.get("uid") != user["uid"]:
+        raise HTTPException(404, errors.FILE_NOT_FOUND)
+    return rec
+
+
 def _is_first_byte_request(byte_range: str | None) -> bool:
     """True for a whole-file GET (no Range) or a Range window starting at byte 0 —
     used to log exactly one FILE_DOWNLOAD audit entry per file, not one per
@@ -41,9 +50,7 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     edge usually means that budget was exhausted mid-stream.
     """
     user = ctx["user"]
-    f = repo.get_file(file_id)
-    if not f or f.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.FILE_NOT_FOUND)
+    f = _owned_file(file_id, user)
     if not repo.cloud_backup_enabled(user):
         raise HTTPException(403, errors.feature_not_licensed_detail())
     drive_file_id = f.get("driveFileId")
@@ -102,9 +109,7 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
 )
 def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx["user"]
-    rec = repo.get_file(file_id)
-    if not rec or rec.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.FILE_NOT_FOUND)
+    rec = _owned_file(file_id, user)
     # Verify the upload actually landed intact before trusting this completion.
     # The client uploads straight to Drive, so ask Drive for the real size/md5
     # and reject a truncated or corrupted object. Skipped on an idempotent retry

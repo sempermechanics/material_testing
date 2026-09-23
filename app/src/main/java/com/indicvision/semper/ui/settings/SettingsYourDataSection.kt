@@ -12,6 +12,7 @@ import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.R
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.AuthRepository
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DevAuth
 import com.indicvision.semper.data.DicSettings
@@ -97,106 +98,87 @@ class SettingsYourDataSection(
             Toast.makeText(activity, R.string.export_cloud_data_offline, Toast.LENGTH_LONG).show()
             return
         }
-        val key = "export_cloud"
-        if (activity.transferBanner.contains(key)) {
-            Toast.makeText(activity, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
-            return
-        }
-        var job: kotlinx.coroutines.Job? = null
-        SemperAnalytics.event(activity, SemperAnalytics.EXPORT_STARTED, mapOf("kind" to "cloud"))
-        activity.transferBanner.upsert(
-            TransferBannerController.Transfer(
-                id = key,
-                title = activity.getString(R.string.transfer_banner_export_cloud),
-                onCancel = { job?.cancel() },
-            ),
-        )
-        job = activity.lifecycleScope.launch {
-            try {
-                val dest = java.io.File(activity.cacheDir, "semper-account-export.json")
-                val ok = suspendRunCatching {
-                    val idToken = TokenProvider.usableIdToken() ?: error("not signed in")
-                    api.exportAccount(idToken, dest)
-                }.onFailure { Timber.w(it, "Cloud account export failed") }.isSuccess
-                activity.transferBanner.remove(key)
-                if (!ok || !dest.exists() || dest.length() == 0L) {
-                    SemperAnalytics.event(
-                        activity,
-                        SemperAnalytics.EXPORT_FAILED,
-                        mapOf("kind" to "cloud"),
-                    )
-                    Toast.makeText(
-                        activity,
-                        R.string.export_cloud_data_failed,
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    return@launch
-                }
-                SemperAnalytics.event(
-                    activity,
-                    SemperAnalytics.EXPORT_COMPLETED,
-                    mapOf("kind" to "cloud"),
-                )
-                SendToSheet.show(activity, dest, SettingsActivity.JSON_MIME)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                activity.transferBanner.remove(key)
-                throw e
-            } finally {
-                activity.transferBanner.remove(key)
-            }
+        runExport(CLOUD_EXPORT) {
+            val dest = java.io.File(activity.cacheDir, CacheJanitor.ACCOUNT_EXPORT)
+            suspendRunCatching {
+                val idToken = TokenProvider.usableIdToken() ?: error("not signed in")
+                api.exportAccount(idToken, dest)
+            }.onFailure { Timber.w(it, "Cloud account export failed") }
+                .getOrNull()
+                ?.let { dest }
         }
     }
 
     private fun exportMyData() {
-        val key = "export_local"
-        if (activity.transferBanner.contains(key)) {
+        runExport(LOCAL_EXPORT) { onProgress ->
+            SessionEverythingExporter.exportMasterZip(activity, onProgress)?.file
+        }
+    }
+
+    /** What differs between the two "export my data" buttons; the flow is shared. */
+    private class ExportKind(
+        val key: String,
+        val analyticsKind: String,
+        val bannerTitle: Int,
+        val failedMessage: Int,
+        val mime: String,
+    )
+
+    /**
+     * Banner, produce, share: one flow for both exports. [produce] returns the
+     * file to share, or null on failure; an empty file counts as a failure.
+     * Cancelling from the banner cancels [produce] — and says nothing, because
+     * the user asked for it.
+     */
+    private fun runExport(
+        kind: ExportKind,
+        produce: suspend (onProgress: (done: Int, total: Int) -> Unit) -> java.io.File?,
+    ) {
+        if (activity.transferBanner.contains(kind.key)) {
             Toast.makeText(activity, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
         var job: kotlinx.coroutines.Job? = null
-        SemperAnalytics.event(activity, SemperAnalytics.EXPORT_STARTED, mapOf("kind" to "local"))
+        SemperAnalytics.event(activity, SemperAnalytics.EXPORT_STARTED, mapOf("kind" to kind.analyticsKind))
         activity.transferBanner.upsert(
             TransferBannerController.Transfer(
-                id = key,
-                title = activity.getString(R.string.transfer_banner_export_local),
+                id = kind.key,
+                title = activity.getString(kind.bannerTitle),
                 onCancel = { job?.cancel() },
             ),
         )
         job = activity.lifecycleScope.launch {
             try {
-                val export = SessionEverythingExporter.exportMasterZip(activity) { done, total ->
+                val produced = produce { done, total ->
                     val pct = if (total > 0) done * SettingsActivity.PERCENT_MAX / total else 0
                     activity.runOnUiThread {
                         activity.transferBanner.updateProgress(
-                            key,
+                            kind.key,
                             pct,
                             activity.getString(R.string.export_progress_fmt, done, total),
                         )
                     }
                 }
-                activity.transferBanner.remove(key)
+                activity.transferBanner.remove(kind.key)
                 // Safety: only share a file that actually exists and has content.
-                val file = export?.file?.takeIf { it.exists() && it.length() > 0L }
+                val file = produced?.takeIf { it.exists() && it.length() > 0L }
                 if (file == null) {
                     SemperAnalytics.event(
                         activity,
                         SemperAnalytics.EXPORT_FAILED,
-                        mapOf("kind" to "local"),
+                        mapOf("kind" to kind.analyticsKind),
                     )
-                    Toast.makeText(activity, R.string.export_data_failed, Toast.LENGTH_LONG).show()
+                    Toast.makeText(activity, kind.failedMessage, Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 SemperAnalytics.event(
                     activity,
                     SemperAnalytics.EXPORT_COMPLETED,
-                    mapOf("kind" to "local"),
+                    mapOf("kind" to kind.analyticsKind),
                 )
-                SendToSheet.show(activity, file, SettingsActivity.ZIP_MIME)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                activity.transferBanner.remove(key)
-                throw e
+                SendToSheet.show(activity, file, kind.mime)
             } finally {
-                activity.transferBanner.remove(key)
+                activity.transferBanner.remove(kind.key)
             }
         }
     }
@@ -243,5 +225,22 @@ class SettingsYourDataSection(
                     activity.toast(activity.getString(R.string.delete_account_failed))
             }
         }
+    }
+
+    private companion object {
+        val CLOUD_EXPORT = ExportKind(
+            key = "export_cloud",
+            analyticsKind = "cloud",
+            bannerTitle = R.string.transfer_banner_export_cloud,
+            failedMessage = R.string.export_cloud_data_failed,
+            mime = SettingsActivity.JSON_MIME,
+        )
+        val LOCAL_EXPORT = ExportKind(
+            key = "export_local",
+            analyticsKind = "local",
+            bannerTitle = R.string.transfer_banner_export_local,
+            failedMessage = R.string.export_data_failed,
+            mime = SettingsActivity.ZIP_MIME,
+        )
     }
 }

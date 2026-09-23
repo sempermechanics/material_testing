@@ -177,8 +177,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                     }
                 }
                 // Both directories are app-private storage, so this is a rename
-                // rather than a second multi-megabyte write; the copy is the
-                // fallback for the rare cross-volume case.
+                // rather than a second multi-megabyte write. The fallback writes
+                // the bytes already read for JNI rather than AtomicFiles.promote's
+                // copy, which would read the file a second time.
                 if (!source.renameTo(target)) target.writeBytes(defBytes)
                 // Record the name we ACTUALLY wrote: the session index (and the
                 // cloud upload) must be able to find these files again.

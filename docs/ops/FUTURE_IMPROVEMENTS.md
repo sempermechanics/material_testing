@@ -154,8 +154,21 @@ twice.
   ceilings, 100 and 1000) and the `page` response dict three times each;
   `routers/files.py` has the file-doc variant of the guard twice.
 
-All of these are scheduled in the tech-debt burn-down (TD-54 and the app-reuse
-PR in [TECH_DEBT.md](TECH_DEBT.md)).
+**Done** (TD-54 in the backend-dedupe PR, the rest in the app-reuse PR):
+
+- `data/DownloadProgress` publishes both workers' progress; their keys are
+  `DicKeys.PHASE_DOWNLOAD` / `DicKeys.DOWNLOAD_ERROR`, and both give up on
+  `HttpStatus.NOT_FOUND` / `FORBIDDEN`.
+- `SettingsYourDataSection.runExport(kind, produce)` runs both exports; the dead
+  `CancellationException` catch is gone.
+- `ui/common/SupportMail` builds the intent, the fallback toast and the
+  diagnostics lines for all four screens.
+- `util/AtomicFiles` owns `PART_SUFFIX` / `FULL_SUFFIX`, `deleteSidecars` and
+  `promote(tmp, dest)`, used at every site above except `DicBatchRunner`, which
+  keeps `writeBytes` so the `.dat` is not read a second time.
+- `CacheJanitor.SHARE_SUBDIR`, `shareDir()` and the reclaimable file names are
+  public, and their writers use them.
+- `routers/files.py` has one `_owned_file` guard, like `sessions._owned_session`.
 
 ## FI-16 Licensing: the three things scale will find first
 

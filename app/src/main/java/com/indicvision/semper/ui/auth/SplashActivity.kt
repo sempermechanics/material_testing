@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.BuildConfig
@@ -23,6 +24,7 @@ import timber.log.Timber
  * [com.indicvision.semper.ui.home.HomeActivity] (approved user), [PendingApprovalActivity]
  * (account awaiting admin approval), or [AuthActivity] (signed out).
  */
+@MainThread
 class SplashActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }

@@ -6,6 +6,7 @@ import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
@@ -31,6 +32,7 @@ import timber.log.Timber
  * and everything already on the device is still theirs to open — only starting
  * new work waits.
  */
+@MainThread
 class SeatRequiredActivity : AppCompatActivity() {
 
     private lateinit var tvBody: TextView

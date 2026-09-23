@@ -18,6 +18,7 @@ import com.indicvision.semper.data.net.CloudFileDto
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
@@ -241,13 +242,12 @@ object CloudRestore {
         val bundleEntry = files.firstOrNull { it.role == "bundle" }
             ?: error("This backup has no Session.zip")
 
-        val outDir = File(appContext.cacheDir, "share").apply { mkdirs() }
+        val outDir = CacheJanitor.shareDir(appContext.cacheDir)
         val safe = displayName.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_')
             .ifBlank { "analysis" }.take(40)
         val dest = File(outDir, "${safe}_Session.zip")
         dest.delete()
-        File(outDir, "${dest.name}.part").delete()
-        File(outDir, "${dest.name}.full").delete()
+        AtomicFiles.deleteSidecars(dest)
 
         val expected = bundleEntry.sizeBytes.takeIf { it > 0L } ?: -1L
         val totalForUi = expected.takeIf { it > 0L } ?: 1L
@@ -292,8 +292,7 @@ object CloudRestore {
             SessionZip.merge(listOf(dest, extrasTmp), dest)
         } finally {
             extrasTmp.delete()
-            File(outDir, "${extrasTmp.name}.part").delete()
-            File(outDir, "${extrasTmp.name}.full").delete()
+            AtomicFiles.deleteSidecars(extrasTmp)
         }
     }
 
@@ -527,8 +526,7 @@ object CloudRestore {
             downloadAndUnpackBundle(fetch, onProgress)
         } finally {
             prefixTmp.delete()
-            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_prefix.zip.part").delete()
-            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_prefix.zip.full").delete()
+            AtomicFiles.deleteSidecars(prefixTmp)
         }
     }
 
@@ -574,8 +572,7 @@ object CloudRestore {
             return planFromTail(tailTmp.readBytes(), size - tailLen, size)
         } finally {
             tailTmp.delete()
-            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_tail.bin.part").delete()
-            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_tail.bin.full").delete()
+            AtomicFiles.deleteSidecars(tailTmp)
         }
     }
 
@@ -701,8 +698,7 @@ object CloudRestore {
             BundleOutcome(unpackBundle(zipTmp, layout), "whole-bundle", zipTmp.length())
         } finally {
             zipTmp.delete()
-            File(appContext.cacheDir, "restore_${sessionId}_bundle.zip.part").delete()
-            File(appContext.cacheDir, "restore_${sessionId}_bundle.zip.full").delete()
+            AtomicFiles.deleteSidecars(zipTmp)
         }
     }
 
