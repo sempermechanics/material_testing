@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from fastapi import Depends, Header, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from . import audit, errors, firestore_repo as repo, statuses
+from . import audit, errors, firestore_repo as repo, rate_limit, statuses
 from .config import settings
 from .google_auth import verify_app_check_token, verify_id_token
 from .validation import require_header_identifier
@@ -185,6 +185,34 @@ def any_status_user(
     """
     return _authenticate(request, authorization, x_forwarded_authorization, x_device_id,
                          x_firebase_appcheck, require_approved=False)
+
+
+def rate_limited(bucket: rate_limit.TokenBucket):
+    """Route dependency: spend one of the caller's tokens in `bucket`, else 429.
+
+    Declare it in the route decorator's `dependencies=[...]`, which FastAPI
+    resolves before the endpoint's own parameters. On a device-signed route
+    that puts the limit ahead of `verified_device`, so a 429 leaves the nonce
+    unclaimed and the signed request can be sent again as it is — which is
+    what the app's `RetryOnTransient` assumes of every 429. Checked inside the
+    handler instead, the nonce was already spent, the retry came back 401
+    `nonce_invalid_or_replayed`, and the phone gave up on client nonces for
+    the rest of its process; a batch erase of more than three analyses left
+    some in the cloud every time.
+
+    Keyed on the ID-token uid and spent before the signature is checked: a
+    caller holding someone's ID token but not their device key can drain that
+    user's per-instance bucket. The same token already reaches every unsigned
+    route as them, and the cost is a few seconds of 429s.
+    """
+    def check(user: dict = Depends(current_user)) -> None:
+        if not bucket.allow(user["uid"]):
+            raise HTTPException(
+                429, errors.RATE_LIMITED,
+                headers={"Retry-After": str(bucket.retry_after(user["uid"]))},
+            )
+
+    return Depends(check)
 
 
 def admin_user(user: dict = Depends(current_user)) -> dict:
