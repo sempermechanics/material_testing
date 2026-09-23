@@ -186,11 +186,6 @@ def add_seat(
     "/v1/institutions/licenses/{license_id}/invites/{invite_key}",
     dependencies=[rate_limited(rate_limit.institution_bucket)],
 )
-@router.delete(
-    "/v1/campus/licenses/{license_id}/invites/{invite_key}",
-    include_in_schema=False,
-    dependencies=[rate_limited(rate_limit.institution_bucket)],
-)
 def revoke_invite(
     license_id: DocumentId,
     invite_key: DocumentId,

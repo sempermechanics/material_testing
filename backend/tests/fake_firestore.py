@@ -290,6 +290,11 @@ class FakeClient:
     def collection(self, name):
         return _Collection(self, name)
 
+    def get_all(self, references, transaction=None):
+        # The real client yields in arbitrary order; reversing keeps callers
+        # honest about keying results by id rather than by position.
+        return [ref.get() for ref in reversed(list(references))]
+
     def batch(self):
         return _Batch(self)
 

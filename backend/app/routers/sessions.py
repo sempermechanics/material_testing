@@ -395,11 +395,12 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     existing = repo.find_incomplete_session(user["uid"], body.localSessionId)
     if existing:
         sid = existing["sessionId"]
-        uploads, _ = repo.list_pending_uploads(sid)
+        uploads, next_token = repo.list_pending_uploads(sid)
         return {
             "sessionId": sid,
             "status": existing.get("status"),
             "uploads": uploads,
+            "nextPageToken": next_token,
         }
 
     # Quotas: one session == one analysis.
@@ -463,5 +464,13 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     # than leaving a shell against the user's quota.
     provision_session(sid, purge_on_failure=True)
     session = repo.get_session(sid) or {}
-    uploads, _ = repo.list_pending_uploads(sid)
-    return {"sessionId": sid, "status": session.get("status"), "uploads": uploads}
+    # One page is the whole manifest today (MAX_FILES_PER_SESSION is below the
+    # listing's page size), but the cursor is returned rather than dropped so a
+    # larger cap cannot silently truncate it; the app follows /uploads anyway.
+    uploads, next_token = repo.list_pending_uploads(sid)
+    return {
+        "sessionId": sid,
+        "status": session.get("status"),
+        "uploads": uploads,
+        "nextPageToken": next_token,
+    }

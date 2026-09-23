@@ -35,7 +35,7 @@ def activate_license(
         raise HTTPException(status, code)
     audit.record(
         user["uid"], device_id, action="LICENSE_ACTIVATE",
-        detail={"plan": (config or {}).get("plan")},
+        detail={"mode": (config or {}).get("mode")},
     )
     return {"config": config}
 

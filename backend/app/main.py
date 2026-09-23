@@ -201,15 +201,21 @@ async def dependency_error_handler(request: Request, exc: obs.DependencyError):
 # so an async handler would stall the event loop. A `def` handler is dispatched
 # to Starlette's threadpool. Do not "modernize" these back to async def.
 
-app.include_router(health.router)
-app.include_router(account.router)
-app.include_router(devices.router)
-app.include_router(licenses.router)
-app.include_router(sessions.router)
-app.include_router(files.router)
-app.include_router(provision_tasks.router)
-app.include_router(admin.router)
-app.include_router(institutions.router)
+for _router in (
+    health.router,
+    account.router,
+    devices.router,
+    licenses.router,
+    sessions.router,
+    files.router,
+    provision_tasks.router,
+    admin.router,
+    institutions.router,
+):
+    app.include_router(_router)
+    # The access log classifies by declared template, not by guessing which
+    # path segments are ids (TD-44).
+    obs.register_routes(route.path_format for route in _router.routes)
 
 # Re-exports so existing tests keep `from app.main import …`.
 __all__ = [

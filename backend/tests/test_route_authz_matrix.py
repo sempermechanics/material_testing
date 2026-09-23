@@ -148,7 +148,6 @@ EXPECTED = {
     ("GET", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
     ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
     ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
-    ("DELETE", "/v1/campus/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
 }
 

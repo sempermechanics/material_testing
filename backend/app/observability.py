@@ -6,7 +6,7 @@ import logging
 import re
 from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterable
 
 _request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
 _uid: ContextVar[str | None] = ContextVar("uid", default=None)
@@ -48,6 +48,40 @@ def normalize_route_template(path: str) -> str:
     return template if template.startswith("/") else f"/{template}"
 
 
+# Declared route templates, registered by main.py once the routers are
+# included. Matching the request against these is what keeps a static segment
+# such as `activate` from collapsing to `{id}` (TD-44); the regex above is only
+# the fallback for a path no route declares (a 404).
+_PARAM = re.compile(r"\{[^/{}]+\}")
+_ROUTES: list[tuple[re.Pattern[str], str]] = []
+
+
+def register_routes(path_formats: Iterable[str]) -> None:
+    """Record route templates (`/v1/sessions/{sid}`) for `route_template`.
+
+    Templates with fewer parameters are tried first, so a static segment wins
+    over a parameter at the same depth.
+    """
+    for fmt in path_formats:
+        template = _PARAM.sub("{id}", fmt)
+        segments = (
+            "[^/]+" if _PARAM.fullmatch(seg) else re.escape(seg)
+            for seg in fmt.split("/")
+        )
+        pattern = re.compile("^" + "/".join(segments) + "$")
+        if all(t != template for _, t in _ROUTES):
+            _ROUTES.append((pattern, template))
+    _ROUTES.sort(key=lambda r: r[1].count("{id}"))
+
+
+def route_template(path: str) -> str:
+    """The declared template for [path] with every parameter as `{id}`."""
+    for pattern, template in _ROUTES:
+        if pattern.match(path):
+            return template
+    return normalize_route_template(path)
+
+
 def classify_route(method: str, path: str) -> tuple[str, str]:
     """Map method+path to (opClass, routeTemplate) for usage metering.
 
@@ -55,7 +89,7 @@ def classify_route(method: str, path: str) -> tuple[str, str]:
     not double-counted under login/backup/restore buckets.
     """
     method_u = (method or "GET").upper()
-    template = normalize_route_template(path or "/")
+    template = route_template(path or "/")
     raw = path or "/"
 
     if raw in {"/healthz", "/readyz"} or template in {"/healthz", "/readyz"}:
@@ -64,7 +98,7 @@ def classify_route(method: str, path: str) -> tuple[str, str]:
         return "attest", template
     if template == "/v1/me" and method_u == "DELETE":
         return "account", template
-    if template == "/v1/me/export":
+    if template in {"/v1/me/export", "/v1/me/consents", "/v1/me/terms"}:
         return "account", template
     if template in {"/v1/me", "/v1/devices/register"}:
         return "login", template
@@ -72,6 +106,13 @@ def classify_route(method: str, path: str) -> tuple[str, str]:
         return "config", template
     if template.startswith("/v1/admin"):
         return "admin", template
+    # A licence's own lifecycle on the device: activate, seat checkout and
+    # release, unbind. Institution desk traffic (and its legacy `campus` path)
+    # is its own class so shim retirement can read how much is left.
+    if template.startswith("/v1/licenses/"):
+        return "license", template
+    if template.startswith(("/v1/institutions/", "/v1/campus/")):
+        return "institution", template
     if template == "/v1/tasks/provision-session":
         return "backup", template
     if template == "/v1/sessions" and method_u == "POST":

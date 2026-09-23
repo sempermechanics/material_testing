@@ -975,7 +975,12 @@ Signing.
   `opClass` / `routeTemplate` for usage rollups, optional `fileCount` /
   `frameCount` on session create, and `errorCode` on failures
   (`backend/app/observability.py` + middleware). Never logs tokens/signatures/URIs.
-  Structured access logs include `opClass` / `routeTemplate` for ops dashboards.
+  `routeTemplate` is the route's **declared** path with every parameter as
+  `{id}` (`/v1/licenses/{id}/revoke`), registered from the routers at startup;
+  only an undeclared path (a 404) falls back to collapsing long segments.
+  `opClass` is one of `health`, `attest`, `login`, `account`, `config`,
+  `admin`, `license`, `institution`, `backup`, `sync`, `restore`, `other`;
+  `tests/test_op_class.py` fails if a declared route lands in `other`.
   Client 500 bodies stay opaque (`internal_error`) on
   Cloud Run.
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
@@ -1286,10 +1291,25 @@ Both spellings are live at once, in every direction a version skew can go:
 | Old ops tooling | `AdminLicenseCreate` accepts `kind="campus"`; `PATCH .../config` accepts a `plan` patch and folds it onto `mode`. |
 | Unmigrated documents | `normalize_mode` / `normalize_kind` read either spelling, so a user or license document migration 002 has not reached still resolves and still activates. |
 
-Retiring the compatibility is two later changes, in this order: drop the `plan`
-mirror from the response once adoption of a `mode`-reading app build is high
-enough (the same judgement `DAT_CODEC_ENCODING_ENABLED` needs), then drop the
-`/v1/campus/*` aliases from **both** the FastAPI router and the gateway spec.
+**Retirement order.** Nine compatibility shims are live (TD-45). Retire them
+in this order; each is its own change, and each waits on the signal in its row,
+not on a date. The `/v1/campus/*` invite-revoke alias is already gone: it was
+added two days *after* the rename (`4100955` vs `90485b4`), so nothing
+pre-rename could call it.
+
+| # | Shim | Where | Retire when | Signal |
+|---|---|---|---|---|
+| 1 | `PRO_MAX_SESSIONS_PER_USER` read as the default for `LICENSED_MAX_SESSIONS_PER_USER` | `config.py` | No Cloud Run service carries the old name | The deploy workflow's warning stops firing on both environments |
+| 2 | ID-token-only `/uploads` read (`device_or_legacy_reader`) | `deps.py`, `routers/sessions.py` | `REQUIRE_ATTESTED_UPLOADS=1` everywhere for a release cycle | `legacy_unattested_uploads` log count is zero ([FUTURE_IMPROVEMENTS.md](../ops/FUTURE_IMPROVEMENTS.md) FI-7) |
+| 3 | `kind="campus"` on admin mint | `models.AdminLicenseCreate` | Ops scripts send `institution` | Search ops tooling; no server-side signal |
+| 4 | `plan` patch on `PATCH /v1/admin/users/{uid}/config`, folded onto `mode` | `firestore_repo._mode_patch` callers, `models.py` | Ops scripts send `mode` | Neither console nor app calls this route; only hand-run ops calls do, so check those |
+| 5 | `/v1/campus/*` seat routes (4) | `routers/institutions.py` **and** `gateway/openapi.yaml` | No request for a release cycle | Access-log `opClass="institution"` with a `routeTemplate` under `/v1/campus/` (TD-44 made these countable) |
+| 6 | App reads `config.plan` when `mode` is empty | `AppRemoteConfig.resolveMode`, `ApiDtos.AppConfigDto.plan` | Every backend the app can meet emits `mode` (true since the rename deployed) | None needed; ship with #7 |
+| 7 | App falls back to the old `plan` pref key | `AppRemoteConfig.mode()` | One release after the rename build, so every install has cached `mode` | Play Console version distribution |
+| 8 | `plan` mirror in `/v1/config`, licence summaries and user documents | `firestore_repo` (`_mode_patch`, `resolve_user_config`, `_license_public`), `licenses.legacy_plan` | A `mode`-reading build is the fleet (the same judgement `DAT_CODEC_ENCODING_ENABLED` needs) | Play Console version distribution; old builds fail closed to demo without it |
+| 9 | `normalize_mode` / `normalize_kind` accept `plan` / `campus` values in stored documents | `licenses.py` | Migration 002 has reached every `users` and `licenses` document **and** #8 stopped writing the mirror | A Firestore count of documents with no `mode` (users) or `kind == "campus"` (licenses) is zero |
+
+`plan` is not written into new audit rows: `LICENSE_ACTIVATE` records `mode`.
 
 Migration `002_rename_campus_to_institution` rewrites `users` and `licenses`,
 keeping both field spellings consistent rather than deleting the old ones. It
