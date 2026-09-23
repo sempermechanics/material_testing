@@ -30,11 +30,11 @@ import java.util.Locale
 /**
  * The machine-load card on wizard step 1: import / clear the load log, the
  * specimen dimensions the test's stress needs (cross-section, or the bending
- * rows of [SpecimenGeometryFields]), strain axis, and the chips explaining
+ * rows of [SpecimenGeometryFields] and [LoadPointRow]), strain axis, and the chips explaining
  * how the log's rows were matched to the frames. Owns
  * nothing the ViewModel does not already hold; [refresh] redraws from it.
- * The document picker itself stays on the Activity (Activity Result
- * launchers must be registered there).
+ * The document picker and the load-point editor stay on the Activity
+ * (Activity Result launchers must be registered there); [Pickers] opens them.
  *
  * Readiness stays in [AnalysisReadyGate].
  */
@@ -42,10 +42,13 @@ class AnalysisLoadCard(
     private val activity: AppCompatActivity,
     private val viewModel: AnalysisViewModel,
     root: View,
-    private val onPickCsv: () -> Unit,
+    private val pickers: Pickers,
     private val onChanged: () -> Unit,
     private val confirmOpenFaq: (String) -> Unit,
 ) {
+    /** The Activity's launchers: the load CSV, and bending's thickness-tap editor. */
+    class Pickers(val loadCsv: () -> Unit, val loadPoint: () -> Unit = {})
+
     private val dropzone: View = root.findViewById(R.id.loadDropzone)
     private val summary: View = root.findViewById(R.id.loadSummary)
     private val tvName: TextView = root.findViewById(R.id.tvLoadName)
@@ -55,10 +58,16 @@ class AnalysisLoadCard(
     private val etCrossSection: EditText = root.findViewById(R.id.etCrossSection)
     private val toggleAxis: MaterialButtonToggleGroup = root.findViewById(R.id.toggleLoadAxis)
 
+    /** Bending's tapped edges; hidden (and the axis toggle shown) for tensile. */
+    val loadPoint = LoadPointRow(root, viewModel, pickers.loadPoint, onChanged)
+
+    /** When a video's frames are time-matched: the log's start after the reference frame. */
+    private val loadSync = LoadSyncRow(root, viewModel, onChanged)
+
     private var reading = false
 
     init {
-        dropzone.setOnClickListener { if (!reading) onPickCsv() }
+        dropzone.setOnClickListener { if (!reading) pickers.loadCsv() }
         root.findViewById<ImageButton>(R.id.btnLoadClear).setOnClickListener {
             viewModel.clearMachineLoads()
             refresh()
@@ -118,11 +127,13 @@ class AnalysisLoadCard(
 
     /** Redraws the card from the ViewModel; call after the frames change too. */
     fun refresh() {
+        loadPoint.refresh()
         viewModel.refreshMachineLoads()
         val parsed = viewModel.parsedLoadCsv
         val hasLog = parsed != null
         dropzone.isVisible = !hasLog
         summary.isVisible = hasLog
+        loadSync.refresh(viewModel.machineLoads?.mapping == LoadMapping.TIME_NEAREST)
         if (parsed == null) {
             warnRow.isVisible = false
             return

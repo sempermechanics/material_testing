@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bending only, under thickness on the load card: where the beam's edges
+     were tapped on the reference photo, and the button that opens the tap
+     editor. The taps are the photo's scale and the deflection probe. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/load_point"
+            android:textColor="@color/viewer_chrome_text"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tvLoadPointMeta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="12sp"
+            tools:text="128 px across · 0.0498 mm/px" />
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnLoadPoint"
+        style="@style/Widget.Semper.Button.Outlined"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:text="@string/load_point_mark" />
+</LinearLayout>

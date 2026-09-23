@@ -174,8 +174,19 @@ object AnalysisCsvWriter {
             }
             w.append("# load_axis,").append(if (metadata.loadAxisX) "x" else "y").append('\n')
             w.append("# load_unit,N\n")
+            (model as? StressStrain.Model.Flexural)?.probe?.let { writeLoadPoint(w, it) }
         }
     }
+
+    /** Bending's tapped edges (reference px) and the scale they give. */
+    private fun writeLoadPoint(w: Writer, probe: BeamDeflection.Probe) {
+        val taps = probe.taps
+        w.append("# load_point_top_px,").append(px(taps.topX)).append(',').append(px(taps.topY)).append('\n')
+        w.append("# load_point_bottom_px,").append(px(taps.bottomX)).append(',').append(px(taps.bottomY)).append('\n')
+        w.append("# mm_per_px,").append(String.format(Locale.US, "%.6f", probe.mmPerPx)).append('\n')
+    }
+
+    private fun px(value: Float): String = String.format(Locale.US, "%.2f", value)
 
     private fun writeFieldStatsRow(
         w: Writer,
@@ -259,7 +270,7 @@ object AnalysisCsvWriter {
             if (loadN == null) return
             val model = metadata.stressModel
             val strain = model.strainMilli(data) ?: return
-            points += StressStrain.Point(index, loadN, model.stressMPa(loadN), strain)
+            points += StressStrain.Point(index, loadN, model.stressMPa(loadN), strain, model.deflectionMm(data))
         }
 
         override fun close() {
@@ -275,10 +286,18 @@ object AnalysisCsvWriter {
     /**
      * The trailer: what the lab report's Results section quotes. Tensile gets
      * Young's modulus from [ElasticModulus]; an empty value means no straight
-     * run was found. 1-based frame numbers, like the viewer and the report.
+     * run was found. Bending with a load point gets the lab's observation
+     * table and both of its E values ([BeamDeflection]). 1-based frame
+     * numbers, like the viewer and the report.
      */
     internal fun writeMechanicalResults(w: Writer, curve: StressStrain.Curve) {
-        if (curve.model !is StressStrain.Model.Axial) return
+        when {
+            curve.model is StressStrain.Model.Axial -> writeTensileResults(w, curve)
+            curve.model.plotsLoadDeflection -> BeamDeflection.summarize(curve)?.let { writeBendingResults(w, it) }
+        }
+    }
+
+    private fun writeTensileResults(w: Writer, curve: StressStrain.Curve) {
         val fit = ElasticModulus.fit(curve)
         w.append("# mechanical_results\n")
         w.append("# elastic_modulus_gpa,")
@@ -290,6 +309,27 @@ object AnalysisCsvWriter {
             w.append('\n')
         }
     }
+
+    private fun writeBendingResults(w: Writer, summary: BeamDeflection.Summary) {
+        w.append("# mechanical_results\n")
+        w.append("# bending_step,frame,load_N,deflection_mm,flexural_stress_MPa,e_GPa\n")
+        summary.steps.forEach { step ->
+            w.append("# bending_step,${step.frame + 1},")
+                .append(String.format(Locale.US, "%.4f", step.loadN)).append(',')
+                .append(String.format(Locale.US, "%.5f", step.deflectionMm)).append(',')
+                .append(String.format(Locale.US, "%.4f", step.stressMPa)).append(',')
+                .append(gpaOrEmpty(step.modulusGPa)).append('\n')
+        }
+        w.append("# e_mean_gpa,").append(gpaOrEmpty(summary.meanModulusGPa)).append('\n')
+        summary.slope?.let { line ->
+            w.append("# load_deflection_slope_N_per_mm,").append(String.format(Locale.US, "%.4f", line.slope))
+                .append('\n')
+            w.append("# load_deflection_r2,").append(String.format(Locale.US, "%.6f", line.r2)).append('\n')
+        }
+        w.append("# e_slope_gpa,").append(gpaOrEmpty(summary.slopeModulusGPa)).append('\n')
+    }
+
+    private fun gpaOrEmpty(value: Float?): String = value?.let { String.format(Locale.US, "%.4f", it) }.orEmpty()
 
     /** Appends one frame's solved points, each row led by [prefix]. */
     private fun writeFrame(

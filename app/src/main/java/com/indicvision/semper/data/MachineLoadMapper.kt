@@ -52,12 +52,16 @@ object MachineLoadMapper {
      * @param frameTimesMs time of each deformed frame relative to the
      *   reference, index-aligned with the frames, or empty when unknown
      *   (image batches). Only video extraction knows these.
+     * @param logStartS when the log's first row was taken, in seconds after
+     *   the reference frame; negative when the log started first. Used only
+     *   by the time match.
      */
     fun map(
         parsed: ParsedLoadCsv,
         frameCount: Int,
         frameTimesMs: List<Long>,
         testType: TestType,
+        logStartS: Float = 0f,
     ): MachineLoadTable? {
         if (frameCount <= 0 || parsed.rows == 0) return null
         val warnings = mutableListOf<LoadMapWarning>()
@@ -71,7 +75,7 @@ object MachineLoadMapper {
             parsed.timesS != null && frameTimesMs.size == frameCount -> {
                 warnings += LoadMapWarning.TIME_ALIGNED
                 MachineLoadTable(
-                    nearestInTime(rows, parsed.timesS, frameTimesMs),
+                    nearestInTime(rows, parsed.timesS, frameTimesMs, logStartS),
                     LoadMapping.TIME_NEAREST,
                     warnings,
                     rows.size,
@@ -93,15 +97,21 @@ object MachineLoadMapper {
     }
 
     /**
-     * The log's clock is taken to start at the reference frame, so frame time
-     * `t` after the reference is log time `t0 + t`. Times are non-decreasing
-     * (the parser drops any that are not), so a binary search finds the
-     * nearest row.
+     * The log's first row is taken [logStartS] after the reference frame, so
+     * frame time `t` after the reference is log time `t0 + t - logStartS`.
+     * Times are non-decreasing (the parser drops any that are not), so a
+     * binary search finds the nearest row; a frame before the log began reads
+     * its first row.
      */
-    private fun nearestInTime(rows: List<Float>, timesS: List<Float>, frameTimesMs: List<Long>): List<Float> {
+    private fun nearestInTime(
+        rows: List<Float>,
+        timesS: List<Float>,
+        frameTimesMs: List<Long>,
+        logStartS: Float,
+    ): List<Float> {
         val t0 = timesS.first()
         return frameTimesMs.map { frameMs ->
-            val target = t0 + frameMs / MS_PER_S
+            val target = t0 + frameMs / MS_PER_S - logStartS
             val index = timesS.binarySearch(target)
             val at = if (index >= 0) {
                 index

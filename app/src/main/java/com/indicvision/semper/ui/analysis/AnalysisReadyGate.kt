@@ -46,6 +46,8 @@ object AnalysisReadyGate {
                         R.string.next_reason_dimensions
                     },
                 )
+            viewModel.testType.hasMachineLoad && viewModel.loadPointMissing() ->
+                activity.getString(R.string.next_reason_load_point)
             else -> ""
         }
 

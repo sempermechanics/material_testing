@@ -50,6 +50,7 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.data.BeamEdgeTaps
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.SkippedNode
@@ -151,6 +152,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private var loadCard: AnalysisLoadCard? = null
     private val pickLoadCsv = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) loadCard?.onCsvPicked(uri)
+    }
+    private val pickLoadPoint = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val taps = result.data?.getFloatArrayExtra(DicKeys.BEAM_EDGE_TAPS)
+        if (result.resultCode == Activity.RESULT_OK) loadCard?.loadPoint?.onPicked(BeamEdgeTaps.fromArray(taps))
     }
     private lateinit var wizardCoach: AnalysisWizardCoach
     private lateinit var sweepHelper: SweepSetupHelper
@@ -482,7 +487,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (bytes == null) {
                 Toast.makeText(this, R.string.load_image_first, Toast.LENGTH_SHORT).show()
             } else {
-                openRoiStudio(bytes, roiStudioLauncher)
+                openReferenceEditor(bytes, roiStudioLauncher, RoiDrawActivity::class.java)
             }
         }
 
@@ -494,15 +499,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     /**
-     * Hand the reference image to [RoiDrawActivity] through a cache file.
+     * Hand the reference image to an editor that draws on it — [RoiDrawActivity]
+     * or [BeamEdgeTapActivity] — through a cache file, plus any [extras].
      *
      * The copy runs on [Dispatchers.IO]: [bytes] is the decoded reference, tens
      * of megabytes for a RAW frame, and writing that from the click handler
      * froze the wizard for the length of the write.
      */
-    private fun openRoiStudio(
+    private fun openReferenceEditor(
         bytes: ByteArray,
         launcher: ActivityResultLauncher<Intent>,
+        target: Class<out Activity>,
+        extras: Intent.() -> Unit = {},
     ) {
         val tempFile = File(cacheDir, "temp_roi_ref.bin")
         lifecycleScope.launch {
@@ -523,10 +531,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 ).show()
                 return@launch
             }
-            val intent = Intent(this@StaticAnalysisActivity, RoiDrawActivity::class.java)
+            val intent = Intent(this@StaticAnalysisActivity, target)
             intent.putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
             intent.putExtra(DicKeys.IMAGE_WIDTH, viewModel.realRefWidth)
             intent.putExtra(DicKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
+            intent.extras()
             launcher.launch(intent)
         }
     }
@@ -622,6 +631,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     viewModel.realRefHeight = loaded.height
                     viewModel.refName = name
                     viewModel.refBytes = loaded.bytes
+                    viewModel.onReferenceReplaced()
+                    loadCard?.refresh()
                     refPreviewBmp = loaded.preview
                     wizardSlots.refreshRefSlot(refPreviewBmp)
 
@@ -822,8 +833,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // the rest become the deformed sequence, feeding the exact same
     // refBytes / defFilePaths state as the image flow.
     //
-    // Step 1: read metadata  show resolution/fps/length + sampling options.
-    // Step 2: extract at the chosen frame rate over the chosen time segment.
+    // Step 1: read metadata and key frames → show resolution/fps/length + sampling options.
+    // Step 2: extract at the chosen frame rate, or the key frames, over the chosen segment.
     // ------------------------------------------------------------------
     private fun handleVideo(uri: Uri) {
         lifecycleScope.launch(Dispatchers.IO) {
@@ -853,90 +864,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
                 return@launch
             }
-            withContext(Dispatchers.Main) { showVideoSamplingDialog(uri, meta) }
+            val syncTimesUs = VideoKeyframes.syncTimesUs(this@StaticAnalysisActivity, uri)
+            withContext(Dispatchers.Main) { showVideoSamplingDialog(uri, meta, syncTimesUs) }
         }
     }
 
-    /** Sampling by extraction frame rate + time segment, with a metadata summary. */
-    private fun showVideoSamplingDialog(uri: Uri, meta: VideoMeta) {
-        val view = layoutInflater.inflate(R.layout.dialog_video_sampling, null)
-        val tvInfo = view.findViewById<TextView>(R.id.tvVideoInfo)
-        val sliderFps = view.findViewById<com.google.android.material.slider.Slider>(R.id.sliderFps)
-        val tvFps = view.findViewById<TextView>(R.id.tvFpsValue)
-        val range = view.findViewById<com.google.android.material.slider.RangeSlider>(R.id.rangeSegment)
-        val tvSegment = view.findViewById<TextView>(R.id.tvSegmentValue)
-        val tvEstimate = view.findViewById<TextView>(R.id.tvEstimate)
-
-        // --- Metadata summary: only show parts the file actually reported ---
-        val info = mutableListOf<String>()
-        if (meta.width > 0 && meta.height > 0) info.add("${meta.width}×${meta.height}")
-        if (meta.fpsKnown) info.add("%.0f fps".format(meta.fps))
-        info.add(VideoFrameExtractor.formatClock(meta.durationMs))
-        tvInfo.text = info.joinToString("   ·   ")
-
-        // --- Frame-rate selector (capped at the source rate when known) ---
-        val maxFps = (if (meta.fpsKnown) Math.ceil(meta.fps).toInt() else 30).coerceIn(2, 60)
-        sliderFps.valueFrom = 1f
-        sliderFps.valueTo = maxFps.toFloat()
-        sliderFps.value = minOf(10, maxFps).toFloat()
-        tvFps.text = "${sliderFps.value.toInt()} fps"
-
-        // --- Time-segment selector (seconds) ---
-        val durationSec = (meta.durationMs / 1000.0).toFloat().coerceAtLeast(0.1f)
-        range.valueFrom = 0f
-        range.valueTo = durationSec
-        range.values = listOf(0f, durationSec)
-        tvSegment.text = "${VideoFrameExtractor.formatClock(0)} – ${VideoFrameExtractor.formatClock(meta.durationMs)}"
-
-        val maxFrames = DicSettings.maxFrames(
-            this@StaticAnalysisActivity,
-            AppRemoteConfig.maxFrames(this@StaticAnalysisActivity),
-        )
-        // The slider reaches the clip's end, where no frame starts; sampling
-        // stops at the last frame's start so the estimate is what extraction
-        // delivers (see VideoSampling).
-        val lastFrameMs = VideoSampling.lastFrameStartMs(meta.durationMs, meta.fps, meta.fpsKnown)
-        fun segmentMs(): Pair<Long, Long> =
-            (range.values.first() * 1000).toLong().coerceAtMost(lastFrameMs) to
-                (range.values.last() * 1000).toLong().coerceAtMost(lastFrameMs)
-        fun estimate(): Int {
-            val (startMs, endMs) = segmentMs()
-            return VideoSampling.sampleTimesMs(startMs, endMs, sliderFps.value.toDouble(), maxFrames).size
-        }
-        val btnExtract = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnExtractFrames)
-        fun refreshEstimate() {
-            val n = estimate()
-            val capped = if (n >= maxFrames) getString(R.string.video_capped_suffix) else ""
-            tvEstimate.text = "≈ $n frame(s): 1 reference + ${(n - 1).coerceAtLeast(0)} deformed$capped"
-            btnExtract.text = resources.getQuantityString(R.plurals.extract_n_frames_fmt, n, n)
-        }
-
-        sliderFps.addOnChangeListener { _, v, _ ->
-            tvFps.text = "${v.toInt()} fps"
-            refreshEstimate()
-        }
-        range.addOnChangeListener { s, _, _ ->
-            val startMs = (s.values.first() * 1000).toLong()
-            val endMs = (s.values.last() * 1000).toLong()
-            tvSegment.text = "${VideoFrameExtractor.formatClock(startMs)} – ${VideoFrameExtractor.formatClock(endMs)}"
-            refreshEstimate()
-        }
-        refreshEstimate()
-
-        // Bottom sheet (wireframe 05b): the primary button states the outcome.
-        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
-        sheet.setContentView(view)
-        btnExtract.setOnClickListener {
-            sheet.dismiss()
-            val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
-            val (startMs, endMs) = segmentMs()
-            extractVideoFrames(uri, fpsExtract, startMs, endMs)
-        }
-        sheet.show()
+    /** The sampling sheet: frame rate or key frames, over a time segment. */
+    private fun showVideoSamplingDialog(uri: Uri, meta: VideoMeta, syncTimesUs: List<Long>) {
+        val maxFrames = DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
+        VideoSamplingSheet.show(this, meta, syncTimesUs, maxFrames) { times -> extractVideoFrames(uri, times) }
     }
 
-    /** Extracts frames at [fpsExtract] over [startMs, endMs] with the progress overlay. */
-    private fun extractVideoFrames(uri: Uri, fpsExtract: Double, startMs: Long, endMs: Long) {
+    /** Extracts the frames at [times] (ms) with the progress overlay. */
+    private fun extractVideoFrames(uri: Uri, times: List<Double>) {
         if (isProcessing) return
         isProcessing = true
         checkReady()
@@ -944,9 +884,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             activity = this,
             viewModel = viewModel,
             uri = uri,
-            fpsExtract = fpsExtract,
-            startMs = startMs,
-            endMs = endMs,
+            times = times,
             cacheDir = cacheDir,
             tvResult = tvResult,
             overlayHelper = overlayHelper,
@@ -1769,10 +1707,27 @@ class StaticAnalysisActivity : AppCompatActivity() {
             activity = this,
             viewModel = viewModel,
             root = root,
-            onPickCsv = { pickLoadCsv.launch(AnalysisLoadCard.CSV_MIME_TYPES) },
+            pickers = AnalysisLoadCard.Pickers(
+                loadCsv = { pickLoadCsv.launch(AnalysisLoadCard.CSV_MIME_TYPES) },
+                loadPoint = ::openLoadPointEditor,
+            ),
             onChanged = ::checkReady,
             confirmOpenFaq = ::confirmOpenFaq,
         )
+    }
+
+    /** Bending: tap the beam's edges on the reference; needs the photo and the thickness first. */
+    private fun openLoadPointEditor() {
+        val bytes = viewModel.refBytes
+        val thickness = viewModel.geometry.thicknessMm
+        when {
+            bytes == null -> Toast.makeText(this, R.string.load_image_first, Toast.LENGTH_SHORT).show()
+            thickness <= 0f -> Toast.makeText(this, R.string.load_point_need_thickness, Toast.LENGTH_LONG).show()
+            else -> openReferenceEditor(bytes, pickLoadPoint, BeamEdgeTapActivity::class.java) {
+                putExtra(DicKeys.BEAM_THICKNESS_MM, thickness)
+                putExtra(DicKeys.BEAM_EDGE_TAPS, viewModel.geometry.loadPoint.toArray())
+            }
+        }
     }
 
     private fun checkReady() {

@@ -1,5 +1,6 @@
 package com.indicvision.semper.ui.analysis
 
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /**
@@ -35,4 +36,34 @@ object VideoSampling {
         val count = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
         return List(count) { startMs + it * stepMs }
     }
+
+    /**
+     * The key frames (sync samples, start times in µs) inside [startMs, endMs],
+     * as ms. A key frame is stored whole rather than predicted from its
+     * neighbours, so it carries the least compression error of any frame —
+     * the cleanest input for correlation. Their spacing is the encoder's, about
+     * one a second on a phone; loads are matched to each frame's own time, so
+     * uneven spacing costs nothing. More than [maxFrames] are thinned evenly,
+     * keeping the first (the reference) and the last.
+     */
+    fun keyframeTimesMs(syncTimesUs: List<Long>, startMs: Long, endMs: Long, maxFrames: Int): List<Double> {
+        val inSegment = syncTimesUs
+            .filter { it >= startMs * US_PER_MS && it <= endMs * US_PER_MS }
+            .distinct()
+            .sorted()
+            .map { it / US_PER_MS.toDouble() }
+        return selectEvenly(inSegment, maxFrames)
+    }
+
+    /** [times] thinned to at most [count], evenly by index, first and last kept. */
+    fun selectEvenly(times: List<Double>, count: Int): List<Double> = when {
+        times.size <= count -> times
+        count <= 1 -> times.take(1)
+        else -> {
+            val step = (times.size - 1).toDouble() / (count - 1)
+            List(count) { times[(it * step).roundToInt()] }.distinct()
+        }
+    }
+
+    private const val US_PER_MS = 1000L
 }

@@ -1,6 +1,7 @@
 package com.indicvision.semper.results
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.BeamEdgeTaps
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.StressStrain
@@ -240,6 +241,43 @@ class AnalysisCsvPreambleTest {
         assertEquals("", trailer[3])
         assertEquals(4, trailer.size)
         assertTrue(text.indexOf("# mechanical_results") > text.lastIndexOf("frame_4.jpg,"))
+    }
+
+    @Test
+    fun `a bending session with taps writes its scale and the lab's table and E values`() {
+        val out = File.createTempFile("semper_csv_bending", ".csv")
+        out.deleteOnExit()
+        // 100 px over 5 mm: 0.05 mm/px; each frame drops 10·k px = 0.5·k mm under 100·k N.
+        val taps = BeamEdgeTaps(topX = 100f, topY = 50f, bottomX = 100f, bottomY = 150f)
+        val frames = (1..3).map { k ->
+            val data = translatedGrid(u = 0f, v = 10f * k)
+            AnalysisCsvWriter.Frame("frame_$k.jpg", 41, 5, 15, { data }, loadN = 100f * k)
+        }
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = "ref.jpg",
+            strainMethod = "VSG",
+            imgW = 640,
+            imgH = 480,
+            roiX = 0,
+            roiY = 0,
+            roiW = 640,
+            roiH = 480,
+            testType = "bending",
+            geometry = SpecimenGeometry(spanMm = 200f, widthMm = 20f, thicknessMm = 5f, loadPoint = taps),
+        )
+        AnalysisCsvWriter.write(out, false, frames, metadata)
+        val text = out.readText()
+
+        assertTrue(text.contains("# load_point_top_px,100.00,50.00\n"))
+        assertTrue(text.contains("# load_point_bottom_px,100.00,150.00\n"))
+        assertTrue(text.contains("# mm_per_px,0.050000\n"))
+        val trailer = text.substringAfter("# mechanical_results\n", missingDelimiterValue = "").lines()
+        assertEquals("# bending_step,frame,load_N,deflection_mm,flexural_stress_MPa,e_GPa", trailer[0])
+        // I = 20 · 5³ / 12; E = W L³ / (48 δ I) = 160 GPa at every step.
+        assertEquals("# bending_step,1,100.0000,0.50000,60.0000,160.0000", trailer[1])
+        assertEquals("# e_mean_gpa,160.0000", trailer[4])
+        assertEquals("# load_deflection_slope_N_per_mm,200.0000", trailer[5])
+        assertEquals("# e_slope_gpa,160.0000", trailer[7])
     }
 
     @Test

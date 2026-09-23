@@ -52,6 +52,13 @@ object DicKeys {
     const val ROI_T = "ROI_T"
     const val ROI_B = "ROI_B"
 
+    // ── StaticAnalysisActivity ⇄ BeamEdgeTapActivity
+    /** Float: the beam thickness in mm the taps will span. */
+    const val BEAM_THICKNESS_MM = "BEAM_THICKNESS_MM"
+
+    /** FloatArray(4): top x, top y, bottom x, bottom y in reference pixels. */
+    const val BEAM_EDGE_TAPS = "BEAM_EDGE_TAPS"
+
     // ── StaticAnalysisActivity  ResultViewerActivity
     const val SESSION_ID = "SESSION_ID"
     const val REF_NAME = "REF_NAME"

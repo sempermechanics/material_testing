@@ -143,7 +143,13 @@ class ShareCenter(private val host: ResultViewerActivity) {
             }
         }
         val labRow = v.findViewById<View>(R.id.rowShareLabReport)
-        if (LabReportExporter.offered(s.testType, s.loadsN.isNotEmpty(), s.stepPerFrame != null)) {
+        val offered = LabReportExporter.offered(
+            s.testType,
+            hasLoads = s.loadsN.isNotEmpty(),
+            isSweep = s.stepPerFrame != null,
+            hasLoadPoint = s.geometry.loadPoint.isSet,
+        )
+        if (offered) {
             labRow.visibility = View.VISIBLE
             labRow.setOnClickListener {
                 sheet.dismiss()

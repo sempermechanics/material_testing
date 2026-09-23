@@ -21,6 +21,7 @@ import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.BeamEdgeTaps
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.MachineLoadMapper
 import com.indicvision.semper.data.MachineLoadTable
@@ -179,19 +180,27 @@ class AnalysisViewModel : ViewModel() {
      */
     var defFrameTimesMs: List<Long> = emptyList()
 
+    /**
+     * Seconds after the reference frame at which the load log's first row was
+     * taken — the gap between pressing record and the machine starting its
+     * log. Only the time match reads it.
+     */
+    var loadLogStartS: Float = 0f
+
     /** Re-matches the load log to the frames as they are now. Cheap; call after either changes. */
     fun refreshMachineLoads() {
         val parsed = parsedLoadCsv
         machineLoads = if (parsed == null) {
             null
         } else {
-            MachineLoadMapper.map(parsed, defFilePaths.size, defFrameTimesMs, testType)
+            MachineLoadMapper.map(parsed, defFilePaths.size, defFrameTimesMs, testType, loadLogStartS)
         }
     }
 
     fun clearMachineLoads() {
         parsedLoadCsv = null
         loadCsvName = ""
+        loadLogStartS = 0f
         machineLoads = null
     }
 
@@ -200,7 +209,21 @@ class AnalysisViewModel : ViewModel() {
      * stress model uses before the wizard can go on.
      */
     fun mechanicalInputsReady(): Boolean =
-        !testType.hasMachineLoad || (machineLoads != null && stressModel().isComplete)
+        !testType.hasMachineLoad || (machineLoads != null && stressModel().isComplete && !loadPointMissing())
+
+    /**
+     * Bending reads its scale and its deflection from the beam's edges tapped
+     * on the reference photo; without them there is no δ and no E.
+     */
+    fun loadPointMissing(): Boolean = testType == TestType.BENDING && !geometry.loadPoint.isSet
+
+    /**
+     * A new reference photo puts the beam somewhere else, so taps on the old
+     * one no longer mark its edges. Call wherever [refBytes] is replaced.
+     */
+    fun onReferenceReplaced() {
+        if (geometry.loadPoint != BeamEdgeTaps.NONE) geometry = geometry.copy(loadPoint = BeamEdgeTaps.NONE)
+    }
 
     /**
      * Everything the session record stores about the test. A sweep varies

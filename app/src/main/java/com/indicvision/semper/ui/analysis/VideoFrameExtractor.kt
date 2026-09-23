@@ -33,6 +33,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 import kotlin.math.max
+import kotlin.math.roundToLong
 
 data class VideoMeta(
     val durationMs: Long,
@@ -111,8 +112,9 @@ object VideoFrameExtractor {
     )
 
     /**
-     * Extract frames. Call from IO. Invokes [onProgress] from the background thread.
-     * Returns [ExtractionResult] or null if insufficient frames.
+     * Extract frames at [fpsExtract] over [startMs, endMs]. Call from IO.
+     * Invokes [onProgress] from the background thread. Returns
+     * [ExtractionResult] or null if insufficient frames.
      */
     suspend fun extract(
         context: Context,
@@ -123,7 +125,28 @@ object VideoFrameExtractor {
         maxFrames: Int,
         cacheDir: File,
         onProgress: (percent: Int, status: String) -> Unit,
+    ): ExtractionResult? = extract(
+        context = context,
+        uri = uri,
+        times = VideoSampling.sampleTimesMs(startMs, endMs, fpsExtract, maxFrames),
+        cacheDir = cacheDir,
+        onProgress = onProgress,
+    )
+
+    /**
+     * Extract the frames at [times] (ms, ascending): the first becomes the
+     * reference and every deformed frame is timed from it. A frame-rate plan
+     * or the key frames ([VideoSampling]). Call from IO.
+     */
+    suspend fun extract(
+        context: Context,
+        uri: Uri,
+        times: List<Double>,
+        cacheDir: File,
+        onProgress: (percent: Int, status: String) -> Unit,
     ): ExtractionResult? {
+        if (times.isEmpty()) return null
+        val startMs = times.first().toLong()
         val stagingDir = FrameImportHelper.createStagingDir(cacheDir)
         var completed = false
         var refPreview: Bitmap? = null
@@ -131,7 +154,6 @@ object VideoFrameExtractor {
             // Three rungs, tried in order: the AVI demuxer, which is the only
             // thing that can open that container; the hardware decoder; and the
             // retriever, which crashes on nothing.
-            val times = VideoSampling.sampleTimesMs(startMs, endMs, fpsExtract, maxFrames)
             val result = extractWithAvi(
                 context = context,
                 uri = uri,
@@ -191,8 +213,10 @@ object VideoFrameExtractor {
                 VideoFrameBatchWriter.write(
                     context = context,
                     count = times.size,
-                    lumaAt = { i -> dec.decodeFrameAt((times[i] * 1000).toLong()) },
-                    offsetMsAt = { i -> (times[i] - startMs).toLong() },
+                    // Rounded: a key frame's time in ms, truncated, lands a hair before
+                    // it, and the decoder would then decode the GOP before it first.
+                    lumaAt = { i -> dec.decodeFrameAt((times[i] * 1000).roundToLong()) },
+                    offsetMsAt = { i -> (times[i] - times[0]).roundToLong() },
                     startMs = startMs,
                     cacheDir = cacheDir,
                     stagingDir = stagingDir,
@@ -226,8 +250,8 @@ object VideoFrameExtractor {
             // stream's own cannot ask for the same frame twice.
             val picked = LinkedHashMap<Int, Long>()
             for (timeMs in times) {
-                val index = avi.video.frameIndexAt((timeMs * 1000).toLong())
-                if (!picked.containsKey(index)) picked[index] = (timeMs - startMs).toLong()
+                val index = avi.video.frameIndexAt((timeMs * 1000).roundToLong())
+                if (!picked.containsKey(index)) picked[index] = (timeMs - times[0]).roundToLong()
             }
             val indices = picked.keys.toList()
             val offsetsMs = picked.values.toList()
@@ -272,7 +296,7 @@ object VideoFrameExtractor {
 
             for ((i, timeMs) in times.withIndex()) {
                 currentCoroutineContext().ensureActive()
-                val frame = getFrameHybrid(retriever, (timeMs * 1000).toLong()) ?: continue
+                val frame = getFrameHybrid(retriever, (timeMs * 1000).roundToLong()) ?: continue
                 try {
                     currentCoroutineContext().ensureActive()
                     if (i == 0) {
@@ -286,7 +310,7 @@ object VideoFrameExtractor {
                             frame.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, out)
                         }
                         defPaths.add(f.absolutePath)
-                        defTimesMs[f.absolutePath] = (timeMs - startMs).toLong()
+                        defTimesMs[f.absolutePath] = (timeMs - times[0]).roundToLong()
                     }
                 } finally {
                     frame.recycle()

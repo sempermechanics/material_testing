@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Under the load log when a video's frames were matched to it by time: when
+     the machine started logging, in seconds after the video's reference frame.
+     Hidden for image batches, which are matched row by row. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/load_sync_label"
+            android:textColor="@color/viewer_chrome_text"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/etLoadLogStart"
+            android:layout_width="84dp"
+            android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
+            android:gravity="end"
+            android:hint="@string/load_sync_hint"
+            android:imeOptions="actionDone"
+            android:importantForAutofill="no"
+            android:includeFontPadding="false"
+            android:inputType="numberDecimal|numberSigned"
+            android:maxLength="7"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:textColor="@color/sky_primary"
+            android:textColorHint="@color/viewer_chrome_muted"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:text="@string/unit_s"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/load_sync_body"
+        android:textColor="@color/viewer_chrome_muted"
+        android:textSize="12sp" />
+</LinearLayout>

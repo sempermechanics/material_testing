@@ -61,6 +61,20 @@ class SessionStoreMechanicalTest {
     }
 
     @Test
+    fun `bending load-point taps round-trip and a record without them writes no loadPoint key`() {
+        val taps = BeamEdgeTaps(topX = 400f, topY = 210f, bottomX = 401f, bottomY = 338f)
+        val geometry = SpecimenGeometry(spanMm = 935f, widthMm = 150f, thicknessMm = 6.38f, loadPoint = taps)
+        val record = typedRecord(loadsN = listOf(0f, 42f, 51f)).copy(testType = "bending", geometry = geometry)
+
+        assertTrue(SessionStore.upsert(context, record))
+        assertEquals(taps, SessionStore.get(context, record.id)!!.geometry.loadPoint)
+
+        assertTrue(SessionStore.upsert(context, record.copy(geometry = geometry.copy(loadPoint = BeamEdgeTaps.NONE))))
+        val index = File(context.filesDir, "sessions/index.json").readText()
+        assertFalse(index.contains("loadPoint"))
+    }
+
+    @Test
     fun `a typed record with per-frame loads round-trips through the store`() {
         val record = typedRecord(loadsN = listOf(0f, 512.5f, -1024f))
 

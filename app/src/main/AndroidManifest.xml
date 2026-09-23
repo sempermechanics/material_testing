@@ -153,6 +153,10 @@
             android:windowSoftInputMode="adjustPan" />
 
         <activity
+            android:name=".ui.analysis.BeamEdgeTapActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.analysis.VsgLatticeActivity"
             android:exported="false" />
 

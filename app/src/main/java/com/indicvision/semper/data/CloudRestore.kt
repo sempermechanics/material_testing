@@ -936,7 +936,16 @@ object CloudRestore {
             spanMm = mm("spanMm"),
             widthMm = mm("widthMm"),
             thicknessMm = mm("thicknessMm"),
+            loadPoint = restoredTaps(json.optJSONObject("loadPoint")),
         )
+    }
+
+    /** The `/6` edge taps, or none when absent or not two distinct edges. */
+    private fun restoredTaps(json: JSONObject?): BeamEdgeTaps {
+        if (json == null) return BeamEdgeTaps.NONE
+        fun px(key: String) = json.optDouble(key, 0.0).toFloat().takeIf { it.isFinite() } ?: 0f
+        val taps = BeamEdgeTaps(px("topX"), px("topY"), px("bottomX"), px("bottomY"))
+        return if (taps.isSet) taps else BeamEdgeTaps.NONE
     }
 
     /**

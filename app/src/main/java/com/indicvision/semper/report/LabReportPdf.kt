@@ -164,7 +164,8 @@ class LabReportPdf(
     }
 
     private fun heading(text: String) {
-        ensure(160f)
+        // Keep the heading with its first two lines; never strand it at a page foot.
+        ensure(300f)
         y += 30f
         val label = "$text:"
         canvas?.drawText(label, left, y + 48f, headingPaint)

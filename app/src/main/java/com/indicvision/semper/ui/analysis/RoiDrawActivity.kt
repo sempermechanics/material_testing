@@ -25,12 +25,8 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.SemperNativeLib
-import com.indicvision.semper.imaging.RawRgba
 import com.indicvision.semper.ui.common.Insets
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -104,40 +100,15 @@ class RoiDrawActivity : AppCompatActivity() {
                 val bytes = file.readBytes()
                 val screenWidth = resources.displayMetrics.widthPixels
 
-                // A RAW/DNG reference is stored as a headerless RGBA blob, which no
-                // decoder can read — both calls below would fail and leave the editor
-                // with nothing to draw on. Its dimensions arrive in the intent and are
-                // already correct, so skip the decode probes entirely.
-                val isRawRgba = RawRgba.matches(bytes.size.toLong(), realImageWidth, realImageHeight)
-
                 lifecycleScope.launch {
-                    // Prefer decoder-native dims (OpenCV applies EXIF) over intent
-                    // extras from BitmapFactory bounds, which do not. Off the main
-                    // thread: getImageDimensions decodes the whole image rather
-                    // than parsing a header, which is ~0.3s and tens of MB on a
-                    // 12MP shot.
-                    val dims = if (isRawRgba) {
-                        null
-                    } else {
-                        withContext(SemperNativeLib.nativeDispatcher) {
-                            runCatching { SemperNativeLib.getImageDimensions(bytes) }.getOrNull()
-                        }
-                    }
-                    if (dims != null && dims.size >= 2 && dims[0] > 0 && dims[1] > 0) {
-                        realImageWidth = dims[0]
-                        realImageHeight = dims[1]
-                        overlayRoi.realImageWidth = realImageWidth
-                        overlayRoi.realImageHeight = realImageHeight
-                    }
-                    val bitmap = if (isRawRgba) {
-                        withContext(Dispatchers.Default) {
-                            RawRgba.preview(bytes, realImageWidth, realImageHeight, screenWidth)
-                        }
-                    } else {
-                        withContext(SemperNativeLib.nativeDispatcher) {
-                            SemperNativeLib.getPreviewFromBytes(bytes, screenWidth)
-                        }
-                    }
+                    val loaded = ReferencePreviewLoader.load(
+                        ReferencePreviewLoader.Request(bytes, realImageWidth, realImageHeight, screenWidth),
+                    )
+                    realImageWidth = loaded.width
+                    realImageHeight = loaded.height
+                    overlayRoi.realImageWidth = realImageWidth
+                    overlayRoi.realImageHeight = realImageHeight
+                    val bitmap = loaded.bitmap
 
                     if (bitmap == null) {
                         Toast.makeText(this@RoiDrawActivity, R.string.roi_decode_failed, Toast.LENGTH_LONG).show()

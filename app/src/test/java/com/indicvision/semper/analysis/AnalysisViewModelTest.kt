@@ -1,5 +1,10 @@
 package com.indicvision.semper.analysis
 
+import com.indicvision.semper.data.BeamEdgeTaps
+import com.indicvision.semper.data.LoadCsvParse
+import com.indicvision.semper.data.MachineLoadCsv
+import com.indicvision.semper.data.SpecimenGeometry
+import com.indicvision.semper.data.TestType
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -152,5 +157,44 @@ class AnalysisViewModelTest {
         assertFalse(snapshot.completed)
         assertEquals(0, snapshot.stopCode)
         assertEquals(0, snapshot.plannedFrames)
+    }
+
+    // ------------------------------------------------------------ bending load point
+
+    private fun bendingReadyButTaps() {
+        vm.testType = TestType.BENDING
+        vm.defFilePaths = listOf("/tmp/def0.png", "/tmp/def1.png")
+        vm.parsedLoadCsv = (MachineLoadCsv.parse("Load (N)\n10\n20\n") as LoadCsvParse.Ok).csv
+        vm.refreshMachineLoads()
+        vm.geometry = SpecimenGeometry(spanMm = 935f, widthMm = 150f, thicknessMm = 6.38f)
+    }
+
+    @Test
+    fun `bending waits for the load point taps once loads and dimensions are in`() {
+        bendingReadyButTaps()
+        assertTrue(vm.loadPointMissing())
+        assertFalse(vm.mechanicalInputsReady())
+
+        vm.geometry = vm.geometry.copy(loadPoint = BeamEdgeTaps(10f, 20f, 10f, 148f))
+
+        assertFalse(vm.loadPointMissing())
+        assertTrue(vm.mechanicalInputsReady())
+    }
+
+    @Test
+    fun `a new reference clears the taps but keeps the dimensions`() {
+        bendingReadyButTaps()
+        vm.geometry = vm.geometry.copy(loadPoint = BeamEdgeTaps(10f, 20f, 10f, 148f))
+
+        vm.onReferenceReplaced()
+
+        assertEquals(BeamEdgeTaps.NONE, vm.geometry.loadPoint)
+        assertEquals(935f, vm.geometry.spanMm)
+        assertFalse(vm.mechanicalInputsReady())
+    }
+
+    @Test
+    fun `tensile never asks for a load point`() {
+        assertFalse(vm.loadPointMissing())
     }
 }

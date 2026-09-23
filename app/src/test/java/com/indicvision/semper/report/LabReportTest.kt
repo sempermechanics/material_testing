@@ -71,7 +71,7 @@ class LabReportTest {
     fun `observation table rows carry load in kN, stress and a journal-style strain`() {
         val table = document().blocks.filterIsInstance<LabReport.Block.Table>().single()
 
-        assertEquals(listOf("S.No", "Load (kN)", "Extension (mm)", "Stress (MPa)", "Strain"), table.headers)
+        assertEquals(listOf("S.No", "Load (kN)", "Extension (px)", "Stress (MPa)", "Strain"), table.headers)
         assertEquals(15, table.rows.size)
         assertEquals(listOf("1", "8.900", "—", "72.06", "8.00×10⁻⁵"), table.rows[0])
         assertEquals("9.60×10⁻⁴", table.rows[11][4])

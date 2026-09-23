@@ -70,6 +70,22 @@ class MachineLoadMapperTest {
     }
 
     @Test
+    fun `a log started after the reference frame is shifted by the gap`() {
+        // Recording began 2 s before the machine: the log's first row is at video 2 s.
+        val table = MachineLoadMapper.map(
+            parsed(listOf(0f, 100f, 200f, 300f, 400f, 500f), listOf(0f, 1f, 2f, 3f, 4f, 5f)),
+            frameCount = 3,
+            frameTimesMs = listOf(1000L, 3000L, 5000L),
+            testType = TestType.TENSILE,
+            logStartS = 2f,
+        )!!
+
+        // Video 1 s is before the log began → first row; 3 s → log 1 s; 5 s → log 3 s.
+        assertEquals(listOf(0f, 100f, 300f), table.loadsN)
+        assertEquals(LoadMapping.TIME_NEAREST, table.mapping)
+    }
+
+    @Test
     fun `a frame past the end of the log takes the last row`() {
         val table = map(
             loads = listOf(0f, 25f, 50f, 100f),

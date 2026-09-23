@@ -7,7 +7,11 @@ package com.indicvision.semper.report
  *
  * The straight part is the longest *leading* run of solved frames, up to the
  * peak, whose least-squares line keeps R² at or above [MIN_R2] — the frames a
- * student would rule a line through on graph paper. The line has a free
+ * student would rule a line through on graph paper. Every run length is
+ * tried, not only until the first one fails: the first few frames often span
+ * only a few MPa, where camera noise alone drops R² (real steel reads 0.91 on
+ * its first three frames and 0.9955 on its first 26 — see
+ * docs/app/REAL_WORLD_VALIDATION.md). The line has a free
  * intercept and the unloaded reference is left out by default: a lab usually
  * zeroes its gauge under a small preload, and forcing the line through the
  * origin then bends it (the tensile lab data reads 218 GPa that way instead
@@ -43,8 +47,7 @@ object ElasticModulus {
 
     /**
      * The fit, or null when fewer than [minPoints] frames precede the peak,
-     * strain does not move, or even the first [minPoints] are not straight
-     * enough.
+     * strain does not move, or no leading run is straight enough.
      */
     fun fit(
         curve: StressStrain.Curve,
@@ -53,11 +56,12 @@ object ElasticModulus {
         includeOrigin: Boolean = false,
     ): Fit? {
         val candidates = candidates(curve)
-        // Grow the run one frame at a time and keep the last one still straight enough.
-        val best = (minPoints..candidates.size).asSequence()
-            .map { count -> fitFirst(candidates, count, includeOrigin)?.takeIf { it.r2 >= minR2 }?.let { count to it } }
-            .takeWhile { it != null }
-            .lastOrNull()
+        // The longest leading run that is straight enough; shorter runs may fail on noise.
+        val best = (candidates.size downTo minPoints).asSequence()
+            .mapNotNull { count ->
+                fitFirst(candidates, count, includeOrigin)?.takeIf { it.r2 >= minR2 }?.let { count to it }
+            }
+            .firstOrNull()
         return best?.let { (count, line) ->
             Fit(
                 modulusGPa = line.slope.toFloat(),

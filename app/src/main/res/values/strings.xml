@@ -603,6 +603,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="next_reason_load">import the machine load log to continue</string>
     <string name="next_reason_cross_section">enter the specimen cross-section to continue</string>
     <string name="next_reason_dimensions">enter the specimen dimensions to continue</string>
+    <string name="next_reason_load_point">mark the beam’s edges on the reference photo to continue</string>
     <string name="run_analysis">Compute</string>
     <string name="new_analysis_title">New analysis</string>
 
@@ -612,7 +613,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="test_type_tensile">Tensile test</string>
     <string name="test_type_bending">Bending test</string>
     <string name="test_type_sub_loads">Stress–strain curve and Young’s modulus E, from your photos and the machine’s load log.</string>
-    <string name="test_type_sub_flexural">Imports the load log; three-point flexural stress from span, width and thickness.</string>
+    <string name="test_type_sub_flexural">Deflection, bending stress and E from your photos, the hanger loads and the beam’s size.</string>
 
     <!-- Machine load import (wizard step 1, every test type) -->
     <string name="load_card_title">Machine load</string>
@@ -637,14 +638,35 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_cross_section_hint">area</string>
     <string name="unit_mm2">mm²</string>
     <string name="unit_mm">mm</string>
+    <string name="unit_s">s</string>
     <string name="load_dimension_hint">0</string>
     <string name="load_span">Support span</string>
     <string name="load_width">Width</string>
     <string name="load_thickness">Thickness</string>
     <string name="load_axis">Strain axis</string>
+    <string name="load_point">Load point</string>
+    <string name="load_point_mark">Mark</string>
+    <string name="load_point_remark">Re-mark</string>
+    <string name="load_point_unset">Tap the beam’s top and bottom edges on the reference photo</string>
+    <string name="load_point_need_thickness">Enter the thickness first — the taps turn it into the photo’s scale.</string>
+    <!-- e.g. "128 px across · 0.0498 mm/px" -->
+    <string name="load_point_meta_fmt">%1$d px across · %2$s mm/px</string>
+
+    <!-- Bending edge taps (BeamEdgeTapActivity) -->
+    <string name="beam_tap_title">Beam thickness</string>
+    <string name="beam_tap_save">Save</string>
+    <string name="beam_tap_canvas">Reference photo of the beam</string>
+    <string name="beam_tap_step_top">Tap the beam’s top edge, right under the load. Pinch or double-tap to zoom in first; drag to move around.</string>
+    <string name="beam_tap_step_bottom">Now tap the bottom edge, straight below.</string>
+    <string name="beam_tap_step_done">Tap near a mark to move it. Save when both sit on the edges.</string>
+    <string name="beam_tap_readout_empty">Thickness %1$s mm — tap both edges</string>
+    <string name="beam_tap_too_close">The marks are on top of each other — tap the other edge.</string>
+    <!-- thickness mm, pixels, mm per pixel -->
+    <string name="beam_tap_readout_fmt">%1$s mm over %2$d px · %3$s mm/px</string>
+    <string name="beam_tap_precision_warn_fmt">Only %1$d px across: a 1 px slip changes E by about %2$d%%. Zoom in, or photograph the middle of the beam closer.</string>
     <string name="info_load_title">Machine load</string>
     <string name="info_load_body">Import the loads as a CSV, in N or kN: the file the testing machine exported, or one you type yourself with one load per photo, in the same order as the photos. A longer machine log is matched by time for video frames, or spread evenly over the photos. Loads keep their sign.\n\nStress = load ÷ cross-section area. For a round bar the area is π × d² ÷ 4 (d = diameter in mm). Strain comes from the photos, so no extensometer is needed. The strain axis is the direction the bar is pulled in the image.\n\nYoung’s modulus E is the slope of the straight, early part of the curve, so take several photos before the bar starts to yield. E from a phone camera is approximate; compare it with the value your lab gives you.</string>
-    <string name="info_load_body_bending">Import the load log the testing machine exported (CSV). One load per deformed frame is ideal; a longer log is matched by time for video frames, or resampled evenly for photos. Three-point bending: flexural stress = 3 × load × span ÷ (2 × width × thickness²), the outer-fibre stress under the loading nose. Span is the distance between the supports, thickness is in the loading direction. The strain axis is the beam’s length in the image; the camera should see the tension or compression face.</string>
+    <string name="info_load_body_bending">Import the loads as a CSV in N or kN, one per photo in the same order as the photos. A hanger load in kg is kg × 9.81 N.\n\nPoint the phone at the side of the beam, at the middle where the load hangs, on a tripod. Take the reference photo with no load on the hanger — that is the dial gauge’s zero. Frame the middle of the beam rather than the whole span, so the thickness covers plenty of pixels.\n\nAfter the dimensions, tap the beam’s top and bottom edges under the load on the reference photo: the thickness you measured over those pixels is the photo’s scale, and the deflection δ is read there.\n\nBending stress σb = M·y ÷ I, with M = W·L ÷ 4, y = t ÷ 2 and I = b·t³ ÷ 12 (L span, b width, t thickness). E = W·L³ ÷ (48·δ·I) for each load, and also from the slope of the load–deflection graph. E from a phone camera is approximate.</string>
     <plurals name="load_warn_resampled_fmt">
         <item quantity="one">%1$d row resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>
         <item quantity="other">%1$d rows resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>
@@ -652,7 +674,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_warn_first_row_dropped">The log has one more row than frames; the first (unloaded) row is taken as the reference.</string>
     <string name="load_warn_units_assumed">No unit found in the log — loads are taken as newtons.</string>
     <string name="load_warn_column_guessed">No load column named in the log — the last numeric column is used.</string>
-    <string name="load_warn_time_aligned">Frames matched to the log by time, assuming the video and the log started together.</string>
+    <string name="load_warn_time_aligned">Frames matched to the log by time. If the machine started logging after the video’s first frame, enter the gap below.</string>
+    <string name="load_sync_label">Log started after the first frame</string>
+    <string name="load_sync_hint">0</string>
+    <string name="load_sync_body">Seconds from the video’s first frame (the reference) to the log’s first row. Negative if the log started first.</string>
     <string name="load_warn_time_ignored">The log’s time column does not increase, so it was ignored.</string>
     <string name="load_warn_sign_tensile">All loads are negative for a tensile test — check the machine’s sign convention.</string>
     <string name="load_err_title">Couldn’t read the load log</string>
@@ -676,6 +701,27 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">The whole test: %1$d of %2$d photo on the curve. Tap › to see its strain.</item>
         <item quantity="other">The whole test: %1$d of %2$d photos on the curve. Tap › to see each photo’s strain.</item>
     </plurals>
+    <plurals name="results_summary_caption_bending_fmt">
+        <item quantity="one">The whole test: %1$d of %2$d photo on the graph. Tap › to see its deflection.</item>
+        <item quantity="other">The whole test: %1$d of %2$d photos on the graph. Tap › to see each photo’s deflection.</item>
+    </plurals>
+
+    <!-- Bending Results: load–deflection graph and the lab's Results lines -->
+    <string name="bending_curve_title">Load–deflection</string>
+    <string name="bending_axis_deflection">Deflection δ (mm)</string>
+    <string name="bending_axis_load">Load W (N)</string>
+    <string name="bending_slope_label">Slope</string>
+    <string name="bending_modulus_slope_fmt">E from the graph ≈ %1$s GPa (slope %2$s N/mm, R² %3$s)</string>
+    <string name="bending_modulus_slope_none">E from the graph: needs at least two photos with a deflection.</string>
+    <plurals name="bending_modulus_mean_fmt">
+        <item quantity="one">Average E from the calculation ≈ %1$s GPa (%2$d load step)</item>
+        <item quantity="other">Average E from the calculations ≈ %1$s GPa (%2$d load steps)</item>
+    </plurals>
+    <string name="bending_scale_fmt">Scale from the thickness taps: %1$s mm/px</string>
+    <string name="bending_caution">Approximate: the deflection comes from the camera, not a dial gauge, and includes any movement of the whole beam. The graph value ignores that movement; trust it more.</string>
+    <string name="bending_no_deflection">No deflection was read at the load point. Check that the tapped point is inside the analysed region.</string>
+    <!-- frame, load N, deflection mm, bending stress MPa, E GPa -->
+    <string name="bending_frame_caption_fmt">Frame %1$d · %2$s N · δ %3$s mm · σb %4$s MPa · E %5$s GPa</string>
     <string name="results_peak_stress_fmt">Peak stress: %1$s MPa (frame %2$d)</string>
     <string name="modulus_fit_label">Elastic fit</string>
     <string name="modulus_tensile_fmt">Young’s modulus E ≈ %1$s GPa, from the straight part of the curve (frames %2$d–%3$d, R² %4$s). Approximate: the strain comes from the camera, not an extensometer.</string>
@@ -896,6 +942,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     
     <string name="video_capped_suffix">" (capped — raise Max frames in Settings)"</string>
     <string name="video_first_frame_note">First frame becomes the reference</string>
+    <string name="video_mode_rate">Frame rate</string>
+    <string name="video_mode_keyframes">Key frames</string>
+    <string name="video_keyframes_note">Key frames are stored whole, not predicted from their neighbours, so they are the sharpest frames for DIC. Phones record about one a second.</string>
+    <string name="video_keyframes_estimate_fmt">%1$d key frames: 1 reference + %2$d deformed%3$s</string>
+    <string name="video_keyframes_too_few">Fewer than two key frames in this segment. Widen it, or use Frame rate.</string>
     <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients.</string>
     <string name="info_step">Spacing between tracked points, in pixels. Smaller means denser results but longer analysis time. Linked to subset overlap: overlap = 1 − step / subset.</string>
     <string name="info_strain_window">Bigger means smoother strain but less local detail.</string>

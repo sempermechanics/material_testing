@@ -136,24 +136,27 @@ class ViewerStressStrainHelper(
         plot.compactAxes = true
         // The summary is the whole test, so no frame is highlighted there.
         val current = if (host.isShowingSummary) null else curve.at(host.currentFrameIndex)
-        val (strainAxis, stressAxis) = axisLabels(host, curve.model)
+        val (xAxis, yAxis) = axisLabels(host, curve.model)
         val modulus = modulusOf(curve)
+        val bending = curve.model.plotsLoadDeflection
         plot.setData(
             plotSeries(host, curve, modulus),
-            strainAxis,
-            stressAxis,
-            highlightX = current?.strainMilli,
-            xUnit = StressStrain.UNIT_STRAIN,
-            yUnit = StressStrain.UNIT_STRESS,
+            xAxis,
+            yAxis,
+            highlightX = if (bending) current?.deflectionMm else current?.strainMilli,
+            xUnit = if (bending) ViewerBendingResults.UNIT_DEFLECTION else StressStrain.UNIT_STRAIN,
+            yUnit = if (bending) ViewerBendingResults.UNIT_LOAD else StressStrain.UNIT_STRESS,
         )
         caption.text = when {
             host.isShowingSummary -> host.resources.getQuantityString(
-                R.plurals.results_summary_caption_fmt,
+                if (bending) R.plurals.results_summary_caption_bending_fmt else R.plurals.results_summary_caption_fmt,
                 host.loadsN.size,
                 curve.points.size,
                 host.loadsN.size,
             )
             current == null -> host.getString(R.string.stress_strain_frame_skipped)
+            bending -> ViewerBendingResults.frameCaption(host, curve, current.frame)
+                ?: host.getString(R.string.stress_strain_frame_skipped)
             else -> host.getString(
                 R.string.stress_strain_caption_fmt,
                 current.frame + 1,
@@ -186,79 +189,35 @@ class ViewerStressStrainHelper(
 
         /**
          * The curve, plus — when there is a fit — the fitted elastic line as a
-         * muted second series, drawn across the frames it was fitted to.
+         * muted second series, drawn across the frames it was fitted to. A
+         * bending curve with a load point is [ViewerBendingResults]' instead.
          */
         fun plotSeries(
             context: Context,
             curve: StressStrain.Curve,
             modulus: ElasticModulus.Fit?,
-        ): List<VsgPlotView.Series> = buildList {
-            add(
-                VsgPlotView.Series(
-                    label = context.getString(R.string.stress_strain_title),
-                    color = VsgPlotView.paletteColor(context, 0),
-                    points = curve.plotPoints(),
-                ),
-            )
-            val fitted = modulus?.let { fit -> curve.points.filter { fit.covers(it.frame) } }.orEmpty()
-            if (modulus != null && fitted.isNotEmpty()) {
-                val from = fitted.minOf { it.strainMilli }
-                val to = fitted.maxOf { it.strainMilli }
-                add(
-                    VsgPlotView.Series(
-                        label = context.getString(R.string.modulus_fit_label),
-                        color = VsgPlotView.paletteColor(context, 1),
-                        points = listOf(from to modulus.stressAt(from), to to modulus.stressAt(to)),
-                        markers = false,
-                        muted = true,
-                    ),
-                )
-            }
+        ): List<VsgPlotView.Series> = if (curve.model.plotsLoadDeflection) {
+            ViewerBendingResults.plotSeries(context, curve)
+        } else {
+            ViewerStressStrainResults.plotSeries(context, curve, modulus)
         }
 
         /**
          * The Results summary under the curve — what the lab report's Results
-         * section asks for: E with the frames it came from, and the peak stress.
+         * section asks for: E with the frames it came from, and the peak stress;
+         * for bending with a load point, [ViewerBendingResults.resultsText].
          */
         fun resultsText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): String =
-            buildList {
-                if (curve.model is StressStrain.Model.Axial) {
-                    add(
-                        if (modulus == null) {
-                            context.getString(R.string.modulus_tensile_none)
-                        } else {
-                            context.getString(
-                                R.string.modulus_tensile_fmt,
-                                String.format(Locale.US, "%.1f", modulus.modulusGPa),
-                                modulus.firstFrame + 1,
-                                modulus.lastFrame + 1,
-                                String.format(Locale.US, "%.4f", modulus.r2),
-                            )
-                        },
-                    )
-                    if (modulus != null && modulus.modulusGPa <= 0f) {
-                        add(context.getString(R.string.modulus_sign_caution))
-                    }
-                }
-                curve.peak?.let { peak ->
-                    add(
-                        context.getString(
-                            R.string.results_peak_stress_fmt,
-                            String.format(Locale.US, "%.2f", peak.stressMPa),
-                            peak.frame + 1,
-                        ),
-                    )
-                }
-            }.joinToString("\n")
+            if (curve.model.plotsLoadDeflection) {
+                ViewerBendingResults.resultsText(context, curve)
+            } else {
+                ViewerStressStrainResults.resultsText(context, curve, modulus)
+            }
 
-        /** Plot axis titles (strain, stress) worded for the model. */
-        fun axisLabels(context: Context, model: StressStrain.Model): Pair<String, String> = when (model) {
-            is StressStrain.Model.Axial ->
-                context.getString(R.string.stress_strain_axis_strain) to
-                    context.getString(R.string.stress_strain_axis_stress)
-            is StressStrain.Model.Flexural ->
-                context.getString(R.string.stress_strain_axis_strain) to
-                    context.getString(R.string.stress_strain_axis_flexural_stress)
+        /** Plot axis titles (x, y) worded for the model: strain and stress, or deflection and load. */
+        fun axisLabels(context: Context, model: StressStrain.Model): Pair<String, String> = when {
+            model.plotsLoadDeflection -> ViewerBendingResults.axisLabels(context)
+            else -> ViewerStressStrainResults.axisLabels(context, model)
         }
 
         fun stressLabelRes(model: StressStrain.Model): Int = when (model) {
