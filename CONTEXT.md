@@ -157,12 +157,17 @@ Same fix as material_testing #9.
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
-**Quicker session setup (branch `perf/inline-provision`, 2026-09-23).** Two
-Pixel 6 backups spent 5.37 s and 3.43 s provisioning inline (a bundle is 3
-files, under the queue threshold). The folder step made three Drive calls in a
-row; now the cached `session/` check and the new session folder's create run
-together, with no name search for an id minted in the same request, and a
-retry reuses the stored folder. `session_provisioned` logs `folderMs`.
+**Quicker session setup (#149, deployed 2026-09-23).** Two Pixel 6 backups
+spent 5.37 s and 3.43 s provisioning inline (a bundle is 3 files, under the
+queue threshold). The folder step made three Drive calls in a row; now the
+cached `session/` check and the new session folder's create run together, with
+no name search for an id minted in the same request, and a retry reuses the
+stored folder. `session_provisioned` logs `folderMs`. The next Pixel backup
+provisioned in 2.40 s (folders 1.23 s), `POST /v1/sessions` 3.12 s.
+
+**Deploys prune their tags (branch `chore/prune-cand-tags`).** The promote
+routes `--to-latest` and drops every `cand-*` tag in the same call (TD-32
+closed). Unproven until the next staging deploy.
 
 **Backend names standardised (2026-09-23, #146, deployed).** Cloud Run
 services are rebuilt as `semper-api` / `semper-api-staging` with queues

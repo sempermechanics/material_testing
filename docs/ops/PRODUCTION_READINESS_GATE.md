@@ -360,13 +360,18 @@ pre-licensing documents)
       event (proves the Tasks grant). A phone backup cannot prove it: a bundle
       is 3 files and provisions inline. Two Pixel 6 backups on 2026-09-23 did
       that — `POST /v1/sessions` 6.06 s / 4.05 s, provisioning 5.37 s / 3.43 s.
-- [ ] Inline provisioning after the folder change (check-and-create run
+- [x] Inline provisioning after the folder change (check-and-create run
       concurrently, no name search for the new session folder): a phone backup's
       `session_provisioned` shows `folderMs` and `latencyMs` well under the
-      3.43 s above.
+      3.43 s above. Pixel 6 on 2026-09-23 against #149: `latencyMs` 2401,
+      `folderMs` 1233, `POST /v1/sessions` 3.12 s (from 3.43 s / 4.05 s);
+      the rest is opening the three resumable uploads, already in parallel.
 - [x] Prune the tagged `cand-*` revisions so none holds a warm instance.
-      Moot: they went with `indic-api` (deleted 2026-09-23); `semper-api` has
-      one revision.
+      Every deploy re-created one, so the promote now removes them
+      (`chore/prune-cand-tags`, TD-32).
+- [ ] The first staging deploy after `chore/prune-cand-tags` promotes with
+      `--to-latest` and leaves no `cand-*` tag (`gcloud run services describe
+      semper-api-staging --format='value(spec.traffic)'`); then production.
 
 ## Contention fixes found by the emulator tier
 
