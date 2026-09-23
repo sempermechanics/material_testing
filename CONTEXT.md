@@ -153,8 +153,8 @@ its SPS/PPS, so an extraction intermittently fell back the same way. Neither pat
 has run on a physical device yet (vendor strides, crop; a real camera AVI):
 [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a. The same change is being ported to `sempermechanics/material_testing`.
 
-**Faster sign-in, upload and restore; failures that say so (branch
-`perf/backend-latency-and-failures`, 2026-09-23, open).** Launch opens Home
+**Faster sign-in, upload and restore; failures that say so (#142, merged
+and deployed 2026-09-23).** Launch opens Home
 from the cached approval and re-checks in the background (`StatusRecheck`);
 `/v1/me` and `/v1/config` run in parallel. Signed calls carry a device-minted
 `t1.` nonce instead of fetching a challenge first — one round-trip fewer per
@@ -165,9 +165,13 @@ files or fewer inline, keeps one warm instance in production with one worker,
 logs a failed Cloud Tasks enqueue at ERROR, and answers `drive_file_gone`
 instead of a retried 502 when a backed-up file is gone from Drive. `/readyz`
 is off the gateway, staging deploys private, and the setup guide no longer
-advises `allUsers`. Ops still owed (the Cloud Tasks `serviceAccountUser`
-grant, the staging deployer invoker, the deploy, `cand-*` pruning):
+advises `allUsers`. Production serves `c0c0ce3` (`indic-api-35835537292-1`,
+one warm instance) behind gateway config `v202609230812`; the Cloud Tasks
+`serviceAccountUser` grant and the staging deployer invoker are applied.
+Still owed: proof that the next backup goes through the queue, the app side
+(ships with the next release), and `cand-*` pruning —
 [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
+Rollback: revision `indic-api-35821056144-1`, gateway `v202609211150`.
 
 **Licensing is live in production (2026-09-21/22).** `indic-api` serves
 `d6b1b64` (`main` after #116) behind the `semper-gw` gateway config

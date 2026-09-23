@@ -340,11 +340,20 @@ pre-licensing documents)
       (`--no-allow-unauthenticated`), so the candidate smoke needs it.
       Granted 2026-09-23; staging invokers are now `indic-gw@`,
       `indic-deployer@` and `domain:indicvision.com`.
-- [ ] Deploy to production (min-instances 1, one worker, client nonces,
+- [x] Deploy to production (min-instances 1, one worker, client nonces,
       `/readyz` no longer on the gateway — redeploy the gateway config from
-      `backend/gateway/openapi.yaml`). Check: `/readyz` through the gateway
-      → 404; a signed call from a new build carries a `t1.` nonce and no
-      `POST /v1/challenge` precedes it.
+      `backend/gateway/openapi.yaml`). Deployed 2026-09-23: `c0c0ce3` as
+      `indic-api-35835537292-1` (run `35835537292`, minScale 1), gateway
+      `semper-gw` on `v202609230812` (the diff against `v202609211150` was
+      the `/readyz` block only). Checked: `/readyz` through the gateway → 404,
+      unauthenticated `/v1/config` → 401, the console preflight → 200 with
+      ACAO, invokers unchanged. Rollback: `update-traffic
+      --to-revisions=indic-api-35821056144-1=100`, gateway
+      `--api-config=v202609211150`.
+- [ ] A signed call from a new build carries a `t1.` nonce and no
+      `POST /v1/challenge` precedes it (next app release).
+- [ ] The next backup's session reaches `UPLOADING` through the queue with no
+      `provision_enqueue_failed` event (proves the Tasks grant).
 - [ ] Prune the tagged `cand-*` revisions so none holds a warm instance.
 
 ## Contention fixes found by the emulator tier
