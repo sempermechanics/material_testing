@@ -61,48 +61,66 @@ change (see §19).
 ## 1. Production architecture diagram
 
 ```
-                         ┌───────────────────────────────────────────┐
-                         │             Android device                 │
-                         │  Android Views UI (XML + findViewById)     │
-                         │  ├─ Firebase Auth (Firebase ID token)      │
-                         │  ├─ Android Keystore (device private key)  │
-                         │  ├─ WorkManager CoroutineWorker            │
-                         │  └─ OkHttp streaming (chunked resumable)   │
-                         │  ── DIC / OpenCV / PDF: 100% on-device ──  │
-                         └───────────────┬───────────────────────────┘
-                                         │ HTTPS (ID token + device signature)
-                                         ▼
-              ┌────────────────────── Google Cloud project ──────────────────────┐
-              │                                                                   │
-              │   ┌──────────────┐   verify ID token (firebase-admin: certs,     │
-              │   │  Cloud Run   │◀── aud, iss, exp) + verify device signature   │
-              │   │  FastAPI     │                                               │
-              │   │  (scale→0)   │──▶ Firestore (users, devices, sessions,       │
-              │   │  runs as SA  │        files, audit_logs)                     │
-              │   │ indic-api@…  │                                               │
-              │   └──────┬───────┘                                               │
-              │          │ IAM Credentials generateAccessToken                   │
-              │          │ (Drive scope, keyless self-impersonation)             │
-              │          ▼                                                       │
-              │   ┌──────────────┐   create folders, init resumable session     │
-              │   │ Drive API    │   (metadata only — NO bytes)                  │
-              │   └──────┬───────┘                                               │
-              │          │ returns resumable session URI                        │
-              │  Cloud Logging / Monitoring / Error Reporting  ◀── structured    │
-              └──────────┼────────────────────────────────────────────logs──────┘
-                         │ session URI handed back to device
-                         ▼
-              ┌───────────────────────────────────────────────┐
-              │  Company Google Workspace — Shared Drive       │
-              │  "Semper-Research-Storage" (5 TB pool)          │
-              │  SA is Manager. Device PUTs bytes here        │
-              │  DIRECTLY (never through Cloud Run).           │
-              └───────────────────────────────────────────────┘
+ ┌─ Android device ────────────────────────┐   ┌─ Browser: the consoles (§20.8) ─────────┐
+ │ Android Views UI (XML + findViewById)   │   │ app.sempermechanics.com = Firebase      │
+ │ ├─ Firebase Auth (Firebase ID token)    │   │ Hosting, auth project; static pages     │
+ │ ├─ Android Keystore (device key)        │   │ /login /account /console/institution    │
+ │ ├─ WorkManager CoroutineWorker          │   │ /console/operator                       │
+ │ └─ OkHttp streaming (chunked resumable) │   │ ├─ Firebase Auth: redirect + TOTP       │
+ │ ── DIC / OpenCV / PDF: 100% on-device   │   │ └─ fetch + Bearer (CORS preflight)      │
+ └────────────────────┬────────────────────┘   └────────────────────┬────────────────────┘
+                      │ ID token + device signature                 │ ID token: 2nd factor done,
+                      │                                             │ recent auth_time; no device
+                      └──────────────────────┬──────────────────────┘
+                                             ▼ HTTPS
+ ┌──────────────────────────────── Google Cloud project ─────────────────────────────────┐
+ │                                                                                       │
+ │  ┌───────────────────┐  validates the Firebase JWT (iss / aud = the auth              │
+ │  │ API Gateway       │  project); refuses any path not declared in                    │
+ │  │ semper-gw (ESPv2) │  gateway/openapi.yaml; allowCors hands the                     │
+ │  │                   │  preflight to Cloud Run; per-consumer quotas                   │
+ │  └─────────┬─────────┘                                                                │
+ │            │ invokes as indic-gw@ (run.invoker; never allUsers)                       │
+ │            ▼                                                                          │
+ │  ┌──────────────┐   re-verifies the ID token (firebase-admin), then the               │
+ │  │  Cloud Run   │   device signature, or from a browser the second                    │
+ │  │  FastAPI     │   factor + sign-in age; CORS for CONSOLE_ORIGINS only               │
+ │  │  (scale→0)   │                                                                     │
+ │  │  runs as SA  │──▶ Firestore (users, devices, licenses + seats,                     │
+ │  │ indic-api@…  │        invites, sessions, files, audit_logs)                        │
+ │  │              │◀── Cloud Tasks: session provisioning, as indic-api@                 │
+ │  └──────┬───────┘                                                                     │
+ │         │ IAM Credentials generateAccessToken                                         │
+ │         │ (Drive scope, keyless self-impersonation)                                   │
+ │         ▼                                                                             │
+ │  ┌──────────────┐   create folders, init resumable session                            │
+ │  │ Drive API    │   (metadata only — NO bytes)                                        │
+ │  └──────┬───────┘                                                                     │
+ │         │ returns resumable session URI                                               │
+ │ Cloud Logging / Monitoring / Error Reporting  ◀── structured logs                     │
+ └─────────┼─────────────────────────────────────────────────────────────────────────────┘
+           │ session URI handed back to the device, which
+           ▼ PUTs bytes to Drive directly
+     ┌─────────────────────────────────────────────┐
+     │ Company Google Workspace — Shared Drive     │
+     │ "Semper-Research-Storage" (5 TB pool)       │
+     │ SA is Manager. Device PUTs bytes here       │
+     │ DIRECTLY (never through Cloud Run).         │
+     └─────────────────────────────────────────────┘
 ```
 
 **Trust boundaries.** (1) Device↔Cloud Run: mutually authenticated (the
-Firebase ID token proves *user*; the Keystore signature proves *device*). (2) Cloud
-Run↔Google APIs: keyless, via the metadata server + IAM Credentials. (3)
+Firebase ID token proves *user*; the Keystore signature proves *device*). (2)
+Browser↔Cloud Run: there is no device key to sign with, so what a state-changing
+browser call must prove instead is a **completed second factor and a recent
+sign-in**, both read from the ID token by Cloud Run (§20.8). CORS decides only
+which origins' pages may *read* a response — bearer tokens, no cookies — so it
+is not an authorisation control and nothing relies on it as one. (3)
+Gateway↔Cloud Run: Cloud Run is not public. `run.invoker` is held by the
+gateway's service account and by the API's own, which Cloud Tasks uses to call
+back for provisioning — never `allUsers` — so the only way in from outside is
+through the gateway's JWT check and its declared paths. (4) Cloud
+Run↔Google APIs: keyless, via the metadata server + IAM Credentials. (5)
 Device↔Drive: capability-scoped — the resumable session URI authorizes writes
 to *exactly one file*, nothing else.
 
@@ -1061,7 +1079,7 @@ guarantee as activation — never touches stored sessions/files. See
 
 | Action | Route | Effect |
 |---|---|---|
-| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff, device-attested) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0. |
+| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff: device-attested, or from the operator desk with a second factor and a sign-in newer than `ADMIN_WEB_REVOKE_REAUTH_SECONDS`) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0. |
 | Single-seat revoke | `DELETE /v1/institutions/licenses/{id}/seats/{uid}` (institution IT) | Only that member drops to Demo; **frees the slot** for another domain member (including, after re-admission, the same member re-entering the key). |
 | Disable a seat | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores the licensed mode in place with no re-activation needed. |
 
@@ -1091,6 +1109,22 @@ verified account attaches it at once (`create_individual_license` →
 post-deploy request stamped. The invite is still written for the case where no
 such account exists yet, and a holder of a *live* non-demo licence is left
 untouched (`claimError: holder_already_licensed`).
+
+**A mint is licence-first, delivery second, and delivery can fail without
+failing the mint.** The licence document is written, then the invite, then
+the attach. An address already promised to another live licence refuses the
+invite (`inviteError: invite_exists`), and the new licence exists undelivered —
+its key still redeems it through the support route. That is deliberate: a
+licence that has been paid for should never be lost to a delivery conflict,
+and the conflict is for a person to resolve, not the backend. The cost showed
+the first time a mint answered 500 after succeeding (#131): the retry minted a
+second licence for the same address, which could not attach. The operator
+desk now checks its own list for a live licence on the address before minting,
+and says for every mint whether the licence attached, is waiting for a first
+sign-in, or was not delivered and why. Renewal is Extend (§20.6), never a
+second mint. A claim that loses every retry under contention is the one
+delivery failure nobody is told about —
+[TD-33](../ops/TECH_DEBT.md).
 
 None of these reach the person instantly, and the counters IT reads move
 before they do. §20.12 is the read that measures the difference.
@@ -1414,8 +1448,12 @@ timestamp says so.
 
 ### 20.8 The consoles, and what a browser may do
 
-Static pages on the existing auth Hosting site
-(`firebase-hosting/public/console/`). No build step, no framework, no
+Static pages on the auth project's Hosting site
+(`firebase-hosting/public/console/`), served at **`app.sempermechanics.com`** —
+a Hosting custom domain whose records live in the product site's Netlify DNS.
+`sempermechanics.com` itself is that Netlify site; it only links here and
+redirects `/login`, `/account` and `/terms/`. The default
+`…-auth.firebaseapp.com` host serves the same files. No build step, no framework, no
 `package.json` — the site is served as files, and a toolchain for four pages
 would cost more than it saves.
 
@@ -1464,10 +1502,38 @@ invisible reCAPTCHA and two SDK imports are gone from it. Leaving SMS off in
 the Firebase console is part of the configuration, not an oversight: a factor
 nobody can be challenged for is a factor somebody can be locked out by.
 
-The page shows the secret for manual entry
-rather than a QR code: every QR service is somebody else's server and the
-payload is the TOTP secret itself, so fetching a picture would hand away the
-factor protecting licence issuance.
+Enrolment happens in the page, before any dashboard loads. The QR code is
+drawn locally by `qr.js` from the `otpauth://` URI, and the secret is shown
+beside it for manual entry. Nothing is fetched to make the picture: every QR
+service is somebody else's server and the payload is the TOTP secret itself,
+so a hosted image would hand away the factor protecting licence issuance.
+
+**Sign-in is by redirect, never popup, on the page's own host.** `auth.js`
+sets `authDomain` to `window.location.host`, so the SDK's `/__/auth/*` handler
+and iframe are same-origin (`frame-src 'self'`) on either host, and nothing
+depends on third-party storage a browser may partition. The price is that a
+Google re-authentication unloads the page. Every step-up therefore stashes a
+one-line note, and a revoke stashes the licence it was revoking, so the
+return leg finishes it after one plain confirmation inside the backend's
+120-second window. Two SDK behaviours shape that return leg, both handled in
+`requireSignIn` / `resolveChallenge` and explained in the console README:
+the second-factor challenge resolves against `auth.redirectUser` rather than
+`currentUser`, so the re-authenticated user is adopted with
+`updateCurrentUser` (#132); and adopting it fires the auth listener a second
+time, so a page is started once per signed-in account and handed the stashed
+revoke once (#138).
+
+**Access is by role, and the page says so.** `/login` forwards each account
+to the dashboard that is theirs (§20.11). A dashboard reached by link that is
+not the account's — the operator desk for a non-operator, say — renders
+nothing the backend would refuse and says where the account *can* go.
+
+**A result stays where the operator can read it.** Every change on the desk
+reports what it did in the status line, which is pinned to the viewport while
+it holds a message and is not cleared by the list reload that follows. A
+revoked licence leaves the table at once — behind "Show revoked", since the
+record is the audit trail. Silence after a click is always a defect here: it
+is indistinguishable from a revoke that did not happen.
 
 Destructive actions confirm twice — a dialog naming who is affected, then
 typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
@@ -1481,6 +1547,17 @@ a password-only token the same way: institution seat/invite work sits on
 whole-licence revoke on the tighter `attested_or_mfa_admin_fresh`
 (`ADMIN_WEB_REVOKE_REAUTH_SECONDS`).
 
+**Every console call is a CORS preflight.** Each `fetch` carries
+`Authorization`, which makes it non-simple, so the browser sends `OPTIONS`
+first — without a token. ESPv2 would refuse that on `security`;
+`x-google-endpoints … allowCors: true` in `gateway/openapi.yaml` hands it to
+Cloud Run instead, where Starlette's `CORSMiddleware` answers for
+`CONSOLE_ORIGINS` only (both console hosts). There is no credentials mode,
+because there are no cookies. `CONSOLE_ORIGINS` and `ADMIN_EMAILS` are
+space-separated in the deploy variables: `deploy-backend.yml` passes env
+through a block that splits pairs on commas, which would silently ship only
+the first entry.
+
 **CSP is relaxed for `/console/**` and the two addresses that rewrite into
 it.** A Hosting header is matched against the *request* path and knows nothing
 about a rewrite, so `/login` and `/account` would otherwise be served the
@@ -1489,10 +1566,14 @@ policy is restated for them verbatim in `firebase.json`. For the same reason
 both pages carry a `<base href>`: a relative path in them would resolve
 against the site root at the pretty address and one directory too high.
 Every other page — the legal pages,
-the auth continue-URLs — keeps the strict `default-src 'self'`. Only
-`connect-src` is widened, for the API and Firebase Auth's token endpoints;
-`script-src` is **not**, because the Firebase SDK is served from Hosting's own
-`/__/firebase/` namespace, which is same-origin. `__API_ORIGIN__` and
+the auth continue-URLs — keeps the strict `default-src 'self'`. `connect-src` is
+widened for the API and Firebase Auth's token endpoints. `script-src` is
+widened to exactly two origins and never to `'unsafe-inline'`:
+`https://www.gstatic.com` for the SDK modules and `https://apis.google.com`
+for the gapi loader the auth iframe pulls in. Both SDK modules come from
+gstatic rather than Hosting's `/__/firebase/` copies — Hosting's
+`firebase-auth.js` imports `@firebase/app` from gstatic anyway, and mixing the
+two puts `initializeApp` and `getAuth` on different registries. `__API_ORIGIN__` and
 `__API_BASE_URL__` are substituted at deploy exactly as
 `gateway/openapi.yaml` substitutes `__CLOUD_RUN_URL__`; no live hostname is
 committed. See `firebase-hosting/public/console/README.md`.
