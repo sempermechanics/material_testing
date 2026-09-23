@@ -137,6 +137,14 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**Video sampling and long snackbars (`fix/video-estimate-snackbar`).** The
+sampling sheet promised one frame more than extraction delivered whenever the
+segment reached the clip's end, because it sampled at the end itself, where
+no frame starts. `ui/analysis/VideoSampling` now holds the sample instants
+for the estimate and both extraction paths, and stops at the last frame's
+start. `FaqRedirect.snackbar` shows up to five lines and stays up as long as
+its message takes to read, capped at 10 s.
+
 **Video import reads AVI (PR #8, `feat/avi-video-import`).** Ported from the
 parent repo's #139, so the two apps read the same files. `AviReader` demuxes
 RIFF, `AviLuma` reads the uncompressed layouts losslessly, `MjpegHuffman`

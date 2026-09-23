@@ -149,9 +149,8 @@ object VideoFrameExtractor {
 
             retriever.setDataSource(context, uri)
 
-            val stepMs = 1000.0 / fpsExtract
-            val span = (endMs - startMs).coerceAtLeast(0L)
-            val count = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
+            val times = VideoSampling.sampleTimesMs(startMs, endMs, fpsExtract, maxFrames)
+            val count = times.size
 
             val defPaths = mutableListOf<String>()
             val defTimesMs = mutableMapOf<String, Long>()
@@ -159,10 +158,8 @@ object VideoFrameExtractor {
             var refWidth = 0
             var refHeight = 0
 
-            for (i in 0 until count) {
+            for ((i, timeMs) in times.withIndex()) {
                 currentCoroutineContext().ensureActive()
-                val timeMs = startMs + i * stepMs
-                if (timeMs > endMs + stepMs / 2) break
                 val frame = getFrameHybrid(retriever, (timeMs * 1000).toLong()) ?: continue
                 try {
                     currentCoroutineContext().ensureActive()
@@ -295,13 +292,8 @@ object VideoFrameExtractor {
         endMs: Long,
         maxFrames: Int,
     ): Map<Int, Long> {
-        val stepMs = 1000.0 / fpsExtract
-        val span = (endMs - startMs).coerceAtLeast(0L)
-        val wanted = ((span / stepMs).toInt() + 1).coerceIn(1, maxFrames)
         val picked = LinkedHashMap<Int, Long>()
-        for (i in 0 until wanted) {
-            val timeMs = startMs + i * stepMs
-            if (timeMs > endMs + stepMs / 2) break
+        for (timeMs in VideoSampling.sampleTimesMs(startMs, endMs, fpsExtract, maxFrames)) {
             val index = video.frameIndexAt((timeMs * 1000).toLong())
             if (!picked.containsKey(index)) picked[index] = (timeMs - startMs).toLong()
         }
