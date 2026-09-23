@@ -180,8 +180,10 @@ provisioned in 2.40 s (folders 1.23 s), `POST /v1/sessions` 3.12 s.
 provider was skipped whenever the `DEV_AUTH_BYPASS` build flag was on — every
 debug build, real phones included. It now keys on the bypass being active
 (emulator only). That exposed that the Auth project has the App Check and Play
-Integrity APIs disabled, so no build has ever sent a token; setup steps are in
-AUTH_SETUP §3.2 and a gate row. Harmless while `APP_CHECK_MODE=off`.
+Integrity APIs disabled, so no build had ever sent a token. Both APIs are now
+enabled and the app is registered with Play Integrity; the Play Console link
+waits for a Play developer account (AUTH_SETUP §3.2, gate). Harmless while
+`APP_CHECK_MODE=off`.
 
 **Deploys prune their tags (#151, deployed 2026-09-23).** The promote
 routes `--to-latest` and drops every `cand-*` tag in the same call (TD-32
