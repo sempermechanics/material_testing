@@ -72,3 +72,42 @@ async def test_complete_rejects_omitted_md5_when_drive_has_one(seeded, client, m
     assert r.status_code == 422
     assert r.json()["detail"] == "checksum_mismatch"
     assert seeded._data["files"]["f1"]["status"] == "PENDING"
+
+
+def _drive_http_error(code):
+    import requests
+
+    resp = requests.Response()
+    resp.status_code = code
+    return requests.HTTPError(f"{code}", response=resp)
+
+
+async def test_complete_when_the_upload_is_not_in_drive_is_400_not_502(
+    seeded, client, monkeypatch,
+):
+    """A 5xx made the app retry this forever. 400 drives the app's existing
+    stale-session branch: delete the session and rebuild it."""
+    def gone(t, fid):
+        raise _drive_http_error(404)
+
+    monkeypatch.setattr(drive, "get_file_meta", gone)
+    r = await client.post(
+        "/v1/files/f1/complete",
+        json={"sessionId": "s1", "driveFileId": "drive1", "bytes": 100, "md5": _MD5},
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"] == "drive_file_gone"
+    assert seeded._data["files"]["f1"]["status"] == "PENDING"
+
+
+async def test_complete_on_a_drive_outage_is_still_502(seeded, client, monkeypatch):
+    def outage(t, fid):
+        raise _drive_http_error(503)
+
+    monkeypatch.setattr(drive, "get_file_meta", outage)
+    r = await client.post(
+        "/v1/files/f1/complete",
+        json={"sessionId": "s1", "driveFileId": "drive1", "bytes": 100, "md5": _MD5},
+    )
+    assert r.status_code == 502
+    assert r.json()["detail"] == "drive_meta_failed"

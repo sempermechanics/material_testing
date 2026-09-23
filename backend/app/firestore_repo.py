@@ -2765,6 +2765,29 @@ def consume_nonce(nonce: str, uid: str, device_id: str) -> bool:
         return False
 
 
+def claim_client_nonce(nonce: str, uid: str, device_id: str, expire_at) -> bool:
+    """Record a client-minted (timestamped) nonce as used. False = replay.
+
+    One `create()` — it fails with AlreadyExists when the document is there,
+    so two concurrent claims cannot both win, without a read or a transaction.
+    Stored in `challenges` so the existing TTL policy on `expireAt` reclaims it;
+    server-issued IDs never contain '.', so the two kinds cannot collide.
+    """
+    try:
+        db().collection("challenges").document(nonce).create(
+            {
+                "uid": uid,
+                "deviceId": device_id,
+                "kind": "client",
+                "expireAt": expire_at,
+                "schemaVersion": SCHEMA_VERSION,
+            }
+        )
+        return True
+    except AlreadyExists:
+        return False
+
+
 # ---------------- sessions / files ----------------
 def delete_session(sid: str) -> int:
     """Hard-delete an analysis' metadata: every file doc, then the session doc.
@@ -2779,9 +2802,16 @@ def delete_session(sid: str) -> int:
     return file_count
 
 
-def remember_user_folder(uid: str, folder_id: str) -> None:
-    """Persist the user's Drive subtree id so erasure never has to guess by name."""
-    db().collection("users").document(uid).update({"driveFolderId": folder_id})
+def remember_user_folder(uid: str, folder_id: str, sessions_folder_id: str | None = None) -> None:
+    """Persist the user's Drive subtree id so erasure never has to guess by name.
+
+    `sessions_folder_id` (the user's session/ folder) lets the next upload skip
+    the four-level name walk in drive.ensure_session_folders.
+    """
+    fields = {"driveFolderId": folder_id}
+    if sessions_folder_id:
+        fields["driveSessionsFolderId"] = sessions_folder_id
+    db().collection("users").document(uid).update(fields)
 
 
 def get_user(uid: str):

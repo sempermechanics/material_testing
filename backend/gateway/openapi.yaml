@@ -161,17 +161,6 @@ paths:
           health-requests: 1
       responses:
         '200': { description: OK }
-  /readyz:
-    get:
-      operationId: readyz
-      description: Readiness — Firestore + Drive probes; stable 503 detail codes.
-      security: []
-      x-google-quota:
-        metricCosts:
-          health-requests: 1
-      responses:
-        '200': { description: Ready }
-        '503': { description: Dependency unhealthy }
   /v1/me:
     get:
       operationId: getMe

@@ -70,6 +70,9 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
         if isinstance(e, requests.HTTPError) and e.response is not None:
             if e.response.status_code == 416:
                 raise HTTPException(416, errors.RANGE_NOT_SATISFIABLE) from e
+            if e.response.status_code == 404:
+                log.error("drive download %s: object gone from Drive", drive_file_id)
+                raise HTTPException(404, errors.DRIVE_FILE_GONE) from e
         log.error("drive download %s failed: %s", drive_file_id, e)
         raise HTTPException(502, errors.DRIVE_DOWNLOAD_FAILED) from e
 
@@ -115,6 +118,8 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
             meta = drive.get_file_meta(drive.access_token(), body.driveFileId)
         except requests.HTTPError as e:
             log.error("drive meta for %s failed: %s", body.driveFileId, e)
+            if e.response is not None and e.response.status_code == 404:
+                raise HTTPException(400, errors.DRIVE_FILE_GONE) from e
             raise HTTPException(502, errors.DRIVE_META_FAILED) from e
         if meta["size"] != rec.get("sizeBytes"):
             raise HTTPException(422, errors.SIZE_MISMATCH)

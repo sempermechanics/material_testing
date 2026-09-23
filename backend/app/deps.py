@@ -3,7 +3,9 @@ import base64
 import binascii
 import hashlib
 import logging
+import re
 import time
+from datetime import datetime, timezone
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -226,7 +228,15 @@ async def verified_device(
     dev = await run_in_threadpool(repo.get_device, x_device_id)
     if not dev or dev["uid"] != user["uid"] or dev["status"] != statuses.DEVICE_ACTIVE:
         raise HTTPException(409, errors.DEVICE_NOT_ACTIVE)
-    if not await run_in_threadpool(repo.consume_nonce, x_nonce, user["uid"], x_device_id):
+    client_nonce_ts = parse_client_nonce(x_nonce)
+    if client_nonce_ts is None:
+        # Server-issued challenge: claimed (deleted) before the signature check,
+        # exactly as before — it was bound to this uid+device when issued.
+        if not await run_in_threadpool(repo.consume_nonce, x_nonce, user["uid"], x_device_id):
+            raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
+    elif not client_nonce_fresh(client_nonce_ts):
+        # Stale or from a phone whose clock is off: no write, and the client
+        # retries once with a server challenge.
         raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
     # current_user already re-validated the lock for THIS x_device_id when it
     # was present on the request — but device-attested routes are the ones
@@ -253,12 +263,41 @@ async def verified_device(
         audit.record(user["uid"], x_device_id, action="AUTH_DENIED", outcome="DENIED",
                      detail={"stage": "signature"})
         raise HTTPException(401, errors.BAD_SIGNATURE)
+    # A client nonce is claimed only after the signature verified, so a forged
+    # request costs no write and cannot burn a nonce the device will use.
+    if client_nonce_ts is not None and not await run_in_threadpool(
+        repo.claim_client_nonce, x_nonce, user["uid"], x_device_id,
+        datetime.fromtimestamp(
+            client_nonce_ts + settings.CLIENT_NONCE_WINDOW_SECONDS + 60, tz=timezone.utc,
+        ),
+    ):
+        raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
     try:
         request.state.device_id = x_device_id
         obs.bind_device(x_device_id)
     except Exception:  # noqa: BLE001
         pass
     return {"user": user, "device": dev}
+
+
+_CLIENT_NONCE = re.compile(r"t1\.(\d{9,11})\.[A-Za-z0-9_-]{22,86}")
+
+
+def parse_client_nonce(nonce: str) -> int | None:
+    """The Unix time in a client-minted nonce, or None for a server challenge.
+
+    `t1.<seconds>.<random>`, the random part at least 128 bits of base64url.
+    Anything else — including a malformed `t1.` value — is treated as a server
+    challenge and simply fails the lookup, so there is one rejection path.
+    """
+    if settings.CLIENT_NONCE_WINDOW_SECONDS <= 0:
+        return None
+    m = _CLIENT_NONCE.fullmatch(nonce)
+    return int(m.group(1)) if m else None
+
+
+def client_nonce_fresh(ts: int) -> bool:
+    return abs(time.time() - ts) <= settings.CLIENT_NONCE_WINDOW_SECONDS
 
 
 def _second_factor(claims: dict) -> str:

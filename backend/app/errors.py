@@ -125,6 +125,11 @@ APP_CHECK_REQUIRED = "app_check_required"
 RATE_LIMITED = "rate_limited"
 DRIVE_DOWNLOAD_FAILED = "drive_download_failed"
 DRIVE_META_FAILED = "drive_meta_failed"
+# Drive answered 404 for an object the index points at: it was deleted straight
+# in Drive, or the client's upload never landed. Not an outage, so never 502 —
+# a 5xx makes the app retry forever. Download → 404 (the app gives up and says
+# why); complete → 400 (the app discards the session and rebuilds it).
+DRIVE_FILE_GONE = "drive_file_gone"
 
 # Reported as `{"detail": …}` too: an unhandled exception on Cloud Run, and the
 # DependencyError codes the readiness probe and the Drive/Firestore clients
@@ -156,5 +161,6 @@ CLIENT_BRANCHED = frozenset(
         FEATURE_NOT_LICENSED,
         LICENSE_DEVICE_MISMATCH,
         APP_CHECK_REQUIRED,
+        DRIVE_FILE_GONE,
     }
 )

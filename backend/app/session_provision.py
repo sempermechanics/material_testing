@@ -53,8 +53,15 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
             # Only create the Drive subfolders this manifest actually uses (a
             # bundle upload needs none — Session.zip and metadata.json sit at
             # the session root).
-            folders = drive.ensure_session_folders(token, uid, sid, roles=roles)
-            repo.remember_user_folder(uid, folders["userFolderId"])
+            user = repo.get_user(uid) or {}
+            cached = {"userFolderId": user.get("driveFolderId"),
+                      "sessionsFolderId": user.get("driveSessionsFolderId")}
+            folders = drive.ensure_session_folders(token, uid, sid, roles=roles, cached=cached)
+            # Write only when the pointers changed — the common upload reuses them.
+            if (folders["userFolderId"] != cached["userFolderId"]
+                    or folders.get("sessionsFolderId") != cached["sessionsFolderId"]):
+                repo.remember_user_folder(uid, folders["userFolderId"],
+                                          folders.get("sessionsFolderId"))
             repo.set_session_folder(sid, folders["sessionFolderId"])
 
             pending = list(repo.iter_unprovisioned_files(sid))

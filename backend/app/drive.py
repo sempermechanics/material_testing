@@ -230,23 +230,36 @@ def find_user_folder(token: str, uid: str):
     return found
 
 
-def ensure_session_folders(token: str, uid: str, sid: str, roles=None) -> dict:
+def ensure_session_folders(token: str, uid: str, sid: str, roles=None,
+                           cached: dict | None = None) -> dict:
     """Build Research Storage/user/{uid}/session/{sid}/ plus the role subfolders
     the manifest actually uses. "bundle" (Session.zip), "extras" (Extras.zip) and
     "metadata" live at the session root — no subfolder, no extra Drive round-trips.
 
+    `cached` is the user doc's stored {"userFolderId", "sessionsFolderId"}. The
+    name walk down to session/ is four sequential Drive lists (~3 s) and its
+    answer never changes for a user, so when the stored session/ folder is
+    still alive the walk is skipped. Alive is checked, not assumed: a folder
+    deleted or trashed straight in Drive would otherwise take the new upload
+    with it.
+
     Partial failure mid-walk may leave an empty orphan folder under session/;
     that is monitored / accepted rather than rolled back.
     """
-    root = settings.ROOT_FOLDER_ID
-    research = _find_or_create_folder(token, "Research Storage", root)
-    user_dir = _find_or_create_folder(token, "user", research)
-    uid_dir = _find_or_create_folder(token, uid, user_dir)
-    sess_dir = _find_or_create_folder(token, "session", uid_dir)
+    cached = cached or {}
+    uid_dir, sess_dir = cached.get("userFolderId"), cached.get("sessionsFolderId")
+    if not (uid_dir and sess_dir and file_exists(token, sess_dir)):
+        root = settings.ROOT_FOLDER_ID
+        research = _find_or_create_folder(token, "Research Storage", root)
+        user_dir = _find_or_create_folder(token, "user", research)
+        uid_dir = _find_or_create_folder(token, uid, user_dir)
+        sess_dir = _find_or_create_folder(token, "session", uid_dir)
     sid_dir = _find_or_create_folder(token, sid, sess_dir)
-    # userFolderId is returned so it can be persisted on the user doc: account
-    # deletion then erases Drive via a stored id instead of re-walking names.
+    # userFolderId / sessionsFolderId are returned so they can be persisted on
+    # the user doc: account deletion erases Drive via the stored id instead of
+    # re-walking names, and the next upload skips the walk.
     folders = {"sessionFolderId": sid_dir, "userFolderId": uid_dir,
+               "sessionsFolderId": sess_dir,
                "bundle": sid_dir, "extras": sid_dir, "metadata": sid_dir}
     wanted = roles if roles is not None else ("raw", "processed", "reports", "csv", "dat")
     for role in wanted:

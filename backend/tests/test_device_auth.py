@@ -133,3 +133,100 @@ async def test_nonce_replay_rejected(wired):
     with pytest.raises(HTTPException) as e:
         await _call(wired)
     assert e.value.status_code == 401
+
+
+# --- client-minted timestamped nonces (no /v1/challenge round-trip) ---------
+
+def _client_nonce(ts=None, rand="A" * 22):
+    import time
+
+    return f"t1.{int(time.time() if ts is None else ts)}.{rand}"
+
+
+@pytest.fixture
+def claims(monkeypatch):
+    """claim_client_nonce backed by a list: single use, like Firestore create()."""
+    seen = []
+
+    def fake_claim(nonce, uid, device_id, expire_at):
+        if nonce in seen:
+            return False
+        seen.append(nonce)
+        return True
+
+    def no_lookup(*a):
+        pytest.fail("a client nonce must not be looked up as a challenge")
+
+    monkeypatch.setattr(deps.repo, "claim_client_nonce", fake_claim)
+    monkeypatch.setattr(deps.repo, "consume_nonce", no_lookup)
+    return seen
+
+
+async def test_fresh_client_nonce_accepted_without_a_challenge(wired, claims):
+    nonce = _client_nonce()
+    ctx = await _call(wired, nonce=nonce)
+    assert ctx["device"]["deviceId"] == "d1"
+    assert claims == [nonce]
+
+
+async def test_client_nonce_replay_rejected(wired, claims):
+    nonce = _client_nonce()
+    await _call(wired, nonce=nonce)
+    with pytest.raises(HTTPException) as e:
+        await _call(wired, nonce=nonce)
+    assert e.value.status_code == 401
+    assert e.value.detail == "nonce_invalid_or_replayed"
+
+
+@pytest.mark.parametrize("skew", [-600, 600])
+async def test_client_nonce_outside_the_window_rejected_without_a_write(wired, claims, skew):
+    """A stale nonce, or a phone clock far off, is refused before any write;
+    the client then retries once with a server challenge."""
+    import time
+
+    with pytest.raises(HTTPException) as e:
+        await _call(wired, nonce=_client_nonce(time.time() + skew))
+    assert e.value.status_code == 401
+    assert claims == []
+
+
+async def test_client_nonce_is_claimed_only_after_the_signature_verifies(wired, claims):
+    """A forged request must not burn the nonce the real device is about to use."""
+    attacker = ec.generate_private_key(ec.SECP256R1())
+    nonce = _client_nonce()
+    bad = _sign(attacker, nonce, "POST", "/v1/sessions", b'{"x":1}')
+    with pytest.raises(HTTPException):
+        await _call(wired, nonce=nonce, sig=bad)
+    assert claims == []
+    await _call(wired, nonce=nonce)  # the genuine call still goes through
+    assert claims == [nonce]
+
+
+async def test_malformed_client_nonce_falls_to_the_challenge_path(wired, monkeypatch):
+    """`t1.` with a short random part is not a client nonce; it is looked up as a
+    challenge, finds nothing, and is refused: one rejection path."""
+    monkeypatch.setattr(deps.repo, "consume_nonce", lambda *a: False)
+    with pytest.raises(HTTPException) as e:
+        await _call(wired, nonce=_client_nonce(rand="short"))
+    assert e.value.status_code == 401
+
+
+async def test_client_nonces_can_be_switched_off(wired, claims, monkeypatch):
+    monkeypatch.setattr(deps.settings, "CLIENT_NONCE_WINDOW_SECONDS", 0)
+    monkeypatch.setattr(deps.repo, "consume_nonce", lambda *a: False)
+    with pytest.raises(HTTPException):
+        await _call(wired, nonce=_client_nonce())
+    assert claims == []
+
+
+def test_claim_client_nonce_is_single_use(monkeypatch):
+    from datetime import datetime, timezone
+
+    import fake_firestore
+
+    from app import firestore_repo as repo
+
+    fake_firestore.install(monkeypatch)
+    exp = datetime.now(timezone.utc)
+    assert repo.claim_client_nonce("t1.1.x", "u1", "d1", exp) is True
+    assert repo.claim_client_nonce("t1.1.x", "u1", "d1", exp) is False
