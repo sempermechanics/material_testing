@@ -64,7 +64,7 @@ jobs:
             >> "$GITHUB_STEP_SUMMARY"
 
   # ===================================================================
-  # Nightly (and on demand) sweep of the whole repository cache.
+  # Weekly (Sunday 03:00 UTC) and on-demand sweep of the whole repository cache.
   # ===================================================================
   sweep:
     name: Sweep repository caches

@@ -45,8 +45,11 @@ class Settings:
     # reference + report + metadata ≈ 460, so 600 gives headroom);
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
     DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
-    # Deployed services still set PRO_MAX_SESSIONS_PER_USER; it is read as the
-    # default so the rename does not require a coordinated env change.
+    # PRO_MAX_SESSIONS_PER_USER is the pre-rename name, still read as the
+    # default so the rename did not need a coordinated env change.
+    # deploy-backend.yml pins LICENSED_MAX_SESSIONS_PER_USER and warns while the
+    # old name is still set on the service; delete this fallback once no
+    # service carries it (TD-45).
     LICENSED_MAX_SESSIONS_PER_USER = _env_int(
         "LICENSED_MAX_SESSIONS_PER_USER",
         os.environ.get("PRO_MAX_SESSIONS_PER_USER", "999"),

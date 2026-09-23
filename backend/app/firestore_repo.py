@@ -70,8 +70,9 @@ _LEASE_SWEEP_LIMIT = 50
 def _lost_to_contention(exc: BaseException) -> bool:
     """True when a transaction failed only because it kept losing the race.
 
-    The client retries an ABORTED transaction five times and then raises
-    ValueError("Failed to commit transaction in 5 attempts") chained from the
+    Every transaction here is opened with `max_attempts=_TX_ATTEMPTS` (10), so
+    the client retries an ABORTED commit ten times and then raises
+    ValueError("Failed to commit transaction in 10 attempts") chained from the
     last Aborted. Two callers hammering one hot document — the same nonce
     replayed, the same file completed twice — is an expected condition on these
     paths, not a server fault, so it must resolve to the normal deny/idempotent
@@ -3018,7 +3019,7 @@ def list_pending_uploads(
         out.append({
             "fileId": d.id,
             "uploadUrl": url,
-            "chunkSize": 32 * 1024 * 1024,  # keep in sync with create_session
+            "chunkSize": 32 * 1024 * 1024,  # the client uploads in chunks of this size (IndicApi.uploadResumable)
             "name": f.get("name"),
             "role": f.get("role"),
             "sizeBytes": f.get("sizeBytes", 0),
@@ -3398,7 +3399,8 @@ def bump_session_progress(sid: str):
     Uses firestore.Increment rather than a read-modify-write transaction. A
     transaction serialises every concurrent completion onto this one document,
     and parallel uploads finish together by design — six concurrent bumps
-    exhausted the client's five retries and raised `Aborted: Transaction lock
+    exhausted that transaction's retries (the client default of five, before
+    `_TX_ATTEMPTS`) and raised `Aborted: Transaction lock
     timeout`, i.e. a 500 on the last files of an otherwise-successful upload.
     (The fake store in tests applies transactions immediately with no isolation,
     so this was invisible until the Firestore emulator tier was wired into CI.)

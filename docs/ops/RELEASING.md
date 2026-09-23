@@ -183,7 +183,11 @@ the documented environment and pushes the lock to that branch.
 **Dependabot cannot do this step.** It bumps `requirements.txt` and has no way to
 produce a hashed lock, so every backend Dependabot PR arrives with the two files
 out of step and tier 4 red. Run `Backend lock` against the Dependabot branch to
-fix the PR in place. A `Backend lock` check also runs on any PR touching either
+put the lock on the PR. Its push is made with the workflow's `GITHUB_TOKEN`,
+and GitHub starts no new workflow run for a push made with that token, so the
+PR's checks stay red on the old commit: re-run CI from the PR (Checks → Re-run
+all jobs) or push any follow-up commit yourself. A human push also stops
+Dependabot rebasing that PR. A `Backend lock` check also runs on any PR touching either
 file: when the committed lock is stale it fails and attaches the regenerated file
 as the `requirements-lock` artifact, so the fix is a download rather than a
 toolchain install.

@@ -38,7 +38,7 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       `challenges.expireAt` TTL policy is not ACTIVE.
 - [x] Cloud Tasks queue and IAM for async session provisioning
       ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) §A6) — pilot
-      `indic-provision` + `TASKS_*` vars. Keep vars set on redeploy.
+      `indic-provision`, renamed `semper-provision` / `semper-provision-staging` in #146 (2026-09-23), + `TASKS_*` vars. Keep vars set on redeploy.
 
 ### Authorization / quality
 
@@ -98,6 +98,13 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       regenerate the pages: `[OPERATOR LEGAL NAME]`, `[REGISTERED ADDRESS]`,
       `[GRIEVANCE OFFICER NAME]` / `[EMAIL]` (DPDP Act 2023 requires one),
       `[GCP REGION …]`. `render_legal_pages.py --check` does not catch these.
+      **They are live** on the hosted pages as literal text (TD-36, checked
+      2026-09-23): `PRIVACY_POLICY.md:5` (name, address), `:7` (Grievance
+      Officer name, email), `:18` (name), `:153` (region);
+      `TERMS_OF_SERVICE.md:6` (name, address), `:438` (name), `:439`
+      (address) — rendered into `firebase-hosting/public/privacy/index.html`
+      and `terms/index.html`. Values come from the operator; nobody else
+      should fill them.
 - [x] Clickwrap: Terms acceptance is an affirmative in-app act recorded
       server-side (`users/{uid}.termsAccepted`) with a version, and the
       product-improvement consent is a separate, pre-ticked but declinable,
@@ -208,8 +215,8 @@ pre-licensing documents)
       installed pre-licensing build** — it never touched the backend, and
       the backend has no forced-update gate. Accepted: share gating arrives
       with the next app release, not the deploy.
-- [ ] Mint an individual licence against that account (`damodardatta1@gmail.com`,
-      from the operator desk once the consoles are up) → response carries
+- [ ] Mint an individual licence against that account (the operator's own
+      test account, from the operator desk once the consoles are up) → response carries
       `claimedByUid` → `/v1/config` flips to `mode: licensed` → restore
       succeeds. Mint against an address with no account → invite retained.
       **Attempted 2026-09-22 and it answered 500** — `_write_license` returned

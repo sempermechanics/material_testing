@@ -659,6 +659,17 @@ without redeploying. Admins set them via
 `PATCH /v1/admin/users/{uid}/config`, and the app reads the resolved numbers
 rather than hardcoding its own.
 
+**`MAX_SESSIONS_PER_USER` is deleted, not merely unread.** It used to be the
+one cap for everyone (default 4). `mode` now selects between
+`DEMO_MAX_ANALYSES` (25) and `LICENSED_MAX_SESSIONS_PER_USER`, so a
+deployment still setting the old variable silently gets 25 for every
+unlicensed account (`backend/app/config.py`). `deploy-backend.yml` pins
+`DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
+`APP_CHECK_MODE` and `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` with expression
+defaults, and its "Describe live env" step warns when the retired variable is
+still on the service. `deploy-cloudrun` merges env rather than replacing it,
+so removal is a manual `--remove-env-vars` after promote.
+
 **Firestore contention is retried, not returned.** Concurrent writes to the same
 session document used to surface as a `500`. `firestore_repo.py` now retries the
 contended transaction, so a burst of `:complete` calls for one session settles
@@ -685,6 +696,14 @@ backoff, so an upload survives losing connectivity or the app being killed.
 
 Cloud sync stays off entirely unless `INDIC_API_BASE_URL` is set at build time
 — see [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md) step C1.
+
+**The PENDING stamp lands before the upload is queued.** Both manual backup
+sites (`HomeActivity`, `SettingsActivity`) write
+`SessionRecord.SyncState.PENDING` and only then call
+`CloudSync.enqueueUpload`. They stay in that order rather than turning
+optimistic: an upload that finished first would have its SYNCED stamp
+overwritten by the late PENDING, and the session would read as never backed
+up.
 ---
 
 ## 9. IAM configuration
@@ -824,6 +843,20 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 
 **Idempotency** is the backbone: deterministic `fileId` / `sessionId` mean every
 mutation is safely retryable.
+
+**429 and 503 promise different things, and the client treats them apart.**
+A 429 comes from the per-instance token bucket (`rate_limit.py`) or the
+gateway quota, both of which refuse *before* the handler runs, so nothing
+happened and a repeat is never a second write. A 503 carries no such promise:
+ESPv2 emits it both before and after handing the request on. The app's
+`RetryOnTransient` interceptor therefore retries 429 on any call and 503 only
+on GET and the two POSTs that are idempotent by contract
+(`/v1/licenses/checkout`, whose repeat *is* the heartbeat, and
+`/v1/licenses/release`). Session create and the upload broker are left out on
+purpose: a duplicate there costs a Drive object. Three attempts, honouring
+`Retry-After`; WorkManager keeps the long game. Client side:
+[ARCHITECTURE.md](../app/ARCHITECTURE.md) "The two interceptors on the shared
+client".
 
 ---
 
@@ -1165,7 +1198,10 @@ session creation forever, which is why the gate is on retrieval and not on
 creation. And the app shows a demo account **no** backup or restore surface at
 all: no sync badge, no pending-upload banner, no Settings backup/restore
 section. The upload is silent; the account's data is there for the day a
-licence attaches, and for the operator's own use under the Terms.
+licence attaches, and for the operator's own use under the Terms. On the phone
+that is `CloudSync.uploadsEnabled`, which ignores the Save-to-cloud toggle
+while backup is not licensed, and `StorageBudget`, which refuses to free local
+frames on demo — the cloud copy cannot come back, so it is not a cache.
 
 Minting an individual licence for an address that already has an approved,
 verified account attaches it at once (`create_individual_license` →
@@ -1457,6 +1493,18 @@ the next claim. **The licence and not the holder's mode mirror**: revocation
 demotes in place and leaves the pointer alone, so a mirror test would delete
 revocation records.
 
+**A lost race is not a full pool.** The claim transactions answer a private
+`_CONTENDED` when they only lost the race; `claim_pending_invite` logs it at
+`info` rather than `warning`, and every route-facing caller maps it back
+through `_public_claim_error` (to `license_seats_exhausted` or
+`claim_contended`), so no wire code changed and contention stops reading in
+the logs like a licence with no room left. A failed claim then answers with
+the account **as stored**, re-read, not the caller's pre-race copy: the
+request that beat it has already granted the entitlement, and
+`ensure_demo_license`, which would otherwise rescue the stale copy by
+re-reading, returns early for a browser because consoles send no
+`X-Device-Id`.
+
 #### Checkout, and why there is no heartbeat route
 
 `POST /v1/licenses/checkout` claims or extends. Re-calling it **is** the
@@ -1642,6 +1690,28 @@ two puts `initializeApp` and `getAuth` on different registries. `__API_ORIGIN__`
 `gateway/openapi.yaml` substitutes `__CLOUD_RUN_URL__`; no live hostname is
 committed. See `firebase-hosting/public/console/README.md`.
 
+**Inline scripts never run, and one script is the only gate.** With no
+`'unsafe-inline'`, each page loads one ES module from a file beside it; code
+in a page body, or an `on*=` handler, loads, looks right and does nothing.
+The consoles have no compiler, so `scripts/check_console.py` (CI job
+`console-pages`, on every event, no path filter) is what reads them: inline
+script, the ids a module asks for, rewrite targets, every `/v1` path declared
+on the gateway, and `__API_BASE_URL__` / `__API_ORIGIN__` still being
+placeholders in the committed files. `scripts/deploy-console.sh` substitutes
+them for the deploy and its `trap` restores them afterwards — committing a
+substituted host fails that check.
+
+**The same Hosting site carries the app's auth continue links.** They live
+under `/auth/` on `app.sempermechanics.com` (`AUTH_HOST` in
+`data/AuthRepository.kt`). The `…-auth.firebaseapp.com` host stays accepted as
+`LEGACY_AUTH_HOST` for every installed build that declares only it, and is
+still the password-reset action URL, until Play vitals show no such build
+([TD-29](../ops/TECH_DEBT.md)). On the CORS side, `allowCors` in
+`gateway/openapi.yaml` sits under `x-google-endpoints` named by the
+`__MANAGED_SERVICE__` placeholder — the API's managed service name, not the
+gateway hostname, which ESPv2 ignores. `test_security_controls.py` pins the
+preflight.
+
 ### 20.9 Structural guard
 
 `backend/tests/test_route_authz_matrix.py` inspects every route's FastAPI
@@ -1649,6 +1719,14 @@ dependency tree and asserts it maps to exactly one expected auth tier —
 `INSTITUTION_ADMIN` is a tier in that matrix alongside `USER`/`ADMIN`/`DEVICE`, so a
 future change that accidentally widens (or narrows) an institution route's auth
 fails CI rather than shipping quietly.
+
+Every route also needs a declaration in `gateway/openapi.yaml`, and
+`backend/tests/test_gateway_parity.py` fails the build on a missing one. ESPv2
+is an allowlist: an undeclared route is unreachable in production and nothing
+in the app's logs says why. That has happened twice (the `/v1/campus/*`
+aliases, then the lease routes). The test proves the spec; it does not deploy
+it — moving the live gateway to a new config is still by hand
+([TD-27](../ops/TECH_DEBT.md)).
 
 ### 20.10 Changing device
 
@@ -1911,3 +1989,32 @@ calls it out separately.
 rather than a field on the licence listing. It is a plain `ADMIN` read like
 `GET /v1/admin/licenses`: it writes nothing, so it does not take the
 second-factor tier the mutating routes do.
+
+### 20.13 On the phone
+
+The backend decides every entitlement (§20); these are the app-side choices
+that keep the phone from contradicting it.
+
+- **A seat check parallel to the quota check.** An institution member without
+  a live lease is not over any quota — a licensed account never is — so
+  `TokenStore.isSessionLimitReached` would let them through every existing
+  gate. `LicenseEntitlements.seatRequiredToStart` is a separate predicate. It
+  gates the Home **+** before the source menu opens (`HomeActivity`) and both
+  compute paths (`AnalysisNavHelper`), guarded by
+  `AnalysisViewModel.wouldCreateNewSession()` so a run already in flight is
+  never aborted. `SeatRequiredActivity` is one button that asks again, because
+  seats free themselves.
+- **Floating seats renew in-process and release on sign-out.**
+  `SeatHeartbeat` re-calls checkout every `seatHeartbeatMinutes` while the
+  process is up (§20.7: the repeat is the heartbeat); `SeatLease.releaseBestEffort`
+  returns the seat before tokens are cleared, and a quiet failure leaves it to
+  the lease TTL.
+- **An idle phone learns a remote revoke within four hours.**
+  `LicenseConfigWorker` refreshes `/v1/config` every four hours (§20.12's
+  bound). Shortening the interval is the wrong lever: it costs every device
+  every day to reach one ([FI-16](../ops/FUTURE_IMPROVEMENTS.md)).
+- **Restore explains a lock that has not moved yet.** `LicenseErrors` maps
+  `license_device_mismatch` on a download to a sign-in-first message, since
+  restoring before the lock binds is the ordering failure in §20.10.
+- **The key never reaches the device.** Settings → Account shows the licence
+  **prefix** (`SettingsAccountSection`), which is what support asks for.
