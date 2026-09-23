@@ -117,6 +117,16 @@ td.actions { text-align: right; white-space: nowrap; }
 }
 .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .err { color: var(--danger); }
+
+/* The status line sits above the first card, and the licence table is well
+   below it: a result written there while the operator worked in the table was
+   off-screen. Pinned while it says something; empty, it takes no room. */
+#status:not(:empty) {
+  position: sticky; top: .5rem; z-index: 5;
+  background: var(--bg-elevated); border: 1px solid var(--line-strong);
+  border-radius: var(--radius); padding: .6rem 1rem;
+}
+#status.err:not(:empty) { border-color: currentColor; }
 .ok { color: var(--ok); }
 .wrap { overflow-x: auto; }
 

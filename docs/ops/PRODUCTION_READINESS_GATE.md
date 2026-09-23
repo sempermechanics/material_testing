@@ -269,12 +269,17 @@ pre-licensing documents)
       challenge against `auth.redirectUser`, never making it current, so the
       fresh `auth_time` was invisible and every revoke bounced back to Google
       (#132, which also resumes the revoke on the return leg).
-- [ ] Deploy #131 (mint 500) to production: `deploy-backend.yml`
+- [x] Deploy #131 (mint 500) to production: `deploy-backend.yml`
       `environment=production project=indicvision-dic-app region=asia-south1`.
       The workflow pins env from the repository variables, so this is also the
       first deploy to carry `ADMIN_EMAILS` for both operators — space-separated
       since #134, because the deploy action splits `env_vars` pairs on commas.
-      Rollback: `update-traffic --to-revisions=indic-api-00067-mbp=100`.
+      **Done 2026-09-23:** serving `indic-api-35821056144-1` (`7593692`); env,
+      `/readyz` and the gateway's 401 checked, no errors since. Rollback:
+      `update-traffic --to-revisions=indic-api-00067-mbp=100`.
+- [ ] Deploy the #138 console (`scripts/deploy-console.sh`): the desk reports
+      every revoke and mint outcome, and asks before a second live licence for
+      the same address. Then revoke `SEMP-5MZP`.
 - [ ] Hand-check `/login` as an ordinary account holder (`/account` only).
 - [x] Marketing site (`IndicVision/semper-website`, Netlify): "Sign in" in the
       nav, `/dashboard/` page, `_redirects` for `/login`, `/account`,

@@ -184,12 +184,18 @@ emulator starves grants nothing, so it is re-raced rather than asserted on.
 The repository is public as of 2026-09-22 (CI minutes; the engine submodule
 was already public), and `damodar@indicvision.com` is the second operator.
 
-**#131 is merged but not deployed**: production still serves `d6b1b64`
-(revision `indic-api-00067-mbp`, which carries the two-operator
-`ADMIN_EMAILS` set by hand), so minting still answers 500 after writing the
-licence. Still open in
+**#131 is deployed** (2026-09-23): production serves `7593692` as revision
+`indic-api-35821056144-1`, the first with both operators' `ADMIN_EMAILS`
+pinned by the workflow. #138 (merged 2026-09-23, console not yet deployed) fixes the desk's silence: a revoke that
+failed said nothing and one that worked stayed listed until a reload,
+because redirect re-authentication started the page twice and the list
+reload cleared the result. It also makes a duplicate mint for one address
+ask first — the backend is licence-first by design, so the 500 retry had
+left `SEMP-5MZP` beside `SEMP-EQUZ`
+([CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) §20.3,
+§20.8, now with the browser and gateway in §1). Still open in
 [docs/ops/PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md)
-"Licensing rollout": that deploy, the first minted licence, the staff
+"Licensing rollout": the #138 console deploy, the first minted licence, the staff
 hand-check of `/login` as an ordinary account holder, the new-build
 demo-key check, and the 24 h log watch. Rollback targets: Cloud Run
 revision `indic-api-00067-mbp` (pre-licensing `indic-api-31896308319-1`),

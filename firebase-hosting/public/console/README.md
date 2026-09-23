@@ -145,6 +145,24 @@ adopts the re-authenticated user with `updateCurrentUser`. A plain sign-in
 does not need this (the SDK makes that user current itself), and neither does
 a same-page password re-auth.
 
+`updateCurrentUser` fires the auth listener a second time, so `requireSignIn`
+starts a page once per signed-in account and hands the stashed `resume` to
+that one start. Without this the desk loaded twice on every return leg, both
+copies received the revoke, and the second load's status reset erased
+whatever the first reported.
+
+Results stay on screen. The reload that follows a change passes
+`keepStatus`, so "SEMP-4K2P revoked." or "Could not revoke: …" is not
+overwritten by "Loading…" half a second later, and the status line is pinned
+to the top of the viewport while it holds a message — it sits above the mint
+card, and the licence table is well below it. Revoked licences are hidden
+behind "Show revoked": a revoke that left its row in place with only the pill
+changed read as one that had not happened. Before an individual mint the desk
+checks the list for a live licence on the same address and asks first — the
+backend mints the second one anyway and only reports `invite_exists` — and
+every mint says whether the licence reached the person: attached, waiting
+for their first sign-in, or not delivered and why.
+
 ### Go-live checklist (Identity Platform + consoles)
 
 Same Firebase project as the app (`indicvision-dic-app-auth`). Do **not** open a
