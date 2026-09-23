@@ -18,6 +18,17 @@ import timber.log.Timber
  */
 object FaqRedirect {
 
+    /** Enough for a two-sentence cause-and-remedy message; Material's default is two. */
+    private const val SNACKBAR_MAX_LINES = 5
+
+    /** Material's LENGTH_LONG, in ms. */
+    private const val LONG_MS = 2750
+
+    /** Roughly 200 words a minute at five characters a word. */
+    private const val READ_MS_PER_CHAR = 60
+
+    private const val MAX_MS = 10_000
+
     fun confirm(activity: Activity, url: String) {
         MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.faq_redirect_title)
@@ -39,11 +50,22 @@ object FaqRedirect {
         anchor: View? = null,
     ) {
         val root = anchor ?: activity.findViewById(android.R.id.content) ?: return
-        Snackbar.make(root, message, Snackbar.LENGTH_LONG)
+        Snackbar.make(root, message, durationFor(message))
+            .setTextMaxLines(SNACKBAR_MAX_LINES)
             .setAction(R.string.action_why) {
                 confirm(activity, faqUrlRes)
             }
             .show()
+    }
+
+    /**
+     * How long a snackbar stays up: Material's long duration, or as long as
+     * [message] takes to read when that is longer — a message cut short in
+     * time is as unread as one cut short in lines. Capped so it still goes.
+     */
+    internal fun durationFor(message: CharSequence): Int {
+        val readMs = message.length * READ_MS_PER_CHAR
+        return if (readMs <= LONG_MS) Snackbar.LENGTH_LONG else readMs.coerceAtMost(MAX_MS)
     }
 
     fun snackbar(
