@@ -557,15 +557,18 @@ the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
 
 #### Redeploying the gateway after a route change
 
-CI does not yet touch the gateway (TD-27 in
-[TECH_DEBT.md](../ops/TECH_DEBT.md); the job is designed in
-[ADR-006](../adr/ADR-006-gateway-deploy-job.md)); `test_gateway_parity.py` only proves the
-committed spec matches the routers. Whenever `backend/gateway/openapi.yaml`
-changes — the licensing rollout added `/v1/licenses/*`, `/v1/me/terms`,
-`/v1/admin/licenses/*` and more — the live gateway must be moved to a new config
-by hand, **after** the Cloud Run revision that serves the new routes is promoted
-(a config that names a route the backend does not yet serve would 5xx, and the
-gateway 404s any route the config does not name).
+A production dispatch of `deploy-backend.yml` now runs a `gateway` job after
+the Cloud Run promote ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)). The
+order matters: a config that names a route the backend does not serve yet
+would 5xx, and the gateway 404s any route the config does not name.
+`test_gateway_parity.py` proves only that the committed spec matches the routers.
+
+Dispatch with `gateway_mode: dry-run` first. It renders the spec and puts its
+diff against the live config in the job summary. Re-dispatch with `apply` to
+create the config, switch, verify and roll back on failure. The deploy SA needs
+`roles/apigateway.admin` on the project and `roles/iam.serviceAccountUser` on
+`indic-gw@…`. Until those are granted, or when CI is unavailable, the block
+below is the manual fallback. It runs the same steps.
 
 API configs are immutable: create a new one and point the gateway at it.
 
@@ -612,8 +615,8 @@ gcloud api-gateway gateways describe semper-gw --location $GW_REGION \
 Earlier versions of this block never set `FIREBASE_PROJECT_ID`, named configs by
 day only, and ended the guard with `grep … && exit 1` — which, as a script's
 last line, exits 1 exactly when **no** placeholder remains. All three are fixed
-above; [ADR-006](../adr/ADR-006-gateway-deploy-job.md) moves the same steps into
-`deploy-backend.yml`.
+above, and the `gateway` job in `deploy-backend.yml` runs the same steps
+([ADR-006](../adr/ADR-006-gateway-deploy-job.md)).
 
 Verify from outside: an unauthenticated `GET https://<gateway>/v1/config` must
 answer **401** (route known, token missing), not 404 (route missing from the

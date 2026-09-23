@@ -91,7 +91,31 @@ the first run observational.
 
 ## Action items
 
-1. [ ] `gateway` job with `gateway_mode`, diff-and-skip, verify, rollback.
-2. [ ] Rewrite the runbook; fix the three faults.
+1. [x] `gateway` job with `gateway_mode`, diff-and-skip, verify, rollback.
+2. [x] Rewrite the runbook; fix the three faults.
 3. [ ] Owner: grant the two roles; dispatch `dry-run`, then `apply`.
 4. [ ] Close TD-27 after the first successful `apply`.
+
+## As built (2026-09-24)
+
+- `deploy-backend.yml` has a `gateway` job: `needs: deploy`, production
+  and `main` only, `environment: production`, and its own WIF auth. The
+  `deploy` job exports `service` for it.
+- The `gateway_mode` input is `dry-run` (default) or `apply`. Both render
+  `openapi.generated.yaml` and fail on an empty `RUN_URL`,
+  `FIREBASE_PROJECT_ID` or `MANAGED_SERVICE`, or on a leftover `__X__`.
+  Both diff the spec against the live config's document (`api-configs
+  describe --view=FULL`) and write the diff to the job summary. **Only
+  `apply`** creates `v<UTC minute>-<run number>`, switches the gateway,
+  verifies from outside, and rolls back to the previous config if the
+  verification fails.
+- No change to the spec means the job skips the create.
+- Names default to today's resources: `semper-gw`, API `semper-api`,
+  `asia-northeast1`, `indic-gw@PROJECT`. Repo variables `GATEWAY_ID`,
+  `GATEWAY_API`, `GATEWAY_REGION` and `GATEWAY_SA` override them.
+- The CORS check sends the first origin in `CONSOLE_ORIGINS`.
+- **Not run yet.** No one has dispatched it; it needs the IAM grant (item
+  3). Whether the live config's stored document is byte-equal to a fresh
+  render has not been checked either. The first `dry-run` shows it: a diff
+  of only whitespace or ordering means the skip would never fire, which is
+  harmless, since `apply` then just creates an identical config.

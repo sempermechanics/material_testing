@@ -1,0 +1,25 @@
+name: Set up the Android build
+description: >
+  JDK 17 (Temurin) and Gradle with its cache, the pair every app job starts
+  with. The Gradle cache is written only from main; other refs read it.
+
+inputs:
+  validate-wrappers:
+    description: >
+      Set false after a recursive submodule checkout: OpenCV's Android samples
+      ship old gradle-wrapper.jar files that fail checksum validation.
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v6
+      with:
+        distribution: temurin
+        java-version: '17'
+
+    - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      with:
+        validate-wrappers: ${{ inputs.validate-wrappers }}
+        cache-read-only: ${{ github.ref != 'refs/heads/main' }}

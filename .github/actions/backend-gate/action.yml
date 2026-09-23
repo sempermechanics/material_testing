@@ -1,0 +1,51 @@
+name: Backend gate
+description: >
+  The backend check CI, Release and Deploy all run, so none of them ships what
+  another would have stopped (TD-43): Python 3.12 (the runtime's), the hashed
+  lock the image installs, a dependency audit, ruff over app, tests and the ops
+  scripts, and pytest with the coverage floor. CI's tier 4 adds the lock
+  coverage check and the Firestore emulator tier on top.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v7
+      with:
+        python-version: '3.12'
+        cache: pip
+        cache-dependency-path: |
+          backend/requirements.lock
+          backend/requirements-test.txt
+
+    - name: Install the image's lock, then the test tools
+      shell: bash
+      working-directory: backend
+      run: |
+        pip install --require-hashes -r requirements.lock
+        pip install -r requirements-test.txt
+
+    # Covers what we depend on (secret scanning covers what we commit). Audits
+    # the pinned runtime set, not the test tooling. If a CVE lands with no
+    # fixed release, pin the advisory with --ignore-vuln rather than deleting
+    # the gate.
+    - name: Audit dependencies
+      shell: bash
+      working-directory: backend
+      run: |
+        pip install pip-audit==2.10.1
+        pip-audit -r requirements.txt --strict
+
+    # scripts/ included deliberately: the migration runner and the ops scripts
+    # are run by hand against production and were once linted nowhere.
+    - name: Lint
+      shell: bash
+      working-directory: backend
+      run: ruff check app/ tests/ scripts/ ../scripts/
+
+    # The floor sits just under the measured value so ordinary churn does not
+    # break unrelated PRs. Raise it when it climbs; never lower it to make a
+    # red build green.
+    - name: Test
+      shell: bash
+      working-directory: backend
+      run: pytest tests/ -q --cov=app --cov-report=term-missing --cov-fail-under=75
