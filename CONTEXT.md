@@ -136,7 +136,16 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-21)
+## Current state (2026-09-23)
+
+**Video import reads AVI (`feat/avi-video-import`).** Ported from the parent
+repo's #139, so the two apps read the same files. `AviReader` demuxes RIFF,
+`AviLuma` reads the uncompressed layouts losslessly, `MjpegHuffman` repairs
+tableless motion-JPEG frames and `AviCodecDecoder` hands Xvid/H.264 samples to
+the platform codecs — no new dependency, no APK growth. A codec the device
+cannot decode is named in the error instead of failing blank. Untried on a real
+AVI on a device: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a rows 7-9.
+
 
 **This is `material_testing`, pushed from `semperdic-app` `main` at `bfe00e5` on
 2026-09-21.** Same `applicationId`, Firebase app and backend as the parent; only

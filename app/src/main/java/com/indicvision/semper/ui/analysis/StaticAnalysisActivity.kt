@@ -829,6 +829,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             val meta = VideoFrameExtractor.readMeta(this@StaticAnalysisActivity, uri)
 
+            // An AVI we could demux but not decode can say which codec it is,
+            // which beats "could not read this video" by a mile.
+            val unsupported = meta.unsupportedCodec
+            if (unsupported != null) {
+                withContext(Dispatchers.Main) {
+                    FaqRedirect.snackbar(
+                        this@StaticAnalysisActivity,
+                        getString(R.string.video_codec_unsupported, unsupported.trim()),
+                        R.string.url_faq_video_read,
+                    )
+                }
+                return@launch
+            }
+
             if (meta.durationMs <= 0L) {
                 withContext(Dispatchers.Main) {
                     FaqRedirect.snackbar(
