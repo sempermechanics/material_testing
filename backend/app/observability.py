@@ -186,7 +186,7 @@ def report_exception(
     )
     payload.update({
         "@type": "type.googleapis.com/google.devtools.clouderrorreporting.v1beta1.ReportedErrorEvent",
-        "serviceContext": {"service": "indic-api"},
+        "serviceContext": {"service": "semper-api"},
         "message": error_code,
     })
     logger.error(json.dumps(payload, separators=(",", ":")))

@@ -136,6 +136,15 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
+**Backend names standardised (2026-09-23, `chore/semper-names`).** Cloud Run
+services are rebuilt as `semper-api` / `semper-api-staging` with queues
+`semper-provision` / `semper-provision-staging`; the gateways point at them and
+the old `indic-api*` services and `indic-provision` queue are removed once idle.
+Staging now has its own queue and task target (environment-scoped GitHub vars).
+The legacy `indic-gw` gateway is deleted. Service-account emails and project IDs
+keep their `indic-*` names — see the names table in
+[docs/ops/ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md).
+
 **Video import reads AVI (#136, #137, #139, merged 2026-09-23).** #136 landed
 the keyframe/uniform extraction path that pulls frames out of the raw Y plane;
 #137 fixed its fixed-interval mode, which had returned the preceding I-frame

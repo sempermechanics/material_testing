@@ -168,14 +168,14 @@ and large analyses will time out. Small deployments can skip this.
 ```bash
 gcloud services enable cloudtasks.googleapis.com --project $PROJECT
 
-gcloud tasks queues create indic-provision \
+gcloud tasks queues create semper-provision \
   --location=$REGION --project=$PROJECT \
   --max-attempts=5 --max-concurrent-dispatches=20
 
 # Cloud Tasks delivers with an OIDC token for this SA. Reusing $API_SA keeps it
 # to one identity; the service only accepts tokens whose email matches
 # TASKS_INVOKER_SA, so this is the identity /v1/tasks/* trusts.
-gcloud run services add-iam-policy-binding indic-api \
+gcloud run services add-iam-policy-binding semper-api \
   --member="serviceAccount:$API_SA" --role="roles/run.invoker" \
   --region=$REGION --project=$PROJECT
 
@@ -199,7 +199,7 @@ deploys (see table below):
 
 | Variable | Value |
 |---|---|
-| `TASKS_QUEUE` | `indic-provision` |
+| `TASKS_QUEUE` | `semper-provision` |
 | `TASKS_LOCATION` | `$REGION` |
 | `TASKS_TARGET_BASE_URL` | the Cloud Run service URL (not the gateway) |
 | `TASKS_INVOKER_SA` | `$API_SA` |
@@ -215,7 +215,7 @@ client's first poll cost more than the work.
 **Check:** create a session with more than eight files; the response is
 `{"status": "PROVISIONING", "uploads": []}` and, within a second or two,
 `GET /v1/sessions/{sid}/uploads` reports `UPLOADING` with one target per file.
-`gcloud tasks queues describe indic-provision --location=$REGION` should show no
+`gcloud tasks queues describe semper-provision --location=$REGION` should show no
 backlog.
 
 ---
@@ -224,7 +224,7 @@ backlog.
 
 ### B1. Deploy to Cloud Run from source
 ```bash
-gcloud run deploy indic-api \
+gcloud run deploy semper-api \
   --source backend \
   --region $REGION \
   --service-account "$API_SA" \
@@ -286,15 +286,15 @@ Everything above is required (or near enough). These are the rest of what
 > promote (the previous revision keeps its env for rollback):
 >
 > ```bash
-> gcloud run services update indic-api --region $REGION \
+> gcloud run services update semper-api --region $REGION \
 >   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
-> gcloud run services update-traffic indic-api --region $REGION --to-latest
+> gcloud run services update-traffic semper-api --region $REGION --to-latest
 > ```
 >
 > The `update-traffic` is not optional: the deploy workflow pins 100 % of
 > traffic to the candidate revision by name, so any later `services update`
 > creates a new revision that serves **0 %** until traffic is moved. Check
-> with `gcloud run services describe indic-api --region $REGION
+> with `gcloud run services describe semper-api --region $REGION
 > --format='value(status.traffic)'`. Every promote also leaves its `cand-*`
 > traffic tag behind; prune them now and then with
 > `--remove-tags` or they accumulate (a dozen by the licensing rollout).
@@ -335,7 +335,7 @@ gcloud secrets add-iam-policy-binding resend-api-key --member "serviceAccount:$A
 
 Then deploy with the `--set-secrets` flag shown in B1. Verify by signing in with
 a fresh non-admin, non-domain account: mail should land in support@ within
-seconds, and `gcloud run services logs read indic-api --region $REGION` should
+seconds, and `gcloud run services logs read semper-api --region $REGION` should
 carry no `access-request mail` warning.
 
 > `--no-allow-unauthenticated` keeps Cloud Run private: only the service
@@ -348,7 +348,7 @@ carry no `access-request mail` warning.
 
 Grab the URL:
 ```bash
-export URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
+export URL=$(gcloud run services describe semper-api --region $REGION --format='value(status.url)')
 echo $URL
 ```
 **Check:** `curl -s $URL/readyz` → `{"ok":true}`. (`/healthz` on the
@@ -365,7 +365,7 @@ This bypasses the ID-token + device-signature checks (see `DEV_INSECURE_AUTH`
 in [config.py](../../backend/app/config.py)) so you can prove the storage path with
 plain curl, before any Android work. **Never leave this on.**
 ```bash
-gcloud run services update indic-api --region $REGION \
+gcloud run services update semper-api --region $REGION \
   --update-env-vars "DEV_INSECURE_AUTH=1,INSECURE_AUTH_I_ACCEPT_THE_RISK=1,AUTO_APPROVE=1"
 ```
 
@@ -430,11 +430,11 @@ curl -s -X POST "$URL/v1/files/$FID/complete" -H "content-type: application/json
 **Check (the payoff):**
 - `Semper-Research-Storage/Research Storage/user/dev-user/session/$SID/metadata/note.txt` exists in Drive.
 - Firestore → `sessions/$SID` shows `status: COMPLETED`; `files/$FID` shows `driveFileId`.
-- Cloud Run logs (`gcloud run services logs read indic-api --region $REGION`) show the requests, no errors.
+- Cloud Run logs (`gcloud run services logs read semper-api --region $REGION`) show the requests, no errors.
 
 ### B3. Turn dev mode OFF
 ```bash
-gcloud run services update indic-api --region $REGION \
+gcloud run services update semper-api --region $REGION \
   --remove-env-vars "DEV_INSECURE_AUTH,INSECURE_AUTH_I_ACCEPT_THE_RISK,AUTO_APPROVE"
 ```
 **Check:** `curl -s $URL/v1/me` (no token) → `401 missing_bearer`.
@@ -503,7 +503,7 @@ signature) runs unchanged — the client token arrives as
 # Reuse the same $PROJECT you set in Part A — do not reassign it here. Set
 # $REGION to wherever you deployed Cloud Run.
 REGION=asia-south1
-RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
+RUN_URL=$(gcloud run services describe semper-api --region $REGION --format='value(status.url)')
 
 # 1. APIs
 gcloud services enable apigateway.googleapis.com servicemanagement.googleapis.com \
@@ -512,7 +512,7 @@ gcloud services enable apigateway.googleapis.com servicemanagement.googleapis.co
 # 2. Gateway service account, granted invoker on the private Cloud Run service
 gcloud iam service-accounts create indic-gw
 GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
-gcloud run services add-iam-policy-binding indic-api --region $REGION \
+gcloud run services add-iam-policy-binding semper-api --region $REGION \
   --member="serviceAccount:$GW_SA" --role="roles/run.invoker"
 
 # 3. Create the API first: its managed service name is a placeholder input.
@@ -571,7 +571,7 @@ API configs are immutable: create a new one and point the gateway at it.
 
 ```bash
 PROJECT=indicvision-dic-app REGION=asia-south1
-RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
+RUN_URL=$(gcloud run services describe semper-api --region $REGION --format='value(status.url)')
 GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
 
 # Same substitution + placeholder guard as step 3 above.
@@ -631,7 +631,7 @@ creates the matching Android OAuth client for you. Full steps in
 ### C3. Configure the access model
 
 ```bash
-gcloud run services update indic-api --region asia-south1 \
+gcloud run services update semper-api --region asia-south1 \
   --update-env-vars AUTO_APPROVE_HD=indicvision.com \
   --remove-env-vars DEV_INSECURE_AUTH,INSECURE_AUTH_I_ACCEPT_THE_RISK,AUTO_APPROVE
 ```
@@ -649,7 +649,7 @@ Designate admins with `ADMIN_EMAILS` (space-separated; `,` and `;` also
 parse) — they're always
 approved and can call the admin API:
 ```bash
-gcloud run services update indic-api --region asia-south1 \
+gcloud run services update semper-api --region asia-south1 \
   --update-env-vars ADMIN_EMAILS=support@sempermechanics.com
 ```
 
@@ -690,7 +690,7 @@ Firestore directly.
   └── metadata/  metadata_<frame>.json   (device/time/engine info)
   ```
 - Firestore: `sessions/<sid>` → `COMPLETED`; `files/*` have `driveFileId`.
-- Backend logs for a run: `gcloud run services logs read indic-api --region asia-south1 --limit 50`.
+- Backend logs for a run: `gcloud run services logs read semper-api --region asia-south1 --limit 50`.
 
 ### C6. Approving outside collaborators
 

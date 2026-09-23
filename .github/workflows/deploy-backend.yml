@@ -33,7 +33,7 @@ on:
         required: true
         default: asia-south1
       service:
-        description: Cloud Run service name (empty = indic-api / indic-api-staging)
+        description: Cloud Run service name (empty = semper-api / semper-api-staging)
         required: false
         default: ""
 
@@ -74,9 +74,9 @@ jobs:
           SVC="${{ github.event.inputs.service }}"
           if [ -z "$SVC" ]; then
             if [ "${{ github.event.inputs.environment }}" = "production" ]; then
-              SVC="indic-api"
+              SVC="semper-api"
             else
-              SVC="indic-api-staging"
+              SVC="semper-api-staging"
             fi
           fi
           echo "service=$SVC" >> "$GITHUB_OUTPUT"
@@ -118,7 +118,7 @@ jobs:
             exit 1
           fi
           # Operators often paste the Cloud Run service name into "project".
-          if [ "$PROJECT" = "$SERVICE" ] || [[ "$PROJECT" == indic-api* ]]; then
+          if [ "$PROJECT" = "$SERVICE" ] || [[ "$PROJECT" == semper-api* ]] || [[ "$PROJECT" == indic-api* ]]; then
             echo "::error::project='$PROJECT' looks like a Cloud Run service name, not a GCP project id. Use the project id (e.g. indicvision-dic-app)."
             exit 1
           fi
@@ -268,7 +268,7 @@ jobs:
       - name: Post-deploy smoke (/readyz on candidate)
         id: smoke
         env:
-          # Tag URL from deploy (cand-…---indic-api-….run.app); aud is service URL.
+          # Tag URL from deploy (cand-…---semper-api-….run.app); aud is service URL.
           URL: ${{ steps.deploy.outputs.url }}
           ID_TOKEN: ${{ steps.smoke_token.outputs.id_token }}
         run: |

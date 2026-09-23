@@ -233,8 +233,8 @@ pre-licensing documents)
       "Redeploying the gateway"). Unauthenticated `/v1/config` → **401**, not
       404; the preflight above → **200** through the gateway. Done
       2026-09-21 on `semper-gw` (`v202609211150`, rollback `v202608081145`).
-      The legacy `indic-gw` / `indic-api` pair is still deployed and unused;
-      delete it once nothing resolves the old host.
+      The legacy `indic-gw` gateway and its `indic-api` gateway API were
+      deleted 2026-09-23 (last client call 2026-09-10).
 - [x] Verify with the **installed, unmodified** old app: sign-in, new backup,
       delete, export succeed; restore shows one refusal. (Prod log 2026-09-21:
       `POST /v1/sessions` 200, uploads complete, `DELETE /v1/sessions/…` 200,

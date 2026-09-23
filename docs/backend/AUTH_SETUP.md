@@ -234,7 +234,7 @@ on the next successful `/v1/me`.
 ## 4. App config — local.properties
 
 ```properties
-INDIC_API_BASE_URL=https://indic-api-xxxx.a.run.app
+INDIC_API_BASE_URL=https://semper-gw-xxxx.an.gateway.dev
 ```
 
 That is the only key the app needs, exposed as
