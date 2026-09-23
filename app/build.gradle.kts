@@ -380,10 +380,11 @@ kover {
             }
         }
         verify {
-            // Modest floor after excluding view classes; raise deliberately once
-            // the measured number from `:app:koverLog` settles higher.
+            // Two points under the measured line coverage (39.1 % on 2026-09-24,
+            // after the TD-57 tests), so churn does not fail unrelated PRs while
+            // a real drop does. Raise it as coverage climbs; never lower it.
             rule {
-                minBound(27)
+                minBound(37)
             }
         }
     }

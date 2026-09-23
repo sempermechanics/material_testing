@@ -134,8 +134,8 @@ in a drive-by. Settings / wizard settings XML stay under `TooManyViews` by
 inflating through `SettingsScrollContentView` /
 `WizardStepSettingsContentView`.
 
-Kover `minBound` is 27 (`app/build.gradle.kts`), enforced by `:app:koverVerify`
-in CI tier 1 and `ciReleaseGate` (measured 32.1 % on 2026-09-23). Macrobenchmark CI is
+Kover `minBound` is 37 (`app/build.gradle.kts`), enforced by `:app:koverVerify`
+in CI tier 1 and `ciReleaseGate` (measured 39.1 % on 2026-09-24). Macrobenchmark CI is
 emulator **smoke** (`suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`), API 34, no
 numeric thresholds.
 
@@ -143,7 +143,7 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 (≥ 4557 solves/s host) is a manual engine-repo reference; no CI job enforces
 it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-23)
+## Current state (2026-09-24)
 
 - **Deployed.** Production is Cloud Run `semper-api` behind API Gateway
   `semper-gw` (staging `semper-api-staging`); #146 renamed services and queues,
@@ -153,8 +153,10 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
   bucket as `dependencies=[deps.rate_limited(...)]`, resolved before
   `verified_device`, so a 429 no longer spends the nonce; 429s send
   `Retry-After`. No app change ([§12](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
-- **In flight.** Tech-debt burn-down: [TECH_DEBT.md](docs/ops/TECH_DEBT.md)
-  register, [docs/adr/](docs/adr/README.md) ADR-001..006. Video/AVI import
+- **In flight.** Tech-debt burn-down, one PR per step (#155–#157 open, the
+  rest stacked behind them): [TECH_DEBT.md](docs/ops/TECH_DEBT.md) register,
+  [docs/adr/](docs/adr/README.md) ADR-001..006 all built. ADR-006's gateway
+  job has never run: it waits on the owner's IAM grant and a `dry-run` dispatch. Video/AVI import
   (#136–#139) has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a). Unchecked "Licensing rollout" rows in
   [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md) are owed.

@@ -11,11 +11,11 @@ chunk own?" here.
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
 |-------|--------------|---------------------------|------------------------------|
 | **auth** | Splash → Auth / Pending / Home, re-auth, password rules | `auth/AccessRouterTest`, `ReauthFlowTest`, `PasswordPolicyTest` | `auth/FirebaseAuthIntegrationTest` |
-| **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability; the wizard across a process death | `analysis/AnalysisViewModelTest`, `WizardStateTest`, `VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecodeTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest` | `ui/analysis/WizardDraftRestoreTest` |
+| **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability; the wizard across a process death | `analysis/AnalysisViewModelTest`, `WizardStateTest`, `VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecodeTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest`, `SweepSetupHelperTest`, `DicBatchRunnerLimitTest` | `ui/analysis/WizardDraftRestoreTest` |
 | **session** | Session store durability, disk footprint, failure provenance | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest` | — |
-| **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
-| **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ui/viewer/ViewerArgsTest`, `analysis/RunSpecTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
-| **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest` | — |
+| **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest`, `PdfReportGeneratorTest` | `report/PdfReportDeviceTest` |
+| **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ShareCenterTest`, `ui/viewer/ViewerArgsTest`, `analysis/RunSpecTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
+| **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest`, `data/SessionUploadBundlerTest` | `data/SessionUploadBundlerDeviceTest` |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `DicSettingsMigrateTest` | — |
 | **analytics** | Consent-gated Firebase Analytics events | `analytics/SemperAnalyticsTest` | — |
 | **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |
@@ -121,6 +121,11 @@ comparison is in [../perf/round2-main-vs-branch.md](../perf/round2-main-vs-branc
 ### Known coverage gaps
 
 Worth knowing before you assume something is protected:
+
+- Robolectric's `PdfDocument` has no native document: `startPage` throws
+  "document is closed". Anything that draws a PDF page (`PdfReportGenerator`,
+  the bundler's reports, the viewer's PDF and ZIP exports) is checked only by
+  the device tests above. JVM tests stop at the progress and error contract.
 
 - The sweep lattice's newer interactions — pinch-zoom, the scrub slider,
   double-tap-to-copy and the composed **Save graph** PNG — have **no automated
