@@ -223,12 +223,33 @@ message byte-identical for every current call — the client and
 query-bearing route is covered without a flag day. A signed request cannot be
 replayed against its own path with the parameters swapped.
 
-**Latency note.** A per-request challenge round-trip doubles RTT. For hot paths
-you may fold it into a **signed-timestamp assertion** (client signs
-`timestamp||method||path||bodyHash`; server accepts a ±120 s skew window and
-caches used signatures to block replay) — same security property, one fewer
-round-trip. The challenge endpoint remains for registration and sensitive
-admin actions.
+**Client nonces (one round-trip, not two).** A per-request challenge doubles
+the RTT of every signed call, so the app now mints its own nonce:
+`t1.<unix seconds>.<128 random bits, base64url>`. It goes in `X-Nonce` and is
+signed exactly like a challenge — the message format does not change. The
+server (`deps.verified_device`) accepts it when:
+
+1. the seconds are within `CLIENT_NONCE_WINDOW_SECONDS` (120) of its own clock —
+   checked first, with no write, so a stale or far-future nonce costs nothing;
+2. the signature verifies; and only then
+3. `challenges/{nonce}` can be **created** (`claim_client_nonce`). `create()`
+   fails on an existing document, so a nonce is single-use, and the collection's
+   existing TTL on `expireAt` (window + 60 s) cleans it up. Claiming after the
+   signature means an unsigned flood cannot fill the collection.
+
+The seconds are the server's, not the phone's: `ClientNonce.ServerDateObserver`
+learns the offset from the `Date` header of any API response, so a phone set to
+the wrong time still signs valid nonces. Until a `Date` has been seen, and for
+the rest of the process after any refusal, the app uses `POST /v1/challenge` as
+before. A refusal is a 401 `nonce_invalid_or_replayed` raised before the route
+runs, so the app re-sends that one call with a challenge. The two sides deploy
+in either order: an old backend refuses every `t1.` nonce once, and an old app
+never sends one. Any value that is not a `t1.` nonce takes the challenge path,
+and `CLIENT_NONCE_WINDOW_SECONDS=0` switches client nonces off.
+
+Replay protection is the same as a challenge's: one Firestore document per
+nonce, created once. A captured request replays for no longer than a challenge
+does, since both expire in minutes and both are consumed on first use.
 
 ---
 
@@ -274,6 +295,20 @@ Three properties worth knowing before you change this path:
 - **A failed provision is recorded, not silent.** The task marks the session
   `PROVISION_FAILED` with an error code so Cloud Tasks can retry and a polling
   client is told to stop waiting.
+- **A failed enqueue is an error, not a quiet fallback.** It logs
+  `provision_enqueue_failed` at ERROR with `errorCode=tasks_enqueue_failed`
+  and the exception type. Before it was logged, a missing
+  `iam.serviceAccountUser` grant made every session provision inline, 5–7 s
+  per request, with nothing in the error log.
+- **Small manifests skip the queue.** Up to `INLINE_PROVISION_MAX_FILES` (8)
+  files are provisioned inside the request: a bundle backup is three, and the
+  task hop plus the client's first poll cost more than opening three sessions.
+- **The folder walk is cached.** The per-user and `sessions` folder IDs are
+  kept on `users/{uid}` (`driveFolderId`, `driveSessionsFolderId`). A later
+  session checks the cached `sessions` folder still exists (one `files.get`)
+  and creates only its own folder, instead of four sequential list-or-create
+  calls from the root. A deleted or moved folder fails that check and the
+  full walk runs again and re-caches.
 
 `/v1/tasks/provision-session` is authenticated by `tasks.tasks_caller`, not by
 anything in `deps.py`: the caller is Google, so there is no uid, no device and no
@@ -670,7 +705,8 @@ allow-list). **No JSON key, no domain-wide delegation required.**
 ## 10. Cloud Run deployment
 
 Container: [`backend/Dockerfile`](../../backend/Dockerfile) (python:3.12-slim,
-uvicorn, 2 workers). The exact deploy command with all flags is step B1 of
+uvicorn, 1 worker — with one vCPU a second worker only doubled cold-start
+imports and memory). The exact deploy command with all flags is step B1 of
 [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md) — it is a runbook step, not
 something to retype from here.
 
@@ -678,11 +714,11 @@ The shape it deploys into, and why:
 
 | Setting | Value | Reason |
 |---|---|---|
-| Min instances | 0 | Scale to zero — $0 when idle |
+| Min instances | 1 in production, 0 in staging | A cold start cost ~6 s, paid by the first sign-in or upload after any idle spell. One warm instance is roughly $10–15/month. Override with the `MIN_INSTANCES` repository variable |
 | Max instances | 10 | Pilot-sized ceiling |
 | CPU / memory | 1 / 512Mi | Upload bytes bypass Cloud Run (device→Drive); restore still proxies Session.zip through `/content` |
 | Timeout | 300 s | Matches the `/v1/files/{id}/content` API Gateway deadline (300 s) so Session.zip restore can finish; other JSON routes keep a 60 s gateway deadline. Session provisioning still runs as a Cloud Task. |
-| Public endpoint | yes | Auth is enforced in the app layer (ID token + device signature), not the network layer |
+| Public endpoint | no | `run.invoker` is held by service accounts only (gateway, Tasks, deployer) plus the owner for manual smokes — never `allUsers`. The API Gateway is the public door; auth is still enforced in the app layer (ID token + device signature) |
 
 No mounted secrets. All identity comes from the attached SA + metadata server.
 HTTPS-only is the default; consider Cloud Armor / a WAF once public.
@@ -830,7 +866,7 @@ replace the serving revision and hope:
    serving. **First create** must omit `no_traffic` (Cloud Run rejects it on
    create).
 2. Smoke the **tagged candidate URL** at `/readyz`, using an ID token minted with
-   the *service URL* as its audience (production runs
+   the *service URL* as its audience (both environments run
    `--no-allow-unauthenticated`, so an unauthenticated probe would only ever
    prove that the gateway rejects it).
 3. Promote the candidate to 100% traffic only if the smoke passes (update path).
@@ -859,7 +895,9 @@ Signing.
 - **Liveness** `GET /healthz` — process up; no dependency probes (safe for
   restart loops).
 - **Readiness** `GET /readyz` — bounded Firestore + Drive probes; stable 503
-  detail codes (`firestore_unreachable`, `drive_unhealthy`, …).
+  detail codes (`firestore_unreachable`, `drive_unhealthy`, …). Not published
+  at the API Gateway (each hit costs a Drive call and the 503 names the failing
+  dependency); reachable only on the private run.app URL with an invoker token.
 - **Structured JSON access log** — UTC `timestamp`, `requestId`, `method`,
   `path`, `status`, `latencyMs`, `outcome`, `uid` / `deviceId` when resolved,
   `opClass` / `routeTemplate` for usage rollups, optional `fileCount` /

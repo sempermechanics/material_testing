@@ -316,6 +316,23 @@ pre-licensing documents)
       host. Switch it, and drop the legacy filters, once Play vitals show no
       such build installed.
 
+**Latency and failure visibility (`perf/backend-latency-and-failures`)**
+
+- [ ] Grant the runtime SA `iam.serviceAccountUser` **on itself only**, so
+      Cloud Tasks accepts its OIDC tasks. Without it every enqueue 403s
+      (`iam.serviceAccounts.actAs`) and large sessions provision inline:
+      `gcloud iam service-accounts add-iam-policy-binding indic-api@indicvision-dic-app.iam.gserviceaccount.com --member=serviceAccount:indic-api@indicvision-dic-app.iam.gserviceaccount.com --role=roles/iam.serviceAccountUser --project indicvision-dic-app`.
+      Check: no `provision_enqueue_failed` events after the next large upload.
+- [ ] Give `indic-deployer@` `run.invoker` on `indic-api-staging` before the
+      next staging deploy: the workflow now deploys staging private
+      (`--no-allow-unauthenticated`), so the candidate smoke needs it.
+- [ ] Deploy to production (min-instances 1, one worker, client nonces,
+      `/readyz` no longer on the gateway — redeploy the gateway config from
+      `backend/gateway/openapi.yaml`). Check: `/readyz` through the gateway
+      → 404; a signed call from a new build carries a `t1.` nonce and no
+      `POST /v1/challenge` precedes it.
+- [ ] Prune the tagged `cand-*` revisions so none holds a warm instance.
+
 ## Contention fixes found by the emulator tier
 
 Wiring the Firestore emulator into CI immediately falsified three assumptions the

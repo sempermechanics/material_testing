@@ -182,6 +182,14 @@ gcloud run services add-iam-policy-binding indic-api \
 # The API SA enqueues its own tasks.
 gcloud projects add-iam-policy-binding $PROJECT \
   --member="serviceAccount:$API_SA" --role="roles/cloudtasks.enqueuer"
+
+# A task that carries an OIDC token for $API_SA can only be created by a
+# caller allowed to act as $API_SA — here, itself. Scoped to that one SA, not
+# the project. Without it every enqueue fails with 403
+# iam.serviceAccounts.actAs and the service quietly provisions inline.
+gcloud iam service-accounts add-iam-policy-binding $API_SA \
+  --member="serviceAccount:$API_SA" --role="roles/iam.serviceAccountUser" \
+  --project=$PROJECT
 ```
 
 Then set these on the service (GitHub Environment or **repo-level** `vars` for
@@ -200,7 +208,11 @@ deploys (see table below):
 part of the public API and is absent from `gateway/openapi.yaml`. It is also the
 OIDC audience, so it must match exactly.
 
-**Check:** create a session with a few files; the response is
+Manifests of up to `INLINE_PROVISION_MAX_FILES` (default 8 — a bundle upload is
+three) are still provisioned inside the request: the task hop plus the
+client's first poll cost more than the work.
+
+**Check:** create a session with more than eight files; the response is
 `{"status": "PROVISIONING", "uploads": []}` and, within a second or two,
 `GET /v1/sessions/{sid}/uploads` reports `UPLOADING` with one target per file.
 `gcloud tasks queues describe indic-provision --location=$REGION` should show no
@@ -216,8 +228,8 @@ gcloud run deploy indic-api \
   --source backend \
   --region $REGION \
   --service-account "$API_SA" \
-  --allow-unauthenticated \
-  --min-instances 0 --max-instances 10 \
+  --no-allow-unauthenticated \
+  --min-instances 1 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 300 \
   --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
   --set-env-vars "SUPPORT_EMAIL=support@sempermechanics.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
@@ -247,6 +259,8 @@ Everything above is required (or near enough). These are the rest of what
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
+| `INLINE_PROVISION_MAX_FILES` | `8` | Manifests this small provision inside `POST /v1/sessions` instead of through the queue. `0` sends everything through Cloud Tasks |
+| `CLIENT_NONCE_WINDOW_SECONDS` | `120` | How far a device-minted `t1.` nonce's timestamp may be from server time ([CLOUD_ARCHITECTURE_GCP.md §3](CLOUD_ARCHITECTURE_GCP.md)). `0` refuses client nonces, so every signed call fetches a challenge |
 | `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot keeps this at `1`. See the hardening note below |
 | `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
 | `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
@@ -324,9 +338,13 @@ a fresh non-admin, non-domain account: mail should land in support@ within
 seconds, and `gcloud run services logs read indic-api --region $REGION` should
 carry no `access-request mail` warning.
 
-> `--allow-unauthenticated` is correct here: the service is public at the network
-> layer, and **auth is enforced in the app layer** (Firebase ID token + device
-> signature). Nothing sensitive is reachable without a valid token.
+> `--no-allow-unauthenticated` keeps Cloud Run private: only the service
+> accounts in C0 invoke it, and the API Gateway is the public door. **Auth is
+> still enforced in the app layer** (Firebase ID token + device signature).
+> Never deploy with `--allow-unauthenticated` — it binds `allUsers`.
+>
+> `--min-instances 1` keeps one instance warm: a cold start costs ~6 s on the
+> first sign-in or upload after idle. Use `0` for staging.
 
 Grab the URL:
 ```bash
@@ -335,9 +353,11 @@ echo $URL
 ```
 **Check:** `curl -s $URL/readyz` → `{"ok":true}`. (`/healthz` on the
 `*.run.app` URL answers a Google-frontend 404 in this project without
-reaching the container — the deploy workflow and the gateway use `/readyz`;
-the route exists and `test_health.py` covers it, but do not use it as the
-smoke check.)
+reaching the container — the deploy workflow uses `/readyz`; the route
+exists and `test_health.py` covers it, but do not use it as the smoke check.)
+`/readyz` is **not** published at the API Gateway: it costs a Firestore read
+and a Drive call per hit and names the failing dependency, so it is reachable
+only on the private `*.run.app` URL with an invoker token (the deploy smoke).
 
 ### B2. Redeploy in **insecure dev mode** to smoke-test Drive + Firestore
 
@@ -452,22 +472,26 @@ Run **invoker** token. So a **private** Cloud Run service is unreachable by the
 app — every call gets Google's HTML `403 Forbidden`. It needs a public front
 door.
 
-**Simplest — if your org allows it:** make Cloud Run public (app-layer auth then
-guards it):
-```bash
-gcloud run services add-iam-policy-binding indic-api --region asia-south1 \
-  --member="allUsers" --role="roles/run.invoker"
-```
-If this **fails** with `iam.allowedPolicyMemberDomains` / Domain Restricted
-Sharing, your org forbids public Cloud Run and forbids `allUsers`. Ask an org
-admin for a project-scoped exception (one change, $0, no code) — otherwise use
-the API Gateway workaround below.
+**Never bind `allUsers`.** Cloud Run stays private; only service accounts (and
+the owner, for manual smokes) hold `roles/run.invoker`. In production those are:
+
+| Principal | Why it invokes |
+|-----------|----------------|
+| `indic-gw@` (gateway SA) | The API Gateway forwards every client call |
+| `indic-api@` (runtime SA) | Cloud Tasks delivers `/v1/tasks/provision-session` with its OIDC token |
+| `indic-deployer@` | The deploy workflow smokes the tagged candidate at `/readyz` |
+| the owner account | Manual smokes; remove when not needed |
+
+Every one of them still needs a Firebase ID token for `/v1/*` — invoker only
+gets a request to the container. The public front door is the API Gateway
+below; `allUsers` would also expose `/readyz` and the Tasks callback's URL to
+anyone.
 
 > **IAP is not an option if you need external (non-domain) users:** IAP
 > authorizes via IAM, which the same DRS policy restricts — so IAP can only admit
 > your own Workspace domain. For external collaborators, use API Gateway.
 
-**Workaround (no policy change, supports external users) — API Gateway:**
+**API Gateway (no policy change, supports external users):**
 A managed **public** endpoint whose reachability is *not* granted via `allUsers`
 IAM, so DRS doesn't block it. The gateway invokes Cloud Run using **its own
 service account** (an org-internal principal DRS permits); Cloud Run stays
