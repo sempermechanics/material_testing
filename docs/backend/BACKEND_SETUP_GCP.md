@@ -288,16 +288,15 @@ Everything above is required (or near enough). These are the rest of what
 > ```bash
 > gcloud run services update semper-api --region $REGION \
 >   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
-> gcloud run services update-traffic semper-api --region $REGION --to-latest
 > ```
 >
-> The `update-traffic` is not optional: the deploy workflow pins 100 % of
-> traffic to the candidate revision by name, so any later `services update`
-> creates a new revision that serves **0 %** until traffic is moved. Check
-> with `gcloud run services describe semper-api --region $REGION
-> --format='value(status.traffic)'`. Every promote also leaves its `cand-*`
-> traffic tag behind; prune them now and then with
-> `--remove-tags` or they accumulate (a dozen by the licensing rollout).
+> The deploy workflow promotes with `--to-latest`, so the revision this
+> creates serves at once. A service last promoted before that change is still
+> pinned to its revision by name and the new one serves **0 %**: check with
+> `gcloud run services describe semper-api --region $REGION
+> --format='value(status.traffic)'` and, if so, run `gcloud run services
+> update-traffic semper-api --region $REGION --to-latest`. The promote also
+> removes every `cand-*` traffic tag, so none accumulate.
 
 **Production hardening: `REQUIRE_ATTESTED_UPLOADS=1` (live on pilot).**
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this

@@ -290,6 +290,12 @@ jobs:
           exit 1
 
       # Only reached when smoke passed — live traffic stays on PREV until here.
+      # The candidate is the newest revision (the concurrency group serialises
+      # deploys), so --to-latest serves it and a later `gcloud run services
+      # update` goes live without a manual update-traffic. The next deploy's
+      # no_traffic pins LATEST to the then-serving revision by name, as before.
+      # Every cand-* tag goes in the same call: a tag exists only for the smoke
+      # above, and a stale one keeps its revision addressable.
       - id: promote
         name: Promote candidate to 100% traffic
         env:
@@ -299,9 +305,17 @@ jobs:
           REV: ${{ steps.meta.outputs.service }}-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          echo "Routing 100% traffic to ${REV}"
-          gcloud run services update-traffic "$SERVICE" \
-            --to-revisions="${REV}=100" \
+          DESC=$(gcloud run services describe "$SERVICE" \
+            --project "$PROJECT" --region "$REGION" --format=json)
+          LATEST=$(jq -r '.status.latestReadyRevisionName' <<<"$DESC")
+          if [ "$LATEST" != "$REV" ]; then
+            echo "Latest ready revision is ${LATEST}, not ${REV}; refusing to promote"
+            exit 1
+          fi
+          TAGS=$(jq -r '[.spec.traffic[]?.tag // empty | select(startswith("cand-"))] | unique | join(",")' <<<"$DESC")
+          echo "Routing 100% traffic to ${REV} (latest); dropping tags: ${TAGS:-none}"
+          gcloud run services update-traffic "$SERVICE" --to-latest \
+            ${TAGS:+--remove-tags="$TAGS"} \
             --project "$PROJECT" --region "$REGION"
 
       # Deliberately AFTER the smoke + promote gate.

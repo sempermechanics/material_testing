@@ -210,7 +210,8 @@ Environments. It:
    `allUsers`), so an unauthenticated probe would only prove the
    gateway rejects it. The deploy SA needs `run.invoker` on each service.
 5. Promotes the candidate to 100% traffic once the smoke passes (when
-   `no_traffic` was used).
+   `no_traffic` was used), with `--to-latest` after checking the latest ready
+   revision is the candidate, and removes every `cand-*` tag in the same call.
 
 On an update deploy, traffic never reaches an unproven revision, so a failed
 smoke needs no rollback. The revision suffix includes the **run attempt** as

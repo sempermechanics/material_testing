@@ -897,7 +897,12 @@ replace the serving revision and hope:
    the *service URL* as its audience (both environments run
    `--no-allow-unauthenticated`, so an unauthenticated probe would only ever
    prove that the gateway rejects it).
-3. Promote the candidate to 100% traffic only if the smoke passes (update path).
+3. Promote the candidate to 100% traffic only if the smoke passes (update path):
+   `update-traffic --to-latest`, after checking the latest ready revision *is*
+   the candidate, removing every `cand-*` tag in the same call. Traffic then
+   follows the latest revision, so a later `gcloud run services update` serves
+   without a manual traffic move; the next deploy's `no_traffic` pins LATEST to
+   the serving revision by name before its candidate appears.
 
 On an update deploy, if the smoke fails there is nothing to roll back — the
 candidate never carried traffic. Rollback is only relevant if a later step fails
@@ -1078,6 +1083,17 @@ read an empty lock; a plain write would let the later one win, so the licence
 would silently follow whichever request Firestore ordered second. First writer
 wins, and the other device is a mismatch from its next request onward, which
 is the answer a device lock exists to give.
+
+Losing the race is not the same as someone winning it. Firestore aborts
+contended transactions, and a burst of binds can all exhaust their retries
+with nothing committed (the emulator does this to eight concurrent binds).
+`bind_device_lock` therefore re-reads a starved round: a held lock is an
+ordinary loss, an empty one runs the bind again, up to three jittered rounds.
+If every round starves it raises `DeviceLockContended` instead of reporting a
+loss, so nothing is ever told "mismatch" for a lock no device holds. On the
+request path `revalidate_device_lock` swallows it and leaves the licence
+unbound for the next request; `POST /v1/licenses/activate` answers
+`503 device_lock_contended`, and a retry binds.
 
 The same rule makes the Demo mint a compare-and-set. Several requests arrive at
 app launch; the one that loses the race to claim a real licence is still

@@ -133,6 +133,29 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**A starved device-lock bind is not a loss (`fix/deflake-device-lock-test`).**
+The emulator test `test_the_first_device_wins_an_unbound_lock` flaked (2 in 10
+locally, and on PR #148) with **zero** winners: all eight binds exhausted their
+transaction retries and `bind_device_lock` read that as "another device won",
+returning False with the lock still empty — which `_activate_individual` then
+answered as `license_device_mismatch`. A starved round now re-reads the lock
+and binds again (three jittered rounds); if every round starves it raises
+`DeviceLockContended` (`503 device_lock_contended` on activate; swallowed on
+the request path, leaving the licence unbound for the next request). Details:
+[CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) §20.1.
+
+**Upload stops retrying a session whose files are gone
+(#148, merged 2026-09-23).** `DicUploadWorker` returned `Result.retry()`
+forever when report staging came out incomplete, so a session whose `.dat`
+files had been deleted sat on "upload pending" for days (Pixel 6, since
+2026-09-21). `UploadWorkOutcomes.classifyIncompleteStaging` now keeps retrying
+only while the inputs are on disk, the row was saved under 15 min ago, or they
+have been missing for under 10 min (timed by an `upload_inputs_missing_since`
+marker in the session folder and restarted whenever the row is re-saved, so a
+re-run's brief `.dat` gap does not count). Otherwise the worker fails with
+`cloud_backup_failed_missing_files`, which shows on the Home FAILED badge and
+its dialog.
+
 **Video sampling and long snackbars (`fix/video-estimate-snackbar`).** The
 sampling sheet promised one frame more than a fixed-interval extraction
 delivered whenever the segment reached the clip's end: it sampled at the end
@@ -145,12 +168,17 @@ Same fix as material_testing #9.
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
-**Quicker session setup (branch `perf/inline-provision`, 2026-09-23).** Two
-Pixel 6 backups spent 5.37 s and 3.43 s provisioning inline (a bundle is 3
-files, under the queue threshold). The folder step made three Drive calls in a
-row; now the cached `session/` check and the new session folder's create run
-together, with no name search for an id minted in the same request, and a
-retry reuses the stored folder. `session_provisioned` logs `folderMs`.
+**Quicker session setup (#149, deployed 2026-09-23).** Two Pixel 6 backups
+spent 5.37 s and 3.43 s provisioning inline (a bundle is 3 files, under the
+queue threshold). The folder step made three Drive calls in a row; now the
+cached `session/` check and the new session folder's create run together, with
+no name search for an id minted in the same request, and a retry reuses the
+stored folder. `session_provisioned` logs `folderMs`. The next Pixel backup
+provisioned in 2.40 s (folders 1.23 s), `POST /v1/sessions` 3.12 s.
+
+**Deploys prune their tags (branch `chore/prune-cand-tags`).** The promote
+routes `--to-latest` and drops every `cand-*` tag in the same call (TD-32
+closed). Unproven until the next staging deploy.
 
 **Backend names standardised (2026-09-23, #146, deployed).** Cloud Run
 services are rebuilt as `semper-api` / `semper-api-staging` with queues
