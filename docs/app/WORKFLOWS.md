@@ -394,6 +394,9 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.1a.4 | Choose settings that exceed *Max frames* | The estimate shows the cap being applied |
 | [ ] 5.1a.5 | Tap **Extract** | Progress overlay; frame 0 becomes the reference, the rest deformed |
 | [ ] 5.1a.6 | Look for the sort control afterwards | Hidden — video frames are already in time order |
+| [ ] 5.1a.7 | Pick an `.avi` from a lab or UTM camera (uncompressed or motion-JPEG) | Sampling sheet opens with its resolution, rate and duration; **Extract** writes the same lossless grayscale frames an MP4 does |
+| [ ] 5.1a.8 | Pick an `.avi` whose codec this device has no decoder for (Xvid on a device without MPEG-4 ASP) | Snackbar naming the four-letter codec and what to do instead, with **Why?** → video-read FAQ |
+| [ ] 5.1a.9 | Pick an `.avi` that is truncated or not a video at all | The ordinary "could not read this video" snackbar — no crash |
 
 ### 5.2 Step 2 — Confirm settings
 

@@ -137,17 +137,25 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**Video import reads AVI (PR #8, `feat/avi-video-import`).** Ported from the
+parent repo's #139, so the two apps read the same files. `AviReader` demuxes
+RIFF, `AviLuma` reads the uncompressed layouts losslessly, `MjpegHuffman`
+repairs tableless motion-JPEG frames and `AviCodecDecoder` hands Xvid/H.264
+samples to the platform codecs — no new dependency, no APK growth. A codec the
+device cannot decode is named in the error instead of failing blank. Untried on
+a real AVI on a device: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a
+rows 7-9.
+
 **This is `material_testing`, pushed from `semperdic-app` `main` at `bfe00e5` on
 2026-09-21.** Same `applicationId`, Firebase app and backend as the parent; only
 `app_name` ("Material Testing"), `rootProject.name` and the README changed. The
 parent repo owns backend deploys. Scope of this repo: a test-type chooser
-(Tensile / Bending) ahead of the wizard, machine-load CSV
-import with the specimen dimensions each test's stress needs, and stress–strain
-outputs in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was written
-in the parent repo and still applies. The first four PRs (#1, #5, #3, #4) are
-merged, the fork's branches are swept (only `main` remains on the remote), and
-the repo is public with a `main` ruleset requiring `CI OK` and a pull request.
-Bending inputs follow in `feat/bending-torsion-inputs`.
+(Tensile / Bending) ahead of the wizard, machine-load CSV import with the
+specimen dimensions each test's stress needs, and stress–strain
+outputs in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was
+written in the parent repo and still applies. PRs #1, #5, #3, #4, #6 and #7 are
+merged, and the repo is public with a `main` ruleset requiring `CI OK` and a
+pull request.
 
 **Test type (PR #5, `feat/test-type`; first opened as #2).** `TestTypeSheet`
 sits between the Home **+** and the media picker. The choice is stored inline
@@ -181,7 +189,7 @@ without a log), typed sessions add `# test_type` / `# cross_section_mm2` /
 all-frames report with the curve (rendered off screen by `ShareCenter`) and a
 per-frame table. `.dat` is untouched.
 
-**Bending inputs (`feat/bending-torsion-inputs`).** Both tests import a load
+**Bending inputs (PR #7, `feat/bending-torsion-inputs`).** Both tests import a load
 log; what differs is how the load becomes a stress, which is a
 `StressStrain.Model`: `Axial` (σ = P/A, strain along the load axis) for tensile
 and `Flexural` (three-point, σ = 3PL/2bh² from span / width / thickness) for

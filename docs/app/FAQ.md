@@ -291,10 +291,18 @@ check storage permission.
 
 ## video-read {#video-read}
 
-**When you see it:** Video metadata could not be read.
+**When you see it:** Video metadata could not be read, or the message names a
+four-letter codec the device cannot decode.
 
 **What to do:** Re-copy the file; try a shorter clip; confirm the container is
 supported on this device.
+
+**AVI:** MP4, 3GP, MKV/WebM and MPEG-TS are the containers Android itself opens;
+AVI is not one of them, so the app demuxes AVI on its own. Uncompressed AVI
+(8-bit gray, 4:2:2, 4:2:0, DIB) and motion-JPEG are read losslessly, and
+Xvid/DivX/H.264 inside AVI go to the device's own decoders. If the message names
+a codec — for example `XVID` — this device has no decoder for it: re-save the
+clip as MP4 (H.264), or export the frames as PNG and import them as images.
 
 ---
 
