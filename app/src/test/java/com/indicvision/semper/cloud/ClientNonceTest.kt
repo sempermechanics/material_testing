@@ -15,6 +15,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * [ClientNonce]: nonces the device mints so a signed call skips the challenge
@@ -27,6 +28,7 @@ import org.robolectric.RobolectricTestRunner
  * Robolectric only for `org.json`, which [ClientNonce.isRefusal] parses with.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ClientNonceTest {
 
     /** `backend/app/deps.py` `_CLIENT_NONCE`. */
