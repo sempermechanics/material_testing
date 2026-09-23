@@ -136,15 +136,18 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 Open debt and improvements: [docs/ops/TECH_DEBT.md](docs/ops/TECH_DEBT.md),
 [docs/ops/FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
-**Video import reads AVI (#139, `feat/avi-video-import`, open).** #136 landed
+**Video import reads AVI (#136, #137, #139, merged 2026-09-23).** #136 landed
 the keyframe/uniform extraction path that pulls frames out of the raw Y plane;
+#137 fixed its fixed-interval mode, which had returned the preceding I-frame
+for every sample (the decoder now decodes forward to the requested timestamp);
 #139 adds the container Android itself cannot open. `AviReader` demuxes RIFF,
 `AviLuma` reads the uncompressed layouts losslessly, `MjpegHuffman` repairs
 tableless motion-JPEG frames and `AviCodecDecoder` hands Xvid/H.264 samples to
 the platform codecs — no new dependency, no APK growth. A codec the device
-cannot decode is now named in the error instead of failing blank. Untried on a
-real AVI on a device: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a rows
-7-9. The same change is being ported to `sempermechanics/material_testing`.
+cannot decode is now named in the error instead of failing blank. Neither path
+has run on a device yet — the MediaCodec Y-plane decode (vendor strides, crop,
+portrait rotation) nor a real AVI: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md)
+§5.1a rows 7-9. The same change is being ported to `sempermechanics/material_testing`.
 
 **Licensing is live in production (2026-09-21/22).** `indic-api` serves
 `d6b1b64` (`main` after #116) behind the `semper-gw` gateway config
