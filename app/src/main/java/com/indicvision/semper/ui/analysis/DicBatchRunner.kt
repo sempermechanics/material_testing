@@ -21,7 +21,6 @@ import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionPaths
-import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.FieldRangesStore
@@ -39,6 +38,7 @@ import kotlin.coroutines.CoroutineContext
  */
 internal fun AnalysisViewModel.runBatchAnalysisBody(
     appContext: Context,
+    spec: RunSpec,
     params: AnalysisViewModel.BatchAnalysisParams,
     onProgress: (AnalysisViewModel.BatchProgressUpdate) -> Unit,
     jobContext: CoroutineContext,
@@ -59,12 +59,11 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val batchDir = SessionStore.dirFor(appContext, localSessionId)
     batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
 
-    // Start every run from a clean result snapshot. Fields below (engineStats,
-    // sessionId, refPath, completed, stopCode, plannedFrames) are only written
-    // on the success path, so a re-run that fails early or yields 0 valid points
+    // Start every run from a clean result snapshot carrying its spec. Fields
+    // below (engineStats, refPath, settings, stopCode, plannedFrames) are only
+    // written on the success path, so a re-run that fails early or yields 0 valid points
     // would otherwise keep the PREVIOUS run's numbers — the stale-results bug.
-    resetRunResult(batchDir.absolutePath)
-    lastStep = params.step
+    resetRunResult(batchDir.absolutePath, spec)
 
     EngineDebug.attach(params.debugDir)
 
@@ -316,8 +315,6 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val executionTimeMs = (System.currentTimeMillis() - params.processingStartTime).toInt()
 
     if (firstFrameValidPoints > 0 && engineErrorCode != AnalysisViewModel.ERROR_CANCELLED) {
-        currentSessionId = newPendingSessionId()
-
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
@@ -334,16 +331,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 refName = refName,
                 realRefWidth = realRefWidth,
                 realRefHeight = realRefHeight,
-                settings = SessionRecordSettings(
-                    subset = params.subset,
-                    step = params.step,
-                    strainWin = params.strainWin,
-                    roiX = params.finalRectX,
-                    roiY = params.finalRectY,
-                    roiW = params.finalRectW,
-                    roiH = params.finalRectH,
-                    use6x6 = params.use6x6,
-                ),
+                settings = spec.recordSettings().also { recordRunSettings(it) },
                 cloudEnabled = cloudEnabled,
                 pointsConverged = firstFrameValidPoints,
                 avgIterations = firstFrameAvgIters,

@@ -34,7 +34,9 @@ object SessionOpenHelper {
         activity.startActivity(intentFor(activity, session))
     }
 
-    fun intentFor(context: Context, session: SessionRecord): Intent =
+    fun intentFor(context: Context, session: SessionRecord): Intent = argsFor(session).toIntent(context)
+
+    fun argsFor(session: SessionRecord): ViewerArgs =
         ViewerArgs(
             imgW = session.imgW,
             imgH = session.imgH,
@@ -67,5 +69,5 @@ object SessionOpenHelper {
             } else {
                 null
             },
-        ).toIntent(context)
+        )
 }
