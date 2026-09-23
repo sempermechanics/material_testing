@@ -213,9 +213,9 @@ and how a load becomes a stress.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 3b.1 | Tap **+** on Home | **Which test?** with two rows — Tensile and Bending — each with a caption: stress–strain curve and Young's modulus E for tensile, three-point flexural stress for bending |
+| [ ] 3b.1 | Tap **+** on Home | **Which test?** with two rows — Tensile and Bending — each with a caption: stress–strain curve and Young's modulus E for tensile; deflection, bending stress and E for bending |
 | [ ] 3b.2 | Swipe the sheet down | Nothing opens; Home is unchanged |
-| [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard's load card asks for span, width and thickness (§5.1b) |
+| [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard's load card asks for span, width and thickness and has a **Load point → Mark** row (§5.1b, §6a); the strain-axis toggle is hidden |
 | [ ] 3b.4 | Rotate the phone between picking a test and picking media | The test survives — the resulting session still carries it |
 | [ ] 3b.5 | Finish any run, open the viewer, tap ⓘ | **Test type** is the first row of Settings used, naming the test picked in 3b.1 |
 | [ ] 3b.6 | Reopen that session from Home; back it up, delete it locally, restore it | The ⓘ row still shows the test after each reopen |
@@ -381,6 +381,11 @@ tensile, **Support span** / **Width** / **Thickness** for bending.
 | [ ] 5.1b.18 | Bending, log imported, one dimension left empty | **Next** disabled with "enter the specimen dimensions to continue"; it enables once span, width and thickness are all in |
 | [ ] 5.1b.19 | Tap ⓘ on the card, per test | The dialog gives that test's formula: load ÷ area, or 3 P L / (2 b h²) |
 | [ ] 5.1b.20 | Rotate with dimensions typed | The dimensions survive |
+| [ ] 5.1b.21 | Bending, log and dimensions in, no taps | **Next** disabled with "mark the beam's edges on the reference photo to continue"; **Mark** opens the tap editor (§6a) |
+| [ ] 5.1b.22 | Save taps in the editor | The row reads "N px across · 0.0xxx mm/px"; **Next** enables |
+| [ ] 5.1b.23 | Change the reference image | The taps clear; **Next** is disabled again until re-marked |
+| [ ] 5.1b.24 | Video + a timed log that starts after the recording (e.g. `scripts/synthetic_beam_video.py`, 2 s late) | Chip "matched by time" and a **Log started after the first frame** row (s). Typing 2 re-matches: the first loaded frame is the one filmed after the first weight went on |
+| [ ] 5.1b.25 | Same log, one row per frame | No offset row (it shows only for a time match) |
 
 #### 5.1a Video source
 
@@ -400,6 +405,10 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | [ ] 5.1a.10 | Leave the segment at the whole clip and the rate at the source's own, then **Extract** | The deformed count is exactly the sheet's estimate minus the reference — a 20-frame clip gives 1 + 19, not a promised 21 |
 | [ ] 5.1a.11 | Read the codec snackbar from 5.1a.8 | The whole message shows — both remedies, not cut after two lines — and it stays up long enough to read (about 9 s) |
 | [ ] 5.1a.12 | Extract a phone-recorded MP4 over the whole clip, then scrub the deformed frames | Consecutive frames differ wherever the specimen moved — not runs of one repeated I-frame — and the displacement field is not zero |
+| [ ] 5.1a.13 | Pick a video whose file marks two or more key frames | A **Frame rate / Key frames** toggle sits under the info line. A clip with no key-frame marks (an AVI without `idx1`) shows no toggle |
+| [ ] 5.1a.14 | Choose **Key frames** | The fps slider hides and a note explains key frames. The estimate reads "N key frames: 1 reference + N−1 deformed"; `scripts/synthetic_beam_video.py`'s clip (a key frame every second) gives 29 |
+| [ ] 5.1a.15 | Narrow the segment to hold under two key frames | The estimate says so and **Extract** is disabled |
+| [ ] 5.1a.16 | Extract in **Key frames** | Exactly the estimate's frames, each a different decode (no repeats), and loads match by each frame's own time |
 
 `VideoFrameExtractionDeviceTest` (instrumented) covers the extraction itself on
 an emulator: it encodes MP4 and AVI (Y800, MJPG, H.264) clips whose frames are
@@ -546,6 +555,23 @@ ROI and mask, or with full-image defaults on cancel.
 | [ ] 6.20 | Save an ROI with holes, then run | The masked regions are absent from the result heatmap |
 
 ---
+
+### 6a. Beam thickness taps (bending)
+
+`BeamEdgeTapActivity`, opened from **Load point → Mark**. Cancel / **Beam
+thickness** / Save across the top, the reference photo, the scale readout
+over it, the instruction and **Reset** below.
+
+| # | Action | Expected |
+|---|---|---|
+| [ ] 6a.1 | Open it with the thickness typed | Readout "Thickness t mm — tap both edges"; the instruction asks for the top edge and says pinch or double-tap zooms, drag pans; Save disabled |
+| [ ] 6a.2 | Double-tap the beam, then pinch | Zooms in about the finger; drag pans; double-tap again returns to fit |
+| [ ] 6a.3 | While zoomed, tap the top edge, then the bottom edge | Crosshairs on both edges and a dashed probe circle between; **the zoom does not change between taps**; readout "t mm over N px · mm/px" |
+| [ ] 6a.4 | Tap near either mark | That mark moves; the other stays |
+| [ ] 6a.5 | Place the marks under 40 px apart | Readout adds the precision warning (≈ 100/N % per pixel of slip) |
+| [ ] 6a.6 | Marks under 3 px apart | Save disabled; readout "The marks are on top of each other — tap the other edge." |
+| [ ] 6a.7 | Rotate with marks placed | Marks survive |
+| [ ] 6a.8 | Save; reopen Mark | The saved marks are shown |
 
 ## 7. Parameter sweep lattice `[sweep]`
 
@@ -738,7 +764,8 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.14a | Same tensile run, once the curve has drawn | A second, muted **Elastic fit** line over the straight early part; under the caption "Young's modulus E ≈ … GPa, from the straight part of the curve (frames a–b, R² …)", marked approximate, then **Peak stress** with its frame |
 | [ ] 8.4.14b | A tensile run with fewer than three frames before the peak, or no straight start | No fit line; the E line says it was not found and why (three photos on the straight part, before the peak) |
 | [ ] 8.4.14c | A tensile run logged against the wrong strain axis (E ≤ 0) | E is shown with its sign, plus a line asking to check the strain axis |
-| [ ] 8.4.15 | Open it on a bending run | Rows **Support span**, **Width**, **Thickness**, **Machine load**, **Flexural stress**; the curve's y-axis reads "Flexural stress (MPa)" |
+| [ ] 8.4.15 | Open it on a bending run without taps (made before this build) | Rows **Support span**, **Width**, **Thickness**, **Machine load**, **Flexural stress**; the curve's y-axis reads "Flexural stress (MPa)" |
+| [ ] 8.4.15a | Open a bending run with taps | Results shows the **load–deflection** graph (W on δ) with a muted slope line, then E from the graph (slope, R²), average E over the load steps ("n load steps" counts held loads, not frames), the mm/px scale and the approximate note. On the synthetic video of §5.1b.24: 141.5 GPa and 173.1 GPa over 6 load steps |
 
 ### 8.5 Share and export
 
@@ -749,7 +776,8 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.3 | **All fields** | Five PNGs for the current frame, zipped for hand-off. The row's sub-line and each PNG's stamp name the **source image**; the file names still come from the analysis name |
 | [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
 | [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
-| [ ] 8.5.3c | **Lab report (PDF)** — first row, tensile run with loads, not a sweep | A journal-style write-up in the layout of the student's handwritten report ([STUDENT_LAB_WORKFLOW.md](STUDENT_LAB_WORKFLOW.md)): experiment and title, Name / Date lines, Aim, Materials required, Theory, the reference photo with the analysed region, Observations (area filled in; lengths and diameters as blank lines), the observation table (S.No, Load kN, Extension —, Stress MPa, Strain) with **Elastic / Plastic / Break point** bracketed in the margin, Calculation for row 1, the elastic-region and full stress–strain graphs with E boxed, Results (E and peak stress, with the approximate note), and ruled Conclusions lines |
+| [ ] 8.5.3c | **Lab report (PDF)** — first row, tensile run with loads, not a sweep | A journal-style write-up in the layout of the student's handwritten report ([STUDENT_LAB_WORKFLOW.md](STUDENT_LAB_WORKFLOW.md)): experiment and title, Name / Date lines, Aim, Materials required, Theory, the reference photo with the analysed region, Observations (area filled in; lengths and diameters as blank lines), a **DIC gauge length along x/y (px)** line; the observation table (S.No, Load kN, Extension px, Stress MPa, Strain — Extension ÷ gauge length ≈ Strain; "—" once an end of the region has left the view) with **Elastic / Plastic / Break point** bracketed in the margin, Calculation for row 1 (stress, strain, and ΔL in px over the gauge), the elastic-region and full stress–strain graphs with E boxed, Results (E and peak stress, with the approximate note), and ruled Conclusions lines |
+| [ ] 8.5.3d | **Lab report (PDF)** on a bending run with taps | Offered first (absent until the thickness is tapped). Layout of Experiment 5: title, Aim, Experimental setup, Theory, procedure (a)–(d), the reference photo with the two taps and the probe circle, Observations (L, b, t, no-load reading = reference photo, mm/px), row-1 Calculation (M, y, I, σb, E), the table with **one row per load step** (unloaded frames left out), Results (average E, E from the graph) and the load–deflection graph with slope and E boxed |
 | [ ] 8.5.3d | Open Share on bending, on a sweep, or on a run without loads | No **Lab report** row (bending arrives in the next PR) |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
 | [ ] 8.5.4a | Same, on a tensile run | Each cover has a **Mechanical Test** block (type, cross-section, strain, this frame's load and engineering stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a **Modulus E (approx.)** with its frames and R², and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |

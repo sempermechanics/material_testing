@@ -13,7 +13,9 @@ build it. This page routes you to the rest.
 | Backtrack a symptom to its code | [WORKFLOWS.md §E](WORKFLOWS.md#e-backtracking) |
 | Run a manual test pass over every screen | [app/WORKFLOWS.md](app/WORKFLOWS.md) |
 | See which errors open public Troubleshooting | [app/FAQ_LINKS.md](app/FAQ_LINKS.md) · canonical text [app/FAQ.md](app/FAQ.md) |
-| Operate the app to analyse a DIC image set | [OPERATING_MANUAL.md](OPERATING_MANUAL.md) |
+| Run a tensile or bending lab with the app | [OPERATING_MANUAL.md §2](OPERATING_MANUAL.md#2-lab-tests) · spec, formulas, accuracy [app/STUDENT_LAB_WORKFLOW.md](app/STUDENT_LAB_WORKFLOW.md) |
+| Operate the app to analyse any DIC image set | [OPERATING_MANUAL.md](OPERATING_MANUAL.md) |
+| Check the app against published and synthetic test data (tensile and bending E) | [app/REAL_WORLD_VALIDATION.md](app/REAL_WORLD_VALIDATION.md) |
 | Understand lighting / measurement-floor accuracy | [app/NOISE_FLOOR_STRAIN_ACCURACY.md](app/NOISE_FLOOR_STRAIN_ACCURACY.md) · short FAQ [app/FAQ.md — lighting-and-accuracy](app/FAQ.md#lighting-and-accuracy) |
 | Change the correlation engine (C++) | [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md) — the engine is a submodule, so this points into `native/docs/` |
 | Know what the app may assume of the engine | [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md) |

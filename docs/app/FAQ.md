@@ -330,8 +330,10 @@ matches one load to each deformed frame:
 - **First row skipped** — one more row than frames, and the first row is the
   smallest load: it is taken as the unloaded reference.
 - **Matched by time** — video frames only. Each frame takes the row nearest in
-  time, assuming the video and the log started together. Start the recording
-  and the machine at the same moment, or trim the video to that moment.
+  time, counting from the video's first frame (the reference). If the machine
+  started logging later than the recording, enter the gap under **Log started
+  after the first frame** (seconds; negative if the log started first).
+  Starting both together still works best.
 - **Resampled** — any other row count. Frames are spread evenly through the
   log (reference ↔ first row, last frame ↔ last row). This is right when
   photos were taken at a steady rate through the whole test; otherwise export
@@ -343,6 +345,12 @@ matches one load to each deformed frame:
 - **Sign** — loads are kept exactly as logged. A tensile test whose loads are
   all negative most likely reflects the machine's sign convention; the curve is
   plotted as logged.
+- **Bending** — photos or video frames held at one hanger load count as one
+  load step, and frames with no load (the reference, before the hanger went
+  on) stay out of the table, the average E and the graph's slope. E from the
+  graph can differ from the average E: the dial is zeroed with the hanger
+  seated, so the readings need not pass through the origin, and the slope
+  ignores that offset. The slope value is the one to trust more.
 
 **What to do:** Remove the log with ✕ and import a corrected export, or accept
 the chip — it never blocks the analysis.
