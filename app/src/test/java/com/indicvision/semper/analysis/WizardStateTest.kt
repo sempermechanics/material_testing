@@ -1,0 +1,215 @@
+package com.indicvision.semper.analysis
+
+import android.app.Application
+import androidx.lifecycle.SavedStateHandle
+import androidx.test.core.app.ApplicationProvider
+import com.indicvision.semper.data.CacheJanitor
+import com.indicvision.semper.data.WizardDraft
+import com.indicvision.semper.ui.analysis.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.AnalysisViewModel.DraftRestore
+import com.indicvision.semper.ui.analysis.FrameImportHelper
+import com.indicvision.semper.ui.analysis.FrameOrderDirection
+import com.indicvision.semper.ui.analysis.FrameOrderMode
+import com.indicvision.semper.ui.analysis.WizardState
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.File
+
+/**
+ * The wizard across a process death (ADR-005): the scalars through the
+ * saved-state Bundle, the rest through the [WizardDraft], and the janitor
+ * keeping a live draft's staged frames.
+ */
+@RunWith(RobolectricTestRunner::class)
+// A plain Application: SemperApp.onCreate starts its own startup sweep, which
+// would race these tests for cacheDir/temp_deformed.
+@Config(sdk = [34], application = Application::class)
+class WizardStateTest {
+
+    private val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+    private lateinit var frames: File
+    private lateinit var draft: WizardDraft
+
+    @Before
+    fun setUp() {
+        frames = File(ctx.cacheDir, FrameImportHelper.COMMITTED_DIR_NAME).apply { mkdirs() }
+        draft = WizardDraft(ctx)
+        draft.clear()
+    }
+
+    @After
+    fun tearDown() {
+        frames.deleteRecursively()
+        draft.clear()
+    }
+
+    /** A wizard at step 3 with every kind of input, as the user left it. */
+    private fun editedWizard(): AnalysisViewModel = AnalysisViewModel().apply {
+        refBytes = REF
+        roiMaskBytes = MASK
+        realRefWidth = 400
+        realRefHeight = 300
+        refName = "ref.png"
+        hasCustomRoi = true
+        roiX = 10
+        roiY = 20
+        roiW = 300
+        roiH = 200
+        val paths = listOf("f1.png", "f2.png").map { File(frames, it).apply { writeBytes(byteArrayOf(1)) }.path }
+        defFilePaths = paths
+        defOriginalNames = listOf("IMG_1.png", "IMG_2.png")
+        defFrameDates = listOf(100L, Long.MAX_VALUE)
+        defFrameSizes = mapOf(paths[0] to (400 to 300))
+        defOrderMode = FrameOrderMode.DATE
+        defOrderDirection = FrameOrderDirection.DESCENDING
+        wizardStep = 3
+        settingsReviewed = true
+        subsetUserModified = true
+        sweepMode = true
+        subsetMin = 21
+        subsetMax = 61
+        strainWinMin = 9
+        strainWinMax = 31
+        subsetSamples = 4
+        strainWinSamples = 5
+        stepDenominator = 4
+        subsetOverlap = 0.75
+        lineCutHorizontal = false
+        vsgFrameIndex = 1
+        workingLocalId = "abc123"
+    }
+
+    /** What the system hands back after the kill, with the draft the stop wrote. */
+    private fun afterProcessDeath(before: AnalysisViewModel): AnalysisViewModel {
+        draft.writeReference(before.refBytes)
+        draft.writeMask(before.roiMaskBytes)
+        // What saveWizardState writes when a draft is attached.
+        draft.writeFrames(WizardState.encodeFrames(WizardState.frames(before)))
+        val saved = before.saveWizardState()
+        return AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }
+    }
+
+    @Test
+    fun `the scalars are back before the draft is read`() {
+        val before = editedWizard()
+        val after = afterProcessDeath(before)
+
+        assertEquals(3, after.wizardStep)
+        assertEquals(listOf(10, 20, 300, 200), listOf(after.roiX, after.roiY, after.roiW, after.roiH))
+        assertTrue(after.hasCustomRoi)
+        assertEquals(400, after.realRefWidth)
+        assertEquals("ref.png", after.refName)
+        assertEquals(FrameOrderMode.DATE, after.defOrderMode)
+        assertEquals(FrameOrderDirection.DESCENDING, after.defOrderDirection)
+        assertTrue(after.sweepMode && after.settingsReviewed && after.subsetUserModified)
+        assertEquals(
+            listOf(21, 61, 9, 31, 4, 5, 4),
+            with(after) {
+                listOf(subsetMin, subsetMax, strainWinMin, strainWinMax)
+                    .plus(listOf(subsetSamples, strainWinSamples, stepDenominator))
+            },
+        )
+        assertEquals(0.75, after.subsetOverlap, 0.0)
+        assertFalse(after.lineCutHorizontal)
+        assertEquals(1, after.vsgFrameIndex)
+        // The re-run keeps its Home row instead of making a second one.
+        assertEquals("abc123", after.workingLocalId)
+        // Not yet: the heavy inputs wait for restoreDraft.
+        assertNull(after.refBytes)
+        assertTrue(after.defFilePaths.isEmpty())
+    }
+
+    @Test
+    fun `the draft brings back the reference, mask and frames`() {
+        val before = editedWizard()
+        val after = afterProcessDeath(before)
+
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertArrayEquals(REF, after.refBytes)
+        assertArrayEquals(MASK, after.roiMaskBytes)
+        assertEquals(before.defFilePaths, after.defFilePaths)
+        assertEquals(before.defOriginalNames, after.defOriginalNames)
+        assertEquals(before.defFrameDates, after.defFrameDates)
+        assertEquals(before.defFrameSizes, after.defFrameSizes)
+        assertEquals(3, after.wizardStep)
+        // Once only.
+        assertEquals(DraftRestore.NONE, runBlocking { after.restoreDraft() })
+    }
+
+    @Test
+    fun `a frame the OS evicted loses the whole draft`() {
+        val before = editedWizard()
+        val after = afterProcessDeath(before)
+        File(before.defFilePaths[1]).delete()
+
+        assertEquals(DraftRestore.LOST, runBlocking { after.restoreDraft() })
+        assertEquals(1, after.wizardStep)
+        assertNull(after.refBytes)
+        assertNull(after.roiMaskBytes)
+        assertTrue(after.defFilePaths.isEmpty())
+        assertEquals(0, after.realRefWidth)
+        assertEquals(AnalysisViewModel.NO_REFERENCE_NAME, after.refName)
+        assertNull(after.workingLocalId)
+        // The sweep ranges are choices, not inputs; they stay.
+        assertEquals(21, after.subsetMin)
+    }
+
+    @Test
+    fun `a missing reference loses the draft`() {
+        val before = editedWizard()
+        val after = afterProcessDeath(before)
+        draft.writeReference(null)
+
+        assertEquals(DraftRestore.LOST, runBlocking { after.restoreDraft() })
+    }
+
+    @Test
+    fun `a fresh wizard restores nothing`() {
+        val vm = AnalysisViewModel().also { it.attachDraft(draft) }
+        assertEquals(DraftRestore.NONE, runBlocking { vm.restoreDraft() })
+    }
+
+    @Test
+    fun `startup keeps a live draft's frames and drops a stale draft with them`() {
+        val frame = File(frames, "f1.png").apply { writeBytes(byteArrayOf(1)) }
+        draft.writeFrames("{}")
+
+        CacheJanitor.sweepOnStartup(ctx)
+        assertTrue("a live draft's frames were reclaimed", frame.isFile)
+
+        File(WizardDraft.dirIn(ctx.filesDir), "live")
+            .setLastModified(System.currentTimeMillis() - WizardDraft.MAX_AGE_MS - 1)
+        CacheJanitor.sweepOnStartup(ctx)
+        assertFalse(frame.exists())
+        assertFalse(WizardDraft.dirIn(ctx.filesDir).exists())
+    }
+
+    @Test
+    fun `startup without a draft still reclaims the import`() {
+        val frame = File(frames, "f1.png").apply { writeBytes(byteArrayOf(1)) }
+        CacheJanitor.sweepOnStartup(ctx)
+        assertFalse(frame.exists())
+    }
+
+    @Test
+    fun `a discarded draft ignores a write still queued behind it`() {
+        draft.discard()
+        draft.writeReference(REF)
+        assertFalse(WizardDraft.dirIn(ctx.filesDir).exists())
+    }
+
+    private companion object {
+        val REF = ByteArray(64) { it.toByte() }
+        val MASK = ByteArray(16) { 1 }
+    }
+}
