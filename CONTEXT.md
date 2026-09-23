@@ -186,7 +186,7 @@ was already public), and `damodar@indicvision.com` is the second operator.
 
 **#131 is deployed** (2026-09-23): production serves `7593692` as revision
 `indic-api-35821056144-1`, the first with both operators' `ADMIN_EMAILS`
-pinned by the workflow. #138 (open) fixes the desk's silence: a revoke that
+pinned by the workflow. #138 (merged 2026-09-23, console not yet deployed) fixes the desk's silence: a revoke that
 failed said nothing and one that worked stayed listed until a reload,
 because redirect re-authentication started the page twice and the list
 reload cleared the result. It also makes a duplicate mint for one address
