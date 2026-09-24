@@ -40,7 +40,8 @@ app/          Android UI (Kotlin). Gradle builds ../native/CMakeLists.txt;
               app/src/main/cpp/ holds only a redirect CMakeLists.txt
 native/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
               docs, and the JNI adapter in native/adapters/android/)
-backend/      FastAPI on Cloud Run — routers in backend/app/routers/
+backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
+              access in backend/app/repo/ behind the firestore_repo facade
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 docs/         Human docs. This file is the agent map.
 ```
