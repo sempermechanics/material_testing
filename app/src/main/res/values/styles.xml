@@ -142,6 +142,12 @@
         <item name="cornerRadius">0dp</item>
     </style>
 
+    <!-- The Results Whole test / Elastic region toggle: Grouped, with a light fill on
+         the unchecked half so it reads on the white Details sheet (results_range_bg). -->
+    <style name="Widget.Semper.SegmentedButton.ViewerImmersive.Grouped.ResultsRange">
+        <item name="backgroundTint">@color/results_range_bg</item>
+    </style>
+
     <!-- Peek sheet home action: soft glass pill on dark. -->
     <style name="Widget.Semper.Button.ViewerPeekHome" parent="Widget.MaterialComponents.Button.UnelevatedButton">
         <item name="android:textAllCaps">false</item>

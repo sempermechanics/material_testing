@@ -29,6 +29,7 @@
          deliberately NOT overridden — bg_probe_chip is dark in both themes.) -->
     <color name="viewer_pill_on_bg">#FFFFFFFF</color>
     <color name="viewer_pill_on_text">#FF111111</color>
+    <color name="viewer_range_track">@color/viewer_glass_pill</color>
 
     <color name="viewer_peek_scrim">#F2121212</color>       <!-- dark glass peek sheet -->
     <color name="viewer_peek_handle">#66FFFFFF</color>

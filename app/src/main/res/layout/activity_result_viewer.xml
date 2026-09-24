@@ -105,14 +105,14 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnRangeWhole"
-                                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped"
+                                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped.ResultsRange"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/results_range_whole" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnRangeElastic"
-                                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped"
+                                style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped.ResultsRange"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/results_range_elastic" />
