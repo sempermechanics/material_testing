@@ -31,15 +31,22 @@ Strict binary PASS against all applicable external controls is **not** claimed.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
 - [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`
       substituted) — pilot gateway is live; re-confirm quotas in console.
-- [ ] Confirm Cloud Run ingress, SA roles, Shared Drive Manager rights.
+- [ ] Confirm Cloud Run ingress, SA roles, Shared Drive Manager rights. Ingress
+      checked 2026-09-24: `all` on `semper-api`, as intended
+      ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) "Leave Cloud Run ingress at its
+      default"); an anonymous `GET /v1/config` on the `run.app` URL of production and
+      staging answers `403 Forbidden`. SA roles and Shared Drive rights still open.
 - [ ] Run and record one **Firestore restore drill**. The drill is automated
       (`.github/workflows/firestore-restore-drill.yml`) but needs a
       **`restore-drill` GitHub Environment** (separate from `production-backup`)
       plus one recorded RTO
       ([FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md)).
-- [ ] Confirm PITR / scheduled export job actually scheduled in GCP. The export
+- [x] Confirm PITR / scheduled export job actually scheduled in GCP. The export
       script already refuses to run without PITR, and now also fails if the
-      `challenges.expireAt` TTL policy is not ACTIVE.
+      `challenges.expireAt` TTL policy is not ACTIVE. Checked 2026-09-24:
+      `pointInTimeRecoveryEnablement` is `POINT_IN_TIME_RECOVERY_ENABLED`, the
+      `challenges.expireAt` TTL is `ACTIVE`, and the daily `firestore-backup.yml`
+      (`17 2 * * *`) succeeded on its scheduled runs of 2026-09-22, -23 and -24.
 - [x] Cloud Tasks queue and IAM for async session provisioning
       ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) §A6) — pilot
       `indic-provision`, renamed `semper-provision` / `semper-provision-staging` in #146 (2026-09-23), + `TASKS_*` vars. Keep vars set on redeploy.
