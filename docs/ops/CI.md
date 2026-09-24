@@ -124,7 +124,7 @@ When `github.head_ref` starts with `dependabot/`:
 | `dependabot/pip/…` | gates + Tier 4 |
 | `dependabot/gradle/…` | gates + Tier 1 |
 | `dependabot/github_actions/…` | gates only — deploy workflows are **not** exercised; read WIF / Cloud Run action inputs by hand before landing |
-| `dependabot/docker/…` | gates only (no case in `ci.yml`, so it takes the unknown-ecosystem branch): nothing builds or tests the image. Read the base-image change by hand, and do not take a Python minor/major bump while the lock is compiled on 3.12 (TD-68) |
+| `dependabot/docker/…` | gates + Tier 4. Tier 4 runs on the runner's Python 3.12, not the image, so read the base-image change by hand too. `dependabot.yml` ignores Python minor/major bumps: only digest and patch updates arrive while the lock is compiled on 3.12 (TD-68) |
 
 Never Tier 3 / Tier 5 for Dependabot. Path filters use an explicit
 `base: pull_request.base.sha` so Dependabot's 403 on the PR Files API does not
@@ -316,6 +316,16 @@ tier 1 when tier 1 runs.
 **Three jobs run on every single event.** `secret-scan`, `legal-pages` and
 `console-pages` carry no path filter, so a documentation-only PR still runs
 them — and can still be blocked by them, which is the point.
+
+**Runners are pinned to `ubuntu-24.04`, not `ubuntu-latest`.** GitHub moves
+`ubuntu-latest` to Ubuntu 26 from 2026-10-19. The emulator, NDK / OpenCV and
+Firestore-emulator jobs are sensitive to the image, so moving to 26 is its own
+PR, run with `full_ci=true`, rather than a silent label change.
+
+**Emulator steps pass `-no-metrics`.** Without an explicit metrics choice the
+Android emulator prints an "ACTION REQUIRED" banner, which its own notes say a
+future release turns into a blocking prompt. Keep the flag when editing
+`emulator-options`.
 
 **A green backend tier means more than pytest.** Tier 4 also audits dependencies
 with pip-audit, proves `requirements.lock` resolves under `--require-hashes` on

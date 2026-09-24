@@ -49,7 +49,7 @@ class ForegroundServiceTypeTest {
         assertNotEquals(
             "SystemForegroundService reached the merged manifest with no " +
                 "foregroundServiceType; Android 14+ will refuse to start it",
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE,
+            TYPE_NONE,
             declared,
         )
     }
@@ -81,7 +81,7 @@ class ForegroundServiceTypeTest {
         runtimeTypes.forEach { requested ->
             assertNotEquals(
                 "a transfer worker requested foreground service type none",
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE,
+                TYPE_NONE,
                 requested,
             )
             assertEquals(
@@ -90,5 +90,11 @@ class ForegroundServiceTypeTest {
                 requested and declared,
             )
         }
+    }
+
+    private companion object {
+        // ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE (0) is deprecated; the
+        // platform's "no type" is still the empty bit set.
+        const val TYPE_NONE = 0
     }
 }
