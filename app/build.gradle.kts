@@ -380,11 +380,11 @@ kover {
             }
         }
         verify {
-            // Two points under the measured line coverage (39.1 % on 2026-09-24,
-            // after the TD-57 tests), so churn does not fail unrelated PRs while
-            // a real drop does. Raise it as coverage climbs; never lower it.
+            // Two points under the measured line coverage (51.7 % on 2026-09-24,
+            // after the TD-57 view-class tests), so churn does not fail unrelated
+            // PRs while a real drop does. Raise it as coverage climbs; never lower it.
             rule {
-                minBound(37)
+                minBound(49)
             }
         }
     }
