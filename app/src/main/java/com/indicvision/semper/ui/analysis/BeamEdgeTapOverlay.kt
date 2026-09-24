@@ -14,8 +14,10 @@ import kotlin.math.max
 
 /**
  * Draws the bending edge taps over the reference in [BeamEdgeTapActivity]:
- * a crosshair on each tapped edge, the line between them, and the circle the
- * deflection is averaged over. Points are in true reference pixels;
+ * full-length crosshair lines through each tapped edge (the horizontal one is
+ * laid along the edge; the top's vertical one is the line the bottom mark is
+ * held to), the thickness between them, and the circle the deflection is
+ * averaged over. Points are in true reference pixels;
  * [imageToView] (the photo's zoom matrix) places them on screen. Never takes
  * touches — the photo under it does.
  */
@@ -44,6 +46,15 @@ class BeamEdgeTapOverlay @JvmOverloads constructor(
 
     private val density = resources.displayMetrics.density
 
+    private val guide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = GUIDE_DP * density
+        color = MARK_COLOR
+    }
+    private val guideHalo = Paint(guide).apply {
+        strokeWidth = GUIDE_HALO_DP * density
+        color = HALO_COLOR
+    }
     private val mark = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = STROKE_DP * density
@@ -89,18 +100,25 @@ class BeamEdgeTapOverlay @JvmOverloads constructor(
         canvas.drawCircle((t.x + b.x) / 2f, (t.y + b.y) / 2f, radius, probe)
     }
 
+    /** Crosshair lines across the whole view, and a ring on the mark itself. */
     private fun cross(canvas: Canvas, c: PointF) {
-        val arm = ARM_DP * density
-        for (paint in listOf(halo, mark)) {
-            canvas.drawLine(c.x - arm, c.y, c.x + arm, c.y, paint)
-            canvas.drawLine(c.x, c.y - arm, c.x, c.y + arm, paint)
+        val w = width.toFloat()
+        val h = height.toFloat()
+        for (paint in listOf(guideHalo, guide)) {
+            canvas.drawLine(0f, c.y, w, c.y, paint)
+            canvas.drawLine(c.x, 0f, c.x, h, paint)
         }
+        val ring = RING_DP * density
+        canvas.drawCircle(c.x, c.y, ring, halo)
+        canvas.drawCircle(c.x, c.y, ring, mark)
     }
 
     private companion object {
         const val STROKE_DP = 1.5f
         const val HALO_DP = 3.5f
-        const val ARM_DP = 14f
+        const val GUIDE_DP = 1f
+        const val GUIDE_HALO_DP = 2.5f
+        const val RING_DP = 6f
         const val DASH_DP = 4f
         val MARK_COLOR = Color.rgb(0x38, 0xBD, 0xF8)
         val HALO_COLOR = Color.argb(0xAA, 0, 0, 0)

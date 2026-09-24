@@ -27,10 +27,13 @@ import kotlin.math.roundToInt
 /**
  * Bending's scale and load point: the student taps the beam's top edge and
  * then its bottom edge, right under the loading nose, on the reference photo.
- * The thickness they measured over the tapped pixels is the photo's mm per
- * pixel, and the midpoint is where [com.indicvision.semper.report.BeamDeflection]
- * reads δ. Pinch and pan to zoom in; a tap after both are placed moves the
- * nearer mark. Returns [DicKeys.BEAM_EDGE_TAPS] in true reference pixels.
+ * Each mark is drawn as full-length crosshair lines, so the horizontal one can
+ * be laid along the edge. The bottom mark is held on the top mark's vertical
+ * line ([BeamTapPlacement]). The thickness they measured over the tapped
+ * pixels is the photo's mm per pixel, and the midpoint is where
+ * [com.indicvision.semper.report.BeamDeflection] reads δ. Pinch and pan to
+ * zoom in; a tap after both are placed moves the mark nearer in height. Returns
+ * [DicKeys.BEAM_EDGE_TAPS] in true reference pixels.
  */
 class BeamEdgeTapActivity : AppCompatActivity() {
 
@@ -43,8 +46,7 @@ class BeamEdgeTapActivity : AppCompatActivity() {
     private var thicknessMm = 0f
     private var imageWidth = 0
     private var imageHeight = 0
-    private var top: PointF? = null
-    private var bottom: PointF? = null
+    private var marks = BeamTapPlacement.Marks()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,8 +68,7 @@ class BeamEdgeTapActivity : AppCompatActivity() {
 
         findViewById<MaterialButton>(R.id.btnBeamCancel).setOnClickListener { finish() }
         findViewById<MaterialButton>(R.id.btnBeamReset).setOnClickListener {
-            top = null
-            bottom = null
+            marks = BeamTapPlacement.Marks()
             refresh()
         }
         btnSave.setOnClickListener { saveAndFinish() }
@@ -112,32 +113,28 @@ class BeamEdgeTapActivity : AppCompatActivity() {
         if (!photo.getZoomMatrix().invert(inverse)) return
         val pts = floatArrayOf(viewX, viewY)
         inverse.mapPoints(pts)
-        val p = PointF(pts[0].coerceIn(0f, imageWidth.toFloat()), pts[1].coerceIn(0f, imageHeight.toFloat()))
-        val t = top
-        val b = bottom
-        when {
-            t == null -> top = p
-            b == null -> bottom = p
-            PointF.length(p.x - t.x, p.y - t.y) <= PointF.length(p.x - b.x, p.y - b.y) -> top = p
-            else -> bottom = p
-        }
+        marks = BeamTapPlacement.place(
+            marks,
+            pts[0].coerceIn(0f, imageWidth.toFloat()),
+            pts[1].coerceIn(0f, imageHeight.toFloat()),
+        )
         refresh()
     }
 
     private fun taps(): BeamEdgeTaps? {
-        val t = top
-        val b = bottom
+        val t = marks.top
+        val b = marks.bottom
         return if (t != null && b != null) BeamEdgeTaps(t.x, t.y, b.x, b.y) else null
     }
 
     private fun refresh() {
-        overlay.top = top
-        overlay.bottom = bottom
+        overlay.top = marks.top?.let { PointF(it.x, it.y) }
+        overlay.bottom = marks.bottom?.let { PointF(it.x, it.y) }
         val taps = taps()
         tvStep.setText(
             when {
-                top == null -> R.string.beam_tap_step_top
-                bottom == null -> R.string.beam_tap_step_bottom
+                marks.top == null -> R.string.beam_tap_step_top
+                marks.bottom == null -> R.string.beam_tap_step_bottom
                 else -> R.string.beam_tap_step_done
             },
         )
@@ -175,8 +172,10 @@ class BeamEdgeTapActivity : AppCompatActivity() {
     private fun restore(values: FloatArray?) {
         val taps = BeamEdgeTaps.fromArray(values)
         if (!taps.isSet) return
-        top = PointF(taps.topX, taps.topY)
-        bottom = PointF(taps.bottomX, taps.bottomY)
+        marks = BeamTapPlacement.Marks(
+            BeamTapPlacement.Mark(taps.topX, taps.topY),
+            BeamTapPlacement.Mark(taps.bottomX, taps.bottomY),
+        )
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

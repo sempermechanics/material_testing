@@ -569,8 +569,8 @@ over it, the instruction and **Reset** below.
 |---|---|---|
 | [ ] 6a.1 | Open it with the thickness typed | Readout "Thickness t mm — tap both edges"; the instruction asks for the top edge and says pinch or double-tap zooms, drag pans; Save disabled |
 | [ ] 6a.2 | Double-tap the beam, then pinch | Zooms in about the finger; drag pans; double-tap again returns to fit |
-| [ ] 6a.3 | While zoomed, tap the top edge, then the bottom edge | Crosshairs on both edges and a dashed probe circle between; **the zoom does not change between taps**; readout "t mm over N px · mm/px" |
-| [ ] 6a.4 | Tap near either mark | That mark moves; the other stays |
+| [ ] 6a.3 | While zoomed, tap the top edge, then tap below it and a little to one side | Each mark gets crosshair lines across the whole photo, with a ring on the mark; the second mark lands **on the first mark's vertical line**, at the height tapped, so thickness is measured straight down; a dashed probe circle sits between them; **the zoom does not change between taps**; readout "t mm over N px · mm/px" |
+| [ ] 6a.4 | Tap nearer either horizontal line | That mark moves. The top follows the tap in both directions and the bottom's vertical line comes with it; the bottom moves only up or down |
 | [ ] 6a.5 | Place the marks under 40 px apart | Readout adds the precision warning (≈ 100/N % per pixel of slip) |
 | [ ] 6a.6 | Marks under 3 px apart | Save disabled; readout "The marks are on top of each other — tap the other edge." |
 | [ ] 6a.7 | Rotate with marks placed | Marks survive |
