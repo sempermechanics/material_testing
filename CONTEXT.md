@@ -37,7 +37,7 @@ Use these words. Do not invent synonyms.
 | step | Grid spacing between tracked points, px |
 | ZNSSD | Match score; 0 = perfect, ≤ 0.15 accepted, < 0 failed-point sentinel |
 | ICGN | Iterative Gauss-Newton sub-pixel solver |
-| VSG | Strain window: least-squares plane fit, odd width |
+| VSG | Strain window: least-squares plane fit over a circle whose diameter is the window, in px (odd). VSG = window, not `(window − 1) × step + 1` (`VsgStudy.vsgFor`) |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
@@ -250,6 +250,15 @@ The run changed three things:
   under the nose and at the bottom fibre late in the test. The engine's VSG
   takes them in, and local strain spikes to about 2,400,000 µε in 6 of 33
   frames. That is a `native/` change.
+
+**VSG = strain window in the docs (`docs/vsg-is-strain-window`).** The
+engine reads `strain_window` as a circle's diameter in px, so the gauge is the
+window itself (`VsgStudy.vsgFor`, two device runs in its KDoc). The operating
+manual, WORKFLOWS §8.4.3, `docs/images/vsg.svg`, the glossaries and the
+strain-window ⓘ still said `(window − 1) × step + 1`, or counted points. They
+now match the code. The engine-vsg FAQ no longer says to coarsen the step: a
+window under twice the step leaves fewer than 3 points in the circle. Docs
+and one string only; no behaviour change.
 
 **Docs refresh with new screenshots (PR #12).** Every app screenshot in
 `docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile

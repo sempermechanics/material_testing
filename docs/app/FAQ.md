@@ -264,10 +264,13 @@ check for motion blur between frames.
 
 ## engine-vsg {#engine-vsg}
 
-**When you see it:** Engine failure or hollow lattice nodes — strain window too large
-for ROI/step, or no points survived VSG filtering.
+**When you see it:** Engine failure or hollow lattice nodes — no point had enough
+solved neighbours inside its strain window to fit strain. The window is a circle whose
+diameter is the strain window in px; a point needs at least 3 solved points and 90% of
+the circle filled. A window too large for the ROI, or smaller than twice the step, fails.
 
-**What to do:** Reduce strain window (VSG), enlarge ROI, or coarsen step. In sweeps,
+**What to do:** Reduce strain window (VSG) or enlarge ROI; if the window is under twice
+the step, use a finer step. In sweeps,
 tap a hollow node for its one-line reason; **Why?** opens this section.
 
 ---

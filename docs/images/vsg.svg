@@ -1,36 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" width="760" height="250" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
-  <rect x="0" y="0" width="760" height="250" rx="10" fill="#ffffff" stroke="#d8dee4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 280" width="760" height="280" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <rect x="0" y="0" width="760" height="280" rx="10" fill="#ffffff" stroke="#d8dee4"/>
   <text x="24" y="32" font-size="13" font-weight="600" fill="#1f2328">The virtual strain gauge is the distance one strain value covers.</text>
-  <text x="24" y="52" font-size="11" fill="#656d76">Strain comes from fitting displacement over neighbouring grid points, not from a single point.</text>
+  <text x="24" y="52" font-size="11" fill="#656d76">Strain comes from a plane fitted to every grid point inside a circle. The strain window is that circle's diameter, in px.</text>
 
-  <!-- grid points row -->
-  <g fill="#0288d1">
-    <circle cx="90" cy="120" r="4"/><circle cx="150" cy="120" r="4"/><circle cx="210" cy="120" r="4"/>
-    <circle cx="270" cy="120" r="4"/><circle cx="330" cy="120" r="4"/><circle cx="390" cy="120" r="4"/>
-    <circle cx="450" cy="120" r="4"/>
+  <!-- same window, two steps -->
+  <circle cx="150" cy="140" r="50" fill="#e8f4fb" stroke="#0288d1" stroke-dasharray="4 3"/>
+  <circle cx="370" cy="140" r="50" fill="#e8f4fb" stroke="#0288d1" stroke-dasharray="4 3"/>
+  <g fill="#c9d1d9">
+    <circle cx="90" cy="80" r="3.5"/><circle cx="90" cy="100" r="3.5"/><circle cx="90" cy="120" r="3.5"/><circle cx="90" cy="140" r="3.5"/><circle cx="90" cy="160" r="3.5"/><circle cx="90" cy="180" r="3.5"/><circle cx="90" cy="200" r="3.5"/><circle cx="110" cy="80" r="3.5"/><circle cx="110" cy="100" r="3.5"/><circle cx="110" cy="180" r="3.5"/><circle cx="110" cy="200" r="3.5"/><circle cx="130" cy="80" r="3.5"/><circle cx="130" cy="200" r="3.5"/><circle cx="150" cy="80" r="3.5"/><circle cx="150" cy="200" r="3.5"/><circle cx="170" cy="80" r="3.5"/><circle cx="170" cy="200" r="3.5"/><circle cx="190" cy="80" r="3.5"/><circle cx="190" cy="100" r="3.5"/><circle cx="190" cy="180" r="3.5"/><circle cx="190" cy="200" r="3.5"/><circle cx="210" cy="80" r="3.5"/><circle cx="210" cy="100" r="3.5"/><circle cx="210" cy="120" r="3.5"/><circle cx="210" cy="140" r="3.5"/><circle cx="210" cy="160" r="3.5"/><circle cx="210" cy="180" r="3.5"/><circle cx="210" cy="200" r="3.5"/><circle cx="330" cy="100" r="3.5"/><circle cx="330" cy="180" r="3.5"/><circle cx="410" cy="100" r="3.5"/><circle cx="410" cy="180" r="3.5"/>
   </g>
-  <line x1="70" y1="120" x2="480" y2="120" stroke="#d8dee4" stroke-width="1"/>
+  <g fill="#0288d1">
+    <circle cx="110" cy="120" r="3.5"/><circle cx="110" cy="140" r="3.5"/><circle cx="110" cy="160" r="3.5"/><circle cx="130" cy="100" r="3.5"/><circle cx="130" cy="120" r="3.5"/><circle cx="130" cy="140" r="3.5"/><circle cx="130" cy="160" r="3.5"/><circle cx="130" cy="180" r="3.5"/><circle cx="150" cy="100" r="3.5"/><circle cx="150" cy="120" r="3.5"/><circle cx="150" cy="140" r="3.5"/><circle cx="150" cy="160" r="3.5"/><circle cx="150" cy="180" r="3.5"/><circle cx="170" cy="100" r="3.5"/><circle cx="170" cy="120" r="3.5"/><circle cx="170" cy="140" r="3.5"/><circle cx="170" cy="160" r="3.5"/><circle cx="170" cy="180" r="3.5"/><circle cx="190" cy="120" r="3.5"/><circle cx="190" cy="140" r="3.5"/><circle cx="190" cy="160" r="3.5"/><circle cx="330" cy="140" r="3.5"/><circle cx="370" cy="100" r="3.5"/><circle cx="370" cy="140" r="3.5"/><circle cx="370" cy="180" r="3.5"/><circle cx="410" cy="140" r="3.5"/>
+  </g>
 
-  <!-- highlighted window: 5 points -->
-  <rect x="138" y="100" width="252" height="40" rx="6" fill="#e8f4fb" stroke="#0288d1" stroke-dasharray="4 3"/>
-  <text x="264" y="94" text-anchor="middle" font-size="11" font-weight="600" fill="#0288d1">strain window = 5 points</text>
-
-  <!-- step bracket -->
-  <path d="M90 152 h60" stroke="#656d76" stroke-width="1.5"/>
-  <path d="M90 148 v8 M150 148 v8" stroke="#656d76" stroke-width="1.5"/>
-  <text x="120" y="170" text-anchor="middle" font-size="11" fill="#656d76">step</text>
-
-  <!-- vsg span -->
-  <path d="M150 196 h240" stroke="#d64545" stroke-width="2"/>
-  <path d="M150 190 v12 M390 190 v12" stroke="#d64545" stroke-width="2"/>
-  <text x="270" y="216" text-anchor="middle" font-size="12" font-weight="600" fill="#d64545">VSG footprint</text>
+  <!-- vsg spans -->
+  <path d="M100 216 h100 M320 216 h100" stroke="#d64545" stroke-width="2"/>
+  <path d="M100 210 v12 M200 210 v12 M320 210 v12 M420 210 v12" stroke="#d64545" stroke-width="2"/>
+  <text x="150" y="234" text-anchor="middle" font-size="12" font-weight="600" fill="#d64545">VSG</text>
+  <text x="370" y="234" text-anchor="middle" font-size="12" font-weight="600" fill="#d64545">VSG</text>
+  <text x="150" y="250" text-anchor="middle" font-size="11" fill="#656d76">step s · 21 points fitted</text>
+  <text x="370" y="250" text-anchor="middle" font-size="11" fill="#656d76">step 2s · 5 points fitted</text>
 
   <!-- formula -->
-  <rect x="510" y="86" width="226" height="106" rx="8" fill="#f6f8fa" stroke="#d8dee4"/>
-  <text x="528" y="112" font-size="12" font-weight="600" fill="#1f2328">VSG = (window − 1) × step + 1</text>
-  <text x="528" y="136" font-size="11" fill="#656d76">Here: (5 − 1) × step + 1</text>
-  <text x="528" y="158" font-size="11" fill="#656d76">Quote the VSG in a paper —</text>
-  <text x="528" y="174" font-size="11" fill="#656d76">it is what a sweep varies.</text>
+  <rect x="510" y="80" width="226" height="126" rx="8" fill="#f6f8fa" stroke="#d8dee4"/>
+  <text x="528" y="106" font-size="12" font-weight="600" fill="#1f2328">VSG = strain window   [px]</text>
+  <text x="528" y="130" font-size="11" fill="#656d76">The window is a diameter, not a</text>
+  <text x="528" y="146" font-size="11" fill="#656d76">count of points. Step sets how</text>
+  <text x="528" y="162" font-size="11" fill="#656d76">many points land inside it.</text>
+  <text x="528" y="186" font-size="11" fill="#656d76">Quote the VSG in a paper.</text>
 
-  <text x="24" y="238" font-size="11" fill="#656d76">Wider window: smoother strain, less local detail. Narrower: more detail, more noise.</text>
+  <text x="24" y="270" font-size="11" fill="#656d76">Wider window: smoother strain, less local detail. Narrower: more detail, more noise.</text>
 </svg>
