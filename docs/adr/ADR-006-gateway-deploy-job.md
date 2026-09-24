@@ -93,7 +93,10 @@ the first run observational.
 
 1. [x] `gateway` job with `gateway_mode`, diff-and-skip, verify, rollback.
 2. [x] Rewrite the runbook; fix the three faults.
-3. [ ] Owner: grant the two roles; dispatch `dry-run`, then `apply`.
+3. [ ] Owner: grant the two roles; dispatch `dry-run`, then `apply`. The first
+   `dry-run` (run 35963412251, 2026-09-24) ran before the grant and failed at the
+   diff step with `apigateway.apis.get` denied; the Cloud Run deploy it followed
+   succeeded.
 4. [ ] Close TD-27 after the first successful `apply`.
 
 ## As built (2026-09-24)
