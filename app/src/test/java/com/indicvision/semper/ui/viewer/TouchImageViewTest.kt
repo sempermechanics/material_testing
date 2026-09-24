@@ -277,6 +277,15 @@ class TouchImageViewTest {
     }
 
     @Test
+    fun `a fast long swipe is one fling and one swipe but steps one frame`() {
+        specimen()
+        // Past SWIPE_DISTANCE and FLING_MIN_VELOCITY at once: both paths fire on ACTION_UP.
+        drag(350f, 400f, dx = -250f, dy = 0f, durationMs = 60, steps = 4)
+        drag(100f, 400f, dx = 250f, dy = 0f, durationMs = 60, steps = 4, startAt = 5_000)
+        assertEquals(listOf(1, -1), scrubs)
+    }
+
+    @Test
     fun `a swipe down shows chrome and a swipe up does nothing`() {
         specimen()
         drag(200f, 200f, dx = 0f, dy = 200f, durationMs = 2_000)

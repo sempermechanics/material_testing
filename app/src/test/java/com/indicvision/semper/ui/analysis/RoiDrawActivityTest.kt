@@ -3,6 +3,8 @@ package com.indicvision.semper.ui.analysis
 import android.app.Activity
 import android.app.Application
 import android.content.Intent
+import android.graphics.Rect
+import android.graphics.RectF
 import android.view.View
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
@@ -145,6 +147,19 @@ class RoiDrawActivityTest {
         assertEquals(listOf(100, 200, 300, 150), activity.resultRect())
         val mask = File(shadowOf(activity).resultIntent.getStringExtra(DicKeys.MASK_FILE_PATH)!!)
         assertTrue("one mask byte per image pixel or more", mask.length() >= IMG_W.toLong() * IMG_H)
+    }
+
+    @Test
+    fun `a typed ROI that comes back from the view a hair low is saved as typed`() {
+        // The overlay holds the ROI in view pixels; on a 4032-wide photo a typed
+        // (1000, 750, 300, 200) returns from that round trip as n − ε.
+        val back = RectF(999.9997f, 749.99994f, 1299.9998f, 949.9999f)
+        assertEquals(Rect(1000, 750, 1300, 950), roiPixels(back, 4032, 3024))
+    }
+
+    @Test
+    fun `saved ROI pixels are clipped to the image`() {
+        assertEquals(Rect(0, 0, 640, 400), roiPixels(RectF(-0.4f, -3f, 700.2f, 400.4f), 640, 400))
     }
 
     @Test
