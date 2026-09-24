@@ -37,7 +37,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
 | `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
-| `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log | `app` (PR); always on `main` push | ~5–8 / ~10 min |
+| `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log + `koverVerify` floor | `app` (PR); always on `main` push | ~5–8 / ~10 min |
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
 | `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=75`, Firestore emulator suite | `backend` (PR); always on `main` push | ~5–10 min |
 | `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | main push / labels | ~15–40 / up to ~90 min |
@@ -188,13 +188,15 @@ Release builds **require** `INDIC_API_BASE_URL` (repo or `release` environment
 variable — see [ENVIRONMENTS.md](ENVIRONMENTS.md)) and pass
 `-PrequireCloudApi=true` so an empty URL cannot silently ship with cloud sync
 disabled. Local `assembleRelease` without that flag still allows offline
-inspection builds.
+inspection builds. Release builds also pass `-PuploadCrashlyticsMapping=true`,
+so the R8 mapping reaches Crashlytics; local builds never upload it.
 
 ## Backend deploy
 
 [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) is
 `workflow_dispatch` with separate **staging** and **production** GitHub
-Environments. It:
+Environments. A **production** deploy runs only when dispatched from `main`
+(the `deploy` job is skipped otherwise); staging may deploy a branch. It:
 
 1. Runs backend ruff + pytest.
 2. Deploys from `backend/` tagging the new revision

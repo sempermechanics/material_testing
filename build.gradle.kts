@@ -18,6 +18,7 @@ tasks.register("ciReleaseGate") {
         ":app:detekt",
         ":app:lintDebug",
         ":app:testDebugUnitTest",
+        ":app:koverVerify",
         ":app:minifyReleaseWithR8",
         ":app:assembleRelease",
     )
