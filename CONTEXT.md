@@ -242,7 +242,7 @@ have no times, so they are still paired in order or resampled.
 now admits users from 16. Under 18 (or under the local age of majority), a
 parent or guardian must agree for them. Privacy §8 matches. The Terms version
 is `2026-09-24` in the doc, `backend/app/legal.py` and `LegalTerms.kt`, so
-every existing user re-accepts once the backend deploys. Still open, for the
+every existing user re-accepts once (deployed 2026-09-24). Still open, for the
 owner and counsel:
 - §1.2 (professional use only, not offered to consumers) still sits badly with
   students;
@@ -250,16 +250,11 @@ owner and counsel:
   parental consent, which the app does not collect; the clickwrap has no age
   question or guardian step.
 
-**Before shipping a build from `main`: the Terms version is ahead of the
-deployed backend.** Backend deploys come from the parent repo
-(`semperdic-app`), whose `backend/app/legal.py` still says `2026-09-15`. This
-repo's `LegalTerms.TERMS_VERSION` fallback is `2026-09-24`. A user the server
-has not yet reported a version for (every first sign-up, and PENDING accounts)
-therefore accepts `2026-09-24`, and the deployed backend answers 409: "update
-the app". Approved users are unaffected, because the app uses the version
-`/v1/me` reports. The fix is to port the Terms and Privacy change and the
-`legal.py` bump to `semperdic-app` and deploy it there (all existing users then
-re-accept), or to hold this repo's fallback at `2026-09-15` until then.
+**Terms 2026-09-24 is live on the backend.** Backend deploys come from the
+parent repo; the change was ported there as `semperdic-app` #169 and deployed
+to staging and production on 2026-09-24 (revision `semper-api-35959026266-1`).
+Every existing user re-accepts once. The hosted `/terms/` and `/privacy/` pages
+are redeployed from the parent repo's `firebase-hosting/`.
 
 **MP4 frames decode forward (`fix/mp4-decode-forward`, on top of
 `fix/video-estimate-snackbar`).** MP4 extraction asked the retriever for the
