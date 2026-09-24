@@ -544,7 +544,7 @@ def _race_entitlement(repo_, user, settled, workers: int = 6, rounds: int = _RAC
 
     Repeating the race is not a weaker test, because a round that grants
     nothing proves nothing. The emulator serialises contention and aborts the
-    losers, so all six requests can exhaust the client's five retries and
+    losers, so all six requests can exhaust their ten attempts (`_TX_ATTEMPTS`) and
     every one of them answer `_contended`; production reads that round the
     same way — `_drop_superseded_demo` records "six concurrent sign-ins
     starved out completely and the account landed on Demo", and the claim is

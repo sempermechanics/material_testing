@@ -8,8 +8,13 @@ Baselines stay empty: `app/lint-baseline.xml` and `app/detekt-baseline.xml`.
 - `OldTargetApi` — disabled in `app/build.gradle.kts` lint config until a
   deliberate `targetSdk` 36→37 bump PR. Do not re-enable casually.
 
-Inherent size/complexity in a few UI orchestration files uses targeted
-`@file:Suppress` — prefer extracting over widening those lists.
+Size and complexity findings are silenced with targeted `@file:Suppress`
+rather than a baseline — prefer extracting over widening those lists. As of
+2026-09-23 that is not "a few files": 81 main files carry `@file:Suppress`
+(most often `MagicNumber` 55, `ReturnCount` 29, `TooManyFunctions` 27,
+`LongParameterList` 21, `CyclomaticComplexMethod` 19, `LongMethod` 18) and 17
+carry `@file:SuppressLint`. Since the baselines are empty, suppression is the
+only thing keeping those findings quiet.
 Catalog version-availability lint IDs are disabled; bump deps in deliberate PRs.
 
 `UnclosedTrace`, `PluralsCandidate`, `UseKtx`, `TooManyViews` on
@@ -32,19 +37,68 @@ This file stays the record of what is *owed* and what is deliberately deferred.
 
 Priority = (Impact + Risk) × (6 − Effort).
 
+**Re-verified against the code on 2026-09-23.** Every row below was checked at
+`main` @ `4d04c28`, not copied from the previous register; several of the old
+rows' numbers were wrong and are corrected here. Evidence is `path:line`.
+Architecture decisions for the structural rows are in [../adr/](../adr/README.md);
+the remediation order is fourteen PRs, tracked in the Status column.
+
+### Carried over (re-scored)
+
 | ID | Category | Item | I | R | E | P | Status |
 |----|----------|------|---|---|---|---|--------|
-| TD-3 | Architecture | `ViewerSession` extras bag (FI-1) — **write half done**: `ViewerArgs` is the one packer and `ViewerArgsTest` pins both entry points' key sets. What is left is the unpack half, across four readers | 3 | 2 | 4 | **10** | Deferred — a parsed-object read side has to keep working for an Intent already in the back stack across an update |
-| TD-22 | Test | Consoles have no behavioural test — `check_console.py` reads their structure, nothing exercises a sign-in, a step-up or a revoke | 3 | 3 | 4 | **12** | Deferred — same Firebase Auth fixture blocker as auth-gated UI E2E |
-| TD-24 | Architecture | No `@MainThread` on UI entry points, so `SessionStore`'s `@WorkerThread` contract is documentation rather than a gate — lint's `WrongThread` fires only when the *calling* method is annotated | 2 | 2 | 3 | **12** | Deferred — annotating ~27 Activities needs a lint run to land against an empty baseline |
-| TD-25 | Test | `AuthRepository` cannot be unit-tested against a fake backend: `IndicApi` is final with a private constructor, so a defaulted constructor parameter would be a seam that admits only the real client | 2 | 2 | 2 | **16** | Deferred — needs an interface extracted from `IndicApi` and threaded through every worker and repository; that is the DI proposal CONTRIBUTING defers to its own PR |
-| TD-26 | Architecture | Wizard/viewer UI state lives on the Activity as fields rather than hoisted into `AnalysisViewModel` as `StateFlow`, so a rotation reconstructs it from intent extras and `onSaveInstanceState` | 3 | 2 | 5 | **5** | Deferred — a 1.8k-line native-solve screen with bit-exact `.dat` oracles; the run itself is on `viewModelScope`, which is the part that was losing work |
-| TD-27 | Ops | The API Gateway is never deployed by CI: `test_gateway_parity.py` proves `gateway/openapi.yaml` matches the routers, but moving the live gateway to a new config is a by-hand `api-configs create` + `gateways update` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) "Redeploying the gateway"). A route can be merged, tested and deployed to Cloud Run while the gateway still 404s it | 3 | 3 | 3 | **18** | Deferred — a workflow job needs `apigateway.*` on the WIF principal and an ordering guarantee against the Cloud Run promote; the runbook covers the licensing rollout |
-| TD-28 | Backend | A per-user `maxSessions` override (`PATCH /v1/admin/users/{uid}/config`) is ignored while the account is demo: `resolve_user_config` takes `DEMO_MAX_ANALYSES` for every unlicensed user, so an operator cannot lift one demo account's cap | 2 | 2 | 2 | **16** | Deferred — decide whether the override should win in demo or whether "lift the cap" means "attach a licence"; today the docs say the latter |
-| TD-29 | App | Two auth continue hosts: `app.sempermechanics.com/auth/*` (current `AUTH_HOST`) and `indicvision-dic-app-auth.firebaseapp.com/*` (`LEGACY_AUTH_HOST`). The manifest carries four App Link filters, `AUTH_HOSTS` accepts both, the Hosting site rewrites both path shapes, and the Firebase Console password-reset action URL still names the legacy host because pre-`/auth` builds intercept only it | 1 | 2 | 2 | **8** | Deferred until no build declaring only the legacy host is installed (Play vitals). Then: action URL → `https://app.sempermechanics.com/auth/finishReset`, drop the two legacy filters and `LEGACY_AUTH_HOST`, drop the bare rewrites in `firebase.json` |
-| TD-30 | Ops | The API Gateway (`semper-gw`, asia-northeast1) sits in a different region from Cloud Run (`semper-api`, asia-south1) because API Gateway is not offered in asia-south1: every request takes a Tokyo→Mumbai hop, and the legacy `indic-gw` / `indic-api` pair from the first deploy is still provisioned | 2 | 1 | 3 | **9** | Deferred — a regional external HTTPS load balancer with a serverless NEG in asia-south1 would replace the gateway (JWT check moves to Cloud Run / IAP); measure the hop first. Delete the legacy pair as soon as nothing resolves its host |
-| TD-33 | Backend | A contended invite claim that starves out completely leaves the account on the Demo key it then mints, and `claim_pending_invite` returns early for anyone already holding a licence — so the invite stays pending until ops mints for the address again (which attaches directly) | 2 | 1 | 3 | **9** | Open — either re-check invites for an account whose only licence is a `createdByUid: system` Demo key, or have the Demo mint skip an address that still has an invite. It needs every request in one burst to exhaust the client's five ABORTED retries: seen against the emulator (#133), never in production |
-| TD-34 | Console | The operator desk still carries the pre-#129 enrolment card (`enrolCard`, `enrolSecret`, and its two handlers): `requireSignIn` → `ensureDashboardMfa` enrols in-page with a QR before any desk code runs, so `hasSecondFactor(user)` is always true by the time `renderFactorState` reads it and the card never shows | 1 | 1 | 2 | **2** | Open — delete the card from `operator/index.html` and `operator.js`; keep `renderFactorState` only for displaying which factor is enrolled |
+| TD-3 | Architecture | The viewer's read side: `ViewerArgs` (`ui/viewer/ViewerArgs.kt`) is the one writer, but four readers (`ResultViewerActivity` 25 `DicKeys` refs, `VsgLatticeActivity` 21, `ViewerSettingsSheet` 12, `ViewerReportFactory` 8) parse the bundle themselves with **different silent defaults** (subset 41 vs 0, step 5 vs 1, ROI image-size vs 0). The lattice→viewer hop copies the whole bundle (`VsgLatticeActivity.kt:757-764`) | 3 | 3 | 3 | **18** | [ADR-003](../adr/ADR-003-viewerargs-read-side.md) — `ViewerArgs.from(intent, record)` |
+| TD-22 | Test | Consoles have no behavioural test; `scripts/check_console.py` reads structure only | 3 | 3 | 4 | **12** | Partial in the console PR: DOM-free `util.js` + `node --test`. Sign-in/step-up/revoke E2E still needs Firebase fixtures |
+| TD-24 | Architecture | No `@MainThread` on UI entry points (0 in `app/src/main`), so `SessionStore`'s 13 `@WorkerThread` annotations are not a gate. **14** Activities (the old row said ~27) | 2 | 2 | 2 | **16** | App-reuse PR |
+| TD-25 | Test | `AuthRepository` cannot be unit-tested: `IndicApi` is `class IndicApi private constructor` (`data/net/IndicApi.kt:44`), reached by 21 `IndicApi.get(` calls in 10 files; no mocking library in the test stack | 2 | 2 | 2 | **16** | [ADR-002](../adr/ADR-002-cloudapi-seam.md) — `CloudApi` interface |
+| TD-26 | Architecture | **Reframed.** Rotation does not recreate the wizard (full `configChanges`, `AndroidManifest.xml:147-149`). **Process death** loses everything: no `SavedStateHandle` anywhere, and `CacheJanitor` deletes `temp_deformed` on start (`data/CacheJanitor.kt:132`). A re-run after a kill loses `workingLocalId` and creates a second Home row | 3 | 3 | 3 | **18** | [ADR-005](../adr/ADR-005-wizard-process-death.md) — wizard draft |
+| TD-27 | Ops | The API Gateway is never deployed by CI; the runbook ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) "Redeploying the gateway") also had three faults (unset `FIREBASE_PROJECT_ID`, same-day config-id collision, inverted `grep && exit 1`) | 3 | 3 | 3 | **18** | [ADR-006](../adr/ADR-006-gateway-deploy-job.md); runbook faults fixed in the docs PR. Closes after the owner's first `apply` dispatch (needs `roles/apigateway.admin` + `roles/iam.serviceAccountUser` on `indic-gw@`) |
+| TD-28 | Backend | A per-user `maxSessions` override is ignored while the account is demo (`backend/app/firestore_repo.py:537-538`) | 2 | 2 | 2 | 16 | **Closed as decided (2026-09-23):** "lift a demo cap" means attach a licence. `BACKEND_SETUP_GCP.md` described it wrongly and is corrected |
+| TD-29 | App | Two auth continue hosts (`AUTH_HOST` / `LEGACY_AUTH_HOST`, `data/AuthRepository.kt:47,55`; four App Link hosts in the manifest; `AuthHostsTest.kt:17` pins the legacy host) | 1 | 2 | 2 | **8** | Deferred until Play vitals show no legacy-only build installed |
+| TD-30 | Ops | API Gateway in asia-northeast1 vs Cloud Run in asia-south1. Whether the legacy `indic-gw` / `indic-api` pair still exists **cannot be verified from the repo**, and CONTEXT previously said it was deleted: check with `gcloud api-gateway gateways list` and `gcloud run services list` | 2 | 1 | 3 | **9** | Deferred — measure the hop first |
+| TD-33 | Backend | A contended invite claim that starves out leaves the account on the Demo key it then mints; `claim_pending_invite` returns early on `licenseId` (`firestore_repo.py:2192`), so the invite stays pending. The client retries **10** times (`_TX_ATTEMPTS`, `firestore_repo.py:49`), not five as previously written | 2 | 1 | 3 | **9** | Backend quick-wins PR: the Demo mint skips an address with a pending invite |
+| TD-34 | Console | Dead pre-#129 enrolment card on the operator desk (`operator/index.html:44-73`, `operator.js:14,54-90`) **and** the account page (`account/index.html:47-77`, `account.js:19,30-63`); `auth.js:472` awaits `ensureDashboardMfa()` before any page code runs, so it never shows | 1 | 2 | 2 | **12** | Console PR |
+
+### New (found 2026-09-23)
+
+| ID | Category | Item | I | R | E | P | Status |
+|----|----------|------|---|---|---|---|--------|
+| TD-35 | Infra / privacy | The monthly restore drill purges only `users devices sessions files audit_logs challenges _migrations` (`.github/workflows/firestore-restore-drill.yml:96`), so `licenses`, their `seats`, `licenseInvites` and `auth_links` — production PII — stay in the weaker drill project; `scripts/firestore_verify.py` does not check them either | 3 | 4 | 1 | **35** | CI/ops PR |
+| TD-36 | Legal | 10 bracketed operator fields in `docs/legal/PRIVACY_POLICY.md` (:5 ×2, :7 ×2, :18, :153) and `TERMS_OF_SERVICE.md` (:6 ×2, :440, :441) are published as literal text on the hosted pages | 2 | 5 | 1 | **35** | Operator task (values); listed in [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md) |
+| TD-61 | **Accuracy** | The viewer's metadata depends on how it was opened. A fresh run passes the **requested** ROI (`ui/analysis/AnalysisNavHelper.kt:113-116`) but the session saves the **resolved, inset** ROI the engine ran on (`ui/analysis/DicBatchRunner.kt:340-343`), so the report, ⓘ sheet, CSV header and lattice line cut change when the same session is reopened from Home. Also `SESSION_ID` (`Pending_Cloud_Sync_…` vs the local id), sweep subset/strain window (slider vs first combination), and `lastPlannedFrames` / `lastStep` left stale by an all-failed sweep | 3 | 4 | 2 | **28** | [ADR-004](../adr/ADR-004-runspec.md) + [ADR-003](../adr/ADR-003-viewerargs-read-side.md) |
+| TD-37 | Build | No `ndkVersion` (`app/build.gradle.kts`): the bit-exact `-ffast-math` engine silently follows AGP's default NDK | 2 | 3 | 1 | **25** | CI/ops PR |
+| TD-38 | Test | The Kover floor is configured (`minBound(27)`, `app/build.gradle.kts:389-395`) but **never enforced**: CI runs `koverLog` only (`ci.yml:294-295`) and `ciReleaseGate` omits `koverVerify`. Measured 31.9 % locally | 2 | 3 | 1 | **25** | CI/ops PR |
+| TD-39 | Test | `DicResultCsvTest.kt:33` pins `DicResult.CSV_POINT_HEADER` (`DicResult.kt:177`), but production CSV uses its own copy (`report/AnalysisCsvWriter.kt:49`) | 2 | 3 | 1 | **25** | App-correctness PR |
+| TD-40 | Infra | R8 `mapping.txt` is a 90-day workflow artifact, deliberately not attached to the release (`release.yml:231-240`), and Crashlytics mapping upload is off: field crashes become unreadable after 90 days | 2 | 3 | 1 | **25** | CI/ops PR |
+| TD-41 | Code | `runCatching` around a suspend call swallows `CancellationException` at **21** sites (`AuthRepository` ×5, `CloudRestore:563`, `CloudSync:153,268`, `DicUploadWorker` ×7, `SeatLease:64,86,103`, `SeatRequiredActivity:69`, `SettingsYourDataSection:116`, `AuthActivity:428`). Visible bug: cancelling the cloud account export shows "export failed" and logs `EXPORT_FAILED` | 3 | 3 | 2 | **24** | App-correctness PR |
+| TD-42 | CI / security | Dispatch inputs interpolated into shell (`deploy-backend.yml:74,76`; `backend-lock.yml:99,127`); no top-level `permissions:` in `ci.yml`; no `refs/heads/main` guard on the deploy; `reactivecircus/android-emulator-runner@v2` unpinned at `ci.yml:668` (SHA-pinned at `:357`); `pip-audit` / `pip-tools` unpinned; gitleaks downloaded by curl with no checksum (`ci.yml:57-59`) | 2 | 3 | 2 | **20** | CI/ops PR |
+| TD-43 | CI | The backend gate differs across three workflows: `deploy-backend.yml:61-62` runs no pip-audit, coverage gate, emulator tier or ruff on scripts; `release.yml:65` runs no lint/detekt/spotless before signing | 2 | 3 | 2 | **20** | CI composites PR |
+| TD-44 | Backend / observability | `observability.classify_route` (`backend/app/observability.py:24,37-41`) rewrites any unlisted segment of 8+ characters to `{id}`: `/v1/licenses/activate` logs as `/v1/{id}/{id}` and every licence and institution route is opClass `other`. Blocks the telemetry that shim retirement needs | 3 | 2 | 2 | **20** | Backend quick-wins PR — classify from `request.scope["route"].path_format` |
+| TD-45 | Backend | Compat shims: nine in the code, retirement order documented for two (CLOUD_ARCHITECTURE_GCP §20.5). The `/v1/campus/*` invite-revoke alias (`routers/institutions.py:176`, `gateway/openapi.yaml:816`) was added on 2026-09-09 (`4100955`), **after** the rename (`90485b4`, 2026-09-07), so no caller can exist. `plan` is still written into the audit detail (`routers/licenses.py:38`); `PRO_MAX_SESSIONS_PER_USER` is still read as a default (`config.py:50-53`) | 2 | 2 | 2 | **16** | Backend quick-wins PR: delete that alias, drop `plan` from audit, document all nine |
+| TD-46 | Dependencies | Dependabot (`.github/dependabot.yml`) has no `docker` (the digest-pinned `backend/Dockerfile`), `gitsubmodule` (`native`) or `.github/actions/*` entries; CI uses Node 20 (EOL April 2026) and `firebase-tools@13`; the Firestore workflows pin `google-cloud-firestore==2.21.0` against the backend's 2.29.0 | 2 | 2 | 1 | **20** | CI/ops PR |
+| TD-47 | Security | `.gitleaks.toml` allowlists every `local.properties` (:14), two paths that no longer exist (:15-16) and four whole commits (:18-23) | 1 | 3 | 1 | **20** | CI/ops PR |
+| TD-48 | Privacy | A personal Gmail address was committed in this public repo (`PRODUCTION_READINESS_GATE.md:211`) | 1 | 3 | 1 | **20** | Docs PR (git history keeps it) |
+| TD-49 | Docs | `CONTEXT.md` was 83 % changelog (lines 134–780) | 3 | 2 | 2 | **20** | Docs PR — history moved to [CHANGELOG.md](CHANGELOG.md) |
+| TD-50 | Console | `seatRow` / `inviteRow` exist in both `operator.js:661/678` and `institution.js:115/141` and have drifted: the operator desk shows an expired lease as "until …" | 2 | 2 | 2 | **16** | Console PR |
+| TD-51 | Code | Dead code: `CloudRestore.listRestorable` / `listRestorableSessions` and their 60 s cache (`data/CloudRestore.kt:209-277`, no caller); six `SessionStore.*Async` wrappers; `FrameOrderHelper.loadMeta/sortMeta`; a doc comment + `@Suppress` orphaned above the wrong function (`CloudRestore.kt:527-532`); worker keys `KEY_DONE/KEY_TOTAL/KEY_LOCAL_ID` never read; `SettingsActivity.kt:530` reads `KEY_CLOUD_SESSION_ID` from progress no worker writes; `AnalysisViewModel.hasCompletedAnalysis` write-only | 2 | 1 | 1 | **15** | App-correctness PR |
+| TD-52 | Backend | `notify._retry_delay` honours `Retry-After` with no upper limit (`backend/app/notify.py:92-100`): one 429 can park the single notify worker | 1 | 2 | 1 | **15** | Backend quick-wins PR |
+| TD-53 | Backend | The contention block `try tx / except Exception: if not _lost_to_contention(exc): raise` is repeated ten times in `firestore_repo.py` | 2 | 2 | 2 | **16** | Backend refactor PR, precondition of [ADR-001](../adr/ADR-001-firestore-repo-package.md) |
+| TD-54 | Backend | Router duplication: `raise HTTPException(429, …)` ×35; `routers/sessions.py` ownership guard ×4, page-size clamp ×3 with two ceilings, `page` dict ×3; cursor loop copied (`firestore_repo.py:3147,3175`); 15 raw status strings bypass `statuses.py`; two `_retry_delay`s; `sessions.py:21` imports from another router | 2 | 1 | 2 | **12** | Backend refactor PR — a one-line `rate_limit.enforce(bucket, key)` (not a dependency: that would turn 422 into 429 and reorder admin 403 / nonce use) |
+| TD-55 | Test | Emulator re-race logic in three variants (`test_firestore_emulator_integration.py:541-570, 600-620, 706-721`); the `store` fixture defined in 10 files; `test_licenses.py` is 2,518 lines | 1 | 2 | 2 | **12** | Backend refactor PR |
+| TD-56 | CI | Copy-paste across workflows (java+gradle setup ×6, KVM ×2, ccache env ×3, prune ×3, arm64 `.so` check ×2); `.github/actions/dic-submodules` referenced nowhere; six jobs without `timeout-minutes` | 2 | 1 | 2 | **12** | CI composites PR |
+| TD-57 | Test | 14 main classes over 300 lines with no test at all (`ShareCenter` 759, `SweepSetupHelper` 822, `DicBatchRunner.kt` 413, `SessionUploadBundler` 397, `PdfReportGenerator` 304, `VsgPlotView`, `StudioOverlayView`, `TouchImageView`, `RoiDrawActivity`, `VsgLatticeView`, `SessionSelectionController`, `MediaPickerSheet`, `ViewerSettingsSheet`, `SessionListAdapter`); `HotPathMicroBenchmark` never runs in CI (`ci.yml:371`) | 3 | 3 | 4 | **12** | Coverage PR |
+| TD-58 | Architecture | `backend/app/firestore_repo.py` is 3,432 lines / 138 functions, two thirds licensing | 3 | 2 | 4 | **10** | [ADR-001](../adr/ADR-001-firestore-repo-package.md) |
+| TD-59 | Hygiene | Seven merged remote branches (`beta-v0.1`, `damodar`, `beta-v1.2.0`, `video-decoding`, `chore/semper-names`, `docs/perf-142-deployed`, `fix/appcheck-real-phones`) and the dead `fix/capture-dic-good-practice-gates` | 1 | 1 | 1 | **10** | Close-out PR, each deletion confirmed |
+| TD-60 | Build | Java 11 source/target (`app/build.gradle.kts:255-256`) vs JDK 17 in CI and detekt `jvmTarget = "17"` (`:366`); plugin versions outside the catalog; ktlint `1.5.0` hard-coded twice; `localProperty()` re-implemented for two keys | 1 | 1 | 2 | **8** | App-reuse PR |
+| TD-62 | Misc | `StudioOverlayView` suppresses `DrawAllocation` over real `RectF` allocations in `onDraw` (:497, :500); `Thread.sleep` in the `RetryOnTransient` interceptor; `create_session` drops the next-page token (`routers/sessions.py:401,469`); `TIMEOUT_US` declared twice; `reconcile_institution_seats` reads one user per seat serially | 1 | 1 | 1 | **10** | Split across the app-reuse and backend PRs |
+
+### Cannot be verified from the repository
+
+Checked by hand in the console or with `gcloud`, not by reading code: whether
+the legacy `indic-gw` / `indic-api` pair exists (TD-30); branch protection
+requiring `CI OK`; whether the deny-all `firestore.rules` is deployed; API-key
+restrictions; GitHub Environment branch rules on `production`. The open
+checkboxes are in [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md).
 
 ### Closed as obsolete, 2026-09-14
 
@@ -76,7 +130,7 @@ test and is now TD-33.
 | Item | Why deferred |
 |------|----------------|
 | Auth-gated UI E2E | Needs Firebase secrets / fixtures in CI |
-| `ViewerSession` unpack half | `DicKeys` is now packed in one place (`ViewerArgs`); the four readers still parse the bundle themselves |
+| `ViewerArgs` read half | Now TD-3 / [ADR-003](../adr/ADR-003-viewerargs-read-side.md) |
 | firebase-admin / hashed lock | Lock is regenerated from txt on each bump (`pip-compile --generate-hashes` on Python 3.12). Direct-dep versions in the lock must match `requirements.txt`. |
 | Identity Platform upgrade | The consoles' second factor is Firebase MFA (TOTP), which needs the project upgraded to Identity Platform — a project-wide Auth change shared with the mobile app, and a change to the Auth pricing model. Until it is done the consoles sign in and every write fails `mfa_required`. |
 
@@ -84,7 +138,10 @@ test and is now TD-33.
 
 See [../engine/PERF_BASELINE_bd44af0.md](../engine/PERF_BASELINE_bd44af0.md):
 ≥ 4557 solves/s host; smoke/DICe floors; preserve `-O3 -ffast-math` / OpenMP / LTO
-on the release pipeline.
+on the release pipeline. **No CI job in this repository enforces the solve-rate
+floor** (that document says so at line 10): it is checked by hand in the engine
+repo when the `native` pin moves. The Kover floor was likewise report-only until
+TD-38.
 
 Macrobenchmark CI (`tier-benchmark`) is emulator **smoke**: it suppresses
 `EMULATOR,LOW-BATTERY,UNLOCKED` and does not assert numeric thresholds. Keep API 34

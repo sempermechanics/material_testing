@@ -134,7 +134,9 @@ Dependabot bumps `backend/requirements.txt` and cannot regenerate the hashed
 `requirements.lock`, so tier 4's *Verify the hashed lock* step reports a version
 diff. Fix it before merging by running
 [`Backend lock`](../../.github/workflows/backend-lock.yml) against the Dependabot
-branch — it compiles on Linux / Python 3.12 and pushes the lock to that PR. See
+branch — it compiles on Linux / Python 3.12 and pushes the lock to that PR.
+That push uses `GITHUB_TOKEN`, which starts no CI run, so re-run the PR's checks
+afterwards (the status stays on the old commit until you do). See
 [RELEASING.md](RELEASING.md) § Bumping backend dependencies.
 
 `secret-scan`, `legal-pages` and `console-pages` are absent from the tables on
