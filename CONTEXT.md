@@ -77,6 +77,9 @@ Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`
 
 Kotlin helpers are plain `object` / small classes (`*Helper`, `*Runner`, `*Bundler`).
 No Hilt/Dagger. Keep `lifecycleScope` and Activity Result launchers on the Activity.
+A class with cloud decisions to test takes `api: CloudApi = IndicApi.get(context)` and
+`tokens: TokenSource = TokenProvider` as defaulted parameters; tests pass `FakeCloudApi`
+([ADR-002](docs/adr/ADR-002-cloudapi-seam.md)).
 
 Wizard later steps inflate through **ViewStubs**. `goToStep` stays on
 `StaticAnalysisActivity`. Slot chrome / coach marks: `AnalysisWizardSlots` /

@@ -105,10 +105,32 @@ more classes need fakes; nothing in A blocks it.
 
 ## Action items
 
-1. [ ] `CloudApi`, `AuthBackend`, `TokenSource` interfaces; `IndicApi`,
-       `FirebaseAuthBackend`, `TokenProvider` implement them.
-2. [ ] Defaulted parameters on `AuthRepository`, `SeatLease`, `CloudSync`,
-       and the extracted cloud-export function.
-3. [ ] `FakeCloudApi` in `app/src/test/`; `AuthRepositoryTest`,
-       `SeatLeaseTest`, `CloudExportTest` (cancel shows no failure).
-4. [ ] Close TD-25.
+1. [x] `CloudApi` and `TokenSource` (`data/net/CloudApi.kt`); `IndicApi` and
+       `TokenProvider` implement them. ~~`AuthBackend` / `FirebaseAuthBackend`~~:
+       replaced by a `signedIn` lambda (As built).
+2. [x] Defaulted parameters on `AuthRepository`, `SeatLease`, `CloudSync`,
+       and the extracted `data/CloudAccountExport.download`.
+3. [x] `FakeCloudApi` + `FakeTokens` in `app/src/test/…/cloud/`;
+       `AuthRepositoryTest` (14), `CloudSeamTest` (13: seat refresh, reconcile
+       verdicts, erase order, export success / failure / cancel).
+4. [x] Close TD-25.
+
+## As built (2026-09-23)
+
+- **No `AuthBackend`.** Wrapping `FirebaseAuth` would have meant an interface
+  over some 20 sign-in, MFA, reset and link calls, none of which the tests
+  drive. The decisions worth testing (status, terms, consent) need only "is
+  anyone signed in", so `AuthRepository` takes
+  `signedIn: () -> Boolean = { FirebaseAuth.getInstance().currentUser != null }`
+  and looks `FirebaseAuth` up lazily. A test that never signs in never
+  initialises Firebase. Revisit if the sign-in flows themselves need JVM tests.
+- **Defaults live on the interface.** Kotlin forbids an override from
+  restating a default, so `listSessions(verify)`, `downloadFile(expectedBytes,
+  onBytes)`, `listUsers(status)` and `uploadResumable(onBytes)` declare theirs
+  on `CloudApi`; calls through `IndicApi` inherit them unchanged.
+- **The fake fails loudly.** Every `FakeCloudApi` call a test did not script
+  throws `AssertionError`, so a decision that reaches the backend when it
+  should not fails the test instead of getting an answer.
+- **Other call sites unchanged.** `CloudRestore`, `DicUploadWorker` and the
+  workers still take `IndicApi` in their private helpers; widen them to
+  `CloudApi` when a test needs them.

@@ -12,18 +12,16 @@ import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.R
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.AuthRepository
-import com.indicvision.semper.data.CacheJanitor
+import com.indicvision.semper.data.CloudAccountExport
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DevAuth
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SessionEverythingExporter
 import com.indicvision.semper.data.net.IndicApi
-import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.viewer.SendToSheet
-import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -98,15 +96,7 @@ class SettingsYourDataSection(
             Toast.makeText(activity, R.string.export_cloud_data_offline, Toast.LENGTH_LONG).show()
             return
         }
-        runExport(CLOUD_EXPORT) {
-            val dest = java.io.File(activity.cacheDir, CacheJanitor.ACCOUNT_EXPORT)
-            suspendRunCatching {
-                val idToken = TokenProvider.usableIdToken() ?: error("not signed in")
-                api.exportAccount(idToken, dest)
-            }.onFailure { Timber.w(it, "Cloud account export failed") }
-                .getOrNull()
-                ?.let { dest }
-        }
+        runExport(CLOUD_EXPORT) { CloudAccountExport.download(activity.cacheDir, api) }
     }
 
     private fun exportMyData() {

@@ -42,7 +42,7 @@ private const val EMPTY_JSON = "{}"
  * broker — they never pass through this client's backend host.
  */
 @Suppress("TooManyFunctions") // one method per backend endpoint plus signing helpers
-class IndicApi private constructor(context: Context) {
+class IndicApi private constructor(context: Context) : CloudApi {
 
     private val appContext = context.applicationContext
 
@@ -66,7 +66,7 @@ class IndicApi private constructor(context: Context) {
      * under the debug emulator sign-in bypass (which has no Firebase user, so
      * every authenticated call would fail — see [DevAuth]).
      */
-    val enabled: Boolean get() = base.isNotBlank() && !DevAuth.active
+    override val enabled: Boolean get() = base.isNotBlank() && !DevAuth.active
 
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val octet = "application/octet-stream".toMediaType()
@@ -176,7 +176,7 @@ class IndicApi private constructor(context: Context) {
     // ---------------------------------------------------------------- identity
 
     /** GET /v1/me. Throws [NotApprovedException] for a PENDING/SUSPENDED user. */
-    suspend fun me(idToken: String): MeResponse = withContext(Dispatchers.IO) {
+    override suspend fun me(idToken: String): MeResponse = withContext(Dispatchers.IO) {
         json.decodeFromString(
             authedGet(idToken, "$base/v1/me") { code, body, ref ->
                 if (code == HttpStatus.FORBIDDEN) throw NotApprovedException()
@@ -187,7 +187,7 @@ class IndicApi private constructor(context: Context) {
     }
 
     /** GET /v1/config — resolved product limits for this account. */
-    suspend fun getConfig(idToken: String): AppConfigDto = withContext(Dispatchers.IO) {
+    override suspend fun getConfig(idToken: String): AppConfigDto = withContext(Dispatchers.IO) {
         json.decodeFromString(
             authedGet(idToken, "$base/v1/config", approvedOnly),
         )
@@ -207,7 +207,7 @@ class IndicApi private constructor(context: Context) {
      * Distinct from the local "Export my data" zip, which only bundles what is on
      * this device.
      */
-    suspend fun exportAccount(idToken: String, dest: java.io.File): Unit = withContext(Dispatchers.IO) {
+    override suspend fun exportAccount(idToken: String, dest: java.io.File): Unit = withContext(Dispatchers.IO) {
         val resp = signedRequest(idToken, "GET", "/v1/me/export", ByteArray(0))
         resp.use {
             if (it.code != HttpStatus.OK) failSigned(it)
@@ -226,7 +226,7 @@ class IndicApi private constructor(context: Context) {
      * 201 → registered, 409 → another device already bound (needs admin rebind).
      * Requires an APPROVED user.
      */
-    suspend fun registerDevice(idToken: String) = withContext(Dispatchers.IO) {
+    override suspend fun registerDevice(idToken: String) = withContext(Dispatchers.IO) {
         val body = DeviceRegisterRequest(
             deviceId = device.getDeviceId(),
             publicKeyPem = device.getPublicKeyPem(),
@@ -260,7 +260,7 @@ class IndicApi private constructor(context: Context) {
      * `license_device_mismatch`, `license_revoked`, `license_seat_disabled`,
      * `license_seats_exhausted`, `license_already_redeemed`, `license_not_found`).
      */
-    suspend fun activateLicense(idToken: String, key: String): AppConfigDto = withContext(Dispatchers.IO) {
+    override suspend fun activateLicense(idToken: String, key: String): AppConfigDto = withContext(Dispatchers.IO) {
         val body = LicenseActivateRequest(key = key)
         val req = Request.Builder().url("$base/v1/licenses/activate")
             .header("Authorization", "Bearer $idToken")
@@ -291,10 +291,10 @@ class IndicApi private constructor(context: Context) {
      * demo — so it is a distinct type rather than a generic [ApiException],
      * to stop a caller rendering "something went wrong" for it.
      */
-    suspend fun checkoutLease(idToken: String): AppConfigDto = seatCall(idToken, "checkout")
+    override suspend fun checkoutLease(idToken: String): AppConfigDto = seatCall(idToken, "checkout")
 
     /** POST /v1/licenses/release — give a floating seat back. Idempotent. */
-    suspend fun releaseLease(idToken: String): AppConfigDto = seatCall(idToken, "release")
+    override suspend fun releaseLease(idToken: String): AppConfigDto = seatCall(idToken, "release")
 
     private suspend fun seatCall(idToken: String, action: String): AppConfigDto =
         withContext(Dispatchers.IO) {
@@ -328,7 +328,7 @@ class IndicApi private constructor(context: Context) {
      * Throws [TermsVersionMismatchException] when the server no longer serves
      * [version] — the app is older than the published Terms.
      */
-    suspend fun acceptTerms(idToken: String, version: String): Unit = withContext(Dispatchers.IO) {
+    override suspend fun acceptTerms(idToken: String, version: String): Unit = withContext(Dispatchers.IO) {
         val req = Request.Builder().url("$base/v1/me/terms")
             .header("Authorization", "Bearer $idToken")
             .header("X-Device-Id", device.getDeviceId())
@@ -343,7 +343,7 @@ class IndicApi private constructor(context: Context) {
     }
 
     /** PUT /v1/me/consents — grant or withdraw the optional product-improvement consent. */
-    suspend fun setImprovementConsent(idToken: String, granted: Boolean): Unit = withContext(Dispatchers.IO) {
+    override suspend fun setImprovementConsent(idToken: String, granted: Boolean): Unit = withContext(Dispatchers.IO) {
         val req = Request.Builder().url("$base/v1/me/consents")
             .header("Authorization", "Bearer $idToken")
             .header("X-Device-Id", device.getDeviceId())
@@ -365,9 +365,9 @@ class IndicApi private constructor(context: Context) {
      * exist in Drive (catching artifacts deleted straight in Drive). It costs
      * Drive calls per page, so it's for explicit refreshes, not every resume.
      */
-    suspend fun listSessions(
+    override suspend fun listSessions(
         idToken: String,
-        verify: Boolean = false,
+        verify: Boolean,
     ): ListSessionsResponse = withContext(Dispatchers.IO) {
         val all = mutableListOf<CloudSessionDto>()
         var pageToken: String? = null
@@ -389,7 +389,7 @@ class IndicApi private constructor(context: Context) {
     }
 
     /** POST /v1/sessions (device-signed). Initiates a session + one resumable target per file. */
-    suspend fun createSession(
+    override suspend fun createSession(
         idToken: String,
         request: SessionCreateRequest,
     ): SessionCreateResponse = withContext(Dispatchers.IO) {
@@ -417,7 +417,7 @@ class IndicApi private constructor(context: Context) {
      * reason it does on createSession — a stolen ID token must not be able to
      * recover them.
      */
-    suspend fun sessionUploads(
+    override suspend fun sessionUploads(
         idToken: String,
         sessionId: String,
     ): SessionUploadsResponse = withContext(Dispatchers.IO) {
@@ -432,7 +432,7 @@ class IndicApi private constructor(context: Context) {
     }
 
     /** POST /v1/files/{id}/complete (device-signed). */
-    suspend fun completeFile(
+    override suspend fun completeFile(
         idToken: String,
         fileId: String,
         request: FileCompleteRequest,
@@ -445,7 +445,7 @@ class IndicApi private constructor(context: Context) {
     // ----------------------------------------------------------------- restore
 
     /** GET /v1/sessions/{sid}/files — the manifest for one cloud analysis. */
-    suspend fun listSessionFiles(
+    override suspend fun listSessionFiles(
         idToken: String,
         sessionId: String,
     ): SessionFilesResponse = withContext(Dispatchers.IO) {
@@ -471,7 +471,7 @@ class IndicApi private constructor(context: Context) {
      * Restore uses this to read a legacy backup's central directory and then just the
      * prefix of entries it needs, instead of the whole archive.
      */
-    suspend fun downloadRange(
+    override suspend fun downloadRange(
         idToken: String,
         fileId: String,
         dest: java.io.File,
@@ -487,12 +487,12 @@ class IndicApi private constructor(context: Context) {
         signedHeaders(idToken, "GET", path, ByteArray(0), nonceFor(idToken))
     }
 
-    suspend fun downloadFile(
+    override suspend fun downloadFile(
         idToken: String,
         fileId: String,
         dest: java.io.File,
-        expectedBytes: Long = -1L,
-        onBytes: suspend (haveBytes: Long) -> Unit = {},
+        expectedBytes: Long,
+        onBytes: suspend (haveBytes: Long) -> Unit,
     ) = drive.downloadFile(
         fileId,
         dest,
@@ -506,7 +506,7 @@ class IndicApi private constructor(context: Context) {
     // ------------------------------------------------------------------- admin
 
     /** GET /v1/admin/users?status=… (admin ID token; no device signature). */
-    suspend fun listUsers(idToken: String, status: String = ""): List<AdminUserDto> = withContext(Dispatchers.IO) {
+    override suspend fun listUsers(idToken: String, status: String): List<AdminUserDto> = withContext(Dispatchers.IO) {
         val url = if (status.isBlank()) "$base/v1/admin/users" else "$base/v1/admin/users?status=$status"
         json.decodeFromString<AdminUsersResponse>(
             authedGet(idToken, url) { code, body, ref ->
@@ -520,7 +520,7 @@ class IndicApi private constructor(context: Context) {
     }
 
     /** POST /v1/admin/users/{uid}/{action} — device-attested (approve/revoke). */
-    suspend fun setUserStatus(idToken: String, uid: String, action: String) = withContext(Dispatchers.IO) {
+    override suspend fun setUserStatus(idToken: String, uid: String, action: String) = withContext(Dispatchers.IO) {
         signedPost(idToken, "/v1/admin/users/$uid/$action", ByteArray(0)).use { resp ->
             if (resp.code != HttpStatus.OK) throw IndicApiHttp.apiException(resp)
         }
@@ -585,7 +585,7 @@ class IndicApi private constructor(context: Context) {
      * cloud. The caller must sign out immediately afterwards; any further
      * authenticated call would create a fresh, empty profile.
      */
-    suspend fun deleteAccount(idToken: String) = withContext(Dispatchers.IO) {
+    override suspend fun deleteAccount(idToken: String) = withContext(Dispatchers.IO) {
         val resp = signedRequest(idToken, "DELETE", "/v1/me", ByteArray(0))
         // No 404-is-fine shortcut here: this endpoint never legitimately 404s,
         // so a 404 means the route isn't reachable (e.g. not published on the
@@ -599,7 +599,7 @@ class IndicApi private constructor(context: Context) {
      * folder (raw images, .dat, csv, report) and all Firestore metadata.
      * Permanent; there is no undo.
      */
-    suspend fun deleteSession(idToken: String, sessionId: String) = withContext(Dispatchers.IO) {
+    override suspend fun deleteSession(idToken: String, sessionId: String) = withContext(Dispatchers.IO) {
         val resp = signedRequest(idToken, "DELETE", "/v1/sessions/$sessionId", ByteArray(0))
         resp.use {
             if (it.code == HttpStatus.OK) return@use
@@ -662,11 +662,11 @@ class IndicApi private constructor(context: Context) {
      * go straight to Drive — not through the backend.
      * Returns (driveFileId, localMd5Hex) — md5 is always set for `:complete`.
      */
-    suspend fun uploadResumable(
+    override suspend fun uploadResumable(
         uploadUrl: String,
         file: java.io.File,
         chunkSize: Int,
-        onBytes: (Long) -> Unit = {},
+        onBytes: (Long) -> Unit,
     ): Pair<String, String> = drive.uploadResumable(uploadUrl, file, chunkSize, onBytes)
 
     companion object {
