@@ -135,6 +135,10 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   inside the ROI and counts only textured patches (`SubsetRecommender`), the
   `VsgPlotView` y gutter fits its widest tick, `TouchImageView` keeps a zoom
   across a resize, and `AviReader.frameIndexAt` takes half a µs of slack.
+- **Request volume, in progress.** One app open sent 19 backend requests
+  (10 config, 8 session listings). Pass 1 lets only one `CloudSync.reconcile`
+  run at a time, so the calls Home starts together list the cloud once
+  ([perf/request-volume.md](docs/perf/request-volume.md)). Device check owed.
 - **material_testing shares this history.** It merged this repo's `main` at
   `643462c` (sempermechanics/material_testing#22), so the next sync either way
   is a plain `git merge`. Its lab features (test type, loads, reports) stay
