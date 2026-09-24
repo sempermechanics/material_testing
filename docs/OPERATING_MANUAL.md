@@ -204,7 +204,7 @@ Re-running the same inputs updates the same analysis. Different inputs make a ne
 | Subset | 15–121, odd | Suggested | Correlation fails, speckle is weak | You need detail across a gradient |
 | Step | 1 to min(30, subset/2) | 5 | Runtime matters | You need a denser field |
 | Overlap | 0.50–0.99 = 1 − step/subset | Follows step | — | — |
-| Strain window | 5–101, odd | 15 | Strain is noisy | Detail is being smoothed away |
+| Strain window | 5–101, odd | 15; bending 45 | Strain is noisy | Detail is being smoothed away |
 | Kernel | 4×4 Bicubic / 6×6 Keys | 4×4 | You are studying interpolation bias | — |
 
 - **The suggested subset** follows the SSSIG criterion (Pan et al. 2008). It's the median over a 4×4 grid, sized to reach 0.007 px.
@@ -364,7 +364,7 @@ Long exports carry on in the background.
 |---|---|---|
 | Subset | 15–121, odd | Suggested |
 | Step | 1–30 | 5 |
-| Strain window | 5–101, odd | 15 |
+| Strain window | 5–101, odd | 15; bending 45 |
 | Kernel | 4×4 / 6×6 | 4×4 Bicubic |
 | Max frames | 10–150 | 50 |
 | Sweep step denominator | 2–9 | 3 |

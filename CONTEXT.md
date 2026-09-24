@@ -197,8 +197,8 @@ first tap (`TouchImageView` now keeps zoom through a resize); unloaded frames
 bent the slope (left out now); a video gave one table row per frame (frames at
 one load are now one load step); the speckle check sampled outside the ROI
 (clamped); and a load log started after the recording could not be aligned
-(new *Log started after the first frame* offset, `LoadSyncRow`). Bending has
-no real-image check yet.
+(new *Log started after the first frame* offset, `LoadSyncRow`). The
+real-image check came later (case 2, below).
 
 **Student lab outputs, part 3: the elastic region in the viewer
 (PR #14, `feat/viewer-elastic-plot`, merged).**
@@ -223,7 +223,35 @@ the top moves the bottom's line with it. Taps saved before this with
 different x's load as they were and line up on the next edit. WORKFLOWS
 §6a.3–6a.4.
 
-**VSG = strain window in the docs (`docs/vsg-is-strain-window`).** The
+**Bending on real images (`feat/bending-real-validation`).** A published PMMA
+3-point bend (Zenodo 1172068) was run through the app and compared point by
+point with the authors' own DIC
+([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md), case 2;
+`scripts/real_data_pmma_bending.py`). Results:
+- Deflection at the load point: 0.0074 mm RMS over 33 frames (0.5% of the
+  peak).
+- E from the graph 2.000 GPa against the authors' 1.982; average 2.104
+  against 2.084. Pinned in `RealPmmaBendingTest`.
+- Displacement: 0.013 px RMS.
+- Strain: about 1,000 µε RMS at a 15 px strain window, about 390 µε at 45 px.
+
+The run changed three things:
+- **The tap editor's photo no longer moves between taps.** #17's longer
+  wording broke the fixed three-line instruction, so the photo re-fitted after
+  the first tap and a bottom tap aimed at the old position landed 49 px short
+  (E 9% low). The instruction now sits over invisible copies of all three steps
+  (`BeamTapStepText`), so its box is as tall as the longest at any width or
+  font size.
+- **Bending's strain window starts at 45 px** (`TestType.defaultStrainWindow`;
+  tensile stays 15), on first open and on Reset. δ and E use displacement
+  only. The cost is a band of about 20 px at the ROI edges with no strain,
+  which also lowers the headline "converged" figure (97.6% → 92.8% here).
+- **Found, not fixed:** 0.02% of points are wrong matches with good ZNSSD,
+  under the nose and at the bottom fibre late in the test. The engine's VSG
+  takes them in, and local strain spikes to about 2,400,000 µε in 6 of 33
+  frames. That is a `native/` change.
+
+**VSG = strain window in the docs (PR #19, `docs/vsg-is-strain-window`, merged).** The
 engine reads `strain_window` as a circle's diameter in px, so the gauge is the
 window itself (`VsgStudy.vsgFor`, two device runs in its KDoc). The operating
 manual, WORKFLOWS §8.4.3, `docs/images/vsg.svg`, the glossaries and the

@@ -1,5 +1,6 @@
 package com.indicvision.semper.data
 
+import com.indicvision.semper.ui.analysis.VsgStudy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -22,6 +23,17 @@ class TestTypeTest {
     @Test
     fun `every test type takes machine loads`() {
         TestType.entries.forEach { assertTrue(it.name, it.hasMachineLoad) }
+    }
+
+    @Test
+    fun `bending starts with a wider strain window than tensile`() {
+        assertEquals(15, TestType.TENSILE.defaultStrainWindow)
+        assertEquals(45, TestType.BENDING.defaultStrainWindow)
+        // The slider takes odd values in its own range; a default off it would snap.
+        TestType.entries.forEach {
+            assertTrue(it.name, it.defaultStrainWindow % 2 == 1)
+            assertTrue(it.name, it.defaultStrainWindow in VsgStudy.MIN_STRAIN_WINDOW..VsgStudy.MAX_STRAIN_WINDOW)
+        }
     }
 
     @Test

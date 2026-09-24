@@ -72,6 +72,8 @@ Loads are CSV-only for now. Typing loads in the app is still an open decision.
 - **Scale:** mm/px = t ÷ the thickness in px.
   - The editor zooms (pinch or double-tap) and pans, and the zoom holds while you mark.
   - Under 40 px it warns, because a 1 px slip then moves E by more than 2.5%.
+  - The second mark stays on the first mark's vertical line, so the thickness is measured straight down.
+- **Strain window:** bending starts at 45 px, not 15. δ and E come from displacement, so strain only draws the maps, and at 45 px they are about 2.5× less noisy. The cost is a band about 20 px wide along the ROI's edges with no strain (the outer fibres), which also lowers the "converged" figure. On a thin beam, lower it or frame closer.
 - **Load steps:**
   - Frames within 0.5% of the largest load of each other form one averaged row, so a 1 fps video gives the same six rows as six photos.
   - Frames under 1% of the largest load (the reference, and frames before the hanger went on) are left out of the table, the average and the slope.
@@ -150,6 +152,7 @@ It's offered once the thickness is tapped.
 - **Strain is the mean over the region,** so after necking it understates the local strain. The curve does not use the extensometer.
 - **A seating start** that never straightens can still give no E, and the report says so.
 - **On published steel data,** the strain reads about 8% above the dataset's 3D gauge points and E about 5% below ([REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)).
+- **On a published PMMA 3-point bend,** the deflection at the load point is within 0.0074 mm RMS of the authors' own DIC, 0.5% of the peak. Both E values are within 1%. Displacement agrees to 0.013 px, and strain to about 400 µε at the 45 px window. The thickness taps matter most: a 49 px slip on 572 px put E 9% low (same page, case 2).
 
 ## Deferred
 
