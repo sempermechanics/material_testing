@@ -2,6 +2,7 @@
 <!-- Details sheet: max/min (+ mean on a frame), then the frame histogram, then settings used,
      then Results. Scrolls: with a load log the Results section runs past a phone screen. -->
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -149,15 +150,57 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <TextView
-                android:id="@+id/tvStressStrainTitle"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:letterSpacing="0.08"
-                android:textAllCaps="true"
-                android:textColor="@color/viewer_chrome_muted"
-                android:textSize="11sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvStressStrainTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:letterSpacing="0.08"
+                    android:textAllCaps="true"
+                    android:textColor="@color/viewer_chrome_muted"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <!-- Whole curve or the elastic region E is fitted to; shown only with a fit.
+                     Pill clip set in code, as activity_vsg_lattice.xml's togglePlotModeClip. -->
+                <FrameLayout
+                    android:id="@+id/stressStrainRangeClip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_pill_clip_mask"
+                    android:visibility="gone">
+
+                    <com.google.android.material.button.MaterialButtonToggleGroup
+                        android:id="@+id/toggleStressStrainRange"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/results_range_desc"
+                        app:checkedButton="@id/btnRangeWhole"
+                        app:selectionRequired="true"
+                        app:singleSelection="true">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnRangeWhole"
+                            style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/results_range_whole" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnRangeElastic"
+                            style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/results_range_elastic" />
+                    </com.google.android.material.button.MaterialButtonToggleGroup>
+                </FrameLayout>
+            </LinearLayout>
 
             <com.indicvision.semper.ui.analysis.VsgPlotView
                 android:id="@+id/plotStressStrain"
