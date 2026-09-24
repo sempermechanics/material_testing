@@ -35,7 +35,14 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       checked 2026-09-24: `all` on `semper-api`, as intended
       ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) "Leave Cloud Run ingress at its
       default"); an anonymous `GET /v1/config` on the `run.app` URL of production and
-      staging answers `403 Forbidden`. SA roles and Shared Drive rights still open.
+      staging answers `403 Forbidden`. SA roles reviewed 2026-09-24: `run.invoker`
+      on `semper-api` is `indic-gw`, `indic-api`, `indic-deployer` and the owner's
+      user (no `allUsers`); `indic-api` holds only `datastore.user`,
+      `cloudtasks.enqueuer`, `logging.logWriter`; `indic-backup` only
+      `datastore.importExportAdmin` + `datastore.viewer`; the default compute SA
+      has no `roles/editor`. Open: `indic-deployer`'s project-wide
+      `storage.admin` and `iam.serviceAccountUser` (TD-71), and Shared Drive
+      Manager rights for `indic-api`.
 - [ ] Run and record one **Firestore restore drill**. The drill is automated
       (`.github/workflows/firestore-restore-drill.yml`) but needs a
       **`restore-drill` GitHub Environment** (separate from `production-backup`)
