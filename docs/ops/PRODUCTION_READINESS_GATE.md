@@ -137,9 +137,13 @@ build that calls them ships, or every sign-in ends at an unrecordable gate.
       [PRIVACY_POLICY.md](../legal/PRIVACY_POLICY.md); regenerate and **deploy
       Hosting** so `/terms/` and `/privacy/` show the new text before the app
       links to it.
-- [ ] Deploy the backend **and** redeploy API Gateway from the updated
+- [x] Deploy the backend **and** redeploy API Gateway from the updated
       `backend/gateway/openapi.yaml` (`POST /v1/me/terms`, `PUT /v1/me/consents`);
-      confirm with a curl that both reach Cloud Run through the gateway.
+      confirm with a curl that both reach Cloud Run through the gateway. Checked
+      2026-09-24 on config `v202609241122-44`: both answer an anonymous call with
+      `401 "Jwt is missing"` (the route exists and wants a token), where an
+      undefined path answers `404 "not defined by this API"`. A signed-in call
+      reaching Cloud Run is the Terms gate in the device pass below.
 - [ ] Manual device pass of the gate: fresh install → password sign-up → Terms
       screen before Pending/Home → Agree writes `users/{uid}.termsAccepted`;
       Google sign-in and email link show the same screen; Decline and Back sign
