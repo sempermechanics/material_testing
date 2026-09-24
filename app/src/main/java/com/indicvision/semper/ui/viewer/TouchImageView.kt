@@ -250,7 +250,16 @@ class TouchImageView @JvmOverloads constructor(
         super.onSizeChanged(w, h, oldw, oldh)
         viewWidth = w
         viewHeight = h
-        fitToScreen()
+        if (oldw <= 0 || oldh <= 0 || isAtRestScale()) {
+            fitToScreen()
+            return
+        }
+        // Zoomed in: a sibling changing height (e.g. a longer instruction) must not
+        // throw the zoom away mid-task. Keep the scale and the centre point.
+        recomputeScaleLimits()
+        matrix.postTranslate((w - oldw) / 2f, (h - oldh) / 2f)
+        limitPan()
+        publishMatrix()
     }
 
     private fun safeViewRect(): RectF? {

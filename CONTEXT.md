@@ -130,7 +130,11 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   entered in data points, default 5 (material_testing #20; stored and
   exported values stay the VSG in px), and engine `v0.2.2` rejects
   displacement outliers before the VSG (semper-dic-engine#3, material_testing
-  #21, which has the real-data before/after).
+  #21, which has the real-data before/after). Four general-purpose fixes from
+  material_testing `3a1a941` / `c15efd3`: the speckle reading stays inside
+  the ROI and counts only textured patches (`SubsetRecommender`), the
+  `VsgPlotView` y gutter fits its widest tick, `TouchImageView` keeps a
+  zoom across a resize, and `AviReader.frameIndexAt` takes half a µs of slack.
 - **Owed.** An app release for the burn-down's app half. The IAM grant for
   ADR-006's `gateway` job (TD-27): its first dry-run failed on
   `apigateway.apis.get`. Video/AVI import has run only on emulators
