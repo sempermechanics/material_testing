@@ -586,10 +586,12 @@ jobs:
           except-key: ccache-arm64-${{ steps.native-ci.outputs.cache-infix }}
 
   # ===================================================================
-  # Macrobenchmark — opt-in only (label `benchmark` or dispatch run_benchmark)
+  # Benchmarks — opt-in only (label `benchmark` or dispatch run_benchmark).
+  # Macrobenchmark startup (:benchmark) and the :app HotPathMicroBenchmark
+  # share one emulator boot; both are smoke, with their numbers uploaded.
   # ===================================================================
   tier-benchmark:
-    name: Macrobenchmark startup
+    name: Benchmarks (macro + micro)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     needs: [changes, tier1-app-fast]
@@ -611,9 +613,24 @@ jobs:
           # fail checksum validation when submodules are checked out recursively.
           validate-wrappers: false
 
+      # The microbenchmark lives in :app's androidTest, so it needs the same
+      # debug x86_64 native build as tier 3; restore tier 3's .cxx / ccache.
+      - uses: ./.github/actions/setup-native-ci
+        with:
+          abi: x86_64
+
       - uses: ./.github/actions/enable-kvm
 
-      - name: Run startup Macrobenchmarks
+      # Two native builds (benchmark + debug) plus the AVD: free space as tier 3 does.
+      - name: Free disk space for AVD
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          df -h /
+
+      # One emulator boot, two suites; each line is its own command, and a failing
+      # one fails the step. The micro run is a debug build on an emulator, hence
+      # DEBUGGABLE in its suppress list: its numbers are relative, not absolutes.
+      - name: Run startup Macrobenchmarks and hot-path Microbenchmarks
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           # Same image as tier 3. API 37 empties gfxinfo framestats, so
@@ -622,7 +639,9 @@ jobs:
           arch: x86_64
           # The action's default options plus -no-metrics (see tier 3).
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
+          script: |
+            ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
+            ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache -Pandroid.testInstrumentationRunnerArguments.class=com.indicvision.semper.benchmark.HotPathMicroBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED --console=plain
 
       # Numbers are smoke on an emulator, not a regression gate (see
       # docs/app/TESTING.md), but leaving them uncaptured means every run answers
@@ -634,6 +653,15 @@ jobs:
         with:
           name: macrobenchmark-results
           path: benchmark/build/outputs/connected_android_test_additional_output/**
+          if-no-files-found: warn
+
+      # Median timeNs and allocationCount per hot path (*-benchmarkData.json).
+      - name: Upload microbenchmark results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: microbenchmark-results
+          path: app/build/outputs/connected_android_test_additional_output/**
           if-no-files-found: warn
 
   # ===================================================================
