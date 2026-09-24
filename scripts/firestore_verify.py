@@ -18,7 +18,13 @@ import sys
 
 from google.cloud import firestore
 
-COLLECTIONS = ("users", "devices", "sessions", "files", "audit_logs")
+COLLECTIONS = (
+    "users", "devices", "sessions", "files", "audit_logs",
+    "licenses", "licenseInvites", "auth_links",
+)
+# Subcollections, counted across every parent as a collection group. Seats live
+# under licenses/{id}/seats, so a top-level count would always read zero.
+GROUPS = ("seats",)
 # Challenges are single-use nonces with a 120s TTL: they legitimately differ
 # between export and restore, so they are counted but never compared.
 VOLATILE = ("challenges",)
@@ -26,7 +32,8 @@ SAMPLE_SIZE = 25
 
 
 def _count(client, name: str) -> int:
-    return client.collection(name).count().get()[0][0].value
+    ref = client.collection_group(name) if name in GROUPS else client.collection(name)
+    return ref.count().get()[0][0].value
 
 
 def _relationship_sample(client) -> list[dict]:
@@ -49,7 +56,7 @@ def emit(project: str) -> dict:
     client = firestore.Client(project=project)
     manifest = {
         "project": project,
-        "counts": {name: _count(client, name) for name in COLLECTIONS},
+        "counts": {name: _count(client, name) for name in COLLECTIONS + GROUPS},
         "volatileCounts": {name: _count(client, name) for name in VOLATILE},
         "sample": _relationship_sample(client),
     }

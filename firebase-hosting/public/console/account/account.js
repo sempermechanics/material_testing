@@ -7,7 +7,6 @@
  */
 import {
   requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when,
-  hasSecondFactor, beginTotpEnrolment, ERR_CANCELLED,
 } from "../auth.js";
 
 const $ = (id) => document.getElementById(id);
@@ -15,53 +14,25 @@ const $ = (id) => document.getElementById(id);
 let licence = {};        // the `license` block of /v1/me
 let sessions = [];       // every page loaded so far
 let nextToken = "";
-let enrolment = null;
 
-requireSignIn((user) => {
+requireSignIn(() => {
   $("signedOut").hidden = true;
-  renderFactorState(user);
+  showFactorPill();
   loadAccount();
   loadSessions({ reset: true });
 });
 
 /* ------------------------------------------------------ second factor */
 
-function renderFactorState(user) {
-  const enrolled = hasSecondFactor(user);
+// Page code only runs once `requireSignIn` has enrolled a second factor
+// and confirmed it for this session (`ensureDashboardMfa`), so the factor is
+// always on here; the pill just says so.
+function showFactorPill() {
   const pill = $("mfaPill");
   pill.hidden = false;
-  pill.textContent = enrolled ? "2FA on" : "2FA off";
-  pill.className = `pill ${enrolled ? "ok" : "warn"}`;
-  $("enrolCard").hidden = enrolled;
+  pill.textContent = "2FA on";
+  pill.className = "pill ok";
 }
-
-$("enrolStart").addEventListener("click", async () => {
-  try {
-    setStatus("Re-authenticating…");
-    enrolment = await beginTotpEnrolment();
-    $("enrolSecret").textContent = enrolment.secret;
-    $("enrolAccount").textContent = $("who").textContent || "your Semper account";
-    $("enrolStep").hidden = false;
-    setStatus("");
-  } catch (e) {
-    if (e.message === ERR_CANCELLED) return setStatus("");
-    setStatus(`Could not start enrolment: ${e.code || e.message}`, true);
-  }
-});
-
-$("enrolFinish").addEventListener("click", async () => {
-  if (!enrolment) return;
-  const code = $("enrolCode").value.trim();
-  if (!code) return;
-  try {
-    setStatus("Confirming…");
-    await enrolment.finish(code);
-    renderFactorState();
-    setStatus("Two-factor authentication is on.");
-  } catch (e) {
-    setStatus(`That code was not accepted: ${e.code || e.message}`, true);
-  }
-});
 
 /* ------------------------------------------------------------ licence */
 

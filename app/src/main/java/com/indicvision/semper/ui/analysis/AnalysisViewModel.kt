@@ -15,7 +15,9 @@
 
 package com.indicvision.semper.ui.analysis
 import android.content.Context
+import android.os.Bundle
 import android.os.Trace
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.R
@@ -23,6 +25,8 @@ import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.BeamEdgeTaps
 import com.indicvision.semper.data.CloudSync
+import com.indicvision.semper.data.LoadCsvParse
+import com.indicvision.semper.data.MachineLoadCsv
 import com.indicvision.semper.data.MachineLoadMapper
 import com.indicvision.semper.data.MachineLoadTable
 import com.indicvision.semper.data.MechanicalTestInputs
@@ -34,10 +38,12 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
+import com.indicvision.semper.data.WizardDraft
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.StressStrain
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -65,7 +71,7 @@ import kotlin.coroutines.coroutineContext
  * results, and enqueues cloud sync via DicUploadWorker.
  */
 @Suppress("TooManyFunctions") // both run modes plus their session bookkeeping
-class AnalysisViewModel : ViewModel() {
+class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()) : ViewModel() {
 
     companion object {
         /** @see AnalysisRunCodes.ERROR_CANCELLED */
@@ -73,9 +79,6 @@ class AnalysisViewModel : ViewModel() {
 
         /** @see AnalysisRunCodes.ERROR_SESSION_LIMIT */
         const val ERROR_SESSION_LIMIT = AnalysisRunCodes.ERROR_SESSION_LIMIT
-
-        /** Index of the height in an `[x, y, w, h]` ROI array. */
-        private const val ROI_H = 3
 
         /** Below this, the correlation has effectively lost the speckle. */
         const val MIN_CONVERGENCE_PERCENT = 50f
@@ -86,6 +89,9 @@ class AnalysisViewModel : ViewModel() {
          * runs that would have recovered.
          */
         const val LOW_CONVERGENCE_STRIKES = 2
+
+        /** [refName] before a reference is picked. */
+        const val NO_REFERENCE_NAME = "No image selected"
     }
 
     internal val sessions = SessionRepository()
@@ -93,8 +99,19 @@ class AnalysisViewModel : ViewModel() {
     // NATIVE THREAD PINNING: All JNI/OpenMP calls are routed through the global
     // SemperNativeLib.nativeDispatcher to ensure thread affinity.
 
+    /** Mirrored into the [WizardDraft] as it changes (ADR-005). */
     var refBytes: ByteArray? = null
+        set(value) {
+            field = value
+            stage { it.writeReference(value) }
+        }
+
+    /** Mirrored into the [WizardDraft] as it changes (ADR-005). */
     var roiMaskBytes: ByteArray? = null
+        set(value) {
+            field = value
+            stage { it.writeMask(value) }
+        }
     var defFilePaths: List<String> = emptyList()
 
     /** Original picked filenames, index-aligned with [defFilePaths]. */
@@ -138,7 +155,7 @@ class AnalysisViewModel : ViewModel() {
 
     var realRefWidth: Int = 0
     var realRefHeight: Int = 0
-    var refName: String = "No image selected"
+    var refName: String = NO_REFERENCE_NAME
 
     // ── Mechanical test
     // Chosen on Home before the media picker, so the wizard knows on open
@@ -197,11 +214,19 @@ class AnalysisViewModel : ViewModel() {
         }
     }
 
+    /** An imported load log. Its [text] goes to the draft so a process death can parse it again. */
+    fun setLoadLog(csv: ParsedLoadCsv, name: String, text: String) {
+        parsedLoadCsv = csv
+        loadCsvName = name
+        stage { it.writeLoadLog(text) }
+    }
+
     fun clearMachineLoads() {
         parsedLoadCsv = null
         loadCsvName = ""
         loadLogStartS = 0f
         machineLoads = null
+        stage { it.writeLoadLog(null) }
     }
 
     /**
@@ -249,8 +274,6 @@ class AnalysisViewModel : ViewModel() {
     var roiW: Int = 0
     var roiH: Int = 0
 
-    var lastStep: Int = 5
-
     /**
      * The result of the last (or in-progress) run, as ONE immutable snapshot.
      *
@@ -264,24 +287,35 @@ class AnalysisViewModel : ViewModel() {
      * `update { copy(...) }`. (First increment of the P2-15 state consolidation —
      * the Main-thread-only wizard-input fields are intentionally left as plain
      * vars for now.)
+     *
+     * @property spec what the run was computed from (ADR-004); null before the first run
+     * @property settings what the saved session records, once it is saved. For a
+     *   sweep that is its first solved combination, not the plan's first.
      */
     @Suppress("ArrayInDataClass") // engineStats identity-compared; never used as a map key
     data class RunResult(
         val batchDirPath: String? = null,
         val refPath: String? = null,
         val defPath: String? = null,
-        val completed: Boolean = false,
         val stopCode: Int = 0,
         val plannedFrames: Int = 0,
-        val sessionId: String? = null,
         val engineStats: FloatArray? = null,
-    )
+        val spec: RunSpec? = null,
+        val settings: SessionRecordSettings? = null,
+    ) {
+        /** The settings the viewer shows: the saved session's, else the spec's (a sweep that solved nothing). */
+        fun viewerSettings(): SessionRecordSettings? = settings ?: spec?.recordSettings()
+    }
 
     private val _runResult = MutableStateFlow(RunResult())
     val runResult: StateFlow<RunResult> = _runResult.asStateFlow()
 
-    internal fun resetRunResult(batchDirPath: String) {
-        _runResult.value = RunResult(batchDirPath = batchDirPath)
+    internal fun resetRunResult(batchDirPath: String, spec: RunSpec) {
+        _runResult.value = RunResult(batchDirPath = batchDirPath, spec = spec)
+    }
+
+    internal fun recordRunSettings(settings: SessionRecordSettings) {
+        _runResult.update { it.copy(settings = settings) }
     }
 
     // Buffered (not conflated): a StateFlow would drop intermediate per-frame /
@@ -307,7 +341,8 @@ class AnalysisViewModel : ViewModel() {
      * does not cancel a minutes-long native solve. Progress is published on
      * [progress]; completion (or failure) on [batchOutcome].
      */
-    fun launchBatchAnalysis(appContext: Context, params: BatchAnalysisParams) {
+    fun launchBatchAnalysis(appContext: Context, spec: RunSpec, cacheDir: File, processingStartTime: Long) {
+        val params = spec.batchParams(cacheDir, processingStartTime)
         if (batchJob?.isActive == true) return
         batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
             _progress.tryEmit(null)
@@ -321,7 +356,7 @@ class AnalysisViewModel : ViewModel() {
                 ),
             )
             try {
-                val outcome = runBatchAnalysis(appContext, params) { update ->
+                val outcome = runBatchAnalysis(appContext, spec, params) { update ->
                     if (isActive) _progress.tryEmit(update)
                 }
                 _batchOutcome.emit(Result.success(outcome))
@@ -353,10 +388,6 @@ class AnalysisViewModel : ViewModel() {
         get() = _runResult.value.defPath
         set(v) = _runResult.update { it.copy(defPath = v) }
 
-    var hasCompletedAnalysis: Boolean
-        get() = _runResult.value.completed
-        set(v) = _runResult.update { it.copy(completed = v) }
-
     /** Why the last run stopped early (0 = ran to completion), and its planned size. */
     var lastStopCode: Int
         get() = _runResult.value.stopCode
@@ -365,10 +396,6 @@ class AnalysisViewModel : ViewModel() {
     var lastPlannedFrames: Int
         get() = _runResult.value.plannedFrames
         set(v) = _runResult.update { it.copy(plannedFrames = v) }
-
-    var currentSessionId: String?
-        get() = _runResult.value.sessionId
-        set(v) = _runResult.update { it.copy(sessionId = v) }
 
     var engineStatsArray: FloatArray?
         get() = _runResult.value.engineStats
@@ -427,7 +454,7 @@ class AnalysisViewModel : ViewModel() {
      */
     var subsetOverlap: Double = VsgStudy.overlapForDenominator(VsgStudy.DEFAULT_STEP_DENOM)
 
-    /** True when the line cut runs along x; false for a cut along y. */
+    /** True when the line cut runs along x; false for a cut along y. Editing state; a run reads its [RunSpec]. */
     var lineCutHorizontal: Boolean = true
 
     /**
@@ -441,19 +468,6 @@ class AnalysisViewModel : ViewModel() {
 
     /** Combinations the engine could not solve in the last sweep. */
     var sweepSkippedNodes: List<SkippedNode> = emptyList()
-
-    /**
-     * @param labels one human-readable name per combination, index-aligned with
-     *   [plan]; they become the frame names in the viewer and the report
-     */
-    data class SweepRequest(
-        val plan: List<VsgStudy.Point>,
-        val labels: List<String>,
-        val roi: IntArray,
-        val use6x6: Boolean,
-        /** Engine debug-export target; null in release, where the export is off. */
-        val debugDir: File?,
-    )
 
     private val _sweepProgress = MutableSharedFlow<VsgStudyRunner.Progress?>(
         extraBufferCapacity = 1,
@@ -475,12 +489,13 @@ class AnalysisViewModel : ViewModel() {
      * session behind. Progress arrives on [sweepProgress], the result on
      * [sweepOutcome].
      */
-    fun launchVsgSweep(appContext: Context, request: SweepRequest) {
+    fun launchVsgSweep(appContext: Context, spec: RunSpec) {
+        require(spec.sweep != null) { "not a sweep" }
         if (sweepJob?.isActive == true) return
         sweepJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
             _sweepProgress.tryEmit(null)
             try {
-                val outcome = runVsgSweep(appContext, request) { update ->
+                val outcome = runVsgSweep(appContext, spec) { update ->
                     if (isActive) _sweepProgress.tryEmit(update)
                 }
                 _sweepOutcome.emit(Result.success(outcome))
@@ -502,32 +517,30 @@ class AnalysisViewModel : ViewModel() {
      */
     suspend fun runVsgSweep(
         appContext: Context,
-        request: SweepRequest,
+        spec: RunSpec,
         onProgress: (VsgStudyRunner.Progress) -> Unit,
     ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
         traceSection("Semper.analysis.sweep") {
-            runVsgSweepBody(appContext, request, onProgress)
+            runVsgSweepBody(appContext, spec, onProgress)
         }
     }
 
     private fun runVsgSweepBody(
         appContext: Context,
-        request: SweepRequest,
+        spec: RunSpec,
         onProgress: (VsgStudyRunner.Progress) -> Unit,
     ): BatchAnalysisOutcome {
+        val sweep = checkNotNull(spec.sweep) { "not a sweep" }
+        val plan = sweep.plan
         SemperAnalytics.event(
             appContext,
             SemperAnalytics.ANALYSIS_STARTED,
             mapOf(
                 "mode" to "sweep",
-                "frames" to SemperAnalytics.frameCountBucket(request.plan.size),
+                "frames" to SemperAnalytics.frameCountBucket(plan.size),
                 "testType" to testType.wireName,
             ),
         )
-        val plan = request.plan
-        val roi = request.roi
-        val use6x6 = request.use6x6
-        val debugDir = request.debugDir
         val bytes = refBytes ?: error("Reference missing")
         val startedAt = System.currentTimeMillis()
 
@@ -544,23 +557,24 @@ class AnalysisViewModel : ViewModel() {
         val localSessionId = resolveLocalSessionId()
         val batchDir = SessionStore.dirFor(appContext, localSessionId)
         batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
-        lastBatchDirPath = batchDir.absolutePath
+        // A clean snapshot, as the batch path takes: a sweep used to inherit the
+        // previous run's stop code, reference and planned-frame count.
+        resetRunResult(batchDir.absolutePath, spec)
 
-        val frameIndex = resolvedVsgFrameIndex()
         val result = VsgStudyRunner.run(
             bytes,
             realRefWidth,
             realRefHeight,
             VsgStudyRunner.Params(
                 plan = plan,
-                defFramePath = defFilePaths[frameIndex],
-                roiX = roi[0],
-                roiY = roi[1],
-                roiW = roi[2],
-                roiH = roi[ROI_H],
-                maskData = roiMaskBytes ?: ByteArray(0),
-                use6x6 = use6x6,
-                debugDir = debugDir,
+                defFramePath = defFilePaths[sweep.frameIndex],
+                roiX = spec.roiX,
+                roiY = spec.roiY,
+                roiW = spec.roiW,
+                roiH = spec.roiH,
+                maskData = spec.mask,
+                use6x6 = spec.use6x6,
+                debugDir = spec.debugDir,
                 outputDir = batchDir,
             ),
             onProgress,
@@ -571,6 +585,8 @@ class AnalysisViewModel : ViewModel() {
             SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
         }
         engineStatsArray = result.firstMetrics
+        lastStopCode = result.engineErrorCode
+        lastPlannedFrames = result.runs.size + result.skipped.size
         val executionTimeMs = (System.currentTimeMillis() - startedAt).toInt()
 
         if (result.runs.isEmpty()) {
@@ -592,7 +608,7 @@ class AnalysisViewModel : ViewModel() {
             )
         }
 
-        persistSweepSession(appContext, localSessionId, batchDir, bytes, result, request, executionTimeMs)
+        persistSweepSession(appContext, localSessionId, batchDir, bytes, result, spec, executionTimeMs)
 
         SemperAnalytics.event(
             appContext,
@@ -638,16 +654,14 @@ class AnalysisViewModel : ViewModel() {
         batchDir: File,
         refBytes: ByteArray,
         result: VsgStudyRunner.Result,
-        request: SweepRequest,
+        spec: RunSpec,
         executionTimeMs: Int,
     ) {
-        val roi = request.roi
-        currentSessionId = newPendingSessionId()
+        val sweep = checkNotNull(spec.sweep)
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
         lastRefPath = refPngPath
-        lastStep = result.runs.first().point.step
 
-        val frameIndex = resolvedVsgFrameIndex()
+        val frameIndex = sweep.frameIndex
         val rawName = sessions.persistRawDeformed(batchDir, frameIndex, defFilePaths, defOriginalNames)
         if (rawName.isNotBlank()) {
             val moved = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).resolve(rawName)
@@ -662,7 +676,7 @@ class AnalysisViewModel : ViewModel() {
             defOriginalNames.getOrNull(frameIndex) ?: File(defFilePaths[frameIndex]).name
         }.baseName()
         val skipped = result.skipped
-        val summary = sweepSummary(appContext, localSessionId, result, request, defDisplay)
+        val summary = sweepSummary(appContext, localSessionId, result, sweep, defDisplay)
         val record = sessions.buildSessionRecord(
             appContext = appContext,
             localSessionId = localSessionId,
@@ -671,16 +685,9 @@ class AnalysisViewModel : ViewModel() {
             refName = refName,
             realRefWidth = realRefWidth,
             realRefHeight = realRefHeight,
-            settings = SessionRecordSettings(
-                subset = first.subset,
-                step = first.step,
-                strainWin = first.vsg,
-                roiX = roi[0],
-                roiY = roi[1],
-                roiW = roi[2],
-                roiH = roi[ROI_H],
-                use6x6 = request.use6x6,
-            ),
+            settings = spec.recordSettings()
+                .copy(subset = first.subset, step = first.step, strainWin = first.vsg)
+                .also { recordRunSettings(it) },
             cloudEnabled = cloudEnabled,
             pointsConverged = result.runs.first().pointsSolved,
             avgIterations = result.firstMetrics?.getOrNull(EngineStats.SLOT_AVG_ITERS) ?: 0f,
@@ -688,7 +695,7 @@ class AnalysisViewModel : ViewModel() {
             frameCount = result.runs.size,
             defNames = result.runs.map { rawName },
             engineStatsArray = engineStatsArray,
-            mechanical = mechanicalInputs(forSweep = true),
+            mechanical = spec.mechanical,
         ).copy(
             name = summary.name,
             // What makes a reopened session a sweep again: without these the
@@ -697,11 +704,11 @@ class AnalysisViewModel : ViewModel() {
             sweepSteps = result.runs.map { it.point.step },
             sweepStrainWindows = result.runs.map { it.point.vsg },
             sweepLabels = summary.solvedLabels,
-            lineCutHorizontal = lineCutHorizontal,
+            lineCutHorizontal = sweep.lineCutHorizontal,
             sweepSkippedNodes = skipped.mapIndexed { index, point ->
                 SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
             },
-            stopCode = result.engineErrorCode.also { lastStopCode = it },
+            stopCode = result.engineErrorCode,
             plannedFrameCount = result.runs.size + skipped.size,
             headline = summary.headline,
         )
@@ -719,12 +726,12 @@ class AnalysisViewModel : ViewModel() {
         appContext: Context,
         localSessionId: String,
         result: VsgStudyRunner.Result,
-        request: SweepRequest,
+        sweep: RunSpec.Sweep,
         defDisplay: String,
     ): SweepSummary {
         // Labels are plan-aligned; map each solved run back to its plan slot so
         // a skip mid-sweep does not shift later names onto the wrong frame.
-        val labelByPoint = request.plan.zip(request.labels).toMap()
+        val labelByPoint = sweep.plan.zip(sweep.labels).toMap()
         val solvedLabels = result.runs.map { labelByPoint[it.point].orEmpty() }
         val totalPlanned = result.runs.size + result.skipped.size
         val existing = SessionStore.get(appContext, localSessionId)
@@ -759,7 +766,6 @@ class AnalysisViewModel : ViewModel() {
         lastBatchDirPath = null
         lastRefPath = null
         lastDefPath = null
-        hasCompletedAnalysis = false
         workingLocalId = null
     }
 
@@ -782,9 +788,9 @@ class AnalysisViewModel : ViewModel() {
     internal fun sessionLimitOutcome(appContext: Context, plannedFrames: Int): BatchAnalysisOutcome? {
         if (!wouldCreateNewSession()) return null
         TokenStore.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
-        // An unknown cloud quota does not block: analysis is on-device and costs
-        // the backend nothing. Only a *known and full* quota is a hard stop; the
-        // upload is separately gated in CloudSync until config is known.
+        // Before the config is fetched a demo account is held to the demo cap
+        // (LicenseEntitlements.analysisCap); a licensed one has no local cap.
+        // The upload is gated separately in CloudSync until config is known.
         if (!TokenStore.isSessionLimitReached(appContext)) return null
         Timber.w("Hard stop: analysis blocked at session limit")
         return BatchAnalysisOutcome(
@@ -798,26 +804,6 @@ class AnalysisViewModel : ViewModel() {
 
     internal fun resolveLocalSessionId(): String =
         workingLocalId ?: UUID.randomUUID().toString().take(12).also { workingLocalId = it }
-
-    /**
-     * The deformed frame a sweep is solved against: [vsgFrameIndex] when it
-     * points at a real frame, otherwise the middle of the sequence
-     * (0-based index n/2).
-     */
-    private fun resolvedVsgFrameIndex(): Int {
-        val n = defFilePaths.size
-        if (n <= 0) return -1
-        val last = n - 1
-        return if (vsgFrameIndex < 0 || vsgFrameIndex > last) {
-            (n / 2).coerceIn(0, last)
-        } else {
-            vsgFrameIndex
-        }
-    }
-
-    /** Placeholder cloud id a session carries until the upload worker assigns the real one. */
-    internal fun newPendingSessionId(): String =
-        "Pending_Cloud_Sync_" + UUID.randomUUID().toString().take(8)
 
     /** The "MMM d, HH:mm:ss" stamp used in default session names / sweep labels. */
     private fun timestamp(millis: Long): String =
@@ -886,13 +872,119 @@ class AnalysisViewModel : ViewModel() {
      */
     suspend fun runBatchAnalysis(
         appContext: Context,
+        spec: RunSpec,
         params: BatchAnalysisParams,
         onProgress: (BatchProgressUpdate) -> Unit,
     ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
         val jobContext = coroutineContext
         traceSection("Semper.analysis.batch") {
-            runBatchAnalysisBody(appContext, params, onProgress, jobContext)
+            runBatchAnalysisBody(appContext, spec, params, onProgress, jobContext)
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Process death (ADR-005): the scalars in [saved], the rest in [draft]
+    // ------------------------------------------------------------------
+
+    enum class DraftRestore { NONE, RESTORED, LOST }
+
+    /** Where the heavy inputs are mirrored; null until [attachDraft] (and in JVM tests). */
+    private var draft: WizardDraft? = null
+
+    /** One writer at a time, so an older reference can never land after a newer one. */
+    private val draftIo = Dispatchers.IO.limitedParallelism(1)
+
+    /** False while [restoreDraft] puts back what the draft already holds. */
+    private var mirrorToDraft = true
+
+    /** The Bundle a process death left, until [restoreDraft] reads the draft behind it. */
+    private var pendingRestore: Bundle? = null
+
+    private fun stage(write: (WizardDraft) -> Unit) {
+        val target = draft?.takeIf { mirrorToDraft } ?: return
+        viewModelScope.launch(draftIo) { write(target) }
+    }
+
+    /**
+     * Starts mirroring the inputs into [target]. A wizard that is not being
+     * restored empties it first: whatever is there belongs to one that is gone.
+     */
+    fun attachDraft(target: WizardDraft) {
+        if (draft != null) return
+        draft = target
+        if (pendingRestore == null) stage(WizardDraft::clear)
+    }
+
+    /**
+     * Finishes what [init] began after a process death: reads the reference,
+     * mask and frame list back from the draft. [DraftRestore.LOST] when any of
+     * them is gone; the inputs are then reset to an empty step 1.
+     */
+    suspend fun restoreDraft(): DraftRestore {
+        val state = pendingRestore
+        val source = draft
+        if (state == null || source == null) return DraftRestore.NONE
+        pendingRestore = null
+        val inputs = withContext(draftIo) { WizardState.readInputs(state, source) }
+        return if (inputs == null) {
+            Timber.w("Wizard draft incomplete after a process death; starting over")
+            clearInputs()
+            stage(WizardDraft::clear)
+            DraftRestore.LOST
+        } else {
+            mirrorToDraft = false
+            refBytes = inputs.reference
+            roiMaskBytes = inputs.mask
+            mirrorToDraft = true
+            WizardState.applyFrames(this, inputs.frames)
+            parsedLoadCsv = inputs.loadLog?.let { (MachineLoadCsv.parse(it) as? LoadCsvParse.Ok)?.csv }
+            refreshMachineLoads()
+            DraftRestore.RESTORED
+        }
+    }
+
+    /** The wizard was left for good: nothing will restore from the draft. */
+    fun discardDraft() {
+        draft?.discard()
+    }
+
+    /** Back to an empty wizard. Sweep ranges and the line-cut choice stay. */
+    private fun clearInputs() {
+        refBytes = null
+        roiMaskBytes = null
+        WizardState.applyFrames(this, WizardState.Frames())
+        frameSizeError = null
+        defFromVideo = false
+        realRefWidth = 0
+        realRefHeight = 0
+        refName = NO_REFERENCE_NAME
+        hasCustomRoi = false
+        roiX = 0
+        roiY = 0
+        roiW = 0
+        roiH = 0
+        wizardStep = 1
+        settingsReviewed = false
+        subsetRecommendation = null
+        subsetRecommendationKey = null
+        subsetUserModified = false
+        workingLocalId = null
+        clearMachineLoads()
+        crossSectionMm2 = 0f
+        geometry = SpecimenGeometry.NONE
+    }
+
+    /** What the system saves as the Activity stops: the scalars, once the frame list is on disk. */
+    internal fun saveWizardState(): Bundle {
+        draft?.writeFrames(WizardState.encodeFrames(WizardState.frames(this)))
+        return WizardState.save(this)
+    }
+
+    init {
+        // Last in the class, so the restored values land after every
+        // property initializer above has run, not before.
+        pendingRestore = saved.get<Bundle>(WizardState.KEY)?.also { WizardState.restoreScalars(this, it) }
+        saved.setSavedStateProvider(WizardState.KEY) { saveWizardState() }
     }
 }
 

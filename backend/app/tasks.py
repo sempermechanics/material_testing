@@ -17,11 +17,24 @@ import logging
 from fastapi import Header, HTTPException
 
 from . import errors
+from . import observability as obs
 from .config import settings
 
 log = logging.getLogger("indic.tasks")
 
 PROVISION_PATH = "/v1/tasks/provision-session"
+
+_client = None
+
+
+def _tasks_client():
+    """One client per process: building it opens a gRPC channel (~100 ms)."""
+    global _client
+    if _client is None:
+        from google.cloud import tasks_v2
+
+        _client = tasks_v2.CloudTasksClient()
+    return _client
 
 
 def enqueue_provision(sid: str) -> bool:
@@ -36,7 +49,7 @@ def enqueue_provision(sid: str) -> bool:
     try:
         from google.cloud import tasks_v2
 
-        client = tasks_v2.CloudTasksClient()
+        client = _tasks_client()
         parent = client.queue_path(
             settings.GCP_PROJECT, settings.TASKS_LOCATION, settings.TASKS_QUEUE,
         )
@@ -65,7 +78,14 @@ def enqueue_provision(sid: str) -> bool:
         if type(e).__name__ == "AlreadyExists":
             log.info("provision task for %s already queued", sid)
             return True
-        log.warning("Cloud Tasks enqueue failed for %s (%s) — provisioning inline", sid, e)
+        # ERROR, not a warning: the upload still works (inline), but every large
+        # manifest is now provisioned on the request path. A missing IAM grant
+        # sat here unnoticed for weeks as a WARNING. The exception type goes in
+        # the event; its message stays in the plain log line below.
+        obs.log_event(log, logging.ERROR, "provision_enqueue_failed", outcome="error",
+                      errorCode="tasks_enqueue_failed", dependency="cloud_tasks",
+                      errorType=type(e).__name__)
+        log.error("Cloud Tasks enqueue failed for %s (%s) — provisioning inline", sid, e)
         return False
 
 

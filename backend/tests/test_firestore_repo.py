@@ -5,17 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-import fake_firestore
 
 from app import firestore_repo as repo
 from app.models import FileComplete
-
-
-@pytest.fixture
-def store(monkeypatch):
-    # Keep outbound mail out of the unit tests regardless of env.
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
-    return fake_firestore.install(monkeypatch)
 
 
 def _claims(sub="u1", email="a@b.com", verified=True, provider="google.com"):

@@ -45,8 +45,11 @@ class Settings:
     # reference + report + metadata ≈ 460, so 600 gives headroom);
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
     DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
-    # Deployed services still set PRO_MAX_SESSIONS_PER_USER; it is read as the
-    # default so the rename does not require a coordinated env change.
+    # PRO_MAX_SESSIONS_PER_USER is the pre-rename name, still read as the
+    # default so the rename did not need a coordinated env change.
+    # deploy-backend.yml pins LICENSED_MAX_SESSIONS_PER_USER and warns while the
+    # old name is still set on the service; delete this fallback once no
+    # service carries it (TD-45).
     LICENSED_MAX_SESSIONS_PER_USER = _env_int(
         "LICENSED_MAX_SESSIONS_PER_USER",
         os.environ.get("PRO_MAX_SESSIONS_PER_USER", "999"),
@@ -92,13 +95,18 @@ class Settings:
         "DAT_CODEC_ENCODING_ENABLED", "false",
     ).strip().lower() == "true"
 
-    # Comma-separated emails that are treated as admins (role=admin, always
-    # approved) — they can call the /v1/admin/* endpoints. e.g.
-    # "support@indicvision.com,damodar@indicvision.com".
+    # Emails treated as admins (role=admin, always approved) — they can call
+    # the /v1/admin/* endpoints. e.g.
+    # "support@indicvision.com damodar@indicvision.com".
+    # Separated by whitespace, `;` or `,`. Prefer spaces, for the reason
+    # CONSOLE_ORIGINS gives below: the deploy action's env_vars block splits
+    # pairs on commas, so a comma-separated list of operators arrives
+    # truncated to the first address — and the operator desk is exactly where
+    # losing the second name is least visible until someone is locked out.
     ADMIN_EMAILS = {
-        e.strip().lower()
-        for e in os.environ.get("ADMIN_EMAILS", "").split(",")
-        if e.strip()
+        e.lower()
+        for e in re.split(r"[\s,;]+", os.environ.get("ADMIN_EMAILS", ""))
+        if e
     }
 
     # --- browser dashboards ---------------------------------------------------
@@ -243,6 +251,17 @@ class Settings:
     TASKS_INVOKER_SA = os.environ.get("TASKS_INVOKER_SA", "") or SERVICE_ACCOUNT_EMAIL
     # Bounded fan-out when the worker opens resumable sessions.
     TASKS_PROVISION_WORKERS = _env_int("TASKS_PROVISION_WORKERS", "8")
+    # Manifests this small are provisioned inside the request even when a queue
+    # exists. A bundle upload is three files (~1 s of Drive calls once the
+    # folders are cached); queueing it instead costs a task hop plus the
+    # client's first 1 s poll, so it was slower, not faster. 0 = always queue.
+    INLINE_PROVISION_MAX_FILES = _env_int("INLINE_PROVISION_MAX_FILES", "8")
+
+    # A signed call may carry a client-minted nonce `t1.<unix seconds>.<random>`
+    # instead of one from POST /v1/challenge, saving a round-trip per call. It
+    # is accepted within this many seconds of server time either way; outside
+    # it the client falls back to a challenge. 0 disables client nonces.
+    CLIENT_NONCE_WINDOW_SECONDS = _env_int("CLIENT_NONCE_WINDOW_SECONDS", "120")
 
     @property
     def tasks_enabled(self) -> bool:

@@ -11,6 +11,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.annotation.MainThread
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
@@ -38,6 +39,7 @@ import timber.log.Timber
  * Declining (button or back) signs the user out: the account cannot be used
  * under terms that were not accepted.
  */
+@MainThread
 class TermsActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }

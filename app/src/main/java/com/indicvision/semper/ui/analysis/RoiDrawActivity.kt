@@ -17,6 +17,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
@@ -25,6 +26,7 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.launch
 import java.io.File
@@ -34,6 +36,7 @@ import kotlin.math.roundToInt
  * Full-screen region-of-interest editor: draw or type a rectangular crop over
  * the reference image; optional erase punches exclude regions from the mask.
  */
+@MainThread
 class RoiDrawActivity : AppCompatActivity() {
 
     private lateinit var imgRoiCanvas: ImageView
@@ -350,7 +353,7 @@ class RoiDrawActivity : AppCompatActivity() {
             maskBytes = overlayRoi.generateMaskBytes()
         }
 
-        val maskFile = File(cacheDir, "roi_mask_cache.bin")
+        val maskFile = File(cacheDir, CacheJanitor.ROI_MASK_CACHE)
         java.io.FileOutputStream(maskFile).use { it.write(maskBytes) }
 
         val resultIntent = Intent()

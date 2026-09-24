@@ -13,6 +13,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
@@ -25,6 +26,7 @@ import com.indicvision.semper.data.isTrustedAuthLink
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -37,6 +39,7 @@ import timber.log.Timber
  * Whichever is used, the backend then verifies the Firebase ID token and applies
  * the APPROVED allow-list; routing depends on the resulting access status.
  */
+@MainThread
 class AuthActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }
@@ -425,7 +428,7 @@ class AuthActivity : AppCompatActivity() {
      * accepted, so a rejected password is never stored.
      */
     private suspend fun offerToSavePassword(email: String, password: String) {
-        runCatching {
+        suspendRunCatching {
             CredentialManager.create(this)
                 .createCredential(this, CreatePasswordRequest(email, password))
         }.onFailure { Timber.d(it, "Password not saved (declined or unsupported)") }

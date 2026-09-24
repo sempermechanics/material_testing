@@ -121,11 +121,11 @@ purely a verifier.
 
 Verification proves *who* someone is. Whether they may use the system is a
 separate decision made in `get_or_create_user`
-([firestore_repo.py](../../backend/app/firestore_repo.py)):
+([repo/users.py](../../backend/app/repo/users.py)):
 
 | Env var | Effect |
 |---|---|
-| `ADMIN_EMAILS` | Comma-separated. A **verified** email in this list gets `role=admin` and is always approved |
+| `ADMIN_EMAILS` | Addresses separated by whitespace, `;` or `,` — **prefer spaces**, because the deploy workflow's `env_vars` block splits pairs on commas and would ship only the first address. A **verified** email in this list gets `role=admin` and is always approved |
 | `AUTO_APPROVE_HD` | A **verified** email at this domain is created `APPROVED` |
 | `AUTO_APPROVE` | `1` = every new user is created `APPROVED`. Pilot convenience; turn off for production |
 
@@ -202,6 +202,37 @@ The client half fails open — see
 [ARCHITECTURE.md](../app/ARCHITECTURE.md#the-two-interceptors-on-the-shared-client).
 Go to `enforce` only once `monitor` shows the missing-token rate at zero.
 
+**Project setup (partly done).** The app attests against the Auth project
+(`indicvision-dic-app-auth`, number `171818100029`). Until 2026-09-23 that
+project had neither `firebaseappcheck.googleapis.com` nor
+`playintegrity.googleapis.com` enabled: every token exchange answered `403 …
+Firebase App Check API has not been used in project 171818100029`, so no build
+has ever sent a token. Before `monitor` means anything:
+
+1. ~~Enable both APIs on the Auth project.~~ Done 2026-09-23.
+2. ~~Firebase Console → App Check → register the Android app with the **Play
+   Integrity** provider.~~ Done 2026-09-23; Firebase Auth stays
+   `UNENFORCED` there (enforcing it would fail sign-in on every build without
+   a token).
+3. **Blocked on the Play developer account**, which does not exist yet. Once
+   it does: Play Console → App integrity → link the same Cloud project, and
+   add the Play **app signing** certificate's SHA-256 to the Firebase Android
+   app — Play re-signs the release, so the upload key's SHA-256 is not the one
+   Play Integrity reports. Until then Play Integrity cannot vouch for any
+   build, sideloaded or not.
+
+Meanwhile the exchange answers `403 App attestation failed` (seen 2026-09-24
+from a sideloaded debug build on a Pixel 6), and the SDK then backs off with
+`Too many attempts`; the app logs both at debug level and sends the request
+without a token.
+
+A sideloaded debug build still gets no token after that (Play Integrity does
+not recognise it); a debug-provider token registered in the console is the way
+to exercise the path from one. The app installs its provider on every build
+with a backend except while the emulator sign-in bypass is active
+(`wantsAppCheck` in `SemperApp.kt`) — before 2026-09-23 it keyed on the
+`DEV_AUTH_BYPASS` build flag, which skipped debug builds on real phones too.
+
 ## 3a. Terms acceptance (clickwrap) and the improvement consent
 
 Signing in proves identity; it does not bind anyone to the Terms. The app
@@ -234,7 +265,7 @@ on the next successful `/v1/me`.
 ## 4. App config — local.properties
 
 ```properties
-INDIC_API_BASE_URL=https://indic-api-xxxx.a.run.app
+INDIC_API_BASE_URL=https://semper-gw-xxxx.an.gateway.dev
 ```
 
 That is the only key the app needs, exposed as

@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.ReportBuilder
 import kotlinx.coroutines.CancellationException
@@ -70,7 +71,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
                 imgW = host.imgW,
                 imgH = host.imgH,
                 stepAt = { index -> host.sweepSteps?.getOrNull(index) ?: host.baseStep },
-                outputDir = File(host.cacheDir, "share").apply { mkdirs() },
+                outputDir = CacheJanitor.shareDir(host.cacheDir),
                 backgroundColor = ContextCompat.getColor(host, R.color.viewer_canvas),
                 fitBounds = host.summaryFitBounds(),
             ),

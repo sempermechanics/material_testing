@@ -54,3 +54,57 @@ def test_metrics_counts():
     }
     assert obs.metrics_counts({"frameCount": True}, file_count=1) == {"fileCount": 1}
     assert obs.metrics_counts(None, file_count=3) == {"fileCount": 3}
+
+
+def _declared_routes():
+    import app.main as main  # noqa: F401 — registers the route templates
+
+    from app.routers import (
+        account, admin, devices, files, health, institutions, licenses,
+        provision_tasks, sessions,
+    )
+
+    for mod in (health, account, devices, licenses, sessions, files,
+                provision_tasks, admin, institutions):
+        for route in mod.router.routes:
+            for method in route.methods - {"HEAD"}:
+                yield method, route.path_format
+
+
+def test_static_segments_are_not_ids():
+    """TD-44: `activate` is eight characters; it used to log as `{id}`."""
+    list(_declared_routes())
+    assert obs.classify_route("POST", "/v1/licenses/activate") == (
+        "license",
+        "/v1/licenses/activate",
+    )
+    assert obs.classify_route("POST", "/v1/licenses/checkout")[0] == "license"
+    assert obs.classify_route("GET", "/v1/institutions/licenses") == (
+        "institution",
+        "/v1/institutions/licenses",
+    )
+    assert obs.classify_route(
+        "PATCH", "/v1/institutions/licenses/SEMP-ABCD/seats/uid123456789",
+    ) == ("institution", "/v1/institutions/licenses/{id}/seats/{id}")
+    assert obs.classify_route("POST", "/v1/admin/licenses/SEMP-ABCD/revoke") == (
+        "admin",
+        "/v1/admin/licenses/{id}/revoke",
+    )
+    assert obs.classify_route("PUT", "/v1/me/consents")[0] == "account"
+    assert obs.classify_route("POST", "/v1/me/terms")[0] == "account"
+
+
+def test_every_declared_route_has_a_class():
+    """A new route must be given an opClass, not left to `other`."""
+    routes = list(_declared_routes())
+    assert routes
+    unclassified = [
+        (method, fmt) for method, fmt in routes
+        if obs.classify_route(method, fmt.replace("{", "x").replace("}", "x"))[0] == "other"
+    ]
+    assert unclassified == []
+
+
+def test_undeclared_path_falls_back_to_id_collapse():
+    list(_declared_routes())
+    assert obs.classify_route("GET", "/nope/abcdef0123456789") == ("other", "/nope/{id}")

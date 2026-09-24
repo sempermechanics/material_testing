@@ -89,7 +89,6 @@ class AnalysisViewModelTest {
         vm.lastBatchDirPath = "/tmp/batch"
         vm.lastRefPath = "/tmp/ref.png"
         vm.lastDefPath = "/tmp/def.png"
-        vm.hasCompletedAnalysis = true
         vm.workingLocalId = "abc123"
 
         vm.clearPreviousResults()
@@ -97,7 +96,6 @@ class AnalysisViewModelTest {
         assertNull(vm.lastBatchDirPath)
         assertNull(vm.lastRefPath)
         assertNull(vm.lastDefPath)
-        assertFalse(vm.hasCompletedAnalysis)
         assertNull(vm.workingLocalId)
     }
 
@@ -121,31 +119,27 @@ class AnalysisViewModelTest {
         vm.lastBatchDirPath = "/tmp/batch"
         vm.lastRefPath = "/tmp/ref.png"
         vm.lastDefPath = "/tmp/def.png"
-        vm.hasCompletedAnalysis = true
         vm.lastStopCode = 7
         vm.lastPlannedFrames = 12
-        vm.currentSessionId = "sess-1"
 
         val snapshot = vm.runResult.value
         assertEquals("/tmp/batch", snapshot.batchDirPath)
         assertEquals("/tmp/ref.png", snapshot.refPath)
         assertEquals("/tmp/def.png", snapshot.defPath)
-        assertTrue(snapshot.completed)
         assertEquals(7, snapshot.stopCode)
         assertEquals(12, snapshot.plannedFrames)
-        assertEquals("sess-1", snapshot.sessionId)
     }
 
     @Test
     fun `each setter leaves the other RunResult fields untouched`() {
         vm.lastPlannedFrames = 12
-        vm.currentSessionId = "sess-1"
+        vm.lastRefPath = "/tmp/ref.png"
 
         // A later, unrelated write must not clobber the earlier ones.
         vm.lastStopCode = 3
 
         assertEquals(12, vm.lastPlannedFrames)
-        assertEquals("sess-1", vm.currentSessionId)
+        assertEquals("/tmp/ref.png", vm.lastRefPath)
         assertEquals(3, vm.lastStopCode)
     }
 
@@ -153,8 +147,8 @@ class AnalysisViewModelTest {
     fun `a fresh run result starts empty`() {
         val snapshot = vm.runResult.value
         assertNull(snapshot.batchDirPath)
-        assertNull(snapshot.sessionId)
-        assertFalse(snapshot.completed)
+        assertNull(snapshot.spec)
+        assertNull(snapshot.settings)
         assertEquals(0, snapshot.stopCode)
         assertEquals(0, snapshot.plannedFrames)
     }

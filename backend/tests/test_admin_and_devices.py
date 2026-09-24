@@ -2,7 +2,6 @@
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-import fake_firestore
 import pytest
 
 from app import audit, firestore_repo as repo
@@ -18,9 +17,7 @@ def _ec_pem() -> str:
 
 
 @pytest.fixture
-def store(monkeypatch):
-    store = fake_firestore.install(monkeypatch)
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+def store(store, monkeypatch):
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     return store
 

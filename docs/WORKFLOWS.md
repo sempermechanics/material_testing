@@ -61,6 +61,7 @@ of these is [app/WORKFLOWS.md](app/WORKFLOWS.md).
 
 ```
 SplashActivity ─ session restore ─┬─ no session ─────────→ A1 Login
+                                  ├─ cached APPROVED ────→ A3 Home, re-checked in the background
                                   ├─ PENDING ────────────→ A2 Pending approval
                                   ├─ APPROVED / offline ─→ A3 Home
                                   └─ [debug] dev bypass ─→ A3 Home, cloud off
@@ -69,10 +70,10 @@ SplashActivity ─ session restore ─┬─ no session ────────
 | Field | Value |
 |---|---|
 | Entry | `ui/auth/SplashActivity` |
-| Chain | `data/AuthRepository` → `data/net/IndicApi.me` → `ui/auth/AccessRouter` (+ `data/AccessStatus`), `data/DevAuth` for the emulator bypass |
+| Chain | `data/AuthRepository` → `data/net/IndicApi.me` (with `getConfig` in parallel) → `ui/auth/AccessRouter` (+ `data/AccessStatus`), `data/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
 | Writes | `data/net/TokenStore` cached uid / email / status / role |
 | Fails as | Routing error passed on as `DicKeys.ROUTING_ERROR`, shown by A1 as a red pill |
-| Tests | `auth/AccessRouterTest` |
+| Tests | `auth/AccessRouterTest`, `auth/StatusRecheckTest` |
 
 The quota check is **not** here — it runs in `HomeActivity.onCreate` (A3), which
 is why a capped account still lands on Home first.
@@ -267,7 +268,7 @@ CloudSync.enqueueUpload → DicUploadWorker.doWork
 | Field | Value |
 |---|---|
 | Triggered by | `SessionRepository.saveSession` after a run, the Home badge retry, Settings **Back up now**, and turning **Save to cloud** on |
-| Decisions | `data/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip` |
+| Decisions | `data/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip`, incomplete staging (`classifyIncompleteStaging`: retry while the reference/`.dat` inputs exist, the row was saved < 15 min ago, or they have been missing < 10 min by the `<sessionDir>/upload_inputs_missing_since` marker; else terminal `inputs_missing`) |
 | Writes | `<sessionDir>/upload_staging/`, sync state + `cloudSessionId` on the index row; `StorageBudget.enforce` runs at the end |
 | Fails as | Terminal: `DicKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + badge dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
 | Signals | `data/TransferNotifications` foreground notification; `DicKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
@@ -299,8 +300,8 @@ failed download deletes the empty destination rather than leaving a 0-byte file.
 
 `ui/home/SessionSelectionController` or `SettingsActivity` → 5-second undo →
 `data/BackupDeleteWorker` → `CloudSync.eraseCloudBackup` / `eraseEverywhere` →
-`IndicApi.deleteSession` (C11). `CloudRestore.invalidateRestorableCache` runs
-after, so the list stops offering what no longer exists.
+`IndicApi.deleteSession` (C11). Settings re-lists with `CloudRestore.listCompleted`,
+which is uncached, so the list stops offering what no longer exists.
 
 ### B5 Reclaim local space
 
@@ -409,7 +410,7 @@ because Drive has no anonymous signed read.
 
 Handlers stay plain `def` (Firestore and Drive calls are blocking, so Starlette
 runs them in its threadpool). Every route is in `backend/app/routers/`; shared
-pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access),
+pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade over `repo/`),
 `drive.py` (all Drive access), `errors.py` (the `detail` codes),
 `validation.py`, `rate_limit.py`, `audit.py`, `observability.py`.
 

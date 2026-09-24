@@ -16,6 +16,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.AnyThread
+import androidx.annotation.MainThread
+import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
@@ -28,6 +31,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.indicvision.semper.BuildConfig
+import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.BackupDeleteWorker
@@ -60,6 +64,7 @@ import java.util.concurrent.TimeUnit
  * export/erasure and analysis defaults. A page rather than a sheet — Home
  * refreshes in `onResume`, so anything changed here is reflected on return.
  */
+@MainThread
 class SettingsActivity : AppCompatActivity() {
 
     /**
@@ -447,6 +452,8 @@ class SettingsActivity : AppCompatActivity() {
         analysesAdapter.setDownloadingKeys(downloadingKeys.toSet())
     }
 
+    /** Writes the index, so [restoreBackup] calls it on the IO dispatcher. */
+    @WorkerThread
     @Suppress("ReturnCount")
     private fun enqueueRestoreWithStub(
         entry: AnalysisEntry,
@@ -472,6 +479,7 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    @AnyThread
     private fun restoreStub(
         entry: AnalysisEntry,
         cloud: CloudSessionDto,
@@ -527,7 +535,6 @@ class SettingsActivity : AppCompatActivity() {
                     val cloudId = info.tags.firstOrNull { it.startsWith("restore-") }
                         ?.removePrefix("restore-")
                         ?: info.outputData.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
-                        ?: info.progress.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
                     val key = cloudId.orEmpty()
                     when (info.state) {
                         WorkInfo.State.RUNNING -> {
@@ -551,7 +558,7 @@ class SettingsActivity : AppCompatActivity() {
                             if (key.isNotBlank()) transferBanner.remove(key)
                             if (shownRestoreOutcomes.add(info.id)) {
                                 syncDownloadingKeys()
-                                val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
+                                val reason = info.outputData.getString(DicKeys.DOWNLOAD_ERROR)
                                     ?: getString(R.string.restore_failed_generic)
                                 CrispToast.show(
                                     this@SettingsActivity,
@@ -625,7 +632,7 @@ class SettingsActivity : AppCompatActivity() {
                                     this,
                                     LicenseErrors.downloadMessage(
                                         this,
-                                        info.outputData.getString(DicBundleDownloadWorker.KEY_ERROR),
+                                        info.outputData.getString(DicKeys.DOWNLOAD_ERROR),
                                     ),
                                     Toast.LENGTH_LONG,
                                 ).show()

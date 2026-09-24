@@ -1,7 +1,7 @@
 import logging
 import time
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 
 from .. import firestore_repo as repo
 from .. import drive, errors
@@ -33,8 +33,7 @@ def _client_key(request: Request) -> str:
 def healthz(request: Request):
     # Liveness only: process is up. Do not probe dependencies here — a slow
     # Firestore/Drive outage must not restart healthy instances.
-    if not rate_limit.health_bucket.allow(_client_key(request)):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.health_bucket, _client_key(request))
     return {"ok": True}
 
 
@@ -45,8 +44,7 @@ def readyz(request: Request):
     Returns stable 503 detail codes (`firestore_unreachable`, `drive_unhealthy`,
     …) so load balancers and smoke checks can act without parsing messages.
     """
-    if not rate_limit.health_bucket.allow(_client_key(request)):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.health_bucket, _client_key(request))
     started = time.perf_counter()
     try:
         repo.ping()

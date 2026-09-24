@@ -116,8 +116,7 @@ class AnalysisLoadCard(
             reading = false
             when (outcome) {
                 is ReadOutcome.Parsed -> {
-                    viewModel.parsedLoadCsv = outcome.parse.csv
-                    viewModel.loadCsvName = outcome.name
+                    viewModel.setLoadLog(outcome.parse.csv, outcome.name, outcome.text)
                     viewModel.refreshMachineLoads()
                 }
                 is ReadOutcome.Failed -> showError(outcome.message)
@@ -167,7 +166,7 @@ class AnalysisLoadCard(
     }
 
     private sealed interface ReadOutcome {
-        data class Parsed(val parse: LoadCsvParse.Ok, val name: String) : ReadOutcome
+        data class Parsed(val parse: LoadCsvParse.Ok, val name: String, val text: String) : ReadOutcome
         data class Failed(val message: String) : ReadOutcome
     }
 
@@ -187,7 +186,7 @@ class AnalysisLoadCard(
             return ReadOutcome.Failed(activity.getString(R.string.load_err_read))
         }
         return when (val parse = MachineLoadCsv.parse(text)) {
-            is LoadCsvParse.Ok -> ReadOutcome.Parsed(parse, name)
+            is LoadCsvParse.Ok -> ReadOutcome.Parsed(parse, name, text)
             is LoadCsvParse.Failed -> ReadOutcome.Failed(errorText(parse.error))
         }
     }

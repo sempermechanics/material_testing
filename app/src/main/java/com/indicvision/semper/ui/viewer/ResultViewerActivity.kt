@@ -36,6 +36,7 @@ import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
@@ -69,6 +70,7 @@ import java.io.File
  * image, with frame scrubbing, tap-to-probe readings, custom color scales,
  * and all exports (PDF/CSV/PNG/ZIP via [ShareCenter]).
  */
+@MainThread
 class ResultViewerActivity : AppCompatActivity() {
 
     private val viewerVm: ResultViewerViewModel by viewModels()
@@ -146,14 +148,13 @@ class ResultViewerActivity : AppCompatActivity() {
     internal var roiW = 0
     internal var roiH = 0
 
-    // Mechanical-test facts ride the intent unchanged (ViewerArgs writes them
-    // for every session, empty for a plain DIC one) and are read on demand.
-    internal val testType: String get() = intent.getStringExtra(DicKeys.TEST_TYPE).orEmpty()
-    internal val crossSectionMm2: Float get() = intent.getFloatExtra(DicKeys.CROSS_SECTION_MM2, 0f)
-    internal val loadAxisX: Boolean get() = intent.getBooleanExtra(DicKeys.LOAD_AXIS_X, true)
-    internal val loadsN: FloatArray by lazy { intent.getFloatArrayExtra(DicKeys.LOADS_N) ?: FloatArray(0) }
-    internal val geometry: SpecimenGeometry
-        get() = SpecimenGeometry.fromArray(intent.getFloatArrayExtra(DicKeys.SPECIMEN_GEOMETRY))
+    // Mechanical-test facts come through ViewerArgs (written for every
+    // session, empty for a plain DIC one; filled from the record if absent).
+    internal val testType: String get() = args.testType
+    internal val crossSectionMm2: Float get() = args.crossSectionMm2
+    internal val loadAxisX: Boolean get() = args.loadAxisX
+    internal val loadsN: FloatArray by lazy { args.loadsN.toFloatArray() }
+    internal val geometry: SpecimenGeometry get() = args.geometry
 
     /** How this session's loads become stress; axial for a plain DIC session. */
     internal val stressModel: StressStrain.Model
@@ -305,30 +306,30 @@ class ResultViewerActivity : AppCompatActivity() {
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
-            currentFrameIndex = intent.getIntExtra(DicKeys.START_FRAME, 0)
+            currentFrameIndex = args.startFrame ?: 0
             // Otherwise the summary is what the viewer opens on — it answers
             // "what happened across the test" before any single frame does.
             // Sweeps never use the summary slot (combinations are not a time series).
-            showingSummary = !intent.hasExtra(DicKeys.START_FRAME)
+            showingSummary = args.startFrame == null
         }
 
-        imgW = intent.getIntExtra(DicKeys.IMG_W, 0)
-        imgH = intent.getIntExtra(DicKeys.IMG_H, 0)
-        baseStep = intent.getIntExtra(DicKeys.STEP, 5)
+        imgW = args.imgW
+        imgH = args.imgH
+        baseStep = args.step
         step = baseStep
-        sweepSubsets = intent.getIntArrayExtra(DicKeys.SWEEP_SUBSETS)
-        sweepSteps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS)
-        sweepStrainWins = intent.getIntArrayExtra(DicKeys.SWEEP_STRAIN_WINS)
-        lineCutHorizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
+        sweepSubsets = args.sweep?.subsets?.toIntArray()
+        sweepSteps = args.sweep?.steps?.toIntArray()
+        sweepStrainWins = args.sweep?.strainWindows?.toIntArray()
+        lineCutHorizontal = args.sweep?.lineCutHorizontal ?: true
         // Sweep extras are available now; drop any restored summary flag.
         if (isSweep) showingSummary = false
 
-        roiX = intent.getIntExtra(DicKeys.ROI_X, 0)
-        roiY = intent.getIntExtra(DicKeys.ROI_Y, 0)
-        roiW = intent.getIntExtra(DicKeys.ROI_W, imgW)
-        roiH = intent.getIntExtra(DicKeys.ROI_H, imgH)
+        roiX = args.roiX
+        roiY = args.roiY
+        roiW = args.roiW
+        roiH = args.roiH
 
-        val refPath = intent.getStringExtra(DicKeys.REF_PATH)
+        val refPath = args.refPath.ifBlank { null }
         if ((imgW <= 0 || imgH <= 0) && refPath != null) {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(refPath, bounds)
@@ -345,18 +346,17 @@ class ResultViewerActivity : AppCompatActivity() {
             decodeReferenceForDisplay(refPath)
         }
 
-        currentDefPath = intent.getStringExtra(DicKeys.DEF_PATH)
+        currentDefPath = args.defPath
 
-        val batchDirPath = intent.getStringExtra(DicKeys.BATCH_DIR_PATH)
-        originalDefNames = intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES) ?: emptyList()
-        refImagePath = intent.getStringExtra(DicKeys.REF_PATH)
+        val batchDirPath = args.batchDirPath
+        originalDefNames = args.frameNames
+        refImagePath = refPath
         // Prefer the raw deformed originals persisted in the session dir (survive
         // reopen/eviction); fall back to the just-analysed session's temp paths.
         val rawDeformedDir = batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
         defImagePaths = rawDeformedDir?.takeIf { it.isDirectory }
             ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
-            ?: intent.getStringArrayListExtra(DicKeys.DEF_FILE_PATHS)
-            ?: emptyList()
+            ?: args.defFilePaths
 
         if (batchDirPath != null) {
             val dir = File(batchDirPath)
@@ -611,7 +611,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // Sweeps already carry a stable caption (image + solved count) — don't
         // overwrite it with the last field's peak reading.
         if (isSweep) return
-        intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)?.let { localId ->
+        args.sessionLocalId?.let { localId ->
             val data = rawData ?: return@let
             val stats = DicResult.fieldStats(data, currentDataIndex) ?: return@let
             val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) "m\u03b5" else "px"
@@ -1052,6 +1052,13 @@ class ResultViewerActivity : AppCompatActivity() {
             ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
     }
 
+    /**
+     * This viewer's arguments, parsed once (ADR-003). The record fallback reads
+     * the session index only for an Intent missing a key, which no current
+     * writer produces.
+     */
+    internal val args: ViewerArgs by lazy { ViewerArgs.from(intent) { sessionRecord } }
+
     internal fun buildShareSnapshot(): ShareCenter.Snapshot? {
         val data = rawData ?: return null
         // Snapshot can open with ref path alone while display decode is still in flight.
@@ -1077,10 +1084,10 @@ class ResultViewerActivity : AppCompatActivity() {
             summary = if (isSweep) null else summaryHelper.animation,
             summaryBounds = { index -> if (isSweep) null else summaryHelper.boundsFor(index) },
             buildReportAt = { index, frameData -> buildReportData(index, frameData) },
-            referenceName = intent.getStringExtra(DicKeys.REF_NAME).orEmpty(),
-            strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG",
-            subset = intent.getIntExtra(DicKeys.SUBSET_SIZE, 41),
-            strainWindow = intent.getIntExtra(DicKeys.STRAIN_WINDOW, 15),
+            referenceName = args.refName,
+            strainMethod = args.strainMethod,
+            subset = args.subsetSize,
+            strainWindow = args.strainWindow,
             roiX = roiX,
             roiY = roiY,
             roiW = roiW,

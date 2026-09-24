@@ -126,7 +126,6 @@ class BatchRunController(
                 tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
                 viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
                 viewModel.lastBatchDirPath = outcome.batchDirPath
-                viewModel.hasCompletedAnalysis = true
                 checkReady()
                 openResultViewer()
             }

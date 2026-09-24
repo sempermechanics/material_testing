@@ -169,7 +169,7 @@ published (verify current values at gcp-quota-review time — these change):
 Cloud Run ~2M requests/mo + ~1 GiB egress/mo (NA egress only), Firestore 50K reads /
 20K writes / 20K deletes per day + 1 GiB stored, Drive 15 GB/account.
 
-**⚠️ Confirmed via `gcloud run services list`: production (`indic-api`) runs in
+**⚠️ Confirmed via `gcloud run services list`: production (`indic-api` at the time; renamed `semper-api` in #146, 2026-09-23) runs in
 `asia-south1`.** GCP's always-free Cloud Run egress tier is **North America only** — so
 the "~1 GiB/mo free egress" figure above **does not apply to this deployment at all**.
 Every byte this section counts against that free allowance is actually **billed
@@ -429,7 +429,7 @@ untracked sidecar is invisible to it by design, not evidence it's missing.
   structure (`backend/app/routers/`, `firestore_repo.py`), not live-measured —
   order-of-magnitude, not exact.
 - The restore measurement reflects the **currently deployed production backend**
-  (`indic-api`, last deployed 2026-08-12), which predates every change from this
+  (`indic-api`, last deployed 2026-08-12; the service is `semper-api` since #146), which predates every change from this
   report's Phase 1/1.4 work — none of it is live yet. The numbers here are a genuine
   "before" baseline, not a mix of old and new behavior.
 - This workload's synthetic imagery (640×640 LARGE / 320×320 LIGHT, dense seeded

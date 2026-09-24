@@ -378,6 +378,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_too_large">This analysis is too large to back up.</string>
     <string name="cloud_backup_failed_oom">Not enough memory on this device to prepare the backup. Try again after closing other apps, or use a device with more RAM.</string>
     <string name="cloud_backup_failed_provision">Cloud backup setup could not be completed. Tap Try again.</string>
+    <string name="cloud_backup_failed_missing_files">This analysis\'s results are no longer on this device, so it can\'t be backed up.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_backup_title">Delete from backup</string>
     <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
@@ -398,6 +399,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_api_off">Cloud backup is not configured on this build.</string>
     <string name="restore_failed_fmt">Restore failed. %1$s</string>
     <string name="restore_failed_generic">This backup couldn\'t be restored.</string>
+    <string name="restore_backup_gone">This backup\'s files are no longer in cloud storage. Back the analysis up again from a phone that still has it.</string>
     <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the device to bind, then try restore again — or move the licence from the Semper account page first.</string>
     <string name="restore_not_licensed">Restore isn\'t available in demo mode.</string>
     <string name="download_not_licensed">Downloading from the cloud isn\'t available in demo mode.</string>
@@ -1106,4 +1108,5 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Extract 1 frame</item>
         <item quantity="other">Extract %1$d frames</item>
     </plurals>
+    <string name="wizard_draft_lost">Your images were cleared while Semper was in the background. Please add them again.</string>
 </resources>

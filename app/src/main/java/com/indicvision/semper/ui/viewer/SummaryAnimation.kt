@@ -9,6 +9,7 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.GifEncoder
 import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import timber.log.Timber
@@ -105,7 +106,7 @@ class SummaryAnimation(private val spec: Spec) {
 
         // Encode to a sibling first: a cancelled or failed build must never leave
         // a truncated file behind that the next call would treat as cached.
-        val partial = File(out.parentFile, out.name + ".part")
+        val partial = AtomicFiles.partOf(out)
 
         try {
             partial.outputStream().buffered().use { stream ->

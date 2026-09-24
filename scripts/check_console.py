@@ -34,6 +34,7 @@ after reporting all of them.
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -98,7 +99,7 @@ def check_scripts() -> None:
                 # all, so the check would pass on anything.
                 proc = subprocess.run(
                     [node, "--input-type=module", "--check"],
-                    input=read(module), capture_output=True, text=True,
+                    input=read(module), capture_output=True, text=True, encoding="utf-8",
                 )
                 if proc.returncode != 0:
                     detail = proc.stderr.strip().splitlines()
@@ -154,12 +155,16 @@ def check_placeholders(policies: dict[str, str]) -> None:
 
     path = os.path.join(HOSTING, "firebase.json")
     for source, policy in policies.items():
-        for token in ("__API_ORIGIN__", "https://__AUTH_DOMAIN__"):
-            if token not in policy:
-                fail(path, f"the {source} CSP no longer carries {token} — "
-                           "either it was substituted and not restored, or the "
-                           "policy stopped naming it and the consoles can no "
-                           "longer reach that origin")
+        if "__API_ORIGIN__" not in policy:
+            fail(path, f"the {source} CSP no longer carries __API_ORIGIN__ — "
+                       "either it was substituted and not restored, or the "
+                       "policy stopped naming it and the consoles can no "
+                       "longer reach the API")
+        if "frame-src 'self'" not in policy:
+            fail(path, f"the {source} CSP's frame-src is not 'self' — auth.js "
+                       "sets authDomain to the page's own host, so the SDK's "
+                       "auth iframe is same-origin and sign-in cannot complete "
+                       "without it")
 
 
 # ---------------- 5 & 6: hosting rewrites and the two console CSPs --------
@@ -193,6 +198,27 @@ def check_hosting() -> dict[str, str]:
                    "a Hosting header matches the request path, so the aliases "
                    "would be served a different policy than the pages they "
                    "rewrite to")
+
+    # The console pages resolve their stylesheet, module script and onward
+    # links through <base href="/console/…">, so the same page works at its
+    # rewritten address (/login, /account). A CSP `base-uri 'none'` makes the
+    # browser drop that element — the page then loads no CSS and no script,
+    # and "Sign in" does nothing. First production deploy shipped exactly
+    # that. `'self'` keeps the injected-off-site-base defence.
+    if console is not None:
+        directive = re.search(r"base-uri\s+([^;]+)", console)
+        allowed = directive.group(1).split() if directive else []
+        pages_with_base = [
+            os.path.relpath(page, HOSTING)
+            for page in glob.glob(os.path.join(PUBLIC, "console", "**", "*.html"), recursive=True)
+            if "<base " in read(page)
+        ]
+        if pages_with_base and "'self'" not in allowed:
+            fail(path, "the console CSP's base-uri is "
+                       f"{' '.join(allowed) or 'unset'!r}, but these pages rely "
+                       f"on <base>: {', '.join(pages_with_base)} — the browser "
+                       "blocks the element, every relative asset 404s and the "
+                       "sign-in button is dead")
 
     return {
         source: value

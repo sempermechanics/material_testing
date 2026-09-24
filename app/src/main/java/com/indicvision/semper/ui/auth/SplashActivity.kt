@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.BuildConfig
@@ -23,6 +24,7 @@ import timber.log.Timber
  * [com.indicvision.semper.ui.home.HomeActivity] (approved user), [PendingApprovalActivity]
  * (account awaiting admin approval), or [AuthActivity] (signed out).
  */
+@MainThread
 class SplashActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }
@@ -57,16 +59,11 @@ class SplashActivity : AppCompatActivity() {
     private suspend fun performRoutingCheck() {
         try {
             // Dev shortcuts: emulator bypass, or no backend configured at all.
-            if (routeDevShortcut()) return
+            // Then the two answers that need no server round-trip.
+            if (routeDevShortcut() || routeWithoutWaiting()) return
 
-            // 1. Is there a saved backend session on this device?
-            if (!authRepo.hasSession()) {
-                navigateTo(AuthActivity::class.java)
-                return
-            }
-
-            // 2. Ask the backend for the current authorization status (with an
-            //    offline bypass when previously approved).
+            // 3. Otherwise ask the backend for the current authorization status
+            //    (with an offline bypass when previously approved).
             authRepo.refreshStatus().fold(
                 onSuccess = { status ->
                     val target = AccessRouter.afterRefresh(status)
@@ -109,6 +106,27 @@ class SplashActivity : AppCompatActivity() {
      *     set on a real device, always run real auth so device testing
      *     exercises the full sign-in + upload path.
      */
+    /**
+     * Routes that need no server answer; true when one was taken.
+     *
+     *  1. No saved backend session on this device: sign in.
+     *  2. Approved and bound last time: open Home now and confirm in the
+     *     background. Waiting on /v1/me here was the whole launch delay (a
+     *     cold start made it ~6 s); a changed answer re-routes when it arrives.
+     */
+    private fun routeWithoutWaiting(): Boolean = when {
+        !authRepo.hasSession() -> {
+            navigateTo(AuthActivity::class.java)
+            true
+        }
+        authRepo.canOpenFromCache() -> {
+            StatusRecheck.launch(applicationContext, authRepo)
+            navigateTo(HomeActivity::class.java)
+            true
+        }
+        else -> false
+    }
+
     private fun routeDevShortcut(): Boolean {
         if (DevAuth.active) {
             DevAuth.install(this)

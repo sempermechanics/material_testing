@@ -6,8 +6,13 @@ each Cloud Run instance — it does not coordinate across replicas.
 """
 from __future__ import annotations
 
+import math
 import threading
 import time
+
+from fastapi import HTTPException
+
+from . import errors
 
 
 class TokenBucket:
@@ -49,6 +54,39 @@ class TokenBucket:
                 return False
             self._tokens[key] = tokens - 1.0
             return True
+
+    def retry_after(self, key: str) -> int:
+        """Whole seconds until `key` holds a token again, at least 1.
+
+        Sent as `Retry-After` on a 429 so the client waits long enough for its
+        one retry to land: the app's interceptor honours the header (capped at
+        8 s) and otherwise backs off 0.5 s then 1 s, which never outlasts a
+        bucket that refills once every 5 s.
+        """
+        now = time.monotonic()
+        with self._lock:
+            last = self._updated.get(key, now)
+            stored = self._tokens.get(key, self._burst)
+        tokens = min(self._burst, stored + (now - last) * self._rate)
+        if tokens >= 1.0 or self._rate <= 0:
+            return 1
+        return max(1, math.ceil((1.0 - tokens) / self._rate))
+
+
+def enforce(bucket: TokenBucket, key: str) -> None:
+    """Spend one of `key`'s tokens in `bucket`, else raise 429 with Retry-After.
+
+    For a check inside a handler — unsigned routes, where no nonce can be
+    spent before it runs. A device-signed route declares
+    `deps.rate_limited(bucket)` instead, which runs this ahead of
+    `verified_device`. Either way the 429 names when the bucket next has a
+    token, which the app's retry interceptor honours.
+    """
+    if not bucket.allow(key):
+        raise HTTPException(
+            429, errors.RATE_LIMITED,
+            headers={"Retry-After": str(bucket.retry_after(key))},
+        )
 
 
 # Challenge minting is cheap but abusable for nonce spam.

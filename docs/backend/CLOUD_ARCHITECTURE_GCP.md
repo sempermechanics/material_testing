@@ -61,48 +61,70 @@ change (see §19).
 ## 1. Production architecture diagram
 
 ```
-                         ┌───────────────────────────────────────────┐
-                         │             Android device                 │
-                         │  Android Views UI (XML + findViewById)     │
-                         │  ├─ Firebase Auth (Firebase ID token)      │
-                         │  ├─ Android Keystore (device private key)  │
-                         │  ├─ WorkManager CoroutineWorker            │
-                         │  └─ OkHttp streaming (chunked resumable)   │
-                         │  ── DIC / OpenCV / PDF: 100% on-device ──  │
-                         └───────────────┬───────────────────────────┘
-                                         │ HTTPS (ID token + device signature)
-                                         ▼
-              ┌────────────────────── Google Cloud project ──────────────────────┐
-              │                                                                   │
-              │   ┌──────────────┐   verify ID token (firebase-admin: certs,     │
-              │   │  Cloud Run   │◀── aud, iss, exp) + verify device signature   │
-              │   │  FastAPI     │                                               │
-              │   │  (scale→0)   │──▶ Firestore (users, devices, sessions,       │
-              │   │  runs as SA  │        files, audit_logs)                     │
-              │   │ indic-api@…  │                                               │
-              │   └──────┬───────┘                                               │
-              │          │ IAM Credentials generateAccessToken                   │
-              │          │ (Drive scope, keyless self-impersonation)             │
-              │          ▼                                                       │
-              │   ┌──────────────┐   create folders, init resumable session     │
-              │   │ Drive API    │   (metadata only — NO bytes)                  │
-              │   └──────┬───────┘                                               │
-              │          │ returns resumable session URI                        │
-              │  Cloud Logging / Monitoring / Error Reporting  ◀── structured    │
-              └──────────┼────────────────────────────────────────────logs──────┘
-                         │ session URI handed back to device
-                         ▼
-              ┌───────────────────────────────────────────────┐
-              │  Company Google Workspace — Shared Drive       │
-              │  "Semper-Research-Storage" (5 TB pool)          │
-              │  SA is Manager. Device PUTs bytes here        │
-              │  DIRECTLY (never through Cloud Run).           │
-              └───────────────────────────────────────────────┘
+ ┌─ Android device ────────────────────────┐   ┌─ Browser: the consoles (§20.8) ─────────┐
+ │ Android Views UI (XML + findViewById)   │   │ app.sempermechanics.com = Firebase      │
+ │ ├─ Firebase Auth (Firebase ID token)    │   │ Hosting, auth project; static pages     │
+ │ ├─ Android Keystore (device key)        │   │ /login /account /console/institution    │
+ │ ├─ WorkManager CoroutineWorker          │   │ /console/operator                       │
+ │ └─ OkHttp streaming (chunked resumable) │   │ ├─ Firebase Auth: redirect + TOTP       │
+ │ ── DIC / OpenCV / PDF: 100% on-device   │   │ └─ fetch + Bearer (CORS preflight)      │
+ └────────────────────┬────────────────────┘   └────────────────────┬────────────────────┘
+                      │ ID token + device signature                 │ ID token: 2nd factor done,
+                      │                                             │ recent auth_time; no device
+                      └──────────────────────┬──────────────────────┘
+                                             ▼ HTTPS
+ ┌──────────────────────────────── Google Cloud project ─────────────────────────────────┐
+ │                                                                                       │
+ │  ┌───────────────────┐  validates the Firebase JWT (iss / aud = the auth              │
+ │  │ API Gateway       │  project); refuses any path not declared in                    │
+ │  │ semper-gw (ESPv2) │  gateway/openapi.yaml; allowCors hands the                     │
+ │  │                   │  preflight to Cloud Run; per-consumer quotas                   │
+ │  └─────────┬─────────┘                                                                │
+ │            │ invokes as indic-gw@ (run.invoker; never allUsers)                       │
+ │            ▼                                                                          │
+ │  ┌──────────────┐   re-verifies the ID token (firebase-admin), then the               │
+ │  │  Cloud Run   │   device signature, or from a browser the second                    │
+ │  │  FastAPI     │   factor + sign-in age; CORS for CONSOLE_ORIGINS only               │
+ │  │  (scale→0)   │                                                                     │
+ │  │  runs as SA  │──▶ Firestore (users, devices, licenses + seats,                     │
+ │  │ indic-api@…  │        invites, sessions, files, audit_logs)                        │
+ │  │              │◀── Cloud Tasks: session provisioning, as indic-api@                 │
+ │  └──────┬───────┘                                                                     │
+ │         │ IAM Credentials generateAccessToken                                         │
+ │         │ (Drive scope, keyless self-impersonation)                                   │
+ │         ▼                                                                             │
+ │  ┌──────────────┐   create folders, init resumable session                            │
+ │  │ Drive API    │   (metadata only — NO bytes)                                        │
+ │  └──────┬───────┘                                                                     │
+ │         │ returns resumable session URI                                               │
+ │ Cloud Logging / Monitoring / Error Reporting  ◀── structured logs                     │
+ └─────────┼─────────────────────────────────────────────────────────────────────────────┘
+           │ session URI handed back to the device, which
+           ▼ PUTs bytes to Drive directly
+     ┌─────────────────────────────────────────────┐
+     │ Company Google Workspace — Shared Drive     │
+     │ "Semper-Research-Storage" (5 TB pool)       │
+     │ SA is Manager. Device PUTs bytes here       │
+     │ DIRECTLY (never through Cloud Run).         │
+     └─────────────────────────────────────────────┘
 ```
 
 **Trust boundaries.** (1) Device↔Cloud Run: mutually authenticated (the
-Firebase ID token proves *user*; the Keystore signature proves *device*). (2) Cloud
-Run↔Google APIs: keyless, via the metadata server + IAM Credentials. (3)
+Firebase ID token proves *user*; the Keystore signature proves *device*). (2)
+Browser↔Cloud Run: there is no device key to sign with, so what a state-changing
+browser call must prove instead is a **completed second factor and a recent
+sign-in**, both read from the ID token by Cloud Run (§20.8). CORS decides only
+which origins' pages may *read* a response — bearer tokens, no cookies — so it
+is not an authorisation control and nothing relies on it as one. (3)
+Gateway↔Cloud Run: Cloud Run is not public, and never `allUsers`.
+`run.invoker` is held by the gateway's service account, by the API's own
+(which Cloud Tasks uses to call back for provisioning), by the deployer (the
+candidate `/readyz` smoke calls the revision directly) and by the owner
+account for hand checks. Every other way in from outside passes the
+gateway's JWT check and its declared paths — and each of those four still
+needs a Firebase ID token for any `/v1/*` route, because Cloud Run verifies
+the token itself. (4) Cloud
+Run↔Google APIs: keyless, via the metadata server + IAM Credentials. (5)
 Device↔Drive: capability-scoped — the resumable session URI authorizes writes
 to *exactly one file*, nothing else.
 
@@ -144,7 +166,7 @@ SA's public JWKS) — still keyless. Not needed at pilot scale.
 
 **Access control is a separate decision from authentication.** Verification
 proves identity; it does not grant entry. `get_or_create_user`
-([firestore_repo.py](../../backend/app/firestore_repo.py)) assigns:
+([repo/users.py](../../backend/app/repo/users.py)) assigns:
 
 1. `role = admin` if a **verified** email is in `ADMIN_EMAILS`;
 2. `access_status = APPROVED` if admin, or `AUTO_APPROVE=1`, or a **verified**
@@ -209,7 +231,7 @@ record rather than leaving it `ACTIVE` and unreachable:
 
 | Event | What happens to the device docs |
 |---|---|
-| Admin revokes or suspends a user | **Every** device of that uid moves to `REVOKED` with a `revokedAt`, and `users/{uid}.activeDeviceId` is cleared (`set_user_status` in `firestore_repo.py`) |
+| Admin revokes or suspends a user | **Every** device of that uid moves to `REVOKED` with a `revokedAt`, and `users/{uid}.activeDeviceId` is cleared (`set_user_status` in `backend/app/repo/users.py`) |
 | A new device is registered after that | The previous device moves to `SUPERSEDED` with a `revokedAt`, so history shows *why* it stopped being usable rather than just vanishing |
 
 Admin revoke itself requires a `verified_device` caller — an admin cannot revoke
@@ -223,12 +245,33 @@ message byte-identical for every current call — the client and
 query-bearing route is covered without a flag day. A signed request cannot be
 replayed against its own path with the parameters swapped.
 
-**Latency note.** A per-request challenge round-trip doubles RTT. For hot paths
-you may fold it into a **signed-timestamp assertion** (client signs
-`timestamp||method||path||bodyHash`; server accepts a ±120 s skew window and
-caches used signatures to block replay) — same security property, one fewer
-round-trip. The challenge endpoint remains for registration and sensitive
-admin actions.
+**Client nonces (one round-trip, not two).** A per-request challenge doubles
+the RTT of every signed call, so the app now mints its own nonce:
+`t1.<unix seconds>.<128 random bits, base64url>`. It goes in `X-Nonce` and is
+signed exactly like a challenge — the message format does not change. The
+server (`deps.verified_device`) accepts it when:
+
+1. the seconds are within `CLIENT_NONCE_WINDOW_SECONDS` (120) of its own clock —
+   checked first, with no write, so a stale or far-future nonce costs nothing;
+2. the signature verifies; and only then
+3. `challenges/{nonce}` can be **created** (`claim_client_nonce`). `create()`
+   fails on an existing document, so a nonce is single-use, and the collection's
+   existing TTL on `expireAt` (window + 60 s) cleans it up. Claiming after the
+   signature means an unsigned flood cannot fill the collection.
+
+The seconds are the server's, not the phone's: `ClientNonce.ServerDateObserver`
+learns the offset from the `Date` header of any API response, so a phone set to
+the wrong time still signs valid nonces. Until a `Date` has been seen, and for
+the rest of the process after any refusal, the app uses `POST /v1/challenge` as
+before. A refusal is a 401 `nonce_invalid_or_replayed` raised before the route
+runs, so the app re-sends that one call with a challenge. The two sides deploy
+in either order: an old backend refuses every `t1.` nonce once, and an old app
+never sends one. Any value that is not a `t1.` nonce takes the challenge path,
+and `CLIENT_NONCE_WINDOW_SECONDS=0` switches client nonces off.
+
+Replay protection is the same as a challenge's: one Firestore document per
+nonce, created once. A captured request replays for no longer than a challenge
+does, since both expire in minutes and both are consumed on first use.
 
 ---
 
@@ -274,6 +317,26 @@ Three properties worth knowing before you change this path:
 - **A failed provision is recorded, not silent.** The task marks the session
   `PROVISION_FAILED` with an error code so Cloud Tasks can retry and a polling
   client is told to stop waiting.
+- **A failed enqueue is an error, not a quiet fallback.** It logs
+  `provision_enqueue_failed` at ERROR with `errorCode=tasks_enqueue_failed`
+  and the exception type. Before it was logged, a missing
+  `iam.serviceAccountUser` grant made every session provision inline, 5–7 s
+  per request, with nothing in the error log.
+- **Small manifests skip the queue.** Up to `INLINE_PROVISION_MAX_FILES` (8)
+  files are provisioned inside the request: a bundle backup is three, and the
+  task hop plus the client's first poll cost more than opening three sessions.
+- **The folder walk is cached.** The per-user and `sessions` folder IDs are
+  kept on `users/{uid}` (`driveFolderId`, `driveSessionsFolderId`). A later
+  session checks the cached `sessions` folder still exists (one `files.get`)
+  and creates only its own folder, instead of four sequential list-or-create
+  calls from the root. The check and the create run concurrently, and the
+  session folder is created without a name search (its id was minted by this
+  request), so a warm upload spends one Drive round-trip on folders before the
+  resumable sessions open in parallel. A deleted or trashed folder fails the
+  check: the folder just made under it is deleted and the full walk runs again
+  and re-caches. A Cloud Tasks retry reuses the session's stored
+  `driveFolderId` instead of creating a second one. `session_provisioned`
+  logs `folderMs` (the folder phase) next to `latencyMs` (the whole provision).
 
 `/v1/tasks/provision-session` is authenticated by `tasks.tasks_caller`, not by
 anything in `deps.py`: the caller is Google, so there is no uid, no device and no
@@ -567,16 +630,16 @@ the way it does.
 | FastAPI app, middleware, lifespan | [`backend/app/main.py`](../../backend/app/main.py) | App factory; includes routers below |
 | Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin`, `licenses`, `institutions` |
 | License key format, hashing, `mode`/`kind` vocabulary | [`backend/app/licenses.py`](../../backend/app/licenses.py) | `SEMP-XXXX-XXXX-XXXX-XXXX`; sha256 hash is the Firestore doc id; `normalize_mode` / `normalize_kind` / `legacy_plan` (§20.5) |
-| Floating seats, leases, pool accounting | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
-| Duration, grace, renewal fan-out | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
-| Individual + institution license logic | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
+| Floating seats, leases, pool accounting | [`backend/app/repo/leases.py`](../../backend/app/repo/leases.py), `claim_seat` in [`repo/licensing.py`](../../backend/app/repo/licensing.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
+| Duration, grace, renewal fan-out | [`backend/app/repo/user_config.py`](../../backend/app/repo/user_config.py), [`repo/licensing.py`](../../backend/app/repo/licensing.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
+| Individual + institution license logic | [`backend/app/repo/licensing.py`](../../backend/app/repo/licensing.py), [`repo/seats.py`](../../backend/app/repo/seats.py), [`repo/devlock.py`](../../backend/app/repo/devlock.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
 | Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script. Also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
 | Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
 | Async provisioning | [`backend/app/tasks.py`](../../backend/app/tasks.py) | Cloud Tasks enqueue + OIDC callback auth (§4.1) |
-| Firestore access | [`backend/app/firestore_repo.py`](../../backend/app/firestore_repo.py) | Schema in §5; contention retries; device settlement (§3) |
+| Firestore access | [`backend/app/repo/`](../../backend/app/repo/__init__.py), one module per aggregate behind the [`firestore_repo.py`](../../backend/app/firestore_repo.py) facade ([ADR-001](../adr/ADR-001-firestore-repo-package.md)) | Schema in §5; contention retries (`_run_tx` in `repo/_base.py`); device settlement (§3) |
 | Input validation | [`backend/app/validation.py`](../../backend/app/validation.py) | Page cursors and document ids — see below |
 | Rate limiting | [`backend/app/rate_limit.py`](../../backend/app/rate_limit.py) | Per-uid token buckets (§12) |
 | Structured logging | [`backend/app/observability.py`](../../backend/app/observability.py) | JSON log records with request correlation (§17) |
@@ -602,8 +665,19 @@ without redeploying. Admins set them via
 `PATCH /v1/admin/users/{uid}/config`, and the app reads the resolved numbers
 rather than hardcoding its own.
 
+**`MAX_SESSIONS_PER_USER` is deleted, not merely unread.** It used to be the
+one cap for everyone (default 4). `mode` now selects between
+`DEMO_MAX_ANALYSES` (25) and `LICENSED_MAX_SESSIONS_PER_USER`, so a
+deployment still setting the old variable silently gets 25 for every
+unlicensed account (`backend/app/config.py`). `deploy-backend.yml` pins
+`DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
+`APP_CHECK_MODE` and `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` with expression
+defaults, and its "Describe live env" step warns when the retired variable is
+still on the service. `deploy-cloudrun` merges env rather than replacing it,
+so removal is a manual `--remove-env-vars` after promote.
+
 **Firestore contention is retried, not returned.** Concurrent writes to the same
-session document used to surface as a `500`. `firestore_repo.py` now retries the
+session document used to surface as a `500`. `_run_tx` (`backend/app/repo/_base.py`) now retries the
 contended transaction, so a burst of `:complete` calls for one session settles
 instead of failing the client.
 
@@ -628,6 +702,14 @@ backoff, so an upload survives losing connectivity or the app being killed.
 
 Cloud sync stays off entirely unless `INDIC_API_BASE_URL` is set at build time
 — see [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md) step C1.
+
+**The PENDING stamp lands before the upload is queued.** Both manual backup
+sites (`HomeActivity`, `SettingsActivity`) write
+`SessionRecord.SyncState.PENDING` and only then call
+`CloudSync.enqueueUpload`. They stay in that order rather than turning
+optimistic: an upload that finished first would have its SYNCED stamp
+overwritten by the late PENDING, and the session would read as never backed
+up.
 ---
 
 ## 9. IAM configuration
@@ -676,7 +758,8 @@ allow-list). **No JSON key, no domain-wide delegation required.**
 ## 10. Cloud Run deployment
 
 Container: [`backend/Dockerfile`](../../backend/Dockerfile) (python:3.12-slim,
-uvicorn, 2 workers). The exact deploy command with all flags is step B1 of
+uvicorn, 1 worker — with one vCPU a second worker only doubled cold-start
+imports and memory). The exact deploy command with all flags is step B1 of
 [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md) — it is a runbook step, not
 something to retype from here.
 
@@ -684,11 +767,11 @@ The shape it deploys into, and why:
 
 | Setting | Value | Reason |
 |---|---|---|
-| Min instances | 0 | Scale to zero — $0 when idle |
+| Min instances | 1 in production, 0 in staging | A cold start cost ~6 s, paid by the first sign-in or upload after any idle spell. One warm instance is roughly $10–15/month. Override with the `MIN_INSTANCES` repository variable |
 | Max instances | 10 | Pilot-sized ceiling |
 | CPU / memory | 1 / 512Mi | Upload bytes bypass Cloud Run (device→Drive); restore still proxies Session.zip through `/content` |
 | Timeout | 300 s | Matches the `/v1/files/{id}/content` API Gateway deadline (300 s) so Session.zip restore can finish; other JSON routes keep a 60 s gateway deadline. Session provisioning still runs as a Cloud Task. |
-| Public endpoint | yes | Auth is enforced in the app layer (ID token + device signature), not the network layer |
+| Public endpoint | no | `run.invoker` is held by service accounts only (gateway, Tasks, deployer) plus the owner for manual smokes — never `allUsers`. The API Gateway is the public door; auth is still enforced in the app layer (ID token + device signature) |
 
 No mounted secrets. All identity comes from the attached SA + metadata server.
 HTTPS-only is the default; consider Cloud Armor / a WAF once public.
@@ -737,7 +820,15 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
   Run instance rather than the fleet — the cross-instance layer is API Gateway
   quotas in `openapi.yaml`, with Cloud Armor still to come when the service is
   public. [PRODUCTION_READINESS_GATE.md](../ops/PRODUCTION_READINESS_GATE.md)
-  tracks this as PARTIAL for that reason.
+  tracks this as PARTIAL for that reason. On a device-signed route the bucket is
+  declared as `dependencies=[deps.rate_limited(bucket)]`, which FastAPI resolves
+  before `verified_device`: a 429 spends no nonce, so the app's unchanged retry
+  is accepted rather than refused as a replay. An unsigned route checks its
+  bucket in the handler with `rate_limit.enforce(bucket, key)`, the same call
+  the dependency makes. Every 429 carries `Retry-After` (seconds to the next
+  token), which the app honours up to 8 s.
+  `tests/test_rate_limit_before_nonce.py` fails if a signed route checks its
+  bucket inside the handler again, or if an unsigned 429 has no `Retry-After`.
 - **Attested upload targets:** `/uploads` hands out capability URLs and is gated
   by `device_or_legacy_reader`; production keeps `REQUIRE_ATTESTED_UPLOADS=1`
   (§4).
@@ -762,10 +853,24 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 | Provisioning task fails | task marks `PROVISION_FAILED` | Cloud Tasks retries the task; a polling client sees the status and stops waiting instead of hanging on `PROVISIONING` |
 | Cloud Tasks unavailable / unconfigured | `enqueue_provision` returns `False` | Provision inline in the request — slower, same result (§4.1) |
 | Drive unreachable during a verifying refresh | probe yields `UNKNOWN` | **Purge nothing.** Report an `indeterminate` count and log at WARNING (§4) |
-| Concurrent writes to one session doc | Firestore contention | Retried inside `firestore_repo.py` rather than returned as `500` |
+| Concurrent writes to one session doc | Firestore contention | Retried inside `_run_tx` (`backend/app/repo/_base.py`) rather than returned as `500` |
 
 **Idempotency** is the backbone: deterministic `fileId` / `sessionId` mean every
 mutation is safely retryable.
+
+**429 and 503 promise different things, and the client treats them apart.**
+A 429 comes from the per-instance token bucket (`rate_limit.py`) or the
+gateway quota, both of which refuse *before* the handler runs, so nothing
+happened and a repeat is never a second write. A 503 carries no such promise:
+ESPv2 emits it both before and after handing the request on. The app's
+`RetryOnTransient` interceptor therefore retries 429 on any call and 503 only
+on GET and the two POSTs that are idempotent by contract
+(`/v1/licenses/checkout`, whose repeat *is* the heartbeat, and
+`/v1/licenses/release`). Session create and the upload broker are left out on
+purpose: a duplicate there costs a Drive object. Three attempts, honouring
+`Retry-After`; WorkManager keeps the long game. Client side:
+[ARCHITECTURE.md](../app/ARCHITECTURE.md) "The two interceptors on the shared
+client".
 
 ---
 
@@ -836,10 +941,15 @@ replace the serving revision and hope:
    serving. **First create** must omit `no_traffic` (Cloud Run rejects it on
    create).
 2. Smoke the **tagged candidate URL** at `/readyz`, using an ID token minted with
-   the *service URL* as its audience (production runs
+   the *service URL* as its audience (both environments run
    `--no-allow-unauthenticated`, so an unauthenticated probe would only ever
    prove that the gateway rejects it).
-3. Promote the candidate to 100% traffic only if the smoke passes (update path).
+3. Promote the candidate to 100% traffic only if the smoke passes (update path):
+   `update-traffic --to-latest`, after checking the latest ready revision *is*
+   the candidate, removing every `cand-*` tag in the same call. Traffic then
+   follows the latest revision, so a later `gcloud run services update` serves
+   without a manual traffic move; the next deploy's `no_traffic` pins LATEST to
+   the serving revision by name before its candidate appears.
 
 On an update deploy, if the smoke fails there is nothing to roll back — the
 candidate never carried traffic. Rollback is only relevant if a later step fails
@@ -865,13 +975,20 @@ Signing.
 - **Liveness** `GET /healthz` — process up; no dependency probes (safe for
   restart loops).
 - **Readiness** `GET /readyz` — bounded Firestore + Drive probes; stable 503
-  detail codes (`firestore_unreachable`, `drive_unhealthy`, …).
+  detail codes (`firestore_unreachable`, `drive_unhealthy`, …). Not published
+  at the API Gateway (each hit costs a Drive call and the 503 names the failing
+  dependency); reachable only on the private run.app URL with an invoker token.
 - **Structured JSON access log** — UTC `timestamp`, `requestId`, `method`,
   `path`, `status`, `latencyMs`, `outcome`, `uid` / `deviceId` when resolved,
   `opClass` / `routeTemplate` for usage rollups, optional `fileCount` /
   `frameCount` on session create, and `errorCode` on failures
   (`backend/app/observability.py` + middleware). Never logs tokens/signatures/URIs.
-  Structured access logs include `opClass` / `routeTemplate` for ops dashboards.
+  `routeTemplate` is the route's **declared** path with every parameter as
+  `{id}` (`/v1/licenses/{id}/revoke`), registered from the routers at startup;
+  only an undeclared path (a 404) falls back to collapsing long segments.
+  `opClass` is one of `health`, `attest`, `login`, `account`, `config`,
+  `admin`, `license`, `institution`, `backup`, `sync`, `restore`, `other`;
+  `tests/test_op_class.py` fails if a declared route lands in `other`.
   Client 500 bodies stay opaque (`internal_error`) on
   Cloud Run.
 - **Audit trail** in Firestore `audit_logs` — the compliance record (Cloud
@@ -1019,6 +1136,17 @@ would silently follow whichever request Firestore ordered second. First writer
 wins, and the other device is a mismatch from its next request onward, which
 is the answer a device lock exists to give.
 
+Losing the race is not the same as someone winning it. Firestore aborts
+contended transactions, and a burst of binds can all exhaust their retries
+with nothing committed (the emulator does this to eight concurrent binds).
+`bind_device_lock` therefore re-reads a starved round: a held lock is an
+ordinary loss, an empty one runs the bind again, up to three jittered rounds.
+If every round starves it raises `DeviceLockContended` instead of reporting a
+loss, so nothing is ever told "mismatch" for a lock no device holds. On the
+request path `revalidate_device_lock` swallows it and leaves the licence
+unbound for the next request; `POST /v1/licenses/activate` answers
+`503 device_lock_contended`, and a retry binds.
+
 The same rule makes the Demo mint a compare-and-set. Several requests arrive at
 app launch; the one that loses the race to claim a real licence is still
 holding the copy of the account it read beforehand, and a blind write there
@@ -1049,7 +1177,7 @@ sequenceDiagram
 Activation is **in-place**: same `uid`, same user doc, only plan/license
 fields change. It never migrates, copies, or touches `sessions`/`files` — a
 dedicated test (`test_activation_is_in_place_session_data_untouched` in
-`backend/tests/test_licenses.py`) asserts session docs are byte-identical
+`backend/tests/test_licenses_institution.py`) asserts session docs are byte-identical
 before and after.
 
 ### 20.2 Not "activate once, trust forever"
@@ -1067,7 +1195,7 @@ guarantee as activation — never touches stored sessions/files. See
 
 | Action | Route | Effect |
 |---|---|---|
-| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff, device-attested) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0. |
+| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff: device-attested, or from the operator desk with a second factor and a sign-in newer than `ADMIN_WEB_REVOKE_REAUTH_SECONDS`) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0. |
 | Single-seat revoke | `DELETE /v1/institutions/licenses/{id}/seats/{uid}` (institution IT) | Only that member drops to Demo; **frees the slot** for another domain member (including, after re-admission, the same member re-entering the key). |
 | Disable a seat | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores the licensed mode in place with no re-activation needed. |
 
@@ -1089,7 +1217,10 @@ session creation forever, which is why the gate is on retrieval and not on
 creation. And the app shows a demo account **no** backup or restore surface at
 all: no sync badge, no pending-upload banner, no Settings backup/restore
 section. The upload is silent; the account's data is there for the day a
-licence attaches, and for the operator's own use under the Terms.
+licence attaches, and for the operator's own use under the Terms. On the phone
+that is `CloudSync.uploadsEnabled`, which ignores the Save-to-cloud toggle
+while backup is not licensed, and `StorageBudget`, which refuses to free local
+frames on demo — the cloud copy cannot come back, so it is not a cache.
 
 Minting an individual licence for an address that already has an approved,
 verified account attaches it at once (`create_individual_license` →
@@ -1097,6 +1228,22 @@ verified account attaches it at once (`create_individual_license` →
 post-deploy request stamped. The invite is still written for the case where no
 such account exists yet, and a holder of a *live* non-demo licence is left
 untouched (`claimError: holder_already_licensed`).
+
+**A mint is licence-first, delivery second, and delivery can fail without
+failing the mint.** The licence document is written, then the invite, then
+the attach. An address already promised to another live licence refuses the
+invite (`inviteError: invite_exists`), and the new licence exists undelivered —
+its key still redeems it through the support route. That is deliberate: a
+licence that has been paid for should never be lost to a delivery conflict,
+and the conflict is for a person to resolve, not the backend. The cost showed
+the first time a mint answered 500 after succeeding (#131): the retry minted a
+second licence for the same address, which could not attach. The operator
+desk now checks its own list for a live licence on the address before minting,
+and says for every mint whether the licence attached, is waiting for a first
+sign-in, or was not delivered and why. Renewal is Extend (§20.6), never a
+second mint. A claim that loses every retry under contention is the one
+delivery failure nobody is told about —
+[TD-33](../ops/TECH_DEBT.md).
 
 None of these reach the person instantly, and the counters IT reads move
 before they do. §20.12 is the read that measures the difference.
@@ -1152,10 +1299,25 @@ Both spellings are live at once, in every direction a version skew can go:
 | Old ops tooling | `AdminLicenseCreate` accepts `kind="campus"`; `PATCH .../config` accepts a `plan` patch and folds it onto `mode`. |
 | Unmigrated documents | `normalize_mode` / `normalize_kind` read either spelling, so a user or license document migration 002 has not reached still resolves and still activates. |
 
-Retiring the compatibility is two later changes, in this order: drop the `plan`
-mirror from the response once adoption of a `mode`-reading app build is high
-enough (the same judgement `DAT_CODEC_ENCODING_ENABLED` needs), then drop the
-`/v1/campus/*` aliases from **both** the FastAPI router and the gateway spec.
+**Retirement order.** Nine compatibility shims are live (TD-45). Retire them
+in this order; each is its own change, and each waits on the signal in its row,
+not on a date. The `/v1/campus/*` invite-revoke alias is already gone: it was
+added two days *after* the rename (`4100955` vs `90485b4`), so nothing
+pre-rename could call it.
+
+| # | Shim | Where | Retire when | Signal |
+|---|---|---|---|---|
+| 1 | `PRO_MAX_SESSIONS_PER_USER` read as the default for `LICENSED_MAX_SESSIONS_PER_USER` | `config.py` | No Cloud Run service carries the old name | The deploy workflow's warning stops firing on both environments |
+| 2 | ID-token-only `/uploads` read (`device_or_legacy_reader`) | `deps.py`, `routers/sessions.py` | `REQUIRE_ATTESTED_UPLOADS=1` everywhere for a release cycle | `legacy_unattested_uploads` log count is zero ([FUTURE_IMPROVEMENTS.md](../ops/FUTURE_IMPROVEMENTS.md) FI-7) |
+| 3 | `kind="campus"` on admin mint | `models.AdminLicenseCreate` | Ops scripts send `institution` | Search ops tooling; no server-side signal |
+| 4 | `plan` patch on `PATCH /v1/admin/users/{uid}/config`, folded onto `mode` | `firestore_repo._mode_patch` callers, `models.py` | Ops scripts send `mode` | Neither console nor app calls this route; only hand-run ops calls do, so check those |
+| 5 | `/v1/campus/*` seat routes (4) | `routers/institutions.py` **and** `gateway/openapi.yaml` | No request for a release cycle | Access-log `opClass="institution"` with a `routeTemplate` under `/v1/campus/` (TD-44 made these countable) |
+| 6 | App reads `config.plan` when `mode` is empty | `AppRemoteConfig.resolveMode`, `ApiDtos.AppConfigDto.plan` | Every backend the app can meet emits `mode` (true since the rename deployed) | None needed; ship with #7 |
+| 7 | App falls back to the old `plan` pref key | `AppRemoteConfig.mode()` | One release after the rename build, so every install has cached `mode` | Play Console version distribution |
+| 8 | `plan` mirror in `/v1/config`, licence summaries and user documents | `firestore_repo` (`_mode_patch`, `resolve_user_config`, `_license_public`), `licenses.legacy_plan` | A `mode`-reading build is the fleet (the same judgement `DAT_CODEC_ENCODING_ENABLED` needs) | Play Console version distribution; old builds fail closed to demo without it |
+| 9 | `normalize_mode` / `normalize_kind` accept `plan` / `campus` values in stored documents | `licenses.py` | Migration 002 has reached every `users` and `licenses` document **and** #8 stopped writing the mirror | A Firestore count of documents with no `mode` (users) or `kind == "campus"` (licenses) is zero |
+
+`plan` is not written into new audit rows: `LICENSE_ACTIVATE` records `mode`.
 
 Migration `002_rename_campus_to_institution` rewrites `users` and `licenses`,
 keeping both field spellings consistent rather than deleting the old ones. It
@@ -1365,6 +1527,18 @@ the next claim. **The licence and not the holder's mode mirror**: revocation
 demotes in place and leaves the pointer alone, so a mirror test would delete
 revocation records.
 
+**A lost race is not a full pool.** The claim transactions answer a private
+`_CONTENDED` when they only lost the race; `claim_pending_invite` logs it at
+`info` rather than `warning`, and every route-facing caller maps it back
+through `_public_claim_error` (to `license_seats_exhausted` or
+`claim_contended`), so no wire code changed and contention stops reading in
+the logs like a licence with no room left. A failed claim then answers with
+the account **as stored**, re-read, not the caller's pre-race copy: the
+request that beat it has already granted the entitlement, and
+`ensure_demo_license`, which would otherwise rescue the stale copy by
+re-reading, returns early for a browser because consoles send no
+`X-Device-Id`.
+
 #### Checkout, and why there is no heartbeat route
 
 `POST /v1/licenses/checkout` claims or extends. Re-calling it **is** the
@@ -1420,8 +1594,12 @@ timestamp says so.
 
 ### 20.8 The consoles, and what a browser may do
 
-Static pages on the existing auth Hosting site
-(`firebase-hosting/public/console/`). No build step, no framework, no
+Static pages on the auth project's Hosting site
+(`firebase-hosting/public/console/`), served at **`app.sempermechanics.com`** —
+a Hosting custom domain whose records live in the product site's Netlify DNS.
+`sempermechanics.com` itself is that Netlify site; it only links here and
+redirects `/login`, `/account` and `/terms/`. The default
+`…-auth.firebaseapp.com` host serves the same files. No build step, no framework, no
 `package.json` — the site is served as files, and a toolchain for four pages
 would cost more than it saves.
 
@@ -1470,10 +1648,38 @@ invisible reCAPTCHA and two SDK imports are gone from it. Leaving SMS off in
 the Firebase console is part of the configuration, not an oversight: a factor
 nobody can be challenged for is a factor somebody can be locked out by.
 
-The page shows the secret for manual entry
-rather than a QR code: every QR service is somebody else's server and the
-payload is the TOTP secret itself, so fetching a picture would hand away the
-factor protecting licence issuance.
+Enrolment happens in the page, before any dashboard loads. The QR code is
+drawn locally by `qr.js` from the `otpauth://` URI, and the secret is shown
+beside it for manual entry. Nothing is fetched to make the picture: every QR
+service is somebody else's server and the payload is the TOTP secret itself,
+so a hosted image would hand away the factor protecting licence issuance.
+
+**Sign-in is by redirect, never popup, on the page's own host.** `auth.js`
+sets `authDomain` to `window.location.host`, so the SDK's `/__/auth/*` handler
+and iframe are same-origin (`frame-src 'self'`) on either host, and nothing
+depends on third-party storage a browser may partition. The price is that a
+Google re-authentication unloads the page. Every step-up therefore stashes a
+one-line note, and a revoke stashes the licence it was revoking, so the
+return leg finishes it after one plain confirmation inside the backend's
+120-second window. Two SDK behaviours shape that return leg, both handled in
+`requireSignIn` / `resolveChallenge` and explained in the console README:
+the second-factor challenge resolves against `auth.redirectUser` rather than
+`currentUser`, so the re-authenticated user is adopted with
+`updateCurrentUser` (#132); and adopting it fires the auth listener a second
+time, so a page is started once per signed-in account and handed the stashed
+revoke once (#138).
+
+**Access is by role, and the page says so.** `/login` forwards each account
+to the dashboard that is theirs (§20.11). A dashboard reached by link that is
+not the account's — the operator desk for a non-operator, say — renders
+nothing the backend would refuse and says where the account *can* go.
+
+**A result stays where the operator can read it.** Every change on the desk
+reports what it did in the status line, which is pinned to the viewport while
+it holds a message and is not cleared by the list reload that follows. A
+revoked licence leaves the table at once — behind "Show revoked", since the
+record is the audit trail. Silence after a click is always a defect here: it
+is indistinguishable from a revoke that did not happen.
 
 Destructive actions confirm twice — a dialog naming who is affected, then
 typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
@@ -1487,6 +1693,17 @@ a password-only token the same way: institution seat/invite work sits on
 whole-licence revoke on the tighter `attested_or_mfa_admin_fresh`
 (`ADMIN_WEB_REVOKE_REAUTH_SECONDS`).
 
+**Every console call is a CORS preflight.** Each `fetch` carries
+`Authorization`, which makes it non-simple, so the browser sends `OPTIONS`
+first — without a token. ESPv2 would refuse that on `security`;
+`x-google-endpoints … allowCors: true` in `gateway/openapi.yaml` hands it to
+Cloud Run instead, where Starlette's `CORSMiddleware` answers for
+`CONSOLE_ORIGINS` only (both console hosts). There is no credentials mode,
+because there are no cookies. `CONSOLE_ORIGINS` and `ADMIN_EMAILS` are
+space-separated in the deploy variables: `deploy-backend.yml` passes env
+through a block that splits pairs on commas, which would silently ship only
+the first entry.
+
 **CSP is relaxed for `/console/**` and the two addresses that rewrite into
 it.** A Hosting header is matched against the *request* path and knows nothing
 about a rewrite, so `/login` and `/account` would otherwise be served the
@@ -1495,13 +1712,39 @@ policy is restated for them verbatim in `firebase.json`. For the same reason
 both pages carry a `<base href>`: a relative path in them would resolve
 against the site root at the pretty address and one directory too high.
 Every other page — the legal pages,
-the auth continue-URLs — keeps the strict `default-src 'self'`. Only
-`connect-src` is widened, for the API and Firebase Auth's token endpoints;
-`script-src` is **not**, because the Firebase SDK is served from Hosting's own
-`/__/firebase/` namespace, which is same-origin. `__API_ORIGIN__` and
+the auth continue-URLs — keeps the strict `default-src 'self'`. `connect-src` is
+widened for the API and Firebase Auth's token endpoints. `script-src` is
+widened to exactly two origins and never to `'unsafe-inline'`:
+`https://www.gstatic.com` for the SDK modules and `https://apis.google.com`
+for the gapi loader the auth iframe pulls in. Both SDK modules come from
+gstatic rather than Hosting's `/__/firebase/` copies — Hosting's
+`firebase-auth.js` imports `@firebase/app` from gstatic anyway, and mixing the
+two puts `initializeApp` and `getAuth` on different registries. `__API_ORIGIN__` and
 `__API_BASE_URL__` are substituted at deploy exactly as
 `gateway/openapi.yaml` substitutes `__CLOUD_RUN_URL__`; no live hostname is
 committed. See `firebase-hosting/public/console/README.md`.
+
+**Inline scripts never run, and one script is the only gate.** With no
+`'unsafe-inline'`, each page loads one ES module from a file beside it; code
+in a page body, or an `on*=` handler, loads, looks right and does nothing.
+The consoles have no compiler, so `scripts/check_console.py` (CI job
+`console-pages`, on every event, no path filter) is what reads them: inline
+script, the ids a module asks for, rewrite targets, every `/v1` path declared
+on the gateway, and `__API_BASE_URL__` / `__API_ORIGIN__` still being
+placeholders in the committed files. `scripts/deploy-console.sh` substitutes
+them for the deploy and its `trap` restores them afterwards — committing a
+substituted host fails that check.
+
+**The same Hosting site carries the app's auth continue links.** They live
+under `/auth/` on `app.sempermechanics.com` (`AUTH_HOST` in
+`data/AuthRepository.kt`). The `…-auth.firebaseapp.com` host stays accepted as
+`LEGACY_AUTH_HOST` for every installed build that declares only it, and is
+still the password-reset action URL, until Play vitals show no such build
+([TD-29](../ops/TECH_DEBT.md)). On the CORS side, `allowCors` in
+`gateway/openapi.yaml` sits under `x-google-endpoints` named by the
+`__MANAGED_SERVICE__` placeholder — the API's managed service name, not the
+gateway hostname, which ESPv2 ignores. `test_security_controls.py` pins the
+preflight.
 
 ### 20.9 Structural guard
 
@@ -1510,6 +1753,14 @@ dependency tree and asserts it maps to exactly one expected auth tier —
 `INSTITUTION_ADMIN` is a tier in that matrix alongside `USER`/`ADMIN`/`DEVICE`, so a
 future change that accidentally widens (or narrows) an institution route's auth
 fails CI rather than shipping quietly.
+
+Every route also needs a declaration in `gateway/openapi.yaml`, and
+`backend/tests/test_gateway_parity.py` fails the build on a missing one. ESPv2
+is an allowlist: an undeclared route is unreachable in production and nothing
+in the app's logs says why. That has happened twice (the `/v1/campus/*`
+aliases, then the lease routes). The test proves the spec; it does not deploy
+it — moving the live gateway to a new config is still by hand
+([TD-27](../ops/TECH_DEBT.md)).
 
 ### 20.10 Changing device
 
@@ -1772,3 +2023,32 @@ calls it out separately.
 rather than a field on the licence listing. It is a plain `ADMIN` read like
 `GET /v1/admin/licenses`: it writes nothing, so it does not take the
 second-factor tier the mutating routes do.
+
+### 20.13 On the phone
+
+The backend decides every entitlement (§20); these are the app-side choices
+that keep the phone from contradicting it.
+
+- **A seat check parallel to the quota check.** An institution member without
+  a live lease is not over any quota — a licensed account never is — so
+  `TokenStore.isSessionLimitReached` would let them through every existing
+  gate. `LicenseEntitlements.seatRequiredToStart` is a separate predicate. It
+  gates the Home **+** before the source menu opens (`HomeActivity`) and both
+  compute paths (`AnalysisNavHelper`), guarded by
+  `AnalysisViewModel.wouldCreateNewSession()` so a run already in flight is
+  never aborted. `SeatRequiredActivity` is one button that asks again, because
+  seats free themselves.
+- **Floating seats renew in-process and release on sign-out.**
+  `SeatHeartbeat` re-calls checkout every `seatHeartbeatMinutes` while the
+  process is up (§20.7: the repeat is the heartbeat); `SeatLease.releaseBestEffort`
+  returns the seat before tokens are cleared, and a quiet failure leaves it to
+  the lease TTL.
+- **An idle phone learns a remote revoke within four hours.**
+  `LicenseConfigWorker` refreshes `/v1/config` every four hours (§20.12's
+  bound). Shortening the interval is the wrong lever: it costs every device
+  every day to reach one ([FI-16](../ops/FUTURE_IMPROVEMENTS.md)).
+- **Restore explains a lock that has not moved yet.** `LicenseErrors` maps
+  `license_device_mismatch` on a download to a sign-in-first message, since
+  restoring before the lock binds is the ordering failure in §20.10.
+- **The key never reaches the device.** Settings → Account shows the licence
+  **prefix** (`SettingsAccountSection`), which is what support asks for.

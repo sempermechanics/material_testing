@@ -1,6 +1,7 @@
 package com.indicvision.semper.data.net
 
 import com.indicvision.semper.data.RestoreDownloadOutcomes
+import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -260,7 +261,7 @@ internal class DriveTransfer(
             "a windowed download must declare its length"
         }
         dest.parentFile?.mkdirs()
-        val part = File(dest.parentFile, "${dest.name}.part")
+        val part = AtomicFiles.partOf(dest)
         // Stale complete from a prior corrupt finalize — always rebuild.
         if (dest.exists()) dest.delete()
         val path = "/v1/files/$fileId/content"
@@ -314,7 +315,7 @@ internal class DriveTransfer(
                             // Proxy ignored Range and sent a full-body reply.
                             // Write to a scratch file first — a truncated 200
                             // must not wipe a good partial `.part`.
-                            val scratch = File(dest.parentFile, "${dest.name}.full")
+                            val scratch = AtomicFiles.fullOf(dest)
                             scratch.delete()
                             java.io.FileOutputStream(scratch, false).use { out ->
                                 resp.body.byteStream().use { input ->
@@ -347,10 +348,7 @@ internal class DriveTransfer(
                                 throw IOException("empty full-body download for $fileId")
                             }
                             part.delete()
-                            if (!scratch.renameTo(part)) {
-                                scratch.copyTo(part, overwrite = true)
-                                scratch.delete()
-                            }
+                            AtomicFiles.promote(scratch, part)
                             finalizeDownload(part, dest)
                             onBytes(dest.length())
                             return@withContext
@@ -429,6 +427,12 @@ internal class DriveTransfer(
                         }
                         else -> {
                             val body = IndicApiHttp.bodyText(resp)
+                            if (ClientNonce.isRefusal(resp.code, body) && ClientNonce.usable()) {
+                                // Signed with a client nonce the server would not
+                                // take: go back to challenges and re-sign this window.
+                                ClientNonce.markRefused()
+                                throw IOException("client nonce refused downloading $fileId")
+                            }
                             val resume = RestoreDownloadOutcomes.shouldResumeAfterHttp(
                                 code = resp.code,
                                 attempt = attempt,
@@ -488,10 +492,7 @@ internal class DriveTransfer(
         if (dest.exists() && !dest.delete()) {
             Timber.w("Could not replace existing download target %s", dest)
         }
-        if (!part.renameTo(dest)) {
-            part.copyTo(dest, overwrite = true)
-            part.delete()
-        }
+        AtomicFiles.promote(part, dest)
     }
 
     /** Copy [input] → [out], reporting cumulative bytes via [onBytes] each buffer. */

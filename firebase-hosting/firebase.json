@@ -1,8 +1,4 @@
 {
-  "firestore": {
-    "rules": "../firestore.rules",
-    "indexes": "../backend/firestore.indexes.json"
-  },
   "hosting": {
     "site": "indicvision-dic-app-auth",
     "public": "public",
@@ -69,18 +65,22 @@
         ]
       },
       {
-        "//": "The consoles are the only pages that talk to anything but this origin: Firebase Auth to sign in, and the Semper API to read and change seats. connect-src is widened for them ALONE — every other page, including the legal pages and the auth continue-URLs, keeps the default-src 'self' policy above. script-src is deliberately NOT relaxed: the Firebase SDK is served from Hosting's own /__/firebase/ namespace, which is same-origin, so no CDN exception is needed. __API_ORIGIN__ is substituted at deploy time alongside __CLOUD_RUN_URL__ in gateway/openapi.yaml — see public/console/README.md.",
+        "//": "The consoles are the only pages that talk to anything but this origin: Firebase Auth to sign in, and the Semper API to read and change seats. connect-src is widened for them ALONE — every other page, including the legal pages and the auth continue-URLs, keeps the default-src 'self' policy above. script-src is widened to exactly two origins and never to 'unsafe-inline': www.gstatic.com for both Firebase SDK modules (Hosting's /__/firebase/ firebase-auth imports @firebase/app from gstatic, so both must come from there) and apis.google.com for the gapi loader the auth iframe needs. __API_ORIGIN__ is substituted at deploy time alongside __CLOUD_RUN_URL__ in gateway/openapi.yaml — see public/console/README.md.",
         "source": "/console/**",
+        "//": "no-cache, not no-store: the browser revalidates by ETag on every load, so a console fix is live on the next reload instead of after Hosting's default max-age=3600 — the first three production fixes each looked undeployed for an hour. Four small files; the revalidation is a 304.",
         "headers": [
-          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://__AUTH_DOMAIN__; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" },
+          { "key": "Cache-Control", "value": "no-cache" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
           { "key": "Referrer-Policy", "value": "no-referrer" }
         ]
       },
       {
-        "//": "/login and /account rewrite into /console/, but a Hosting header is matched against the REQUEST path, so without this they would be served the strict global policy above and could reach neither Firebase Auth nor the API. The value must stay character-for-character identical to the /console/** policy; the deploy-time substitution of __API_ORIGIN__ and __AUTH_DOMAIN__ rewrites both together.",
+        "//": "/login and /account rewrite into /console/, but a Hosting header is matched against the REQUEST path, so without this they would be served the strict global policy above and could reach neither Firebase Auth nor the API. The value must stay character-for-character identical to the /console/** policy; the deploy-time substitution of __API_ORIGIN__ rewrites both together. frame-src is 'self' because auth.js sets authDomain to the page's own host, so the SDK's auth iframe is same-origin.",
         "source": "{/login,/account}",
+        "//": "no-cache here too, and it matters more than on /console/**: these are the addresses people open, and a cached /login carries the CSP it was cached WITH. A normal reload revalidates to a 304 that does not resend custom headers, so the stale policy survives; the frame-src change for same-origin sign-in left a browser blocking the auth iframe for an hour with no error to see.",
         "headers": [
-          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src https://__AUTH_DOMAIN__; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" },
+          { "key": "Cache-Control", "value": "no-cache" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' __API_ORIGIN__ https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" },
           { "key": "Referrer-Policy", "value": "no-referrer" }
         ]
       },

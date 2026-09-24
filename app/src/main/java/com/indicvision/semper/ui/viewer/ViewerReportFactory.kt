@@ -6,7 +6,6 @@ package com.indicvision.semper.ui.viewer
 
 import android.graphics.Bitmap
 import androidx.core.graphics.scale
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.data.loadOfFrame
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.EngineStats
@@ -34,7 +33,7 @@ object ViewerReportFactory {
         // cap — via inSampleSize, so peak stays a few MB.
         val cap = VisualizationEngine.REPORT_MAX_EDGE
         val (capW, capH) = VisualizationEngine.cappedDims(host.imgW, host.imgH, cap)
-        val refPath = host.intent.getStringExtra(DicKeys.REF_PATH)
+        val refPath = host.args.refPath.ifBlank { null }
         val decodedCapped = refPath?.let {
             BitmapDecode.decodeFileForView(
                 it,
@@ -56,11 +55,11 @@ object ViewerReportFactory {
 
         val frameStep = host.sweepSteps?.getOrNull(frameIndex) ?: host.baseStep
         val frameSubset = host.sweepSubsets?.getOrNull(frameIndex)
-            ?: host.intent.getIntExtra(DicKeys.SUBSET_SIZE, 41)
+            ?: host.args.subsetSize
         val frameStrainWin = host.sweepStrainWins?.getOrNull(frameIndex)
-            ?: host.intent.getIntExtra(DicKeys.STRAIN_WINDOW, 15)
+            ?: host.args.strainWindow
 
-        val statsArray = host.intent.getFloatArrayExtra(DicKeys.ENGINE_STATS) ?: FloatArray(16)
+        val statsArray = host.args.engineStatsArray() ?: FloatArray(16)
         val engineStats = if (statsArray.size >= 16) {
             EngineStats.fromArray(statsArray)
         } else {
@@ -117,16 +116,15 @@ object ViewerReportFactory {
                 imgW = host.imgW,
                 imgH = host.imgH,
                 step = frameStep,
-                sessionId = host.intent.getStringExtra(DicKeys.SESSION_ID) ?: "Local_Offline_Mode",
-                specimenName = host.intent.getStringExtra(DicKeys.REF_NAME)?.substringBeforeLast(".")
-                    ?: "Batch Analysis",
+                sessionId = host.args.sessionId ?: "Local_Offline_Mode",
+                specimenName = host.args.refName.substringBeforeLast(".").ifBlank { "Batch Analysis" },
                 analysisDate = ReportBuilder.currentAnalysisDate(),
                 subsetSize = frameSubset,
                 strainWindow = frameStrainWin,
-                strainMethod = host.intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: "VSG",
+                strainMethod = host.args.strainMethod,
                 roiData = RoiData(host.roiX, host.roiY, host.roiW, host.roiH),
                 engineStats = engineStats,
-                referenceImageName = host.intent.getStringExtra(DicKeys.REF_NAME) ?: "reference.png",
+                referenceImageName = host.args.refName.ifBlank { "reference.png" },
                 deformedImageName = host.originalDefNames.getOrNull(frameIndex)
                     ?: "Frame_${frameIndex + 1}",
             ),

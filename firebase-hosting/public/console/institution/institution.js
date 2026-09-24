@@ -1,11 +1,13 @@
 import { requireSignIn, api, setStatus, esc, when } from "../auth.js";
+import { seatCells, inviteCells } from "../util.js";
 
 let licenseId = "";
 
 const $ = (id) => document.getElementById(id);
 
-requireSignIn(() => {
+requireSignIn(async (user) => {
   $("signedOut").hidden = true;
+  if (!(await administersSomething(user))) return;
   // Deep-link support: ?license=... so IT can bookmark their own licence
   // rather than pasting the id every time.
   const fromUrl = new URLSearchParams(location.search).get("license");
@@ -14,6 +16,31 @@ requireSignIn(() => {
     load();
   }
 });
+
+/**
+ * Whether any institution licence names this address as an administrator.
+ * With none, the id box is a form that can only ever answer "not found",
+ * so the page says that instead and points at the account page. A fault
+ * in the check leaves the page usable: the backend still decides.
+ */
+async function administersSomething(user) {
+  let licenses;
+  try {
+    licenses = (await api("/v1/institutions/licenses")).licenses || [];
+  } catch (e) {
+    if (e.message !== "email_not_verified") {
+      setStatus(`Could not list your institution licences: ${e.message}`, true);
+      return true;
+    }
+    licenses = [];
+  }
+  if (licenses.length) return true;
+  $("app").hidden = true;
+  $("notAdminWho").textContent = user.email;
+  $("notAdmin").hidden = false;
+  setStatus("");
+  return false;
+}
 
 $("load").addEventListener("click", load);
 $("licenseId").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
@@ -87,19 +114,8 @@ function render(data) {
 }
 
 function seatRow(seat) {
-  const holds = seat.leaseExpiresAt && new Date(seat.leaseExpiresAt) > new Date();
-  const status = {
-    active: '<span class="pill ok">active</span>',
-    disabled: '<span class="pill warn">on hold</span>',
-    revoked: '<span class="pill off">removed</span>',
-  }[seat.status] || esc(seat.status);
   return `
-    <tr>
-      <td>${esc(seat.email || seat.uid)}</td>
-      <td>${status}</td>
-      <td>${holds ? `<span class="pill ok">until ${esc(when(seat.leaseExpiresAt))}</span>`
-                   : '<span class="pill off">—</span>'}</td>
-      <td class="muted">${seat.deviceIdLock ? esc(seat.deviceIdLock.slice(0, 10)) + "…" : "not yet"}</td>
+    <tr>${seatCells(seat)}
       <td class="actions">
         ${seat.deviceIdLock
           ? `<button class="secondary" data-act="clear" data-uid="${esc(seat.uid)}">New device</button>`
@@ -114,11 +130,7 @@ function seatRow(seat) {
 
 function inviteRow(invite) {
   return `
-    <tr>
-      <td>${esc(invite.email)}</td>
-      <td><span class="pill warn">invited</span></td>
-      <td><span class="pill off">—</span></td>
-      <td class="muted">joins at first sign-in</td>
+    <tr>${inviteCells(invite)}
       <td class="actions">
         <button class="danger" data-invite="${esc(invite.id)}">Withdraw</button>
       </td>

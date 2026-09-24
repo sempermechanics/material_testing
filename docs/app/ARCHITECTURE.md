@@ -37,7 +37,7 @@ Intent extras shared across Activities live in
 |---|---|
 | `ui/auth/` | Splash, sign-in, pending approval, Google / AccessRouter helpers |
 | `ui/home/` | Session list, selection, open-session intents |
-| `ui/analysis/` | Setup wizard (ViewStub steps 2/3; `AnalysisWizardSlots` / `AnalysisWizardCoach`; `goToStep` on the activity; step-settings body via `WizardStepSettingsContentView`), ROI, VSG sweep, `DicBatchRunner` + `DicFieldIo`, import/overlay helpers, ViewModel |
+| `ui/analysis/` | Setup wizard (ViewStub steps 2/3; `AnalysisWizardSlots` / `AnalysisWizardCoach`; `goToStep` on the activity; step-settings body via `WizardStepSettingsContentView`), ROI, VSG sweep, `DicBatchRunner.kt` (`AnalysisViewModel.runBatchAnalysisBody`) + `DicFieldIo`, import/overlay helpers, ViewModel |
 | `ui/viewer/` | Heatmaps, tap-to-probe, report factory, the ⓘ details sheet, `ViewerFieldPills` |
 | `ui/settings/` | Settings screen; scroll body inflates via `SettingsScrollContentView`; account/storage/prefs/your-data/help live in `Settings*Section`; restore/download/delete stay on `SettingsActivity` |
 | `ui/admin/` | Admin screen — approve/revoke users via `/v1/admin/*` |
@@ -102,7 +102,10 @@ replaying one that may have expired while it waited.
 
 `RetryOnTransient` retries **429 unconditionally** — the token bucket
 (`backend/app/rate_limit.py`) and the gateway quota both reject before the
-handler runs, so nothing happened. **503 is not the same promise**: ESPv2 emits
+handler runs, so nothing happened. On a device-signed route that includes the
+nonce: the bucket is a route dependency (`deps.rate_limited`) resolved ahead of
+`verified_device`, so the unchanged retry is not a replay, and the 429 carries
+`Retry-After` for when the bucket next has a token. **503 is not the same promise**: ESPv2 emits
 it before *and* after handing a request on, so it is retried only for GET and
 for the POSTs whose handlers are idempotent by contract. Session create and the
 upload broker are deliberately absent — a duplicate there costs a Drive object.

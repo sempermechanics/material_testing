@@ -13,14 +13,30 @@ from .. import audit, drive, errors, firestore_repo as repo, statuses
 from .. import observability as obs
 from .. import rate_limit
 from .. import tasks
-from ..deps import attested_or_mfa_user, current_user, device_or_legacy_reader, verified_device
+from ..config import settings
+from ..deps import (
+    attested_or_mfa_user,
+    current_user,
+    device_or_legacy_reader,
+    rate_limited,
+    verified_device,
+)
 from ..models import SessionCreate
 from ..session_provision import provision_session
 from ..validation import PageToken, SessionId
-from .account import json_dumps
+from ._shared import clamp_page_size, json_dumps, page_block
 
 log = logging.getLogger("indic")
 router = APIRouter()
+
+
+def _owned_session(sid: str, user: dict) -> dict:
+    """The caller's session [sid]. Someone else's reads as absent, not 403, so
+    a session id cannot be probed for existence."""
+    session = repo.get_session(sid)
+    if not session or session.get("uid") != user["uid"]:
+        raise HTTPException(404, errors.SESSION_NOT_FOUND)
+    return session
 
 
 @router.get("/v1/sessions")
@@ -40,10 +56,9 @@ def list_sessions(
     session on the *current page* still exists in Drive (bounded parallel
     probes — not a full-account N+1). Orphaned metadata on that page is purged.
     """
-    page_size = max(1, min(page_size, 100))
+    page_size = clamp_page_size(page_size, 100)
     if verify:
-        if not rate_limit.session_verify_bucket.allow(user["uid"]):
-            raise HTTPException(429, errors.RATE_LIMITED)
+        rate_limit.enforce(rate_limit.session_verify_bucket, user["uid"])
     sessions, next_token = repo.list_user_sessions(
         user["uid"], limit=page_size, page_token=page_token or None,
     )
@@ -87,12 +102,7 @@ def list_sessions(
     return {
         "sessions": sessions,
         "quota": {"used": used, "max": repo.resolve_user_config(user)["maxSessions"]},
-        "page": {
-            "size": page_size,
-            "count": len(sessions),
-            "nextPageToken": next_token,
-            "hasMore": bool(next_token),
-        },
+        "page": page_block(page_size, len(sessions), next_token),
         # `indeterminate` tells the client the verification was incomplete, so a
         # session still listed is not proof it was confirmed present.
         "verify": (
@@ -102,7 +112,7 @@ def list_sessions(
     }
 
 
-@router.delete("/v1/sessions/{sid}")
+@router.delete("/v1/sessions/{sid}", dependencies=[rate_limited(rate_limit.erase_bucket)])
 def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     """Erase one analysis from the cloud (GDPR right to erasure).
 
@@ -112,11 +122,7 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     only trace kept is the audit record that the erasure happened.
     """
     user, device = ctx["user"], ctx["device"]
-    if not rate_limit.erase_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    session = repo.get_session(sid)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.SESSION_NOT_FOUND)
+    session = _owned_session(sid, user)
 
     folder = session.get("driveFolderId")
     if folder:
@@ -130,7 +136,7 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     return {"deleted": sid, "filesRemoved": removed}
 
 
-@router.get("/v1/sessions/{sid}/uploads")
+@router.get("/v1/sessions/{sid}/uploads", dependencies=[rate_limited(rate_limit.listing_bucket)])
 def session_uploads(
     sid: SessionId,
     page_size: int = 1000,
@@ -155,12 +161,8 @@ def session_uploads(
     A client that attests is always held to the strict path — see the wrapper.
     """
     user = ctx["user"]
-    if not rate_limit.listing_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    session = repo.get_session(sid)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.SESSION_NOT_FOUND)
-    page_size = max(1, min(page_size, 1000))
+    session = _owned_session(sid, user)
+    page_size = clamp_page_size(page_size, 1000)
     uploads, next_token = repo.list_pending_uploads(
         sid, limit=page_size, page_token=page_token or None,
     )
@@ -171,12 +173,7 @@ def session_uploads(
         "status": session.get("status"),
         "provisionError": session.get("provisionError"),
         "uploads": uploads,
-        "page": {
-            "size": page_size,
-            "count": len(uploads),
-            "nextPageToken": next_token,
-            "hasMore": bool(next_token),
-        },
+        "page": page_block(page_size, len(uploads), next_token),
     }
 
 
@@ -192,12 +189,9 @@ def list_session_files(
     Cursor-paginated. This silently truncated at 2000 files before, which for a
     restore means a manifest quietly missing entries.
     """
-    if not rate_limit.listing_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    session = repo.get_session(sid)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.SESSION_NOT_FOUND)
-    page_size = max(1, min(page_size, 1000))
+    rate_limit.enforce(rate_limit.listing_bucket, user["uid"])
+    session = _owned_session(sid, user)
+    page_size = clamp_page_size(page_size, 1000)
     files, next_token = repo.list_session_files(
         sid, limit=page_size, page_token=page_token or None,
     )
@@ -207,12 +201,7 @@ def list_session_files(
         "specimen": session.get("specimen"),
         "status": session.get("status"),
         "files": files,
-        "page": {
-            "size": page_size,
-            "count": len(files),
-            "nextPageToken": next_token,
-            "hasMore": bool(next_token),
-        },
+        "page": page_block(page_size, len(files), next_token),
     }
 
 
@@ -270,7 +259,7 @@ def _zip_time(value) -> tuple:
     return _ZIP_EPOCH
 
 
-@router.get("/v1/sessions/{sid}/bundle")
+@router.get("/v1/sessions/{sid}/bundle", dependencies=[rate_limited(rate_limit.download_bucket)])
 def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     """One analysis as a single zip — how the data leaves through a browser.
 
@@ -298,11 +287,7 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     signal that the transfer completed.
     """
     user = ctx["user"]
-    if not rate_limit.download_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    session = repo.get_session(sid)
-    if not session or session.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.SESSION_NOT_FOUND)
+    session = _owned_session(sid, user)
     if not repo.cloud_backup_enabled(user):
         raise HTTPException(403, errors.feature_not_licensed_detail())
     artifacts = repo.list_session_artifacts(sid)
@@ -374,7 +359,7 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     )
 
 
-@router.post("/v1/sessions")
+@router.post("/v1/sessions", dependencies=[rate_limited(rate_limit.session_bucket)])
 def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device)):
     """Record an analysis: create the session and hand back its upload slots.
 
@@ -390,18 +375,16 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     user, device = ctx["user"], ctx["device"]
     cfg = repo.resolve_user_config(user)
 
-    if not rate_limit.session_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-
     # Idempotent retry: same localSessionId + still in flight → return existing.
     existing = repo.find_incomplete_session(user["uid"], body.localSessionId)
     if existing:
         sid = existing["sessionId"]
-        uploads, _ = repo.list_pending_uploads(sid)
+        uploads, next_token = repo.list_pending_uploads(sid)
         return {
             "sessionId": sid,
             "status": existing.get("status"),
             "uploads": uploads,
+            "nextPageToken": next_token,
         }
 
     # Quotas: one session == one analysis.
@@ -450,17 +433,28 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     # Opening a Drive resumable session per file is ~2 round-trips each; at the
     # 600-file ceiling that cannot fit in a 60s request. Hand it to Cloud Tasks
     # and let the client poll /uploads, which it already does for resume.
-    if tasks.enqueue_provision(sid):
+    # A small manifest (the common bundle upload) is quicker inline: the task
+    # hop and the client's first poll cost more than the work itself.
+    small = len(body.files) <= settings.INLINE_PROVISION_MAX_FILES
+    if not small and tasks.enqueue_provision(sid):
         repo.set_session_status(sid, statuses.SESSION_PROVISIONING)
         obs.log_event(log, logging.INFO, "session_provision_queued",
                       outcome="ok", stage="queued", count=len(body.files))
         return {"sessionId": sid, "status": statuses.SESSION_PROVISIONING, "uploads": []}
 
-    # No queue configured (local dev, tests, or an environment that has not
-    # created it): provision inline. Same outcome, slower request. Because
+    # Small manifest, or no queue configured / the enqueue failed: provision
+    # inline. Same outcome from the client's point of view. Because
     # nothing will retry, a failure here rolls the whole session back rather
     # than leaving a shell against the user's quota.
     provision_session(sid, purge_on_failure=True)
     session = repo.get_session(sid) or {}
-    uploads, _ = repo.list_pending_uploads(sid)
-    return {"sessionId": sid, "status": session.get("status"), "uploads": uploads}
+    # One page is the whole manifest today (MAX_FILES_PER_SESSION is below the
+    # listing's page size), but the cursor is returned rather than dropped so a
+    # larger cap cannot silently truncate it; the app follows /uploads anyway.
+    uploads, next_token = repo.list_pending_uploads(sid)
+    return {
+        "sessionId": sid,
+        "status": session.get("status"),
+        "uploads": uploads,
+        "nextPageToken": next_token,
+    }

@@ -40,7 +40,6 @@ class BackupDeleteWorker(context: Context, params: WorkerParameters) : Coroutine
 
         // The list is built from the backend's answer; drop the cached copy so
         // the deleted backup does not reappear until the cache expires.
-        CloudRestore.invalidateRestorableCache()
 
         return if (ok) {
             Timber.i("Deleted cloud backup %s", cloudSessionId)

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   export:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: production-backup
     steps:
@@ -55,7 +55,7 @@ jobs:
           python-version: '3.12'
       # firestore_verify.py emits the manifest the restore drill checks against.
       - name: Install manifest dependencies
-        run: pip install google-cloud-firestore==2.21.0
+        run: pip install google-cloud-firestore==2.31.0
       - name: Export and verify PITR
         env:
           GCP_PROJECT: ${{ vars.GCP_PROJECT }}

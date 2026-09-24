@@ -6,11 +6,12 @@ directly to the resumable session URI returned by init_resumable().
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from requests.adapters import HTTPAdapter
 
-from . import errors
+from . import backoff, errors
 from .config import settings
 from .google_auth import drive_access_token
 
@@ -72,14 +73,8 @@ def _headers(token: str) -> dict:
 
 
 def _retry_delay(response: requests.Response, attempt: int) -> float:
-    """Seconds to wait before retrying: honor Retry-After, else exponential."""
-    raw = response.headers.get("Retry-After")
-    if raw is not None:
-        try:
-            return max(0.0, float(raw))
-        except ValueError:
-            pass
-    return float(min(2 ** attempt, 16))
+    """Seconds to wait before retrying: honor Retry-After (capped), else exponential."""
+    return backoff.retry_delay(attempt, response.headers.get("Retry-After"))
 
 
 def _request_with_retry(
@@ -169,6 +164,16 @@ def _find_or_create_folder(token: str, name: str, parent: str) -> str:
     files = r.json().get("files", [])
     if files:
         return files[0]["id"]
+    return _create_folder(token, name, parent)
+
+
+def _create_folder(token: str, name: str, parent: str) -> str:
+    """Create a folder without looking for an existing one first.
+
+    For names that cannot exist yet — a session id minted moments ago — the
+    search in _find_or_create_folder is a Drive round-trip that always comes
+    back empty.
+    """
     r = _request_with_retry(
         "POST",
         f"{API}/files",
@@ -230,29 +235,85 @@ def find_user_folder(token: str, uid: str):
     return found
 
 
-def ensure_session_folders(token: str, uid: str, sid: str, roles=None) -> dict:
+def ensure_session_folders(token: str, uid: str, sid: str, roles=None,
+                           cached: dict | None = None,
+                           session_folder_id: str | None = None) -> dict:
     """Build Research Storage/user/{uid}/session/{sid}/ plus the role subfolders
     the manifest actually uses. "bundle" (Session.zip), "extras" (Extras.zip) and
     "metadata" live at the session root — no subfolder, no extra Drive round-trips.
 
+    `cached` is the user doc's stored {"userFolderId", "sessionsFolderId"}. The
+    name walk down to session/ is four sequential Drive lists (~3 s) and its
+    answer never changes for a user, so when the stored session/ folder is
+    still alive the walk is skipped. Alive is checked, not assumed: a folder
+    deleted or trashed straight in Drive would otherwise take the new upload
+    with it. The check runs alongside creating {sid}/ under it, so a live cache
+    costs one Drive round-trip rather than three; when the check fails, that
+    {sid}/ is deleted and the walk runs.
+
+    `session_folder_id` is the session's stored driveFolderId from an earlier
+    attempt (a Cloud Tasks retry). It is reused instead of making a second
+    {sid}/ folder.
+
     Partial failure mid-walk may leave an empty orphan folder under session/;
     that is monitored / accepted rather than rolled back.
     """
-    root = settings.ROOT_FOLDER_ID
-    research = _find_or_create_folder(token, "Research Storage", root)
-    user_dir = _find_or_create_folder(token, "user", research)
-    uid_dir = _find_or_create_folder(token, uid, user_dir)
-    sess_dir = _find_or_create_folder(token, "session", uid_dir)
-    sid_dir = _find_or_create_folder(token, sid, sess_dir)
-    # userFolderId is returned so it can be persisted on the user doc: account
-    # deletion then erases Drive via a stored id instead of re-walking names.
+    cached = cached or {}
+    uid_dir, sess_dir = cached.get("userFolderId"), cached.get("sessionsFolderId")
+    alive, sid_dir = False, None
+    if uid_dir and sess_dir:
+        if session_folder_id:
+            alive = file_exists(token, sess_dir)
+            sid_dir = session_folder_id
+        else:
+            alive, sid_dir = _check_and_create(token, sess_dir, sid)
+    if not alive:
+        root = settings.ROOT_FOLDER_ID
+        research = _find_or_create_folder(token, "Research Storage", root)
+        user_dir = _find_or_create_folder(token, "user", research)
+        uid_dir = _find_or_create_folder(token, uid, user_dir)
+        sess_dir = _find_or_create_folder(token, "session", uid_dir)
+        # Searched, not blindly created: after a walk nothing says whether an
+        # earlier attempt already made {sid}/ here.
+        sid_dir = _find_or_create_folder(token, sid, sess_dir)
+    # userFolderId / sessionsFolderId are returned so they can be persisted on
+    # the user doc: account deletion erases Drive via the stored id instead of
+    # re-walking names, and the next upload skips the walk.
     folders = {"sessionFolderId": sid_dir, "userFolderId": uid_dir,
+               "sessionsFolderId": sess_dir,
                "bundle": sid_dir, "extras": sid_dir, "metadata": sid_dir}
     wanted = roles if roles is not None else ("raw", "processed", "reports", "csv", "dat")
     for role in wanted:
         if role not in folders:
             folders[role] = _find_or_create_folder(token, role, sid_dir)
     return folders
+
+
+def _check_and_create(token: str, sess_dir: str, sid: str) -> tuple[bool, str | None]:
+    """Check the cached session/ folder and create {sid}/ in it, concurrently.
+
+    Returns (alive, sid_dir). When session/ is gone or trashed, a {sid}/ made
+    anyway (a trashed parent still accepts children) is deleted, best effort,
+    and (False, None) comes back so the caller walks.
+    """
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        check = pool.submit(file_exists, token, sess_dir)
+        create = pool.submit(_create_folder, token, sid, sess_dir)
+        alive = check.result()
+        try:
+            sid_dir = create.result()
+        except requests.HTTPError:
+            if alive:
+                raise
+            sid_dir = None
+    if alive:
+        return True, sid_dir
+    if sid_dir:
+        try:
+            delete_file(token, sid_dir)
+        except Exception as e:  # noqa: BLE001
+            log.warning("could not delete %s made under a stale session folder: %s", sid_dir, e)
+    return False, None
 
 
 def file_exists(token: str, file_id: str) -> bool:

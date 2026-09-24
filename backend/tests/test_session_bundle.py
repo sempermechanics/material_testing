@@ -217,3 +217,24 @@ def test_the_artifact_read_carries_a_drive_id_and_the_export_read_does_not(store
     exported = repo.list_session_files_all(SID)
     assert len(exported) == 3
     assert all("driveFileId" not in f for f in exported)
+
+
+def _drive_http_error(code):
+    import requests
+
+    resp = requests.Response()
+    resp.status_code = code
+    return requests.HTTPError(f"{code}", response=resp)
+
+
+@pytest.mark.asyncio
+async def test_a_file_deleted_in_drive_downloads_as_404_not_502(client, stored, monkeypatch):
+    """The app gives up on a 404 and says the backup is gone; a 502 made it
+    retry the restore forever."""
+    def gone(token, fid, **kw):
+        raise _drive_http_error(404)
+
+    monkeypatch.setattr(drive, "open_download", gone)
+    resp = await client.get(f"/v1/files/{SID}_bundle_Session.zip/content")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "drive_file_gone"

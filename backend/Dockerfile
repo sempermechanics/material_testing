@@ -1,7 +1,7 @@
 # Pinned by digest for reproducible builds: the human tag can move, the digest
 # cannot. Re-resolve with `docker buildx imagetools inspect python:3.12-slim`
 # when intentionally bumping.
-FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
+FROM python:3.12-slim@sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9
 WORKDIR /app
 # Install from the hashed lock, not requirements.txt. requirements.txt pins only
 # our direct dependencies, so transitive ones floated between builds — the image
@@ -19,4 +19,7 @@ ENV PORT=8080
 RUN useradd --system --no-create-home --uid 10001 appuser
 USER appuser
 
-CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 2
+# One worker. Cloud Run scales by instance, and with 1 vCPU a second process
+# only doubled the import on a cold start (~6 s) and split the per-process rate
+# buckets in two. Sync routes still run concurrently on the threadpool.
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 1

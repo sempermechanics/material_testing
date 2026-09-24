@@ -16,11 +16,16 @@ import com.google.firebase.auth.MultiFactorResolver
 import com.google.firebase.auth.TotpMultiFactorGenerator
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.CloudApi
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -75,11 +80,19 @@ fun isTrustedAuthLink(scheme: String?, host: String?): Boolean =
  *  - [AccessStatus.OFFLINE_CACHE_APPROVED] → offline but previously approved
  */
 @Suppress("TooManyFunctions") // one method per auth action (sign-in variants, reset, status, session)
-class AuthRepository(context: Context) {
+class AuthRepository(
+    context: Context,
+    private val api: CloudApi = IndicApi.get(context),
+    private val tokens: TokenSource = TokenProvider,
+    /** Whether Firebase holds a user; a seam so status tests need no Firebase. */
+    private val signedIn: () -> Boolean = { FirebaseAuth.getInstance().currentUser != null },
+) {
 
     private val appContext = context.applicationContext
-    private val api = IndicApi.get(appContext)
-    private val auth = FirebaseAuth.getInstance()
+
+    // Looked up on first use, so a test that only drives status and terms
+    // never initialises Firebase.
+    private val auth by lazy { FirebaseAuth.getInstance() }
 
     val cloudConfigured: Boolean get() = api.enabled
 
@@ -148,7 +161,7 @@ class AuthRepository(context: Context) {
      */
     suspend fun signUpWithPassword(email: String, password: String): Result<String> = firebaseThen("password_signup") {
         val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
-        runCatching { result.user?.sendEmailVerification()?.await() }
+        suspendRunCatching { result.user?.sendEmailVerification()?.await() }
             .onFailure { Timber.w(it, "Could not send verification email") }
         result
     }
@@ -312,7 +325,7 @@ class AuthRepository(context: Context) {
 
     /** Re-check the account status for the currently signed-in Firebase user. */
     suspend fun refreshStatus(): Result<String> = withContext(Dispatchers.IO) {
-        if (auth.currentUser == null) {
+        if (!signedIn()) {
             return@withContext Result.failure(Exception("Not signed in."))
         }
         resolveStatus()
@@ -345,7 +358,7 @@ class AuthRepository(context: Context) {
      */
     suspend fun acceptTerms(version: String, improvementConsent: Boolean): Result<Unit> =
         withContext(Dispatchers.IO) {
-            val token = if (api.enabled) TokenProvider.usableIdToken() else null
+            val token = if (api.enabled) tokens.usableIdToken() else null
             if (token == null) {
                 TokenStore.setTermsAccepted(appContext, version, synced = false)
                 TokenStore.setImprovementConsent(appContext, improvementConsent)
@@ -372,7 +385,7 @@ class AuthRepository(context: Context) {
      */
     suspend fun setImprovementConsent(granted: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         TokenStore.setImprovementConsent(appContext, granted)
-        val token = (if (api.enabled) TokenProvider.usableIdToken() else null)
+        val token = (if (api.enabled) tokens.usableIdToken() else null)
             ?: return@withContext Result.success(Unit)
         try {
             api.setImprovementConsent(token, granted)
@@ -387,14 +400,33 @@ class AuthRepository(context: Context) {
     private suspend fun syncPendingTermsAcceptance(token: String) {
         if (TokenStore.isTermsAcceptanceSynced(appContext)) return
         val version = TokenStore.termsAcceptedVersion(appContext) ?: return
-        runCatching { api.acceptTerms(token, version) }
+        suspendRunCatching { api.acceptTerms(token, version) }
             .onSuccess { TokenStore.setTermsAccepted(appContext, version, synced = true) }
             .onFailure { Timber.d(it, "Terms acceptance still not synced") }
     }
 
     fun cachedEmail(): String? = auth.currentUser?.email ?: TokenStore.cachedEmail(appContext)
 
-    fun hasSession(): Boolean = auth.currentUser != null
+    fun hasSession(): Boolean = signedIn()
+
+    /**
+     * True when this device was approved and bound the last time it asked, so
+     * the launch can open Home at once and confirm in the background. The
+     * server still checks access on every call; this only picks the first
+     * screen.
+     */
+    fun canOpenFromCache(): Boolean =
+        signedIn() &&
+            TokenStore.cachedStatus(appContext) == AccessStatus.APPROVED &&
+            TokenStore.isDeviceRegistered(appContext)
+
+    /**
+     * The cached approval turned out to be wrong: forget it, so the next launch
+     * asks the server before showing Home.
+     */
+    fun forgetCachedApproval() {
+        TokenStore.setStatus(appContext, "")
+    }
 
     // ------------------------------------------------------------------ internal
 
@@ -510,7 +542,7 @@ class AuthRepository(context: Context) {
      */
     private suspend fun unverifiedEmailError(user: FirebaseUser): Exception? {
         if (!needsEmailVerification(user)) return null
-        runCatching { auth.currentUser?.sendEmailVerification()?.await() }
+        suspendRunCatching { auth.currentUser?.sendEmailVerification()?.await() }
             .onFailure { Timber.w(it, "Could not re-send verification email") }
         val email = user.email.orEmpty()
         signOut()
@@ -556,20 +588,25 @@ class AuthRepository(context: Context) {
         if (user.providerData.none { it.providerId == EmailAuthProvider.PROVIDER_ID }) return false
         // Someone who just clicked the link in a browser is still unverified in
         // this cached user object; reload before judging them.
-        runCatching { user.reload().await() }
+        suspendRunCatching { user.reload().await() }
             .onFailure { Timber.d(it, "Could not refresh verification state; using cached value") }
         return auth.currentUser?.isEmailVerified == false
     }
 
     private suspend fun resolveStatus(): Result<String> {
-        val token = TokenProvider.usableIdToken() ?: return offlineOrExpired()
+        val token = tokens.usableIdToken() ?: return offlineOrExpired()
         return try {
-            val me = api.me(token) // 200 = APPROVED
+            // /v1/me and /v1/config are independent reads: in parallel they cost
+            // one round-trip instead of two. A failed /me cancels the config call.
+            val (me, config) = coroutineScope {
+                val config = async { suspendRunCatching { api.getConfig(token) } }
+                api.me(token) to config.await() // 200 = APPROVED
+            }
             TokenStore.setStatus(appContext, AccessStatus.APPROVED)
             TokenStore.setRole(appContext, me.role ?: "user")
             cacheLegalState(me)
             syncPendingTermsAcceptance(token)
-            runCatching { api.getConfig(token) }
+            config
                 .onSuccess { AppRemoteConfig.apply(appContext, it) }
                 .onFailure {
                     AppRemoteConfig.recordFetchFailure(appContext)
@@ -599,7 +636,7 @@ class AuthRepository(context: Context) {
                 } else {
                     "Session expired. Please sign in again."
                 }
-                Result.failure(Exception(message))
+                Result.failure(AccessLostException(message))
             } else {
                 Result.failure(Exception("Could not verify account (server error ${e.code})."))
             }
@@ -640,12 +677,19 @@ class AuthRepository(context: Context) {
 
     private fun deviceBindingFailure(cause: IOException): Result<String> =
         Result.failure(
-            Exception(
+            AccessLostException(
                 "This device is already linked to another account, or this account to " +
                     "another device. Sign in with that account, or ask an admin to reset the binding.",
                 cause,
             ),
         )
+
+    /**
+     * The server definitively refused this sign-in (401, or the device binding
+     * belongs elsewhere). Distinct from a 5xx or no network, which must not
+     * throw someone already in the app back to the sign-in screen.
+     */
+    class AccessLostException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
     private companion object {
         /** HTTP 401 from the backend: the session token is no longer valid. */

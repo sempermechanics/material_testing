@@ -5,9 +5,9 @@ package com.indicvision.semper.debug
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.ui.viewer.ViewerArgs
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -28,20 +28,14 @@ class DebugViewerSeedActivity : Activity() {
         val names = ArrayList<String>(frameCount)
         for (i in 0 until frameCount) names.add("Frame_${i + 1}")
 
-        val viewer = Intent().apply {
-            setClassName(this@DebugViewerSeedActivity, VIEWER)
-            putExtra(DicKeys.BATCH_DIR_PATH, dir.absolutePath)
-            putExtra(DicKeys.IMG_W, IMG_W)
-            putExtra(DicKeys.IMG_H, IMG_H)
-            putExtra(DicKeys.STEP, STEP)
-            putExtra(DicKeys.ROI_X, 0)
-            putExtra(DicKeys.ROI_Y, 0)
-            putExtra(DicKeys.ROI_W, IMG_W)
-            putExtra(DicKeys.ROI_H, IMG_H)
-            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, names)
-            if (skipSummary) putExtra(DicKeys.START_FRAME, 0)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+        val viewer = ViewerArgs.ofFrames(
+            batchDir = dir.absolutePath,
+            imgW = IMG_W,
+            imgH = IMG_H,
+            step = STEP,
+            frameNames = names,
+            startFrame = if (skipSummary) 0 else null,
+        ).toIntent(this).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(viewer)
         finish()
     }
@@ -90,6 +84,5 @@ class DebugViewerSeedActivity : Activity() {
         const val STEP = 4
         const val IMG_W = COLS * STEP
         const val IMG_H = ROWS * STEP
-        const val VIEWER = "com.indicvision.semper.ui.viewer.ResultViewerActivity"
     }
 }

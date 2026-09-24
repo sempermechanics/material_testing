@@ -47,7 +47,10 @@ Automated: `.github/workflows/firestore-restore-drill.yml` runs monthly (03:40
 UTC on the 1st) and on demand. It imports the latest export into the drill
 project, **waits** for the operation, verifies the result, and purges the drill
 database afterwards so a second full copy of production is not left sitting in a
-weaker project.
+weaker project. Both the verify step (`scripts/firestore_verify.py`) and the
+purge cover every collection the backend writes — including `licenses`, their
+`seats` subcollection, `licenseInvites` and `auth_links` — so add a new
+collection to both when the backend starts writing one.
 
 ### Configuring the `restore-drill` environment
 

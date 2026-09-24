@@ -34,7 +34,9 @@ object SessionOpenHelper {
         activity.startActivity(intentFor(activity, session))
     }
 
-    fun intentFor(context: Context, session: SessionRecord): Intent =
+    fun intentFor(context: Context, session: SessionRecord): Intent = argsFor(session).toIntent(context)
+
+    fun argsFor(session: SessionRecord): ViewerArgs =
         ViewerArgs(
             imgW = session.imgW,
             imgH = session.imgH,
@@ -51,7 +53,7 @@ object SessionOpenHelper {
             sessionLocalId = session.id,
             subsetSize = session.subset,
             strainWindow = session.strainWindow,
-            engineStats = session.engineStats.toFloatArray(),
+            engineStats = session.engineStats.ifEmpty { null },
             roiX = session.roiX,
             roiY = session.roiY,
             roiW = session.roiW,
@@ -70,7 +72,7 @@ object SessionOpenHelper {
             testType = session.testType,
             crossSectionMm2 = session.crossSectionMm2,
             loadAxisX = session.loadAxisX,
-            loadsN = if (session.hasMachineLoads) session.loadsN.toFloatArray() else FloatArray(0),
+            loadsN = if (session.hasMachineLoads) session.loadsN else emptyList(),
             geometry = session.geometry,
-        ).toIntent(context)
+        )
 }

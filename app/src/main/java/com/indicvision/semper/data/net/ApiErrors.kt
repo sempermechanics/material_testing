@@ -54,6 +54,13 @@ object ApiErrors {
     /** No such cloud file for this account (404). */
     const val FILE_NOT_FOUND = "file_not_found"
 
+    /**
+     * The index points at a Drive object that is no longer there (404 on a
+     * download, 400 on a completion). Deleted in Drive, or the upload never
+     * landed — not an outage, so retrying cannot fix it.
+     */
+    const val DRIVE_FILE_GONE = "drive_file_gone"
+
     /** Per-instance token bucket or gateway quota rejected the call (429). */
     const val RATE_LIMITED = "rate_limited"
 
