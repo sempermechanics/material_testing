@@ -22,8 +22,11 @@ Strict binary PASS against all applicable external controls is **not** claimed.
 
 ### Security / data integrity
 
-- [ ] Deploy deny-all `firestore.rules` (`./scripts/deploy-firestore.sh rules`) and confirm
-      client SDK cannot read/write.
+- [x] Deploy deny-all `firestore.rules` (`./scripts/deploy-firestore.sh rules`) and confirm
+      client SDK cannot read/write. Deployed to `indicvision-dic-app` 2026-09-24;
+      anonymous REST reads of `users`, `licenses`, `sessions` and a create all
+      answer `403 PERMISSION_DENIED` ("Missing or insufficient permissions").
+      The Auth project has no Firestore database.
 - [ ] Confirm Firebase API key restrictions + App Check posture.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
 - [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`
