@@ -175,6 +175,8 @@ jobs:
               - 'backend/**'
               - 'firestore.rules'
               - 'firebase-hosting/**'
+              # test_security_controls reads it.
+              - 'scripts/deploy-firestore.sh'
               # The client's copies of the three wire contracts. Without these,
               # a rename on an app-only PR skips the backend tier and the tests
               # holding each pair of lists together never run — which is the one

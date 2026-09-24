@@ -22,7 +22,8 @@ Strict binary PASS against all applicable external controls is **not** claimed.
 
 ### Security / data integrity
 
-- [ ] Deploy deny-all `firestore.rules` and confirm client SDK cannot read/write.
+- [ ] Deploy deny-all `firestore.rules` (`./scripts/deploy-firestore.sh rules`) and confirm
+      client SDK cannot read/write.
 - [ ] Confirm Firebase API key restrictions + App Check posture.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
 - [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`

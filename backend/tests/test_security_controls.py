@@ -86,15 +86,24 @@ async def test_simple_request_from_console_origin_keeps_security_headers(
     assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
 
 
-def test_firestore_rules_are_deny_all_and_wired_to_existing_hosting():
+def test_firestore_rules_are_deny_all_and_deployable():
     rules = (ROOT / "firestore.rules").read_text(encoding="utf-8")
     assert "allow read, write: if false;" in rules
     assert "if true" not in rules
 
+    # The rules deploy through a script that stages them beside a firebase.json
+    # of its own: the CLI refuses files outside its project directory, so a
+    # `firestore` block pointing at ../firestore.rules could never deploy.
+    script = (ROOT / "scripts" / "deploy-firestore.sh").read_text(encoding="utf-8")
+    assert '"${ROOT}/firestore.rules"' in script
+    assert '"${ROOT}/backend/firestore.indexes.json"' in script
+    assert 'PROJECT="${PROJECT:-indicvision-dic-app}"' in script
+    assert "allow read, write: if false;" in script
+
     config = json.loads(
         (ROOT / "firebase-hosting" / "firebase.json").read_text(encoding="utf-8")
     )
-    assert config["firestore"]["rules"] == "../firestore.rules"
+    assert "firestore" not in config, "Hosting's firebase.json cannot deploy Firestore"
     assert config["hosting"]["site"] == "indicvision-dic-app-auth"
     keys = {
         header["key"]

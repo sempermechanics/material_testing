@@ -12,6 +12,12 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-24 — App release v1.2-beta.2 (#182)
+
+`v1.2-beta.2` (beta channel, private GitHub Release) from `fab33cb`, main CI
+green through Tier 3 and Tier 5: `v1.2-beta.1` plus #182, which keeps the
+upload CSV's `#` field-stats rows above the point section (TD-66).
+
 ## 2026-09-24 — Backend deploy, first CI gateway apply (#173, #179, #182, #183)
 
 Production `semper-api-35992296245-1` from `4d5a0ab` (staging first, run

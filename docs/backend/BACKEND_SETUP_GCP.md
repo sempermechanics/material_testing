@@ -106,12 +106,12 @@ aborts the whole deploy. A missing composite does not fail at deploy time — it
 fails at runtime with `FAILED_PRECONDITION`, so deploy before the first real
 client.
 
-The file has no `firebase.json` of its own; point one at it from a scratch
-directory:
+The file has no `firebase.json` of its own, and the CLI refuses files outside
+its project directory, so the script stages it in a scratch directory (it
+deploys the deny-all `firestore.rules` the same way, with `rules`):
 
 ```bash
-mkdir -p /tmp/fs-indexes && cp backend/firestore.indexes.json /tmp/fs-indexes/   && printf '{"firestore":{"indexes":"firestore.indexes.json"}}
-' > /tmp/fs-indexes/firebase.json   && (cd /tmp/fs-indexes && firebase deploy --only firestore:indexes --project $PROJECT --non-interactive)
+PROJECT=$PROJECT ./scripts/deploy-firestore.sh indexes
 ```
 
 **Check:** `gcloud firestore indexes composite list --project $PROJECT` shows
