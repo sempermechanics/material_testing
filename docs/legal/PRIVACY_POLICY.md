@@ -1,6 +1,6 @@
 # Semper — Privacy Policy
 
-**Last updated:** 2026-09-15  
+**Last updated:** 2026-09-24  
 **Product:** Semper DIC Android app, optional cloud sync backend, and web console  
 **Data controller (data fiduciary):** [OPERATOR LEGAL NAME], [REGISTERED ADDRESS], Chennai, Tamil Nadu, India  
 **Privacy contact:** the support mailbox configured as `SUPPORT_EMAIL` for the deployment  
@@ -247,10 +247,11 @@ security headers, and opaque client error bodies on Cloud Run. See
 
 ## 8. Children
 
-Semper is a professional / research tool offered to adults (18 or the age of
-majority where you live) acting in a business or professional capacity. It is
-not directed at children and we do not knowingly process children's data; if
-you believe a child has created an account, contact us and we will delete it.
+Semper is offered to users aged 16 and older. A user under 18 (or under the age
+of majority where they live) may use it only with the agreement of a parent or
+legal guardian (Terms §1.3). We do not knowingly process the personal data of
+anyone under 16; if you believe someone under 16 has created an account,
+contact us and we will delete it.
 
 ## 9. Changes
 

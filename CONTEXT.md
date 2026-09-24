@@ -149,6 +149,12 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
   `dependencies=[deps.rate_limited(...)]`, resolved before `verified_device`,
   so a 429 no longer spends the nonce; 429s send `Retry-After`. Production
   `semper-api-35957034833-1`; proven from a Pixel 6 ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
+- **Merged, deploy pending (#169).** Terms §1.3 admits users from 16, with a
+  parent or guardian agreeing under 18; Privacy §8 matches. `TERMS_VERSION`
+  `2026-09-24` in `backend/app/legal.py` and `LegalTerms.kt`, so every user
+  re-accepts once after the backend deploys. Open for owner and counsel: §1.2
+  (professional use only) and the DPDP Act's verifiable parental consent,
+  which the clickwrap does not collect.
 - **In flight.** Tech-debt burn-down: [TECH_DEBT.md](docs/ops/TECH_DEBT.md)
   register, [docs/adr/](docs/adr/README.md) ADR-001..006. Video/AVI import
   (#136–#139) has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
