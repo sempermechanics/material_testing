@@ -126,12 +126,13 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
   Latest: the #155–#168 burn-down, #173/#179 backend dependency and base-image
   bumps, #183 and the first CI gateway apply ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **App release `v1.2-beta.1`** (beta, private GitHub Release, from `2214860`):
-  the burn-down's app half, and #180's strain window in data points and engine
-  `v0.2.2` outlier rejection ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **Owed.** A device smoke of `v1.2-beta.1` and its public distribution
-  (website / Play). #182 (TD-66, upload CSV sections) is on `main` but not in
-  `v1.2-beta.1`; it ships with the next release. Video/AVI import has run only on emulators
+- **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`):
+  `v1.2-beta.1` (the burn-down's app half, #180's strain window in data points,
+  engine `v0.2.2`) plus #182, the upload CSV's stats rows above the point
+  section (TD-66) ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
+- **Owed.** A device smoke of `v1.2-beta.2` and its public distribution
+  (website / Play). Deploying the deny-all Firestore rules
+  (`scripts/deploy-firestore.sh rules`). Video/AVI import has run only on emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
   rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`; history in

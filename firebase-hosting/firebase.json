@@ -1,8 +1,4 @@
 {
-  "firestore": {
-    "rules": "../firestore.rules",
-    "indexes": "../backend/firestore.indexes.json"
-  },
   "hosting": {
     "site": "indicvision-dic-app-auth",
     "public": "public",
