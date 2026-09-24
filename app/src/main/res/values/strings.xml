@@ -955,4 +955,5 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Extract 1 frame</item>
         <item quantity="other">Extract %1$d frames</item>
     </plurals>
+    <string name="wizard_draft_lost">Your images were cleared while Semper was in the background. Please add them again.</string>
 </resources>

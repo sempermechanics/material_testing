@@ -11,7 +11,7 @@ chunk own?" here.
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
 |-------|--------------|---------------------------|------------------------------|
 | **auth** | Splash → Auth / Pending / Home, re-auth, password rules | `auth/AccessRouterTest`, `ReauthFlowTest`, `PasswordPolicyTest` | `auth/FirebaseAuthIntegrationTest` |
-| **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability | `analysis/AnalysisViewModelTest`, `VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecodeTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest` | — |
+| **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability; the wizard across a process death | `analysis/AnalysisViewModelTest`, `WizardStateTest`, `VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecodeTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest` | `ui/analysis/WizardDraftRestoreTest` |
 | **session** | Session store durability, disk footprint, failure provenance | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest` | — |
 | **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ui/viewer/ViewerArgsTest`, `analysis/RunSpecTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
@@ -52,6 +52,16 @@ handing their path in on the intent.
 `results/GifEncoderTest` reads its own output back with `javax.imageio` rather
 than a decoder of ours: the encoder is written against the GIF89a spec by hand,
 so the only claim worth making is that a third-party decoder agrees.
+
+`analysis/WizardStateTest` covers the wizard's process-death restore on the
+JVM, `ui/analysis/WizardDraftRestoreTest` covers it through a real Parcel on a
+device, and neither can kill the process. The kill is a scripted pass: take
+the wizard to step 2, press Home, run `adb shell am kill com.indicvision.semper`
+(if `pidof` still shows the process, `adb shell run-as com.indicvision.semper
+kill -9 <pid>`), then reopen from Recents. Step, sliders, ROI and both slots
+must come back. Run it once more with `run-as … rm -rf cache/temp_deformed`
+before reopening: expect an empty step 1 and the "cleared while Semper was in
+the background" snackbar ([ADR-005](../adr/ADR-005-wizard-process-death.md)).
 
 `session/LocalStorageFootprintTest` pins the rule that only cloud-backed
 analyses may have their local frames freed — it is the guard against a storage

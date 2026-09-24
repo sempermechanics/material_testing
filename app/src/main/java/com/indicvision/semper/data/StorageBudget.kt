@@ -61,7 +61,8 @@ object StorageBudget {
     private fun canRestore(context: Context): Boolean = LicenseEntitlements.cloudBackupEnabled(context)
 
     private fun freeDownTo(context: Context, target: Long): Outcome {
-        var total = SessionStore.totalSize(context)
+        // A wizard draft (ADR-005) counts against the budget but is never dropped here.
+        var total = SessionStore.totalSize(context) + WizardDraft.sizeIn(context.filesDir)
         if (!canRestore(context) || total <= target) return Outcome(0L, 0)
 
         // Oldest first: the session the user is least likely to reopen next.

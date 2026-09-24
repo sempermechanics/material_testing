@@ -47,6 +47,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
+import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
@@ -55,6 +56,7 @@ import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.SkippedNode
+import com.indicvision.semper.data.WizardDraft
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.FaqRedirect
@@ -167,6 +169,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
+        viewModel.attachDraft(WizardDraft(applicationContext))
         // Later wizard pages live in ViewStubs so the host layout stays under
         // lint's TooManyViews cap. Inflate before any findViewById of those IDs.
         // MissingInflatedId is suppressed at file level: those IDs live in the
@@ -351,21 +354,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
-        // the extract-frames flow. Consumed once.
-        intent.getStringExtra(DicKeys.PICKED_REF_URI)?.let {
-            intent.removeExtra(DicKeys.PICKED_REF_URI)
-            handleReferenceImage(it.toUri())
-        }
-        intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
-            intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
-            handleVideo(it.toUri())
-        }
-        intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
-            intent.removeExtra(DicKeys.PICKED_DEF_URIS)
-            if (list.isNotEmpty()) {
-                onDeformedPicked(list.map { it.toUri() })
-            }
-        }
+        // the extract-frames flow. Consumed once: a process death restores
+        // the original Intent, extras and all, but the draft holds the result.
+        if (savedInstanceState == null) consumePickerHandOff()
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
         // and keep the wizard nav above the nav-bar gesture area so the top
         // controls aren't in the system swipe-down zone.
@@ -531,6 +522,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * that depends on the mask stays after the read, in order.
      */
     private fun applyRoiResult(data: Intent) {
+        // After a process death whose draft was lost there is no reference
+        // left to measure this ROI against.
+        if (viewModel.realRefWidth == 0) {
+            Timber.w("ROI result with no reference; ignored")
+            return
+        }
         viewModel.roiX = data.getIntExtra(DicKeys.ROI_X, 0)
         viewModel.roiY = data.getIntExtra(DicKeys.ROI_Y, 0)
         viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
@@ -580,6 +577,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // bitmap crashes on the next draw — the superseded ones are GC-eligible.)
         refPreviewBmp?.recycle()
         refPreviewBmp = null
+        // Finishing is the one way out that no restore follows.
+        if (isFinishing) viewModel.discardDraft()
         super.onDestroy()
     }
 
@@ -1771,27 +1770,54 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
     }
 
+    private fun consumePickerHandOff() {
+        intent.getStringExtra(DicKeys.PICKED_REF_URI)?.let {
+            intent.removeExtra(DicKeys.PICKED_REF_URI)
+            handleReferenceImage(it.toUri())
+        }
+        intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
+            intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
+            handleVideo(it.toUri())
+        }
+        intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
+            intent.removeExtra(DicKeys.PICKED_DEF_URIS)
+            if (list.isNotEmpty()) {
+                onDeformedPicked(list.map { it.toUri() })
+            }
+        }
+    }
+
+    /**
+     * Redraws the slots from the view model, after first reading back the
+     * draft when this is a restore from a process death (ADR-005). Runs
+     * straight through, without suspending, when there is nothing to read.
+     */
     private fun restoreUiFromViewModel() {
-        val bytes = viewModel.refBytes
-        if (bytes != null) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                val preview = withContext(SemperNativeLib.nativeDispatcher) {
+        lifecycleScope.launch {
+            val restore = viewModel.restoreDraft()
+            val bytes = viewModel.refBytes
+            if (bytes != null) {
+                refPreviewBmp = withContext(SemperNativeLib.nativeDispatcher) {
                     SemperNativeLib.getPreviewFromBytes(
                         bytes,
                         com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE,
                     )
                 }
-                withContext(Dispatchers.Main) {
-                    refPreviewBmp = preview
-                    wizardSlots.refreshRefSlot(refPreviewBmp)
-                    wizardSlots.refreshDefSlot()
-                    checkReady()
-                    applySubsetRecommendation()
-                }
             }
-        } else {
             wizardSlots.refreshRefSlot(refPreviewBmp)
             wizardSlots.refreshDefSlot()
+            when (restore) {
+                // Re-enter the page so it re-measures what it shows.
+                AnalysisViewModel.DraftRestore.RESTORED -> goToStep(viewModel.wizardStep, animate = false)
+                AnalysisViewModel.DraftRestore.LOST -> {
+                    goToStep(1, animate = false)
+                    val lost = getString(R.string.wizard_draft_lost)
+                    Snackbar.make(findViewById(android.R.id.content), lost, FaqRedirect.durationFor(lost))
+                        .setAnchorView(R.id.bottomNav)
+                        .show()
+                }
+                AnalysisViewModel.DraftRestore.NONE -> Unit
+            }
             checkReady()
             applySubsetRecommendation()
         }

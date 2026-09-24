@@ -15,7 +15,9 @@
 
 package com.indicvision.semper.ui.analysis
 import android.content.Context
+import android.os.Bundle
 import android.os.Trace
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.indicvision.semper.R
@@ -27,9 +29,11 @@ import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SkippedNode
+import com.indicvision.semper.data.WizardDraft
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -57,7 +61,7 @@ import kotlin.coroutines.coroutineContext
  * results, and enqueues cloud sync via DicUploadWorker.
  */
 @Suppress("TooManyFunctions") // both run modes plus their session bookkeeping
-class AnalysisViewModel : ViewModel() {
+class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()) : ViewModel() {
 
     companion object {
         /** @see AnalysisRunCodes.ERROR_CANCELLED */
@@ -75,6 +79,9 @@ class AnalysisViewModel : ViewModel() {
          * runs that would have recovered.
          */
         const val LOW_CONVERGENCE_STRIKES = 2
+
+        /** [refName] before a reference is picked. */
+        const val NO_REFERENCE_NAME = "No image selected"
     }
 
     internal val sessions = SessionRepository()
@@ -82,8 +89,19 @@ class AnalysisViewModel : ViewModel() {
     // NATIVE THREAD PINNING: All JNI/OpenMP calls are routed through the global
     // SemperNativeLib.nativeDispatcher to ensure thread affinity.
 
+    /** Mirrored into the [WizardDraft] as it changes (ADR-005). */
     var refBytes: ByteArray? = null
+        set(value) {
+            field = value
+            stage { it.writeReference(value) }
+        }
+
+    /** Mirrored into the [WizardDraft] as it changes (ADR-005). */
     var roiMaskBytes: ByteArray? = null
+        set(value) {
+            field = value
+            stage { it.writeMask(value) }
+        }
     var defFilePaths: List<String> = emptyList()
 
     /** Original picked filenames, index-aligned with [defFilePaths]. */
@@ -127,7 +145,7 @@ class AnalysisViewModel : ViewModel() {
 
     var realRefWidth: Int = 0
     var realRefHeight: Int = 0
-    var refName: String = "No image selected"
+    var refName: String = NO_REFERENCE_NAME
 
     val defCount: Int get() = defFilePaths.size
 
@@ -740,6 +758,106 @@ class AnalysisViewModel : ViewModel() {
         traceSection("Semper.analysis.batch") {
             runBatchAnalysisBody(appContext, spec, params, onProgress, jobContext)
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Process death (ADR-005): the scalars in [saved], the rest in [draft]
+    // ------------------------------------------------------------------
+
+    enum class DraftRestore { NONE, RESTORED, LOST }
+
+    /** Where the heavy inputs are mirrored; null until [attachDraft] (and in JVM tests). */
+    private var draft: WizardDraft? = null
+
+    /** One writer at a time, so an older reference can never land after a newer one. */
+    private val draftIo = Dispatchers.IO.limitedParallelism(1)
+
+    /** False while [restoreDraft] puts back what the draft already holds. */
+    private var mirrorToDraft = true
+
+    /** The Bundle a process death left, until [restoreDraft] reads the draft behind it. */
+    private var pendingRestore: Bundle? = null
+
+    private fun stage(write: (WizardDraft) -> Unit) {
+        val target = draft?.takeIf { mirrorToDraft } ?: return
+        viewModelScope.launch(draftIo) { write(target) }
+    }
+
+    /**
+     * Starts mirroring the inputs into [target]. A wizard that is not being
+     * restored empties it first: whatever is there belongs to one that is gone.
+     */
+    fun attachDraft(target: WizardDraft) {
+        if (draft != null) return
+        draft = target
+        if (pendingRestore == null) stage(WizardDraft::clear)
+    }
+
+    /**
+     * Finishes what [init] began after a process death: reads the reference,
+     * mask and frame list back from the draft. [DraftRestore.LOST] when any of
+     * them is gone; the inputs are then reset to an empty step 1.
+     */
+    suspend fun restoreDraft(): DraftRestore {
+        val state = pendingRestore
+        val source = draft
+        if (state == null || source == null) return DraftRestore.NONE
+        pendingRestore = null
+        val inputs = withContext(draftIo) { WizardState.readInputs(state, source) }
+        return if (inputs == null) {
+            Timber.w("Wizard draft incomplete after a process death; starting over")
+            clearInputs()
+            stage(WizardDraft::clear)
+            DraftRestore.LOST
+        } else {
+            mirrorToDraft = false
+            refBytes = inputs.reference
+            roiMaskBytes = inputs.mask
+            mirrorToDraft = true
+            WizardState.applyFrames(this, inputs.frames)
+            DraftRestore.RESTORED
+        }
+    }
+
+    /** The wizard was left for good: nothing will restore from the draft. */
+    fun discardDraft() {
+        draft?.discard()
+    }
+
+    /** Back to an empty wizard. Sweep ranges and the line-cut choice stay. */
+    private fun clearInputs() {
+        refBytes = null
+        roiMaskBytes = null
+        WizardState.applyFrames(this, WizardState.Frames())
+        frameSizeError = null
+        defFromVideo = false
+        realRefWidth = 0
+        realRefHeight = 0
+        refName = NO_REFERENCE_NAME
+        hasCustomRoi = false
+        roiX = 0
+        roiY = 0
+        roiW = 0
+        roiH = 0
+        wizardStep = 1
+        settingsReviewed = false
+        subsetRecommendation = null
+        subsetRecommendationKey = null
+        subsetUserModified = false
+        workingLocalId = null
+    }
+
+    /** What the system saves as the Activity stops: the scalars, once the frame list is on disk. */
+    internal fun saveWizardState(): Bundle {
+        draft?.writeFrames(WizardState.encodeFrames(WizardState.frames(this)))
+        return WizardState.save(this)
+    }
+
+    init {
+        // Last in the class, so the restored values land after every
+        // property initializer above has run, not before.
+        pendingRestore = saved.get<Bundle>(WizardState.KEY)?.also { WizardState.restoreScalars(this, it) }
+        saved.setSavedStateProvider(WizardState.KEY) { saveWizardState() }
     }
 }
 

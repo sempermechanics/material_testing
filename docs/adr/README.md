@@ -11,7 +11,7 @@ record that replaced it.
 | [002](ADR-002-cloudapi-seam.md) | `CloudApi` interface seam for `IndicApi` | Accepted, built | TD-25 |
 | [003](ADR-003-viewerargs-read-side.md) | `ViewerArgs.from` read side with a `SessionRecord` fallback | Accepted, built | TD-3, TD-61 |
 | [004](ADR-004-runspec.md) | Immutable `RunSpec` built once at Compute | Accepted, built | FI-6, TD-61 |
-| [005](ADR-005-wizard-process-death.md) | The wizard survives process death through a draft | Accepted | TD-26 |
+| [005](ADR-005-wizard-process-death.md) | The wizard survives process death through a draft | Accepted, built | TD-26 |
 | [006](ADR-006-gateway-deploy-job.md) | CI deploys the API Gateway after the Cloud Run promote | Accepted | TD-27 |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md).
