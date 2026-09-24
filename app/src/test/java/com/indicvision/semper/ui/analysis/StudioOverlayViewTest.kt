@@ -251,8 +251,19 @@ class StudioOverlayViewTest {
         assertTrue("one row per image row, at least one byte per pixel", stride >= 200)
         assertEquals(255, mask.at(stride, 20, 10))
         assertEquals(255, mask.at(stride, 119, 59))
-        // Outside the crop is not asserted: the ROI rect bounds the engine, and
-        // the ALPHA_8 background (drawColor BLACK) is opaque, so it reads 255.
+    }
+
+    @Test
+    fun `outside the crop stays correlated so edge subsets keep their points`() {
+        // The ROI rect bounds the grid; the engine drops any point whose subset
+        // touches a void pixel, so a void background would eat the crop's edge (TD-74).
+        val (mask, stride) = smallMask { applyImageRoi(20, 10, 100, 50) }
+
+        assertEquals(255, mask.at(stride, 0, 0))
+        assertEquals(255, mask.at(stride, 19, 30))
+        assertEquals(255, mask.at(stride, 120, 30))
+        assertEquals(255, mask.at(stride, 60, 60))
+        assertEquals(255, mask.at(stride, 199, 99))
     }
 
     @Test
