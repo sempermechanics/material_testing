@@ -160,13 +160,17 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
   byte for byte, so only users who accepted `2026-09-24` re-accept. Same
   revert as material_testing #15; keep both `TERMS_VERSION`s equal
   ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **In flight.** Tech-debt burn-down, one PR per step (#155–#168 open,
-  each stacked on the one before): [TECH_DEBT.md](docs/ops/TECH_DEBT.md) register,
-  [docs/adr/](docs/adr/README.md) ADR-001..006 all built. ADR-006's gateway
-  job has never run: it waits on the owner's IAM grant and a `dry-run` dispatch. Video/AVI import
-  (#136–#139) has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
-  §5.1a). Unchecked "Licensing rollout" rows in
-  [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md) are owed.
+- **Merged, not shipped (#155–#168).** The tech-debt burn-down
+  ([TECH_DEBT.md](docs/ops/TECH_DEBT.md), [docs/adr/](docs/adr/README.md)
+  ADR-001..006). Backend changes (`app/repo/` package, route-aware access log,
+  `rate_limit.enforce`, bounded outbound `Retry-After`) go live with the next
+  `deploy-backend` dispatch, with #171; app changes (`RunSpec`, `ViewerArgs`,
+  wizard draft, `CloudApi` seam, checked PDF write) with the next release.
+  ADR-006's gateway job has never run: it waits on the owner's IAM grant and
+  a `dry-run` dispatch.
+- **Owed.** Video/AVI import (#136–#139) has run only on emulators
+  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
+  rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in
   [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
