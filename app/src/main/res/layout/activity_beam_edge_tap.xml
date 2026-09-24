@@ -2,7 +2,9 @@
 <!-- Bending edge taps: Cancel / title / Save above the reference photo, the
      scale readout over it, the instruction and Reset below. Laid out like
      the ROI studio so the canvas never sits under a control. The step text
-     keeps three lines so the canvas does not resize between taps. -->
+     sits over invisible copies of every step, so its box is always as tall as
+     the longest one (at any width or font size) and the canvas does not move
+     between taps. -->
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -107,15 +109,34 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <TextView
-            android:id="@+id/tvBeamStep"
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minLines="3"
-            android:textColor="@color/viewer_on_dark"
-            android:textSize="14sp"
-            tools:text="@string/beam_tap_step_top" />
+            android:layout_weight="1">
+
+            <TextView
+                style="@style/BeamTapStepText"
+                android:importantForAccessibility="no"
+                android:text="@string/beam_tap_step_top"
+                android:visibility="invisible" />
+
+            <TextView
+                style="@style/BeamTapStepText"
+                android:importantForAccessibility="no"
+                android:text="@string/beam_tap_step_bottom"
+                android:visibility="invisible" />
+
+            <TextView
+                style="@style/BeamTapStepText"
+                android:importantForAccessibility="no"
+                android:text="@string/beam_tap_step_done"
+                android:visibility="invisible" />
+
+            <TextView
+                android:id="@+id/tvBeamStep"
+                style="@style/BeamTapStepText"
+                tools:text="@string/beam_tap_step_top" />
+        </FrameLayout>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnBeamReset"
