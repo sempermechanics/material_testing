@@ -666,9 +666,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     internal fun sessionLimitOutcome(appContext: Context, plannedFrames: Int): BatchAnalysisOutcome? {
         if (!wouldCreateNewSession()) return null
         TokenStore.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
-        // An unknown cloud quota does not block: analysis is on-device and costs
-        // the backend nothing. Only a *known and full* quota is a hard stop; the
-        // upload is separately gated in CloudSync until config is known.
+        // Before the config is fetched a demo account is held to the demo cap
+        // (LicenseEntitlements.analysisCap); a licensed one has no local cap.
+        // The upload is gated separately in CloudSync until config is known.
         if (!TokenStore.isSessionLimitReached(appContext)) return null
         Timber.w("Hard stop: analysis blocked at session limit")
         return BatchAnalysisOutcome(

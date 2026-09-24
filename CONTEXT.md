@@ -134,8 +134,8 @@ in a drive-by. Settings / wizard settings XML stay under `TooManyViews` by
 inflating through `SettingsScrollContentView` /
 `WizardStepSettingsContentView`.
 
-Kover `minBound` is 27 (`app/build.gradle.kts`), enforced by `:app:koverVerify`
-in CI tier 1 and `ciReleaseGate` (measured 32.1 % on 2026-09-23). Macrobenchmark CI is
+Kover `minBound` is 37 (`app/build.gradle.kts`), enforced by `:app:koverVerify`
+in CI tier 1 and `ciReleaseGate` (measured 39.1 % on 2026-09-24). Macrobenchmark CI is
 emulator **smoke** (`suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`), API 34, no
 numeric thresholds.
 
@@ -159,8 +159,10 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
   re-accepts once after the backend deploys. Open for owner and counsel: §1.2
   (professional use only) and the DPDP Act's verifiable parental consent,
   which the clickwrap does not collect.
-- **In flight.** Tech-debt burn-down: [TECH_DEBT.md](docs/ops/TECH_DEBT.md)
-  register, [docs/adr/](docs/adr/README.md) ADR-001..006. Video/AVI import
+- **In flight.** Tech-debt burn-down, one PR per step (#155–#168 open,
+  each stacked on the one before): [TECH_DEBT.md](docs/ops/TECH_DEBT.md) register,
+  [docs/adr/](docs/adr/README.md) ADR-001..006 all built. ADR-006's gateway
+  job has never run: it waits on the owner's IAM grant and a `dry-run` dispatch. Video/AVI import
   (#136–#139) has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a). Unchecked "Licensing rollout" rows in
   [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md) are owed.
