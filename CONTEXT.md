@@ -149,10 +149,10 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-23)
+## Current state (2026-09-24)
 
 **Student lab outputs, part 1: tensile E and the lab report
-(`feat/tensile-modulus`).** The repo's audience is now a first-semester
+(PR #11, `feat/tensile-modulus`, merged).** The repo's audience is now a first-semester
 student (Product, above). `report/ElasticModulus` fits Young's modulus to the
 longest leading run of frames before the peak whose line keeps R² ≥ 0.995,
 free intercept, reference left out (a preloaded gauge otherwise reads 218 GPa
@@ -175,10 +175,10 @@ CSV-only; typing a load per photo and the photo↔load sync are open
 decisions. Next: bending deflection — a thickness tap on the reference photo
 sets mm/px and marks the load point, δ comes from V there, and E =
 WL³/(48δI) per step, averaged and from the load–deflection slope, with a
-bending lab report.
+bending lab report (done in PR #12, below).
 
 **Student lab outputs, part 2: bending deflection and real-data validation
-(`feat/bending-deflection`, in progress).** Bending gets a thickness tap on
+(PR #12, `feat/bending-deflection`, merged).** Bending gets a thickness tap on
 the reference photo (`BeamEdgeTapActivity`, stored as
 `SpecimenGeometry.loadPoint`, metadata schema `/6`) that sets mm/px and marks
 the load point; `report/BeamDeflection` reads δ there and gives σb and
@@ -200,7 +200,7 @@ one load are now one load step); the speckle check sampled outside the ROI
 (new *Log started after the first frame* offset, `LoadSyncRow`). Bending has
 no real-image check yet.
 
-**Docs refresh with new screenshots (same branch).** Every app screenshot in
+**Docs refresh with new screenshots (PR #12).** Every app screenshot in
 `docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile
 and bending validation runs. The bending run on the new build reads 142.0 GPa
 from the graph and 173.7 GPa average. The README and the operating manual are
@@ -210,7 +210,7 @@ now image-first:
 - lab-report page strips were added;
 - four unreferenced images were removed ([docs/images/CAPTURE_CHECKLIST.md](docs/images/CAPTURE_CHECKLIST.md)).
 
-**Key frames, speckle and plot fixes (same branch).**
+**Key frames, speckle and plot fixes (PR #12).**
 - **Key frames:** the video sheet (`VideoSamplingSheet`) now offers
   **Frame rate / Key frames**. Key frames come from `VideoKeyframes` (AVI
   `idx1` flags, else `MediaExtractor` sync samples) and are thinned evenly to
@@ -229,7 +229,7 @@ now image-first:
 - `step3-sweep.png` and `result-lattice.png` were recaptured, and so were the
   lab-report strips.
 
-**Loads match by time only, within 100 ms (owner decision, 2026-09-24).** A
+**Loads match by time only, within 100 ms (PR #12; owner decision, 2026-09-24).** A
 timed log with video frames is always matched by time, even when its row count
 equals the frame count. A frame takes the nearest row only when it is within
 `MachineLoadMapper.MATCH_TOLERANCE_MS` (100 ms); otherwise its load is NaN.
@@ -238,7 +238,7 @@ column, it is `null` in `index.json` and it has no `loadN` in `metadata.json`.
 A restore keeps it in place. If no frame matches, the gate blocks Next. Photos
 have no times, so they are still paired in order or resampled.
 
-**Terms: age 16+ (owner decision, 2026-09-24).** `TERMS_OF_SERVICE.md` §1.3
+**Terms: age 16+ (PR #12; owner decision, 2026-09-24).** `TERMS_OF_SERVICE.md` §1.3
 now admits users from 16. Under 18 (or under the local age of majority), a
 parent or guardian must agree for them. Privacy §8 matches. The Terms version
 is `2026-09-24` in the doc, `backend/app/legal.py` and `LegalTerms.kt`, so
@@ -249,6 +249,17 @@ owner and counsel:
 - India's DPDP Act 2023 treats under-18s as children and requires verifiable
   parental consent, which the app does not collect; the clickwrap has no age
   question or guardian step.
+
+**Before shipping a build from `main`: the Terms version is ahead of the
+deployed backend.** Backend deploys come from the parent repo
+(`semperdic-app`), whose `backend/app/legal.py` still says `2026-09-15`. This
+repo's `LegalTerms.TERMS_VERSION` fallback is `2026-09-24`. A user the server
+has not yet reported a version for (every first sign-up, and PENDING accounts)
+therefore accepts `2026-09-24`, and the deployed backend answers 409: "update
+the app". Approved users are unaffected, because the app uses the version
+`/v1/me` reports. The fix is to port the Terms and Privacy change and the
+`legal.py` bump to `semperdic-app` and deploy it there (all existing users then
+re-accept), or to hold this repo's fallback at `2026-09-15` until then.
 
 **MP4 frames decode forward (`fix/mp4-decode-forward`, on top of
 `fix/video-estimate-snackbar`).** MP4 extraction asked the retriever for the
@@ -287,7 +298,7 @@ parent repo owns backend deploys. Scope of this repo: a test-type chooser
 (Tensile / Bending) ahead of the wizard, machine-load CSV import with the
 specimen dimensions each test's stress needs, and stress–strain
 outputs in the viewer ⓘ sheet, CSV and PDF. Everything below this paragraph was
-written in the parent repo and still applies. PRs #1, #5, #3, #4, #6 and #7 are
+written in the parent repo and still applies. PRs #1, #3–#12 are
 merged, and the repo is public with a `main` ruleset requiring `CI OK` and a
 pull request.
 
