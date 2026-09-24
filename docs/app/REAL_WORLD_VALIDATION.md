@@ -261,9 +261,9 @@ trims the ROI's edges. They sit right under the nose and on the
 bottom fibre below it, where the nose indents the surface and the beam later
 breaks. Their correlation is good (ZNSSD 0.007–0.1), so they pass the
 acceptance test, and the strain window takes them in. Around them strain
-reads up to about 2,400,000 µε, in frames 24, 25, 27–29 and 32. The engine's
-strain fit does not reject an outlying displacement; that is a `native/`
-change and is not made here. The RMSEs below leave those six frames out.
+reads up to about 2,400,000 µε, in frames 24, 25, 27–29 and 32. The RMSEs
+below leave those six frames out. Engine 0.2.2 now rejects these points
+([below](#engine-022-rejects-the-wrong-matches)).
 
 | Strain window | exx RMSE | eyy RMSE | exy RMSE | Points with a strain value |
 |---:|---:|---:|---:|---:|
@@ -298,6 +298,41 @@ For bending that trade is worth it, because δ and E come from displacement and
 strain only draws the maps. That is why bending starts at a wide window, now
 9 points, a 41 px VSG at step 5 (`TestType.defaultStrainWindow`). On a thin beam, a 45 px band can be a large
 share of the depth: lower the window, or frame closer.
+
+### Engine 0.2.2 rejects the wrong matches
+
+The wrong matches come in clusters of up to about 15 grid points, all about
+20 px off (v ≈ 2 px where the authors have 21.6). Inside a cluster they are
+the local majority, so a 3×3 median test misses them. Engine 0.2.2 runs a
+normalized median test on u and v over each point's 5×5 neighbours. It
+repeats until nothing new fails, peeling a cluster from its edge inward.
+Rejected points feed no strain window and are not in the output
+(`native/docs/MATHEMATICS.md` §9.4).
+
+It was measured off the device. The engine's own filter and VSG fit (C++,
+built on the host) ran on this run's displacements, and the script compared
+the result. The solve before the filter is unchanged, so the displacements
+are the same ones the app would produce.
+
+| | Before (0.2.1) | After (0.2.2) |
+|---|---:|---:|
+| Points rejected | — | 211 in 7 of 33 frames (each checked one 4–23 px off its neighbours' median) |
+| Wrong matches left (> 0.5 px off), 15 px / 45 px run | 20 / 12 | **0 / 0** |
+| Frames with strain spikes | 6 | **0** |
+| Strain RMSE at 45 px, all 33 frames (exx / eyy / exy) | 915 / 3874 / 2117 µε | **412 / 394 / 392 µε** |
+| Worst frame's eyy RMSE at 45 px | 17,931 µε | 562 µε |
+| Strain RMSE at 15 px, all 33 frames | 20,427 / 24,315 / 17,295 µε | **939 / 933 / 813 µε** |
+| Deflection RMSE / largest error | 0.0074 / 0.0185 mm | 0.0068 / 0.0130 mm |
+| E from the graph | 2.000 GPa | 1.998 GPa |
+
+After the fix, the all-frame strain RMSE is about what the table above got
+only by leaving the six frames out. δ and E barely move: the probe averages hundreds
+of points. The rejected points also cost their neighbours' strain windows the
+90% fill, so a few more points near each cluster have no strain.
+
+The steel run (case 1) loses no point to the test. A threshold of 2 instead of
+3 rejects the same PMMA points, plus 8 on the steel's last frame, by the
+fracture.
 
 **Shear sign.** The authors' exy is engineering shear with y pointing up; the
 app's is tensor shear with y pointing down. Theirs is −2 × the app's, which
