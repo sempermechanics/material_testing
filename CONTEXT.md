@@ -61,41 +61,22 @@ Home → StaticAnalysisActivity (wizard) → ResultViewerActivity
 Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `DicKeys`.
 Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`).
 
-| Package | Role |
-|---------|------|
-| `ui/analysis/` | Wizard, ROI, import, VSG sweep, batch run |
-| `ui/viewer/` | Heatmaps, probe, `ShareCenter` |
-| `ui/settings/` | `SettingsActivity` + `Settings*Section` |
-| `ui/home/` | Session list |
-| `ui/common/` | Insets, `MediaPickerSheet`, `CrispToast`, `TransferBannerController` |
-| `data/` | Auth, session store, upload/restore/download workers, storage budget |
-| `analytics/` | `SemperAnalytics` — consent-gated events, same flag as Crashlytics |
-| `report/` | PDF / CSV / `VisualizationEngine` |
-| `backend/app/main.py` | App, middleware, lifespan |
-| `backend/app/routers/` | `/v1/*` by prefix: health, account, devices, sessions, files, provision_tasks, admin |
-| `backend/app/session_provision.py` | `provision_session` / `purge_session` |
+Package map: [ARCHITECTURE.md](docs/app/ARCHITECTURE.md). Backend: `backend/app/main.py`
+(app, middleware, lifespan), `routers/` (`/v1/*` by prefix), `session_provision.py`
+(`provision_session` / `purge_session`).
 
-Kotlin helpers are plain `object` / small classes (`*Helper`, `*Runner`, `*Bundler`).
-No Hilt/Dagger. Keep `lifecycleScope` and Activity Result launchers on the Activity.
-A class with cloud decisions to test takes `api: CloudApi = IndicApi.get(context)` and
-`tokens: TokenSource = TokenProvider` as defaulted parameters; tests pass `FakeCloudApi`
-([ADR-002](docs/adr/ADR-002-cloudapi-seam.md)).
+Kotlin helpers are plain `object` / small classes; no Hilt/Dagger. Keep `lifecycleScope`
+and Activity Result launchers on the Activity. Cloud logic under test takes a defaulted
+`api: CloudApi` / `tokens: TokenSource`; tests pass `FakeCloudApi` ([ADR-002](docs/adr/ADR-002-cloudapi-seam.md)).
 
-Wizard later steps inflate through **ViewStubs**. `goToStep` stays on
-`StaticAnalysisActivity`. Slot chrome / coach marks: `AnalysisWizardSlots` /
-`AnalysisWizardCoach`. The wizard declares full `configChanges` in the manifest,
+The wizard (`StaticAnalysisActivity`, ViewStub steps) declares full `configChanges`,
 so rotation does not recreate it; the state-loss risk is process death
-([ADR-005](docs/adr/ADR-005-wizard-process-death.md)).
+([ADR-005](docs/adr/ADR-005-wizard-process-death.md)). The batch is
+`DicBatchRunner.kt`, an extension (`AnalysisViewModel.runBatchAnalysisBody`), not a type.
 
-Full-field batch: `DicBatchRunner.kt` (`AnalysisViewModel.runBatchAnalysisBody`,
-an extension, not a type) + `DicFieldIo` shared with VSG. JNI
-`computeFullFieldDirect` stays **inside that one loop**.
-
-New analysis starts from the Home **+**, which opens `MediaPickerSheet`
-(shared with the wizard dropzones).
-Long transfers show a
-non-modal `TransferBannerController` strip in Settings and the viewer; uploads,
-restores, `DicBundleDownloadWorker` downloads and backup deletes are WorkManager.
+Home **+** opens `MediaPickerSheet` (shared with the wizard dropzones). Uploads,
+restores, bundle downloads and backup deletes are WorkManager, shown by the
+non-modal `TransferBannerController` strip.
 
 ## Invariants
 
@@ -125,51 +106,29 @@ restores, `DicBundleDownloadWorker` downloads and backup deletes are WorkManager
 
 ## Quality gates
 
-Empty `app/lint-baseline.xml` and `app/detekt-baseline.xml`. Prefer a targeted
-`@file:Suppress` or an extract over stuffing a baseline.
+Empty `app/lint-baseline.xml` / `app/detekt-baseline.xml`: extract or `@file:Suppress`,
+never stuff a baseline. `OldTargetApi` stays disabled until a deliberate `targetSdk`
+36→37 bump, and no `warningsAsErrors`. Settings / wizard XML stay under
+`TooManyViews` via `SettingsScrollContentView` / `WizardStepSettingsContentView`.
 
-`OldTargetApi` is disabled in `app/build.gradle.kts` until a deliberate
-`targetSdk` 36→37 bump. Do not re-enable that or turn on `warningsAsErrors`
-in a drive-by. Settings / wizard settings XML stay under `TooManyViews` by
-inflating through `SettingsScrollContentView` /
-`WizardStepSettingsContentView`.
-
-Kover `minBound` is 37 (`app/build.gradle.kts`), enforced by `:app:koverVerify`
-in CI tier 1 and `ciReleaseGate` (measured 39.1 % on 2026-09-24). Macrobenchmark CI is
-emulator **smoke** (`suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`), API 34, no
-numeric thresholds.
-
-Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
-(≥ 4557 solves/s host) is a manual engine-repo reference; no CI job enforces
-it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
+Kover `minBound` 37, enforced by `:app:koverVerify` in tier 1 and `ciReleaseGate`
+(39.1 % on 2026-09-24). Macrobenchmark CI is emulator smoke, no thresholds
+([TESTING.md](docs/app/TESTING.md)). The engine floor (≥ 4557 solves/s,
+[PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual
+reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-24)
 
-- **Deployed.** Production is Cloud Run `semper-api` behind API Gateway
-  `semper-gw` (staging `semper-api-staging`); #146 renamed services and queues,
-  project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-  Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
-- **Live 2026-09-24.** #154: signed routes take their rate-limit bucket as
-  `dependencies=[deps.rate_limited(...)]`, resolved before `verified_device`,
-  so a 429 no longer spends the nonce; 429s send `Retry-After`. First live as
-  `semper-api-35957034833-1`; proven from a Pixel 6 ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **Terms back to 18+ (#171, reverts #169).** #169 (Terms §1.3 from 16, with
-  a guardian agreeing under 18; version `2026-09-24`) went live on 2026-09-24
-  and was reverted the same day at the owner's request: legal docs, hosted
-  pages, `backend/app/legal.py` and `LegalTerms.kt` are back to `2026-09-15`
-  byte for byte, so only users who accepted `2026-09-24` re-accept. Same
-  revert as material_testing #15; keep both `TERMS_VERSION`s equal
+- **Deployed.** Production is Cloud Run `semper-api` (`semper-api-35963412251-1`,
+  from `11eddc5`) behind API Gateway `semper-gw`; staging `semper-api-staging`;
+  project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)). Licensing
+  is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
+  Latest: #154 (a 429 keeps the nonce), #171 (Terms back to 18+; keep
+  `TERMS_VERSION` equal to material_testing's), the #155–#168 burn-down
   ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **Burn-down live on the backend 2026-09-24 (#155–#168).**
-  ([TECH_DEBT.md](docs/ops/TECH_DEBT.md), [docs/adr/](docs/adr/README.md)
-  ADR-001..006.) Production `semper-api-35963412251-1` (run 35963412251, from
-  `11eddc5`, with #171) and staging serve it. App changes (`RunSpec`,
-  `ViewerArgs`, wizard draft, `CloudApi` seam, checked PDF write) ship with
-  the next release. ADR-006's first `gateway` run (dry-run) failed:
-  `apigateway.apis.get` denied, so the IAM grant is still owed. The live
-  gateway config still routes the removed campus invite-revoke alias (TD-45);
-  the backend 404s it and nothing calls it.
-- **Owed.** Video/AVI import (#136–#139) has run only on emulators
+- **Owed.** An app release for the burn-down's app half. The IAM grant for
+  ADR-006's `gateway` job (TD-27): its first dry-run failed on
+  `apigateway.apis.get`. Video/AVI import has run only on emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
   rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`; history in

@@ -12,6 +12,22 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-24 — Tech-debt burn-down (#155–#168)
+
+Fourteen stacked PRs from the verified register in
+[TECH_DEBT.md](TECH_DEBT.md), with [ADR-001..006](../adr/README.md). Merged
+2026-09-24 05:40Z; main CI green through Tier 3 and Tier 5. The backend half
+(`app/repo/` package behind the `firestore_repo` facade, route-aware access
+log, `rate_limit.enforce`, bounded outbound `Retry-After`) went to staging in
+Deploy Backend run 35963140403 and to production in run 35963412251, revision
+`semper-api-35963412251-1` from `11eddc5` (with #171); `readyz ok`, 100 %
+traffic. The app half (`RunSpec`, `ViewerArgs`, wizard draft, `CloudApi` seam,
+checked PDF write) waits for the next release. The same production run was
+ADR-006's first `gateway` run, `dry-run`: it stopped at the diff step with
+`apigateway.apis.get` denied, before the owner's IAM grant. The live gateway
+config therefore still routes the removed campus invite-revoke alias (TD-45),
+which the backend now 404s; nothing calls it.
+
 ## 2026-09-24 — Terms 16+ (#169), reverted to 18+ (#171)
 
 **Terms: age 16+, then back to 18+ (owner decisions, 2026-09-24).** #169
