@@ -39,8 +39,13 @@ def report_failures(root: Path) -> int:
                 problem = case.find(kind)
                 if problem is None:
                     continue
-                failures += 1
                 name = f"{case.get('classname', '?')}.{case.get('name', '?')}"
+                body = (problem.get("message") or "") + (problem.text or "")
+                if "AssumptionViolatedException" in body:
+                    # An assumption that did not hold is a skip, not a failure.
+                    print(f"skipped: {name}")
+                    continue
+                failures += 1
                 headline = (problem.get("message") or "").splitlines()[:1]
                 print(f"::error title=Failed test::{name}: {headline[0] if headline else kind}")
                 print(f"::group::{name}")

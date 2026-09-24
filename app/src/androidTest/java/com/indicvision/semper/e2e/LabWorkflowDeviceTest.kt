@@ -11,7 +11,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
-import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.DicResult
@@ -167,11 +166,11 @@ class LabWorkflowDeviceTest {
 
             // At rest, a horizontal swipe is a scrub: one frame whether it is a
             // flick (the fling detector) or a slow drag (the swipe distance).
-            image().swipe(Direction.LEFT, SWIPE_PERCENT)
+            swipeAcrossImage(FLICK_STEPS)
             awaitOn(scenario, "the flick to reach frame 2") { it.currentFrameIndex >= 1 }
             device.waitForIdle()
             scenario.onActivity { assertEquals("one flick moved more than one frame", 1, it.currentFrameIndex) }
-            image().swipe(Direction.LEFT, SWIPE_PERCENT, SLOW_SWIPE_PX_PER_S)
+            swipeAcrossImage(SLOW_STEPS)
             awaitOn(scenario, "the slow swipe to reach frame 3") { it.currentFrameIndex >= 2 }
             device.waitForIdle()
             scenario.onActivity { assertEquals("one slow swipe moved more than one frame", 2, it.currentFrameIndex) }
@@ -182,7 +181,7 @@ class LabWorkflowDeviceTest {
             assertTrue("pinch-open did not zoom ($restScale → $zoomed)", zoomed > restScale * 1.2f)
 
             // Zoomed in, the same swipe pans instead of scrubbing.
-            image().swipe(Direction.LEFT, PAN_PERCENT)
+            swipeAcrossImage(PAN_STEPS)
             device.waitForIdle()
             scenario.onActivity { assertEquals("a pan changed the frame", 2, it.currentFrameIndex) }
             assertEquals(zoomed, scaleOf(scenario), zoomed * 0.01f)
@@ -199,6 +198,21 @@ class LabWorkflowDeviceTest {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * A leftward drag across the middle of the image, clear of the colour-scale
+     * rail on the right edge and the controls at the bottom. UiDevice injects a
+     * move every ~5 ms, so [steps] sets the speed: 10 is a flick, 500 stays
+     * under TouchImageView's 400 px/s fling threshold.
+     */
+    private fun swipeAcrossImage(steps: Int) {
+        val box = image().visibleBounds
+        val y = box.centerY()
+        val from = box.left + (box.width() * SWIPE_FROM).toInt()
+        val to = box.left + (box.width() * SWIPE_TO).toInt()
+        assertTrue("the swipe could not be injected", device.swipe(from, y, to, y, steps))
+        device.waitForIdle()
+    }
 
     private fun image() = checkNotNull(device.findObject(By.res(context.packageName, "imgBaseResult"))) {
         "imgBaseResult is not on screen"
@@ -224,7 +238,11 @@ class LabWorkflowDeviceTest {
             var ok = false
             scenario.onActivity { ok = done(it) }
             if (ok) return
-            check(System.currentTimeMillis() < deadline) { "timed out waiting for $what" }
+            check(System.currentTimeMillis() < deadline) {
+                var frame = -1
+                scenario.onActivity { frame = it.currentFrameIndex }
+                "timed out waiting for $what (on frame index $frame)"
+            }
             Thread.sleep(POLL_MS)
         }
     }
@@ -374,11 +392,11 @@ class LabWorkflowDeviceTest {
         const val CROSS_SECTION_MM2 = 10f
         const val MIN_PDF_BYTES = 1_000L
         const val PDF_MAGIC = "%PDF-"
-        const val SWIPE_PERCENT = 0.6f
-        const val PAN_PERCENT = 0.3f
-
-        // Under TouchImageView's 400 px/s fling threshold, so only the swipe distance scrubs.
-        const val SLOW_SWIPE_PX_PER_S = 250
+        const val SWIPE_FROM = 0.7f
+        const val SWIPE_TO = 0.2f
+        const val FLICK_STEPS = 10
+        const val PAN_STEPS = 40
+        const val SLOW_STEPS = 500
         const val PINCH_PERCENT = 0.8f
         const val TIMEOUT_MS = 20_000L
         const val POLL_MS = 50L
