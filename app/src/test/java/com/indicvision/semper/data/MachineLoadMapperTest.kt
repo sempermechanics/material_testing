@@ -63,23 +63,86 @@ class MachineLoadMapperTest {
             frameTimesMs = listOf(400L, 1600L),
         )!!
 
-        // 10.4 s → row 10.5 (100 N); 11.6 s → row 11.5 (300 N).
+        // 10.4 s → row 10.5 (100 N); 11.6 s → row 11.5 (300 N); each 100 ms away.
         assertEquals(listOf(100f, 300f), table.loadsN)
         assertEquals(LoadMapping.TIME_NEAREST, table.mapping)
         assertEquals(listOf(LoadMapWarning.TIME_ALIGNED), table.warnings)
     }
 
     @Test
-    fun `a frame past the end of the log takes the last row`() {
-        val table = map(
-            loads = listOf(0f, 25f, 50f, 100f),
-            frames = 2,
-            times = listOf(0f, 1f, 2f, 3f),
-            frameTimesMs = listOf(500L, 9000L),
+    fun `a log started after the reference frame is shifted by the gap`() {
+        // Recording began 2 s before the machine: the log's first row is at video 2 s.
+        val table = MachineLoadMapper.map(
+            parsed(listOf(0f, 100f, 200f, 300f, 400f, 500f), listOf(0f, 1f, 2f, 3f, 4f, 5f)),
+            frameCount = 3,
+            frameTimesMs = listOf(1000L, 3000L, 5000L),
+            testType = TestType.TENSILE,
+            logStartS = 2f,
         )!!
 
-        // A tie (0.5 s between rows 0 and 1) takes the earlier row.
-        assertEquals(listOf(0f, 100f), table.loadsN)
+        // Video 1 s is before the log began → no load; 3 s → log 1 s; 5 s → log 3 s.
+        assertEquals(listOf(Float.NaN, 100f, 300f), table.loadsN)
+        assertEquals(LoadMapping.TIME_NEAREST, table.mapping)
+        assertEquals(2, table.matchedFrames)
+    }
+
+    @Test
+    fun `a frame more than 100 ms from every row has no load`() {
+        val table = map(
+            loads = listOf(0f, 25f, 50f, 100f),
+            frames = 3,
+            times = listOf(0f, 1f, 2f, 3f),
+            frameTimesMs = listOf(500L, 2000L, 9000L),
+        )!!
+
+        // 0.5 s sits between rows; 9 s is past the log's end.
+        assertEquals(listOf(Float.NaN, 50f, Float.NaN), table.loadsN)
+        assertEquals(listOf(LoadMapWarning.TIME_ALIGNED, LoadMapWarning.UNMATCHED_FRAMES), table.warnings)
+    }
+
+    @Test
+    fun `100 ms matches and 101 ms does not`() {
+        val table = map(
+            loads = listOf(0f, 40f),
+            frames = 2,
+            times = listOf(0f, 0.9f),
+            frameTimesMs = listOf(1000L, 1001L),
+        )!!
+
+        assertEquals(listOf(40f, Float.NaN), table.loadsN)
+    }
+
+    @Test
+    fun `a timed log is matched by time even when its rows equal the frames`() {
+        val table = map(
+            loads = listOf(0f, 10f, 20f),
+            frames = 3,
+            times = listOf(0f, 1f, 2f),
+            frameTimesMs = listOf(1000L, 2000L, 3000L),
+        )!!
+
+        // In order this would pair 0, 10, 20; by time the third frame is past the log.
+        assertEquals(listOf(10f, 20f, Float.NaN), table.loadsN)
+        assertEquals(LoadMapping.TIME_NEAREST, table.mapping)
+    }
+
+    @Test
+    fun `no frame within 100 ms is a table with nothing matched`() {
+        val table = map(
+            loads = listOf(5f, 6f),
+            frames = 2,
+            times = listOf(0f, 1f),
+            frameTimesMs = listOf(5000L, 6000L),
+        )!!
+
+        assertEquals(0, table.matchedFrames)
+    }
+
+    @Test
+    fun `a timed log with photos, which have no times, pairs in order`() {
+        val table = map(listOf(10f, 20f), frames = 2, times = listOf(0f, 1f))!!
+
+        assertEquals(LoadMapping.ONE_TO_ONE, table.mapping)
     }
 
     @Test

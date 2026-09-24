@@ -54,6 +54,8 @@ object PdfReportGenerator {
     /** Table rows per page, at [PdfLayoutEngine.drawTable]'s row pitch. */
     private const val STRESS_STRAIN_ROWS_FIRST_PAGE = 14
     private const val STRESS_STRAIN_ROWS_PER_PAGE = 34
+    private val STRESS_STRAIN_TABLE_WEIGHTS = listOf(0.31f, 0.23f, 0.23f, 0.23f)
+    private val DEFLECTION_TABLE_WEIGHTS = listOf(0.24f, 0.19f, 0.19f, 0.19f, 0.19f)
 
     /**
      * The closing stress–strain page(s) of an all-frames report: the curve as
@@ -241,7 +243,7 @@ object PdfReportGenerator {
     private fun drawStressStrainPages(layout: PdfLayoutEngine, page: StressStrainPage) {
         val curve = page.curve
         layout.newPage()
-        layout.drawTitle("Stress–Strain Curve")
+        layout.drawTitle(curve.model.curveTitle)
         layout.drawDimensions(curve.model)
         layout.drawKeyValue("Strain:", "${curve.model.strainName} over accepted points")
         curve.peak?.let {
@@ -251,22 +253,30 @@ object PdfReportGenerator {
         layout.advanceY(20f)
         page.plot?.let {
             layout.drawDiagnosticBlock(
-                "${curve.model.stressName} vs. ${curve.model.strainName}",
+                curve.model.plotTitle,
                 it,
                 STRESS_STRAIN_PLOT_HEIGHT,
             )
         }
 
+        val deflection = curve.model.plotsLoadDeflection
         val rows = curve.points.map {
-            listOf(
+            listOfNotNull(
                 "Frame ${it.frame + 1}",
                 "%.2f".format(Locale.US, it.loadN),
                 "%.3f".format(Locale.US, it.stressMPa),
                 "%.3f".format(Locale.US, it.strainMilli),
+                if (deflection) it.deflectionMm?.let { d -> "%.4f".format(Locale.US, d) } ?: "—" else null,
             )
         }
-        val headers = listOf("Frame", "Load (N)", "Stress (MPa)", "Strain (mε)")
-        val weights = listOf(0.31f, 0.23f, 0.23f, 0.23f)
+        val headers = listOfNotNull(
+            "Frame",
+            "Load (N)",
+            "Stress (MPa)",
+            "Strain (mε)",
+            "Deflection (mm)".takeIf { deflection },
+        )
+        val weights = if (deflection) DEFLECTION_TABLE_WEIGHTS else STRESS_STRAIN_TABLE_WEIGHTS
         val first = rows.take(STRESS_STRAIN_ROWS_FIRST_PAGE)
         layout.drawSectionHeader("Per-frame values")
         layout.drawTable(headers, first, weights)

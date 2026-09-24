@@ -166,7 +166,9 @@ print pale axes. **Share → Lab report
 loads) lays the session out as the handwritten Experiment 2 write-up: same
 sections and order, row 1 worked through, Elastic / Plastic / Break point
 margin brackets, blank lines for what the app cannot know (diameter, gauge
-length, final dimensions, extension in mm) and for the student's conclusion.
+length, final dimensions) and for the student's conclusion. Extension is in
+pixels along the strain axis, from a virtual extensometer over the ends of the
+analysed region (`report/Extensometer`, gauge fixed on the first frame).
 Its fixed wording is `LabReportText`, English like the rest of the PDF. The
 CSV ends with a `# mechanical_results` trailer (still version 2). Loads stay
 CSV-only; typing a load per photo and the photo↔load sync are open
@@ -175,10 +177,78 @@ sets mm/px and marks the load point, δ comes from V there, and E =
 WL³/(48δI) per step, averaged and from the load–deflection slope, with a
 bending lab report.
 
-**Open owner decision: the Terms do not fit a student audience.**
-`docs/legal/TERMS_OF_SERVICE.md` §1.2 says professional use only, not offered
-to consumers, and §1.3 requires users to be 18 or over, which rules out some
-first-semester students. Not edited here; legal text changes need the owner.
+**Student lab outputs, part 2: bending deflection and real-data validation
+(`feat/bending-deflection`, in progress).** Bending gets a thickness tap on
+the reference photo (`BeamEdgeTapActivity`, stored as
+`SpecimenGeometry.loadPoint`, metadata schema `/6`) that sets mm/px and marks
+the load point; `report/BeamDeflection` reads δ there and gives σb and
+E = WL³/(48δI) per step, averaged and from the load–deflection slope, in the
+viewer, the CSV trailer and a bending lab report (`LabReportBending`). A
+published steel tensile test (Zenodo 18311953) run through the app
+([docs/app/REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)) first
+read "E not found": `ElasticModulus` stopped at the first run failing R², and
+the first three photos, at 6–17 MPa, are noise. It now keeps the longest
+leading run that passes (149.6 GPa against the dataset's own 157.5; pinned in
+`RealSteelModulusTest`). Bending was run end to end on a synthetic video
+built from the Experiment 5 table (`scripts/synthetic_beam_video.py`); the app
+matches the report (E from the graph 141.5 vs 142.0 GPa, average 173.1 vs
+173.6). That run fixed five things: the tap editor lost its zoom after the
+first tap (`TouchImageView` now keeps zoom through a resize); unloaded frames
+bent the slope (left out now); a video gave one table row per frame (frames at
+one load are now one load step); the speckle check sampled outside the ROI
+(clamped); and a load log started after the recording could not be aligned
+(new *Log started after the first frame* offset, `LoadSyncRow`). Bending has
+no real-image check yet.
+
+**Docs refresh with new screenshots (same branch).** Every app screenshot in
+`docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile
+and bending validation runs. The bending run on the new build reads 142.0 GPa
+from the graph and 173.7 GPa average. The README and the operating manual are
+now image-first:
+- the manual gains **§2 Lab tests**, and its user sections are about half as long;
+- `STUDENT_LAB_WORKFLOW.md` is tightened;
+- lab-report page strips were added;
+- four unreferenced images were removed ([docs/images/CAPTURE_CHECKLIST.md](docs/images/CAPTURE_CHECKLIST.md)).
+
+**Key frames, speckle and plot fixes (same branch).**
+- **Key frames:** the video sheet (`VideoSamplingSheet`) now offers
+  **Frame rate / Key frames**. Key frames come from `VideoKeyframes` (AVI
+  `idx1` flags, else `MediaExtractor` sync samples) and are thinned evenly to
+  *Max frames* by `VideoSampling.keyframeTimesMs`. `VideoFrameExtractor` takes
+  a list of sample times, so both plans share every rung. Times round to the
+  nearest µs, and `AviReader.frameIndexAt` allows half a µs, so a key frame is
+  never decoded as the frame before it. The synthetic beam clip gives 29 key
+  frames, all distinct.
+- **Speckle before an ROI:** the whole-frame reading was ~100 px on the
+  steel set, because the median counted patches straddling the bar's edge.
+  Only patches with at least 2/3 of the strongest patch's gradient energy
+  count now (`SubsetRecommender.texturedSpeckleMedian`); it reads 4.8 px.
+- **Plot titles:** `VsgPlotView` sizes its left gutter from the widest tick
+  label, so the rotated y title no longer runs over the tick numbers in the
+  lab-report graphs.
+- `step3-sweep.png` and `result-lattice.png` were recaptured, and so were the
+  lab-report strips.
+
+**Loads match by time only, within 100 ms (owner decision, 2026-09-24).** A
+timed log with video frames is always matched by time, even when its row count
+equals the frame count. A frame takes the nearest row only when it is within
+`MachineLoadMapper.MATCH_TOLERANCE_MS` (100 ms); otherwise its load is NaN.
+NaN means no load: the frame is left off the curve and out of the CSV load
+column, it is `null` in `index.json` and it has no `loadN` in `metadata.json`.
+A restore keeps it in place. If no frame matches, the gate blocks Next. Photos
+have no times, so they are still paired in order or resampled.
+
+**Terms: age 16+ (owner decision, 2026-09-24).** `TERMS_OF_SERVICE.md` §1.3
+now admits users from 16. Under 18 (or under the local age of majority), a
+parent or guardian must agree for them. Privacy §8 matches. The Terms version
+is `2026-09-24` in the doc, `backend/app/legal.py` and `LegalTerms.kt`, so
+every existing user re-accepts once the backend deploys. Still open, for the
+owner and counsel:
+- §1.2 (professional use only, not offered to consumers) still sits badly with
+  students;
+- India's DPDP Act 2023 treats under-18s as children and requires verifiable
+  parental consent, which the app does not collect; the clickwrap has no age
+  question or guardian step.
 
 **MP4 frames decode forward (`fix/mp4-decode-forward`, on top of
 `fix/video-estimate-snackbar`).** MP4 extraction asked the retriever for the
@@ -187,10 +257,8 @@ the same I-frame; a phone clip gave 26 identical frames and zero displacement.
 Ported the parent repo's `HardwareVideoDecoder` (from its 571a82c, 40bab6a and
 151a8ba): `MediaExtractor` + `MediaCodec`, lossless Y plane, decoding forward
 to the requested frame, then the retriever as a last resort, now asking for the
-exact frame first. The parent's **Keyframes (DIC)** sampling mode was not
-ported: it spaces frames by the encoder's GOP rather than a chosen rate, and
-machine loads are matched by time, so evenly spaced frames suit a stress–strain
-curve better. On the emulator the
+exact frame first. The parent's **Keyframes (DIC)** sampling mode was left
+out of that fix and has since been ported (see *Key frames, speckle and plot fixes* below). On the emulator the
 real clip now yields frames that match the source, and
 `VideoFrameExtractionDeviceTest` passes 6/6. Not yet tried on a physical
 device's vendor decoder (§5.1a.12).

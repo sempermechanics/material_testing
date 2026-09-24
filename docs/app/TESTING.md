@@ -134,6 +134,15 @@ CI runs this only with the `benchmark` PR label or workflow_dispatch
 `run_benchmark`. Ship `app/src/main/baseline-prof.txt` + `profileinstaller`;
 regenerate the profile from Macrobenchmark output when tightening startup.
 
+## Real-data validation
+
+The unit tests type lab tables in by hand. The whole chain — images, solve,
+load CSV, curve, E — is checked against a published test with its own strain
+measurement in [REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md). It is a
+manual emulator run plus `scripts/real_data_steel_tensile.py`, not part of CI;
+the app's resulting curve is pinned in `report/RealSteelModulusTest`. Re-run it
+after a change to the solve, the strain window or `ElasticModulus`.
+
 ## What not to test here
 
 - Algorithm accuracy → the engine's own suite, which lives in the `native/`

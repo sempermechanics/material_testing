@@ -78,13 +78,15 @@ object LabReport {
 
     /**
      * The document for a session's curve, or null when there is nothing to
-     * report (an empty curve) or the test has no lab template in this build.
+     * report: an empty curve, or bending without the load point tapped (no
+     * deflection, so none of the lab's numbers).
      */
     fun of(curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): Document? {
         if (curve.isEmpty) return null
         return when (val model = curve.model) {
             is StressStrain.Model.Axial -> tensile(curve, model, modulus)
-            is StressStrain.Model.Flexural -> null
+            is StressStrain.Model.Flexural ->
+                BeamDeflection.summarize(curve)?.let { LabReportBending.document(model, it) }
         }
     }
 
@@ -114,6 +116,7 @@ object LabReport {
                 add(Block.Field(t.DIAMETER, null))
                 add(Block.Field(t.AREA, num(model.areaMm2, 2)))
                 add(Block.Field(t.STRAIN_BY, t.strainBy(model.strainName)))
+                curve.gauge?.let { add(Block.Field(t.dicGauge(axisName(model)), t.dicGaugeValue(num(it.lengthPx, 0)))) }
                 add(Block.Field(t.FINAL_DIAMETER, null))
                 add(Block.Field(t.FINAL_GAUGE_LENGTH, null))
                 add(tensileTable(curve, modulus))
@@ -127,7 +130,7 @@ object LabReport {
                                 num(first.stressMPa, 2),
                             ),
                             t.strainLine(sci(first.strainMilli / MILLI)),
-                        ),
+                        ) + extensionLine(curve, first),
                     ),
                 )
                 addAll(tensileGraphs(curve, modulus))
@@ -141,13 +144,25 @@ object LabReport {
         )
     }
 
+    private fun axisName(model: StressStrain.Model.Axial): String = if (model.axisX) "x" else "y"
+
+    private fun extensionLine(curve: StressStrain.Curve, first: StressStrain.Point): List<String> {
+        val gauge = curve.gauge
+        val extension = first.extensionPx
+        return if (gauge == null || extension == null) {
+            emptyList()
+        } else {
+            listOf(LabReportText.Tensile.extensionLine(num(extension, EXTENSION_DECIMALS), num(gauge.lengthPx, 0)))
+        }
+    }
+
     private fun tensileTable(curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): Block.Table {
         val t = LabReportText.Tensile
         val rows = curve.points.mapIndexed { i, p ->
             listOf(
                 "${i + 1}",
                 num(p.loadN / NEWTONS_PER_KN, LOAD_DECIMALS),
-                BLANK_CELL,
+                p.extensionPx?.let { num(it, EXTENSION_DECIMALS) } ?: BLANK_CELL,
                 num(p.stressMPa, 2),
                 sci(p.strainMilli / MILLI),
             )
@@ -223,5 +238,6 @@ object LabReport {
     private const val MILLI = 1000f
     private const val CONCLUSION_LINES = 6
     private const val LOAD_DECIMALS = 3
+    private const val EXTENSION_DECIMALS = 2
     const val BLANK_CELL = "—"
 }

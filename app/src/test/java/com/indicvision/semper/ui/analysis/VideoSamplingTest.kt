@@ -52,4 +52,37 @@ class VideoSamplingTest {
         assertEquals(3999L, VideoSampling.lastFrameStartMs(4000, 30.0, fpsKnown = false))
         assertEquals(0L, VideoSampling.lastFrameStartMs(10, 5.0, fpsKnown = true))
     }
+
+    @Test
+    fun `key frames inside the segment become the sample times, in ms`() {
+        // A phone's one-a-second key frames, at 29.97 fps timestamps.
+        val sync = listOf(0L, 1_001_000L, 2_002_000L, 3_003_000L, 4_004_000L)
+        assertEquals(
+            listOf(1001.0, 2002.0, 3003.0),
+            VideoSampling.keyframeTimesMs(sync, startMs = 500, endMs = 3500, maxFrames = 50),
+        )
+    }
+
+    @Test
+    fun `key frames keep sub-millisecond timestamps and ignore repeats and order`() {
+        val sync = listOf(66_733L, 33_366L, 0L, 33_366L)
+        assertEquals(
+            listOf(0.0, 33.366, 66.733),
+            VideoSampling.keyframeTimesMs(sync, startMs = 0, endMs = 100, maxFrames = 50),
+        )
+    }
+
+    @Test
+    fun `too many key frames thin evenly, keeping the reference and the last`() {
+        // An all-intra clip: every frame is a key frame.
+        val sync = List(100) { it * 40_000L }
+        val times = VideoSampling.keyframeTimesMs(sync, startMs = 0, endMs = 4000, maxFrames = 5)
+        assertEquals(listOf(0.0, 1000.0, 2000.0, 2960.0, 3960.0), times)
+    }
+
+    @Test
+    fun `no key frame in the segment is no plan`() {
+        assertEquals(emptyList<Double>(), VideoSampling.keyframeTimesMs(listOf(0L, 5_000_000L), 1000, 4000, 50))
+        assertEquals(listOf(7.0), VideoSampling.selectEvenly(listOf(7.0, 8.0), 1))
+    }
 }

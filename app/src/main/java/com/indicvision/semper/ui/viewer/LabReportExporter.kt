@@ -2,6 +2,7 @@ package com.indicvision.semper.ui.viewer
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.PointF
 import android.graphics.RectF
 import com.indicvision.semper.data.TestType
 import com.indicvision.semper.report.LabReport
@@ -15,7 +16,8 @@ import java.io.File
 /**
  * The share sheet's "Lab report (PDF)": the student write-up [LabReport]
  * lays out, with its graphs drawn by the same off-screen [VsgPlotView] the
- * full report uses and the reference photo as the setup figure.
+ * full report uses and the reference photo as the setup figure — for bending
+ * with the two thickness taps and the ring deflection is read in.
  */
 class LabReportExporter(private val context: Context) {
 
@@ -36,8 +38,11 @@ class LabReportExporter(private val context: Context) {
         val graphs = withContext(Dispatchers.Main) {
             document.graphs.associate { it.id to render(it) }
         }
+        val probe = (curve.model as? StressStrain.Model.Flexural)?.probe
+        val marks = probe?.taps?.let { listOf(PointF(it.topX, it.topY), PointF(it.bottomX, it.bottomY)) }.orEmpty()
+        val ring = probe?.let { PointF(it.taps.midX, it.taps.midY) to it.radiusPx }
         val figure = reference?.let {
-            LabReportPdf.FigureImage(it, imageSize.first, imageSize.second, roi)
+            LabReportPdf.FigureImage(it, imageSize.first, imageSize.second, roi, marks, ring)
         }
         withContext(Dispatchers.IO) {
             dest.outputStream().use { LabReportPdf(figure, graphs).write(document, it) }
@@ -71,9 +76,15 @@ class LabReportExporter(private val context: Context) {
 
         /**
          * Whether a session gets the row: a typed test with a load per frame,
-         * not a parameter sweep, whose test has a lab template.
+         * not a parameter sweep, whose test has a lab template. Bending's
+         * template needs the thickness taps: without them there is no
+         * deflection, so no observation table.
          */
-        fun offered(testType: String, hasLoads: Boolean, isSweep: Boolean): Boolean =
-            hasLoads && !isSweep && TestType.fromWire(testType) == TestType.TENSILE
+        fun offered(testType: String, hasLoads: Boolean, isSweep: Boolean, hasLoadPoint: Boolean): Boolean =
+            hasLoads && !isSweep && when (TestType.fromWire(testType)) {
+                TestType.TENSILE -> true
+                TestType.BENDING -> hasLoadPoint
+                null -> false
+            }
     }
 }

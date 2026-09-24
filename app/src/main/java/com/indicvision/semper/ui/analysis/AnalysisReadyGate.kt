@@ -38,6 +38,8 @@ object AnalysisReadyGate {
             viewModel.defFilePaths.isEmpty() -> activity.getString(R.string.next_reason_def)
             viewModel.testType.hasMachineLoad && viewModel.machineLoads == null ->
                 activity.getString(R.string.next_reason_load)
+            viewModel.testType.hasMachineLoad && viewModel.machineLoads?.matchedFrames == 0 ->
+                activity.getString(R.string.next_reason_load_unmatched)
             viewModel.testType.hasMachineLoad && !viewModel.stressModel().isComplete ->
                 activity.getString(
                     if (viewModel.stressModel() is StressStrain.Model.Axial) {
@@ -46,6 +48,8 @@ object AnalysisReadyGate {
                         R.string.next_reason_dimensions
                     },
                 )
+            viewModel.testType.hasMachineLoad && viewModel.loadPointMissing() ->
+                activity.getString(R.string.next_reason_load_point)
             else -> ""
         }
 

@@ -9,8 +9,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
-import com.indicvision.semper.data.DicSettings
-import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.FaqRedirect
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +21,7 @@ import java.io.File
 
 /**
  * Video frame extraction orchestration extracted from [StaticAnalysisActivity].
- * Frame 0 of the segment becomes the reference; the rest feed defFilePaths.
+ * The first of the sample times becomes the reference; the rest feed defFilePaths.
  */
 object AnalysisVideoExtractHelper {
 
@@ -36,9 +34,7 @@ object AnalysisVideoExtractHelper {
         activity: AppCompatActivity,
         viewModel: AnalysisViewModel,
         uri: Uri,
-        fpsExtract: Double,
-        startMs: Long,
-        endMs: Long,
+        times: List<Double>,
         cacheDir: File,
         tvResult: TextView,
         overlayHelper: ComputeOverlayHelper,
@@ -53,10 +49,7 @@ object AnalysisVideoExtractHelper {
                 val result = VideoFrameExtractor.extract(
                     context = activity,
                     uri = uri,
-                    fpsExtract = fpsExtract,
-                    startMs = startMs,
-                    endMs = endMs,
-                    maxFrames = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity)),
+                    times = times,
                     cacheDir = cacheDir,
                     onProgress = { percent, status ->
                         overlayHelper.update(percent = percent.toFloat(), status = status)
@@ -79,6 +72,7 @@ object AnalysisVideoExtractHelper {
                     viewModel.realRefWidth = result.refWidth
                     viewModel.realRefHeight = result.refHeight
                     viewModel.refBytes = result.refPng
+                    viewModel.onReferenceReplaced()
                     viewModel.refName = result.refName
                     if (!viewModel.hasCustomRoi) {
                         viewModel.roiX = 0

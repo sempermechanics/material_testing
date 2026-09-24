@@ -1,125 +1,161 @@
-# Student lab workflow — tensile and bending with a phone
+# Student lab workflow: tensile and bending with a phone
 
-Product spec for the direction this repository is taking: **Material Testing
-is a phone-camera 2D DIC companion for a first-semester undergraduate** doing
-the two standard strength-of-materials experiments. The phone replaces the
-contact instrument (extensometer, dial gauge) and the app writes the lab
-report the student would otherwise draw up by hand.
+**Material Testing is a phone-camera 2D DIC companion for a first-semester undergraduate** doing
+the two standard strength-of-materials experiments.
+- **The phone replaces the contact instrument** (extensometer, dial gauge).
+- **The app writes the lab report.**
 
-The two reference write-ups this spec was built from are a student's
-handwritten journal reports: *Experiment 2 — Measurement of Tensile Strains
-and Modulus of Elasticity* and *Experiment 5 — Measurement of Bending Moment
-and Deflection of Beam*. Their sections, order and outputs are what the app
-reproduces.
+The spec follows a student's two handwritten journal reports:
+- *Exp. 2: Measurement of Tensile Strains and Modulus of Elasticity*;
+- *Exp. 5: Measurement of Bending Moment and Deflection of Beam*.
 
-## Who it is for
+The app reproduces their sections, order and outputs.
 
-A student in the first semester of an engineering degree:
+**The student** knows stress, strain and Hooke's law, but not DIC. They run the test on a UTM, or on a frame with a hanger.
+They have to hand in:
+- aim, apparatus and theory;
+- observations and an observation table;
+- a worked calculation;
+- graphs and results.
 
-- has met stress, strain and Hooke's law, but not DIC;
-- runs the test in a university lab (a UTM for tensile, a loading frame with a
-  hanger for bending) and reads loads off the machine or counts the weights;
-- has to hand in a journal write-up: aim, apparatus, theory, observations, an
-  observation table, a worked calculation, graphs and results.
+So the copy is plain, the formulas are spelled out, and every number shown is one the write-up asks for.
 
-So the copy is plain, formulas are spelled out, and every result the app
-shows is one the write-up asks for.
-
-## What the student gives the app
+## Inputs
 
 | | Tensile | Bending |
 |---|---|---|
-| Photos | Reference before loading; one photo per load step, speckled face towards the camera | Reference when the dial would be zeroed (no weights); one photo per weight added; camera on the **side face** of the beam |
-| Loads | CSV, N or kN, one per photo in photo order (or the machine's log) | CSV, N or kN — hanger weights × 9.81 (kg is not read) |
-| Dimensions | Cross-section area (mm²) — for a round bar π·d²/4 | Span L, width b, thickness t (mm) |
-| Scale | None — strain is a ratio | The beam's top and bottom edge tapped on the reference photo *(next PR)* |
+| Photos / video | Reference before loading, then one photo per load step | Reference with no weights, then a photo per weight, or a video that holds each weight a few seconds; filmed from the **side face** |
+| Loads | CSV in N or kN: one row per photo, or the machine's log | CSV in N or kN; hanger kg × 9.81 (kg is not read) |
+| Dimensions | Area (mm²); for a round bar πd²/4 | Span L, width b, thickness t (mm) |
+| Scale | None: strain is a ratio | Top and bottom edges tapped on the reference (**Load point → Mark**) |
 
-Loads stay **CSV-only** for now. Typing a load per photo in the app, and how a
-photo is paired with its load (sync), are open decisions.
+**Rows meet photos** in one of two ways:
+- **Timed log with a video:** always matched by time, even when the counts agree. Time 0 is the reference frame.
+  A frame takes a row only within **100 ms** of it; a frame with none has no load and is left off the curve.
+  If the machine started logging later, enter the gap in **Log started after the first frame** (s; negative if the log started first).
+- **Photos:** paired in order when the counts agree (they have no times).
 
-## What the app gives back
+Loads are CSV-only for now. Typing loads in the app is still an open decision.
 
-### Tensile — Experiment 2
+## Tensile (Exp. 2)
 
-- **Stress–strain curve**: σ = P/A per photo, ε = the DIC strain along the
-  load axis, averaged over the analysed region.
-- **Young's modulus E**: the slope of the straight early part of the curve.
-  The app fits the longest leading run of photos, up to the peak, whose
-  straight line keeps R² ≥ 0.995, with a free intercept. Stress in MPa over
-  strain in mε is E in GPa directly.
-- **Peak (ultimate) stress**.
+<p>
+<img src="../images/step1-tensile.png" width="240" alt="Tensile step 1">
+<img src="../images/results-tensile.png" width="240" alt="Tensile Results">
+</p>
 
-The unloaded reference is *not* forced onto the line: labs zero the gauge
-under a small preload, and the Experiment 2 table then reads 218 GPa through
-the origin instead of 194 GPa. E from a phone is approximate and every
-surface says so.
+- **σ = P/A** for each photo. **ε** is the DIC strain along the load axis, averaged over the analysed region.
+- **E** is the slope of the straight early part.
+  - The fit takes the longest leading run up to the peak whose line keeps R² ≥ 0.995, with a free intercept.
+  - Every run length is tried, so noisy first photos don't stop it.
+  - MPa ÷ mε = GPa.
+- **The reference is not forced onto the line.** Labs zero the gauge under a preload. Through the origin, Exp. 2 would read 218 GPa, not 194.
+- **Peak stress.**
+- **Extension (px)**, which appears in the report table only:
+  - It comes from a virtual extensometer (`Extensometer`). Two end bands, each a tenth of the region, are fixed on the first solved photo.
+  - ΔL is the mean displacement of the far band minus that of the near band.
+  - The distance between the bands is the **DIC gauge length** (px), which is printed under Observations.
+  - ΔL ÷ gauge tracks the Strain column: 1.95×10⁻³ against 1.94×10⁻³ at 263 MPa on the steel case.
+  - A "—" means an end band has no points (it left the view, usually well past yield).
 
-### Bending — Experiment 5 *(next PR)*
+## Bending (Exp. 5)
 
-- **Bending stress** σb = M·y/I with M = WL/4, y = t/2, I = bt³/12 — the
-  same number as the app's existing three-point flexural stress 3PL/(2bh²).
-- **Deflection δ** at the load point, from DIC in place of the dial gauge.
-- **E from deflection** E = WL³/(48·δ·I), per load step and averaged, and
-  from the slope of the load–deflection line (the report asks for both).
+<p>
+<img src="../images/step1-bending.png" width="240" alt="Bending step 1">
+<img src="../images/beam-taps.png" width="240" alt="Edge taps">
+<img src="../images/results-bending.png" width="240" alt="Bending Results">
+</p>
 
-## Where the results appear
+- **σb = M·y/I**, where M = WL/4, y = t/2 and I = bt³/12. This equals 3PL/(2bh²).
+- **δ** is the DIC deflection at the load point, in place of the dial gauge.
+- **E = WL³/(48·δ·I)** is given for each load step and averaged, and also from the load–deflection slope. The report asks for both.
+- **Scale:** mm/px = t ÷ the thickness in px.
+  - The editor zooms (pinch or double-tap) and pans, and the zoom holds while you mark.
+  - Under 40 px it warns, because a 1 px slip then moves E by more than 2.5%.
+- **Load steps:**
+  - Frames within 0.5% of the largest load of each other form one averaged row, so a 1 fps video gives the same six rows as six photos.
+  - Frames under 1% of the largest load (the reference, and frames before the hanger went on) are left out of the table, the average and the slope.
+  - With them in, Exp. 5's slope would read 30.5 N/mm instead of 27.06.
 
-- **Viewer → Results**: the page the viewer opens on (the summary slot before
-  frame 1) — the curve with the fitted line, E with the photos it came from,
-  peak stress. The same block closes the ⓘ sheet. The heatmap animation that
-  slot shows for other sessions is still under Share → Animations.
-- **Share → Lab report (PDF)**: the write-up in the handwritten report's own
-  layout, filled with the session's data. Tensile sections, in order:
-  experiment and title, Aim, Materials required, Theory, figure (the
-  reference photo with the analysed region, where the report has its UTM
-  sketch), Observations, observation table (S.No, Load, Extension, Stress,
-  Strain, with Elastic / Plastic / Break point bracketed in the margin),
-  Calculation (row 1 worked through), graphs (elastic region with its line,
-  full curve with E boxed), Results, and ruled lines for the student's own
-  Conclusions. What the app cannot know — total length, gauge length,
-  diameter, final diameter and gauge length, extension in mm — stays as a
-  blank line to fill in by hand.
-- **CSV**: a `# mechanical_results` trailer after the point rows
-  (`# elastic_modulus_gpa`, `# elastic_fit_frames`, `# elastic_fit_r2`).
-- The full DIC **PDF report** keeps its stress–strain page, now with E.
+## Where results appear
+
+- **Viewer → Results:** the page the viewer opens on. It shows:
+  - the curve or graph with its fitted line;
+  - E and the frames it came from;
+  - peak stress, or the bending summary.
+
+  The same block closes the ⓘ sheet. The heatmap loop is under **Share → Animations**.
+- **Share → Lab report (PDF):** the report's own layout, filled in. Anything the app can't know (lengths, final diameter, name, date) stays as a blank line.
+
+<img src="../images/lab-report-tensile.png" width="720" alt="Tensile lab report pages">
+
+**Tensile**, in order:
+  1. title and Aim;
+  2. Materials;
+  3. Theory;
+  4. figure (the reference with the region);
+  5. Observations (area, DIC gauge);
+  6. table: S.No, Load, Extension (px), Stress, Strain, with Elastic / Plastic / Break point bracketed;
+  7. Calculation for row 1;
+  8. graphs: the elastic region with its line, and the full curve with E;
+  9. Results;
+  10. ruled Conclusions.
+
+<img src="../images/lab-report-bending.png" width="540" alt="Bending lab report pages">
+
+**Bending**, in order:
+  1. title and Aim;
+  2. Setup;
+  3. Theory;
+  4. Procedure (a)–(d);
+  5. figure (the taps and the probe);
+  6. Observations (L, b, t, no-load = reference, mm/px);
+  7. Calculation for row 1 (M, y, I, σb, E);
+  8. table with one row per load step;
+  9. Results (average E, E from the graph);
+  10. graph with the slope and E boxed.
+
+It's offered once the thickness is tapped.
+- **CSV:** a `# mechanical_results` trailer after the point rows.
+  - **Tensile:** `# elastic_modulus_gpa`, `# elastic_fit_frames` and `# elastic_fit_r2`.
+  - **Bending:** one `# bending_step` row per frame, `# e_mean_gpa`, the slope and its R², and `# e_slope_gpa`. The last three are over the load steps.
+- **DIC PDF report:** its closing page is the stress–strain or load–deflection page, with E.
 
 ## Capture checklist
 
-1. Speckle the face the camera sees (tensile: the bar's face; bending: the
-   beam's side face).
-2. Phone on a tripod or clamp; it must not move between photos.
-3. Reference photo before any load (tensile) or before the first weight
-   (bending).
-4. Several photos in the straight, elastic part — at least three, more is
-   better — before the specimen yields.
-5. Loads in a CSV, one row per photo, same order.
+1. Speckle the face the camera sees: the bar's face, or the beam's **side** face.
+2. Put the phone on a tripod or clamp. It must not move.
+3. Take the reference before any load, or before the first weight.
+4. Get at least three photos in the elastic part before yield. More is better.
+5. Loads: one CSV row per photo in order, or the machine's timed log for a video.
+6. Bending: frame the **middle** of the beam, not the whole span. Aim for 100+ px across the thickness.
 
 ## Worked numbers
 
-**Experiment 2.** d = 12.54 mm, A = 123.51 mm². Row 1: 8.9 kN → 72.06 MPa,
-strain 0.002/25 = 8×10⁻⁵. All twelve rows form one straight run:
-**E = 194.0 GPa**, R² 0.9989. The handwritten report quotes ~170 GPa from a
-hand-drawn slope; the table itself fits to 194 GPa.
+**Exp. 2:**
+- d = 12.54 mm, so A = 123.51 mm².
+- Row 1: 8.9 kN → 72.06 MPa; strain 0.002/25 = 8×10⁻⁵.
+- All twelve rows form one straight run: **E = 194.0 GPa**, R² 0.9989.
+- The report's ~170 GPa is a hand-drawn slope.
 
-**Experiment 5.** L = 935 mm, b = 150 mm, t = 6.38 mm, I = 3.246×10³ mm⁴
-(3.246×10⁻⁹ m⁴). Step 1, W = 4.28 kg: σb = 9.65 MPa and E = 193.2 GPa. The
-report's 9.591 MPa and 189.94 GPa come out of L = 930 mm with g ≈ 9.8. The
-average over the steps is ≈ 173.6 GPa; the load–deflection slope,
-27.06 N/mm, gives ≈ 142 GPa.
+**Exp. 5:**
+- L = 935 mm, b = 150 mm, t = 6.38 mm, I = 3.246×10³ mm⁴.
+- Step 1 (4.28 kg): σb = 9.65 MPa, E = 193.2 GPa. The report's 9.591 MPa and 189.94 GPa used L = 930 and g ≈ 9.8.
+- Average ≈ 173.6 GPa. Slope 27.06 N/mm → **≈ 142 GPa**.
+- The app on a synthetic video of this beam: **142.0 GPa** from the graph and 173.7 GPa average ([REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)).
 
 ## Accuracy
 
-- Camera strain is noisier than an extensometer's; E is approximate. Small
-  strains (the elastic range of steel is below 1 mε) are where DIC noise
-  matters most — more pixels on the specimen and a still camera help most.
-- Strain is the mean over the analysed region; after necking it understates
-  the local strain (a virtual extensometer is not built yet).
-- A slack or seating start can break the leading-run rule and give no E or a
-  short run; the report then says so.
+- **Camera strain is noisier than an extensometer's,** so E is approximate. Steel's elastic range is below 1 mε, which is where the noise matters most. More pixels and a still camera help most.
+- **Strain is the mean over the region,** so after necking it understates the local strain. The curve does not use the extensometer.
+- **A seating start** that never straightens can still give no E, and the report says so.
+- **On published steel data,** the strain reads about 8% above the dataset's 3D gauge points and E about 5% below ([REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)).
 
 ## Deferred
 
-- Typing loads per photo in the app; the photo↔load sync strategy.
-- Comparison against a textbook or lab-provided E.
-- Virtual-extensometer strain over a chosen gauge length.
-- Automatic edge snapping for the bending thickness tap.
+- Typing loads in the app, and syncing photos to loads.
+- Comparing against a textbook or lab E.
+- Extensometer strain over a chosen gauge length, in mm.
+- Snapping the thickness taps to the edge automatically.
+- Removing rigid movement of the whole beam from δ. The slope E is unaffected by it; the per-step E is not.
+- A bending test on real images with a dial-gauge reference.

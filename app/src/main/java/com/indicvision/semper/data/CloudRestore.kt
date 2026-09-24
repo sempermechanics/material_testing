@@ -936,20 +936,30 @@ object CloudRestore {
             spanMm = mm("spanMm"),
             widthMm = mm("widthMm"),
             thicknessMm = mm("thicknessMm"),
+            loadPoint = restoredTaps(json.optJSONObject("loadPoint")),
         )
     }
 
+    /** The `/6` edge taps, or none when absent or not two distinct edges. */
+    private fun restoredTaps(json: JSONObject?): BeamEdgeTaps {
+        if (json == null) return BeamEdgeTaps.NONE
+        fun px(key: String) = json.optDouble(key, 0.0).toFloat().takeIf { it.isFinite() } ?: 0f
+        val taps = BeamEdgeTaps(px("topX"), px("topY"), px("bottomX"), px("bottomY"))
+        return if (taps.isSet) taps else BeamEdgeTaps.NONE
+    }
+
     /**
-     * One load per frame, or none: a backup where only some frames carry a
-     * `loadN` restores as a session without loads rather than a partial curve.
+     * One load per frame, NaN where a frame has no `loadN` (the time match
+     * found no log row for it). A session where no frame has one restores
+     * without loads.
      */
     private fun restoredLoads(meta: JSONObject, frameCount: Int): List<Float> {
         val frames = meta.optJSONArray("frames")
         if (frames == null || frameCount == 0 || frames.length() != frameCount) return emptyList()
         val loads = (0 until frameCount).map { i ->
-            frames.getJSONObject(i).optDouble("loadN", Double.NaN)
+            frames.getJSONObject(i).optDouble("loadN", Double.NaN).toFloat()
         }
-        return if (loads.any { it.isNaN() }) emptyList() else loads.map { it.toFloat() }
+        return if (loads.none { it.isFinite() }) emptyList() else loads
     }
 
     private fun restoredFrameNames(meta: JSONObject): List<String> {

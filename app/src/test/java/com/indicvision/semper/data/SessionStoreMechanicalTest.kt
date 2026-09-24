@@ -61,6 +61,20 @@ class SessionStoreMechanicalTest {
     }
 
     @Test
+    fun `bending load-point taps round-trip and a record without them writes no loadPoint key`() {
+        val taps = BeamEdgeTaps(topX = 400f, topY = 210f, bottomX = 401f, bottomY = 338f)
+        val geometry = SpecimenGeometry(spanMm = 935f, widthMm = 150f, thicknessMm = 6.38f, loadPoint = taps)
+        val record = typedRecord(loadsN = listOf(0f, 42f, 51f)).copy(testType = "bending", geometry = geometry)
+
+        assertTrue(SessionStore.upsert(context, record))
+        assertEquals(taps, SessionStore.get(context, record.id)!!.geometry.loadPoint)
+
+        assertTrue(SessionStore.upsert(context, record.copy(geometry = geometry.copy(loadPoint = BeamEdgeTaps.NONE))))
+        val index = File(context.filesDir, "sessions/index.json").readText()
+        assertFalse(index.contains("loadPoint"))
+    }
+
+    @Test
     fun `a typed record with per-frame loads round-trips through the store`() {
         val record = typedRecord(loadsN = listOf(0f, 512.5f, -1024f))
 
@@ -76,6 +90,17 @@ class SessionStoreMechanicalTest {
         assertEquals("utm_export.csv", back.loadSource)
         assertEquals("ONE_TO_ONE", back.loadMapping)
         assertTrue(back.hasMachineLoads)
+    }
+
+    @Test
+    fun `a frame with no matched load keeps its place as null in the index`() {
+        val record = typedRecord(loadsN = listOf(0f, Float.NaN, -1024f))
+
+        assertTrue(SessionStore.upsert(context, record))
+        val index = File(context.filesDir, "sessions/index.json").readText()
+
+        assertTrue(index, index.contains("\"loadsN\":[0.0,null,-1024.0]"))
+        assertEquals(listOf(0f, Float.NaN, -1024f), SessionStore.get(context, record.id)!!.loadsN)
     }
 
     @Test

@@ -25,6 +25,7 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SpecimenGeometry
+import com.indicvision.semper.data.loadOfFrame
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
@@ -143,7 +144,13 @@ class ShareCenter(private val host: ResultViewerActivity) {
             }
         }
         val labRow = v.findViewById<View>(R.id.rowShareLabReport)
-        if (LabReportExporter.offered(s.testType, s.loadsN.isNotEmpty(), s.stepPerFrame != null)) {
+        val offered = LabReportExporter.offered(
+            s.testType,
+            hasLoads = s.loadsN.isNotEmpty(),
+            isSweep = s.stepPerFrame != null,
+            hasLoadPoint = s.geometry.loadPoint.isSet,
+        )
+        if (offered) {
             labRow.visibility = View.VISIBLE
             labRow.setOnClickListener {
                 sheet.dismiss()
@@ -837,8 +844,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step
 
-        /** The machine load of frame [index], or null without a load per frame. */
-        fun loadAt(index: Int): Float? = if (loadsN.size == batchFiles.size) loadsN.getOrNull(index) else null
+        /** The machine load of frame [index], or null without a load per frame or for this one. */
+        fun loadAt(index: Int): Float? = if (loadsN.size == batchFiles.size) loadsN.loadOfFrame(index) else null
     }
 
     private companion object {

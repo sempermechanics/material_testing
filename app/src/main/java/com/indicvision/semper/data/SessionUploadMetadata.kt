@@ -30,7 +30,7 @@ object SessionUploadMetadata {
      * Bump it only when that distinction changes, and keep the parse tolerant:
      * pre-`/3` backups predate the field being read at all.
      */
-    const val SCHEMA = "indic.session.metadata/5"
+    const val SCHEMA = "indic.session.metadata/6"
 
     /** Layout version at which the restore payload was split out of the bundle. */
     const val SCHEMA_SPLIT_BUNDLE = 3
@@ -49,6 +49,13 @@ object SessionUploadMetadata {
      */
     const val SCHEMA_SPECIMEN_GEOMETRY = 5
 
+    /**
+     * Version that added `test.geometry.loadPoint` (the bending edge taps, in
+     * reference pixels). Additive: written only when both edges are tapped,
+     * and a `/5` file restores with no taps.
+     */
+    const val SCHEMA_LOAD_POINT = 6
+
     /** One JSON object per frame: its label, files, and (for a sweep) its settings. */
     fun framesJson(record: SessionRecord): JSONArray {
         val frames = JSONArray()
@@ -65,8 +72,9 @@ object SessionUploadMetadata {
                 )
                 .put("image", name)
                 .put("dat", SessionPaths.frameDatName(index))
+            // A frame the time match found no row for has no `loadN` at all.
             if (record.hasMachineLoads) {
-                frameObj.put("loadN", record.loadsN[index].toDouble())
+                record.loadsN.loadOfFrame(index)?.let { frameObj.put("loadN", it.toDouble()) }
             }
             if (record.isSweep) {
                 val subset = record.sweepSubsets.getOrElse(index) { record.subset }
@@ -155,6 +163,16 @@ object SessionUploadMetadata {
         putIf("spanMm", geometry.spanMm)
         putIf("widthMm", geometry.widthMm)
         putIf("thicknessMm", geometry.thicknessMm)
+        geometry.loadPoint.takeIf { it.isSet }?.let { taps ->
+            json.put(
+                "loadPoint",
+                JSONObject()
+                    .put("topX", taps.topX.toDouble())
+                    .put("topY", taps.topY.toDouble())
+                    .put("bottomX", taps.bottomX.toDouble())
+                    .put("bottomY", taps.bottomY.toDouble()),
+            )
+        }
         return json
     }
 

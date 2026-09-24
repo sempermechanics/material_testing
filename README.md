@@ -6,50 +6,63 @@
   <a href="https://github.com/sempermechanics/material_testing/actions/workflows/ci.yml"><img src="https://github.com/sempermechanics/material_testing/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
-> **Lineage.** This repository was created by pushing the full history of
-> [`sempermechanics/semperdic-app`](https://github.com/sempermechanics/semperdic-app)
-> at `bfe00e5` (2026-09-21). It keeps the same `applicationId`
-> (`com.indicvision.semper`), `google-services.json`, backend and CI, so a build
-> **replaces** Semper on a device rather than installing beside it. The backend is
-> deployed from the parent repo only; the deploy and Firestore workflows here have
-> no environments configured and will fail if dispatched. A branch ruleset on
-> `main` requires a pull request and a green `CI OK`.
->
-> What this repo adds: a lab companion for a **first-semester student** doing
-> the tensile and bending experiments with a phone instead of an extensometer
-> or dial gauge. **New analysis** first asks for the test type — Tensile or
-> Bending — then imports the loads (CSV) and the specimen dimensions that
-> test's stress needs (cross-section; span / width / thickness). Tensile gives
-> a **stress–strain curve and Young's modulus E** in the viewer's Results, the
-> CSV and the PDFs, and **Share → Lab report (PDF)** writes the experiment up
-> in the journal layout — aim, observations, table, calculation, graphs,
-> results. Spec: [docs/app/STUDENT_LAB_WORKFLOW.md](docs/app/STUDENT_LAB_WORKFLOW.md).
+Phone-camera **2D digital image correlation (DIC)** for the first-semester
+**tensile** and **bending** labs. You photograph the speckled specimen and import the
+machine's load log. The app gives you E and fills in your lab report.
 
 <p align="center">
-  <img src="docs/images/result-viewer.png" width="220" alt="Interactive strain heatmap in the result viewer">
+  <img src="docs/images/test-type.png" width="220" alt="Which test? Tensile or Bending">
+  &nbsp;
+  <img src="docs/images/step1-tensile.png" width="220" alt="Tensile setup: frames, load log, cross-section">
+  &nbsp;
+  <img src="docs/images/results-tensile.png" width="220" alt="Tensile results: stress–strain curve and E">
 </p>
 
-Speckle a specimen, photograph it before and under load, and Semper computes
-full-field **displacement** (U, V — ~1/100 px) and **strain** (Exx, Eyy, Exy)
-on the phone. Results are interactive heatmaps plus PDF, CSV, and PNG exports.
-The **C++ engine runs fully offline** (OpenCV + Eigen, NEON on device / SSE on
-emulator); cloud sync is optional for signed-in testers.
+<p align="center">
+  <img src="docs/images/step1-bending.png" width="220" alt="Bending setup: video, timed load log, beam size, load point">
+  &nbsp;
+  <img src="docs/images/beam-taps.png" width="220" alt="Tap the beam's top and bottom edges for the mm scale">
+  &nbsp;
+  <img src="docs/images/results-bending.png" width="220" alt="Bending results: load–deflection graph and E">
+</p>
+
+| Test | You give | You get |
+|---|---|---|
+| **Tensile** | Photos or video, the load log (N or kN), cross-section area | Stress–strain curve, **E** from the straight part, peak stress |
+| **Bending** | Video, the timed load log, span / width / thickness, two taps on the beam edges | Load–deflection graph, σb and E for each load step, **E from the slope** |
+
+**Share → Lab report (PDF)** fills in the journal layout: aim, observations, table,
+calculation, graphs and results.
 
 <p align="center">
-  <img src="docs/images/home.png" width="220" alt="Home — sessions">
-  &nbsp;
-  <img src="docs/images/step1-frames.png" width="220" alt="Wizard — pick frames">
+  <img src="docs/images/lab-report-tensile.png" width="720" alt="Tensile lab report, four pages">
+  <br>
+  <img src="docs/images/lab-report-bending.png" width="540" alt="Bending lab report, three pages">
+</p>
+
+The full field is there too: U and V displacement (about 1/100 px), Exx, Eyy and Exy
+strain as heatmaps, and PDF, CSV, PNG, GIF and ZIP exports. The C++ engine runs
+**offline**. Cloud backup is optional.
+
+<p align="center">
+  <img src="docs/images/result-viewer.png" width="220" alt="Exx heatmap in the viewer">
   &nbsp;
   <img src="docs/images/roi-editor.png" width="220" alt="ROI editor">
+  &nbsp;
+  <img src="docs/images/share-sheet.png" width="220" alt="Share sheet">
 </p>
 
-| | |
-|---|---|
-| **Full-field 2D DIC** | ICGN sub-pixel solve, AKAZE + Delaunay seeding, RGDIC propagation, VSG strain |
-| **Batch & video** | One reference vs many frames, or auto-extract from video |
-| **ROI** | Rectangle or freehand mask |
-| **Viewer & exports** | Per-field heatmaps, probe, custom scales, PDF / CSV / PNG / ZIP |
-| **Cloud (optional)** | On-device queue → Google Drive via GCP backend when online — [architecture](docs/backend/CLOUD_ARCHITECTURE_GCP.md) |
+How to run a lab: [docs/OPERATING_MANUAL.md](docs/OPERATING_MANUAL.md) · Spec and accuracy:
+[docs/app/STUDENT_LAB_WORKFLOW.md](docs/app/STUDENT_LAB_WORKFLOW.md) · Check against the handwritten
+reports: [docs/app/REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)
+
+> **Lineage.** This repo holds the full history of
+> [`sempermechanics/semperdic-app`](https://github.com/sempermechanics/semperdic-app) at `bfe00e5`
+> (2026-09-21).
+> - **Same identity.** It keeps the `applicationId` (`com.indicvision.semper`), the backend and CI,
+>   so a build **replaces** Semper on a device.
+> - **Deploys.** The backend deploys from the parent repo only, so the deploy workflows here fail if run.
+> - **`main`.** Changes need a PR and a green `CI OK`.
 
 ---
 
@@ -108,7 +121,7 @@ Full commands, engine bumps, disk hygiene, and backend setup:
 | `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI, parameter-sweep lattice |
 | `app/src/main/java/.../ui/viewer/` | Heatmaps, probe, exports |
 | `app/src/main/java/.../ui/auth/` · `ui/settings/` | Sign-in, access gating, settings |
-| `app/src/main/java/.../report/` | PDF report generation |
+| `app/src/main/java/.../report/` | Stress–strain, E, beam deflection, lab-report and DIC PDFs, CSV |
 | `app/src/main/java/.../data/` | Cloud client, upload/restore workers, storage budget |
 | `app/src/test/` · `app/src/androidTest/` | JVM and instrumented tests |
 | `backend/` | FastAPI on Cloud Run |

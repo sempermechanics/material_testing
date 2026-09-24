@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bending edge taps: Cancel / title / Save above the reference photo, the
+     scale readout over it, the instruction and Reset below. Laid out like
+     the ROI studio so the canvas never sits under a control. The step text
+     keeps three lines so the canvas does not resize between taps. -->
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/viewer_canvas"
+    tools:ignore="Overdraw,UnusedAttribute">
+
+    <LinearLayout
+        android:id="@+id/headerChrome"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_viewer_panel"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBeamCancel"
+            style="@style/Widget.Semper.Button.Text.Danger"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/cancel" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/beam_tap_title"
+            android:textColor="@color/viewer_on_dark"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBeamSave"
+            style="@style/Widget.Semper.Button.Cta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:enabled="false"
+            android:text="@string/beam_tap_save" />
+    </LinearLayout>
+
+    <!-- forceDarkAllowed=false: the photo and the marks keep exact colors. -->
+    <FrameLayout
+        android:id="@+id/canvasFrame"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:forceDarkAllowed="false"
+        app:layout_constraintBottom_toTopOf="@id/bottomToolbar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/headerChrome">
+
+        <com.indicvision.semper.ui.viewer.TouchImageView
+            android:id="@+id/imgBeamPhoto"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@string/beam_tap_canvas" />
+
+        <com.indicvision.semper.ui.analysis.BeamEdgeTapOverlay
+            android:id="@+id/overlayBeamTaps"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/tvBeamReadout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_viewer_panel"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
+        android:textColor="@color/viewer_on_dark"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        app:layout_constrainedWidth="true"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/headerChrome"
+        tools:text="6.38 mm over 128 px · 0.0498 mm/px" />
+
+    <LinearLayout
+        android:id="@+id/bottomToolbar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_viewer_panel"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:id="@+id/tvBeamStep"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minLines="3"
+            android:textColor="@color/viewer_on_dark"
+            android:textSize="14sp"
+            tools:text="@string/beam_tap_step_top" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBeamReset"
+            style="@style/Widget.Semper.Button.Outlined"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="@string/reset"
+            android:textColor="@color/viewer_on_dark"
+            app:strokeColor="#55FFFFFF" />
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

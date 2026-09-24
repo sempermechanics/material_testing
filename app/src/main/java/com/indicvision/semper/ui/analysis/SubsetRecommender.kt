@@ -83,6 +83,13 @@ object SubsetRecommender {
     /** Sample points are laid out on a GRID x GRID lattice inside the ROI. */
     private const val GRID = 4
 
+    /**
+     * Share of the strongest patch's gradient energy a patch needs for its
+     * speckle reading to count. On the steel set the patches on the bar sit
+     * at 0.83–1.0 of the strongest and those straddling its edge at ≤ 0.55.
+     */
+    private const val TEXTURED_FRACTION = 2.0 / 3.0
+
     /** Rec.601 luma weights — the same conversion the native engine uses. */
     private const val LUMA_R = 0.299f
     private const val LUMA_G = 0.587f
@@ -261,18 +268,23 @@ object SubsetRecommender {
             // costs no extra decoding: the patch is already square, already
             // full-resolution and already inside the ROI, which is exactly
             // what SpeckleScale needs.
-            val speckles = ArrayList<Double>(GRID * GRID)
+            val speckles = ArrayList<Pair<Double, Double?>>(GRID * GRID)
 
             for (row in 0 until GRID) {
                 for (col in 0 until GRID) {
                     val cx = region.left + ((2 * col + 1) * region.width()) / (2 * GRID)
                     val cy = region.top + ((2 * row + 1) * region.height()) / (2 * GRID)
-                    val x0 = (cx - halfPatch).coerceIn(0, imgW - side)
-                    val y0 = (cy - halfPatch).coerceIn(0, imgH - side)
+                    // Clamped to the ROI, not the image: on a thin ROI (a beam's
+                    // side face) a patch centred on a sample point would
+                    // otherwise reach into the background, and its edge would
+                    // read as a speckle tens of pixels across. side <= the
+                    // ROI's short edge (cappedMax above), so the range is valid.
+                    val x0 = (cx - halfPatch).coerceIn(region.left, region.right - side)
+                    val y0 = (cy - halfPatch).coerceIn(region.top, region.bottom - side)
                     val patch = source.readGray(x0, y0, side) ?: continue
                     val size = subsetSizeForPatch(patch, side, minSize, cappedMax, threshold)
                     perPoint.add(size)
-                    SpeckleScale.diameterPx(patch)?.let { speckles.add(it) }
+                    speckles.add(gradientEnergy(patch, side) to SpeckleScale.diameterPx(patch))
                     if (size < bestSize) {
                         bestSize = size
                         bestCx = cx
@@ -283,21 +295,56 @@ object SubsetRecommender {
 
             if (perPoint.isEmpty()) return null
             perPoint.sort()
-            // Median, not mean: a patch that lands on a bare corner of the
-            // specimen measures a speckle the size of the whole window, and
-            // one such outlier would drag an average clean out of the band.
-            speckles.sort()
             return Result(
                 subsetSize = perPoint[perPoint.size / 2],
                 samples = perPoint.size,
                 cappedSamples = perPoint.count { it >= cappedMax },
                 focusNormX = bestCx.toFloat() / imgW.coerceAtLeast(1),
                 focusNormY = bestCy.toFloat() / imgH.coerceAtLeast(1),
-                speckleDiameterPx = speckles.getOrNull(speckles.size / 2),
+                speckleDiameterPx = texturedSpeckleMedian(speckles),
             )
         } finally {
             source.close()
         }
+    }
+
+    /**
+     * The median speckle diameter over the patches that carry the pattern,
+     * from (gradient energy, diameter) per patch.
+     *
+     * Only patches with at least [TEXTURED_FRACTION] of the strongest patch's
+     * gradient energy count. Before an ROI is drawn the whole frame is
+     * sampled, and a patch that is mostly dark surround with the specimen's
+     * edge across it measures that edge — ~100 px on the steel set, against
+     * 4.8 px on the bar. Such a patch holds a fraction of the pattern's
+     * gradient, so it falls below the cut. Inside an ROI every patch is on the
+     * pattern and all of them count.
+     *
+     * Median, not mean: a patch on a bare corner of the specimen measures a
+     * speckle the size of the whole window, and one such outlier would drag
+     * an average clean out of the band.
+     */
+    internal fun texturedSpeckleMedian(samples: List<Pair<Double, Double?>>): Double? {
+        val strongest = samples.maxOfOrNull { it.first } ?: return null
+        val diameters = samples
+            .filter { it.first >= strongest * TEXTURED_FRACTION }
+            .mapNotNull { it.second }
+            .sorted()
+        return diameters.getOrNull(diameters.size / 2)
+    }
+
+    /** Mean squared central-difference gradient over the patch's interior. */
+    private fun gradientEnergy(patch: FloatArray, side: Int): Double {
+        var sum = 0.0
+        for (y in 1 until side - 1) {
+            for (x in 1 until side - 1) {
+                val gx = (patch[y * side + x + 1] - patch[y * side + x - 1]) / 2.0
+                val gy = (patch[(y + 1) * side + x] - patch[(y - 1) * side + x]) / 2.0
+                sum += gx * gx + gy * gy
+            }
+        }
+        val interior = (side - 2) * (side - 2)
+        return if (interior > 0) sum / interior else 0.0
     }
 
     // ------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 package com.indicvision.semper.cloud
 
+import com.indicvision.semper.data.BeamEdgeTaps
 import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionUploadMetadata
@@ -22,8 +23,8 @@ import java.io.File
 /**
  * `metadata.json` is the only place a cloud backup keeps the test type and the
  * machine loads, so these pin both halves: what an upload writes for a typed
- * and an untyped session, and what a restore reads back from `/3`, `/4`
- * and `/5` (which adds the bending geometry).
+ * and an untyped session, and what a restore reads back from `/3`, `/4`,
+ * `/5` (which adds the bending geometry) and `/6` (its load-point taps).
  */
 @RunWith(RobolectricTestRunner::class)
 // Robolectric supplies org.json; sdk pinned like every other Robolectric test.
@@ -36,10 +37,11 @@ class SessionMetadataMechanicalTest {
     private var targets = 0
 
     @Test
-    fun `schema is 5 and still counts as a split layout`() {
-        assertEquals("indic.session.metadata/5", SessionUploadMetadata.SCHEMA)
+    fun `schema is 6 and still counts as a split layout`() {
+        assertEquals("indic.session.metadata/6", SessionUploadMetadata.SCHEMA)
         assertEquals(4, SessionUploadMetadata.SCHEMA_MECHANICAL_TEST)
         assertEquals(5, SessionUploadMetadata.SCHEMA_SPECIMEN_GEOMETRY)
+        assertEquals(6, SessionUploadMetadata.SCHEMA_LOAD_POINT)
         assertTrue(CloudRestore.isSplitLayout(SessionUploadMetadata.SCHEMA))
     }
 
@@ -67,6 +69,23 @@ class SessionMetadataMechanicalTest {
         assertEquals("bending", restored.testType)
         assertEquals(geometry, restored.geometry)
         assertEquals(listOf(0f, 100f, 200f), restored.loadsN)
+    }
+
+    @Test
+    fun `load-point taps round-trip and a schema-5 geometry restores with none`() {
+        val taps = BeamEdgeTaps(topX = 512f, topY = 300.5f, bottomX = 514f, bottomY = 428f)
+        val geometry = SpecimenGeometry(spanMm = 935f, widthMm = 150f, thicknessMm = 6.38f, loadPoint = taps)
+        val record = record(testType = "bending", loadsN = listOf(0f, 42f, 51f)).copy(geometry = geometry)
+
+        val test = SessionUploadMetadata.testJson(record)!!
+        assertTrue(test.getJSONObject("geometry").has("loadPoint"))
+        val restored = CloudRestore.recordFrom(JSONObject().put("test", test), target())
+        assertEquals(geometry, restored.geometry)
+
+        test.getJSONObject("geometry").remove("loadPoint")
+        val older = CloudRestore.recordFrom(JSONObject().put("test", test), target())
+        assertEquals(BeamEdgeTaps.NONE, older.geometry.loadPoint)
+        assertEquals(935f, older.geometry.spanMm)
     }
 
     @Test
@@ -144,17 +163,31 @@ class SessionMetadataMechanicalTest {
     }
 
     @Test
-    fun `a frame without a load drops every load rather than misaligning them`() {
-        val record = record(testType = "tensile", loadsN = listOf(0f, 850.25f, 1700.5f))
+    fun `a frame the time match left without a load round-trips as no load, in place`() {
+        val record = record(testType = "tensile", loadsN = listOf(0f, Float.NaN, 1700.5f))
         val frames = SessionUploadMetadata.framesJson(record)
-        frames.getJSONObject(1).remove("loadN")
+        assertFalse(frames.getJSONObject(1).has("loadN"))
         val meta = JSONObject()
             .put("test", SessionUploadMetadata.testJson(record))
             .put("frames", frames)
 
         val restored = CloudRestore.recordFrom(meta, target())
 
-        assertEquals("tensile", restored.testType)
+        assertEquals(listOf(0f, Float.NaN, 1700.5f), restored.loadsN)
+        assertTrue(restored.hasMachineLoads)
+    }
+
+    @Test
+    fun `no frame with a load restores as a session without loads`() {
+        val record = record(testType = "tensile", loadsN = listOf(0f, 850.25f, 1700.5f))
+        val frames = SessionUploadMetadata.framesJson(record)
+        for (i in 0 until frames.length()) frames.getJSONObject(i).remove("loadN")
+        val meta = JSONObject()
+            .put("test", SessionUploadMetadata.testJson(record))
+            .put("frames", frames)
+
+        val restored = CloudRestore.recordFrom(meta, target())
+
         assertTrue(restored.loadsN.isEmpty())
         assertFalse(restored.hasMachineLoads)
     }
