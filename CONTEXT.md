@@ -153,17 +153,18 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
   `dependencies=[deps.rate_limited(...)]`, resolved before `verified_device`,
   so a 429 no longer spends the nonce; 429s send `Retry-After`. Production
   `semper-api-35957034833-1`; proven from a Pixel 6 ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **Merged, deploy pending (#169).** Terms §1.3 admits users from 16, with a
-  parent or guardian agreeing under 18; Privacy §8 matches. `TERMS_VERSION`
-  `2026-09-24` in `backend/app/legal.py` and `LegalTerms.kt`, so every user
-  re-accepts once after the backend deploys. Open for owner and counsel: §1.2
-  (professional use only) and the DPDP Act's verifiable parental consent,
-  which the clickwrap does not collect.
+- **Terms back to 18+ (#171, reverts #169).** #169 (Terms §1.3 from 16, with
+  a guardian agreeing under 18; version `2026-09-24`) went live on 2026-09-24
+  and was reverted the same day at the owner's request: legal docs, hosted
+  pages, `backend/app/legal.py` and `LegalTerms.kt` are back to `2026-09-15`
+  byte for byte, so only users who accepted `2026-09-24` re-accept. Same
+  revert as material_testing #15; keep both `TERMS_VERSION`s equal
+  ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
 - **Merged, not shipped (#155–#168).** The tech-debt burn-down
   ([TECH_DEBT.md](docs/ops/TECH_DEBT.md), [docs/adr/](docs/adr/README.md)
   ADR-001..006). Backend changes (`app/repo/` package, route-aware access log,
   `rate_limit.enforce`, bounded outbound `Retry-After`) go live with the next
-  `deploy-backend` dispatch, with #169; app changes (`RunSpec`, `ViewerArgs`,
+  `deploy-backend` dispatch, with #171; app changes (`RunSpec`, `ViewerArgs`,
   wizard draft, `CloudApi` seam, checked PDF write) with the next release.
   ADR-006's gateway job has never run: it waits on the owner's IAM grant and
   a `dry-run` dispatch.

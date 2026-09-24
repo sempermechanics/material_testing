@@ -12,6 +12,19 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-24 — Terms 16+ (#169), reverted to 18+ (#171)
+
+**Terms: age 16+, then back to 18+ (owner decisions, 2026-09-24).** #169
+changed Terms §1.3 to admit users from 16, with a parent or legal guardian
+agreeing for anyone under 18 (Privacy §8 to match), and moved `TERMS_VERSION`
+to `2026-09-24`. It was deployed to staging and production (revision
+`semper-api-35959026266-1`) and to Hosting. The owner then asked for 18+
+again: #171 restores the legal documents, hosted pages, `backend/app/legal.py`
+and `LegalTerms.kt` to version `2026-09-15` byte for byte, so users who
+accepted `2026-09-15` stay accepted and only those who accepted `2026-09-24`
+while it was live are asked again. Ported from, and reverted with,
+material_testing #12 and #15.
+
 ## 2026-09-24 — A 429 no longer spends the nonce (#154)
 
 **A 429 no longer spends the nonce (#154, live 2026-09-24).**
