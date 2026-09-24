@@ -133,15 +133,13 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-24)
 
-**Terms: age 16+ (owner decision, branch `legal/terms-age-16`).** Terms §1.3
-now admits users from 16; under 18 (or the local age of majority) a parent or
-guardian must agree for them. Privacy §8 matches. `TERMS_VERSION` is
-`2026-09-24` in the doc, `backend/app/legal.py` and `LegalTerms.kt`, so every
-existing user re-accepts once, after the backend deploys. Ported from
-material_testing #12. Still open for the owner and counsel: §1.2
-(professional use only) and India's DPDP Act, which treats under-18s as
-children needing verifiable parental consent that the clickwrap does not
-collect.
+**Terms: back to 18+ (owner decision, 2026-09-24).** #169 (Terms §1.3 16+
+with a guardian's agreement under 18, version `2026-09-24`) was deployed to
+production and Hosting on 2026-09-24 and is reverted: the Terms, Privacy
+Policy, hosted pages, `backend/app/legal.py` and `LegalTerms.kt` are back to
+version `2026-09-15`, byte for byte, so users who accepted `2026-09-15` stay
+accepted and only those who accepted `2026-09-24` while it was live re-accept.
+Same revert as material_testing #15; keep both repos' `TERMS_VERSION` equal.
 
 **A 429 no longer spends the nonce (#154, live 2026-09-24).**
 Erasing seven analyses from a Pixel 6 left two in the cloud: past the erase
