@@ -74,10 +74,12 @@ JVM unit tests, and backend pytest overlap instead of stacking:
 
 - `verify-legal` — `python scripts/render_legal_pages.py --check`: the published
   Privacy Policy and Terms still match `docs/legal/`.
-- `verify-android` — `./gradlew :app:testDebugUnitTest`. No engine/OpenCV
-  submodules: the JVM suite does not `loadLibrary`.
-- `verify-backend` — `ruff check app/ tests/ scripts/ ../scripts/` and
-  `pytest tests/ -q --cov=app --cov-fail-under=75`.
+- `verify-android` — CI tier 1's checks: `:app:testDebugUnitTest spotlessCheck
+  :app:detekt :app:lintDebug`. No engine/OpenCV submodules: the JVM suite does
+  not `loadLibrary`.
+- `verify-backend` — the shared `backend-gate` action (hashed lock, `pip-audit`,
+  ruff over `app/ tests/ scripts/ ../scripts/`, pytest at the 75 % floor), the
+  same one CI and Deploy run.
 
 `build-release` declares `needs: [verify-legal, verify-android, verify-backend]`,
 so none of the signing steps run if any of the above fails.

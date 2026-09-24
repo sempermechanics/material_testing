@@ -36,6 +36,17 @@ on:
         description: Cloud Run service name (empty = semper-api / semper-api-staging)
         required: false
         default: ""
+      gateway_mode:
+        description: >
+          Production only. dry-run renders the gateway spec and prints its diff
+          against the live config; apply also creates the config and switches
+          the gateway (ADR-006).
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - apply
+        default: dry-run
 
 permissions:
   contents: read
@@ -48,25 +59,20 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - run: pip install --require-hashes -r requirements.lock
-      - run: pip install -r requirements-test.txt
-      - run: ruff check app/ tests/
-      - run: python -m pytest -q
+      - uses: ./.github/actions/backend-gate
 
   deploy:
     needs: test
     # Production ships only what is on main; staging may deploy a branch.
     if: github.event.inputs.environment != 'production' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: ${{ github.event.inputs.environment }}
+    outputs:
+      service: ${{ steps.meta.outputs.service }}
     steps:
       - uses: actions/checkout@v7
 
@@ -354,3 +360,139 @@ jobs:
           gcloud run services update-traffic "$SERVICE" \
             --to-revisions="${PREV}=100" \
             --project "$PROJECT" --region "$REGION"
+
+  # API Gateway after the promote (ADR-006). A config that names a route the
+  # backend does not serve yet would 5xx, so this runs only once `deploy` has
+  # promoted the revision that serves it. Production only: staging has no
+  # gateway. `dry-run` (the default) renders the spec and prints its diff
+  # against the live config; only `apply` creates a config and switches.
+  #
+  # One-time IAM for the deploy SA: roles/apigateway.admin on the project and
+  # roles/iam.serviceAccountUser on the gateway SA (vars.GATEWAY_SA, default
+  # indic-gw@PROJECT).
+  gateway:
+    needs: deploy
+    if: github.event.inputs.environment == 'production' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      PROJECT: ${{ github.event.inputs.project }}
+      REGION: ${{ github.event.inputs.region }}
+      SERVICE: ${{ needs.deploy.outputs.service }}
+      MODE: ${{ github.event.inputs.gateway_mode }}
+      GW_ID: ${{ vars.GATEWAY_ID || 'semper-gw' }}
+      GW_API: ${{ vars.GATEWAY_API || 'semper-api' }}
+      GW_REGION: ${{ vars.GATEWAY_REGION || 'asia-northeast1' }}
+      GW_SA_VAR: ${{ vars.GATEWAY_SA }}
+      # The Firebase Auth project, which is not the GCP project. Empty would
+      # render the issuer https://securetoken.google.com/ and reject every token.
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      # First entry of the allowlist the promoted revision was deployed with.
+      CORS_ORIGIN_LIST: ${{ vars.CONSOLE_ORIGINS || 'https://app.sempermechanics.com' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - id: render
+        name: Render the spec and diff it against the live config
+        run: |
+          set -euo pipefail
+          RUN_URL=$(gcloud run services describe "$SERVICE" \
+            --project "$PROJECT" --region "$REGION" --format='value(status.url)')
+          MANAGED_SERVICE=$(gcloud api-gateway apis describe "$GW_API" \
+            --project "$PROJECT" --format='value(managedService)')
+          for v in RUN_URL FIREBASE_PROJECT_ID MANAGED_SERVICE; do
+            if [ -z "${!v}" ]; then echo "::error::$v is empty"; exit 1; fi
+          done
+
+          OUT=backend/gateway/openapi.generated.yaml
+          sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g" \
+              -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g" \
+              -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g" \
+            backend/gateway/openapi.yaml > "$OUT"
+          # if/then, not `grep && exit 1`: that form exits 1 when nothing is left.
+          if grep -v '^[[:space:]]*#' "$OUT" | grep -qE '__[A-Z_]+__'; then
+            echo "::error::unsubstituted placeholder remains in $OUT"
+            exit 1
+          fi
+
+          PREV_CFG=$(gcloud api-gateway gateways describe "$GW_ID" \
+            --project "$PROJECT" --location "$GW_REGION" \
+            --format='value(apiConfig)' | sed 's|.*/||')
+          if [ -z "$PREV_CFG" ]; then echo "::error::gateway $GW_ID has no live config"; exit 1; fi
+          echo "prev=$PREV_CFG" >> "$GITHUB_OUTPUT"
+          echo "Live config: $PREV_CFG (the rollback target)"
+
+          gcloud api-gateway api-configs describe "$PREV_CFG" --api="$GW_API" \
+            --project "$PROJECT" --view=FULL --format=json > /tmp/live-config.json
+          jq -r '.openapiDocuments[0].document.contents' /tmp/live-config.json \
+            | base64 -d > /tmp/live-spec.yaml
+          if cmp -s /tmp/live-spec.yaml "$OUT"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The live config already serves this spec; nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Gateway spec diff (live $PREV_CFG → this commit)"
+              echo '```diff'
+              diff -u /tmp/live-spec.yaml "$OUT" || true
+              echo '```'
+              echo "Mode: \`$MODE\`."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - id: switch
+        name: Create a config and switch the gateway to it
+        if: steps.render.outputs.changed == 'true' && env.MODE == 'apply'
+        run: |
+          set -euo pipefail
+          GW_SA="${GW_SA_VAR:-indic-gw@${PROJECT}.iam.gserviceaccount.com}"
+          # Minute plus run number: a second deploy the same day cannot collide.
+          NEW_CFG="v$(date -u +%Y%m%d%H%M)-${GITHUB_RUN_NUMBER}"
+          gcloud api-gateway api-configs create "$NEW_CFG" --api="$GW_API" \
+            --project "$PROJECT" \
+            --openapi-spec=backend/gateway/openapi.generated.yaml \
+            --backend-auth-service-account="$GW_SA"
+          gcloud api-gateway gateways update "$GW_ID" --api="$GW_API" \
+            --api-config="$NEW_CFG" --project "$PROJECT" --location="$GW_REGION"
+          echo "new=$NEW_CFG" >> "$GITHUB_OUTPUT"
+
+      # Route known but unauthenticated → 401 (404 = the route is missing from
+      # the config). The consoles' preflight → 200 with the allowed origin.
+      - name: Verify the gateway from outside
+        if: steps.switch.outcome == 'success'
+        run: |
+          set -euo pipefail
+          HOST=$(gcloud api-gateway gateways describe "$GW_ID" \
+            --project "$PROJECT" --location "$GW_REGION" --format='value(defaultHostname)')
+          ORIGIN="${CORS_ORIGIN_LIST%% *}"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$HOST/v1/config")
+          echo "GET /v1/config → $CODE"
+          if [ "$CODE" != "401" ]; then echo "::error::expected 401 from /v1/config"; exit 1; fi
+          curl -si --max-time 20 -X OPTIONS "https://$HOST/v1/me" \
+            -H "Origin: $ORIGIN" -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: authorization' > /tmp/preflight.txt
+          head -1 /tmp/preflight.txt
+          if ! head -1 /tmp/preflight.txt | grep -q ' 200'; then
+            echo "::error::preflight did not answer 200"; exit 1
+          fi
+          if ! grep -qi "^access-control-allow-origin: $ORIGIN" /tmp/preflight.txt; then
+            echo "::error::preflight lacks access-control-allow-origin: $ORIGIN"; exit 1
+          fi
+
+      - name: Roll the gateway back
+        if: failure() && steps.switch.outcome == 'success'
+        env:
+          PREV_CFG: ${{ steps.render.outputs.prev }}
+        run: |
+          set -euo pipefail
+          echo "Switching $GW_ID back to $PREV_CFG"
+          gcloud api-gateway gateways update "$GW_ID" --api="$GW_API" \
+            --api-config="$PREV_CFG" --project "$PROJECT" --location="$GW_REGION"

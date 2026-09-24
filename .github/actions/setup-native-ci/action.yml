@@ -43,7 +43,8 @@ runs:
       run: bash native/scripts/sparse-opencv.sh
 
     # Same hash as the cache keys above, so prune-cache except-key cannot drift.
-    # Also raise Gradle heap for R8 and let ninja use every runner core.
+    # Also raise Gradle heap for R8, let ninja use every runner core, and point
+    # ccache at the cached directory for every later step of the job.
     - name: Native compile env
       id: native-env
       shell: bash
@@ -52,3 +53,9 @@ runs:
         echo "infix=$infix" >> "$GITHUB_OUTPUT"
         echo "CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)" >> "$GITHUB_ENV"
         echo "GRADLE_OPTS=-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC -Dfile.encoding=UTF-8" >> "$GITHUB_ENV"
+        {
+          echo "CCACHE_DIR=${GITHUB_WORKSPACE}/.ccache"
+          echo "CCACHE_MAXSIZE=1G"
+          echo "CCACHE_COMPILERCHECK=content"
+          echo "CCACHE_SLOPPINESS=include_file_mtime,include_file_ctime,time_macros,file_macro"
+        } >> "$GITHUB_ENV"

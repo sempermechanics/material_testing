@@ -47,6 +47,7 @@ jobs:
     name: Lock matches requirements.txt
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -91,6 +92,7 @@ jobs:
     name: Regenerate and push
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
