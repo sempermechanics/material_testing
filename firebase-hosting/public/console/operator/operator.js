@@ -1,8 +1,8 @@
 import {
-  requireSignIn, api, setStatus, esc, when,
-  hasSecondFactor, beginTotpEnrolment, confirmByTyping,
+  requireSignIn, api, setStatus, esc, when, confirmByTyping,
   stepUpForRevoke, ERR_CANCELLED,
 } from "../auth.js";
+import { seatCells, inviteCells } from "../util.js";
 
 const $ = (id) => document.getElementById(id);
 let licences = [];
@@ -11,14 +11,13 @@ let roster = null;      // { id, label } of the licence whose roster is open
 // load. Filled on demand: the read costs one user lookup per seat, so it
 // is never run for the whole table at once.
 let verified = {};
-let enrolment = null;
 // One pending revoke per page load, whatever calls `onReady`.
 let resumed = false;
 
 requireSignIn(async (user, resume) => {
   $("signedOut").hidden = true;
   if (!(await isOperator(user))) return;
-  renderFactorState(user);
+  showFactorPill();
   loadUsers();
   await loadLicences();
   // Back from the Google re-authentication a revoke asked for: finish it
@@ -51,45 +50,15 @@ async function isOperator(user) {
 
 /* ------------------------------------------------------ second factor */
 
-function renderFactorState(user) {
-  const enrolled = hasSecondFactor(user);
+// Page code only runs once `requireSignIn` has enrolled a second factor
+// and confirmed it for this session (`ensureDashboardMfa`), so the factor is
+// always on here; the pill just says so.
+function showFactorPill() {
   const pill = $("mfaPill");
   pill.hidden = false;
-  pill.textContent = enrolled ? "2FA on" : "2FA off";
-  pill.className = `pill ${enrolled ? "ok" : "warn"}`;
-  $("enrolCard").hidden = enrolled;
-  // Writes are refused by the backend without a factor; disabling them
-  // here too means the operator finds out before typing a whole form
-  // rather than after submitting it.
-  for (const id of ["mint", "addMember"]) $(id).disabled = !enrolled;
-  $("mintHint").textContent = enrolled ? "" : "Enrol a second factor first.";
+  pill.textContent = "2FA on";
+  pill.className = "pill ok";
 }
-
-$("enrolStart").addEventListener("click", async () => {
-  try {
-    setStatus("Re-authenticating…");
-    enrolment = await beginTotpEnrolment();
-    $("enrolSecret").textContent = enrolment.secret;
-    $("enrolAccount").textContent = $("who").textContent || "your Semper account";
-    $("enrolStep").hidden = false;
-    setStatus("");
-  } catch (e) {
-    if (e.message !== ERR_CANCELLED) setStatus(`Could not start: ${e.code || e.message}`, true);
-    else setStatus("");
-  }
-});
-
-$("enrolFinish").addEventListener("click", async () => {
-  const code = $("enrolCode").value.trim();
-  if (!enrolment || !code) return;
-  try {
-    await enrolment.finish(code);
-    setStatus("Two-factor authentication is on.");
-    window.location.reload();
-  } catch (e) {
-    setStatus(`That code was not accepted: ${e.code || e.message}`, true);
-  }
-});
 
 /* --------------------------------------------------------------- mint */
 
@@ -173,7 +142,7 @@ $("mint").addEventListener("click", async () => {
   } catch (e) {
     setStatus(mintError(e.message), true);
   } finally {
-    $("mint").disabled = !hasSecondFactor();
+    $("mint").disabled = false;
   }
 });
 
@@ -659,15 +628,8 @@ async function loadRoster() {
 }
 
 function seatRow(s) {
-  const held = s.leaseExpiresAt
-    ? `until ${esc(when(s.leaseExpiresAt))}`
-    : '<span class="muted">not holding one</span>';
   return `
-    <tr>
-      <td>${esc(s.email || s.uid)}</td>
-      <td><span class="pill ${s.status === "active" ? "ok" : "off"}">${esc(s.status)}</span></td>
-      <td class="muted">${s.deviceIdLock ? esc(s.deviceIdLock.slice(0, 10)) + "…" : "—"}</td>
-      <td>${held}</td>
+    <tr>${seatCells(s)}
       <td class="actions">
         <button class="secondary" data-device-seat="${esc(s.uid)}">New device</button>
         <button class="danger" data-seat="${esc(s.uid)}">Remove</button>
@@ -677,11 +639,7 @@ function seatRow(s) {
 
 function inviteRow(i) {
   return `
-    <tr>
-      <td>${esc(i.email)}</td>
-      <td><span class="pill warn">invited</span></td>
-      <td class="muted">—</td>
-      <td class="muted">joins at first sign-in</td>
+    <tr>${inviteCells(i)}
       <td class="actions">
         <button class="danger" data-invite="${esc(i.id)}">Withdraw</button>
       </td>

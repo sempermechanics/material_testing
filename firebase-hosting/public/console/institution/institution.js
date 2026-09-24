@@ -1,4 +1,5 @@
 import { requireSignIn, api, setStatus, esc, when } from "../auth.js";
+import { seatCells, inviteCells } from "../util.js";
 
 let licenseId = "";
 
@@ -113,19 +114,8 @@ function render(data) {
 }
 
 function seatRow(seat) {
-  const holds = seat.leaseExpiresAt && new Date(seat.leaseExpiresAt) > new Date();
-  const status = {
-    active: '<span class="pill ok">active</span>',
-    disabled: '<span class="pill warn">on hold</span>',
-    revoked: '<span class="pill off">removed</span>',
-  }[seat.status] || esc(seat.status);
   return `
-    <tr>
-      <td>${esc(seat.email || seat.uid)}</td>
-      <td>${status}</td>
-      <td>${holds ? `<span class="pill ok">until ${esc(when(seat.leaseExpiresAt))}</span>`
-                   : '<span class="pill off">—</span>'}</td>
-      <td class="muted">${seat.deviceIdLock ? esc(seat.deviceIdLock.slice(0, 10)) + "…" : "not yet"}</td>
+    <tr>${seatCells(seat)}
       <td class="actions">
         ${seat.deviceIdLock
           ? `<button class="secondary" data-act="clear" data-uid="${esc(seat.uid)}">New device</button>`
@@ -140,11 +130,7 @@ function seatRow(seat) {
 
 function inviteRow(invite) {
   return `
-    <tr>
-      <td>${esc(invite.email)}</td>
-      <td><span class="pill warn">invited</span></td>
-      <td><span class="pill off">—</span></td>
-      <td class="muted">joins at first sign-in</td>
+    <tr>${inviteCells(invite)}
       <td class="actions">
         <button class="danger" data-invite="${esc(invite.id)}">Withdraw</button>
       </td>

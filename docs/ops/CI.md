@@ -35,7 +35,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
-| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler | No — always runs | seconds |
+| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test` on the DOM-free `console/util.js` | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log + `koverVerify` floor | `app` (PR); always on `main` push | ~5–8 / ~10 min |
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
@@ -171,6 +171,7 @@ cd backend && pip install -r requirements-test.txt && pytest tests/ -v      # ti
 # The two always-on gates
 python scripts/render_legal_pages.py --check                                # legal-pages
 python scripts/check_console.py                                             # console-pages
+node --test "firebase-hosting/tests/*.test.mjs"                             # console-pages
 gitleaks detect --config .gitleaks.toml                                     # secret-scan (human)
 ```
 

@@ -9,7 +9,9 @@ Each page is an HTML document plus one ES module beside it — `router.js`,
 loaded with `<script type="module" src="…">`. **Not inline.** The console
 `script-src` is `'self'` with no `'unsafe-inline'` (see below), so an inline
 script on these pages does not run at all: the page renders and every button is
-dead. `auth.js` and `config.js` are shared by all four.
+dead. `auth.js` and `config.js` are shared by all four. `util.js` holds the
+DOM-free helpers (`esc`, `when`, and the roster cells both seat tables render),
+so `node --test` can run them; `auth.js` re-exports `esc` and `when`.
 
 | Path | Who | What it can do |
 |---|---|---|
@@ -248,6 +250,11 @@ that reads them instead, and runs as the **Console pages** CI job:
 
 Run it directly with `python scripts/check_console.py`. Node is used for the
 syntax check when it is on `PATH` and skipped with a note when it is not.
+
+The same job runs `node --test "firebase-hosting/tests/*.test.mjs"`, which
+covers `util.js`: escaping, dates, and the roster cells (an expired floating
+lease reads "—", not "until <past time>"). Sign-in, step-up and revoke are not
+covered: they need Firebase fixtures, so they stay on the hand-check list below.
 
 ## Downloading an analysis
 
