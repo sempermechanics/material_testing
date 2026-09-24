@@ -213,7 +213,7 @@ and how a load becomes a stress.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 3b.1 | Tap **+** on Home | **Which test?** with two rows — Tensile and Bending — each with a caption: stress against strain for tensile, three-point flexural stress for bending |
+| [ ] 3b.1 | Tap **+** on Home | **Which test?** with two rows — Tensile and Bending — each with a caption: stress–strain curve and Young's modulus E for tensile, three-point flexural stress for bending |
 | [ ] 3b.2 | Swipe the sheet down | Nothing opens; Home is unchanged |
 | [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard's load card asks for span, width and thickness (§5.1b) |
 | [ ] 3b.4 | Rotate the phone between picking a test and picking media | The test survives — the resulting session still carries it |
@@ -671,6 +671,10 @@ node. **Exit:** Home, or back to the Lattice.
 Single-setting analyses only (not parameter sweeps — those open from the lattice
 onto a combination, with no summary slot and no Animations share target).
 
+**A test with a load log shows Results in this slot instead** (8.2a.10–8.2a.13):
+for a student the summary of the experiment is the stress–strain curve, not a
+heatmap loop. The field animations are still built for Share → Animations.
+
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.2a.1 | Open a result | It lands on the summary, which builds and then loops. The **counter** reads "Summary GIF"; the **edge title** carries "<field> · Summary" |
@@ -681,6 +685,10 @@ onto a combination, with no summary slot and no Animations share target).
 | [ ] 8.2a.4 | Compare early and late frames of a growing test | Colour rises through the sequence — one scale throughout, no per-frame renormalising |
 | [ ] 8.2a.5 | Read the scale labels beside it | The widest bounds in the whole sequence, not the current frame's |
 | [ ] 8.2a.5a | Open ⓘ on the summary | Max and min of that GIF scale, no mean, and no histogram |
+| [ ] 8.2a.10 | Open a tensile result with a load log | It lands on **Results**: edge title and counter read "Results"; the page shows the stress–strain curve with its elastic-fit line, a caption "The whole test: n of N photos on the curve…", then E (frames, R², approximate) and peak stress. "Reading strain n / N…" shows while the curve builds |
+| [ ] 8.2a.11 | Look for the field picker and colour scale on Results | Neither is there, including after the chrome fades and comes back |
+| [ ] 8.2a.12 | Tap › to frame 1, then ‹ back | Frame 1 has the field picker and colour scale again; back on Results they are gone again. Opening ⓘ on Results shows the same curve with no frame highlighted |
+| [ ] 8.2a.13 | Open a result without loads, or a sweep | The summary animation as before (8.2a.1) |
 | [ ] 8.2a.6 | Switch field | The animation rebuilds in that field; switching back replays from cache |
 | [ ] 8.2a.7 | Set a custom scale for one field | Only that field's animation rebuilds |
 | [ ] 8.2a.8 | Tap **Next** on the summary, then **Prev** on frame 1 | Leaves to frame 1 and comes back |
@@ -722,27 +730,32 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.7 | Look for **Go to Home** in the sheet | It is not there any more — Home is a chrome icon in the top bar (§8.6.1) |
 | [ ] 8.4.8 | Tap a histogram bar | Caption under the plot names that bin's count and value range, in px or millistrain |
 | [ ] 8.4.9 | Compare the histogram with the colour bar | The histogram includes the outliers the colour bar has clamped; its ends are the true min and max |
-| [ ] 8.4.10 | Open it on a tensile / compression run with a load log | Rows **Cross-section**, **Machine load** (this frame, signed as logged) and **Stress** (MPa) after Test type; a **Stress–strain** section with a caption "Reading strain n / N…" that fills every frame, then the curve (mean Exx or Eyy along the chosen axis vs stress) with this frame highlighted and a caption "Frame n · load N · stress MPa · strain mε" |
+| [ ] 8.4.10 | Open it on a tensile / compression run with a load log | Rows **Cross-section**, **Machine load** (this frame, signed as logged) and **Stress** (MPa) after Test type; a **Results** section with a caption "Reading strain n / N…" that fills every frame, then the curve (mean Exx or Eyy along the chosen axis vs stress) with this frame highlighted and a caption "Frame n · load N · stress MPa · strain mε" |
 | [ ] 8.4.11 | Close and reopen the sheet | The curve is there at once (cached in the ViewModel); rotating keeps it |
 | [ ] 8.4.12 | Run logged negative | The curve sits in the third quadrant; nothing is made positive |
 | [ ] 8.4.13 | Scrub to a frame with no accepted points | Caption says that frame is not on the curve; the rows still show its load |
 | [ ] 8.4.14 | Open it on a sweep | Test type row only; no load rows, no curve |
+| [ ] 8.4.14a | Same tensile run, once the curve has drawn | A second, muted **Elastic fit** line over the straight early part; under the caption "Young's modulus E ≈ … GPa, from the straight part of the curve (frames a–b, R² …)", marked approximate, then **Peak stress** with its frame |
+| [ ] 8.4.14b | A tensile run with fewer than three frames before the peak, or no straight start | No fit line; the E line says it was not found and why (three photos on the straight part, before the peak) |
+| [ ] 8.4.14c | A tensile run logged against the wrong strain axis (E ≤ 0) | E is shown with its sign, plus a line asking to check the strain axis |
 | [ ] 8.4.15 | Open it on a bending run | Rows **Support span**, **Width**, **Thickness**, **Machine load**, **Flexural stress**; the curve's y-axis reads "Flexural stress (MPa)" |
 
 ### 8.5 Share and export
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.5.1 | Tap Share | Sheet with six targets, captioned positionally — "frame N of M shown · photos share the current frame". It no longer names the frame; the frame's own name is on the **Single Field** row's sub-line |
+| [ ] 8.5.1 | Tap Share | Sheet with six targets (seven when **Lab report** is offered, 8.5.3c), captioned positionally — "frame N of M shown · photos share the current frame". It no longer names the frame; the frame's own name is on the **Single Field** row's sub-line |
 | [ ] 8.5.2 | **Single Field** | One annotated PNG of the field and frame on screen |
 | [ ] 8.5.3 | **All fields** | Five PNGs for the current frame, zipped for hand-off. The row's sub-line and each PNG's stamp name the **source image**; the file names still come from the analysis name |
 | [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
 | [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
+| [ ] 8.5.3c | **Lab report (PDF)** — first row, tensile run with loads, not a sweep | A journal-style write-up in the layout of the student's handwritten report ([STUDENT_LAB_WORKFLOW.md](STUDENT_LAB_WORKFLOW.md)): experiment and title, Name / Date lines, Aim, Materials required, Theory, the reference photo with the analysed region, Observations (area filled in; lengths and diameters as blank lines), the observation table (S.No, Load kN, Extension —, Stress MPa, Strain) with **Elastic / Plastic / Break point** bracketed in the margin, Calculation for row 1, the elastic-region and full stress–strain graphs with E boxed, Results (E and peak stress, with the approximate note), and ruled Conclusions lines |
+| [ ] 8.5.3d | Open Share on bending, on a sweep, or on a run without loads | No **Lab report** row (bending arrives in the next PR) |
 | [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
-| [ ] 8.5.4a | Same, on a tensile run | Each cover has a **Mechanical Test** block (type, cross-section, strain, this frame's load and engineering stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
+| [ ] 8.5.4a | Same, on a tensile run | Each cover has a **Mechanical Test** block (type, cross-section, strain, this frame's load and engineering stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a **Modulus E (approx.)** with its frames and R², and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
 | [ ] 8.5.4b | Same, on bending | The cover block names that test's dimensions and flexural stress; the curve page is titled the same way |
 | [ ] 8.5.4c | Same, on a sweep | Cover block shows the type and dimensions only; no curve page |
-| [ ] 8.5.5 | **CSV data** | `# semper_csv_version,2` preamble (reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean; typed sessions add `# test_type`, `# stress_model` (`axial` / `flexural`), that model's dimensions — `# cross_section_mm2`, or `# span_mm` / `# width_mm` / `# thickness_mm` — then `# load_axis`, `# load_unit,N`), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa` — the three motion columns and the two mechanical columns are written for every session, empty when a frame admits no fit / has no load; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image`. `pandas.read_csv(path, comment='#')` reads it |
+| [ ] 8.5.5 | **CSV data** | `# semper_csv_version,2` preamble (reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean; typed sessions add `# test_type`, `# stress_model` (`axial` / `flexural`), that model's dimensions — `# cross_section_mm2`, or `# span_mm` / `# width_mm` / `# thickness_mm` — then `# load_axis`, `# load_unit,N`), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa` — the three motion columns and the two mechanical columns are written for every session, empty when a frame admits no fit / has no load; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image`. A typed, non-sweep tensile run ends with a `# mechanical_results` trailer after the point rows: `# elastic_modulus_gpa` (empty when no fit), `# elastic_fit_frames,a,b` and `# elastic_fit_r2`. `pandas.read_csv(path, comment='#')` reads it |
 | [ ] 8.5.6 | **Everything (.zip)** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |

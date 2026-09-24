@@ -24,6 +24,12 @@ import java.util.Locale
  * the solved field itself, and the two mechanical columns are simply empty for
  * a session without a load log — so a reader never has to guess which value
  * went missing from a short row.
+ *
+ * A typed session with loads may end with a `# mechanical_results` trailer
+ * after the last point row: the results the lab report quotes (Young's
+ * modulus for tensile). It is a trailer because the upload bundler writes the
+ * field stats and point rows interleaved, so only the end of the file has
+ * seen every frame.
  */
 object AnalysisCsvWriter {
 
@@ -64,6 +70,7 @@ object AnalysisCsvWriter {
      * A bending session adds `# stress_model` and its dimensions to the
      * preamble without a version bump: `stress_MPa` is the model's stress
      * either way, and a reader that ignores unknown `#` lines is unaffected.
+     * The `# mechanical_results` trailer is added on the same terms.
      */
     private const val CSV_VERSION = 2
     private const val POINT_HEADER_BASE = "x_px,y_px,u_px,v_px,exx,eyy,exy,znssd"
@@ -202,6 +209,13 @@ object AnalysisCsvWriter {
         private val formatter = DicResult.CsvPointFormatter()
         private var pointSectionStarted = false
 
+        /** 0-based index of the next [append]ed frame — frames arrive in order. */
+        private var frameIndex = 0
+
+        /** The curve's points, collected as frames stream past; null when there is no trailer. */
+        private val mechanical: MutableList<StressStrain.Point>? =
+            if (!sweep && metadata.testType.isNotBlank()) mutableListOf() else null
+
         fun appendFieldStats(frame: Frame, data: FloatArray) {
             FIELD_STATS.forEach { (fieldKey, dataIndex) ->
                 val stats = DicResult.fieldStats(data, dataIndex) ?: return@forEach
@@ -227,31 +241,65 @@ object AnalysisCsvWriter {
 
         fun append(frame: Frame) {
             startPointSection()
+            val index = frameIndex++
+            val data = frame.data() ?: return
             writeFrame(
                 writer,
-                frame,
+                data,
                 prefix(frame, sweep),
                 row,
                 formatter,
                 mechanicalSuffixColumns(frame.loadN, metadata.stressModel),
             )
+            collect(index, frame.loadN, data)
+        }
+
+        private fun collect(index: Int, loadN: Float?, data: FloatArray) {
+            val points = mechanical ?: return
+            if (loadN == null) return
+            val model = metadata.stressModel
+            val strain = model.strainMilli(data) ?: return
+            points += StressStrain.Point(index, loadN, model.stressMPa(loadN), strain)
         }
 
         override fun close() {
-            writer.close()
+            writer.use { w ->
+                val points = mechanical
+                if (!points.isNullOrEmpty()) {
+                    writeMechanicalResults(w, StressStrain.Curve(metadata.stressModel, frameIndex, points))
+                }
+            }
+        }
+    }
+
+    /**
+     * The trailer: what the lab report's Results section quotes. Tensile gets
+     * Young's modulus from [ElasticModulus]; an empty value means no straight
+     * run was found. 1-based frame numbers, like the viewer and the report.
+     */
+    internal fun writeMechanicalResults(w: Writer, curve: StressStrain.Curve) {
+        if (curve.model !is StressStrain.Model.Axial) return
+        val fit = ElasticModulus.fit(curve)
+        w.append("# mechanical_results\n")
+        w.append("# elastic_modulus_gpa,")
+        if (fit != null) {
+            w.append(String.format(Locale.US, "%.4f", fit.modulusGPa)).append('\n')
+            w.append("# elastic_fit_frames,${fit.firstFrame + 1},${fit.lastFrame + 1}\n")
+            w.append("# elastic_fit_r2,").append(String.format(Locale.US, "%.6f", fit.r2)).append('\n')
+        } else {
+            w.append('\n')
         }
     }
 
     /** Appends one frame's solved points, each row led by [prefix]. */
     private fun writeFrame(
         w: Writer,
-        frame: Frame,
+        data: FloatArray,
         prefix: String,
         row: StringBuffer,
         formatter: DicResult.CsvPointFormatter,
         mechanical: String,
     ) {
-        val data = frame.data() ?: return
         val suffix = motionSuffixColumns(RigidBodyFit.fit(data)) + "," + mechanical
         var i = 0
         while (i < data.size) {

@@ -30,7 +30,10 @@ import java.io.File
 
 /**
  * Drives the viewer's summary slot — the looping animation that sits before
- * frame 1 and shows the whole sequence in the selected field.
+ * frame 1 and shows the whole sequence in the selected field. A test with a
+ * load per frame shows its Results there instead (the stress–strain curve,
+ * E and peak stress): for a student that is the summary of the experiment,
+ * and the heatmap animations stay one tap away in Share.
  *
  * The heavy lifting is [SummaryAnimation]'s; this owns the screen: which field
  * is showing, the progress line while a field is still rendering, and playback.
@@ -43,6 +46,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     private val progress: ProgressBar = host.findViewById(R.id.progressSummary)
     private val status: TextView = host.findViewById(R.id.tvSummaryStatus)
     private val cancelButton: MaterialButton = host.findViewById(R.id.btnSummaryCancel)
+    private val resultsPanel: View = host.findViewById(R.id.summaryResults)
 
     /** Value range per field over the whole sequence; empty until the pass finishes. */
     private var ranges: Map<Int, Pair<Float, Float>> = emptyMap()
@@ -54,6 +58,9 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
 
     var isShowing: Boolean = false
         private set
+
+    /** Whether the slot shows Results rather than the heatmap animation. */
+    val showsResults: Boolean get() = host.stressStrain.showsResults
 
     /** Shared with the share sheet, so both build into the same cached files. */
     internal val animation: SummaryAnimation by lazy {
@@ -95,7 +102,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
                     }
                     SummaryAnimation.globalRanges(files, rangesFile) { done, total ->
                         host.lifecycleScope.launch(Dispatchers.Main.immediate) {
-                            if (!isShowing || rangesJob?.isActive != true) return@launch
+                            if (!isShowing || showsResults || rangesJob?.isActive != true) return@launch
                             progress.progress = done * PERCENT / total.coerceAtLeast(1)
                             showStatus(host.getString(R.string.summary_scanning_fmt, done, total))
                         }
@@ -107,13 +114,26 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
             }
             ranges = computed
             host.onSequenceRangesReady()
-            if (isShowing) render(host.currentDataIndex)
+            // Share still needs the ranges; only the animation on screen is skipped.
+            if (isShowing && !showsResults) render(host.currentDataIndex)
         }
     }
 
     fun show() {
         isShowing = true
         layer.isVisible = true
+        resultsPanel.isVisible = showsResults
+        if (showsResults) {
+            statusPanel.isVisible = false
+            host.stressStrain.fill(
+                ViewerStressStrainHelper.Views(
+                    host.findViewById(R.id.plotSummaryResults),
+                    host.findViewById(R.id.tvSummaryResultsCaption),
+                    host.findViewById(R.id.tvSummaryResultsText),
+                ),
+            )
+            return
+        }
         // The colour-scale scan is only needed once the summary is actually on screen.
         start()
         render(host.currentDataIndex)
@@ -127,13 +147,13 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
 
     /** The field toggle moved; re-render if the summary is the thing on screen. */
     fun onFieldChanged() {
-        if (isShowing) render(host.currentDataIndex)
+        if (isShowing && !showsResults) render(host.currentDataIndex)
     }
 
     /** A changed fixed scale invalidates the baked-in colours for that field. */
     fun onScaleChanged(dataIndex: Int) {
         if (shownField == dataIndex) shownField = null
-        if (isShowing) render(host.currentDataIndex)
+        if (isShowing && !showsResults) render(host.currentDataIndex)
     }
 
     fun cancel() {
@@ -150,7 +170,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     fun sequenceRange(dataIndex: Int): Pair<Float, Float>? = ranges[dataIndex]
 
     /** The label the frame counter shows while the summary is up. */
-    fun counterText(): String = host.getString(R.string.summary_gif)
+    fun counterText(): String = host.getString(if (showsResults) R.string.results_title else R.string.summary_gif)
 
     private fun render(dataIndex: Int) {
         if (shownField == dataIndex && image.drawable != null) {

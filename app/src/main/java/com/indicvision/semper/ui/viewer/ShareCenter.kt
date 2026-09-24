@@ -12,6 +12,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import android.net.Uri
 import android.view.View
 import android.widget.TextView
@@ -113,16 +114,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             sheet.dismiss()
             offerSlowExport(KIND_PHOTOS, "application/zip", photosZipName(), R.string.share_generating)
         }
-        // Parameter sweeps are not a time series — no summary GIF and no Animations row.
-        val animationsRow = v.findViewById<View>(R.id.rowShareAnimations)
-        if (s.stepPerFrame != null) {
-            animationsRow.visibility = View.GONE
-        } else {
-            animationsRow.setOnClickListener {
-                sheet.dismiss()
-                offerSlowExport(KIND_GIFS, "application/zip", animationsZipName(), R.string.share_generating_gif)
-            }
-        }
+        bindConditionalRows(v, sheet, s)
         v.findViewById<View>(R.id.rowSharePdf).setOnClickListener {
             sheet.dismiss()
             offerSlowExport(KIND_PDF, "application/pdf", pdfName(), R.string.share_generating_pdf)
@@ -136,6 +128,28 @@ class ShareCenter(private val host: ResultViewerActivity) {
             offerSlowExport(KIND_ZIP, "application/zip", zipName(), R.string.share_generating_pdf)
         }
         sheet.show()
+    }
+
+    /** Rows that depend on the session: Animations (not for sweeps) and Lab report (typed tests with loads). */
+    private fun bindConditionalRows(v: View, sheet: BottomSheetDialog, s: Snapshot) {
+        // Parameter sweeps are not a time series — no summary GIF and no Animations row.
+        val animationsRow = v.findViewById<View>(R.id.rowShareAnimations)
+        if (s.stepPerFrame != null) {
+            animationsRow.visibility = View.GONE
+        } else {
+            animationsRow.setOnClickListener {
+                sheet.dismiss()
+                offerSlowExport(KIND_GIFS, "application/zip", animationsZipName(), R.string.share_generating_gif)
+            }
+        }
+        val labRow = v.findViewById<View>(R.id.rowShareLabReport)
+        if (LabReportExporter.offered(s.testType, s.loadsN.isNotEmpty(), s.stepPerFrame != null)) {
+            labRow.visibility = View.VISIBLE
+            labRow.setOnClickListener {
+                sheet.dismiss()
+                offerSlowExport(KIND_LAB_PDF, "application/pdf", labReportName(), R.string.share_generating_pdf)
+            }
+        }
     }
 
     // ── Job runner: progress dialog → system share sheet (+ Local) ───────
@@ -161,7 +175,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     internal fun writeKindToUri(kind: String, uri: Uri) {
         val progressText = when (kind) {
-            KIND_PDF, KIND_ZIP -> R.string.share_generating_pdf
+            KIND_PDF, KIND_ZIP, KIND_LAB_PDF -> R.string.share_generating_pdf
             KIND_GIFS -> R.string.share_generating_gif
             else -> R.string.share_generating
         }
@@ -173,6 +187,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         report: (Int, String) -> Unit,
     ): Pair<List<File>, String> = when (kind) {
         KIND_PDF -> listOf(allFramesPdf(report)) to "application/pdf"
+        KIND_LAB_PDF -> listOf(labReportPdf(report)) to "application/pdf"
         KIND_ZIP -> listOf(everythingZip(report)) to "application/zip"
         KIND_CSV -> listOf(batchCsv()) to "text/csv"
         KIND_PHOTOS -> allFieldPhotos() to "image/png"
@@ -184,6 +199,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
     }
 
     private fun pdfName(): String = "${requireSnapshot().baseName}_report.pdf"
+
+    private fun labReportName(): String = "${requireSnapshot().baseName}_lab_report.pdf"
 
     private fun csvName(): String = "${requireSnapshot().baseName}_data.csv"
 
@@ -568,7 +585,30 @@ class ShareCenter(private val host: ResultViewerActivity) {
         report: (Int, String) -> Unit,
     ): PdfReportGenerator.StressStrainPage? {
         if (s.loadsN.isEmpty() || s.stepPerFrame != null) return null
-        val curve = s.stressStrain ?: withContext(Dispatchers.Default) {
+        val curve = sessionCurve(s, report)
+        if (curve.isEmpty) return null
+        val axisLabels = ViewerStressStrainHelper.axisLabels(host, curve.model)
+        val modulus = ViewerStressStrainHelper.modulusOf(curve)
+        val plot = withContext(Dispatchers.Main) {
+            val print = ViewerStressStrainHelper.printContext(host)
+            VsgPlotView(print).run {
+                setData(
+                    ViewerStressStrainHelper.plotSeries(print, curve, modulus),
+                    axisLabels.first,
+                    axisLabels.second,
+                )
+                renderToBitmap(STRESS_STRAIN_PLOT_W, STRESS_STRAIN_PLOT_H)
+            }
+        }
+        return PdfReportGenerator.StressStrainPage(curve, plot, modulus)
+    }
+
+    /**
+     * The session's stress–strain curve: the viewer's when it has built one,
+     * otherwise a walk over the batch here (one decode per frame).
+     */
+    private suspend fun sessionCurve(s: Snapshot, report: (Int, String) -> Unit): StressStrain.Curve =
+        s.stressStrain ?: withContext(Dispatchers.Default) {
             StressStrain.build(
                 loadsN = s.loadsN.toList(),
                 model = s.stressModel,
@@ -576,25 +616,22 @@ class ShareCenter(private val host: ResultViewerActivity) {
                 onProgress = { done -> report(0, "Stress–strain $done / ${s.loadsN.size}…") },
             )
         }
-        if (curve.isEmpty) return null
-        val axisLabels = ViewerStressStrainHelper.axisLabels(host, curve.model)
-        val plot = withContext(Dispatchers.Main) {
-            VsgPlotView(host).run {
-                setData(
-                    listOf(
-                        VsgPlotView.Series(
-                            label = host.getString(R.string.stress_strain_title),
-                            color = VsgPlotView.paletteColor(host, 0),
-                            points = curve.plotPoints(),
-                        ),
-                    ),
-                    axisLabels.first,
-                    axisLabels.second,
-                )
-                renderToBitmap(STRESS_STRAIN_PLOT_W, STRESS_STRAIN_PLOT_H)
-            }
+
+    /** The student lab report: the handwritten journal layout, filled with this session. */
+    private suspend fun labReportPdf(report: (Int, String) -> Unit): File {
+        val s = requireSnapshot()
+        val curve = sessionCurve(s, report)
+        report(LAB_REPORT_PROGRESS, host.getString(R.string.share_generating_pdf))
+        val (capW, capH) = VisualizationEngine.cappedDims(s.imgW, s.imgH, VisualizationEngine.REPORT_MAX_EDGE)
+        val reference = withContext(Dispatchers.IO) { runCatching { loadCappedBase(s, capW, capH) }.getOrNull() }
+        val roi = if (s.roiW > 0 && s.roiH > 0) {
+            RectF(s.roiX.toFloat(), s.roiY.toFloat(), (s.roiX + s.roiW).toFloat(), (s.roiY + s.roiH).toFloat())
+        } else {
+            null
         }
-        return PdfReportGenerator.StressStrainPage(curve, plot)
+        val f = File(shareDir(), labReportName())
+        LabReportExporter(host).write(curve, reference, s.imgW to s.imgH, roi, f)
+        return f
     }
 
     /**
@@ -820,6 +857,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
         )
 
         const val KIND_PDF = "pdf"
+        const val KIND_LAB_PDF = "lab_pdf"
+        private const val LAB_REPORT_PROGRESS = 60
         const val KIND_ZIP = "zip"
         const val KIND_CSV = "csv"
         const val KIND_PHOTOS = "photos"

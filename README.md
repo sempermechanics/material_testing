@@ -15,11 +15,15 @@
 > no environments configured and will fail if dispatched. A branch ruleset on
 > `main` requires a pull request and a green `CI OK`.
 >
-> What this repo adds: **New analysis** first asks for the test type — Tensile
-> or Bending — then imports the testing machine's load log (CSV) and the
-> specimen dimensions that test's stress needs (cross-section; span / width /
-> thickness) to produce a **stress–strain curve** — engineering or flexural —
-> in the viewer, CSV and PDF.
+> What this repo adds: a lab companion for a **first-semester student** doing
+> the tensile and bending experiments with a phone instead of an extensometer
+> or dial gauge. **New analysis** first asks for the test type — Tensile or
+> Bending — then imports the loads (CSV) and the specimen dimensions that
+> test's stress needs (cross-section; span / width / thickness). Tensile gives
+> a **stress–strain curve and Young's modulus E** in the viewer's Results, the
+> CSV and the PDFs, and **Share → Lab report (PDF)** writes the experiment up
+> in the journal layout — aim, observations, table, calculation, graphs,
+> results. Spec: [docs/app/STUDENT_LAB_WORKFLOW.md](docs/app/STUDENT_LAB_WORKFLOW.md).
 
 <p align="center">
   <img src="docs/images/result-viewer.png" width="220" alt="Interactive strain heatmap in the result viewer">

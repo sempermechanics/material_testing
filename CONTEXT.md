@@ -16,6 +16,17 @@ Analysis is **offline**. Cloud (Firebase Auth → Cloud Run → Firestore → Dr
 optional identity, metadata, and blob sync. Bytes never transit Cloud Run; the
 phone PUTs to a Drive resumable URI. No JSON service-account keys.
 
+**Who this repo is for: a first-semester engineering undergraduate** running the
+two standard lab experiments with a phone camera in place of the contact
+instrument, then handing in the journal write-up. **Tensile** (UTM, round bar):
+stress–strain curve and Young's modulus E. **Bending** (simply supported beam,
+central hanger load): bending stress σb = M·y/I and E from the deflection,
+E = WL³/(48δI). The app's outputs follow the student's handwritten reports
+section by section; spec, formulas and worked numbers in
+[docs/app/STUDENT_LAB_WORKFLOW.md](docs/app/STUDENT_LAB_WORKFLOW.md). Write copy
+for that reader: plain words, formulas spelled out, results the write-up asks
+for.
+
 ## Domain terms
 
 Use these words. Do not invent synonyms.
@@ -58,6 +69,9 @@ Home → TestTypeSheet → StaticAnalysisActivity (wizard) → ResultViewerActiv
 The test type (`data/TestType`: tensile / bending) is chosen on Home and rides `DicKeys.TEST_TYPE` into the wizard; the run commits
 it, the specimen dimensions and the per-frame machine loads through
 `MechanicalTestInputs` → `SessionRecord` → `metadata.json` schema `/5`.
+Results are pure objects in `report/`: `StressStrain` (the curve), `ElasticModulus`
+(tensile E, via `LinearFit`) and `LabReport` (the student write-up), drawn by the
+viewer ⓘ, `AnalysisCsvWriter` and `LabReportPdf` / `PdfReportGenerator`.
 
 Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `DicKeys`.
 Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`).
@@ -137,6 +151,35 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 
 ## Current state (2026-09-23)
 
+**Student lab outputs, part 1: tensile E and the lab report
+(`feat/tensile-modulus`).** The repo's audience is now a first-semester
+student (Product, above). `report/ElasticModulus` fits Young's modulus to the
+longest leading run of frames before the peak whose line keeps R² ≥ 0.995,
+free intercept, reference left out (a preloaded gauge otherwise reads 218 GPa
+for 194). **Results** — the curve with its fitted line, E with the frames it
+used, and peak stress — replaces the heatmap loop in the viewer's summary
+slot (the page it opens on) for any session with loads, and closes the ⓘ
+sheet; both surfaces share one curve build (`ViewerStressStrainHelper.fill`).
+PDF plots render with the day palette (`printContext`) so dark mode does not
+print pale axes. **Share → Lab report
+(PDF)** (`LabReport` → `LabReportPdf`, offered for tensile sessions with
+loads) lays the session out as the handwritten Experiment 2 write-up: same
+sections and order, row 1 worked through, Elastic / Plastic / Break point
+margin brackets, blank lines for what the app cannot know (diameter, gauge
+length, final dimensions, extension in mm) and for the student's conclusion.
+Its fixed wording is `LabReportText`, English like the rest of the PDF. The
+CSV ends with a `# mechanical_results` trailer (still version 2). Loads stay
+CSV-only; typing a load per photo and the photo↔load sync are open
+decisions. Next: bending deflection — a thickness tap on the reference photo
+sets mm/px and marks the load point, δ comes from V there, and E =
+WL³/(48δI) per step, averaged and from the load–deflection slope, with a
+bending lab report.
+
+**Open owner decision: the Terms do not fit a student audience.**
+`docs/legal/TERMS_OF_SERVICE.md` §1.2 says professional use only, not offered
+to consumers, and §1.3 requires users to be 18 or over, which rules out some
+first-semester students. Not edited here; legal text changes need the owner.
+
 **MP4 frames decode forward (`fix/mp4-decode-forward`, on top of
 `fix/video-estimate-snackbar`).** MP4 extraction asked the retriever for the
 *sync* frame nearest each sample, so every sample within a GOP came back as
@@ -204,7 +247,8 @@ change.
 is the one model (stress in MPa, strain = mean strain over accepted points in
 mε, signed as logged). Viewer ⓘ: `ViewerStressStrainHelper` adds the
 dimension / load / stress rows and the curve, built on first sheet
-open — never on viewer open — and cached in `ResultViewerViewModel`. CSV is
+open and cached in `ResultViewerViewModel` (since the tensile PR the summary
+slot's Results builds it on viewer open instead). CSV is
 `semper_csv_version,2`: `load_N,stress_MPa` trail every point row (empty
 without a log), typed sessions add `# test_type` / `# cross_section_mm2` /
 `# load_axis` / `# load_unit`. PDF: `ReportData.mechanical` draws a
