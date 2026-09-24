@@ -38,40 +38,6 @@
     </section>
 
     <div id="app" hidden>
-      <!-- Shown only while the account has no second factor. Everything
-           below it is read-only until one is enrolled, because the backend
-           refuses every state change without one. -->
-      <section class="card" id="enrolCard" hidden>
-        <h2>Set up two-factor authentication</h2>
-        <div class="note">
-          Minting, renewing and revoking a licence all change what customers
-          can do, so they need a second factor and a recent sign-in. Until you
-          enrol one, this page can look but not touch.
-        </div>
-        <div class="row">
-          <button id="enrolStart">Enrol an authenticator app</button>
-        </div>
-        <div id="enrolStep" hidden>
-          <p class="muted">
-            Add this key to your authenticator app by hand ("enter setup key"),
-            then type the 6-digit code it shows.
-          </p>
-          <!-- Deliberately no QR image. Every QR service is somebody else's
-               server, and the thing being encoded is the TOTP secret itself —
-               posting it to a third party to get a picture back would hand
-               away the second factor protecting licence issuance. Generating
-               one in-page would need an encoder we cannot visually verify, so
-               manual entry it is; every authenticator app supports it. -->
-          <p class="mono key" id="enrolSecret"></p>
-          <p class="muted">Account: <span id="enrolAccount" class="mono"></span> · Issuer: Semper DIC</p>
-          <div class="row">
-            <input id="enrolCode" inputmode="numeric" autocomplete="one-time-code"
-                   placeholder="6-digit code" size="12" />
-            <button id="enrolFinish">Confirm</button>
-          </div>
-        </div>
-      </section>
-
       <!-- ------------------------------------------------------- mint -->
       <section class="card">
         <h2>Issue a licence</h2>
@@ -131,7 +97,6 @@
 
         <div class="row">
           <button id="mint">Issue licence</button>
-          <span id="mintHint" class="muted"></span>
         </div>
 
         <!-- The key is shown once and never again: only its hash is stored. -->
@@ -182,7 +147,7 @@
         <div class="wrap">
           <table>
             <thead>
-              <tr><th>Member</th><th>State</th><th>Device</th><th>Seat held until</th><th></th></tr>
+              <tr><th>Member</th><th>Status</th><th>Seat</th><th>Device</th><th></th></tr>
             </thead>
             <tbody id="rosterRows"></tbody>
           </table>

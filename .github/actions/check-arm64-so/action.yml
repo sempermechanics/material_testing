@@ -1,0 +1,16 @@
+name: Check the arm64 engine library
+description: >
+  Fail unless the release APK exists and carries lib/arm64-v8a/libsemper_core.so.
+  A release built without the native engine installs fine and fails on the
+  first analysis.
+
+runs:
+  using: composite
+  steps:
+    - name: Verify arm64-v8a .so in release APK
+      shell: bash
+      run: |
+        APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1)
+        if [ -z "$APK" ]; then echo "No release APK produced by assembleRelease"; exit 1; fi
+        unzip -l "$APK" | grep -q "lib/arm64-v8a/libsemper_core.so" \
+          || { echo "MISSING arm64-v8a native lib"; exit 1; }

@@ -299,8 +299,8 @@ failed download deletes the empty destination rather than leaving a 0-byte file.
 
 `ui/home/SessionSelectionController` or `SettingsActivity` → 5-second undo →
 `data/BackupDeleteWorker` → `CloudSync.eraseCloudBackup` / `eraseEverywhere` →
-`IndicApi.deleteSession` (C11). `CloudRestore.invalidateRestorableCache` runs
-after, so the list stops offering what no longer exists.
+`IndicApi.deleteSession` (C11). Settings re-lists with `CloudRestore.listCompleted`,
+which is uncached, so the list stops offering what no longer exists.
 
 ### B5 Reclaim local space
 
@@ -409,7 +409,7 @@ because Drive has no anonymous signed read.
 
 Handlers stay plain `def` (Firestore and Drive calls are blocking, so Starlette
 runs them in its threadpool). Every route is in `backend/app/routers/`; shared
-pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access),
+pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade over `repo/`),
 `drive.py` (all Drive access), `errors.py` (the `detail` codes),
 `validation.py`, `rate_limit.py`, `audit.py`, `observability.py`.
 

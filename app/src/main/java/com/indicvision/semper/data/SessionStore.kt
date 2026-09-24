@@ -8,6 +8,7 @@ package com.indicvision.semper.data
 import android.content.Context
 import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -237,9 +238,6 @@ object SessionStore {
     @WorkerThread
     fun get(context: Context, id: String): SessionRecord? = list(context).firstOrNull { it.id == id }
 
-    suspend fun getAsync(context: Context, id: String): SessionRecord? =
-        withContext(Dispatchers.IO) { get(context, id) }
-
     /**
      * Insert or update a session row. New sessions are hard-stopped when the
      * account is at its analysis quota ([SessionQuotaGate]) — re-runs of an
@@ -292,9 +290,6 @@ object SessionStore {
         }
     }
 
-    suspend fun renameAsync(context: Context, id: String, newName: String) =
-        withContext(Dispatchers.IO) { rename(context, id, newName) }
-
     @WorkerThread
     fun updateHeadline(context: Context, id: String, headline: String) = synchronized(lock) {
         mutateIndex(context) { records ->
@@ -303,9 +298,6 @@ object SessionStore {
             }
         }
     }
-
-    suspend fun updateHeadlineAsync(context: Context, id: String, headline: String) =
-        withContext(Dispatchers.IO) { updateHeadline(context, id, headline) }
 
     @WorkerThread
     fun markSynced(context: Context, id: String) = setSyncState(context, id, SessionRecord.SyncState.SYNCED)
@@ -341,9 +333,6 @@ object SessionStore {
         TokenStore.refreshSessionLimit(context, remaining)
     }
 
-    suspend fun deleteAsync(context: Context, id: String) =
-        withContext(Dispatchers.IO) { delete(context, id) }
-
     /**
      * Drop heavy local artifacts (`.dat` frames, raw images, processed / staging
      * trees) but keep the index row and `reference.png` so the Home thumbnail
@@ -366,9 +355,6 @@ object SessionStore {
         }
     }
 
-    suspend fun dropLocalArtifactsAsync(context: Context, id: String) =
-        withContext(Dispatchers.IO) { dropLocalArtifacts(context, id) }
-
     /**
      * Wipes every local analysis — the index and all per-session directories.
      * Used by account deletion (GDPR); cloud erasure is handled separately.
@@ -381,9 +367,6 @@ object SessionStore {
         indexCorrupt = false
         TokenStore.refreshSessionLimit(context, 0)
     }
-
-    suspend fun deleteAllAsync(context: Context) =
-        withContext(Dispatchers.IO) { deleteAll(context) }
 
     private sealed class IndexRead {
         data class Ok(val records: List<SessionRecord>) : IndexRead()
@@ -464,10 +447,7 @@ object SessionStore {
                 out.write(payload.toByteArray(Charsets.UTF_8))
                 out.fd.sync()
             }
-            if (!tmp.renameTo(target)) {
-                tmp.copyTo(target, overwrite = true)
-                tmp.delete()
-            }
+            AtomicFiles.promote(tmp, target)
             indexCorrupt = false
             return true
         } catch (e: Exception) {

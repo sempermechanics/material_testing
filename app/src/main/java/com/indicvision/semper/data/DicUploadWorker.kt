@@ -33,13 +33,12 @@ import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.navigation.AppIntents
 import com.indicvision.semper.util.Digests
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -85,7 +84,7 @@ private const val CHUNK_MEMORY_BUDGET_FRACTION = 0.10
 
 /**
  * The server declares [serverChunkSize] (currently a flat 32 MiB —
- * `firestore_repo.py:489`) without knowing what device will receive it.
+ * `backend/app/repo/sessions.py`) without knowing what device will receive it.
  * `isLowRamDevice` alone is a blunt signal: it is a fixed, device-class boolean,
  * unaware of what else is resident right now (a memory-heavy DIC batch still in
  * the session directory, another foreground app) — where [concurrency] may
@@ -316,7 +315,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         Resume.ProvisionFailed -> {
             Timber.e("Session provision failed — not retrying create loop")
             logUpload("provision_failed")
-            runCatching { api.deleteSession(idToken, cloudSessionId) }
+            suspendRunCatching { api.deleteSession(idToken, cloudSessionId) }
             SessionStore.setCloudSessionId(applicationContext, localId, "")
             throw ProvisionFailedException()
         }
@@ -431,32 +430,18 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         }
         stagingDir.mkdirs()
 
-        // Live progress for the Home row: one throttled sampler emits phase+percent,
-        // fed by the bundling frame count ("prepare") then the uploaded byte count
-        // ("upload"). Decoupling the emit from the producers keeps WorkManager DB
-        // writes cheap regardless of how fast frames/chunks complete.
+        // Live progress for the Home row (UploadProgressSampler): the producers
+        // below feed these counters and the sampler publishes only changes.
         val reuseStaging = UploadWorkOutcomes.stagingReusable(stagingDir)
-        val progPhase = java.util.concurrent.atomic.AtomicReference(
-            if (reuseStaging) "upload" else "prepare",
+        val progress = UploadProgressSampler(
+            localId,
+            initialPhase = if (reuseStaging) "upload" else "prepare",
+            initialTotal = if (reuseStaging) 1L else record.defNames.size.toLong().coerceAtLeast(1L),
         )
-        val progDone = java.util.concurrent.atomic.AtomicLong(0)
-        val progTotal = java.util.concurrent.atomic.AtomicLong(
-            if (reuseStaging) 1L else record.defNames.size.toLong().coerceAtLeast(1L),
-        )
-        val sampler = launch {
-            while (isActive) {
-                val total = progTotal.get()
-                val pct = if (total > 0) (progDone.get() * 100 / total).toInt().coerceIn(0, 100) else 0
-                setProgress(
-                    workDataOf(
-                        DicKeys.SESSION_LOCAL_ID to localId,
-                        DicKeys.UPLOAD_PHASE to progPhase.get(),
-                        DicKeys.UPLOAD_PERCENT to pct,
-                    ),
-                )
-                delay(PROGRESS_SAMPLE_MS)
-            }
-        }
+        val progPhase = progress.phase
+        val progDone = progress.done
+        val progTotal = progress.total
+        val sampler = progress.launchIn(this, PROGRESS_SAMPLE_MS) { setProgress(it) }
 
         try {
             val artifacts = mutableListOf<Artifact>()
@@ -687,14 +672,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                         // Manifest mismatch / gone — erase cloud row, keep staging,
                         // recreate on the next run.
                         Timber.w("Discarding unusable session — keeping staging for recreate")
-                        runCatching { api.deleteSession(idToken, existingId) }
+                        suspendRunCatching { api.deleteSession(idToken, existingId) }
                             .onFailure { Timber.w(it, "Could not delete unusable session") }
                         SessionStore.setCloudSessionId(applicationContext, localId, "")
                         return@withContext retryLater("resume Rebuild — will recreate session")
                     }
                     Resume.ProvisionFailed -> {
                         Timber.e("Session provision failed — failing backup (no create loop)")
-                        runCatching { api.deleteSession(idToken, existingId) }
+                        suspendRunCatching { api.deleteSession(idToken, existingId) }
                             .onFailure { Timber.w(it, "Could not delete failed-provision session") }
                         SessionStore.setCloudSessionId(applicationContext, localId, "")
                         SessionStore.setSyncState(
@@ -722,7 +707,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                             }
                             Resume.Rebuild -> {
                                 Timber.w("Session became unusable while polling — recreate")
-                                runCatching { api.deleteSession(idToken, existingId) }
+                                suspendRunCatching { api.deleteSession(idToken, existingId) }
                                 SessionStore.setCloudSessionId(applicationContext, localId, "")
                                 return@withContext retryLater(
                                     "provision poll Rebuild — will recreate session",
@@ -730,7 +715,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                             }
                             Resume.ProvisionFailed -> {
                                 Timber.e("Session provision failed while polling")
-                                runCatching { api.deleteSession(idToken, existingId) }
+                                suspendRunCatching { api.deleteSession(idToken, existingId) }
                                 SessionStore.setCloudSessionId(applicationContext, localId, "")
                                 SessionStore.setSyncState(
                                     applicationContext,
@@ -808,7 +793,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // our local "registered" flag said otherwise. Re-register and retry
             // instead of stalling forever. Keep staging for the retry.
             TokenStore.setDeviceRegistered(applicationContext, false)
-            runCatching { api.registerDevice(idToken) }
+            suspendRunCatching { api.registerDevice(idToken) }
                 .onSuccess { TokenStore.setDeviceRegistered(applicationContext, true) }
                 .onFailure { Timber.e(it, "Re-registration failed") }
             retryLater("device not active — re-registered, retry upload", e.requestId)
@@ -873,7 +858,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     )
                     // Erase the half-uploaded session so it doesn't orphan and
                     // eat a quota slot. Keep Session.zip so recreate is cheap.
-                    runCatching {
+                    suspendRunCatching {
                         if (cloudId.isNotBlank()) api.deleteSession(idToken, cloudId)
                     }.onFailure { Timber.w(it, "Could not delete stale session") }
                     SessionStore.setCloudSessionId(applicationContext, localId, "")

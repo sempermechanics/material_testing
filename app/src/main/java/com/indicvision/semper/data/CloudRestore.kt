@@ -18,7 +18,9 @@ import com.indicvision.semper.data.net.CloudFileDto
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -189,50 +191,9 @@ object CloudRestore {
      * Every COMPLETED cloud backup for this account (no local-presence filter).
      * Settings management uses this so rows that still have a phone stub without
      * `.dat`s can still offer Download when a cloud copy exists.
-     *
-     * [listRestorable] stays for Home's "restore something missing" lists.
      */
     suspend fun listCompleted(context: Context): ListResult = withContext(Dispatchers.IO) {
         fetchCompletedSessions(context.applicationContext)
-    }
-
-    /**
-     * Cloud analyses available to restore (excludes ones already on this
-     * device).
-     *
-     * Each call is one Firestore-backed session listing, and the settings page
-     * asks on every open, so a successful answer is reused for
-     * [LIST_CACHE_MS]. Anything that changes what the cloud holds must call
-     * [invalidateRestorableCache]; failures are never cached, so a retry after
-     * signing in or coming back online goes straight to the backend.
-     */
-    suspend fun listRestorable(context: Context): ListResult = withContext(Dispatchers.IO) {
-        cachedList?.takeIf { System.currentTimeMillis() - cachedAt < LIST_CACHE_MS }
-            ?.let { return@withContext it }
-
-        val appContext = context.applicationContext
-        val result = when (val listed = fetchCompletedSessions(appContext)) {
-            is ListResult.Ready -> {
-                val localIds = SessionStore.list(appContext).map { it.id }.toSet()
-                val sessions = listed.sessions.filter {
-                    it.localSessionId.isBlank() || it.localSessionId !in localIds
-                }
-                if (sessions.isEmpty()) ListResult.Empty else ListResult.Ready(sessions)
-            }
-            ListResult.Empty,
-            ListResult.NeedSignIn,
-            ListResult.ApiOff,
-            is ListResult.Failed,
-            -> listed
-        }
-        when (result) {
-            is ListResult.Ready, ListResult.Empty -> {
-                cachedList = result
-                cachedAt = System.currentTimeMillis()
-            }
-            ListResult.NeedSignIn, ListResult.ApiOff, is ListResult.Failed -> Unit
-        }
-        result
     }
 
     /**
@@ -255,26 +216,6 @@ object CloudRestore {
             }
         }
     }
-
-    /** Drop the cached listing after anything that changes the cloud's contents. */
-    fun invalidateRestorableCache() {
-        cachedList = null
-    }
-
-    @Volatile
-    private var cachedList: ListResult? = null
-
-    @Volatile
-    private var cachedAt = 0L
-
-    private const val LIST_CACHE_MS = 60_000L
-
-    /** Convenience for callers that only need the list (empty on any non-Ready). */
-    suspend fun listRestorableSessions(context: Context): List<CloudSessionDto> =
-        when (val result = listRestorable(context)) {
-            is ListResult.Ready -> result.sessions
-            else -> emptyList()
-        }
 
     /**
      * Download the cloud [Session.zip] into app cache for the user to save or
@@ -301,13 +242,12 @@ object CloudRestore {
         val bundleEntry = files.firstOrNull { it.role == "bundle" }
             ?: error("This backup has no Session.zip")
 
-        val outDir = File(appContext.cacheDir, "share").apply { mkdirs() }
+        val outDir = CacheJanitor.shareDir(appContext.cacheDir)
         val safe = displayName.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_')
             .ifBlank { "analysis" }.take(40)
         val dest = File(outDir, "${safe}_Session.zip")
         dest.delete()
-        File(outDir, "${dest.name}.part").delete()
-        File(outDir, "${dest.name}.full").delete()
+        AtomicFiles.deleteSidecars(dest)
 
         val expected = bundleEntry.sizeBytes.takeIf { it > 0L } ?: -1L
         val totalForUi = expected.takeIf { it > 0L } ?: 1L
@@ -352,8 +292,7 @@ object CloudRestore {
             SessionZip.merge(listOf(dest, extrasTmp), dest)
         } finally {
             extrasTmp.delete()
-            File(outDir, "${extrasTmp.name}.part").delete()
-            File(outDir, "${extrasTmp.name}.full").delete()
+            AtomicFiles.deleteSidecars(extrasTmp)
         }
     }
 
@@ -434,8 +373,6 @@ object CloudRestore {
             ),
         ) { "Could not update the restored session index" }
         logRestoreSaving(outcome, metaEntry.sizeBytes, files)
-        // The listing excludes backups already on this device, so it changed.
-        invalidateRestorableCache()
         localId
     }
 
@@ -525,12 +462,6 @@ object CloudRestore {
     private data class Layout(val sessionDir: File, val rawDeformedDir: File)
 
     /**
-     * Download Session.zip with size checks, verify zip magic, unpack.
-     * Deletes `.part` / `.full` sidecars so a corrupt transfer cannot stick.
-     * [onProgress] is byte-based: (bytesOnDisk, declaredSize).
-     */
-    @Suppress("LongParameterList")
-    /**
      * Whether this backup's `Session.zip` holds only the restore payload.
      *
      * `schema` has been written since the first cloud backups but never read until
@@ -560,7 +491,7 @@ object CloudRestore {
     ): BundleOutcome {
         val size = fetch.entry.sizeBytes
         val plan = if (size > 0L) {
-            runCatching { planPrefixFetch(fetch) }
+            suspendRunCatching { planPrefixFetch(fetch) }
                 .onFailure { Timber.w(it, "Prefix planning failed for %s; downloading whole bundle", fetch.sessionId) }
                 .getOrNull()
         } else {
@@ -595,8 +526,7 @@ object CloudRestore {
             downloadAndUnpackBundle(fetch, onProgress)
         } finally {
             prefixTmp.delete()
-            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_prefix.zip.part").delete()
-            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_prefix.zip.full").delete()
+            AtomicFiles.deleteSidecars(prefixTmp)
         }
     }
 
@@ -642,8 +572,7 @@ object CloudRestore {
             return planFromTail(tailTmp.readBytes(), size - tailLen, size)
         } finally {
             tailTmp.delete()
-            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_tail.bin.part").delete()
-            File(fetch.appContext.cacheDir, "restore_${fetch.sessionId}_tail.bin.full").delete()
+            AtomicFiles.deleteSidecars(tailTmp)
         }
     }
 
@@ -732,6 +661,11 @@ object CloudRestore {
         }
     }
 
+    /**
+     * Download Session.zip with size checks, verify zip magic, unpack.
+     * Deletes `.part` / `.full` sidecars so a corrupt transfer cannot stick.
+     * [onProgress] is byte-based: (bytesOnDisk, declaredSize).
+     */
     private suspend fun downloadAndUnpackBundle(
         fetch: BundleFetch,
         onProgress: suspend (done: Long, total: Long) -> Unit,
@@ -764,8 +698,7 @@ object CloudRestore {
             BundleOutcome(unpackBundle(zipTmp, layout), "whole-bundle", zipTmp.length())
         } finally {
             zipTmp.delete()
-            File(appContext.cacheDir, "restore_${sessionId}_bundle.zip.part").delete()
-            File(appContext.cacheDir, "restore_${sessionId}_bundle.zip.full").delete()
+            AtomicFiles.deleteSidecars(zipTmp)
         }
     }
 

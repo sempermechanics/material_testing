@@ -14,6 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 /**
  * [RetryOnTransient] against a fake backend.
@@ -104,6 +105,26 @@ class RetryOnTransientTest {
         // The default first step is 500ms, so anything at or past a second can
         // only have come from the header.
         assertTrue("waited ${elapsedMs}ms", elapsedMs >= 950)
+    }
+
+    @Test
+    fun `cancelling the call ends a long backoff wait at once`() {
+        server.enqueue(throttled(retryAfter = "8"))
+        server.enqueue(ok())
+        val call = client.newCall(Request.Builder().url(server.url("/v1/config")).get().build())
+        Thread {
+            Thread.sleep(300)
+            call.cancel()
+        }.start()
+
+        val started = System.nanoTime()
+        val thrown = runCatching { call.execute().close() }.exceptionOrNull()
+        val elapsedMs = (System.nanoTime() - started) / 1_000_000
+
+        assertTrue("expected an IOException, got $thrown", thrown is IOException)
+        // The header asked for eight seconds; a cancel must not sit them out.
+        assertTrue("waited ${elapsedMs}ms", elapsedMs < 2_000)
+        assertEquals(1, server.requestCount)
     }
 
     // ------------------------------------------------------------------- 503

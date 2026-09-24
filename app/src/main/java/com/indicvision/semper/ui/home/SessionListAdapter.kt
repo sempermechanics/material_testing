@@ -17,6 +17,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
+import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.imaging.BitmapDecode
@@ -216,7 +217,7 @@ class SessionListAdapter(
             holder.progressBar.isVisible = true
             // Bundle restore reports 0% for most of the Session.zip download —
             // indeterminate reads as "working" instead of a stuck empty bar.
-            val indeterminate = prog.phase == "download" && prog.percent <= 0
+            val indeterminate = prog.phase == DicKeys.PHASE_DOWNLOAD && prog.percent <= 0
             holder.progressBar.isIndeterminate = indeterminate
             if (!indeterminate) {
                 holder.progressBar.setProgressCompat(prog.percent.coerceIn(0, 100), true)

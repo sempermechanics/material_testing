@@ -30,7 +30,6 @@ internal class AviCodecDecoder private constructor(
 ) : AutoCloseable {
 
     companion object {
-        private const val TIMEOUT_US = 10_000L
         private const val MICROS_PER_SECOND = 1_000_000.0
 
         /** An AVI states no rate of its own more often than one would like. */
@@ -133,7 +132,7 @@ internal class AviCodecDecoder private constructor(
         while (steps++ < MAX_STEPS) {
             if (feedIndex <= target) feedOne()
 
-            val out = codec.dequeueOutputBuffer(info, TIMEOUT_US)
+            val out = codec.dequeueOutputBuffer(info, HardwareVideoDecoder.TIMEOUT_US)
             when {
                 out >= 0 -> {
                     val eos = (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
@@ -155,7 +154,7 @@ internal class AviCodecDecoder private constructor(
 
     private fun feedOne() {
         if (sentEos) return
-        val inIndex = codec.dequeueInputBuffer(TIMEOUT_US)
+        val inIndex = codec.dequeueInputBuffer(HardwareVideoDecoder.TIMEOUT_US)
         if (inIndex < 0) return
 
         val frame = video.frames.getOrNull(feedIndex)

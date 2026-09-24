@@ -1,26 +1,22 @@
 package com.indicvision.semper.ui.limit
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
-import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DeviceKeyManager
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.SupportMail
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * Persistent gate shown when the account's cloud analysis quota is full. Unlike
@@ -28,6 +24,7 @@ import timber.log.Timber
  * the user to email support@sempermechanics.com to raise their limit, and lets them
  * re-check or go back to manage (delete) existing analyses.
  */
+@MainThread
 class SessionLimitActivity : AppCompatActivity() {
 
     private lateinit var tvBody: TextView
@@ -66,7 +63,7 @@ class SessionLimitActivity : AppCompatActivity() {
     /** Opens the mail app pre-filled to support with account + device context. */
     private fun emailSupport() {
         val email = TokenStore.cachedEmail(this) ?: "(unknown account)"
-        val deviceId = DeviceKeyManager(this).getDeviceId()
+        val deviceId = DeviceKeyManager.deviceId(this)
         val used = TokenStore.quotaUsed(this)
         val max = TokenStore.quotaMax(this)
         val body = buildString {
@@ -74,24 +71,14 @@ class SessionLimitActivity : AppCompatActivity() {
             append("Account: ").append(email).append('\n')
             append("Quota: ").append(used).append('/').append(max).append('\n')
             append("Device ID: ").append(deviceId).append('\n')
-            append("App: ").append(BuildConfig.VERSION_NAME)
-                .append(" (").append(BuildConfig.VERSION_CODE).append(")\n")
-            append("Device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
-                .append(" — Android ").append(Build.VERSION.RELEASE)
+            append(SupportMail.deviceLines())
         }
-        val support = getString(R.string.support_email)
-        val intent = Intent(Intent.ACTION_SENDTO).apply {
-            data = "mailto:".toUri()
-            putExtra(Intent.EXTRA_EMAIL, arrayOf(support))
-            putExtra(Intent.EXTRA_SUBJECT, getString(R.string.limit_subject) + " — " + email)
-            putExtra(Intent.EXTRA_TEXT, body)
-        }
-        try {
-            startActivity(intent)
-        } catch (e: ActivityNotFoundException) {
-            Timber.w(e, "No email app to send the access request")
-            Toast.makeText(this, getString(R.string.request_access_none, support), Toast.LENGTH_LONG).show()
-        }
+        SupportMail.open(
+            this,
+            subject = getString(R.string.limit_subject) + " — " + email,
+            body = body,
+            purpose = "the limit request",
+        )
     }
 
     /** Re-query the backend; if the account is under the limit again, dismiss. */

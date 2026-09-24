@@ -532,10 +532,25 @@ def test_a_revoked_invite_loses_the_race_cleanly(emulator_repo):
     assert int(emulator_repo.get_license(license_id).get("seatsUsed") or 0) == 0
 
 
-#: How many times `_race_entitlement` will re-run a race that granted nothing.
+#: How many times `_race_until` will re-run a race that granted nothing.
 #: Four starved rounds in a row has never been seen; the cap is there so a
 #: genuinely stuck claim fails the test instead of spinning.
 _RACE_ROUNDS = 4
+
+
+def _race_until(race, settled, *, what: str, rounds: int = _RACE_ROUNDS):
+    """Run `race()` until `settled(result)` is true. Returns (result, round).
+
+    `settled` sees every round's result, so a test asserts what a starved
+    round is allowed to leave behind inside it and answers False to go again.
+    See `_race_entitlement` for why a race that granted nothing is re-run
+    rather than asserted on.
+    """
+    for attempt in range(1, rounds + 1):
+        result = race()
+        if settled(result):
+            return result, attempt
+    pytest.fail(f"{what} in none of {rounds} rounds — contention should not starve that long")
 
 
 def _race_entitlement(repo_, user, settled, workers: int = 6, rounds: int = _RACE_ROUNDS):
@@ -544,7 +559,7 @@ def _race_entitlement(repo_, user, settled, workers: int = 6, rounds: int = _RAC
 
     Repeating the race is not a weaker test, because a round that grants
     nothing proves nothing. The emulator serialises contention and aborts the
-    losers, so all six requests can exhaust the client's five retries and
+    losers, so all six requests can exhaust their ten attempts (`_TX_ATTEMPTS`) and
     every one of them answer `_contended`; production reads that round the
     same way — `_drop_superseded_demo` records "six concurrent sign-ins
     starved out completely and the account landed on Demo", and the claim is
@@ -559,15 +574,15 @@ def _race_entitlement(repo_, user, settled, workers: int = 6, rounds: int = _RAC
     clears it, so "exactly one licence redeemed by this account" is asserted
     against everything all the rounds left behind.
     """
-    for attempt in range(1, rounds + 1):
+    def race():
         with ThreadPoolExecutor(max_workers=workers) as pool:
             list(pool.map(lambda _: repo_.ensure_entitlement(dict(user), None), range(workers)))
-        if settled():
-            return attempt
-    pytest.fail(
-        f"no request claimed the licence in {rounds} rounds of {workers} — "
-        "contention should not starve that long",
+
+    _, attempt = _race_until(
+        race, lambda _: settled(), rounds=rounds,
+        what=f"no request of {workers} claimed the licence",
     )
+    return attempt
 
 
 def _emu_individual(repo_, email: str):
@@ -597,27 +612,28 @@ def test_one_individual_licence_reaches_exactly_one_account(emulator_repo):
     def claim(u):
         return emulator_repo.claim_individual_license(license_id, u["uid"], address, dict(patch))
 
-    for rounds in range(1, _RACE_ROUNDS + 1):
+    def race():
         with ThreadPoolExecutor(max_workers=len(users)) as pool:
-            results = list(pool.map(claim, users))
+            return list(pool.map(claim, users))
+
+    def settled(results):
         # Losing is a refusal, never an exception surfacing as a 500.
         assert all(isinstance(err, str) for err in results)
         admitted = [u for u, err in zip(users, results) if err == ""]
-        assert len(admitted) <= 1, (
-            f"{len(admitted)} accounts claimed one individual licence in round {rounds}"
-        )
+        assert len(admitted) <= 1, f"{len(admitted)} accounts claimed one individual licence"
         if admitted:
-            break
+            return True
         # Nobody won, so nobody may be told somebody else did, and nothing
         # may be half-written.
         assert set(results) == {emulator_repo._CONTENDED}, results
         starved = emulator_repo.get_license(license_id)
         assert starved["status"] == "unused" and not starved.get("redeemedByUid"), starved
-    else:
-        pytest.fail(
-            f"0 accounts claimed one individual licence in {_RACE_ROUNDS} rounds "
-            f"of {len(users)} — contention should not starve that long",
-        )
+        return False
+
+    results, _ = _race_until(
+        race, settled, what=f"0 of {len(users)} accounts claimed one individual licence",
+    )
+    admitted = [u for u, err in zip(users, results) if err == ""]
 
     stored = emulator_repo.get_license(license_id)
     assert stored["redeemedByUid"] == admitted[0]["uid"]
@@ -685,7 +701,8 @@ def test_the_first_device_wins_an_unbound_lock(emulator_repo):
     answer False while the lock is empty. So this asserts the invariant a
     device lock exists for — never two holders, and never a refusal without
     one — and tolerates only the outcome production also tolerates: a round
-    in which everyone was told to try again."""
+    in which everyone was told to try again, after which the race is run
+    again against the still-empty lock."""
     tag = uuid.uuid4().hex[:8]
     address = f"binder-{tag}@lab.org"
     license_id = _emu_individual(emulator_repo, address)
@@ -703,22 +720,25 @@ def test_the_first_device_wins_an_unbound_lock(emulator_repo):
         except emulator_repo.DeviceLockContended:
             return None
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        won = list(pool.map(_bind, devices))
+    def race():
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            return list(pool.map(_bind, devices))
 
-    locked = emulator_repo.get_license(license_id)["deviceIdLock"]
-    winners = [d for d, w in zip(devices, won) if w is True]
-    assert len(winners) <= 1, f"{len(winners)} devices claimed the lock: {winners}"
-    if winners:
-        assert locked == winners[0]
-    else:
+    def settled(won):
+        locked = emulator_repo.get_license(license_id)["deviceIdLock"]
+        winners = [d for d, w in zip(devices, won) if w is True]
+        assert len(winners) <= 1, f"{len(winners)} devices claimed the lock: {winners}"
+        if winners:
+            assert locked == winners[0]
+            return True
         # Everyone starved. That is only acceptable if everyone was told so:
         # a False here would be a refusal with no holder behind it.
         assert locked == "", f"lock holds {locked!r} but no bind reported winning"
         assert won == [None] * len(devices), f"refused with the lock empty: {won}"
-        assert emulator_repo.bind_device_lock(ref, devices[0]) is True
-        locked = emulator_repo.get_license(license_id)["deviceIdLock"]
-        assert locked == devices[0]
+        return False
+
+    _race_until(race, settled, what="no device bound the lock")
+    locked = emulator_repo.get_license(license_id)["deviceIdLock"]
     assert locked, "no device holds the lock"
     # Every other device is now a mismatch, which is the answer a lock exists
     # to give: revalidation drops them to demo rather than re-binding.
@@ -756,3 +776,37 @@ def test_an_address_finds_the_licences_it_administers(emulator_repo):
 
     assert found == [mine], "a revoked or foreign licence reached the listing"
 
+
+
+def test_reconcile_matches_each_seat_to_its_own_holder(emulator_repo):
+    """Holders are read with one batched `get_all`, which returns snapshots in
+    no promised order. A report that paired a seat with the wrong account would
+    move holders between buckets, so each seat here is in a different state."""
+    license_id = _emu_institution(emulator_repo, max_seats=5, seating="assigned")
+    tag = uuid.uuid4().hex[:8]
+    users = [
+        _emu_user(emulator_repo, f"emu-{tag}-{i}", f"r{i}-{tag}@university.edu")
+        for i in range(3)
+    ]
+    for u in users:
+        err = emulator_repo.claim_seat(
+            license_id, u["uid"], u["email"], "",
+            {"licenseId": license_id, "mode": "licensed"},
+        )
+        assert err == "", err
+    holder, revoked, gone = users
+    assert emulator_repo.revoke_institution_seat(license_id, revoked["uid"]) is True
+    assert emulator_repo.revoke_institution_seat(license_id, gone["uid"]) is True
+    emulator_repo.db().collection("users").document(gone["uid"]).delete()
+
+    err, report = emulator_repo.reconcile_institution_seats(license_id)
+
+    assert err == ""
+    by_uid = {row["uid"]: row for row in report["seats"]}
+    assert set(by_uid) == {u["uid"] for u in users}
+    assert (by_uid[holder["uid"]]["bucket"], by_uid[holder["uid"]]["reason"]) == ("active", "")
+    assert by_uid[holder["uid"]]["email"] == holder["email"]
+    assert by_uid[gone["uid"]]["reason"] == emulator_repo.NO_ACCOUNT
+    assert by_uid[revoked["uid"]]["bucket"] in {"revokedConfirmed", "revokedStillRunning"}
+    assert by_uid[revoked["uid"]]["reason"] != emulator_repo.NO_ACCOUNT
+    assert report["entitled"] == 1

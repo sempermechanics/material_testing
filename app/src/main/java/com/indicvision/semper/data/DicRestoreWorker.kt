@@ -10,6 +10,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.analytics.SemperAnalytics
+import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -48,13 +49,13 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
             Timber.i("Restored %s from cloud session %s", localId, cloudSessionId)
             SemperAnalytics.event(applicationContext, SemperAnalytics.CLOUD_RESTORE_SUCCEEDED)
-            Result.success(workDataOf(KEY_LOCAL_ID to localId))
+            Result.success()
         } catch (e: CancellationException) {
             clearPartialArtifacts(targetLocalId)
             throw e
         } catch (e: IndicApi.ApiException) {
             // 404 = the backup is gone; 403 = not ours. Retrying can't fix either.
-            if (e.code == 404 || e.code == 403) {
+            if (e.code == HttpStatus.NOT_FOUND || e.code == HttpStatus.FORBIDDEN) {
                 clearPartialArtifacts(targetLocalId)
                 Timber.e(e, "Restore of %s rejected — giving up", cloudSessionId)
                 SemperAnalytics.event(
@@ -62,7 +63,8 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     SemperAnalytics.CLOUD_RESTORE_FAILED,
                     mapOf("reason" to "rejected"),
                 )
-                Result.failure(workDataOf(KEY_ERROR to LicenseErrors.restoreMessage(applicationContext, e.body)))
+                val message = LicenseErrors.restoreMessage(applicationContext, e.body)
+                Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to message))
             } else {
                 // Keep cacheDir *.part so the next attempt can Range-resume the
                 // Session.zip after a gateway/Cloud Run 5xx kill.
@@ -78,7 +80,7 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     SemperAnalytics.CLOUD_RESTORE_FAILED,
                     mapOf("reason" to "corrupt"),
                 )
-                Result.failure(workDataOf(KEY_ERROR to (e.message ?: e.javaClass.simpleName)))
+                Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to (e.message ?: e.javaClass.simpleName)))
             } else {
                 // Do not wipe *.part — DriveTransfer resumes from the last byte.
                 Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
@@ -88,33 +90,11 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
     }
 
     private suspend fun publishProgress(localId: String, done: Long, total: Long) {
-        // Long arithmetic avoids overflow on multi-GB Session.zip sizes.
-        val percent = if (total > 0L) {
-            ((done.coerceAtLeast(0L) * 100L) / total).toInt().coerceIn(0, 100)
-        } else {
-            0
-        }
-        setProgress(
-            workDataOf(
-                KEY_DONE to done.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
-                KEY_TOTAL to total.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
-                DicKeys.SESSION_LOCAL_ID to localId,
-                DicKeys.UPLOAD_PHASE to PHASE_DOWNLOAD,
-                DicKeys.UPLOAD_PERCENT to percent,
-            ),
-        )
+        setProgress(DownloadProgress.data(done, total, localId))
     }
 
     private fun clearPartialArtifacts(localId: String) {
         runCatching { CloudRestore.clearPartialArtifacts(applicationContext, localId) }
             .onFailure { Timber.w(it, "Could not clean partial restore %s", localId) }
-    }
-
-    companion object {
-        const val KEY_DONE = "done"
-        const val KEY_TOTAL = "total"
-        const val KEY_LOCAL_ID = "localId"
-        const val KEY_ERROR = "error"
-        const val PHASE_DOWNLOAD = "download"
     }
 }

@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
@@ -318,7 +319,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         SendToSheet.show(host, file, mime)
     }
 
-    private fun shareDir(): File = File(host.cacheDir, "share").apply { mkdirs() }
+    private fun shareDir(): File = CacheJanitor.shareDir(host.cacheDir)
 
     /** Bundle several files into a single zip — the SAF picker saves one document. */
     private fun zipInto(files: List<File>, zipName: String): File {

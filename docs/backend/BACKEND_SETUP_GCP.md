@@ -249,8 +249,8 @@ Everything above is required (or near enough). These are the rest of what
 
 | Variable | Default | What it does |
 |---|---|---|
-| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
-| `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. A key's own `maxAnalyses`, or a per-user override, takes precedence when tighter |
+| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. **Not** overridable per user: `resolve_user_config` applies it to every demo account and ignores a `maxSessions` override (`backend/app/repo/user_config.py`, the `else` branch of `resolve_user_config`). Lifting one demo account's cap means attaching a licence (decided 2026-09-23, TD-28) |
+| `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. The first positive value wins, in this order: the per-user `maxSessions` override, then the licence's `maxAnalyses` (mirrored onto the user as `licenseMaxAnalyses`), then this variable — so an override of 999 beats a key's cap of 10, and a key's cap of 2000 beats this default. It is **not** "whichever is tighter". Falls back to the retired `PRO_MAX_SESSIONS_PER_USER` when unset (`config.py`) |
 | `ADMIN_WEB_MFA_ENABLED` | `1` | Whether browser dashboards may act via MFA at all. `0` restores attestation-only admin — every state change then needs the phone |
 | `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise an ordinary state change. Sudo mode, not a session length |
 | `ADMIN_WEB_REVOKE_REAUTH_SECONDS` | `120` | Tighter window for whole-licence revoke; the operator page forces password/Google re-auth plus TOTP before that call |
@@ -557,38 +557,66 @@ the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
 
 #### Redeploying the gateway after a route change
 
-CI never touches the gateway (a deploy job is tracked as TD-27 in
-[TECH_DEBT.md](../ops/TECH_DEBT.md)); `test_gateway_parity.py` only proves the
-committed spec matches the routers. Whenever `backend/gateway/openapi.yaml`
-changes — the licensing rollout added `/v1/licenses/*`, `/v1/me/terms`,
-`/v1/admin/licenses/*` and more — the live gateway must be moved to a new config
-by hand, **after** the Cloud Run revision that serves the new routes is promoted
-(a config that names a route the backend does not yet serve would 5xx, and the
-gateway 404s any route the config does not name).
+A production dispatch of `deploy-backend.yml` now runs a `gateway` job after
+the Cloud Run promote ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)). The
+order matters: a config that names a route the backend does not serve yet
+would 5xx, and the gateway 404s any route the config does not name.
+`test_gateway_parity.py` proves only that the committed spec matches the routers.
+
+Dispatch with `gateway_mode: dry-run` first. It renders the spec and puts its
+diff against the live config in the job summary. Re-dispatch with `apply` to
+create the config, switch, verify and roll back on failure. The deploy SA needs
+`roles/apigateway.admin` on the project and `roles/iam.serviceAccountUser` on
+`indic-gw@…`. Until those are granted, or when CI is unavailable, the block
+below is the manual fallback. It runs the same steps.
 
 API configs are immutable: create a new one and point the gateway at it.
 
 ```bash
+set -euo pipefail
 PROJECT=indicvision-dic-app REGION=asia-south1
+# The Firebase Auth project, which is NOT the GCP project here (see §A above).
+# An empty value would pass the placeholder guard and produce the issuer
+# `https://securetoken.google.com/`, rejecting every token.
+FIREBASE_PROJECT_ID=indicvision-dic-app-auth
 RUN_URL=$(gcloud run services describe semper-api --region $REGION --format='value(status.url)')
 GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
-
-# Same substitution + placeholder guard as step 3 above.
 GW_REGION=asia-northeast1
 MANAGED_SERVICE=$(gcloud api-gateway apis describe semper-api --format='value(managedService)')
-sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"     -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
-grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__' &&   echo "unsubstituted placeholder remains" && exit 1
+for v in RUN_URL FIREBASE_PROJECT_ID MANAGED_SERVICE; do
+  [ -n "${!v}" ] || { echo "$v is empty"; exit 1; }
+done
+
+sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g" \
+    -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g" \
+    -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g" \
+  backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
+if grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__'; then
+  echo "unsubstituted placeholder remains"; exit 1
+fi
 
 # Remember the config currently live — this is the rollback target.
-PREV_CFG=$(gcloud api-gateway gateways describe semper-gw --location $GW_REGION   --format='value(apiConfig)' | sed 's|.*/||')
+PREV_CFG=$(gcloud api-gateway gateways describe semper-gw --location $GW_REGION \
+  --format='value(apiConfig)' | sed 's|.*/||')
 echo "rollback: $PREV_CFG"
 
-# New config, named by date; then switch the gateway (takes a few minutes).
-NEW_CFG=v$(date +%Y%m%d)
-gcloud api-gateway api-configs create $NEW_CFG --api=semper-api   --openapi-spec=backend/gateway/openapi.generated.yaml   --backend-auth-service-account=$GW_SA
-gcloud api-gateway gateways update semper-gw --api=semper-api   --api-config=$NEW_CFG --location=$GW_REGION
-gcloud api-gateway gateways describe semper-gw --location $GW_REGION   --format='value(apiConfig,state)'
+# New config, named to the minute so a second deploy the same day cannot
+# collide; then switch the gateway (takes a few minutes).
+NEW_CFG=v$(date -u +%Y%m%d%H%M)
+gcloud api-gateway api-configs create $NEW_CFG --api=semper-api \
+  --openapi-spec=backend/gateway/openapi.generated.yaml \
+  --backend-auth-service-account=$GW_SA
+gcloud api-gateway gateways update semper-gw --api=semper-api \
+  --api-config=$NEW_CFG --location=$GW_REGION
+gcloud api-gateway gateways describe semper-gw --location $GW_REGION \
+  --format='value(apiConfig,state)'
 ```
+
+Earlier versions of this block never set `FIREBASE_PROJECT_ID`, named configs by
+day only, and ended the guard with `grep … && exit 1` — which, as a script's
+last line, exits 1 exactly when **no** placeholder remains. All three are fixed
+above, and the `gateway` job in `deploy-backend.yml` runs the same steps
+([ADR-006](../adr/ADR-006-gateway-deploy-job.md)).
 
 Verify from outside: an unauthenticated `GET https://<gateway>/v1/config` must
 answer **401** (route known, token missing), not 404 (route missing from the

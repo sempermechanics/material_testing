@@ -13,9 +13,12 @@ import androidx.work.WorkManager
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.CloudApi
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -75,10 +78,15 @@ object CloudSync {
      * Drive. It costs a Drive call per session, so it's reserved for an explicit
      * pull-to-refresh; screen resumes use the cheap index check.
      */
-    suspend fun reconcile(context: Context, reupload: Boolean = true, deep: Boolean = false): Outcome {
+    suspend fun reconcile(
+        context: Context,
+        reupload: Boolean = true,
+        deep: Boolean = false,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ): Outcome {
         return withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
-            val api = IndicApi.get(appContext)
             if (!api.enabled) return@withContext Outcome.Disabled
 
             // Every screen resume lands here, and each check costs one Firestore
@@ -88,7 +96,7 @@ object CloudSync {
             val sinceLast = System.currentTimeMillis() - prefs.getLong(K_LAST_RECONCILE_AT, 0L)
             val throttled = !deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS
 
-            val token = TokenProvider.usableIdToken() ?: return@withContext Outcome.Offline
+            val token = tokens.usableIdToken() ?: return@withContext Outcome.Offline
 
             refreshRemoteConfig(appContext, api, token, throttled)
 
@@ -145,12 +153,12 @@ object CloudSync {
      */
     private suspend fun refreshRemoteConfig(
         appContext: Context,
-        api: IndicApi,
+        api: CloudApi,
         token: String,
         throttled: Boolean,
     ) {
         if (throttled && AppRemoteConfig.isKnown(appContext)) return
-        runCatching { api.getConfig(token) }
+        suspendRunCatching { api.getConfig(token) }
             .onSuccess {
                 AppRemoteConfig.apply(appContext, it)
                 LicenseConfigWorker.enqueue(appContext)
@@ -179,10 +187,14 @@ object CloudSync {
      * can't be reached we do NOT delete locally either, so the user is never
      * told "erased everywhere" when it isn't.
      */
-    suspend fun eraseEverywhere(context: Context, localSessionId: String): EraseResult = withContext(Dispatchers.IO) {
+    suspend fun eraseEverywhere(
+        context: Context,
+        localSessionId: String,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ): EraseResult = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val record = SessionStore.get(appContext, localSessionId)
-        val api = IndicApi.get(appContext)
 
         val neverSynced = record == null ||
             (record.syncState == SessionRecord.SyncState.LOCAL_ONLY && record.cloudSessionId.isBlank())
@@ -191,7 +203,7 @@ object CloudSync {
             return@withContext EraseResult.ERASED_EVERYWHERE
         }
 
-        val token = TokenProvider.usableIdToken()
+        val token = tokens.usableIdToken()
             ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         try {
             val cloudId = resolveCloudId(api, token, record)
@@ -224,12 +236,15 @@ object CloudSync {
      * The caller re-authenticates first, which is what lets the identity delete
      * succeed instead of being refused as too stale.
      */
-    suspend fun deleteAccount(context: Context): AccountDeletion = withContext(Dispatchers.IO) {
+    suspend fun deleteAccount(
+        context: Context,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ): AccountDeletion = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        val api = IndicApi.get(appContext)
-        val auth = AuthRepository(appContext)
+        val auth = AuthRepository(appContext, api, tokens)
         deleteAccount(
-            eraseCloud = { eraseAccountInCloud(api) },
+            eraseCloud = { eraseAccountInCloud(api, tokens) },
             deleteIdentity = { auth.deleteIdentity().isSuccess },
             wipeLocal = { SessionStore.deleteAll(appContext) },
             signOut = { auth.signOut() },
@@ -261,11 +276,11 @@ object CloudSync {
     }
 
     /** True when the backend copy is gone, or there was never a backend at all. */
-    private suspend fun eraseAccountInCloud(api: IndicApi): Boolean {
+    private suspend fun eraseAccountInCloud(api: CloudApi, tokens: TokenSource): Boolean {
         if (!api.enabled) return true
-        val token = TokenProvider.usableIdToken()
+        val token = tokens.usableIdToken()
         return token != null &&
-            runCatching { api.deleteAccount(token) }
+            suspendRunCatching { api.deleteAccount(token) }
                 .onFailure { Timber.e(it, "Account erasure failed — local data left intact") }
                 .isSuccess
     }
@@ -290,11 +305,12 @@ object CloudSync {
         context: Context,
         cloudSessionId: String,
         localSessionId: String,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
     ): Boolean = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        val api = IndicApi.get(appContext)
         if (!api.enabled) return@withContext false
-        val token = TokenProvider.usableIdToken() ?: return@withContext false
+        val token = tokens.usableIdToken() ?: return@withContext false
         try {
             api.deleteSession(token, cloudSessionId)
             if (SessionStore.get(appContext, localSessionId) != null) {
@@ -312,12 +328,16 @@ object CloudSync {
      * Erase the cloud backup for a local [SessionRecord], resolving the backend
      * id via [resolveCloudIdFor]. Local files stay; sync state becomes LOCAL_ONLY.
      */
-    suspend fun eraseCloudBackup(context: Context, record: SessionRecord): EraseResult =
+    suspend fun eraseCloudBackup(
+        context: Context,
+        record: SessionRecord,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ): EraseResult =
         withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
-            val api = IndicApi.get(appContext)
             if (!api.enabled) return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
-            val token = TokenProvider.usableIdToken()
+            val token = tokens.usableIdToken()
                 ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
             val cloudId = resolveCloudId(api, token, record)
                 ?: run {
@@ -325,7 +345,7 @@ object CloudSync {
                     SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.LOCAL_ONLY)
                     return@withContext EraseResult.ERASED_EVERYWHERE
                 }
-            if (eraseCloudBackup(appContext, cloudId, record.id)) {
+            if (eraseCloudBackup(appContext, cloudId, record.id, api, tokens)) {
                 EraseResult.ERASED_EVERYWHERE
             } else {
                 EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
@@ -333,13 +353,16 @@ object CloudSync {
         }
 
     /** Backend session id for a local analysis, or null if none is known. */
-    suspend fun resolveCloudIdFor(context: Context, record: SessionRecord): String? =
+    suspend fun resolveCloudIdFor(
+        context: Context,
+        record: SessionRecord,
+        api: CloudApi = IndicApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ): String? =
         withContext(Dispatchers.IO) {
             if (record.cloudSessionId.isNotBlank()) return@withContext record.cloudSessionId
-            val appContext = context.applicationContext
-            val api = IndicApi.get(appContext)
             if (!api.enabled) return@withContext null
-            val token = TokenProvider.usableIdToken() ?: return@withContext null
+            val token = tokens.usableIdToken() ?: return@withContext null
             resolveCloudId(api, token, record)
         }
 
@@ -348,7 +371,7 @@ object CloudSync {
      * have it, else falls back to matching on localSessionId (records uploaded
      * before the link existed). Null = nothing in the cloud to erase.
      */
-    private suspend fun resolveCloudId(api: IndicApi, token: String, record: SessionRecord): String? {
+    private suspend fun resolveCloudId(api: CloudApi, token: String, record: SessionRecord): String? {
         if (record.cloudSessionId.isNotBlank()) return record.cloudSessionId
         return api.listSessions(token).sessions
             .firstOrNull { it.localSessionId == record.id }

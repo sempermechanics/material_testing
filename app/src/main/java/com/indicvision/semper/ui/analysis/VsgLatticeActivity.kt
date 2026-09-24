@@ -23,6 +23,7 @@ import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.animation.doOnEnd
 import androidx.core.content.ContextCompat
@@ -37,14 +38,17 @@ import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.ParamClipboard
+import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
-import com.indicvision.semper.ui.viewer.ResultViewerActivity
+import com.indicvision.semper.ui.viewer.ViewerArgs
+import com.indicvision.semper.ui.viewer.ViewerSweepArgs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,10 +66,10 @@ import kotlin.math.roundToInt
  * Double-tap or long-press a solved node still opens that frame in the viewer.
  * The lattice stays on the back stack while the viewer is up.
  *
- * The Intent it receives is exactly the one the result viewer needs (plus the
- * sweep lattice arrays); it forwards those extras on, adding only the frame to
- * start at.
+ * It reads its Intent as [ViewerArgs] and opens the viewer with the same
+ * arguments plus the node's [ViewerArgs.startFrame].
  */
+@MainThread
 class VsgLatticeActivity : AppCompatActivity() {
 
     private companion object {
@@ -121,6 +125,13 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private lateinit var strainPlotSection: View
     private lateinit var latticeView: VsgLatticeView
+
+    /** The sweep's arguments, parsed once (ADR-003); the record is read only for an Intent missing a key. */
+    private val args: ViewerArgs by lazy {
+        ViewerArgs.from(intent) {
+            intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)?.let { SessionStore.get(this, it) }
+        }
+    }
     private lateinit var strainPlot: VsgPlotView
     private lateinit var strainSpinner: Spinner
     private lateinit var strainPlotTitle: TextView
@@ -156,13 +167,8 @@ class VsgLatticeActivity : AppCompatActivity() {
             setNavigationOnClickListener { finish() }
         }
 
-        val solved = nodesFrom(
-            DicKeys.SWEEP_SUBSETS,
-            DicKeys.SWEEP_STEPS,
-            DicKeys.SWEEP_STRAIN_WINS,
-            solved = true,
-        )
-        val skipped = skippedNodesFromIntent(intent)
+        val solved = solvedNodes(args.sweep)
+        val skipped = skippedNodes(args.sweep)
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.window }))
         solvedNodes = nodes.filter { it.solved }
         // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).
@@ -359,14 +365,9 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
     }
 
-    private fun skippedNodesFromIntent(intent: Intent): List<VsgLatticeView.Node> {
-        val nodes = SkippedNode.decodeFromExtras(
-            intent.getStringExtra(DicKeys.SWEEP_SKIPPED),
-            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_SUBSETS),
-            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STEPS),
-            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS),
-            intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES),
-        )
+    /** Nodes the sweep could not solve; [ViewerArgs.from] has already folded any legacy keys in. */
+    private fun skippedNodes(sweep: ViewerSweepArgs?): List<VsgLatticeView.Node> {
+        val nodes = sweep?.let { SkippedNode.decodeJson(it.skippedJson) }.orEmpty()
         return nodes.map { node ->
             VsgLatticeView.Node(
                 subset = node.subset,
@@ -381,41 +382,32 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    private fun nodesFrom(
-        subsetsKey: String,
-        stepsKey: String,
-        windowsKey: String,
-        solved: Boolean,
-        codes: IntArray = IntArray(0),
-    ): List<VsgLatticeView.Node> {
-        val subsets = intent.getIntArrayExtra(subsetsKey) ?: IntArray(0)
-        val steps = intent.getIntArrayExtra(stepsKey) ?: IntArray(0)
-        val windows = intent.getIntArrayExtra(windowsKey) ?: IntArray(0)
-        val count = minOf(subsets.size, steps.size, windows.size)
+    /** One node per solved combination, in frame order. */
+    private fun solvedNodes(sweep: ViewerSweepArgs?): List<VsgLatticeView.Node> {
+        if (sweep == null) return emptyList()
+        val count = minOf(sweep.subsets.size, sweep.steps.size, sweep.strainWindows.size)
         return (0 until count).map { i ->
             VsgLatticeView.Node(
-                subset = subsets[i],
-                step = steps[i],
-                window = windows[i],
-                vsg = VsgStudy.vsgFor(windows[i]),
-                solved = solved,
-                frameIndex = if (solved) i else -1,
-                failureReason = codes.getOrNull(i)
-                    ?.let { code -> getString(EngineFailure.shortReasonRes(code)) }
-                    .orEmpty(),
-                failureCode = codes.getOrNull(i),
+                subset = sweep.subsets[i],
+                step = sweep.steps[i],
+                window = sweep.strainWindows[i],
+                vsg = VsgStudy.vsgFor(sweep.strainWindows[i]),
+                solved = true,
+                frameIndex = i,
+                failureReason = "",
+                failureCode = null,
             )
         }
     }
 
     @Suppress("ReturnCount")
     private fun loadStrainProfiles() {
-        val batchDirPath = intent.getStringExtra(DicKeys.BATCH_DIR_PATH) ?: return
-        val steps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS) ?: return
+        val batchDirPath = args.batchDirPath ?: return
+        val steps = args.sweep?.steps ?: return
         if (steps.isEmpty()) return
 
         val line = centreLine()
-        val baseStep = intent.getIntExtra(DicKeys.STEP, 1).coerceAtLeast(1)
+        val baseStep = args.step.coerceAtLeast(1)
         val componentsArray = VsgStudy.STRAIN_COMPONENTS.toIntArray()
 
         lifecycleScope.launch {
@@ -451,12 +443,14 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     /** The ROI centre line every profile is cut along — fixed for the activity's lifetime. */
     private fun centreLine(): VsgStudy.StudyLine = VsgStudy.centreLine(
-        intent.getIntExtra(DicKeys.ROI_X, 0),
-        intent.getIntExtra(DicKeys.ROI_Y, 0),
-        intent.getIntExtra(DicKeys.ROI_W, 0),
-        intent.getIntExtra(DicKeys.ROI_H, 0),
-        intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true),
+        args.roiX,
+        args.roiY,
+        args.roiW,
+        args.roiH,
+        lineCutHorizontal(),
     )
+
+    private fun lineCutHorizontal(): Boolean = args.sweep?.lineCutHorizontal ?: true
 
     /** Rebuilds the line-cut plot for Highlight or Isolate mode. */
     @Suppress("ReturnCount")
@@ -466,7 +460,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             return
         }
         val component = selectedStrainComponent()
-        val horizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
+        val horizontal = lineCutHorizontal()
         val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         // Keep the zoom across node / mode switches; reset it when the component changes.
         val preserveViewport = component == lastStrainComponent
@@ -664,7 +658,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     /** Study type, image names, and settings for the export header. */
     private fun exportHeaderLines(series: List<VsgPlotView.Series>): List<String> {
         val lines = mutableListOf<String>()
-        val horizontal = intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
+        val horizontal = lineCutHorizontal()
         val axis = getString(if (horizontal) R.string.axis_x else R.string.axis_y)
         val index = strainSpinner.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
         lines += getString(
@@ -673,10 +667,9 @@ class VsgLatticeActivity : AppCompatActivity() {
             getString(STRAIN_OPTIONS[index].first),
             axis,
         )
-        val ref = intent.getStringExtra(DicKeys.REF_NAME)
-        if (!ref.isNullOrBlank()) {
-            // Both writers use putStringArrayListExtra, so this must read the list form.
-            val defs = intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES)?.size ?: 0
+        val ref = args.refName
+        if (ref.isNotBlank()) {
+            val defs = args.frameNames.size
             lines += resources.getQuantityString(R.plurals.vsg_export_images_fmt, defs, ref, defs)
         }
         val node = selectedNode()
@@ -726,7 +719,7 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun writePng(bitmap: Bitmap): File? {
         return try {
-            val dir = File(cacheDir, "share").apply { mkdirs() }
+            val dir = CacheJanitor.shareDir(cacheDir)
             val file = File(dir, "vsg_strain_graph_${System.currentTimeMillis()}.png")
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
@@ -754,12 +747,8 @@ class VsgLatticeActivity : AppCompatActivity() {
         return STRAIN_OPTIONS[index].second
     }
 
+    /** The viewer on one combination: the same arguments, re-packed with the node's frame. */
     private fun openViewer(frameIndex: Int) {
-        val extras = intent.extras ?: return
-        startActivity(
-            Intent(this, ResultViewerActivity::class.java)
-                .putExtras(extras)
-                .putExtra(DicKeys.START_FRAME, frameIndex),
-        )
+        startActivity(args.copy(startFrame = frameIndex).toIntent(this))
     }
 }

@@ -16,10 +16,13 @@ import com.google.firebase.auth.MultiFactorResolver
 import com.google.firebase.auth.TotpMultiFactorGenerator
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.CloudApi
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -77,11 +80,19 @@ fun isTrustedAuthLink(scheme: String?, host: String?): Boolean =
  *  - [AccessStatus.OFFLINE_CACHE_APPROVED] → offline but previously approved
  */
 @Suppress("TooManyFunctions") // one method per auth action (sign-in variants, reset, status, session)
-class AuthRepository(context: Context) {
+class AuthRepository(
+    context: Context,
+    private val api: CloudApi = IndicApi.get(context),
+    private val tokens: TokenSource = TokenProvider,
+    /** Whether Firebase holds a user; a seam so status tests need no Firebase. */
+    private val signedIn: () -> Boolean = { FirebaseAuth.getInstance().currentUser != null },
+) {
 
     private val appContext = context.applicationContext
-    private val api = IndicApi.get(appContext)
-    private val auth = FirebaseAuth.getInstance()
+
+    // Looked up on first use, so a test that only drives status and terms
+    // never initialises Firebase.
+    private val auth by lazy { FirebaseAuth.getInstance() }
 
     val cloudConfigured: Boolean get() = api.enabled
 
@@ -150,7 +161,7 @@ class AuthRepository(context: Context) {
      */
     suspend fun signUpWithPassword(email: String, password: String): Result<String> = firebaseThen("password_signup") {
         val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
-        runCatching { result.user?.sendEmailVerification()?.await() }
+        suspendRunCatching { result.user?.sendEmailVerification()?.await() }
             .onFailure { Timber.w(it, "Could not send verification email") }
         result
     }
@@ -314,7 +325,7 @@ class AuthRepository(context: Context) {
 
     /** Re-check the account status for the currently signed-in Firebase user. */
     suspend fun refreshStatus(): Result<String> = withContext(Dispatchers.IO) {
-        if (auth.currentUser == null) {
+        if (!signedIn()) {
             return@withContext Result.failure(Exception("Not signed in."))
         }
         resolveStatus()
@@ -347,7 +358,7 @@ class AuthRepository(context: Context) {
      */
     suspend fun acceptTerms(version: String, improvementConsent: Boolean): Result<Unit> =
         withContext(Dispatchers.IO) {
-            val token = if (api.enabled) TokenProvider.usableIdToken() else null
+            val token = if (api.enabled) tokens.usableIdToken() else null
             if (token == null) {
                 TokenStore.setTermsAccepted(appContext, version, synced = false)
                 TokenStore.setImprovementConsent(appContext, improvementConsent)
@@ -374,7 +385,7 @@ class AuthRepository(context: Context) {
      */
     suspend fun setImprovementConsent(granted: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         TokenStore.setImprovementConsent(appContext, granted)
-        val token = (if (api.enabled) TokenProvider.usableIdToken() else null)
+        val token = (if (api.enabled) tokens.usableIdToken() else null)
             ?: return@withContext Result.success(Unit)
         try {
             api.setImprovementConsent(token, granted)
@@ -389,14 +400,14 @@ class AuthRepository(context: Context) {
     private suspend fun syncPendingTermsAcceptance(token: String) {
         if (TokenStore.isTermsAcceptanceSynced(appContext)) return
         val version = TokenStore.termsAcceptedVersion(appContext) ?: return
-        runCatching { api.acceptTerms(token, version) }
+        suspendRunCatching { api.acceptTerms(token, version) }
             .onSuccess { TokenStore.setTermsAccepted(appContext, version, synced = true) }
             .onFailure { Timber.d(it, "Terms acceptance still not synced") }
     }
 
     fun cachedEmail(): String? = auth.currentUser?.email ?: TokenStore.cachedEmail(appContext)
 
-    fun hasSession(): Boolean = auth.currentUser != null
+    fun hasSession(): Boolean = signedIn()
 
     /**
      * True when this device was approved and bound the last time it asked, so
@@ -405,7 +416,7 @@ class AuthRepository(context: Context) {
      * screen.
      */
     fun canOpenFromCache(): Boolean =
-        auth.currentUser != null &&
+        signedIn() &&
             TokenStore.cachedStatus(appContext) == AccessStatus.APPROVED &&
             TokenStore.isDeviceRegistered(appContext)
 
@@ -531,7 +542,7 @@ class AuthRepository(context: Context) {
      */
     private suspend fun unverifiedEmailError(user: FirebaseUser): Exception? {
         if (!needsEmailVerification(user)) return null
-        runCatching { auth.currentUser?.sendEmailVerification()?.await() }
+        suspendRunCatching { auth.currentUser?.sendEmailVerification()?.await() }
             .onFailure { Timber.w(it, "Could not re-send verification email") }
         val email = user.email.orEmpty()
         signOut()
@@ -577,18 +588,18 @@ class AuthRepository(context: Context) {
         if (user.providerData.none { it.providerId == EmailAuthProvider.PROVIDER_ID }) return false
         // Someone who just clicked the link in a browser is still unverified in
         // this cached user object; reload before judging them.
-        runCatching { user.reload().await() }
+        suspendRunCatching { user.reload().await() }
             .onFailure { Timber.d(it, "Could not refresh verification state; using cached value") }
         return auth.currentUser?.isEmailVerified == false
     }
 
     private suspend fun resolveStatus(): Result<String> {
-        val token = TokenProvider.usableIdToken() ?: return offlineOrExpired()
+        val token = tokens.usableIdToken() ?: return offlineOrExpired()
         return try {
             // /v1/me and /v1/config are independent reads: in parallel they cost
             // one round-trip instead of two. A failed /me cancels the config call.
             val (me, config) = coroutineScope {
-                val config = async { runCatching { api.getConfig(token) } }
+                val config = async { suspendRunCatching { api.getConfig(token) } }
                 api.me(token) to config.await() // 200 = APPROVED
             }
             TokenStore.setStatus(appContext, AccessStatus.APPROVED)

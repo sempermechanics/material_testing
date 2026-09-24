@@ -90,44 +90,52 @@ object AnalysisNavHelper {
         viewModel: AnalysisViewModel,
         sweep: Boolean,
         frameNames: ArrayList<String>,
-        subsetSize: Int,
-        strainWindow: Int,
     ) {
+        host.startActivity(resultArgs(viewModel, sweep, frameNames).toIntent(host))
+    }
+
+    /**
+     * The viewer arguments for the run that just finished (TD-61). Settings and
+     * ROI come from the run itself ([AnalysisViewModel.RunResult]): the ones the
+     * saved session recorded, so opening from here and reopening from Home show
+     * the same values. The session id is the local one Home opens with.
+     */
+    fun resultArgs(viewModel: AnalysisViewModel, sweep: Boolean, frameNames: List<String>): ViewerArgs {
+        val run = viewModel.runResult.value
+        val settings = checkNotNull(run.viewerSettings()) { "no run to show" }
         val plan = viewModel.sweepPlan
-        host.startActivity(
-            ViewerArgs(
-                imgW = viewModel.realRefWidth,
-                imgH = viewModel.realRefHeight,
-                step = viewModel.lastStep,
-                refName = viewModel.refName,
-                refPath = viewModel.lastRefPath ?: "",
-                batchDirPath = viewModel.lastBatchDirPath,
-                frameNames = frameNames,
-                stopCode = viewModel.lastStopCode,
-                plannedFrames = viewModel.lastPlannedFrames,
-                sessionId = viewModel.currentSessionId,
-                sessionLocalId = viewModel.workingLocalId,
-                subsetSize = subsetSize,
-                strainWindow = strainWindow,
-                engineStats = viewModel.engineStatsArray,
-                roiX = viewModel.roiX,
-                roiY = viewModel.roiY,
-                roiW = viewModel.roiW,
-                roiH = viewModel.roiH,
-                sweep = if (sweep) {
-                    ViewerSweepArgs(
-                        subsets = plan.map { it.subset },
-                        steps = plan.map { it.step },
-                        strainWindows = plan.map { it.strainWindow },
-                        lineCutHorizontal = viewModel.lineCutHorizontal,
-                        skippedJson = SkippedNode.encodeJson(viewModel.sweepSkippedNodes),
-                    )
-                } else {
-                    null
-                },
-                defPath = viewModel.lastDefPath,
-                defFilePaths = viewModel.defFilePaths,
-            ).toIntent(host),
+        return ViewerArgs(
+            imgW = viewModel.realRefWidth,
+            imgH = viewModel.realRefHeight,
+            step = settings.step,
+            refName = viewModel.refName,
+            refPath = run.refPath ?: "",
+            batchDirPath = run.batchDirPath,
+            frameNames = frameNames,
+            stopCode = run.stopCode,
+            plannedFrames = run.plannedFrames,
+            sessionId = viewModel.workingLocalId,
+            sessionLocalId = viewModel.workingLocalId,
+            subsetSize = settings.subset,
+            strainWindow = settings.strainWin,
+            engineStats = run.engineStats?.toList(),
+            roiX = settings.roiX,
+            roiY = settings.roiY,
+            roiW = settings.roiW,
+            roiH = settings.roiH,
+            sweep = if (sweep) {
+                ViewerSweepArgs(
+                    subsets = plan.map { it.subset },
+                    steps = plan.map { it.step },
+                    strainWindows = plan.map { it.strainWindow },
+                    lineCutHorizontal = run.spec?.sweep?.lineCutHorizontal ?: viewModel.lineCutHorizontal,
+                    skippedJson = SkippedNode.encodeJson(viewModel.sweepSkippedNodes),
+                )
+            } else {
+                null
+            },
+            defPath = run.defPath,
+            defFilePaths = viewModel.defFilePaths,
         )
     }
 }

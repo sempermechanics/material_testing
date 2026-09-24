@@ -10,6 +10,10 @@ import math
 import threading
 import time
 
+from fastapi import HTTPException
+
+from . import errors
+
 
 class TokenBucket:
     """Simple refill-per-second token bucket."""
@@ -67,6 +71,22 @@ class TokenBucket:
         if tokens >= 1.0 or self._rate <= 0:
             return 1
         return max(1, math.ceil((1.0 - tokens) / self._rate))
+
+
+def enforce(bucket: TokenBucket, key: str) -> None:
+    """Spend one of `key`'s tokens in `bucket`, else raise 429 with Retry-After.
+
+    For a check inside a handler — unsigned routes, where no nonce can be
+    spent before it runs. A device-signed route declares
+    `deps.rate_limited(bucket)` instead, which runs this ahead of
+    `verified_device`. Either way the 429 names when the bucket next has a
+    token, which the app's retry interceptor honours.
+    """
+    if not bucket.allow(key):
+        raise HTTPException(
+            429, errors.RATE_LIMITED,
+            headers={"Retry-After": str(bucket.retry_after(key))},
+        )
 
 
 # Challenge minting is cheap but abusable for nonce spam.

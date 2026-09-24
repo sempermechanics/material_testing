@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -10,15 +9,10 @@ from pydantic import BaseModel, Field
 from .. import audit, drive, errors, firestore_repo as repo, legal
 from .. import rate_limit
 from ..deps import any_status_user, current_user, rate_limited, verified_device
+from ._shared import json_dumps
 
 log = logging.getLogger("indic")
 router = APIRouter()
-
-
-def json_dumps(value) -> str:
-    """Compact JSON for the streamed export. `default=str` because Firestore
-    hands back datetimes, which json cannot serialise."""
-    return json.dumps(value, separators=(",", ":"), default=str)
 
 
 def _terms_block(user: dict) -> dict:

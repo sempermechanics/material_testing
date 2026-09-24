@@ -11,7 +11,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
-private const val SERVER_CHUNK = 32 shl 20 // firestore_repo.py's flat chunkSize
+private const val SERVER_CHUNK = 32 shl 20 // the flat chunkSize in backend/app/repo/sessions.py
 
 /**
  * [uploadChunkBytes] budgets the upload pipeline's live chunk

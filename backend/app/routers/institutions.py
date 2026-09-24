@@ -95,8 +95,7 @@ def list_my_licenses(user=Depends(current_user)):
     read a customer's roster. An empty list is the ordinary answer for the
     overwhelming majority of accounts and is not an error.
     """
-    if not rate_limit.institution_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
     if not user.get("emailVerified"):
         raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
     licenses = repo.list_licenses_administered_by(user.get("email") or "")
@@ -184,11 +183,6 @@ def add_seat(
 
 @router.delete(
     "/v1/institutions/licenses/{license_id}/invites/{invite_key}",
-    dependencies=[rate_limited(rate_limit.institution_bucket)],
-)
-@router.delete(
-    "/v1/campus/licenses/{license_id}/invites/{invite_key}",
-    include_in_schema=False,
     dependencies=[rate_limited(rate_limit.institution_bucket)],
 )
 def revoke_invite(

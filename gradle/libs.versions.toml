@@ -27,6 +27,13 @@ recyclerview = "1.4.0"
 profileinstaller = "1.4.1"
 benchmarkMacro = "1.3.4"
 uiautomator = "2.4.0"
+detekt = "1.23.8"
+kover = "0.9.9"
+spotless = "8.10.1"
+googleServices = "4.5.0"
+crashlytics = "3.0.8"
+# The ktlint engine Spotless runs, for both the Kotlin and the Gradle-script targets.
+ktlint = "1.5.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -68,3 +75,8 @@ androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomato
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-test = { id = "com.android.test", version.ref = "agp" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlytics" }

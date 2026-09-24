@@ -23,7 +23,7 @@ from . import observability as obs
 log = logging.getLogger("indic.auth")
 
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
-             "access_status": "APPROVED", "activeDeviceId": "dev-device",
+             "access_status": statuses.ACCESS_APPROVED, "activeDeviceId": "dev-device",
              "emailVerified": True, "mode": "licensed", "plan": "professional"}
 _DEV_DEVICE = {"deviceId": "dev-device", "uid": "dev-user", "status": statuses.DEVICE_ACTIVE}
 #: Claims the dev bypass pretends the token carried. Shaped like a real
@@ -126,7 +126,7 @@ def _authenticate(
         except repo.DeviceInUseError as exc:
             raise HTTPException(409, errors.DEVICE_IN_USE) from exc
         status = user["access_status"]
-        if status != "APPROVED" and (require_approved or status != statuses.ACCESS_PENDING):
+        if status != statuses.ACCESS_APPROVED and (require_approved or status != statuses.ACCESS_PENDING):
             raise HTTPException(403, errors.NOT_APPROVED)
         # Re-validate the license/seat device lock on every call that carries
         # X-Device-Id — not just at activation time. A revoked key, a disabled
@@ -206,11 +206,7 @@ def rate_limited(bucket: rate_limit.TokenBucket):
     route as them, and the cost is a few seconds of 429s.
     """
     def check(user: dict = Depends(current_user)) -> None:
-        if not bucket.allow(user["uid"]):
-            raise HTTPException(
-                429, errors.RATE_LIMITED,
-                headers={"Retry-After": str(bucket.retry_after(user["uid"]))},
-            )
+        rate_limit.enforce(bucket, user["uid"])
 
     return Depends(check)
 

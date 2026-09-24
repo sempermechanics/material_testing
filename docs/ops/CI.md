@@ -35,9 +35,9 @@ changes ──┬──> tier1-app-fast ───────────┤
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
-| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler | No — always runs | seconds |
+| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test` on the DOM-free `console/util.js` | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
-| `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log | `app` (PR); always on `main` push | ~5–8 / ~10 min |
+| `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log + `koverVerify` floor | `app` (PR); always on `main` push | ~5–8 / ~10 min |
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
 | `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=75`, Firestore emulator suite | `backend` (PR); always on `main` push | ~5–10 min |
 | `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | main push / labels | ~15–40 / up to ~90 min |
@@ -134,7 +134,9 @@ Dependabot bumps `backend/requirements.txt` and cannot regenerate the hashed
 `requirements.lock`, so tier 4's *Verify the hashed lock* step reports a version
 diff. Fix it before merging by running
 [`Backend lock`](../../.github/workflows/backend-lock.yml) against the Dependabot
-branch — it compiles on Linux / Python 3.12 and pushes the lock to that PR. See
+branch — it compiles on Linux / Python 3.12 and pushes the lock to that PR.
+That push uses `GITHUB_TOKEN`, which starts no CI run, so re-run the PR's checks
+afterwards (the status stays on the old commit until you do). See
 [RELEASING.md](RELEASING.md) § Bumping backend dependencies.
 
 `secret-scan`, `legal-pages` and `console-pages` are absent from the tables on
@@ -169,6 +171,7 @@ cd backend && pip install -r requirements-test.txt && pytest tests/ -v      # ti
 # The two always-on gates
 python scripts/render_legal_pages.py --check                                # legal-pages
 python scripts/check_console.py                                             # console-pages
+node --test "firebase-hosting/tests/*.test.mjs"                             # console-pages
 gitleaks detect --config .gitleaks.toml                                     # secret-scan (human)
 ```
 
@@ -186,15 +189,20 @@ Release builds **require** `INDIC_API_BASE_URL` (repo or `release` environment
 variable — see [ENVIRONMENTS.md](ENVIRONMENTS.md)) and pass
 `-PrequireCloudApi=true` so an empty URL cannot silently ship with cloud sync
 disabled. Local `assembleRelease` without that flag still allows offline
-inspection builds.
+inspection builds. Release builds also pass `-PuploadCrashlyticsMapping=true`,
+so the R8 mapping reaches Crashlytics; local builds never upload it.
 
 ## Backend deploy
 
 [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml) is
 `workflow_dispatch` with separate **staging** and **production** GitHub
-Environments. It:
+Environments. A **production** deploy runs only when dispatched from `main`
+(the `deploy` job is skipped otherwise); staging may deploy a branch. It:
 
-1. Runs backend ruff + pytest.
+1. Runs the shared [`backend-gate`](../../.github/actions/backend-gate/action.yml),
+   the same check Release and CI tier 4 run. It installs the hashed lock
+   the image uses, runs `pip-audit`, ruff over `app/ tests/ scripts/ ../scripts/`,
+   and pytest at the 75 % coverage floor.
 2. Deploys from `backend/` tagging the new revision
    `cand-<run_id>-<run_attempt>`.
    - **Existing service:** `no_traffic: true` — the previous revision keeps
@@ -212,6 +220,14 @@ Environments. It:
 5. Promotes the candidate to 100% traffic once the smoke passes (when
    `no_traffic` was used), with `--to-latest` after checking the latest ready
    revision is the candidate, and removes every `cand-*` tag in the same call.
+
+6. **Production only:** the `gateway` job then moves API Gateway onto a config
+   rendered from `backend/gateway/openapi.yaml`
+   ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)). Input `gateway_mode`
+   defaults to `dry-run`, which prints the diff against the live config.
+   `apply` creates the config, switches the gateway, checks `/v1/config` → 401
+   and the consoles' preflight → 200 with the allowed origin, and switches back
+   if either check fails.
 
 On an update deploy, traffic never reaches an unproven revision, so a failed
 smoke needs no rollback. The revision suffix includes the **run attempt** as
@@ -258,7 +274,21 @@ Create the **`restore-drill`** environment before relying on the schedule — th
 | `app/.cxx` | `cxx-arm64-<hash>` (tier 5 + Release), `cxx-x86_64-<hash>` (tier 3) | ABI-specific CMake/ninja tree |
 | `ccache` | `ccache-arm64-<hash>`, `ccache-x86_64-<hash>` | Compiled object cache, per ABI, keyed on native sources (not commit SHA) so Kotlin-only runs exact-hit |
 | `~/.gradle` | managed by `setup-gradle`; `org.gradle.caching=true` | Dependency + task output cache |
-| pip | managed by `setup-python`, keyed on `backend/requirements-test.txt` | Backend test dependencies |
+| pip | managed by `setup-python` in `backend-gate`, keyed on `backend/requirements.lock` + `requirements-test.txt` | Backend dependencies |
+
+### Shared steps
+
+Local composite actions under `.github/actions/` hold the steps more than
+one job runs:
+
+| Action | Used by | What |
+|--------|---------|------|
+| `setup-android-build` | every app job | JDK 17 + Gradle; cache written from `main` only |
+| `setup-native-ci` | tier 3, tier 5, Release | `.cxx` / ccache restore, OpenCV sparse checkout, the `CCACHE_*` env |
+| `enable-kvm` | tier 3, benchmark | Emulator acceleration |
+| `check-arm64-so` | tier 5, Release | The release APK carries `libsemper_core.so` |
+| `backend-gate` | tier 4, Release, Deploy | Lock install, audit, ruff, pytest + floor |
+| `prune-cache` | tier 3, tier 5, Release | Drops superseded cache entries |
 
 ### Keeping under the 10 GB limit
 

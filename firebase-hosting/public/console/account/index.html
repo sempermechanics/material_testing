@@ -40,42 +40,6 @@
         </div>
       </section>
 
-      <!-- Only while no second factor is enrolled. Downloading an analysis
-           and moving to a new device both need one, and both are refused by
-           the backend without it, so say so before the button is pressed
-           rather than after. -->
-      <section class="card enrol" id="enrolCard" hidden>
-        <h2>Set up two-factor authentication</h2>
-        <div class="note">
-          Downloading an analysis, and moving your licence to a new device,
-          both hand something out that a stolen password should not reach. The
-          app proves itself with the device it is installed on; a browser
-          cannot, so it proves itself with a second factor instead.
-        </div>
-        <div class="row">
-          <button id="enrolStart">Enrol an authenticator app</button>
-        </div>
-        <div id="enrolStep" hidden>
-          <p class="muted">
-            Scan this with Google Authenticator, Microsoft Authenticator,
-            Authy, 1Password or any authenticator app, then type the 6-digit
-            code it shows.
-          </p>
-          <!-- Drawn in the page by qr.js, never fetched; see ../README.md. -->
-          <div class="qr" id="enrolQr"></div>
-          <details>
-            <summary>Can't scan? Enter the key by hand</summary>
-            <p class="mono key" id="enrolSecret"></p>
-            <p class="muted">Account: <span id="enrolAccount" class="mono"></span> · Issuer: Semper DIC · Time-based, 6 digits, 30 seconds</p>
-          </details>
-          <div class="row">
-            <input id="enrolCode" inputmode="numeric" autocomplete="one-time-code"
-                   placeholder="6-digit code" size="12" />
-            <button id="enrolFinish">Confirm</button>
-          </div>
-        </div>
-      </section>
-
       <!-- --------------------------------------------------- analyses -->
       <section class="card">
         <h2>Saved analyses</h2>

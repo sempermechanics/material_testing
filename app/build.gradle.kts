@@ -6,12 +6,12 @@ import javax.xml.parsers.DocumentBuilderFactory
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.serialization)
-    id("io.gitlab.arturbosch.detekt") version "1.23.8"
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
-    // Coverage measurement only (report-only, no gate). Generate with
-    // `./gradlew :app:koverHtmlReport` → app/build/reports/kover/.
-    id("org.jetbrains.kotlinx.kover") version "0.9.9"
+    alias(libs.plugins.detekt)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
+    // Coverage: `koverVerify` enforces the floor below (CI tier 1 and
+    // ciReleaseGate); `./gradlew :app:koverHtmlReport` → app/build/reports/kover/.
+    alias(libs.plugins.kover)
 }
 
 // Read local.properties directly rather than via java.util.Properties, so the
@@ -45,15 +45,8 @@ val devAuthBypass = localProperty("INDIC_DEV_AUTH_BYPASS") != "false"
 // offline-only.
 val indicApiBaseUrl =
     System.getenv("INDIC_API_BASE_URL")?.trim()?.takeIf { it.isNotEmpty() }
-        ?: if (localPropertiesFile.exists()) {
-            localPropertiesFile
-                .readLines()
-                .find { it.startsWith("INDIC_API_BASE_URL=") }
-                ?.substringAfter("=")
-                ?.trim() ?: ""
-        } else {
-            ""
-        }
+        ?: localProperty("INDIC_API_BASE_URL")
+        ?: ""
 
 val requireCloudApi =
     (project.findProperty("requireCloudApi") as String?)?.equals("true", ignoreCase = true) == true
@@ -70,16 +63,7 @@ if (requireCloudApi && !indicApiBaseUrl.startsWith("https://")) {
 
 // Optional comma-separated CertificatePinner pins for the API host
 // (e.g. sha256/AAAA...=). Empty = system trust store only.
-val indicApiCertPins =
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile
-            .readLines()
-            .find { it.startsWith("INDIC_API_CERT_PINS=") }
-            ?.substringAfter("=")
-            ?.trim() ?: ""
-    } else {
-        ""
-    }
+val indicApiCertPins = localProperty("INDIC_API_CERT_PINS") ?: ""
 
 // Release signing. The keystore and passwords come from the environment
 // (SIGNING_* — set by .github/workflows/release.yml and the tier-5 CI job),
@@ -97,6 +81,10 @@ android {
     namespace = "com.indicvision.semper"
     // core-ktx 1.19+ (gradle-deps) requires compileSdk 37+ (AAR metadata).
     compileSdk = 37
+    // Pinned (TD-37): the engine builds with -ffast-math and the .dat oracles
+    // are bit-exact, so a compiler change must be a deliberate edit, not a side
+    // effect of an AGP bump. This is AGP 9.3.2's default NDK as of 2026-09-23.
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "com.indicvision.semper"
@@ -218,11 +206,16 @@ android {
             if (releaseKeystore != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            // Keep the build offline/credential-free: the plugin still injects the
-            // build-ID resource the SDK needs, it just skips uploading the R8
-            // mapping to Firebase at build time.
+            // Local builds stay offline: the plugin still injects the build-ID
+            // resource the SDK needs and skips the mapping upload. The release
+            // workflow passes -PuploadCrashlyticsMapping=true so Crashlytics keeps
+            // the R8 mapping privately for the project's life (TD-40); the
+            // workflow artifact alone expires after 90 days, and attaching it to
+            // the public GitHub Release would undo the obfuscation.
             configure<CrashlyticsExtension> {
-                mappingFileUploadEnabled = false
+                mappingFileUploadEnabled =
+                    (project.findProperty("uploadCrashlyticsMapping") as String?)
+                        ?.equals("true", ignoreCase = true) == true
             }
         }
         // Non-debuggable, debug-signed release-like variant for Macrobenchmark.
@@ -252,8 +245,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     externalNativeBuild {
@@ -387,10 +380,11 @@ kover {
             }
         }
         verify {
-            // Modest floor after excluding view classes; raise deliberately once
-            // the measured number from `:app:koverLog` settles higher.
+            // Two points under the measured line coverage (39.1 % on 2026-09-24,
+            // after the TD-57 tests), so churn does not fail unrelated PRs while
+            // a real drop does. Raise it as coverage climbs; never lower it.
             rule {
-                minBound(27)
+                minBound(37)
             }
         }
     }

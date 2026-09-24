@@ -19,7 +19,7 @@ strain fields — and has not used this app. -->
 | [3. Images it accepts](#3-images-it-accepts) | [9. Exports](#9-exports) |
 | [4. Running an analysis](#4-running-an-analysis) | [10. Managing analyses](#10-managing-analyses) |
 | [5. Parameters](#5-parameters) | [11. Troubleshooting](#11-troubleshooting) |
-| [6. Region of interest](#6-region-of-interest) | [12. Limits](#12-limits) |
+| [6. Region of interest](#6-region-of-interest) | |
 
 ---
 

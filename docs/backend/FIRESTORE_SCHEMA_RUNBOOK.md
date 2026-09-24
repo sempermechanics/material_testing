@@ -1,6 +1,6 @@
 # Firestore schema migration and rollback
 
-The application schema version is `backend/app/firestore_repo.py::SCHEMA_VERSION`.
+The application schema version is `backend/app/repo/_base.py::SCHEMA_VERSION`.
 Every newly written server-owned document includes `schemaVersion`. Firestore is
 schemaless, so migrations must tolerate mixed versions while they run.
 
@@ -42,7 +42,7 @@ interrupted halfway is retried rather than assumed done.
 
 1. Create `backend/scripts/migrations/00N_what_it_does.py` with
    `from_version = SCHEMA_VERSION` (the current value) and `to_version = N`.
-2. Bump `SCHEMA_VERSION` in `backend/app/firestore_repo.py` to match. The runner
+2. Bump `SCHEMA_VERSION` in `backend/app/repo/_base.py` to match. The runner
    refuses to start if the code version and the end of the chain disagree —
    otherwise the app would write documents at a version no migration produces.
 3. `pytest tests/test_migrations.py` covers chain validity automatically.
