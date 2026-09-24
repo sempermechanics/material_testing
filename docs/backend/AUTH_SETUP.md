@@ -221,6 +221,11 @@ has ever sent a token. Before `monitor` means anything:
    Play Integrity reports. Until then Play Integrity cannot vouch for any
    build, sideloaded or not.
 
+Meanwhile the exchange answers `403 App attestation failed` (seen 2026-09-24
+from a sideloaded debug build on a Pixel 6), and the SDK then backs off with
+`Too many attempts`; the app logs both at debug level and sends the request
+without a token.
+
 A sideloaded debug build still gets no token after that (Play Integrity does
 not recognise it); a debug-provider token registered in the console is the way
 to exercise the path from one. The app installs its provider on every build
