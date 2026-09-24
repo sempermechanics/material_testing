@@ -18,7 +18,7 @@ from a measured count and a documented cost; **[Unknown]** means not yet measure
   timestamp at the start and writes it only after `listSessions` succeeds. Calls that
   start together all pass the throttle, and each one fetches config first.
 
-## Pass 1: one reconcile at a time (#TBD)
+## Pass 1: one reconcile at a time (#191)
 
 **Lever:** redundant work elimination. A `Mutex` in `CloudSync.reconcile` runs
 the calls one at a time. The first one lists the cloud and writes the timestamp. Each
