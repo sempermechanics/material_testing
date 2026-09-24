@@ -299,6 +299,23 @@ class AviReaderTest {
     }
 
     @Test
+    fun `a frame start rounded to whole microseconds still names that frame`() {
+        // 30000/1001 fps: frame 2 starts at 66 733.33 µs, rounded to 66 733.
+        val file = riff(
+            "AVI ",
+            headerList(width = 8, height = 8, scale = 1001, rate = 30000) +
+                list(
+                    "movi",
+                    chunk("00dc", payload(1, 4)) + chunk("00dc", payload(2, 4)) + chunk("00dc", payload(3, 4)),
+                ),
+        )
+
+        val video = checkNotNull(read(file))
+        assertEquals(2, video.frameIndexAt(66_733))
+        assertEquals(1, video.frameIndexAt(66_732))
+    }
+
+    @Test
     fun `anything that is not an AVI is refused`() {
         assertNull(read(ByteArray(64)))
         assertNull(read("RIFFxxxxWAVEfmt ".toByteArray(Charsets.US_ASCII)))

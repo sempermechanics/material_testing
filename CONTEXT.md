@@ -130,6 +130,11 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `v1.2-beta.1` (the burn-down's app half, #180's strain window in data points,
   engine `v0.2.2`) plus #182, the upload CSV's stats rows above the point
   section (TD-66) ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
+- **Ported from material_testing, awaiting release.** Four general-purpose
+  fixes from material_testing `3a1a941` / `c15efd3`: the speckle reading stays
+  inside the ROI and counts only textured patches (`SubsetRecommender`), the
+  `VsgPlotView` y gutter fits its widest tick, `TouchImageView` keeps a zoom
+  across a resize, and `AviReader.frameIndexAt` takes half a µs of slack.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public distribution
   (website / Play). Video/AVI import has run only on emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
