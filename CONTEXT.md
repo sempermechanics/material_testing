@@ -1,8 +1,7 @@
 # Semper — agent context
 
-Read this before changing code. Commands live in [CONTRIBUTING.md](CONTRIBUTING.md).
-Screen maps live in [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md).
-DIC primer and glossary: [docs/README.md](docs/README.md).
+Read this before changing code. Commands: [CONTRIBUTING.md](CONTRIBUTING.md); screen maps:
+[ARCHITECTURE.md](docs/app/ARCHITECTURE.md); DIC primer: [docs/README.md](docs/README.md).
 
 ## Product
 
@@ -42,8 +41,7 @@ Use these words. Do not invent synonyms.
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (detail in `native/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay
-mesh → RGDIC flood-fill → ICGN → VSG strain → `.dat`.
+Engine pipeline (`native/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 
@@ -55,12 +53,10 @@ native/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
               access in backend/app/repo/ behind the firestore_repo facade
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
-docs/         Human docs. This file is the agent map.
 ```
 
-The engine is **not** in this repo. Bump it by changing the `native` gitlink.
-Engine host / sanitizer / DICe suites run in the engine repo. This CI only proves
-the pin still **links** (emulator x86_64, release arm64).
+Bump the engine by changing the `native` gitlink. Its host / sanitizer / DICe suites run
+in the engine repo; this CI only proves the pin **links** (emulator x86_64, release arm64).
 
 ## Runtime
 
@@ -84,20 +80,14 @@ write-ups), drawn by the viewer, `AnalysisCsvWriter` and `LabReportPdf` /
 Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `DicKeys`.
 Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`).
 
-Package map: [ARCHITECTURE.md](docs/app/ARCHITECTURE.md). Backend: `backend/app/main.py`
-(app, middleware, lifespan), `routers/` (`/v1/*` by prefix), `session_provision.py`
-(`provision_session` / `purge_session`).
+Backend: `backend/app/main.py` (app, middleware, lifespan), `routers/` (`/v1/*` by
+prefix), `session_provision.py` (`provision_session` / `purge_session`).
 
 Kotlin helpers are plain `object` / small classes; no Hilt/Dagger. Keep `lifecycleScope`
 and Activity Result launchers on the Activity. Cloud logic under test takes a defaulted
 `api: CloudApi` / `tokens: TokenSource`; tests pass `FakeCloudApi` ([ADR-002](docs/adr/ADR-002-cloudapi-seam.md)).
-
-The wizard (`StaticAnalysisActivity`, ViewStub steps) declares full `configChanges`,
-so rotation does not recreate it; the state-loss risk is process death
-([ADR-005](docs/adr/ADR-005-wizard-process-death.md)). The batch is
-`DicBatchRunner.kt`, an extension (`AnalysisViewModel.runBatchAnalysisBody`), not a type.
-
-Home **+** opens `MediaPickerSheet` (shared with the wizard dropzones). Uploads,
+The wizard (`StaticAnalysisActivity`, ViewStub steps) has full `configChanges`: rotation
+does not recreate it, process death does (see Traps). Home **+** opens `MediaPickerSheet` (shared with the wizard dropzones). Uploads,
 restores, bundle downloads and backup deletes are WorkManager, shown by the
 non-modal `TransferBannerController` strip.
 
@@ -124,28 +114,25 @@ non-modal `TransferBannerController` strip.
   local-only unless `INDIC_DEV_AUTH_BYPASS=false`.
 - **Legal pages** are generated: edit `docs/legal/`, run `scripts/render_legal_pages.py`,
   never hand-edit `firebase-hosting/public/{privacy,terms}/`.
-- **Image installs `requirements.lock`** with `--require-hashes`. Bump txt and
-  regenerate the lock on **Python 3.12**. CI checks versions, not just names.
 
 ## Quality gates
 
-Empty `app/lint-baseline.xml` / `app/detekt-baseline.xml`: extract or `@file:Suppress`,
-never stuff a baseline. `OldTargetApi` stays disabled until a deliberate `targetSdk`
-36→37 bump, and no `warningsAsErrors`. Settings / wizard XML stay under
-`TooManyViews` via `SettingsScrollContentView` / `WizardStepSettingsContentView`.
-
-Kover `minBound` 37, enforced by `:app:koverVerify` in tier 1 and `ciReleaseGate`
-(39.1 % on 2026-09-24). Macrobenchmark CI is emulator smoke, no thresholds
-([TESTING.md](docs/app/TESTING.md)). The engine floor (≥ 4557 solves/s,
-[PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual
-reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
+Baselines, `targetSdk`, Kover and the backend lock: see CLAUDE.md. `OldTargetApi` stays
+disabled until the `targetSdk` bump. Settings / wizard XML stay under `TooManyViews` via
+`SettingsScrollContentView` / `WizardStepSettingsContentView`. Macrobenchmark CI is smoke,
+no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 solves/s,
+[PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
+Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-24)
 
 - **Synced with `semperdic-app`.** This repo forked the parent at `bfe00e5`
-  (2026-09-21) and merged its `main` again at `643462c` (parent #188; here
-  #22), so the next sync is a plain `git merge` of the parent's `main`. It
-  brought the #155–#168
+  (2026-09-21) and merges its `main` with a plain `git merge`: `643462c`
+  (parent #188; here #22), then `170ec6e` (parent #195), which brought the
+  view-class tests (TD-57, Kover floor 49), the licensing repo split (TD-64),
+  the swipe and ROI-rounding fixes (TD-72, TD-73) and a linear `quickSelect`
+  on repeated values (TD-75: `valueRanges` and report builds had gone
+  quadratic on fields with many equal strains). The first sync brought the #155–#168
   burn-down (ADR-001…006), CI hardening and composites, App Check on real
   phones, the rate-limit and nonce fixes, the one-pass upload CSV (#182) and the
   coverage floor. The lab inputs ride upstream's seams: `RunSpec.mechanical`

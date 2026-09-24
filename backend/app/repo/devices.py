@@ -16,7 +16,7 @@ from ._base import (
     _run_tx,
     SCHEMA_VERSION,
 )
-from .licensing import (
+from .entitlement import (
     ensure_entitlement,
 )
 

@@ -8,7 +8,7 @@
     "CyclomaticComplexMethod",
     "LongParameterList",
     "NestedBlockDepth",
-    "TooManyFunctions", // quickSelect + its partition/pivot/swap helpers stay next to their one caller
+    "TooManyFunctions", // quickSelect + its pivot/swap helpers stay next to their one caller
 )
 
 package com.indicvision.semper.report
@@ -137,12 +137,27 @@ object VisualizationEngine {
         var lo = fromIndex
         var hi = toIndex - 1
         while (lo < hi) {
-            val pivotIndex = medianOfThreePivotIndex(values, lo, hi)
-            val pivotFinal = partition(values, lo, hi, pivotIndex)
+            val pivot = values[medianOfThreePivotIndex(values, lo, hi)]
+            // Three-way partition: [lo, lt) < pivot, [lt, gt] == pivot, (gt, hi] > pivot.
+            // A two-way partition on strict `<` settled one copy of a repeated value per
+            // pass, so a field of equal values made this quadratic.
+            var lt = lo
+            var gt = hi
+            var i = lo
+            while (i <= gt) {
+                val c = values[i].compareTo(pivot)
+                if (c < 0) {
+                    values.swapInPlace(i++, lt++)
+                } else if (c > 0) {
+                    values.swapInPlace(i, gt--)
+                } else {
+                    i++
+                }
+            }
             when {
-                k < pivotFinal -> hi = pivotFinal - 1
-                k > pivotFinal -> lo = pivotFinal + 1
-                else -> return values[k]
+                k < lt -> hi = lt - 1
+                k > gt -> lo = gt + 1
+                else -> return pivot
             }
         }
         return values[lo]
@@ -155,21 +170,6 @@ object VisualizationEngine {
         if (values[hi].compareTo(values[lo]) < 0) values.swapInPlace(hi, lo)
         if (values[hi].compareTo(values[mid]) < 0) values.swapInPlace(hi, mid)
         return mid
-    }
-
-    /** Lomuto partition around `values[pivotIndex]`; returns the pivot's final sorted position. */
-    private fun partition(values: FloatArray, lo: Int, hi: Int, pivotIndex: Int): Int {
-        val pivotValue = values[pivotIndex]
-        values.swapInPlace(pivotIndex, hi)
-        var storeIndex = lo
-        for (i in lo until hi) {
-            if (values[i].compareTo(pivotValue) < 0) {
-                values.swapInPlace(i, storeIndex)
-                storeIndex++
-            }
-        }
-        values.swapInPlace(storeIndex, hi)
-        return storeIndex
     }
 
     private fun FloatArray.swapInPlace(i: Int, j: Int) {
