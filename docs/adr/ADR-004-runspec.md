@@ -98,10 +98,51 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
 
 ## Action items
 
-1. [ ] `RunSpec` + builders; params derived from it.
-2. [ ] `RunResult.spec`; nav helper and record builder read it.
-3. [ ] Remove `hasCompletedAnalysis`, nav `last*` reads, the sweep's direct
-       mask read.
-4. [ ] Unit tests: params derived from a spec are field-equal to today's.
-5. [ ] Emulator: same fixture before/after, SHA-256 of every
-       `frame_%04d.dat` identical; `EnginePipelineSmokeTest` passes.
+1. [x] `RunSpec` + builders (`ui/analysis/RunSpec.kt`); `BatchAnalysisParams`
+       derived from it.
+2. [x] `RunResult.spec` and `RunResult.settings`; the nav helper and both
+       record builders read them.
+3. [x] Removed `hasCompletedAnalysis`, `lastStep`, `currentSessionId`,
+       `SweepRequest`, the sweep's direct mask read and the duplicate sweep-frame
+       resolver.
+4. [x] `RunSpecTest` (7): params and record settings field-equal to the
+       hand-built ones; fresh-run and Home `ViewerArgs` agree; an edited ROI
+       does not leak into the viewer; an all-failed sweep carries no stale stop code.
+5. [x] Emulator: engine inputs proven identical by digest (see As built; the
+       `.dat` hash check was replaced); `EnginePipelineSmokeTest` passes.
+
+## As built (2026-09-23)
+
+- **Smaller than the sketch.** `RunSpec` holds subset, step, strain window, the
+  resolved ROI, the mask, the interpolator, the debug target and, for a sweep,
+  `Sweep(plan, labels, lineCutHorizontal, frameIndex)`. Left out:
+  - the local session id, which is resolved inside the run after the quota
+    check; resolving it at Compute would make `wouldCreateNewSession` false
+    before the check runs;
+  - reference and frame paths, which the run moves into the session directory
+    (`repointDeformedPaths` follows them);
+  - the requested ROI, which nothing after Compute reads;
+  - overlap, which is derived from step.
+- **`RunResult` carries two values.** `spec` (the inputs) and `settings` (what
+  the saved record got). They differ for a sweep, whose record takes the first
+  *solved* combination. `viewerSettings()` prefers `settings` and falls back
+  to the spec for a sweep that solved nothing. The viewer therefore shows
+  exactly what Home will show.
+- **`SweepRequest` is gone.** The sweep body reads the spec directly.
+  `BatchAnalysisParams` stays, because the batch loop reads it;
+  `RunSpec.batchParams` builds it.
+- **`SESSION_ID` is the local id.** The `Pending_Cloud_Sync_…` placeholder was
+  only ever passed to the viewer, never stored, so the PDF's Session ID line
+  now matches a reopened session.
+- **A sweep starts from a clean `RunResult`**, as the batch path already did.
+  It used to inherit the previous run's stop code, reference and planned-frame
+  count.
+- **Verification changed.** Two runs of the *same* build on the emulator do not
+  give bit-identical `.dat` files (TD-65), so equal hashes could not show that
+  this change left the engine alone. Instead, a temporary uncommitted patch
+  logged SHA-256 of every JNI input (reference, each frame, mask) plus ROI,
+  step, subset, strain window and interpolator, before and after the change:
+  **identical**. `.dat` fields after vs before stayed inside the before-vs-before
+  envelope (max |Δu| 0.0015 / 0.0031 px). On device, the fresh-run and
+  reopened-from-Home `ViewerArgs` now agree on every field except `defPath`
+  (ADR-003), for a single run and for a sweep.

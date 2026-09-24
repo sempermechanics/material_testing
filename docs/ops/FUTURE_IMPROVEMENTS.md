@@ -82,11 +82,10 @@ commit. "What settings did this run actually use?" has no single answer until
 then — and the viewer opened straight after a run reads the ViewModel instead,
 which is TD-61. **Decided:** [ADR-004](../adr/ADR-004-runspec.md).
 
-**Fix.** An immutable `RunSpec` (frames, order, ROI + mask, subset, step, strain
-window, interpolator, sweep plan) built once at Compute and passed to
-`DicBatchRunner` / `VsgStudyRunner` and to the session record. The wizard keeps
-its mutable editing state; the run gets a snapshot. This is the larger item on
-this list — do it on its own, after FI-1.
+**Done** (run-spec PR): `RunSpec` is built once at Compute; the batch params,
+the sweep, both session records and the viewer the run opens read it or the
+`RunResult` that carries it. The wizard keeps its mutable editing state. What
+went in and what stayed out: [ADR-004 As built](../adr/ADR-004-runspec.md#as-built-2026-09-23).
 
 ## FI-7 Retire the unattested `/uploads` reader
 
