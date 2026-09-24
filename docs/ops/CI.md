@@ -124,6 +124,7 @@ When `github.head_ref` starts with `dependabot/`:
 | `dependabot/pip/…` | gates + Tier 4 |
 | `dependabot/gradle/…` | gates + Tier 1 |
 | `dependabot/github_actions/…` | gates only — deploy workflows are **not** exercised; read WIF / Cloud Run action inputs by hand before landing |
+| `dependabot/docker/…` | gates only (no case in `ci.yml`, so it takes the unknown-ecosystem branch): nothing builds or tests the image. Read the base-image change by hand, and do not take a Python minor/major bump while the lock is compiled on 3.12 (TD-68) |
 
 Never Tier 3 / Tier 5 for Dependabot. Path filters use an explicit
 `base: pull_request.base.sha` so Dependabot's 403 on the PR Files API does not
