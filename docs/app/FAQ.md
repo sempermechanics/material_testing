@@ -325,15 +325,20 @@ an unexpected sign.
 **What it means:** The app reads the load log the testing machine exported and
 matches one load to each deformed frame:
 
-- **One row per frame** — the log has exactly as many rows as frames. Nothing
-  to check.
+- **One row per frame** — photos with exactly as many rows as frames, paired
+  in order. Nothing to check. A timed log with a video is never paired this
+  way, even when the counts agree.
 - **First row skipped** — one more row than frames, and the first row is the
   smallest load: it is taken as the unloaded reference.
-- **Matched by time** — video frames only. Each frame takes the row nearest in
-  time, counting from the video's first frame (the reference). If the machine
-  started logging later than the recording, enter the gap under **Log started
-  after the first frame** (seconds; negative if the log started first).
-  Starting both together still works best.
+- **Matched by time** — whenever the log has a time column and the frames come
+  from a video. Each frame takes the row nearest in time, counting from the
+  video's first frame (the reference), but only when that row is **no more
+  than 100 ms** away. A frame with no row that close has no load: it is left
+  off the curve and the chip says how many. If the machine started logging
+  later than the recording, enter the gap under **Log started after the first
+  frame** (seconds; negative if the log started first). If no frame is within
+  100 ms, **Next** stays disabled until the gap is right. Log at 10 rows a
+  second or faster so every frame has a row within reach.
 - **Resampled** — any other row count. Frames are spread evenly through the
   log (reference ↔ first row, last frame ↔ last row). This is right when
   photos were taken at a steady rate through the whole test; otherwise export

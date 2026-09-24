@@ -7,6 +7,7 @@ package com.indicvision.semper.ui.viewer
 import android.graphics.Bitmap
 import androidx.core.graphics.scale
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.data.loadOfFrame
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.MechanicalCover
@@ -138,7 +139,7 @@ object ViewerReportFactory {
         return MechanicalCover(
             testType = type,
             model = host.stressModel,
-            loadN = host.loadsN.getOrNull(frameIndex),
+            loadN = host.loadsN.loadOfFrame(frameIndex),
         )
     }
 }

@@ -196,7 +196,9 @@ object StressStrain {
         val points = ArrayList<Point>(loadsN.size)
         var gauge: Extensometer.Gauge? = null
         loadsN.forEachIndexed { index, loadN ->
-            val data = frameData(index)
+            // NaN: the time match found no log row for this frame, so it has
+            // no load and no point on the curve.
+            val data = if (loadN.isFinite()) frameData(index) else null
             val strain = data?.let { model.strainMilli(it) }
             if (strain != null) {
                 if (gauge == null && model is Model.Axial) gauge = Extensometer.gauge(data, model.axisX)

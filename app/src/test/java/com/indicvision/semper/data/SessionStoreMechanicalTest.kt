@@ -93,6 +93,17 @@ class SessionStoreMechanicalTest {
     }
 
     @Test
+    fun `a frame with no matched load keeps its place as null in the index`() {
+        val record = typedRecord(loadsN = listOf(0f, Float.NaN, -1024f))
+
+        assertTrue(SessionStore.upsert(context, record))
+        val index = File(context.filesDir, "sessions/index.json").readText()
+
+        assertTrue(index, index.contains("\"loadsN\":[0.0,null,-1024.0]"))
+        assertEquals(listOf(0f, Float.NaN, -1024f), SessionStore.get(context, record.id)!!.loadsN)
+    }
+
+    @Test
     fun `loads that do not cover every frame do not count as machine loads`() {
         val record = typedRecord(loadsN = listOf(0f, 512.5f))
 

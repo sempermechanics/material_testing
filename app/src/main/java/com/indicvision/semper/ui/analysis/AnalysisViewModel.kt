@@ -209,7 +209,8 @@ class AnalysisViewModel : ViewModel() {
      * stress model uses before the wizard can go on.
      */
     fun mechanicalInputsReady(): Boolean =
-        !testType.hasMachineLoad || (machineLoads != null && stressModel().isComplete && !loadPointMissing())
+        !testType.hasMachineLoad ||
+            (machineLoads.let { it != null && it.matchedFrames > 0 } && stressModel().isComplete && !loadPointMissing())
 
     /**
      * Bending reads its scale and its deflection from the beam's edges tapped

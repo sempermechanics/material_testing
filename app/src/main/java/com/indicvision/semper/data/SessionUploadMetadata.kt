@@ -72,8 +72,9 @@ object SessionUploadMetadata {
                 )
                 .put("image", name)
                 .put("dat", SessionPaths.frameDatName(index))
+            // A frame the time match found no row for has no `loadN` at all.
             if (record.hasMachineLoads) {
-                frameObj.put("loadN", record.loadsN[index].toDouble())
+                record.loadsN.loadOfFrame(index)?.let { frameObj.put("loadN", it.toDouble()) }
             }
             if (record.isSweep) {
                 val subset = record.sweepSubsets.getOrElse(index) { record.subset }

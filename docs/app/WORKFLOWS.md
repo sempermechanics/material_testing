@@ -385,7 +385,10 @@ tensile, **Support span** / **Width** / **Thickness** for bending.
 | [ ] 5.1b.22 | Save taps in the editor | The row reads "N px across · 0.0xxx mm/px"; **Next** enables |
 | [ ] 5.1b.23 | Change the reference image | The taps clear; **Next** is disabled again until re-marked |
 | [ ] 5.1b.24 | Video + a timed log that starts after the recording (e.g. `scripts/synthetic_beam_video.py`, 2 s late) | Chip "matched by time" and a **Log started after the first frame** row (s). Typing 2 re-matches: the first loaded frame is the one filmed after the first weight went on |
-| [ ] 5.1b.25 | Same log, one row per frame | No offset row (it shows only for a time match) |
+| [ ] 5.1b.25 | Video + a timed log with exactly one row per frame | Still **matched by time**, not paired in order; the offset row shows |
+| [ ] 5.1b.26 | Video + a timed log whose rows are sparser than the frames (e.g. every 2 s at 1 fps) | Chip "N of M frames have no log row within 100 ms"; those frames are missing from Results, the table and the CSV load column |
+| [ ] 5.1b.27 | Set **Log started after the first frame** far off (e.g. 60 s on a 29 s clip) | No frame matches: **Next** disabled with "no frame is within 100 ms of a log row" until the gap is corrected |
+| [ ] 5.1b.28 | Photos + a timed log with one row per photo | Paired in order (photos carry no times) |
 
 #### 5.1a Video source
 

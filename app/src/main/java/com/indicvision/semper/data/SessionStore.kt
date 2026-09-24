@@ -10,8 +10,15 @@ import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.net.TokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.io.File
@@ -131,7 +138,11 @@ data class SessionRecord(
     /** Bending dimensions; [SpecimenGeometry.NONE] on every other session. */
     val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
 
-    /** Signed load in newtons per deformed frame, index-aligned with [defNames]. */
+    /**
+     * Signed load in newtons per deformed frame, index-aligned with [defNames].
+     * NaN (written as `null`) is a frame the time match found no log row for.
+     */
+    @Serializable(with = LoadsSerializer::class)
     val loadsN: List<Float> = emptyList(),
 
     /** Display name of the CSV the loads came from. */
@@ -215,6 +226,21 @@ data class SessionRecord(
  * today it documents the contract for the IDE rather than failing a build.
  * Annotating the UI entry points is the other half — see docs/ops/TECH_DEBT.md.
  */
+/**
+ * [SessionRecord.loadsN] with NaN stored as JSON `null`: standard JSON has no
+ * NaN, and a frame without a load must keep its place in the list.
+ */
+internal object LoadsSerializer : KSerializer<List<Float>> {
+    private val delegate = ListSerializer(Float.serializer().nullable)
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun serialize(encoder: Encoder, value: List<Float>) =
+        encoder.encodeSerializableValue(delegate, value.map { it.takeIf(Float::isFinite) })
+
+    override fun deserialize(decoder: Decoder): List<Float> =
+        decoder.decodeSerializableValue(delegate).map { it ?: Float.NaN }
+}
+
 object SessionStore {
 
     private val json = Json {

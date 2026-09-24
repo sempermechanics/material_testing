@@ -402,9 +402,9 @@ object SessionUploadBundler {
 
     private const val ENGINE_STATS_SIZE = 16
 
-    /** The load logged for frame [index], only when every frame has one. */
+    /** The load logged for frame [index], when the session has loads and this frame matched one. */
     private fun SessionRecord.frameLoadN(index: Int): Float? =
-        if (hasMachineLoads) loadsN.getOrNull(index) else null
+        if (hasMachineLoads) loadsN.loadOfFrame(index) else null
 
     /** The cover's mechanical block, or null on a plain DIC session. */
     private fun SessionRecord.mechanicalCover(index: Int): MechanicalCover? {

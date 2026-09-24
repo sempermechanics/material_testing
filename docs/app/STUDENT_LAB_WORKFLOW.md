@@ -30,9 +30,10 @@ So the copy is plain, the formulas are spelled out, and every number shown is on
 | Scale | None: strain is a ratio | Top and bottom edges tapped on the reference (**Load point → Mark**) |
 
 **Rows meet photos** in one of two ways:
-- **Same count:** paired in order, even when the log has times.
-- **Timed log with a video:** matched by time, where time 0 is the reference frame.
+- **Timed log with a video:** always matched by time, even when the counts agree. Time 0 is the reference frame.
+  A frame takes a row only within **100 ms** of it; a frame with none has no load and is left off the curve.
   If the machine started logging later, enter the gap in **Log started after the first frame** (s; negative if the log started first).
+- **Photos:** paired in order when the counts agree (they have no times).
 
 Loads are CSV-only for now. Typing loads in the app is still an open decision.
 

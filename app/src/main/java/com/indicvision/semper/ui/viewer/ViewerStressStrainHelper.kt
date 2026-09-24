@@ -8,6 +8,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.loadOfFrame
 import com.indicvision.semper.report.ElasticModulus
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.ui.analysis.VsgPlotView
@@ -44,7 +45,7 @@ class ViewerStressStrainHelper(
 
     /** Dimension, load, torque and stress rows for the frame on screen; none on the summary. */
     fun rows(): List<Pair<String, String>> {
-        val loadN = host.loadsN.getOrNull(host.currentFrameIndex)
+        val loadN = host.loadsN.loadOfFrame(host.currentFrameIndex)
             ?.takeUnless { host.isShowingSummary }
             ?: return emptyList()
         val model = host.stressModel

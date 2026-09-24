@@ -601,6 +601,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="next_reason_ref">add a reference image to continue</string>
     <string name="next_reason_def">add at least one deformed frame to continue</string>
     <string name="next_reason_load">import the machine load log to continue</string>
+    <string name="next_reason_load_unmatched">no frame is within 100 ms of a log row: check when the log started</string>
     <string name="next_reason_cross_section">enter the specimen cross-section to continue</string>
     <string name="next_reason_dimensions">enter the specimen dimensions to continue</string>
     <string name="next_reason_load_point">mark the beam’s edges on the reference photo to continue</string>
@@ -674,7 +675,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_warn_first_row_dropped">The log has one more row than frames; the first (unloaded) row is taken as the reference.</string>
     <string name="load_warn_units_assumed">No unit found in the log — loads are taken as newtons.</string>
     <string name="load_warn_column_guessed">No load column named in the log — the last numeric column is used.</string>
-    <string name="load_warn_time_aligned">Frames matched to the log by time. If the machine started logging after the video’s first frame, enter the gap below.</string>
+    <string name="load_warn_time_aligned">Frames matched to the log by time: each takes the row logged within 100 ms of it. If the machine started logging after the video’s first frame, enter the gap below.</string>
+    <plurals name="load_warn_unmatched_fmt">
+        <item quantity="one">%1$d of %2$d frames has no log row within %3$d ms. It has no load and is left off the curve.</item>
+        <item quantity="other">%1$d of %2$d frames have no log row within %3$d ms. They have no load and are left off the curve.</item>
+    </plurals>
     <string name="load_sync_label">Log started after the first frame</string>
     <string name="load_sync_hint">0</string>
     <string name="load_sync_body">Seconds from the video’s first frame (the reference) to the log’s first row. Negative if the log started first.</string>

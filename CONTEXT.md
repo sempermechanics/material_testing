@@ -198,8 +198,7 @@ bent the slope (left out now); a video gave one table row per frame (frames at
 one load are now one load step); the speckle check sampled outside the ROI
 (clamped); and a load log started after the recording could not be aligned
 (new *Log started after the first frame* offset, `LoadSyncRow`). Bending has
-no real-image check yet. A log whose row count equals the frame count is still
-paired in order before any time match.
+no real-image check yet.
 
 **Docs refresh with new screenshots (same branch).** Every app screenshot in
 `docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile
@@ -230,10 +229,26 @@ now image-first:
 - `step3-sweep.png` and `result-lattice.png` were recaptured, and so were the
   lab-report strips.
 
-**Open owner decision: the Terms do not fit a student audience.**
-`docs/legal/TERMS_OF_SERVICE.md` §1.2 says professional use only, not offered
-to consumers, and §1.3 requires users to be 18 or over, which rules out some
-first-semester students. Not edited here; legal text changes need the owner.
+**Loads match by time only, within 100 ms (owner decision, 2026-09-24).** A
+timed log with video frames is always matched by time, even when its row count
+equals the frame count. A frame takes the nearest row only when it is within
+`MachineLoadMapper.MATCH_TOLERANCE_MS` (100 ms); otherwise its load is NaN.
+NaN means no load: the frame is left off the curve and out of the CSV load
+column, it is `null` in `index.json` and it has no `loadN` in `metadata.json`.
+A restore keeps it in place. If no frame matches, the gate blocks Next. Photos
+have no times, so they are still paired in order or resampled.
+
+**Terms: age 16+ (owner decision, 2026-09-24).** `TERMS_OF_SERVICE.md` §1.3
+now admits users from 16. Under 18 (or under the local age of majority), a
+parent or guardian must agree for them. Privacy §8 matches. The Terms version
+is `2026-09-24` in the doc, `backend/app/legal.py` and `LegalTerms.kt`, so
+every existing user re-accepts once the backend deploys. Still open, for the
+owner and counsel:
+- §1.2 (professional use only, not offered to consumers) still sits badly with
+  students;
+- India's DPDP Act 2023 treats under-18s as children and requires verifiable
+  parental consent, which the app does not collect; the clickwrap has no age
+  question or guardian step.
 
 **MP4 frames decode forward (`fix/mp4-decode-forward`, on top of
 `fix/video-estimate-snackbar`).** MP4 extraction asked the retriever for the

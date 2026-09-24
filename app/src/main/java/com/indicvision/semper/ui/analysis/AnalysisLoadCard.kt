@@ -19,6 +19,8 @@ import com.indicvision.semper.data.LoadCsvWarning
 import com.indicvision.semper.data.LoadMapWarning
 import com.indicvision.semper.data.LoadMapping
 import com.indicvision.semper.data.MachineLoadCsv
+import com.indicvision.semper.data.MachineLoadMapper
+import com.indicvision.semper.data.MachineLoadTable
 import com.indicvision.semper.data.TestType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -158,7 +160,7 @@ class AnalysisLoadCard(
         }
         val warnings = buildList {
             parsed.warnings.forEach { add(csvWarningText(it)) }
-            table?.warnings?.forEach { add(mapWarningText(it, table.sourceRows, table.loadsN.size)) }
+            table?.warnings?.forEach { add(mapWarningText(it, table)) }
         }
         warnRow.isVisible = warnings.isNotEmpty()
         tvWarn.text = warnings.joinToString("\n")
@@ -215,11 +217,24 @@ class AnalysisLoadCard(
         },
     )
 
-    private fun mapWarningText(warning: LoadMapWarning, rows: Int, frames: Int): String = when (warning) {
+    private fun mapWarningText(warning: LoadMapWarning, table: MachineLoadTable): String = when (warning) {
         LoadMapWarning.FIRST_ROW_DROPPED -> activity.getString(R.string.load_warn_first_row_dropped)
-        LoadMapWarning.RESAMPLED ->
-            activity.resources.getQuantityString(R.plurals.load_warn_resampled_fmt, rows, rows, frames)
+        LoadMapWarning.RESAMPLED -> activity.resources.getQuantityString(
+            R.plurals.load_warn_resampled_fmt,
+            table.sourceRows,
+            table.sourceRows,
+            table.loadsN.size,
+        )
         LoadMapWarning.TIME_ALIGNED -> activity.getString(R.string.load_warn_time_aligned)
+        LoadMapWarning.UNMATCHED_FRAMES -> (table.loadsN.size - table.matchedFrames).let { unmatched ->
+            activity.resources.getQuantityString(
+                R.plurals.load_warn_unmatched_fmt,
+                unmatched,
+                unmatched,
+                table.loadsN.size,
+                MachineLoadMapper.MATCH_TOLERANCE_MS.toInt(),
+            )
+        }
         LoadMapWarning.SIGN_UNEXPECTED -> activity.getString(R.string.load_warn_sign_tensile)
     }
 

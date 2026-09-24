@@ -66,6 +66,23 @@ class StressStrainTest {
     }
 
     @Test
+    fun `a frame with no matched load is left off the curve and its field is not read`() {
+        val read = mutableListOf<Int>()
+
+        val curve = StressStrain.build(
+            loadsN = listOf(10f, Float.NaN, 30f),
+            model = StressStrain.Model.Axial(areaMm2 = 10f, axisX = true),
+            frameData = {
+                read += it
+                field(0.001f, 0f)
+            },
+        )
+
+        assertEquals(listOf(0, 2), curve.points.map { it.frame })
+        assertEquals(listOf(0, 2), read)
+    }
+
+    @Test
     fun `plot points start at the origin and are strain then stress`() {
         val curve = StressStrain.build(
             loadsN = listOf(50f),

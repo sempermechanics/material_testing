@@ -163,17 +163,31 @@ class SessionMetadataMechanicalTest {
     }
 
     @Test
-    fun `a frame without a load drops every load rather than misaligning them`() {
-        val record = record(testType = "tensile", loadsN = listOf(0f, 850.25f, 1700.5f))
+    fun `a frame the time match left without a load round-trips as no load, in place`() {
+        val record = record(testType = "tensile", loadsN = listOf(0f, Float.NaN, 1700.5f))
         val frames = SessionUploadMetadata.framesJson(record)
-        frames.getJSONObject(1).remove("loadN")
+        assertFalse(frames.getJSONObject(1).has("loadN"))
         val meta = JSONObject()
             .put("test", SessionUploadMetadata.testJson(record))
             .put("frames", frames)
 
         val restored = CloudRestore.recordFrom(meta, target())
 
-        assertEquals("tensile", restored.testType)
+        assertEquals(listOf(0f, Float.NaN, 1700.5f), restored.loadsN)
+        assertTrue(restored.hasMachineLoads)
+    }
+
+    @Test
+    fun `no frame with a load restores as a session without loads`() {
+        val record = record(testType = "tensile", loadsN = listOf(0f, 850.25f, 1700.5f))
+        val frames = SessionUploadMetadata.framesJson(record)
+        for (i in 0 until frames.length()) frames.getJSONObject(i).remove("loadN")
+        val meta = JSONObject()
+            .put("test", SessionUploadMetadata.testJson(record))
+            .put("frames", frames)
+
+        val restored = CloudRestore.recordFrom(meta, target())
+
         assertTrue(restored.loadsN.isEmpty())
         assertFalse(restored.hasMachineLoads)
     }
