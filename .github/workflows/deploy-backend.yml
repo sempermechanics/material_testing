@@ -432,8 +432,22 @@ jobs:
 
           gcloud api-gateway api-configs describe "$PREV_CFG" --api="$GW_API" \
             --project "$PROJECT" --view=FULL --format=json > /tmp/live-config.json
-          jq -r '.openapiDocuments[0].document.contents' /tmp/live-config.json \
-            | base64 -d > /tmp/live-spec.yaml
+          # The document's bytes come back base64 in the JSON, and GNU
+          # `base64 -d` rejects the URL-safe or unpadded form (run 35990981043).
+          # Accept either alphabet and missing padding; a body that is not
+          # base64 at all is taken as the spec text itself.
+          python3 - /tmp/live-config.json /tmp/live-spec.yaml <<'PY'
+          import base64, binascii, json, sys
+          doc = json.load(open(sys.argv[1]))["openapiDocuments"][0]["document"]
+          raw = doc.get("contents") or ""
+          s = "".join(raw.split()).replace("-", "+").replace("_", "/")
+          try:
+              body = base64.b64decode(s + "=" * (-len(s) % 4), validate=True)
+          except (binascii.Error, ValueError):
+              body = raw.encode()
+          open(sys.argv[2], "wb").write(body)
+          print(f"Live document {doc.get('path', '?')}: {len(raw)} chars, {len(body)} bytes")
+          PY
           if cmp -s /tmp/live-spec.yaml "$OUT"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "The live config already serves this spec; nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"

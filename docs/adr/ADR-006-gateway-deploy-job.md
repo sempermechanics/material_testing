@@ -96,7 +96,10 @@ the first run observational.
 3. [ ] Owner: grant the two roles; dispatch `dry-run`, then `apply`. The first
    `dry-run` (run 35963412251, 2026-09-24) ran before the grant and failed at the
    diff step with `apigateway.apis.get` denied; the Cloud Run deploy it followed
-   succeeded.
+   succeeded. The grant is in: the second (run 35990981043, 2026-09-24) read
+   the live config `v202609230845`, then failed on `base64: invalid input`
+   decoding its stored document; the decode now accepts either base64 alphabet
+   with or without padding. Next: `dry-run` again, then `apply`.
 4. [ ] Close TD-27 after the first successful `apply`.
 
 ## As built (2026-09-24)
@@ -117,8 +120,7 @@ the first run observational.
   `asia-northeast1`, `indic-gw@PROJECT`. Repo variables `GATEWAY_ID`,
   `GATEWAY_API`, `GATEWAY_REGION` and `GATEWAY_SA` override them.
 - The CORS check sends the first origin in `CONSOLE_ORIGINS`.
-- **Not run yet.** No one has dispatched it; it needs the IAM grant (item
-  3). Whether the live config's stored document is byte-equal to a fresh
+- **No successful run yet.** Two `dry-run` dispatches failed (item 3). Whether the live config's stored document is byte-equal to a fresh
   render has not been checked either. The first `dry-run` shows it: a diff
   of only whitespace or ordering means the skip would never fire, which is
   harmless, since `apply` then just creates an identical config.
