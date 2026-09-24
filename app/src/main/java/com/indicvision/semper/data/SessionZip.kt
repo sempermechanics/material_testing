@@ -2,6 +2,7 @@
 
 package com.indicvision.semper.data
 
+import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import timber.log.Timber
 import java.io.BufferedOutputStream
@@ -228,10 +229,7 @@ internal object SessionZip {
 
     private fun promote(tmp: File, out: File) {
         out.delete()
-        if (!tmp.renameTo(out)) {
-            tmp.copyTo(out, overwrite = true)
-            tmp.delete()
-        }
+        AtomicFiles.promote(tmp, out)
     }
 
     private fun readEntry(

@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -24,6 +25,7 @@ import kotlinx.coroutines.launch
  * them via the /v1/admin endpoints. Reached from the Home settings sheet, and
  * only shown to accounts whose backend role is `admin`.
  */
+@MainThread
 class AdminActivity : AppCompatActivity() {
 
     private val api by lazy { IndicApi.get(applicationContext) }

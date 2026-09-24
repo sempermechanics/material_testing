@@ -3,6 +3,8 @@ package com.indicvision.semper.data.net
 import okhttp3.Interceptor
 import okhttp3.Response
 import timber.log.Timber
+import java.io.IOException
+import java.io.InterruptedIOException
 
 /** Attempts in total, including the first. Three is smoothing, not resilience. */
 private const val MAX_ATTEMPTS = 3
@@ -14,6 +16,9 @@ private const val BASE_DELAY_MS = 500L
 private const val MAX_DELAY_MS = 8_000L
 
 private const val MILLIS_PER_SECOND = 1000L
+
+/** How often a backoff wait looks for a cancelled call. */
+private const val CANCEL_POLL_MS = 100L
 
 /**
  * Retries the transient answers this backend actually gives.
@@ -48,7 +53,7 @@ class RetryOnTransient : Interceptor {
             response.close()
             // Safe: every IndicApi entry point already runs inside
             // withContext(Dispatchers.IO), so no main thread is ever parked.
-            Thread.sleep(wait)
+            awaitUnlessCanceled(chain, wait)
             attempt++
             response = chain.proceed(chain.request())
         }
@@ -65,6 +70,29 @@ class RetryOnTransient : Interceptor {
                 request.method == "GET" ||
                     (request.method == "POST" && request.url.encodedPath in IDEMPOTENT_POSTS)
             else -> false
+        }
+    }
+
+    /**
+     * Waits [millis] before the retry, in slices, so a call cancelled meanwhile
+     * ends now with OkHttp's own "Canceled" instead of after the whole backoff.
+     * An interrupt ends the wait the same way rather than escaping as an
+     * unchecked [InterruptedException]. Coroutine cancellation does not reach
+     * here: `IndicApi` runs a blocking `execute()`, which nothing cancels.
+     */
+    private fun awaitUnlessCanceled(chain: Interceptor.Chain, millis: Long) {
+        var left = millis
+        while (true) {
+            if (chain.call().isCanceled()) throw IOException("Canceled")
+            if (left <= 0L) return
+            val slice = left.coerceAtMost(CANCEL_POLL_MS)
+            try {
+                Thread.sleep(slice)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw InterruptedIOException("retry wait interrupted").apply { initCause(e) }
+            }
+            left -= slice
         }
     }
 

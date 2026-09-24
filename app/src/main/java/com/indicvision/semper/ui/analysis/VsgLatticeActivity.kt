@@ -23,6 +23,7 @@ import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.animation.doOnEnd
 import androidx.core.content.ContextCompat
@@ -37,6 +38,7 @@ import com.google.android.material.slider.Slider
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.SkippedNode
@@ -66,6 +68,7 @@ import kotlin.math.roundToInt
  * sweep lattice arrays); it forwards those extras on, adding only the frame to
  * start at.
  */
+@MainThread
 class VsgLatticeActivity : AppCompatActivity() {
 
     private companion object {
@@ -726,7 +729,7 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun writePng(bitmap: Bitmap): File? {
         return try {
-            val dir = File(cacheDir, "share").apply { mkdirs() }
+            val dir = CacheJanitor.shareDir(cacheDir)
             val file = File(dir, "vsg_strain_graph_${System.currentTimeMillis()}.png")
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)

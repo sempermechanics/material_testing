@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
@@ -17,6 +18,7 @@ import java.io.File
  * Transparent proxy launched from the system share chooser as the "Save to Files"
  * destination. Opens SAF, copies the staged file, then finishes.
  */
+@MainThread
 class SaveExportActivity : AppCompatActivity() {
 
     private var pendingFile: File? = null

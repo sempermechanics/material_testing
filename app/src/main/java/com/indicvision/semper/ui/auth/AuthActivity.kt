@@ -13,6 +13,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
@@ -38,6 +39,7 @@ import timber.log.Timber
  * Whichever is used, the backend then verifies the Firebase ID token and applies
  * the APPROVED allow-list; routing depends on the resulting access status.
  */
+@MainThread
 class AuthActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }

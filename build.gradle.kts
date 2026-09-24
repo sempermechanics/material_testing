@@ -3,11 +3,11 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.test) apply false
     alias(libs.plugins.kotlin.serialization) apply false
-    id("com.diffplug.spotless") version "8.10.1"
-    id("com.google.gms.google-services") version "4.5.0" apply false
+    alias(libs.plugins.spotless)
+    alias(libs.plugins.google.services) apply false
     // Required by the Crashlytics SDK: injects the build-ID resource the SDK reads
     // at startup. Without it the SDK throws at Firebase init and crashes the app.
-    id("com.google.firebase.crashlytics") version "3.0.8" apply false
+    alias(libs.plugins.firebase.crashlytics) apply false
 }
 
 tasks.register("ciReleaseGate") {
@@ -30,7 +30,7 @@ spotless {
     kotlin {
         target("app/src/**/*.kt", "benchmark/src/**/*.kt")
         targetExclude("**/build/**", "app/src/main/cpp/**", "native/**")
-        ktlint("1.5.0").editorConfigOverride(
+        ktlint(libs.versions.ktlint.get()).editorConfigOverride(
             mapOf(
                 // Keep the gate about consistency, not churn: these rules would
                 // force large mechanical rewrites with no readability payoff.
@@ -50,6 +50,6 @@ spotless {
     }
     kotlinGradle {
         target("*.gradle.kts", "app/*.gradle.kts")
-        ktlint("1.5.0")
+        ktlint(libs.versions.ktlint.get())
     }
 }

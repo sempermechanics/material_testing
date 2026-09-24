@@ -36,6 +36,7 @@ import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
@@ -67,6 +68,7 @@ import java.io.File
  * image, with frame scrubbing, tap-to-probe readings, custom color scales,
  * and all exports (PDF/CSV/PNG/ZIP via [ShareCenter]).
  */
+@MainThread
 class ResultViewerActivity : AppCompatActivity() {
 
     private val viewerVm: ResultViewerViewModel by viewModels()

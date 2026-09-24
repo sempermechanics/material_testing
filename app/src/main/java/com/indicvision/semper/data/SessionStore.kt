@@ -8,6 +8,7 @@ package com.indicvision.semper.data
 import android.content.Context
 import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -446,10 +447,7 @@ object SessionStore {
                 out.write(payload.toByteArray(Charsets.UTF_8))
                 out.fd.sync()
             }
-            if (!tmp.renameTo(target)) {
-                tmp.copyTo(target, overwrite = true)
-                tmp.delete()
-            }
+            AtomicFiles.promote(tmp, target)
             indexCorrupt = false
             return true
         } catch (e: Exception) {

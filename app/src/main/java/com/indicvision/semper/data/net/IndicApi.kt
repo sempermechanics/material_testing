@@ -4,6 +4,7 @@ import android.content.Context
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.data.DevAuth
 import com.indicvision.semper.data.DeviceKeyManager
+import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -210,16 +211,13 @@ class IndicApi private constructor(context: Context) {
         val resp = signedRequest(idToken, "GET", "/v1/me/export", ByteArray(0))
         resp.use {
             if (it.code != HttpStatus.OK) failSigned(it)
-            val part = java.io.File(dest.parentFile, dest.name + ".part")
+            val part = AtomicFiles.partOf(dest)
             it.body.byteStream().use { input ->
                 part.outputStream().buffered().use { output -> input.copyTo(output) }
             }
             // Rename only after the whole body landed: a truncated transfer must
             // not look like a complete export.
-            if (!part.renameTo(dest)) {
-                part.copyTo(dest, overwrite = true)
-                part.delete()
-            }
+            AtomicFiles.promote(part, dest)
         }
     }
 

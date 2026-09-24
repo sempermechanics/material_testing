@@ -36,6 +36,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.MainThread
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
@@ -50,6 +51,7 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.SkippedNode
@@ -73,6 +75,7 @@ import java.io.IOException
  * extracts frames from a video), page 2 sets parameters + ROI and launches
  * the batch solve via [AnalysisViewModel]. Results open in ResultViewerActivity.
  */
+@MainThread
 class StaticAnalysisActivity : AppCompatActivity() {
 
     private companion object {
@@ -492,7 +495,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         bytes: ByteArray,
         launcher: ActivityResultLauncher<Intent>,
     ) {
-        val tempFile = File(cacheDir, "temp_roi_ref.bin")
+        val tempFile = File(cacheDir, CacheJanitor.TEMP_ROI_REF)
         lifecycleScope.launch {
             val written = withContext(Dispatchers.IO) {
                 try {

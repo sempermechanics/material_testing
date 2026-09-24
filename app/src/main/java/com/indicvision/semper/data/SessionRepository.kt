@@ -10,10 +10,9 @@ import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.imaging.RawRgba
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.util.AtomicFiles
 import timber.log.Timber
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -100,15 +99,9 @@ class SessionRepository {
             rawDir.listFiles()?.forEach { it.delete() }
             val target = File(rawDir, name)
             // Both directories are app-private storage, so this is a rename
-            // rather than a second multi-megabyte write; the stream copy is the
+            // rather than a second multi-megabyte write; the copy is the
             // fallback for the rare cross-volume case.
-            if (!source.renameTo(target)) {
-                FileInputStream(source).use { input ->
-                    FileOutputStream(target).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
+            AtomicFiles.promote(source, target)
             target.name
         }.onFailure { Timber.w(it, "Could not persist the sweep's deformed frame") }.getOrDefault("")
     }

@@ -31,7 +31,8 @@ internal class HardwareVideoDecoder private constructor(
     private var fedSinceStart = false
 
     companion object {
-        private const val TIMEOUT_US = 10_000L
+        /** How long one dequeue waits on the codec; shared with [AviCodecDecoder]. */
+        internal const val TIMEOUT_US = 10_000L
 
         // Enough to decode forward across a long GOP (e.g. 2 s at 60 fps) after a sync seek.
         private const val MAX_DRAIN_ATTEMPTS = 600
