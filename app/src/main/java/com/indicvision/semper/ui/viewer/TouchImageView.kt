@@ -56,6 +56,9 @@ class TouchImageView @JvmOverloads constructor(
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private var dragArmed = false
 
+    /** The fling detector already scrubbed on this gesture's ACTION_UP; the swipe must not scrub again. */
+    private var flingScrubbed = false
+
     // --- CRITICAL FIX: Explicit dimensions provided by the Activity ---
     private var trueImageWidth = 0f
     private var trueImageHeight = 0f
@@ -107,6 +110,7 @@ class TouchImageView @JvmOverloads constructor(
                     start.set(last)
                     mode = 1
                     dragArmed = false
+                    flingScrubbed = false
                 }
                 MotionEvent.ACTION_MOVE -> if (mode == 1 && !mScaleDetector.isInProgress && event.pointerCount == 1) {
                     if (!dragArmed) {
@@ -155,7 +159,7 @@ class TouchImageView @JvmOverloads constructor(
     }
 
     private fun maybeFitSwipe(curr: PointF) {
-        if (!isAtRestScale() || !dragArmed || mScaleDetector.isInProgress) return
+        if (!isAtRestScale() || !dragArmed || flingScrubbed || mScaleDetector.isInProgress) return
         val dx = curr.x - start.x
         val dy = curr.y - start.y
         if (hypot(dx, dy) < SWIPE_DISTANCE) return
@@ -353,6 +357,8 @@ class TouchImageView @JvmOverloads constructor(
                 abs(velocityX) >= abs(velocityY) &&
                 abs(velocityX) >= FLING_MIN_VELOCITY
             if (accept) {
+                // onFling runs before maybeFitSwipe on the same ACTION_UP; one flick is one frame.
+                flingScrubbed = true
                 onScrubListener?.invoke(if (velocityX < 0f) 1 else -1)
             }
             return accept

@@ -2,6 +2,7 @@ package com.indicvision.semper.ui.viewer
 
 import android.content.Context
 import android.content.res.Configuration
+import android.os.Trace
 import android.view.View
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -115,17 +116,23 @@ class ViewerStressStrainHelper(
         job = host.lifecycleScope.launch {
             val files = host.summaryBatchFiles()
             val built = withContext(Dispatchers.Default) {
-                StressStrain.build(
-                    loadsN = host.loadsN.toList(),
-                    model = host.stressModel,
-                    frameData = { index -> files.getOrNull(index)?.let { DicResult.decodeDatFile(it) } },
-                    onProgress = { done ->
-                        host.lifecycleScope.launch(Dispatchers.Main.immediate) {
-                            val text = host.getString(R.string.stress_strain_progress_fmt, done, host.loadsN.size)
-                            waiting.forEach { it.caption.text = text }
-                        }
-                    },
-                )
+                // Not suspending inside, so the section opens and closes on one thread.
+                Trace.beginSection(TRACE_BUILD)
+                try {
+                    StressStrain.build(
+                        loadsN = host.loadsN.toList(),
+                        model = host.stressModel,
+                        frameData = { index -> files.getOrNull(index)?.let { DicResult.decodeDatFile(it) } },
+                        onProgress = { done ->
+                            host.lifecycleScope.launch(Dispatchers.Main.immediate) {
+                                val text = host.getString(R.string.stress_strain_progress_fmt, done, host.loadsN.size)
+                                waiting.forEach { it.caption.text = text }
+                            }
+                        },
+                    )
+                } finally {
+                    Trace.endSection()
+                }
             }
             vm.stressStrain = built
             waiting.forEach { draw(it, built) }
@@ -232,6 +239,9 @@ class ViewerStressStrainHelper(
     companion object {
         /** Marks a range toggle whose listener is attached. */
         private const val RANGE_BOUND = "range-bound"
+
+        /** Trace section around the curve build; `LabResultsBenchmark` sums it. */
+        const val TRACE_BUILD = "Semper.viewer.stressStrain"
 
         /**
          * [context] with the day palette, for plots drawn into a PDF: the

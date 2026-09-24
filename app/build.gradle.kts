@@ -325,6 +325,8 @@ dependencies {
     // calls the hidden InputManager.getInstance, removed in Android 17).
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.test.rules)
+    // Real multi-touch for the gesture tests (pinch, flick, slow swipe).
+    androidTestImplementation(libs.androidx.uiautomator)
     // Microbenchmark: median timeNs + allocationCount for the round-2 hot paths
     // (HotPathMicroBenchmark). Same version as the macro library.
     androidTestImplementation(libs.androidx.benchmark.junit4)
