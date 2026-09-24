@@ -131,7 +131,17 @@ Kover `minBound` floor is 27. Macrobenchmark CI is emulator **smoke**
 Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)
 (≥ 4557 solves/s host). Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-23)
+## Current state (2026-09-24)
+
+**Terms: age 16+ (owner decision, branch `legal/terms-age-16`).** Terms §1.3
+now admits users from 16; under 18 (or the local age of majority) a parent or
+guardian must agree for them. Privacy §8 matches. `TERMS_VERSION` is
+`2026-09-24` in the doc, `backend/app/legal.py` and `LegalTerms.kt`, so every
+existing user re-accepts once, after the backend deploys. Ported from
+material_testing #12. Still open for the owner and counsel: §1.2
+(professional use only) and India's DPDP Act, which treats under-18s as
+children needing verifiable parental consent that the clickwrap does not
+collect.
 
 **A 429 no longer spends the nonce (branch `fix/rate-limit-before-nonce`).**
 Erasing seven analyses from a Pixel 6 left two in the cloud: past the erase
