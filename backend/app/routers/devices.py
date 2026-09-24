@@ -11,8 +11,7 @@ router = APIRouter()
 
 @router.post("/v1/devices/register", status_code=201)
 def register_device(body: DeviceReg, user=Depends(current_user)):
-    if not rate_limit.device_register_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.device_register_bucket, user["uid"])
     active = user.get("activeDeviceId")
     # This ACCOUNT is already bound to a different device → real device switch,
     # needs a reset/rebind. (Same device id re-registering after a reinstall is
@@ -39,6 +38,5 @@ def challenge(user=Depends(current_user), x_device_id: str = Header(default=""))
     x_device_id = require_header_identifier(
         x_device_id, name="device_id", maximum=128
     )
-    if not rate_limit.challenge_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.challenge_bucket, user["uid"])
     return {"nonce": repo.issue_nonce(user["uid"], x_device_id)}

@@ -1,7 +1,6 @@
 """Device-move history for one licence — Gap C admin read of audit logs."""
 from datetime import datetime, timezone
 
-import fake_firestore
 import pytest
 
 from app import audit, deps, firestore_repo as repo
@@ -9,8 +8,8 @@ from app.config import settings
 
 
 @pytest.fixture
-def store(monkeypatch):
-    s = fake_firestore.install(monkeypatch)
+def store(store, monkeypatch):
+    s = store
     monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", False)
     monkeypatch.setattr(
         deps, "verify_id_token",

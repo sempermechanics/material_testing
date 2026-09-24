@@ -6,7 +6,6 @@ budget, so a large analysis could not be uploaded at all. The request now
 reserves the session and a Cloud Task fills in the upload targets; the client
 polls the /uploads endpoint it already uses for resume.
 """
-import fake_firestore
 import pytest
 
 from app import audit, drive, main, rate_limit, tasks
@@ -22,10 +21,8 @@ def _file(name: str) -> dict:
 
 
 @pytest.fixture
-def store(monkeypatch):
-    store = fake_firestore.install(monkeypatch)
+def store(store, monkeypatch):
     store._data["users"] = {DEV_UID: {"email": "dev@test", "access_status": "APPROVED"}}
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
     monkeypatch.setattr(

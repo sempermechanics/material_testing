@@ -127,9 +127,37 @@ def test_no_signed_route_checks_its_bucket_in_the_handler():
         for name, f in _signed_routes()
         for node in ast.walk(f)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "allow" and ast.unparse(node.func.value).startswith("rate_limit.")
+        and (
+            (node.func.attr == "allow" and ast.unparse(node.func.value).startswith("rate_limit."))
+            or ast.unparse(node.func) == "rate_limit.enforce"
+        )
     ]
     assert offenders == []
+
+
+def test_the_handler_check_is_found_when_present():
+    """The guard above recognises `rate_limit.enforce` in a handler body."""
+    tree = ast.parse("def f():\n    rate_limit.enforce(rate_limit.erase_bucket, 'u')\n")
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    assert any(ast.unparse(c.func) == "rate_limit.enforce" for c in calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method,path,bucket,headers", [
+    ("GET", "/healthz", "health_bucket", {}),
+    ("POST", "/v1/challenge", "challenge_bucket", {"X-Device-Id": "dev-1"}),
+    ("GET", "/v1/institutions/licenses", "institution_bucket", {}),
+    ("GET", "/v1/sessions?verify=true", "session_verify_bucket", {}),
+])
+async def test_an_unsigned_429_says_when_to_retry(client, monkeypatch, method, path, bucket, headers):
+    """TD-54: the in-handler limits used to answer a bare 429. The app honours
+    `Retry-After`, and without it backs off less than a slow bucket refills."""
+    fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(getattr(rate_limit, bucket), "allow", lambda key: False)
+    r = await client.request(method, path, headers=headers)
+    assert r.status_code == 429
+    assert r.json()["detail"] == "rate_limited"
+    assert int(r.headers["retry-after"]) >= 1
 
 
 def test_the_signed_routes_are_found():

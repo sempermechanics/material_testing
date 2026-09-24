@@ -2,7 +2,6 @@
 and the ordering of the download audit write against its rate-limit check."""
 import time
 
-import fake_firestore
 import pytest
 from fastapi import Request
 
@@ -14,8 +13,8 @@ DEV_UID = "dev-user"  # deps._DEV_USER in DEV_INSECURE_AUTH mode
 
 
 @pytest.fixture
-def store(monkeypatch):
-    s = fake_firestore.install(monkeypatch)
+def store(store, monkeypatch):
+    s = store
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     return s
 

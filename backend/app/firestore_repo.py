@@ -4,6 +4,7 @@ import random
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, TypeVar
 
 from google.api_core.exceptions import Aborted, AlreadyExists, NotFound
 from google.cloud import firestore
@@ -46,6 +47,8 @@ SCHEMA_VERSION = 2
 # Transaction retries on the hot single-document paths (nonce consumption, file
 # completion). The client default is 5; contention there is expected rather than
 # exceptional, and every lost race costs a legitimate caller a round trip.
+T = TypeVar("T")
+
 _TX_ATTEMPTS = 10
 
 # Firestore caps a write batch at 500 operations.
@@ -81,6 +84,23 @@ def _lost_to_contention(exc: BaseException) -> bool:
     if isinstance(exc, Aborted):
         return True
     return isinstance(exc, ValueError) and isinstance(exc.__cause__, Aborted)
+
+
+def _run_tx(body: Callable[[Any], T], *, on_contended: Callable[[], T]) -> T:
+    """Run a `@firestore.transactional` body in a fresh transaction.
+
+    If every attempt lost to contention, answer `on_contended()` instead — each
+    caller decides what losing means (deny, re-read, fail closed). Anything
+    else propagates. One copy of the try/except the ten transactions used to
+    repeat (TD-53); the transaction is created here so its attempt budget is
+    `_TX_ATTEMPTS` everywhere.
+    """
+    try:
+        return body(db().transaction(max_attempts=_TX_ATTEMPTS))
+    except Exception as exc:  # noqa: BLE001
+        if not _lost_to_contention(exc):
+            raise
+        return on_contended()
 
 
 #: What the claim transactions answer when they only lost the race. Private
@@ -235,7 +255,7 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
     # A previously-PENDING user who has since verified a domain email (or been
     # made admin) is auto-approved on this sign-in.
     if cur.get("access_status") == statuses.ACCESS_PENDING and _auto_approved(claims):
-        changed["access_status"] = "APPROVED"
+        changed["access_status"] = statuses.ACCESS_APPROVED
     if device_id and not cur.get("claimedDeviceId"):
         changed["claimedDeviceId"] = device_id
 
@@ -337,17 +357,8 @@ def list_users(
     """Cursor-paginated user list. Returns (page, next_page_token_or_None)."""
     col = db().collection("users")
     query = col.where("access_status", "==", status) if status else col
-    query = query.order_by("__name__").limit(limit + 1)
-    if page_token:
-        cursor = col.document(page_token).get()
-        if cursor.exists:
-            query = query.start_after(cursor)
+    docs, next_token = _cursor_page(col, query, limit, page_token)
     out = []
-    docs = list(query.stream())
-    next_token = None
-    if len(docs) > limit:
-        docs = docs[:limit]
-        next_token = docs[-1].id
     for d in docs:
         u = d.to_dict()
         out.append({
@@ -375,7 +386,7 @@ def set_user_status(uid: str, status: str) -> bool:
         return False
     batch = db().batch()
     batch.update(ref, {"access_status": status, "updatedAt": firestore.SERVER_TIMESTAMP})
-    if status != "APPROVED":
+    if status != statuses.ACCESS_APPROVED:
         batch.update(ref, {"activeDeviceId": firestore.DELETE_FIELD})
         for dev in db().collection("devices").where("uid", "==", uid).stream():
             batch.update(dev.reference, {
@@ -809,7 +820,7 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
     uid = user.get("uid")
     if not uid or user.get("licenseId"):
         return user
-    if user.get("access_status") != "APPROVED":
+    if user.get("access_status") != statuses.ACCESS_APPROVED:
         return user
     if not user.get("emailVerified"):
         return user
@@ -833,7 +844,6 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
         "updatedAt": firestore.SERVER_TIMESTAMP,
     }
     user_ref = db().collection("users").document(uid)
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _attach(tx) -> bool:
@@ -843,12 +853,7 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
         tx.update(user_ref, patch)
         return True
 
-    try:
-        attached = _attach(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        attached = False
+    attached = _run_tx(_attach, on_contended=lambda: False)
 
     if attached:
         return {**user, **patch}
@@ -953,7 +958,7 @@ def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[
     holder = find_user_by_email(address) if address else None
     if not holder:
         return "", ""
-    if holder.get("access_status") != "APPROVED" or not holder.get("emailVerified"):
+    if holder.get("access_status") != statuses.ACCESS_APPROVED or not holder.get("emailVerified"):
         return "", ""
     if not _holds_only_a_demo_key(holder):
         return "", "holder_already_licensed"
@@ -1007,16 +1012,7 @@ def create_institution_license(
 
 def list_licenses(limit: int = 50, page_token: str | None = None) -> tuple[list, str | None]:
     col = db().collection("licenses")
-    query = col.order_by("__name__").limit(limit + 1)
-    if page_token:
-        cursor = col.document(page_token).get()
-        if cursor.exists:
-            query = query.start_after(cursor)
-    docs = list(query.stream())
-    next_token = None
-    if len(docs) > limit:
-        docs = docs[:limit]
-        next_token = docs[-1].id
+    docs, next_token = _cursor_page(col, col, limit, page_token)
     return [_license_public(d.id, d.to_dict() or {}) for d in docs], next_token
 
 
@@ -1207,7 +1203,6 @@ def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
 
     seat_ref = _seat_ref(license_id, uid)
     user_ref = db().collection("users").document(uid)
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _checkout(tx) -> str:
@@ -1242,15 +1237,10 @@ def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
         })
         return ""
 
-    try:
-        err = _checkout(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        # Fail closed: granting a lease we could not commit is what would
-        # overfill the pool. The client retries and wins as soon as there
-        # is room.
-        return "no_floating_seat", None
+    # Fail closed on contention: granting a lease we could not commit is what
+    # would overfill the pool. The client retries and wins as soon as there
+    # is room.
+    err = _run_tx(_checkout, on_contended=lambda: "no_floating_seat")
     if err:
         return err, None
     return "", resolve_user_config({**user, "leaseExpiresAt": expires_at})
@@ -1271,7 +1261,6 @@ def release_lease(user: dict) -> tuple[str, dict | None]:
     lic_ref = db().collection("licenses").document(license_id)
     seat_ref = _seat_ref(license_id, uid)
     user_ref = db().collection("users").document(uid)
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _release(tx) -> str:
@@ -1293,14 +1282,12 @@ def release_lease(user: dict) -> tuple[str, dict | None]:
         })
         return ""
 
-    try:
-        err = _release(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        # Releasing is idempotent, so a lost race means someone else already
-        # did it. Answer from the current state rather than reporting failure.
-        err = "" if seat_ref.get().exists else "not_eligible"
+    # Releasing is idempotent, so a lost race means someone else already did
+    # it. Answer from the current state rather than reporting failure.
+    err = _run_tx(
+        _release,
+        on_contended=lambda: "" if seat_ref.get().exists else "not_eligible",
+    )
     if err:
         return err, None
     merged = {k: v for k, v in user.items() if k != "leaseExpiresAt"}
@@ -1373,7 +1360,6 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
     lic_ref = db().collection("licenses").document(license_id)
     seat_ref = _seat_ref(license_id, uid)
     user_ref = db().collection("users").document(uid)
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _claim(tx) -> str:
@@ -1434,15 +1420,10 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
             tx.delete(invite_ref)
         return ""
 
-    try:
-        err = _claim(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        # Fail closed. Handing out a seat we could not commit is the one
-        # outcome that breaks the cap; a caller who lost the race just tries
-        # again, and on a pool with room they win immediately.
-        return _CONTENDED
+    # Fail closed on contention. Handing out a seat we could not commit is the
+    # one outcome that breaks the cap; a caller who lost the race just tries
+    # again, and on a pool with room they win immediately.
+    err = _run_tx(_claim, on_contended=lambda: _CONTENDED)
     if not err:
         _drop_superseded_demo(uid, license_id)
     return err
@@ -1483,7 +1464,6 @@ def claim_individual_license(license_id: str, uid: str, email: str,
     """
     lic_ref = db().collection("licenses").document(license_id)
     user_ref = db().collection("users").document(uid)
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _claim(tx) -> str:
@@ -1514,15 +1494,10 @@ def claim_individual_license(license_id: str, uid: str, email: str,
             tx.delete(invite_ref)
         return ""
 
-    try:
-        err = _claim(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        # Fail closed, as claim_seat does: granting a licence we could not
-        # commit is the outcome that breaks single-redeemer. The caller retries
-        # on their next request, which for the invite path is moments away.
-        return _CONTENDED
+    # Fail closed on contention, as claim_seat does: granting a licence we
+    # could not commit is the outcome that breaks single-redeemer. The caller
+    # retries on their next request, which for the invite path is moments away.
+    err = _run_tx(_claim, on_contended=lambda: _CONTENDED)
     if not err:
         _drop_superseded_demo(uid, license_id)
     return err
@@ -1711,11 +1686,9 @@ def bind_device_lock(ref, device_id: str) -> bool:
         return True
 
     for round_ in range(_BIND_ROUNDS):
-        try:
-            return _bind(db().transaction(max_attempts=_TX_ATTEMPTS))
-        except Exception as exc:  # noqa: BLE001
-            if not _lost_to_contention(exc):
-                raise
+        bound = _run_tx(_bind, on_contended=lambda: None)
+        if bound is not None:
+            return bound
         snap = ref.get()
         if not snap.exists or ((snap.to_dict() or {}).get("deviceIdLock") or ""):
             # Another device bound it first. This one is a mismatch from its
@@ -2200,7 +2173,7 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
     uid = user.get("uid")
     if not uid or user.get("licenseId"):
         return user, ""
-    if user.get("access_status") != "APPROVED" or not user.get("emailVerified"):
+    if user.get("access_status") != statuses.ACCESS_APPROVED or not user.get("emailVerified"):
         return user, ""
     address = normalize_email(user.get("email"))
     if not address:
@@ -2452,7 +2425,6 @@ def clear_device_lock(license_id: str, uid: str = "", *,
 
     now = _now()
     cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _clear(tx) -> tuple[str, dict | None]:
@@ -2474,14 +2446,11 @@ def clear_device_lock(license_id: str, uid: str = "", *,
             "nextChangeAllowedAt": (now + cooldown).isoformat() if cooldown else "",
         }
 
-    try:
-        err, cleared = _clear(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        # Two self-service clears at once is the only way to reach this, and
-        # the cooldown is exactly what one of them must lose.
-        return errors.DEVICE_CHANGE_TOO_SOON, None
+    # Two self-service clears at once is the only way to lose on contention,
+    # and the cooldown is exactly what one of them must lose.
+    err, cleared = _run_tx(
+        _clear, on_contended=lambda: (errors.DEVICE_CHANGE_TOO_SOON, None),
+    )
     if not err:
         _restore_holder_mode(license_id, lic, ref, scope, uid)
     return err, cleared
@@ -2526,7 +2495,6 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
     """
     lic_ref = db().collection("licenses").document(license_id)
     seat_ref = _seat_ref(license_id, uid)
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _revoke(tx) -> bool:
@@ -2559,14 +2527,9 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
             tx.update(lic_ref, counters)
         return True
 
-    try:
-        revoked = _revoke(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        # The other writer won and did the same thing. Re-read to answer
-        # precisely rather than reporting a failure that did not happen.
-        revoked = seat_ref.get().exists
+    # On contention the other writer won and did the same thing. Re-read to
+    # answer precisely rather than reporting a failure that did not happen.
+    revoked = _run_tx(_revoke, on_contended=lambda: seat_ref.get().exists)
     if revoked:
         _drop_user_to_demo_if_licensed(uid, license_id)
     return revoked
@@ -2809,7 +2772,6 @@ def consume_nonce(nonce: str, uid: str, device_id: str) -> bool:
     ref = db().collection("challenges").document(nonce)
     # More than the default five attempts: this document is the hottest in the
     # service and losing the race means denying a legitimate caller.
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _consume(tx):
@@ -2825,16 +2787,11 @@ def consume_nonce(nonce: str, uid: str, device_id: str) -> bool:
         tx.delete(ref)
         return True
 
-    try:
-        return _consume(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
-        # Concurrent consumption of one nonce is by definition a replay, and we
-        # could not commit — so deny. Fail closed: claiming the nonce here would
-        # be the one outcome that breaks single-use. A legitimate client never
-        # races itself on a nonce; it just fetches a fresh challenge.
-        return False
+    # Concurrent consumption of one nonce is by definition a replay, and we
+    # could not commit — so deny. Fail closed: claiming the nonce here would be
+    # the one outcome that breaks single-use. A legitimate client never races
+    # itself on a nonce; it just fetches a fresh challenge.
+    return _run_tx(_consume, on_contended=lambda: False)
 
 
 def claim_client_nonce(nonce: str, uid: str, device_id: str, expire_at) -> bool:
@@ -2998,6 +2955,40 @@ def get_file(file_id: str):
     return {**snap.to_dict(), "fileId": file_id} if snap.exists else None
 
 
+def _cursor_page(col, query, limit: int, page_token: str | None):
+    """One page of [query] in document-id order. Returns (docs, next_token).
+
+    Reads one document past [limit] so the token is only issued when there
+    really is a next page. A token naming a document that has since been
+    deleted restarts from the beginning rather than failing.
+    """
+    query = query.order_by("__name__").limit(limit + 1)
+    if page_token:
+        cursor = col.document(page_token).get()
+        if cursor.exists:
+            query = query.start_after(cursor)
+    docs = list(query.stream())
+    if len(docs) > limit:
+        docs = docs[:limit]
+        return docs, docs[-1].id
+    return docs, None
+
+
+def _session_file_docs(sid: str, page_size: int):
+    """Every file document in a session, fetched [page_size] at a time."""
+    query = db().collection("files").where("sessionId", "==", sid).order_by("__name__")
+    cursor = None
+    while True:
+        page_q = query.limit(page_size)
+        if cursor is not None:
+            page_q = page_q.start_after(cursor)
+        docs = list(page_q.stream())
+        yield from docs
+        if len(docs) < page_size:
+            return
+        cursor = docs[-1]
+
+
 def _page_session_files(sid: str, limit: int, page_token: str | None):
     """One cursor-paged slice of a session's files. Returns (docs, next_token).
 
@@ -3007,17 +2998,7 @@ def _page_session_files(sid: str, limit: int, page_token: str | None):
     list would stop offering them.
     """
     col = db().collection("files")
-    q = col.where("sessionId", "==", sid).order_by("__name__").limit(limit + 1)
-    if page_token:
-        cursor = col.document(page_token).get()
-        if cursor.exists:
-            q = q.start_after(cursor)
-    docs = list(q.stream())
-    next_token = None
-    if len(docs) > limit:
-        docs = docs[:limit]
-        next_token = docs[-1].id
-    return docs, next_token
+    return _cursor_page(col, col.where("sessionId", "==", sid), limit, page_token)
 
 
 def list_pending_uploads(
@@ -3134,17 +3115,8 @@ def list_user_sessions(
 ) -> tuple[list, str | None]:
     """Cursor-paginated cloud analyses. Returns (page, next_page_token_or_None)."""
     col = db().collection("sessions")
-    q = col.where("uid", "==", uid).order_by("__name__").limit(limit + 1)
-    if page_token:
-        cursor = col.document(page_token).get()
-        if cursor.exists:
-            q = q.start_after(cursor)
+    docs, next_token = _cursor_page(col, col.where("uid", "==", uid), limit, page_token)
     out = []
-    docs = list(q.stream())
-    next_token = None
-    if len(docs) > limit:
-        docs = docs[:limit]
-        next_token = docs[-1].id
     for d in docs:
         s = d.to_dict()
         out.append({
@@ -3174,28 +3146,16 @@ def iter_all_user_sessions(uid: str, *, page_size: int = 100):
 def list_session_files_all(sid: str, *, page_size: int = 200) -> list:
     """Every file in a session, paging past the soft list cap."""
     out = []
-    query = db().collection("files").where("sessionId", "==", sid).order_by("__name__")
-    cursor = None
-    while True:
-        page_q = query.limit(page_size)
-        if cursor is not None:
-            page_q = page_q.start_after(cursor)
-        docs = list(page_q.stream())
-        if not docs:
-            break
-        for d in docs:
-            f = d.to_dict()
-            out.append({
-                "fileId": d.id,
-                "name": f.get("name"),
-                "role": f.get("role"),
-                "sizeBytes": f.get("sizeBytes", 0),
-                "sha256": f.get("sha256"),
-                "status": f.get("status"),
-            })
-        if len(docs) < page_size:
-            break
-        cursor = docs[-1]
+    for d in _session_file_docs(sid, page_size):
+        f = d.to_dict()
+        out.append({
+            "fileId": d.id,
+            "name": f.get("name"),
+            "role": f.get("role"),
+            "sizeBytes": f.get("sizeBytes", 0),
+            "sha256": f.get("sha256"),
+            "status": f.get("status"),
+        })
     return out
 
 
@@ -3212,31 +3172,19 @@ def list_session_artifacts(sid: str, *, page_size: int = 200) -> list:
     is of what was stored, not of what was promised.
     """
     out = []
-    query = db().collection("files").where("sessionId", "==", sid).order_by("__name__")
-    cursor = None
-    while True:
-        page_q = query.limit(page_size)
-        if cursor is not None:
-            page_q = page_q.start_after(cursor)
-        docs = list(page_q.stream())
-        if not docs:
-            break
-        for d in docs:
-            f = d.to_dict()
-            if f.get("status") != statuses.FILE_COMPLETED or not f.get("driveFileId"):
-                continue
-            out.append({
-                "fileId": d.id,
-                "name": f.get("name"),
-                "role": f.get("role"),
-                "sizeBytes": f.get("sizeBytes", 0),
-                "sha256": f.get("sha256"),
-                "driveFileId": f.get("driveFileId"),
-                "createdAt": f.get("createdAt"),
-            })
-        if len(docs) < page_size:
-            break
-        cursor = docs[-1]
+    for d in _session_file_docs(sid, page_size):
+        f = d.to_dict()
+        if f.get("status") != statuses.FILE_COMPLETED or not f.get("driveFileId"):
+            continue
+        out.append({
+            "fileId": d.id,
+            "name": f.get("name"),
+            "role": f.get("role"),
+            "sizeBytes": f.get("sizeBytes", 0),
+            "sha256": f.get("sha256"),
+            "driveFileId": f.get("driveFileId"),
+            "createdAt": f.get("createdAt"),
+        })
     return out
 
 
@@ -3373,7 +3321,6 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
     returns "already"). Without this, both could bump the session counter.
     """
     ref = db().collection("files").document(file_id)
-    transaction = db().transaction(max_attempts=_TX_ATTEMPTS)
 
     @firestore.transactional
     def _complete(tx):
@@ -3397,11 +3344,7 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
         )
         return "ok"
 
-    try:
-        return _complete(transaction)
-    except Exception as exc:  # noqa: BLE001
-        if not _lost_to_contention(exc):
-            raise
+    def _lost_race() -> str:
         # A concurrent completion of this same file won the race. That is the
         # idempotent case the transaction exists to produce — re-read and answer
         # it precisely rather than 500ing on the loser. "already" is important:
@@ -3412,6 +3355,8 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
                 and current.get("status") == statuses.FILE_COMPLETED):
             return "already"
         return ""
+
+    return _run_tx(_complete, on_contended=_lost_race)
 
 
 def bump_session_progress(sid: str):
