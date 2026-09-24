@@ -12,6 +12,20 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-24 — Backend deploy, first CI gateway apply (#173, #179, #182, #183)
+
+Production `semper-api-35992296245-1` from `4d5a0ab` (staging first, run
+35990629608). It carries #173 (firebase-admin 7.6.0, google-auth 2.58.0,
+google-cloud-firestore 2.31.0, uvicorn 0.53.0) and #179 (`python:3.12-slim`
+digest `2f17fc0`). After the owner's IAM grant, ADR-006's `gateway` job ran for
+the first time: a dry-run failed decoding the live document (`base64: invalid
+input`), fixed by #183; the next dry-run's diff was a comment and the removed
+`/v1/campus` invite-revoke alias (TD-45); `apply` (run 35992296245) switched
+`semper-gw` from `v202609230845` to `v202609241122-44` and passed its
+401/preflight checks. TD-27 closed. #182 (TD-66: the upload CSV's stats rows
+stay above the point section) merged as `5c4fe19`; app-only, so it ships with
+the release after `v1.2-beta.1`.
+
 ## 2026-09-24 — App release v1.2-beta.1; strain window in points, engine v0.2.2 (#180)
 
 #180 ported two material_testing changes. The strain window is entered in
