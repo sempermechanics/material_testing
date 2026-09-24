@@ -118,7 +118,7 @@ object AnalysisNavHelper {
             sessionLocalId = viewModel.workingLocalId,
             subsetSize = settings.subset,
             strainWindow = settings.strainWin,
-            engineStats = run.engineStats,
+            engineStats = run.engineStats?.toList(),
             roiX = settings.roiX,
             roiY = settings.roiY,
             roiW = settings.roiW,

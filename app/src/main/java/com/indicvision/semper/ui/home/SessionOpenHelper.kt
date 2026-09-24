@@ -53,7 +53,7 @@ object SessionOpenHelper {
             sessionLocalId = session.id,
             subsetSize = session.subset,
             strainWindow = session.strainWindow,
-            engineStats = session.engineStats.toFloatArray(),
+            engineStats = session.engineStats.ifEmpty { null },
             roiX = session.roiX,
             roiY = session.roiY,
             roiW = session.roiW,
