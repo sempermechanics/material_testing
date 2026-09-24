@@ -238,23 +238,16 @@ column, it is `null` in `index.json` and it has no `loadN` in `metadata.json`.
 A restore keeps it in place. If no frame matches, the gate blocks Next. Photos
 have no times, so they are still paired in order or resampled.
 
-**Terms: age 16+ (PR #12; owner decision, 2026-09-24).** `TERMS_OF_SERVICE.md` §1.3
-now admits users from 16. Under 18 (or under the local age of majority), a
-parent or guardian must agree for them. Privacy §8 matches. The Terms version
-is `2026-09-24` in the doc, `backend/app/legal.py` and `LegalTerms.kt`, so
-every existing user re-accepts once (deployed 2026-09-24). Still open, for the
-owner and counsel:
-- §1.2 (professional use only, not offered to consumers) still sits badly with
-  students;
-- India's DPDP Act 2023 treats under-18s as children and requires verifiable
-  parental consent, which the app does not collect; the clickwrap has no age
-  question or guardian step.
-
-**Terms 2026-09-24 is live on the backend.** Backend deploys come from the
-parent repo; the change was ported there as `semperdic-app` #169 and deployed
-to staging and production on 2026-09-24 (revision `semper-api-35959026266-1`).
-Every existing user re-accepts once. The hosted `/terms/` and `/privacy/` pages
-are redeployed from the parent repo's `firebase-hosting/`.
+**Terms: back to 18+ (owner decision, 2026-09-24).** The 16+ change (#12,
+deployed from `semperdic-app` #169 as version `2026-09-24`) is reverted: §1.3
+again requires users to be 18 or over (or the local age of majority), and the
+Terms, Privacy Policy, hosted pages, `backend/app/legal.py` and `LegalTerms.kt`
+are back to version `2026-09-15`, byte for byte. Users who accepted
+`2026-09-15` stay accepted; only those who accepted `2026-09-24` while it was
+live re-accept. The backend and hosted pages deploy from `semperdic-app`, so the
+revert lands there too; keep both repos' `TERMS_VERSION` equal. Still open for
+the owner: §1.2 (professional use only) and §1.3 (18+) sit badly with a
+first-semester student audience.
 
 **MP4 frames decode forward (`fix/mp4-decode-forward`, on top of
 `fix/video-estimate-snackbar`).** MP4 extraction asked the retriever for the

@@ -81,10 +81,12 @@ class LabReportExporter(private val context: Context) {
          * deflection, so no observation table.
          */
         fun offered(testType: String, hasLoads: Boolean, isSweep: Boolean, hasLoadPoint: Boolean): Boolean =
-            hasLoads && !isSweep && when (TestType.fromWire(testType)) {
-                TestType.TENSILE -> true
-                TestType.BENDING -> hasLoadPoint
-                null -> false
-            }
+            hasLoads &&
+                !isSweep &&
+                when (TestType.fromWire(testType)) {
+                    TestType.TENSILE -> true
+                    TestType.BENDING -> hasLoadPoint
+                    null -> false
+                }
     }
 }
