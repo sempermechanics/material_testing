@@ -12,6 +12,23 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-24 — A 429 no longer spends the nonce (#154)
+
+**A 429 no longer spends the nonce (#154, live 2026-09-24).**
+Erasing seven analyses from a Pixel 6 left two in the cloud: past the erase
+bucket's burst of three, each delete got a 429, and the app's unchanged retry
+came back 401 `nonce_invalid_or_replayed`, because the bucket was checked in
+the handler after `verified_device` had claimed the nonce. The 401 also made
+the app drop client nonces for the rest of its process, so from then on the
+retry replayed a consumed server challenge and nothing recovered. The 21
+signed routes now take their bucket as `dependencies=[rate_limited(...)]`,
+resolved before the nonce is touched, and their 429s send `Retry-After`. No app
+change; installed builds are fixed by the deploy. Nothing was lost: a failed
+cloud erase keeps the local copy. Production revision `semper-api-35957034833-1`
+(from `2fdb44c`) has served since 04:48Z; the same phone then erased four at
+once, the fourth got a 429, waited 2 s and its unchanged resend returned 200,
+with no 401 — the two left over are gone from the cloud too.
+
 ## 2026-09-23 — Starved device-lock binds (`fix/deflake-device-lock-test`)
 
 **A starved device-lock bind is not a loss (`fix/deflake-device-lock-test`).**

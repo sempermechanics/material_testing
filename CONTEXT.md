@@ -143,16 +143,16 @@ Engine perf floor: [docs/engine/PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASEL
 (≥ 4557 solves/s host) is a manual engine-repo reference; no CI job enforces
 it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-23)
+## Current state (2026-09-24)
 
 - **Deployed.** Production is Cloud Run `semper-api` behind API Gateway
   `semper-gw` (staging `semper-api-staging`); #146 renamed services and queues,
   project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
-- **Merged, deploy pending check.** #154: signed routes take their rate-limit
-  bucket as `dependencies=[deps.rate_limited(...)]`, resolved before
-  `verified_device`, so a 429 no longer spends the nonce; 429s send
-  `Retry-After`. No app change ([§12](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
+- **Live 2026-09-24.** #154: signed routes take their rate-limit bucket as
+  `dependencies=[deps.rate_limited(...)]`, resolved before `verified_device`,
+  so a 429 no longer spends the nonce; 429s send `Retry-After`. Production
+  `semper-api-35957034833-1`; proven from a Pixel 6 ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
 - **In flight.** Tech-debt burn-down: [TECH_DEBT.md](docs/ops/TECH_DEBT.md)
   register, [docs/adr/](docs/adr/README.md) ADR-001..006. Video/AVI import
   (#136–#139) has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
