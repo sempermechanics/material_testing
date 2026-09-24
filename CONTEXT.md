@@ -200,20 +200,6 @@ one load are now one load step); the speckle check sampled outside the ROI
 (new *Log started after the first frame* offset, `LoadSyncRow`). Bending has
 no real-image check yet.
 
-**Student lab outputs, part 3: the elastic region in the viewer
-(`feat/viewer-elastic-plot`, stacked on `feat/bending-deflection` / PR #12).**
-On the real steel run the Results curve reaches 336 mε. E comes from frames
-1–26, all below 2 mε, so those frames and the fit line were a vertical stroke
-at x≈0. The Results title on the summary page and in the ⓘ sheet now has a
-**Whole test / Elastic region** toggle. It shows only when there is a tensile
-fit. `report/ElasticRegion` zooms to the fitted frames plus half their strain
-span, starting from the origin. It drops frames after the peak and draws the
-fit line across the whole window, so the student sees the curve leave it. On
-the steel run that is frames 1–28 up to 1.94 mε, pinned in
-`RealSteelModulusTest`. The choice lives in `ResultViewerViewModel`, so both
-surfaces keep it. It is the viewer's counterpart to the lab report's
-`GRAPH_ELASTIC`, which is unchanged. WORKFLOWS §8.4.14d–f and §8.2a.10a.
-
 **Docs refresh with new screenshots (same branch).** Every app screenshot in
 `docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile
 and bending validation runs. The bending run on the new build reads 142.0 GPa
@@ -276,6 +262,20 @@ out of that fix and has since been ported (see *Key frames, speckle and plot fix
 real clip now yields frames that match the source, and
 `VideoFrameExtractionDeviceTest` passes 6/6. Not yet tried on a physical
 device's vendor decoder (§5.1a.12).
+
+**Student lab outputs, part 3: the elastic region in the viewer
+(PR #14, `feat/viewer-elastic-plot`, open).**
+On the real steel run the Results curve reaches 336 mε. E comes from frames
+1–26, all below 2 mε, so those frames and the fit line were a vertical stroke
+at x≈0. The Results title on the summary page and in the ⓘ sheet now has a
+**Whole test / Elastic region** toggle. It shows only when there is a tensile
+fit. `report/ElasticRegion` zooms to the fitted frames plus half their strain
+span, starting from the origin. It drops frames after the peak and draws the
+fit line across the whole window, so the student sees the curve leave it. On
+the steel run that is frames 1–28 up to 1.94 mε, pinned in
+`RealSteelModulusTest`. The choice lives in `ResultViewerViewModel`, so both
+surfaces keep it. It is the viewer's counterpart to the lab report's
+`GRAPH_ELASTIC`, which is unchanged. WORKFLOWS §8.4.14d–f and §8.2a.10a.
 
 **Video sampling and long snackbars (`fix/video-estimate-snackbar`).** The
 sampling sheet promised one frame more than extraction delivered whenever the
