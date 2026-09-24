@@ -362,6 +362,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // after process death re-reads it, and the ViewModel is authoritative
         // once set.
         TestType.fromWire(intent.getStringExtra(DicKeys.TEST_TYPE))?.let { viewModel.testType = it }
+        // The slider keeps its own value across recreation; set it only on first open.
+        if (savedInstanceState == null) etStrainWindow.value = viewModel.testType.defaultStrainWindow.toFloat()
         setupLoadCard()
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
@@ -1411,10 +1413,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             onAdvancedReset = {
                 commitParamFields()
                 viewModel.subsetUserModified = false
-                @Suppress("MagicNumber") // documented defaults: 41 / 5 / 15
+                @Suppress("MagicNumber") // documented defaults: 41 / 5; window per test type
                 etSubsetSize.value = defaultSubsetSize().toFloat()
                 etStepSize.value = 5f
-                etStrainWindow.value = 15f
+                etStrainWindow.value = viewModel.testType.defaultStrainWindow.toFloat()
                 rgInterpolator.check(R.id.rbBicubic)
                 settingsSheetHelper.syncFromStep()
                 showSpeckleFeedback()

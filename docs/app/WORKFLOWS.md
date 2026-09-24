@@ -438,12 +438,12 @@ and for real vendor decoders and camera files.
 | [ ] 5.2.11 | Type nonsense in a parameter field | Reverts to the previous value on commit |
 | [ ] 5.2.12 | Drag **step size** | Max is `min(30, subset/2)` so overlap stays ≥ 0.5; the overlap field mirrors it |
 | [ ] 5.2.12a | Type **overlap** on the step-size row | 0.50–0.99; step size rewrites to `round(subset × (1 − overlap))` |
-| [ ] 5.2.13 | Drag **strain window** | Odd values 5–101, field mirrors it |
+| [ ] 5.2.13 | Drag **strain window** | Odd values 5–101, field mirrors it. It starts at 15 for tensile (and untyped) analyses and **45 for bending** |
 | [ ] 5.2.13a | Open step 2 having never copied params from a lattice | No **Paste params** chip — it only appears when the clipboard holds a set |
 | [ ] 5.2.13b | Copy params from a sweep lattice (§7.3), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window (overlap follows step) and scrolls them into view |
 | [ ] 5.2.14 | Tap each ⓘ | Subset, step, overlap and strain window each explain themselves |
 | [ ] 5.2.15 | Switch the interpolator to **Keys 6×6** | Selection sticks; the run uses it |
-| [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, overlap follows step, strain window to 15, interpolator to Bicubic |
+| [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, overlap follows step, strain window to the test type's default (15, bending 45), interpolator to Bicubic |
 | [ ] 5.2.16a | After a failed run leaves an ❌ line on step 2, change subset / paste params / replace frames | The run-status line clears; the frame-size chip (if any) only shows when sizes still mismatch |
 | [ ] 5.2.17 | Load a well-speckled reference and watch the subset | It is pre-seeded from the SSSIG recommendation — until you touch it |
 | [ ] 5.2.18 | Draw an ROI smaller than the subset and tap **Compute** | "ROI too small" snackbar with a **Why?** action; that asks first whether to leave the app, then opens the ROI FAQ. The run does not start |
@@ -570,6 +570,7 @@ over it, the instruction and **Reset** below.
 | [ ] 6a.1 | Open it with the thickness typed | Readout "Thickness t mm — tap both edges"; the instruction asks for the top edge and says pinch or double-tap zooms, drag pans; Save disabled |
 | [ ] 6a.2 | Double-tap the beam, then pinch | Zooms in about the finger; drag pans; double-tap again returns to fit |
 | [ ] 6a.3 | While zoomed, tap the top edge, then tap below it and a little to one side | Each mark gets crosshair lines across the whole photo, with a ring on the mark; the second mark lands **on the first mark's vertical line**, at the height tapped, so thickness is measured straight down; a dashed probe circle sits between them; **the zoom does not change between taps**; readout "t mm over N px · mm/px" |
+| [ ] 6a.3a | Watch the photo through all three instructions (top, bottom, done), unzoomed and at a large font size | The photo does not move or resize: the instruction's box is as tall as its longest step |
 | [ ] 6a.4 | Tap nearer either horizontal line | That mark moves. The top follows the tap in both directions and the bottom's vertical line comes with it; the bottom moves only up or down |
 | [ ] 6a.5 | Place the marks under 40 px apart | Readout adds the precision warning (≈ 100/N % per pixel of slip) |
 | [ ] 6a.6 | Marks under 3 px apart | Save disabled; readout "The marks are on top of each other — tap the other edge." |

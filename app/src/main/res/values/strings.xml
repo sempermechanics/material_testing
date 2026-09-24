@@ -959,7 +959,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="video_keyframes_too_few">Fewer than two key frames in this segment. Widen it, or use Frame rate.</string>
     <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients.</string>
     <string name="info_step">Spacing between tracked points, in pixels. Smaller means denser results but longer analysis time. Linked to subset overlap: overlap = 1 − step / subset.</string>
-    <string name="info_strain_window">Bigger means smoother strain but less local detail.</string>
+    <string name="info_strain_window">Bigger means smoother strain but less local detail. Bending starts at 45 px: its deflection and E come from displacement, so here strain only draws the maps, and a wider window makes them much less noisy.</string>
 
     <!-- Auth: sign-in errors -->
     <string name="error_passwords_mismatch">Passwords do not match.</string>
