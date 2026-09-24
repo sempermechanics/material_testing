@@ -214,6 +214,15 @@ the steel run that is frames 1–28 up to 1.94 mε, pinned in
 surfaces keep it. It is the viewer's counterpart to the lab report's
 `GRAPH_ELASTIC`, which is unchanged. WORKFLOWS §8.4.14d–f and §8.2a.10a.
 
+**Tap editor crosshairs (`feat/tap-crosshair`).** In `BeamEdgeTapActivity`
+each mark now draws crosshair lines across the whole photo, so the horizontal
+line can be laid along the beam's edge. The bottom mark is held to the top
+mark's x (`BeamTapPlacement`): the second tap only sets its height, so the
+thickness is measured straight down however the finger slips sideways. Moving
+the top moves the bottom's line with it. Taps saved before this with
+different x's load as they were and line up on the next edit. WORKFLOWS
+§6a.3–6a.4.
+
 **Docs refresh with new screenshots (PR #12).** Every app screenshot in
 `docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile
 and bending validation runs. The bending run on the new build reads 142.0 GPa

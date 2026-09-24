@@ -657,9 +657,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="beam_tap_title">Beam thickness</string>
     <string name="beam_tap_save">Save</string>
     <string name="beam_tap_canvas">Reference photo of the beam</string>
-    <string name="beam_tap_step_top">Tap the beam’s top edge, right under the load. Pinch or double-tap to zoom in first; drag to move around.</string>
-    <string name="beam_tap_step_bottom">Now tap the bottom edge, straight below.</string>
-    <string name="beam_tap_step_done">Tap near a mark to move it. Save when both sit on the edges.</string>
+    <string name="beam_tap_step_top">Tap the beam’s top edge, right under the load, so the crosshair’s horizontal line lies along the edge. Pinch or double-tap to zoom in first; drag to move around.</string>
+    <string name="beam_tap_step_bottom">Now tap the bottom edge. The mark stays on the vertical line, so only its height follows your tap.</string>
+    <string name="beam_tap_step_done">Tap near a line to move it: the top mark also moves the vertical line. Save when both horizontal lines sit on the edges.</string>
     <string name="beam_tap_readout_empty">Thickness %1$s mm — tap both edges</string>
     <string name="beam_tap_too_close">The marks are on top of each other — tap the other edge.</string>
     <!-- thickness mm, pixels, mm per pixel -->
