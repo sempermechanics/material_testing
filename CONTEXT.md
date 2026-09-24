@@ -1,8 +1,7 @@
 # Semper — agent context
 
-Read this before changing code. Commands live in [CONTRIBUTING.md](CONTRIBUTING.md).
-Screen maps live in [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md).
-DIC primer and glossary: [docs/README.md](docs/README.md).
+Read this before changing code. Commands: [CONTRIBUTING.md](CONTRIBUTING.md); screen maps:
+[ARCHITECTURE.md](docs/app/ARCHITECTURE.md); DIC primer: [docs/README.md](docs/README.md).
 
 ## Product
 
@@ -30,8 +29,7 @@ Use these words. Do not invent synonyms.
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (detail in `native/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay
-mesh → RGDIC flood-fill → ICGN → VSG strain → `.dat`.
+Engine pipeline (`native/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 
@@ -43,38 +41,29 @@ native/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
               access in backend/app/repo/ behind the firestore_repo facade
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
-docs/         Human docs. This file is the agent map.
 ```
 
-The engine is **not** in this repo. Bump it by changing the `native` gitlink.
-Engine host / sanitizer / DICe suites run in the engine repo. This CI only proves
-the pin still **links** (emulator x86_64, release arm64).
+Bump the engine by changing the `native` gitlink. Its host / sanitizer / DICe suites run
+in the engine repo; this CI only proves the pin **links** (emulator x86_64, release arm64).
 
 ## Runtime
 
 ```
-Splash → Auth / Pending / Home
-Home → StaticAnalysisActivity (wizard) → ResultViewerActivity
-     → open session → ResultViewerActivity | VsgLatticeActivity
+Splash → Auth / Pending / Home → StaticAnalysisActivity (wizard) → ResultViewerActivity
+Home → open session → ResultViewerActivity | VsgLatticeActivity
 ```
 
 Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `DicKeys`.
 Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`).
 
-Package map: [ARCHITECTURE.md](docs/app/ARCHITECTURE.md). Backend: `backend/app/main.py`
-(app, middleware, lifespan), `routers/` (`/v1/*` by prefix), `session_provision.py`
-(`provision_session` / `purge_session`).
+Backend: `backend/app/main.py` (app, middleware, lifespan), `routers/` (`/v1/*` by
+prefix), `session_provision.py` (`provision_session` / `purge_session`).
 
 Kotlin helpers are plain `object` / small classes; no Hilt/Dagger. Keep `lifecycleScope`
 and Activity Result launchers on the Activity. Cloud logic under test takes a defaulted
 `api: CloudApi` / `tokens: TokenSource`; tests pass `FakeCloudApi` ([ADR-002](docs/adr/ADR-002-cloudapi-seam.md)).
-
-The wizard (`StaticAnalysisActivity`, ViewStub steps) declares full `configChanges`,
-so rotation does not recreate it; the state-loss risk is process death
-([ADR-005](docs/adr/ADR-005-wizard-process-death.md)). The batch is
-`DicBatchRunner.kt`, an extension (`AnalysisViewModel.runBatchAnalysisBody`), not a type.
-
-Home **+** opens `MediaPickerSheet` (shared with the wizard dropzones). Uploads,
+The wizard (`StaticAnalysisActivity`, ViewStub steps) has full `configChanges`: rotation
+does not recreate it, process death does (see Traps). Home **+** opens `MediaPickerSheet` (shared with the wizard dropzones). Uploads,
 restores, bundle downloads and backup deletes are WorkManager, shown by the
 non-modal `TransferBannerController` strip.
 
@@ -101,51 +90,32 @@ non-modal `TransferBannerController` strip.
   local-only unless `INDIC_DEV_AUTH_BYPASS=false`.
 - **Legal pages** are generated: edit `docs/legal/`, run `scripts/render_legal_pages.py`,
   never hand-edit `firebase-hosting/public/{privacy,terms}/`.
-- **Image installs `requirements.lock`** with `--require-hashes`. Bump txt and
-  regenerate the lock on **Python 3.12**. CI checks versions, not just names.
 
 ## Quality gates
 
-Empty `app/lint-baseline.xml` / `app/detekt-baseline.xml`: extract or `@file:Suppress`,
-never stuff a baseline. `OldTargetApi` stays disabled until a deliberate `targetSdk`
-36→37 bump, and no `warningsAsErrors`. Settings / wizard XML stay under
-`TooManyViews` via `SettingsScrollContentView` / `WizardStepSettingsContentView`.
-
-Kover `minBound` 37, enforced by `:app:koverVerify` in tier 1 and `ciReleaseGate`
-(39.1 % on 2026-09-24). Macrobenchmark CI is emulator smoke, no thresholds
-([TESTING.md](docs/app/TESTING.md)). The engine floor (≥ 4557 solves/s,
-[PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual
-reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
+Baselines, `targetSdk`, Kover and the backend lock: see CLAUDE.md. `OldTargetApi` stays
+disabled until the `targetSdk` bump. Settings / wizard XML stay under `TooManyViews` via
+`SettingsScrollContentView` / `WizardStepSettingsContentView`. Macrobenchmark CI is smoke,
+no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 solves/s,
+[PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
+Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-24)
 
-- **Deployed.** Production is Cloud Run `semper-api` (`semper-api-35992296245-1`,
-  from `4d5a0ab`) behind API Gateway `semper-gw` (config `v202609241122-44`,
-  now deployed by CI, ADR-006); staging `semper-api-staging`;
-  project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)). Licensing
-  is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
-  Latest: the #155–#168 burn-down, #173/#179 backend dependency and base-image
-  bumps, #183 and the first CI gateway apply ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`):
-  `v1.2-beta.1` (the burn-down's app half, #180's strain window in data points,
-  engine `v0.2.2`) plus #182, the upload CSV's stats rows above the point
-  section (TD-66) ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **Ported from material_testing, awaiting release (#189).** Four general-purpose
-  fixes from material_testing `3a1a941` / `c15efd3`: the speckle reading stays
-  inside the ROI and counts only textured patches (`SubsetRecommender`), the
-  `VsgPlotView` y gutter fits its widest tick, `TouchImageView` keeps a zoom
-  across a resize, and `AviReader.frameIndexAt` takes half a µs of slack.
-- **material_testing shares this history.** It merged this repo's `main` at
-  `643462c` (sempermechanics/material_testing#22), so the next sync either way
-  is a plain `git merge`. Its lab features (test type, loads, reports) stay
-  there; only general-purpose fixes come here.
-- **Owed.** A device smoke of `v1.2-beta.2` and its public distribution
-  (website / Play). Video/AVI import has run only on emulators
-  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
-  rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
-- **Look it up; this list rots.** `gh pr list --state open`; history in
-  [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in
-  [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
+- **Deployed.** Cloud Run `semper-api` (`semper-api-35992296245-1`, from `4d5a0ab`)
+  behind API Gateway `semper-gw` (config `v202609241122-44`, deployed by CI, ADR-006);
+  staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+  Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
+- **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
+  burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
+- **Merged, awaiting release:** #189, four fixes ported from material_testing
+  (`SubsetRecommender` reads speckle inside the ROI from textured patches only,
+  `VsgPlotView` y gutter, `TouchImageView` zoom across a resize, `AviReader` µs slack).
+- **material_testing shares this history** (it merged `643462c`, material_testing#22):
+  sync with a plain `git merge`. Lab features stay there; only general fixes come here.
+- **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
+  run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
+- **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps
 
@@ -168,5 +138,3 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - After Compute, read the run's `RunSpec` / `RunResult` (`spec`, `settings`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
 - Two runs of one build on the emulator do not give bit-identical `.dat` (TD-65), so a hash match cannot prove "engine unchanged"; digest the JNI inputs instead — [ADR-004 As built](docs/adr/ADR-004-runspec.md#as-built-2026-09-23).
 - `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/indicvision/semper/ui/analysis/ConvergenceGate.kt).
-
-**PRs target `main`.** Do not force-push `main`.
