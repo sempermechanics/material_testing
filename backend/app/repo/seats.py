@@ -22,7 +22,7 @@ from ._base import (
     _seat_lease_live,
     _seat_ref,
 )
-from .licensing import (
+from .license_admin import (
     _drop_user_to_demo_if_licensed,
 )
 

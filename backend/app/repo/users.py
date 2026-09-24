@@ -20,7 +20,7 @@ from ._base import (
 from .devices import (
     get_device,
 )
-from .licensing import (
+from .entitlement import (
     ensure_entitlement,
 )
 
