@@ -7,6 +7,6 @@ constant would silently let every existing user continue under terms they
 never saw — `tests/test_legal_version.py` fails the build if the two drift.
 """
 
-TERMS_VERSION = "2026-09-15"
+TERMS_VERSION = "2026-09-24"
 TERMS_URL = "https://sempermechanics.com/terms/"
 PRIVACY_URL = "https://sempermechanics.com/privacy/"
