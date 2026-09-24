@@ -119,7 +119,7 @@ object AnalysisNavHelper {
                     ViewerSweepArgs(
                         subsets = plan.map { it.subset },
                         steps = plan.map { it.step },
-                        strainWindows = plan.map { it.strainWindow },
+                        strainWindows = plan.map { it.vsg },
                         lineCutHorizontal = viewModel.lineCutHorizontal,
                         skippedJson = SkippedNode.encodeJson(viewModel.sweepSkippedNodes),
                     )

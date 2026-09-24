@@ -167,7 +167,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="step_size_density">Step size (density)</string>
     <string name="label_5">5</string>
     <string name="strain_window">Strain window</string>
-    <string name="label_15">15</string>
+    <string name="strain_window_unit_points">points</string>
+    <!-- Under the strain-window slider: the window in points gives this VSG at the current step. -->
+    <string name="strain_window_vsg_fmt">VSG %1$d px at step %2$d px</string>
+    <!-- A stored window: points when the VSG is a whole odd count of steps (StrainWindowText), else the VSG alone. -->
+    <string name="strain_window_points_vsg_fmt">%1$d-point window · VSG %2$d px</string>
+    <string name="strain_window_vsg_only_fmt">VSG %1$d px</string>
     <string name="sub_pixel_interpolation_kernel">Sub-pixel interpolation kernel</string>
     <string name="label_4_4_bicubic">4×4 Bicubic</string>
     <string name="label_6_6_keys">6×6 Keys</string>
@@ -454,12 +459,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="subset_overlap">Subset overlap</string>
     <string name="overlap">Overlap</string>
     <string name="info_subset_overlap">How much neighbouring subsets cover each other. Typical values are 0.50–0.75.</string>
-    <string name="info_subset_samples">Total No. of analyses = No. of subsets × No. of VSGs.</string>
+    <string name="info_subset_samples">Total No. of analyses = No. of subsets × No. of strain windows.</string>
     <string name="info_subset_range"> Min to Max (px) capped by the image/ROI(Odd subset sizes) and speckle pattern.</string>
     <string name="strain_win_min">Min</string>
     <string name="strain_win_max">Max</string>
-    <string name="strain_win_range">Strain window range</string>
-    <string name="info_strain_win_range">Min to Max (odd values) for the sweep\'s y axis. Larger windows smooth strain more; smaller ones resolve finer gradients.</string>
+    <string name="strain_win_range">Strain window range (points)</string>
+    <string name="info_strain_win_range">Min to Max, in data points (odd values). Each subset\'s step turns a window into a VSG of (window − 1) × step + 1 px, which is the sweep\'s y axis. Larger windows smooth strain more; smaller ones resolve finer gradients.</string>
 
     <string name="line_cut_axis">Line cut axis</string>
     <string name="info_line_cut_axis">Strains along the axis through the ROI centre are monitored.</string>
@@ -478,9 +483,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_frame_out_of_fmt">out of %1$d</string>
     <string name="line_cut_preview_heading">Line cut</string>
     <string name="planned_lattice_heading">Planned lattice</string>
-    <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · window %5$d</string>
-    <!-- VSG is the strain window read as a diameter in pixels, so the window
-         column already carries it: never independent info in this label. -->
+    <string name="sweep_running_fmt">Analysis %1$d of %2$d · subset %3$d · step %4$d · %5$d-point window</string>
+    <!-- W is the strain window in data points; with St it fixes the VSG,
+         (W − 1) × St + 1 px, so the label needs no VSG of its own. -->
     <string name="sweep_frame_label_fmt">S%1$d · St%2$d · W%3$d</string>
     <string name="sweep_failed">The parameter sweep could not run.</string>
     
@@ -505,7 +510,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
     <string name="sweep_reason_unknown">Unknown engine error (code %1$d)</string>
-    <string name="sweep_node_title_fmt">S%1$d · St%2$d · W%3$d</string>
+    <string name="sweep_node_title_fmt">S%1$d · St%2$d · %3$s</string>
     <string name="sweep_node_skipped">This combination was skipped</string>
     <!-- Which frame a failure happened on; prefixes the reason above. -->
     <string name="failure_frame_fmt">Frame %1$d (%2$s): </string>
@@ -528,14 +533,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>
     <string name="vsg_lattice_axis_subset">Subset size (px)</string>
-    <string name="vsg_lattice_axis_vsg">Strain window</string>
+    <string name="vsg_lattice_axis_vsg">VSG (px)</string>
     <!-- Compact lattice: unit folded onto the rightmost subset tick instead of a
          separate axis title (see VsgLatticeView.compact). -->
     <string name="vsg_lattice_axis_subset_unit_fmt">%1$d px</string>
     <string name="vsg_lattice_view_results">View results</string>
     <string name="vsg_lattice_open_analysis">Open analysis</string>
-    <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · sw:%3$d</string>
-    <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · strain window %3$d</string>
+    <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · %3$s</string>
+    <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · %3$s</string>
     <string name="vsg_lattice_scrub_x_fmt">x=%1$.1f</string>
     <string name="vsg_lattice_scrub_xy_fmt">x=%1$.1f  y=%2$.4g</string>
     <string name="vsg_lattice_scrub_x_multi_fmt">x=%1$.1f  %2$s</string>
@@ -959,7 +964,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="video_keyframes_too_few">Fewer than two key frames in this segment. Widen it, or use Frame rate.</string>
     <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients.</string>
     <string name="info_step">Spacing between tracked points, in pixels. Smaller means denser results but longer analysis time. Linked to subset overlap: overlap = 1 − step / subset.</string>
-    <string name="info_strain_window">The virtual strain gauge: the diameter, in pixels, that each strain value averages over. Bigger means smoother strain but less local detail. Keep it at least twice the step. Bending starts at 45 px: its deflection and E come from displacement, so here strain only draws the maps, and a wider window makes them much less noisy.</string>
+    <string name="info_strain_window">How many data points across each strain value averages over. The virtual strain gauge (VSG) it gives, in pixels, is (window − 1) × step + 1, shown under the slider. Bigger means smoother strain but less local detail. Bending starts at 9 points: its deflection and E come from displacement, so here strain only draws the maps, and a wider window makes them much less noisy.</string>
 
     <!-- Auth: sign-in errors -->
     <string name="error_passwords_mismatch">Passwords do not match.</string>
@@ -1028,10 +1033,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">1 deleted · 1 still in the cloud (couldn\'t reach it).</item>
         <item quantity="other">%1$d deleted · %2$d still in the cloud (couldn\'t reach it).</item>
     </plurals>
-    <plurals name="setting_subsets_fmt">
-        <item quantity="one">1 subset</item>
-        <item quantity="other">%1$d subsets</item>
-    </plurals>
     <plurals name="license_expiring_fmt">
         <item quantity="one">License expires tomorrow</item>
         <item quantity="other">License expires in %1$d days</item>
@@ -1058,8 +1059,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">%1$s, and %2$d more</item>
     </plurals>
     <plurals name="sweep_plan_grid_fmt">
-        <item quantity="one">1 analyses · subset 1–1 px · window 1–1</item>
-        <item quantity="other">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d</item>
+        <item quantity="one">1 analyses · subset 1–1 px · window 1–1 points</item>
+        <item quantity="other">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d points</item>
     </plurals>
     <plurals name="sweep_partial_fmt">
         <item quantity="one">1 of 1 combinations could not be solved and were skipped — the rest are shown.</item>

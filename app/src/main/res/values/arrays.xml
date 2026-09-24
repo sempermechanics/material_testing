@@ -7,7 +7,7 @@
         <item>61.0</item>
     </array>
     <array name="strain_window_range_default">
-        <item>5.0</item>
-        <item>101.0</item>
+        <item>3.0</item>
+        <item>11.0</item>
     </array>
 </resources>

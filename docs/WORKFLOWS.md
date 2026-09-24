@@ -388,7 +388,7 @@ falling back to compile-time defaults when it has never been fetched.
 
 ### B14 Parameter clipboard
 
-`data/ParamClipboard` — one subset/step/strain-window triple, copied from the A7
+`data/ParamClipboard` — one subset/step/VSG (px) triple, copied from the A7
 parameter chip and pasted in A5.2. In memory only.
 
 ### B15 Transfer progress surfaces

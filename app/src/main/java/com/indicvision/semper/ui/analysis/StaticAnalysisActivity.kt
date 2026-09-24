@@ -910,7 +910,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun currentSubsetSize(): Int = etSubsetSize.value.toInt()
     private fun currentStepSize(): Int = etStepSize.value.toInt()
-    private fun currentStrainWindow(): Int = etStrainWindow.value.toInt()
+
+    /** The VSG in px handed to the engine: the slider's window is in data points. */
+    private fun currentStrainWindow(): Int = VsgStudy.vsgFor(etStrainWindow.value.toInt(), currentStepSize())
     private fun currentUseKeysInterpolator(): Boolean = rgInterpolator.checkedButtonId == R.id.rbKeys
 
     // ------------------------------------------------------------------
@@ -1400,6 +1402,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             stepValue = tvStepValue,
             overlapValue = tvOverlapValue,
             strainValue = tvStrainValue,
+            strainVsg = findViewById(R.id.tvStrainVsg),
             renderParamField = ::renderParamField,
             bindParamField = { field, slider, onUser -> bindParamField(field, slider, onUser) },
             showInfo = ::showInfo,
@@ -1440,7 +1443,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         viewModel.subsetUserModified = true
         etSubsetSize.value = snapToSlider(etSubsetSize, params.subset).toFloat()
         etStepSize.value = snapToSlider(etStepSize, params.step).toFloat()
-        etStrainWindow.value = snapToSlider(etStrainWindow, params.window).toFloat()
+        // The clipboard holds a VSG in px; the slider takes points at the pasted step.
+        etStrainWindow.value = VsgStudy.nearestWindowPoints(params.vsg, currentStepSize()).toFloat()
         settingsSheetHelper.syncFromStep()
         showSpeckleFeedback()
         if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
@@ -1498,7 +1502,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 progress.totalRuns,
                 progress.point.subset,
                 progress.point.step,
-                progress.point.strainWindow,
+                progress.point.window,
             ),
             title = getString(R.string.mode_sweep),
             pointsSolved = if (progress.pointsSolved > 0) progress.pointsSolved else -1,
@@ -1529,7 +1533,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 SkippedNode(
                     subset = point.subset,
                     step = point.step,
-                    strainWindow = point.strainWindow,
+                    strainWindow = point.vsg,
                     code = outcome.engineErrorCode,
                 )
             }

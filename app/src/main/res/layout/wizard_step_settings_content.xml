@@ -460,7 +460,7 @@
                             android:maxLength="3"
                             android:paddingTop="0dp"
                             android:paddingBottom="0dp"
-                            android:text="@string/label_15"
+                            android:text="@string/label_5"
                             android:textColor="@color/sky_primary"
                             android:textStyle="bold" />
 
@@ -468,19 +468,29 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="4dp"
-                            android:text="@string/scale_unit_px"
+                            android:text="@string/strain_window_unit_points"
                             android:textColor="@color/sky_primary"
                             android:textStyle="bold" />
                     </LinearLayout>
 
+                    <!-- In data points (VsgStudy.MIN_WINDOW_POINTS..MAX_WINDOW_POINTS);
+                         tvStrainVsg below shows the VSG in px it gives at the current step. -->
                     <com.google.android.material.slider.Slider
                         android:id="@+id/etStrainWindow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:valueFrom="5"
-                        android:valueTo="101"
+                        android:valueFrom="3"
+                        android:valueTo="31"
                         android:stepSize="2"
-                        android:value="15" />
+                        android:value="5" />
+
+                    <TextView
+                        android:id="@+id/tvStrainVsg"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/viewer_chrome_muted"
+                        android:textSize="12sp"
+                        tools:text="VSG 21 px at step 5 px" />
 
 
 
@@ -722,7 +732,7 @@
                                 android:paddingBottom="0dp"
                                 android:textColor="@color/sky_primary"
                                 android:textStyle="bold"
-                                tools:text="5" />
+                                tools:text="3" />
 
                             <com.google.android.material.slider.RangeSlider
                                 android:id="@+id/rangeStrainWin"
@@ -730,8 +740,8 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
                                 android:stepSize="2"
-                                android:valueFrom="5"
-                                android:valueTo="101"
+                                android:valueFrom="3"
+                                android:valueTo="31"
                                 app:values="@array/strain_window_range_default" />
 
                             <EditText
@@ -749,7 +759,7 @@
                                 android:paddingBottom="0dp"
                                 android:textColor="@color/sky_primary"
                                 android:textStyle="bold"
-                                tools:text="101" />
+                                tools:text="11" />
                         </LinearLayout>
                     </LinearLayout>
 

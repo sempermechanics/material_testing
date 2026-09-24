@@ -204,19 +204,21 @@ Re-running the same inputs updates the same analysis. Different inputs make a ne
 | Subset | 15–121, odd | Suggested | Correlation fails, speckle is weak | You need detail across a gradient |
 | Step | 1 to min(30, subset/2) | 5 | Runtime matters | You need a denser field |
 | Overlap | 0.50–0.99 = 1 − step/subset | Follows step | — | — |
-| Strain window | 5–101, odd | 15; bending 45 | Strain is noisy | Detail is being smoothed away |
+| Strain window | 3–31 points, odd | 5 points; bending 9 | Strain is noisy | Detail is being smoothed away |
 | Kernel | 4×4 Bicubic / 6×6 Keys | 4×4 | You are studying interpolation bias | — |
 
 - **The suggested subset** follows the SSSIG criterion (Pan et al. 2008). It's the median over a 4×4 grid, sized to reach 0.007 px.
   It stops following the image once you touch the slider. **Reset** brings it back.
-- **The strain window is the virtual strain gauge (VSG).** It is the diameter, in px, of the
-  circle of points fitted for one strain value — not a count of points. Step only changes how
-  many points land inside it. Keep the window at least twice the step, or too few points fit.
+- **The strain window is a count of data points.** The virtual strain gauge (VSG) is the
+  distance it covers, in px, shown under the slider as you change the window or the step.
+  Strain is a plane fitted to every point within (window − 1) / 2 steps of the centre, so the
+  same window covers more pixels at a coarser step. Quote the VSG, not the window, in a paper.
+  Sessions from before the window was counted in points show their VSG alone.
 
 ![Virtual strain gauge](images/vsg.svg)
 
 ```
-VSG = strain window     [px]
+VSG = (strain window − 1) × step + 1     [px]
 ```
 
 ---
@@ -364,13 +366,13 @@ Long exports carry on in the background.
 |---|---|---|
 | Subset | 15–121, odd | Suggested |
 | Step | 1–30 | 5 |
-| Strain window | 5–101, odd | 15; bending 45 |
+| Strain window | 3–31 points, odd | 5; bending 9 |
 | Kernel | 4×4 / 6×6 | 4×4 Bicubic |
 | Max frames | 10–150 | 50 |
 | Sweep step denominator | 2–9 | 3 |
 | Sweep samples | 1–8 per axis | 3 |
 
-`VSG = strain window` (px)
+`VSG = (strain window − 1) × step + 1` (px; window in points)
 
 ## Appendix B — Glossary
 
@@ -379,7 +381,7 @@ Long exports carry on in the background.
 | Reference | The unloaded frame everything is matched against |
 | Deformed frame | One load step |
 | Subset / Step | The window matched at each point / the spacing between points |
-| Strain window / VSG | One setting: the diameter, in px, of the circle of points fitted for one strain value |
+| Strain window / VSG | The window is a count of data points; the VSG is the distance it covers, `(window − 1) × step + 1` px, the diameter of the circle of points fitted for one strain value |
 | ROI | Region of interest, with optional erased holes |
 | SSSIG | The sum of squared subset intensity gradients, which drives the suggested subset |
 | ZNSSD | The match residual (0 is perfect; ≤ 0.15 accepted) |

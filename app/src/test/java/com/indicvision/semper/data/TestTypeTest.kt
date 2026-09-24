@@ -27,12 +27,14 @@ class TestTypeTest {
 
     @Test
     fun `bending starts with a wider strain window than tensile`() {
-        assertEquals(15, TestType.TENSILE.defaultStrainWindow)
-        assertEquals(45, TestType.BENDING.defaultStrainWindow)
+        assertEquals(5, TestType.TENSILE.defaultStrainWindow)
+        assertEquals(9, TestType.BENDING.defaultStrainWindow)
+        // In data points: at the default 5 px step, a 21 px and a 41 px VSG.
+        assertEquals(21, VsgStudy.vsgFor(TestType.TENSILE.defaultStrainWindow, 5))
+        assertEquals(41, VsgStudy.vsgFor(TestType.BENDING.defaultStrainWindow, 5))
         // The slider takes odd values in its own range; a default off it would snap.
         TestType.entries.forEach {
-            assertTrue(it.name, it.defaultStrainWindow % 2 == 1)
-            assertTrue(it.name, it.defaultStrainWindow in VsgStudy.MIN_STRAIN_WINDOW..VsgStudy.MAX_STRAIN_WINDOW)
+            assertEquals(it.name, it.defaultStrainWindow, VsgStudy.oddWindowPoints(it.defaultStrainWindow))
         }
     }
 

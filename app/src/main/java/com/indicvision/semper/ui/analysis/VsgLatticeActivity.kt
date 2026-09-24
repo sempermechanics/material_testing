@@ -163,7 +163,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             solved = true,
         )
         val skipped = skippedNodesFromIntent(intent)
-        val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.window }))
+        val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.vsg }))
         solvedNodes = nodes.filter { it.solved }
         // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).
         nodeByFrame = solvedNodes.associateBy { it.frameIndex }
@@ -353,7 +353,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             ?: R.string.url_faq_engine_vsg
         FaqRedirect.errorDialog(
             this,
-            getString(R.string.sweep_node_title_fmt, node.subset, node.step, node.window),
+            getString(R.string.sweep_node_title_fmt, node.subset, node.step, windowText(node)),
             reason,
             faqRes,
         )
@@ -371,8 +371,8 @@ class VsgLatticeActivity : AppCompatActivity() {
             VsgLatticeView.Node(
                 subset = node.subset,
                 step = node.step,
-                window = node.strainWindow,
-                vsg = VsgStudy.vsgFor(node.strainWindow),
+                window = VsgStudy.windowPointsFor(node.strainWindow, node.step),
+                vsg = node.strainWindow,
                 solved = false,
                 frameIndex = -1,
                 failureReason = getString(EngineFailure.shortReasonRes(node.code)),
@@ -396,8 +396,8 @@ class VsgLatticeActivity : AppCompatActivity() {
             VsgLatticeView.Node(
                 subset = subsets[i],
                 step = steps[i],
-                window = windows[i],
-                vsg = VsgStudy.vsgFor(windows[i]),
+                window = VsgStudy.windowPointsFor(windows[i], steps[i]),
+                vsg = windows[i],
                 solved = solved,
                 frameIndex = if (solved) i else -1,
                 failureReason = codes.getOrNull(i)
@@ -526,7 +526,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             val points = profiles[component].orEmpty()
             if (points.isEmpty()) return@mapIndexedNotNull null
             val label = if (node != null) {
-                getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, node.window)
+                getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, windowText(node))
             } else {
                 getString(R.string.sweep_frame_btn_fmt, index + 1)
             }
@@ -569,7 +569,7 @@ class VsgLatticeActivity : AppCompatActivity() {
             R.string.vsg_lattice_param_fmt,
             node.subset,
             node.step,
-            node.window,
+            windowText(node),
         )
         val idx = solvedNodes.indexOfFirst { it.frameIndex == focusedFrameIndex }
         btnPrevNode.isEnabled = idx > 0
@@ -578,12 +578,14 @@ class VsgLatticeActivity : AppCompatActivity() {
         btnSaveGraph.isEnabled = true
     }
 
+    private fun windowText(node: VsgLatticeView.Node): String = StrainWindowText.of(this, node.vsg, node.step)
+
     private fun selectedNode(): VsgLatticeView.Node? =
         solvedNodes.find { it.frameIndex == focusedFrameIndex }
 
     private fun copySelectedParams(animateOn: View) {
         val node = selectedNode() ?: return
-        ParamClipboard.copy(this, node.subset, node.step, node.window)
+        ParamClipboard.copy(this, node.subset, node.step, node.vsg)
         animateCopyConfirmation(animateOn)
         CrispToast.show(this, getString(R.string.vsg_lattice_params_copied))
     }
@@ -681,7 +683,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
         val node = selectedNode()
         if (node != null) {
-            lines += getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, node.window)
+            lines += getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, windowText(node))
         }
         val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         if (!isolate) {

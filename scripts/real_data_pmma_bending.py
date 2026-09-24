@@ -130,7 +130,7 @@ class Grid:
 
     def plane_strain(self, window: int) -> dict[str, np.ndarray]:
         """Strain from the app's own displacements by a plane fit over a circle
-        of `window` px diameter, the engine's VSG footprint (VsgStudy.vsgFor);
+        of `window` px diameter (a VSG), the engine's footprint (VsgStudy.vsgFor);
         at least 90% of the circle's points must be present."""
         h = int(window / 2 // self.step)
         k = np.arange(-h, h + 1) * self.step
