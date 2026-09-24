@@ -209,12 +209,14 @@ Re-running the same inputs updates the same analysis. Different inputs make a ne
 
 - **The suggested subset** follows the SSSIG criterion (Pan et al. 2008). It's the median over a 4×4 grid, sized to reach 0.007 px.
   It stops following the image once you touch the slider. **Reset** brings it back.
-- **Quote the VSG, not the window.**
+- **The strain window is the virtual strain gauge (VSG).** It is the diameter, in px, of the
+  circle of points fitted for one strain value — not a count of points. Step only changes how
+  many points land inside it. Keep the window at least twice the step, or too few points fit.
 
 ![Virtual strain gauge](images/vsg.svg)
 
 ```
-VSG = (strain window − 1) × step + 1     [px]
+VSG = strain window     [px]
 ```
 
 ---
@@ -368,7 +370,7 @@ Long exports carry on in the background.
 | Sweep step denominator | 2–9 | 3 |
 | Sweep samples | 1–8 per axis | 3 |
 
-`VSG = (strain window − 1) × step + 1`
+`VSG = strain window` (px)
 
 ## Appendix B — Glossary
 
@@ -377,7 +379,7 @@ Long exports carry on in the background.
 | Reference | The unloaded frame everything is matched against |
 | Deformed frame | One load step |
 | Subset / Step | The window matched at each point / the spacing between points |
-| Strain window / VSG | The points fitted for strain / the length one strain value covers, in px |
+| Strain window / VSG | One setting: the diameter, in px, of the circle of points fitted for one strain value |
 | ROI | Region of interest, with optional erased holes |
 | SSSIG | The sum of squared subset intensity gradients, which drives the suggested subset |
 | ZNSSD | The match residual (0 is perfect; ≤ 0.15 accepted) |
