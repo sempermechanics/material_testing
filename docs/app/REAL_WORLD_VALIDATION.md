@@ -2,9 +2,10 @@
 
 **Date:** 2026-09-23  
 **App:** `feat/bending-deflection`, debug build on the emulator (x86_64)  
-**Scope:** tensile Young's modulus E and peak stress on published data;
-bending end to end on a synthetic video
-([below](#bending-end-to-end-on-a-synthetic-video)).
+**Scope:** tensile Young's modulus E and peak stress on published data
+(case 1); bending deflection, E, displacement and strain against a published
+3-point bend's own DIC (case 2, 2026-09-24); bending end to end on a synthetic
+video ([below](#bending-end-to-end-on-a-synthetic-video)).
 
 Unit tests prove the math on numbers typed in by hand. This page runs the whole
 app — images in, the DIC solve, the load CSV, the stress–strain curve and E out —
@@ -71,7 +72,10 @@ their starting 60 mm.
 | 38 | 509 | 435.5 (peak) | 213.9 | 200.5 |
 | 40 | 705 | 422.1 | 336.1 | 301.7 |
 
-Over frames 13–28 the app reads **7.8% higher** than the gauge points. The two
+Over frames 13–28 the app reads **7.8% higher** than the gauge points. Over
+the elastic frames 1–28 (up to 1.8 mε) the strain RMSE is **67 µε**, bias
++50 µε. Removing the constant 6.8% scale leaves 30 µε. Over frames 29–40
+(3–302 mε) it is 12,400 µε, about 4% of the range. The two
 agree to within the scatter of the gauge points themselves at the smallest loads
 (the gauge-point fits below have R² as low as 0.94).
 
@@ -165,6 +169,169 @@ window that moves them further than that deserves a look before it merges.
 
 ---
 
+## Case 2 — PMMA beam in 3-point bending (Zenodo 1172068)
+
+### The data
+
+R. Delorme, I. Tabiai, P. Diehl, L. Laberge Lebel, M. Lévesque, *PMMA 3 point
+bending test until failure loaded in displacement*, Zenodo, 2018,
+[doi:10.5281/zenodo.1172068](https://doi.org/10.5281/zenodo.1172068). Licence
+CC BY 4.0. Nothing from the dataset is committed here; `RealPmmaBendingTest`
+holds the app's own deflection per frame, not the dataset's files.
+
+| | |
+|---|---|
+| Specimen | Speckled PMMA beam: span L 75 mm, depth in view t 31 mm, thickness b 12 mm |
+| Rig | Loading nose at mid-span, 2 mm/min to failure; stereo pair, one image per second, force per image |
+| Reference | The authors' VIC-3D full field for every image: camera-0 pixel positions and displacements, world displacements in mm, and strain |
+| Peak | Image 97, 9337 N; the beam breaks at image 98 |
+
+Only **camera 0** was used, as with the steel. Its pixel positions and
+displacements are the image plane the app measures in, so displacement is
+compared in pixels without any calibration.
+
+### What was run
+
+- **Frames:** image 32 (the last before the nose touches) as the reference,
+  then every second image from 33 to 97: 33 deformed frames. Each was cropped
+  to `(40, 820, 2420, 2048)`, which puts the beam across the full width in
+  the top half of the frame, as a student would film it.
+- **Loads:** the dataset's force at those images, in N.
+- **App settings:** Bending; L 75, b 12, t 31 mm; thickness taps under the
+  nose at x 1170, y 38.8 and 609.6 (570.8 px, 0.0543 mm/px; the edges are at
+  39 and 611 by the intensity profile); ROI 2259 × 509 px at (59, 69); subset
+  27 px (the speckle check's suggestion); step 5 px; strain window 45 px
+  (bending's default) and, in a second run, 15 px.
+- **Solve:** about 2 min 17 s on the emulator for 33 frames.
+
+The authors' field is referenced to image 0 and the app's to image 32, so
+both are compared as increments from image 32, at the authors' 20 px grid
+points carried into image 32 (about 2,800 per frame).
+
+### Deflection at the load point and E
+
+The probe is what the app reads δ from: the mean displacement of accepted
+points within t/2 of the taps' midpoint, along the top-to-bottom direction.
+The authors' δ is their world vertical displacement in mm, averaged over the
+same circle.
+
+| Frame | Image | Load (N) | App δ (mm) | Authors' δ (mm) |
+|---:|---:|---:|---:|---:|
+| 2 | 35 | 239 | 0.0240 | 0.0259 |
+| 5 | 41 | 1004 | 0.1335 | 0.1345 |
+| 10 | 51 | 2455 | 0.3337 | 0.3367 |
+| 17 | 65 | 4657 | 0.6573 | 0.6611 |
+| 25 | 81 | 7200 | 1.0232 | 1.0333 |
+| 33 | 97 | 9337 (peak) | 1.3842 | 1.3955 |
+
+Over all 33 frames: **RMSE 0.0074 mm**, 0.5% of the 1.396 mm peak; bias
+−0.006 mm; largest error 0.019 mm.
+
+| | App | Authors' DIC, same probe |
+|---|---:|---:|
+| Load–deflection slope | 6777.7 N/mm, R² 0.9993 | 6716.5 N/mm |
+| **E from the graph** | **2.000 GPa** | 1.982 GPa |
+| Average E (31 load steps) | 2.104 GPa | 2.084 GPa |
+
+Both E values are within 1%. The app's Results showed "E from the graph ≈
+2.0 GPa (slope 6777.73 N/mm, R² 0.9993)" and "Average E ≈ 2.1 GPa (31 load
+steps)". The slope is pinned in `RealPmmaBendingTest`.
+
+The handbook E of PMMA is 2.4–3.3 GPa. This beam is deep (span only 2.4
+times the depth), so shear adds to the deflection and W L³ / (48 δ I), which
+leaves shear out, reads low. That is the formula's limit, not the camera's:
+the authors' own deflection gives the same low value.
+
+**The taps matter most.** In a first attempt the bottom tap landed 49 px
+short (523 px instead of 572; see below). That alone put δ 10% high: RMSE
+0.076 mm and E from the graph 1.81 GPa. A pixel of tap error changes E by
+about 100 / N %, where N is the thickness in pixels.
+
+### Displacement and strain, point by point
+
+Displacement agrees to **0.013 px RMS** in both u and v, about 0.7 µm here,
+and to no worse than 0.015 px on any frame up to the peak.
+
+**20 of 91,179 points** (0.02%) are wrong matches, more than 0.5 px off the
+authors', in frames 25 and 27–29. The 45 px run has 12 of 84,249, because it
+trims the ROI's edges. They sit right under the nose and on the
+bottom fibre below it, where the nose indents the surface and the beam later
+breaks. Their correlation is good (ZNSSD 0.007–0.1), so they pass the
+acceptance test, and the strain window takes them in. Around them strain
+reads up to about 2,400,000 µε, in frames 24, 25, 27–29 and 32. The engine's
+strain fit does not reject an outlying displacement; that is a `native/`
+change and is not made here. The RMSEs below leave those six frames out.
+
+| Strain window | exx RMSE | eyy RMSE | exy RMSE | Points with a strain value |
+|---:|---:|---:|---:|---:|
+| 15 px | 1004 µε | 960 µε | 814 µε | 97.6% |
+| **45 px** (bending's default) | **398 µε** | **374 µε** | **385 µε** | 92.8% |
+
+For scale, the authors' exx at the peak is about 5,700 µε RMS over the beam.
+Most of the error at 15 px is noise: at 35 N, where there is almost no strain,
+it is already 810 µε. The authors' own strain has about 90 µε of noise at the
+same load, so theirs is the smoother reference.
+
+The script also recomputes strain from the app's own displacements, by a
+plane fit over the same circular footprint as the engine. At 15 and 45 px
+it lands within 35 µε of the engine's own strain, and it gives the trend
+beyond:
+
+| Window | 15 | 25 | 45 | 65 | 95 px |
+|---|---:|---:|---:|---:|---:|
+| exx RMSE (µε) | 1022 | 662 | 406 | 289 | 197 |
+
+A wider window costs two things:
+
+- **The edges.** A point keeps its strain only if at least 90% of its circle
+  holds data. At 45 px that trims a band about 20 px wide along every ROI
+  edge. On a bending ROI the top and bottom edges are the outer fibres, where
+  strain is largest. The trimmed points also count against the headline, so
+  this run shows "92.8% converged", not 97.6%. The deflection is unaffected.
+- **Detail.** A 45 px window can't resolve anything smaller, such as the
+  contact zone under the nose.
+
+For bending that trade is worth it, because δ and E come from displacement and
+strain only draws the maps. That is why bending starts at 45 px
+(`TestType.defaultStrainWindow`). On a thin beam, a 45 px band can be a large
+share of the depth: lower the window, or frame closer.
+
+**Shear sign.** The authors' exy is engineering shear with y pointing up; the
+app's is tensor shear with y pointing down. Theirs is −2 × the app's, which
+their own pixel displacements confirm (slope −0.513). The tables compare
+−exy / 2.
+
+### Reproduce
+
+The archive is 749 MB (`3pointPMMA.zip`). Put it in a folder, then:
+
+```bash
+python scripts/real_data_pmma_bending.py prep --data <zenodo folder> --out <frames folder>
+```
+
+This writes `pmma_00.png` (the reference) through `pmma_33.png`,
+`pmma_loads.csv` and `frame_index.csv`. It needs numpy and Pillow.
+
+1. Copy the frames and the CSV to the device.
+2. New analysis → Bending → reference `pmma_00.png`, deformed frames
+   `pmma_01`–`pmma_33`, load log `pmma_loads.csv` (N).
+3. L 75, b 12, t 31 mm. **Mark**: zoom in, tap the top and bottom edges under
+   the nose at x ≈ 1170 (y ≈ 39 and 611). The readout should say about 572 px.
+4. ROI (Manual) x 60, y 70, 2260 × 510. Accept the suggested subset, and keep
+   step 5 and the strain window of 45. Compute.
+5. Pull `files/sessions/<session>/frame_NNNN.dat` as for case 1. Read the
+   taps from the session's `loadPoint` in `files/sessions/index.json`, then:
+
+```bash
+python scripts/real_data_pmma_bending.py compare --data <zenodo folder> --dat <dat folder> --taps 1170.17,38.83,609.59 --windows 15,45
+```
+
+It prints δ per frame against the authors', the deflection RMSE, both E
+values from both sides, the wrong-match count, the spike frames, and the
+displacement and strain RMSEs. `--windows` adds the plane-fit recompute.
+
+---
+
 ## Lab tables (math only)
 
 The two handwritten lab reports the app's outputs follow are typed-in tables,
@@ -177,11 +344,10 @@ not images. They verify the formulas and the report layout, not DIC:
 
 ## Bending: end to end on a synthetic video
 
-No published bending test with side-face speckle images, a mid-span
-deflection reference (dial gauge or LVDT) and the beam's dimensions has been
-run through the app yet. Until one is, the whole bending path was run on a
-**synthetic** video whose truth is the Experiment 5 table, so every number the
-app prints can be checked against the handwritten report.
+Before case 2, no published bending test had been run through the app, so
+the whole bending path was first run on a **synthetic** video whose truth is
+the Experiment 5 table. Every number the app prints could then be checked
+against the handwritten report.
 
 **The video.** 1280 × 720, 10 fps, 29 s, keyframe every second. A speckled
 beam side face 170 px thick (t = 6.38 mm, so 0.0375 mm/px) moves down by the
@@ -213,8 +379,10 @@ The remaining differences come from the 169-px tap (0.6%).
 - The tap editor lost its zoom after the first tap: the instruction below the
   photo changed length, the photo resized, and a resize re-fitted it. The
   second tap then landed on the un-zoomed image (223 px instead of 170).
-  `TouchImageView` now keeps a zoom through a resize, and the instruction
-  keeps three lines.
+  `TouchImageView` now keeps a zoom through a resize. At rest the photo still
+  re-fitted when the instruction changed height, and longer wording later
+  broke the fixed three lines (case 2's first attempt). The instruction's box
+  is now as tall as its longest step, at any width or font size.
 - The slope included the three unloaded frames at (0, 0) and read 151.8 GPa.
   The report's own readings do not pass through the origin (the dial is
   zeroed with the hanger seated), so the slope now uses loaded frames only.
@@ -229,9 +397,9 @@ The remaining differences come from the 169-px tap (0.6%).
   started after the first frame* field now shifts the time match.
 
 This proves the plumbing, the formulas and the report against known truth.
-It does not show what a phone sees on a real beam: lighting, focus,
-out-of-plane motion and support settling are all absent. What a real case
-should record:
+It does not show what a camera sees on a real beam: lighting, focus,
+out-of-plane motion and support settling are all absent. Case 2 covers the
+real images. A future case should still record:
 
 - Thickness taps and the resulting mm/px, against a scale bar in the frame if
   there is one.
