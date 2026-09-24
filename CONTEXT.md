@@ -132,7 +132,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   view-class tests (TD-57, Kover floor 49), the licensing repo split (TD-64),
   the swipe and ROI-rounding fixes (TD-72, TD-73) and a linear `quickSelect`
   on repeated values (TD-75: `valueRanges` and report builds had gone
-  quadratic on fields with many equal strains). The first sync brought the #155–#168
+  quadratic on fields with many equal strains). TD-76, made here and sent
+  back, gives it a ninther pivot for sorted and staircase fields. The first sync brought the #155–#168
   burn-down (ADR-001…006), CI hardening and composites, App Check on real
   phones, the rate-limit and nonce fixes, the one-pass upload CSV (#182) and the
   coverage floor. The lab inputs ride upstream's seams: `RunSpec.mechanical`
