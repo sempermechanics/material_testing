@@ -294,6 +294,12 @@ pre-licensing documents)
       nav, `/dashboard/` page, `_redirects` for `/login`, `/account`,
       `/terms/*` → `app.sempermechanics.com`. `curl -sI https://sempermechanics.com/terms/`
       → 301 → 200 (was 404, and `legal.py` links it; live 2026-09-22).
+- [x] A 429 on a device-signed route leaves the nonce unspent (#154): the
+      bucket is a route dependency resolved before `verified_device`, and the
+      429 sends `Retry-After`. **Done 2026-09-24**: production
+      `semper-api-35957034833-1` from `2fdb44c`; a four-analysis erase from the
+      Pixel 6 got one 429, and the app's unchanged resend 2 s later returned
+      200 (was 401 `nonce_invalid_or_replayed`, leaving analyses in the cloud).
 - [ ] 24 h log watch: `feature_not_licensed` only from restore/bundle by demo
       accounts (never from `POST /v1/sessions`); `app_check_required` **= 0**;
       `session_quota_exceeded`; `license_device_mismatch`; `mfa_required`;
