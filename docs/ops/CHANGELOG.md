@@ -12,6 +12,13 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-24 — Deny-all Firestore rules deployed (#185)
+
+#185 (TD-70) replaced Hosting's undeployable `firestore` block with
+`scripts/deploy-firestore.sh`; the deny-all `firestore.rules` then went to
+`indicvision-dic-app`. Anonymous REST reads and a create answer
+`403 PERMISSION_DENIED`; the Auth project has no Firestore database.
+
 ## 2026-09-24 — App release v1.2-beta.2 (#182)
 
 `v1.2-beta.2` (beta channel, private GitHub Release) from `fab33cb`, main CI

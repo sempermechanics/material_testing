@@ -131,8 +131,7 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   engine `v0.2.2`) plus #182, the upload CSV's stats rows above the point
   section (TD-66) ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
 - **Owed.** A device smoke of `v1.2-beta.2` and its public distribution
-  (website / Play). Deploying the deny-all Firestore rules
-  (`scripts/deploy-firestore.sh rules`). Video/AVI import has run only on emulators
+  (website / Play). Video/AVI import has run only on emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
   rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`; history in

@@ -104,8 +104,7 @@ the remediation order is fourteen PRs, tracked in the Status column.
 
 Checked by hand in the console or with `gcloud`, not by reading code: whether
 the legacy `indic-gw` / `indic-api` pair exists (TD-30); branch protection
-requiring `CI OK`; whether the deny-all `firestore.rules` is deployed; API-key
-restrictions; GitHub Environment branch rules on `production`. The open
+requiring `CI OK`; API-key restrictions; GitHub Environment branch rules on `production`. The open
 checkboxes are in [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md).
 
 ### Closed as obsolete, 2026-09-14
