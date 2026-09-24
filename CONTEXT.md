@@ -201,7 +201,7 @@ one load are now one load step); the speckle check sampled outside the ROI
 no real-image check yet.
 
 **Student lab outputs, part 3: the elastic region in the viewer
-(PR #14, `feat/viewer-elastic-plot`, open).**
+(PR #14, `feat/viewer-elastic-plot`, merged).**
 On the real steel run the Results curve reaches 336 mε. E comes from frames
 1–26, all below 2 mε, so those frames and the fit line were a vertical stroke
 at x≈0. The Results title on the summary page and in the ⓘ sheet now has a
