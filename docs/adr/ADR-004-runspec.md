@@ -146,3 +146,5 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   envelope (max |Δu| 0.0015 / 0.0031 px). On device, the fresh-run and
   reopened-from-Home `ViewerArgs` now agree on every field except `defPath`
   (ADR-003), for a single run and for a sweep.
+- *Later (2026-10-01):* engine 0.2.3 made the Path B flood fill deterministic
+  (TD-65), so a `.dat` hash comparison is a valid check again.
