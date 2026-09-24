@@ -143,7 +143,9 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 ## Current state (2026-09-24)
 
 - **Synced with `semperdic-app`.** This repo forked the parent at `bfe00e5`
-  (2026-09-21) and merged its `main` again at `643462c` (#188): the #155–#168
+  (2026-09-21) and merged its `main` again at `643462c` (parent #188; here
+  #22), so the next sync is a plain `git merge` of the parent's `main`. It
+  brought the #155–#168
   burn-down (ADR-001…006), CI hardening and composites, App Check on real
   phones, the rate-limit and nonce fixes, the one-pass upload CSV (#182) and the
   coverage floor. The lab inputs ride upstream's seams: `RunSpec.mechanical`
@@ -151,7 +153,10 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (ADR-003) and `WizardState` / `WizardDraft`, which keep the type,
   dimensions, taps, frame times and the load log's text across a process death
   (ADR-005). Upstream's key-frame sampling sheet (`VideoKeyframeHelper`) is
-  not taken; `VideoSamplingSheet` / `VideoKeyframes` cover it here.
+  not taken; `VideoSamplingSheet` / `VideoKeyframes` cover it here. The other
+  way, the parent took this repo's four general-purpose fixes
+  (`SubsetRecommender` ROI speckle, `VsgPlotView` gutter, `TouchImageView`
+  zoom, `AviReader` µs slack) in sempermechanics/semperdic-app#189.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain, E from the
   longest straight leading run, the elastic-region view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
