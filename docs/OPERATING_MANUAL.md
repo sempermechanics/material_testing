@@ -259,7 +259,7 @@ share a title row; the overlap ratio sits beside the step readout.
 | Subset size | 15–121, odd | Recommended |
 | Step size | 1–`min(30, subset/2)` | 5 |
 | Subset overlap | 0.50–0.99 (`1 − step / subset`) | Follows step |
-| Strain window | 5–101, odd | 15 |
+| Strain window | 3–31 points, odd | 5 |
 | Kernel | 4×4 Bicubic / 6×6 Keys | 4×4 Bicubic |
 
 ### Subset and step
@@ -291,6 +291,10 @@ Good Practices Guide keeps overlap at least 0.5 and strictly below 1.0;
 typical values are about 0.50–0.75.
 
 ### Strain window and VSG
+
+The strain window is a count of data points. The line under the slider shows the
+VSG it gives at the current step, and follows as you change either. Sessions from
+before the window was counted in points show their VSG alone.
 
 ![Virtual strain gauge](images/vsg.svg)
 
@@ -357,7 +361,7 @@ the line cut, then **Compute**.
 | Control | Range |
 |---|---|
 | Subset range | 15–121, odd (step 2) |
-| Strain window range | 5–101, odd — min and max, the sweep's y axis (step 2) |
+| Strain window range | 3–31 points, odd, default 3–11 — min and max (step 2) |
 | Step size | subset ÷ N, N 2–9, default 3. Overlap on the same row is `1 − 1/N`. Pixel step is `round(subset / N)` (step 2) |
 | Frame to sweep | radio list + number + preview (step 2) |
 | Samples | 1–8 per axis (step 3, lattice gear) |
@@ -368,8 +372,8 @@ Runtime is the product of the two sample counts. 8 × 8 is 64 solves. Start at
 The sweep varies the **strain window** directly, not the VSG. VSG is still what
 you quote — it is shown per node and in the settings sheet — but it is derived
 (`(window − 1) × step + 1`), so two combinations with different steps can share a
-window and land on different VSGs. Sweeping the window is what makes the axis
-mean one thing.
+window and land on different VSGs. The lattice plots each node at its VSG, so one
+window sits higher at a larger subset's step.
 
 The lattice preview on this step is **inert** — taps do nothing until it has
 run. The coach mark points it out on a first visit.
@@ -390,7 +394,7 @@ ever carries meaning at a time.
 
 The screen is built to be worked with one thumb. It scrolls — summary line,
 lattice, controls, then plot — while **Save graph** and **View** stay pinned at
-the bottom. The y axis is the **strain window**; the lattice draws compact, so
+the bottom. The y axis is the **VSG (px)**; the lattice draws compact, so
 the coach mark on first visit is what names the axes.
 
 **Choosing a combination**
@@ -493,9 +497,9 @@ The ⓘ button. On a still frame: true min, max and mean, then a histogram of
 every accepted point (including values the colour bar has clamped away). Tap a
 bar for that bin's range and count. On the summary GIF the histogram is omitted.
 Then everything the result was computed with — and on a sweep, the
-line-cut plot. There is no separate VSG row: it is `(strain window − 1) × step + 1`,
-and both of those are already listed, so `(13 − 1) × 5 + 1 = 61 px` is yours to
-read off (the relation is in [§5](#5-parameters)). A run that stopped early also
+line-cut plot. The strain-window row gives both numbers, e.g. "13-point window ·
+VSG 61 px", `(13 − 1) × 5 + 1` (the relation is in [§5](#5-parameters)). A session
+from before the window was counted in points shows "VSG 15 px" alone. A run that stopped early also
 carries **Stopped early** and **Frames solved** here.
 
 **Changing settings later never changes an old result.** This sheet is your
@@ -674,15 +678,15 @@ Write above that block; leave it in place.
 |---|---|---|---|---|
 | Subset | 15–121, odd | Recommended | Speckle is weak; correlation fails | You need resolution across a sharp gradient |
 | Step | 1–30 | 5 | Runtime matters | You need a denser field |
-| Strain window | 5–101, odd | 15 | Strain is noisy | Detail is being smoothed away |
+| Strain window | 3–31 points, odd | 5 | Strain is noisy | Detail is being smoothed away |
 | Kernel | 4×4 / 6×6 | 4×4 Bicubic | Studying interpolation bias | — |
 | Max frames | 10–150 | 50 | Long sequences | Runs are killed for memory |
 | Sweep subset range | 15–121, odd | Around recommended | — | — |
-| Sweep strain window range | 5–101, odd | 5–101 | Strain is noisy | Detail is being smoothed away |
+| Sweep strain window range | 3–31 points, odd | 3–11 | Strain is noisy | Detail is being smoothed away |
 | Step denominator | 2–9 | — | Denser correlation | Faster runs |
 | Samples | 1–8 per axis | 3 | Finer detail | Runtime is the product |
 
-`VSG = (strain window − 1) × step + 1`
+`VSG = (strain window − 1) × step + 1` (px; window in points)
 
 ## Appendix B — Glossary
 
@@ -692,8 +696,8 @@ Write above that block; leave it in place.
 | Deformed frame | One load step |
 | Subset | The pixel window matched at each point |
 | Step | Spacing between grid points |
-| Strain window | Points fitted to get strain from displacement |
-| VSG | Virtual strain gauge — what one strain value covers, in px |
+| Strain window | A count of data points (odd): strain is a plane fitted to every point within (window − 1) / 2 steps |
+| VSG | Virtual strain gauge — what one strain value covers, `(window − 1) × step + 1` px |
 | ROI | Region of interest, optionally with erased holes |
 | SSSIG | Sum of squared subset intensity gradients — drives the subset recommendation |
 | ZNSSD | Correlation residual, one per point, in the CSV |

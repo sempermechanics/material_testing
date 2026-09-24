@@ -154,7 +154,7 @@ with no framework behind it:
 | Local disk budget | `data/StorageBudget.kt`, `data/CacheJanitor.kt` | Measures analyses and cache; frees the local frames of **backed-up** analyses only. A user-set GB budget is enforced from `SemperApp.onCreate`, so it runs before any screen |
 | Crash reporting | `Diagnostics.kt`, `CrashReportingTree.kt` | Crashlytics collection is **off in the manifest** and enabled only on consent (first-run prompt or the Settings toggle). `CrashReportingTree` is a release-only Timber tree feeding breadcrumbs and non-fatals |
 | Product analytics | `analytics/SemperAnalytics.kt` | Same consent flag as Crashlytics (`DicSettings.diagnosticsEnabled`) — events are dropped, not queued, when it is off. Params must stay PII-free: enums, coarse buckets, success/fail. The consent copy names both halves (**Send crash reports and usage data**) — keep it and [PRIVACY_POLICY.md](../legal/PRIVACY_POLICY.md) §2.4 in step with the event set |
-| Parameter hand-off | `data/ParamClipboard.kt` | Holds one subset/step/strain-window triple, copied from the sweep lattice's parameter chip and pasted into the analysis wizard's advanced parameters |
+| Parameter hand-off | `data/ParamClipboard.kt` | Holds one subset/step/VSG (px) triple, copied from the sweep lattice's parameter chip and pasted into the analysis wizard's advanced parameters |
 
 An analysis whose local frames were freed becomes a **cloud-only row**: Home
 still lists it, badges it, and downloads it on open rather than reporting the

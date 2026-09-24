@@ -58,8 +58,9 @@ object SessionUploadMetadata {
                 frameObj
                     .put("subset", subset)
                     .put("step", step)
+                    // The stored window is already the VSG in px (the engine's diameter).
                     .put("strainWindow", window)
-                    .put("vsg", (window - 1) * step + 1)
+                    .put("vsg", window)
             }
             frames.put(frameObj)
         }

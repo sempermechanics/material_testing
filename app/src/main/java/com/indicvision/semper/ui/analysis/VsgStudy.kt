@@ -19,8 +19,8 @@ import kotlin.math.roundToInt
  * ## Sweep space
  *
  * The three dominant variables are subset size, step size and strain window
- * (guide, Tip 5.4). The user gives a subset *range* and a ceiling on the VSG;
- * this object derives the rest:
+ * (guide, Tip 5.4). The user gives a subset range and a strain-window range
+ * in data points; this object derives the rest:
  *
  *  - subset sizes are the odd values across the requested range;
  *  - step size is an integer between 1/6 and 1/3 of each subset, the usual
@@ -28,8 +28,9 @@ import kotlin.math.roundToInt
  *    extra runtime buys nothing, above 1/3 the field is under-sampled.
  *    The sweep asks for that fraction as `subset ÷ N`; single analysis asks
  *    for a pixel step plus the linked overlap `1 − step/subset`;
- *  - the strain window then follows from the VSG relation below.
- *  - the strain window then follows from the VSG relation below.
+ *  - each window's VSG in pixels then follows from its step,
+ *    `(window - 1) * step + 1` ([vsgFor]), so one window gives a larger VSG
+ *    at a larger subset.
  *
  * Every surviving combination is solved in its own right and lands in the
  * result viewer as its own frame, so the comparison is made on the real fields
@@ -39,48 +40,74 @@ import kotlin.math.roundToInt
 object VsgStudy {
 
     /**
-     * VSG footprint of a strain window, in pixels — which is the strain window
-     * itself, because the engine reads that parameter as a **diameter in
-     * pixels** rather than as a count of data points.
+     * VSG of a strain window of [points] data points at [step], in pixels:
+     * `(points - 1) * step + 1`, the iDICs guide's expression for a window
+     * counted in data points. The user sets the window in points; this is the
+     * diameter the engine is handed, stored and reported.
      *
-     * The engine takes `radius = strain_window / 2` and tests each neighbour's
-     * distance from the centre in physical pixels, so the footprint the strain
-     * fit averages over is a circle of that diameter no matter how the grid is
-     * spaced. Step decides how many points land inside the circle; it does not
-     * change the circle. That is also DICe's convention for the same parameter.
+     * The engine reads its `strain_window` as a circle's **diameter in
+     * pixels**: `radius = strain_window / 2`, each neighbour tested by its
+     * distance from the centre. At this diameter the radius is
+     * `(points - 1) / 2` steps plus half a pixel, so the circle takes in every
+     * grid point within that many steps and no more, whatever the step.
      *
-     * This previously returned `(strainWindow - 1) * step + 1`, the iDICs
-     * guide's expression for a window counted in **data points**. Applied to a
-     * window already given in pixels it multiplies the reported gauge by
-     * roughly the step size, and since the strain floor goes as `1 / L_vsg`,
-     * every quoted floor came out that many times better than the settings
-     * could deliver.
+     * Two device runs confirmed that the footprint is the diameter itself
+     * rather than a count of points. Solving `L = sqrt(2) * sigma_u / sigma_e`
+     * from each run's own displacement jitter and strain scatter, on a static
+     * specimen over 60 frames, both at a 15 px diameter:
      *
-     * Two device runs settled it rather than the argument doing so. Solving
-     * `L = sqrt(2) * sigma_u / sigma_e` from each run's own measured
-     * displacement jitter and strain scatter, on a static specimen over 60
-     * frames:
+     * | device | step | measured `L` | diameter |
+     * |--------|------|--------------|----------|
+     * | Samsung SM-G996U1 | 3 | 13.4 px | 15 px |
+     * | Pixel 6 | 5 | 10.6 px | 15 px |
      *
-     * | device | step | measured `L` | this function | old expression |
-     * |--------|------|--------------|---------------|----------------|
-     * | Samsung SM-G996U1 | 3 | 13.4 px | 15 px | 43 px |
-     * | Pixel 6 | 5 | 10.6 px | 15 px | 71 px |
-     *
-     * Both land just under the nominal window, which is what the engine's 90%
-     * support rule predicts — the outer ring of the circle is not always
-     * filled, so the effective gauge is slightly smaller than the diameter
-     * asked for. Neither is near the old expression at either step.
+     * Both land just under the diameter, which is what the engine's 90%
+     * support rule predicts: the outer ring is not always filled.
      */
-    fun vsgFor(strainWindow: Int): Int = strainWindow
+    fun vsgFor(points: Int, step: Int): Int = (points - 1) * step + 1
 
-    /** Strain window is odd and matches the range of the settings slider. */
-    const val MIN_STRAIN_WINDOW = 5
+    /**
+     * The strain window, in data points, that a VSG of [vsg] px spans at
+     * [step]; null when it is not a whole odd count of at least
+     * [MIN_WINDOW_POINTS]. Sessions from before the window was counted in
+     * points stored whatever diameter the slider gave, so most of theirs have
+     * no such count and are shown by their VSG alone.
+     */
+    fun windowPointsFor(vsg: Int, step: Int): Int? {
+        if (step < 1 || vsg < 1 || (vsg - 1) % step != 0) return null
+        val points = (vsg - 1) / step + 1
+        return points.takeIf { it >= MIN_WINDOW_POINTS && it % 2 == 1 }
+    }
 
-    /** The settings slider's own starting value (`activity` layout `etStrainWindow`).
-     *  Capture-time estimates of the strain floor quote it, because it is what a
-     *  single analysis will actually run at unless the user changes it. */
-    const val DEFAULT_STRAIN_WINDOW = 15
-    const val MAX_STRAIN_WINDOW = 101
+    /**
+     * The odd window, in points and inside the slider's range, whose VSG at
+     * [step] is nearest [vsg]. Paste uses it: the clipboard holds a VSG in px.
+     */
+    fun nearestWindowPoints(vsg: Int, step: Int): Int {
+        val raw = ((vsg - 1).toDouble() / step.coerceAtLeast(1)).roundToInt() + 1
+        return oddWindowPoints(raw)
+    }
+
+    /** [raw] snapped odd and into `[MIN_WINDOW_POINTS, MAX_WINDOW_POINTS]`. */
+    fun oddWindowPoints(raw: Int): Int {
+        val odd = if (raw % 2 == 0) raw + 1 else raw
+        return odd.coerceIn(MIN_WINDOW_POINTS, MAX_WINDOW_POINTS)
+    }
+
+    /** The wizard's strain window on first open and on Reset: a 21 px VSG at step 5. */
+    const val DEFAULT_WINDOW_POINTS = 5
+
+    /**
+     * The strain window's range, in data points, matching the settings
+     * slider. Odd, so the circle is centred on its point: 3 is the smallest
+     * whose circle holds enough points for a plane fit.
+     */
+    const val MIN_WINDOW_POINTS = 3
+    const val MAX_WINDOW_POINTS = 31
+
+    /** Where a sweep's strain-window range starts, in points. */
+    const val DEFAULT_SWEEP_WINDOW_MIN = 3
+    const val DEFAULT_SWEEP_WINDOW_MAX = 11
 
     /** Step size range of the settings slider. */
     const val MIN_STEP = 1
@@ -118,14 +145,11 @@ object VsgStudy {
     const val MAX_OVERLAP = 0.99
     const val DEFAULT_OVERLAP = 0.8
 
-    /** Samples the user may take along each axis (subset, VSG). */
+    /** Samples the user may take along each axis (subset, strain window). */
     const val MIN_SAMPLES = 1
     const val MAX_SAMPLES = 8
     const val DEFAULT_SUBSET_SAMPLES = 3
     const val DEFAULT_VSG_SAMPLES = 3
-
-    /** Default VSG ceiling, as a multiple of the subset size. */
-    const val DEFAULT_VSG_MAX_FACTOR = 3
 
     /** Strain components a sweep reports, as indices into a `.dat` point. */
     val STRAIN_COMPONENTS = listOf(DicResult.IDX_EXX, DicResult.IDX_EYY, DicResult.IDX_EXY)
@@ -143,10 +167,11 @@ object VsgStudy {
     data class Point(
         val subset: Int,
         val step: Int,
-        val strainWindow: Int,
+        /** Strain window in data points. */
+        val window: Int,
     ) {
-        /** Footprint the strain calculation averages over, in pixels. */
-        val vsg: Int get() = vsgFor(strainWindow)
+        /** Footprint the strain calculation averages over, in pixels: what the engine is handed. */
+        val vsg: Int get() = vsgFor(window, step)
     }
 
     /** The single step size for [subset] at the chosen [denominator]: `subset/N`, in pixels. */
@@ -190,34 +215,6 @@ object VsgStudy {
     }
 
     /**
-     * The strain window whose VSG is nearest [vsg]; odd and in range.
-     *
-     * The inverse of [vsgFor], which is now the identity, so this is only the
-     * snap to what the engine accepts. Kept as a named function because the
-     * sweep's y-axis is a VSG axis and reads better saying so.
-     */
-    fun windowForVsg(vsg: Int): Int = vsg.coerceIn(MIN_STRAIN_WINDOW, MAX_STRAIN_WINDOW) or 1
-
-    /** Smallest VSG the engine will accept, in pixels. */
-    fun minVsg(): Int = MIN_STRAIN_WINDOW
-
-    /**
-     * Largest VSG the engine will accept, in pixels.
-     *
-     * This is the binding limit on strain resolution, and it is worth naming as
-     * such: the floor goes as `sqrt(2) * sigma_u / L_vsg`, so at 101 px even a
-     * displacement noise of 0.006 px — better than the two test devices reach —
-     * cannot report below about 90 microstrain. A floor in the single
-     * microstrain range needs a gauge in the hundreds to thousands of pixels,
-     * which is a decision about this ceiling and not about the camera.
-     */
-    fun maxVsg(): Int = MAX_STRAIN_WINDOW
-
-    /** Default VSG ceiling offered for [subset], inside the reachable range. */
-    fun defaultVsgMax(subset: Int): Int =
-        (DEFAULT_VSG_MAX_FACTOR * subset).coerceIn(minVsg(), maxVsg())
-
-    /**
      * The odd subset sizes between [subsetMin] and [subsetMax] inclusive. Both
      * ends are snapped odd — the engine only accepts odd subsets — and the span
      * is bounded by [MAX_SUBSET_SPAN] as a safety net.
@@ -233,13 +230,13 @@ object VsgStudy {
         sampleEvenly(subsetSizes(subsetMin, subsetMax), count)
 
     /**
-     * The odd strain windows between [winMin] and [winMax] inclusive, clamped to
-     * what the engine accepts. The subset's twin: both ends snapped odd, both
-     * ends the user's, so the axis says what it sweeps.
+     * The odd strain windows, in data points, between [winMin] and [winMax]
+     * inclusive, clamped to the slider's range. The subset's twin: both ends
+     * snapped odd, both ends the user's, so the axis says what it sweeps.
      */
     fun strainWindows(winMin: Int, winMax: Int): List<Int> {
-        val low = winMin.coerceIn(MIN_STRAIN_WINDOW, MAX_STRAIN_WINDOW) or 1
-        val high = (maxOf(winMax, low) or 1).coerceAtMost(MAX_STRAIN_WINDOW)
+        val low = oddWindowPoints(winMin)
+        val high = oddWindowPoints(maxOf(winMax, low))
         return (low..high step SUBSET_INCREMENT).toList()
     }
 

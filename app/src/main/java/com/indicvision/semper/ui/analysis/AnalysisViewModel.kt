@@ -461,7 +461,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
 
         sweepPlan = result.runs.map { it.point }
         sweepSkippedNodes = result.skipped.mapIndexed { index, point ->
-            SkippedNode(point.subset, point.step, point.strainWindow, result.skippedCodes[index])
+            SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
         }
         engineStatsArray = result.firstMetrics
         lastStopCode = result.engineErrorCode
@@ -565,7 +565,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
             realRefWidth = realRefWidth,
             realRefHeight = realRefHeight,
             settings = spec.recordSettings()
-                .copy(subset = first.subset, step = first.step, strainWin = first.strainWindow)
+                .copy(subset = first.subset, step = first.step, strainWin = first.vsg)
                 .also { recordRunSettings(it) },
             cloudEnabled = cloudEnabled,
             pointsConverged = result.runs.first().pointsSolved,
@@ -580,11 +580,11 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
             // viewer would render every frame at the first frame's step size.
             sweepSubsets = result.runs.map { it.point.subset },
             sweepSteps = result.runs.map { it.point.step },
-            sweepStrainWindows = result.runs.map { it.point.strainWindow },
+            sweepStrainWindows = result.runs.map { it.point.vsg },
             sweepLabels = summary.solvedLabels,
             lineCutHorizontal = sweep.lineCutHorizontal,
             sweepSkippedNodes = skipped.mapIndexed { index, point ->
-                SkippedNode(point.subset, point.step, point.strainWindow, result.skippedCodes[index])
+                SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
             },
             stopCode = result.engineErrorCode,
             plannedFrameCount = result.runs.size + skipped.size,

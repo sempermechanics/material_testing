@@ -18,6 +18,7 @@ import com.indicvision.semper.FieldHistogram
 import com.indicvision.semper.R
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.ui.analysis.EngineFailure
+import com.indicvision.semper.ui.analysis.StrainWindowText
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import com.indicvision.semper.ui.analysis.VsgStudy
 import kotlin.math.roundToInt
@@ -80,12 +81,8 @@ object ViewerSettingsSheet {
         return buildList {
             add(host.getString(R.string.setting_subset) to host.getString(R.string.setting_px_fmt, subset))
             add(host.getString(R.string.setting_step) to host.getString(R.string.setting_px_fmt, host.step))
-            add(
-                host.getString(R.string.setting_strain_window) to
-                    host.resources.getQuantityString(R.plurals.setting_subsets_fmt, strainWin, strainWin),
-            )
-            // VSG is derived from Step and Strain window, both already rows above --
-            // no separate row for a number that adds no information beyond them.
+            // Stored as the VSG in px; shown with its window in points when it has one.
+            add(host.getString(R.string.setting_strain_window) to StrainWindowText.of(host, strainWin, host.step))
             add(
                 host.getString(R.string.setting_strain_method) to
                     args.strainMethod,

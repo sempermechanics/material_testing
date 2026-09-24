@@ -26,7 +26,7 @@ Use these words. Do not invent synonyms.
 | step | Grid spacing between tracked points, px |
 | ZNSSD | Match score; 0 = perfect, ≤ 0.15 accepted, < 0 failed-point sentinel |
 | ICGN | Iterative Gauss-Newton sub-pixel solver |
-| VSG | Strain window: least-squares plane fit, odd width |
+| VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd, 3–31); VSG = `(window − 1) × step + 1` px is what the engine and sessions get (`VsgStudy.vsgFor`) |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
@@ -126,6 +126,11 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Latest: #154 (a 429 keeps the nonce), #171 (Terms back to 18+; keep
   `TERMS_VERSION` equal to material_testing's), the #155–#168 burn-down
   ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
+- **Ported from material_testing, awaiting release.** The strain window is
+  entered in data points, default 5 (material_testing #20; stored and
+  exported values stay the VSG in px), and engine `v0.2.2` rejects
+  displacement outliers before the VSG (semper-dic-engine#3, material_testing
+  #21, which has the real-data before/after).
 - **Owed.** An app release for the burn-down's app half. The IAM grant for
   ADR-006's `gateway` job (TD-27): its first dry-run failed on
   `apigateway.apis.get`. Video/AVI import has run only on emulators

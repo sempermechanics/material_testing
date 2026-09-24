@@ -63,7 +63,9 @@ class VsgLatticeView @JvmOverloads constructor(
     data class Node(
         val subset: Int,
         val step: Int,
-        val window: Int,
+        /** Strain window in data points; null for a sweep stored before windows were counted in points. */
+        val window: Int?,
+        /** VSG in px, the y axis: what the engine was handed. */
         val vsg: Int,
         val solved: Boolean,
         val frameIndex: Int = -1,
@@ -169,7 +171,7 @@ class VsgLatticeView @JvmOverloads constructor(
     fun setNodes(nodes: List<Node>) {
         this.nodes = nodes
         columns = nodes.map { it.subset }.distinct().sorted()
-        val windows = nodes.map { it.window }
+        val windows = nodes.map { it.vsg }
         // Frame the windows actually swept rather than anchoring at 1: the
         // sweep's own range is the interesting span, and starting below it threw
         // away most of the plot.
@@ -307,11 +309,11 @@ class VsgLatticeView @JvmOverloads constructor(
     private fun drawConnectors(canvas: Canvas, columnX: Map<Int, Float>, yFor: (Int) -> Float) {
         columns.forEach { subset ->
             val x = columnX[subset] ?: return@forEach
-            val ladder = nodes.filter { it.subset == subset }.sortedBy { it.window }
+            val ladder = nodes.filter { it.subset == subset }.sortedBy { it.vsg }
             if (ladder.size < 2) return@forEach
             path.reset()
             ladder.forEachIndexed { i, node ->
-                if (i == 0) path.moveTo(x, yFor(node.window)) else path.lineTo(x, yFor(node.window))
+                if (i == 0) path.moveTo(x, yFor(node.vsg)) else path.lineTo(x, yFor(node.vsg))
             }
             canvas.drawPath(path, connectorPaint)
         }
@@ -329,7 +331,7 @@ class VsgLatticeView @JvmOverloads constructor(
         val ring = ContextCompat.getColor(context, R.color.viewer_plot_ink_strong)
         nodes.forEach { node ->
             val x = columnX[node.subset] ?: return@forEach
-            val y = yFor(node.window)
+            val y = yFor(node.vsg)
             placed.add(Placed(node, x, y))
             if (node.solved) {
                 fillPaint.color = solved

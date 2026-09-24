@@ -4,8 +4,10 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.ui.analysis.SubsetRecommender
 import com.indicvision.semper.ui.analysis.VsgStudy
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 /**
  * Checks the sweep space and the centre line cut of the virtual strain gauge
@@ -20,14 +22,50 @@ class VsgStudyTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `the gauge length is the strain window in pixels, whatever the step`() {
-        // The engine walks a circle of diameter strainWindow in physical
-        // pixels, so the step changes how many points fall inside it and not
-        // how big it is. Asserted at two very different steps because the old
-        // expression multiplied by the step and agreed with this only at 1.
-        assertEquals(15, VsgStudy.vsgFor(15))
-        assertEquals(15, VsgStudy.Point(41, 5, 15).vsg)
-        assertEquals(15, VsgStudy.Point(41, 20, 15).vsg)
+    fun `the VSG is the window in points less one, times the step, plus one`() {
+        assertEquals(21, VsgStudy.vsgFor(5, 5))
+        assertEquals(41, VsgStudy.vsgFor(9, 5))
+        assertEquals(81, VsgStudy.vsgFor(5, 20))
+        assertEquals(41, VsgStudy.Point(41, 5, 9).vsg)
+        assertEquals(161, VsgStudy.Point(61, 20, 9).vsg)
+    }
+
+    @Test
+    fun `the engine's circle at that VSG spans exactly the window's points`() {
+        // The engine keeps a neighbour when its distance is at most diameter / 2.
+        listOf(1, 3, 5, 14).forEach { step ->
+            listOf(3, 5, 9, 31).forEach { points ->
+                val radius = VsgStudy.vsgFor(points, step) / 2.0
+                val across = (-points..points).count { d -> abs(d * step) <= radius }
+                assertEquals("step $step, $points points", points, across)
+            }
+        }
+    }
+
+    @Test
+    fun `a stored VSG gives back its window in points only when it is one`() {
+        assertEquals(9, VsgStudy.windowPointsFor(41, 5))
+        assertEquals(5, VsgStudy.windowPointsFor(81, 20))
+        // Sessions from before points: 15 px at step 5 is 3.8 points, so none.
+        assertNull(VsgStudy.windowPointsFor(15, 5))
+        // Even counts and a lone point are not windows the slider offers.
+        assertNull(VsgStudy.windowPointsFor(11, 2))
+        assertNull(VsgStudy.windowPointsFor(1, 5))
+        assertNull(VsgStudy.windowPointsFor(41, 0))
+        for (step in VsgStudy.MIN_STEP..VsgStudy.MAX_STEP) {
+            for (points in VsgStudy.MIN_WINDOW_POINTS..VsgStudy.MAX_WINDOW_POINTS step 2) {
+                assertEquals(points, VsgStudy.windowPointsFor(VsgStudy.vsgFor(points, step), step))
+            }
+        }
+    }
+
+    @Test
+    fun `a pasted VSG snaps to the nearest odd window at the slider's step`() {
+        assertEquals(9, VsgStudy.nearestWindowPoints(41, 5))
+        // 15 px at step 5 is 3.8 points: 4, then snapped odd.
+        assertEquals(5, VsgStudy.nearestWindowPoints(15, 5))
+        assertEquals(VsgStudy.MIN_WINDOW_POINTS, VsgStudy.nearestWindowPoints(1, 5))
+        assertEquals(VsgStudy.MAX_WINDOW_POINTS, VsgStudy.nearestWindowPoints(5000, 1))
     }
 
     // ------------------------------------------------------------------
@@ -117,8 +155,8 @@ class VsgStudyTest {
         subsetMin: Int = 41,
         subsetMax: Int = 61,
         subsetSamples: Int = 3,
-        strainWinMin: Int = VsgStudy.MIN_STRAIN_WINDOW,
-        strainWinMax: Int = 51,
+        strainWinMin: Int = VsgStudy.MIN_WINDOW_POINTS,
+        strainWinMax: Int = 21,
         strainWinSamples: Int = 3,
         overlap: Double = 0.75,
     ) = VsgStudy.plan(
@@ -136,7 +174,7 @@ class VsgStudyTest {
         // A generous VSG ceiling so no VSG ladder is truncated: the full grid.
         val subsets = 3
         val vsg = 3
-        val p = plan(subsetSamples = subsets, strainWinSamples = vsg, strainWinMax = VsgStudy.MAX_STRAIN_WINDOW)
+        val p = plan(subsetSamples = subsets, strainWinSamples = vsg, strainWinMax = VsgStudy.MAX_WINDOW_POINTS)
         assertEquals(subsets * vsg, p.size)
     }
 
@@ -147,7 +185,7 @@ class VsgStudyTest {
             subsetMin = 41,
             subsetMax = 41,
             subsetSamples = 1,
-            strainWinMax = VsgStudy.MAX_STRAIN_WINDOW,
+            strainWinMax = VsgStudy.MAX_WINDOW_POINTS,
             overlap = 2.0 / 3.0,
         )
         assertEquals(setOf(VsgStudy.stepSizeFor(41, 2.0 / 3.0)), p.map { it.step }.toSet())
@@ -165,45 +203,47 @@ class VsgStudyTest {
             subsetSamples = 1,
             strainWinSamples = 1,
             overlap = 0.5,
-            strainWinMax = VsgStudy.MAX_STRAIN_WINDOW,
+            strainWinMax = VsgStudy.MAX_WINDOW_POINTS,
         )
         assertEquals(1, p.size)
     }
 
     @Test
     fun `the strain window axis honours both ends, like the subset axis`() {
-        val p = plan(strainWinMin = 15, strainWinMax = 25, strainWinSamples = 8)
+        val p = plan(strainWinMin = 5, strainWinMax = 15, strainWinSamples = 8)
 
-        val windows = p.map { it.strainWindow }.distinct().sorted()
-        assertEquals("nothing below the floor", 15, windows.first())
-        assertTrue("nothing above the ceiling: $windows", windows.last() <= 25)
+        val windows = p.map { it.window }.distinct().sorted()
+        assertEquals("nothing below the floor", 5, windows.first())
+        assertTrue("nothing above the ceiling: $windows", windows.last() <= 15)
         assertTrue("the range should not collapse to one window", windows.size > 1)
     }
 
     @Test
     fun `a one-window range sweeps only that window`() {
-        val p = plan(strainWinMin = 21, strainWinMax = 21, strainWinSamples = 5)
+        val p = plan(strainWinMin = 9, strainWinMax = 9, strainWinSamples = 5)
 
-        assertEquals(setOf(21), p.map { it.strainWindow }.toSet())
+        assertEquals(setOf(9), p.map { it.window }.toSet())
+        // One window in points is a larger VSG at a larger subset's step.
+        assertEquals(p.map { (9 - 1) * it.step + 1 }, p.map { it.vsg })
     }
 
     @Test
     fun `an inverted window range does not vanish`() {
         // The UI clamps, but the planner must not produce an empty sweep if a
         // min ever arrives above its max.
-        val p = plan(strainWinMin = 31, strainWinMax = 11, strainWinSamples = 3)
+        val p = plan(strainWinMin = 21, strainWinMax = 7, strainWinSamples = 3)
 
         assertTrue("expected at least one combination", p.isNotEmpty())
-        p.forEach { assertTrue(it.strainWindow % 2 == 1) }
+        p.forEach { assertTrue(it.window % 2 == 1) }
     }
 
     @Test
     fun `window bounds are snapped odd and clamped to what the engine takes`() {
-        val p = plan(strainWinMin = 4, strainWinMax = 999, strainWinSamples = 8)
+        val p = plan(strainWinMin = 2, strainWinMax = 999, strainWinSamples = 8)
 
-        val windows = p.map { it.strainWindow }
+        val windows = p.map { it.window }
         assertTrue(windows.all { it % 2 == 1 })
-        assertTrue(windows.all { it in VsgStudy.MIN_STRAIN_WINDOW..VsgStudy.MAX_STRAIN_WINDOW })
+        assertTrue(windows.all { it in VsgStudy.MIN_WINDOW_POINTS..VsgStudy.MAX_WINDOW_POINTS })
     }
 
     @Test
@@ -214,25 +254,19 @@ class VsgStudyTest {
 
     @Test
     fun `every combination is a valid engine point`() {
-        plan(strainWinMax = VsgStudy.MAX_STRAIN_WINDOW).forEach {
+        plan(strainWinMax = VsgStudy.MAX_WINDOW_POINTS).forEach {
             assertTrue(it.subset % 2 == 1)
-            assertTrue(it.strainWindow % 2 == 1)
-            assertTrue(it.strainWindow in VsgStudy.MIN_STRAIN_WINDOW..VsgStudy.MAX_STRAIN_WINDOW)
+            assertTrue(it.window % 2 == 1)
+            assertTrue(it.window in VsgStudy.MIN_WINDOW_POINTS..VsgStudy.MAX_WINDOW_POINTS)
+            assertEquals(it.window, VsgStudy.windowPointsFor(it.vsg, it.step))
             assertTrue(it.step in VsgStudy.MIN_STEP..VsgStudy.MAX_STEP)
         }
     }
 
     @Test
     fun `plan has no duplicate combinations`() {
-        val p = plan(strainWinMax = VsgStudy.MAX_STRAIN_WINDOW)
+        val p = plan(strainWinMax = VsgStudy.MAX_WINDOW_POINTS)
         assertEquals(p.size, p.distinct().size)
-    }
-
-    @Test
-    fun `windowForVsg inverts vsgFor`() {
-        // A VSG that is exactly reachable maps back to its own window.
-        val window = 15
-        assertEquals(window, VsgStudy.windowForVsg(VsgStudy.vsgFor(window)))
     }
 
     @Test
@@ -246,7 +280,7 @@ class VsgStudyTest {
             .flatMap { min -> listOf(0, 8, 40, 60).map { min to (min + it) } }
             .flatMap { range -> samples.map { range to it } }
             .flatMap { (range, x) -> samples.map { Triple(range, x, it) } }
-            .flatMap { (range, x, y) -> overlaps.map { listOf(3, 15, 51).map { sw -> Case6(range, x, y, it, sw) } } }
+            .flatMap { (range, x, y) -> overlaps.map { listOf(3, 9, 31).map { sw -> Case6(range, x, y, it, sw) } } }
             .flatten()
 
         cases.forEach { c ->
@@ -254,7 +288,7 @@ class VsgStudyTest {
                 c.range.first,
                 c.range.second,
                 c.x,
-                VsgStudy.MIN_STRAIN_WINDOW,
+                VsgStudy.MIN_WINDOW_POINTS,
                 c.strainWinMax,
                 c.y,
                 c.overlap,

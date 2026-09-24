@@ -100,7 +100,8 @@ class RunSpecTest {
 
         assertEquals(31, spec.subset)
         assertEquals(10, spec.step)
-        assertEquals(9, spec.strainWindow)
+        // 9 points at step 10: the engine gets the VSG, (9 - 1) * 10 + 1 px.
+        assertEquals(81, spec.strainWindow)
         assertEquals(sweep, spec.sweep)
     }
 
@@ -189,7 +190,7 @@ class RunSpecTest {
 
         assertEquals(31, args.subsetSize)
         assertEquals(10, args.step)
-        assertEquals(9, args.strainWindow)
+        assertEquals(81, args.strainWindow) // the VSG of 9 points at step 10
         assertEquals("no stale stop code from the previous run", 0, args.stopCode)
         assertEquals(false, args.sweep?.lineCutHorizontal)
         assertNull(vm.runResult.value.settings)
