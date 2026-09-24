@@ -33,7 +33,6 @@ import timber.log.Timber
 class PendingApprovalActivity : AppCompatActivity() {
 
     private val authRepo by lazy { AuthRepository(applicationContext) }
-    private lateinit var keyManager: DeviceKeyManager
 
     // UI Elements
     private lateinit var tvUserEmail: TextView
@@ -49,8 +48,6 @@ class PendingApprovalActivity : AppCompatActivity() {
         window.decorView.post { reportFullyDrawn() }
 
         Insets.padVertical(findViewById(R.id.pendingRoot))
-
-        keyManager = DeviceKeyManager(this)
 
         tvUserEmail = findViewById(R.id.tvUserEmail)
         tvDeviceId = findViewById(R.id.tvDeviceId)
@@ -79,7 +76,7 @@ class PendingApprovalActivity : AppCompatActivity() {
     /** Opens the user's email app pre-filled to support so they can request access. */
     private fun requestAccessByEmail() {
         val email = authRepo.cachedEmail() ?: getString(R.string.pending_unknown_account)
-        val deviceId = keyManager.getDeviceId()
+        val deviceId = DeviceKeyManager.deviceId(this)
         val body = buildString {
             append("I'd like access to Semper.\n\n")
             append("Account: ").append(email).append('\n')
@@ -106,7 +103,7 @@ class PendingApprovalActivity : AppCompatActivity() {
     private fun loadProfileData() {
         // Identity comes from the cached backend session (ID-token claims).
         val email = authRepo.cachedEmail()
-        val deviceId = keyManager.getDeviceId()
+        val deviceId = DeviceKeyManager.deviceId(this)
 
         tvUserEmail.text = email ?: getString(R.string.pending_unknown_user)
         tvDeviceId.text = getString(R.string.pending_device_id_fmt, deviceId.take(8), deviceId.takeLast(4))

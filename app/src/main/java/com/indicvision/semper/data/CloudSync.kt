@@ -16,6 +16,7 @@ import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -150,7 +151,7 @@ object CloudSync {
         throttled: Boolean,
     ) {
         if (throttled && AppRemoteConfig.isKnown(appContext)) return
-        runCatching { api.getConfig(token) }
+        suspendRunCatching { api.getConfig(token) }
             .onSuccess {
                 AppRemoteConfig.apply(appContext, it)
                 LicenseConfigWorker.enqueue(appContext)
@@ -265,7 +266,7 @@ object CloudSync {
         if (!api.enabled) return true
         val token = TokenProvider.usableIdToken()
         return token != null &&
-            runCatching { api.deleteAccount(token) }
+            suspendRunCatching { api.deleteAccount(token) }
                 .onFailure { Timber.e(it, "Account erasure failed — local data left intact") }
                 .isSuccess
     }

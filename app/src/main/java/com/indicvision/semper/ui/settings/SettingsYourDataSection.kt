@@ -22,6 +22,7 @@ import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.viewer.SendToSheet
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -113,7 +114,7 @@ class SettingsYourDataSection(
         job = activity.lifecycleScope.launch {
             try {
                 val dest = java.io.File(activity.cacheDir, "semper-account-export.json")
-                val ok = runCatching {
+                val ok = suspendRunCatching {
                     val idToken = TokenProvider.usableIdToken() ?: error("not signed in")
                     api.exportAccount(idToken, dest)
                 }.onFailure { Timber.w(it, "Cloud account export failed") }.isSuccess

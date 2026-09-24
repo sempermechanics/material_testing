@@ -15,6 +15,7 @@ import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -66,7 +67,7 @@ class SeatRequiredActivity : AppCompatActivity() {
                 Toast.makeText(this@SeatRequiredActivity, R.string.seat_offline, Toast.LENGTH_LONG).show()
                 return@launch
             }
-            val outcome = runCatching { api.checkoutLease(token) }
+            val outcome = suspendRunCatching { api.checkoutLease(token) }
             setLoading(false)
             outcome
                 .onSuccess { config ->

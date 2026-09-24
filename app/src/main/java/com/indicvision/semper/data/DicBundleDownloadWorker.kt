@@ -211,8 +211,6 @@ class DicBundleDownloadWorker(
         }
         setProgress(
             workDataOf(
-                KEY_DONE to done.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
-                KEY_TOTAL to total.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
                 DicKeys.UPLOAD_PHASE to PHASE_DOWNLOAD,
                 DicKeys.UPLOAD_PERCENT to percent,
             ),
@@ -223,8 +221,6 @@ class DicBundleDownloadWorker(
         const val KEY_DISPLAY_NAME = "DISPLAY_NAME"
         const val KEY_LOCAL_SESSION_ID = "LOCAL_SESSION_ID"
         const val KEY_DEST_URI = "DEST_URI"
-        const val KEY_DONE = "done"
-        const val KEY_TOTAL = "total"
         const val KEY_ERROR = "error"
         const val PHASE_DOWNLOAD = "download"
     }

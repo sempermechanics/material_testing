@@ -48,7 +48,7 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
             Timber.i("Restored %s from cloud session %s", localId, cloudSessionId)
             SemperAnalytics.event(applicationContext, SemperAnalytics.CLOUD_RESTORE_SUCCEEDED)
-            Result.success(workDataOf(KEY_LOCAL_ID to localId))
+            Result.success()
         } catch (e: CancellationException) {
             clearPartialArtifacts(targetLocalId)
             throw e
@@ -96,8 +96,6 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
         }
         setProgress(
             workDataOf(
-                KEY_DONE to done.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
-                KEY_TOTAL to total.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
                 DicKeys.SESSION_LOCAL_ID to localId,
                 DicKeys.UPLOAD_PHASE to PHASE_DOWNLOAD,
                 DicKeys.UPLOAD_PERCENT to percent,
@@ -111,9 +109,6 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
     }
 
     companion object {
-        const val KEY_DONE = "done"
-        const val KEY_TOTAL = "total"
-        const val KEY_LOCAL_ID = "localId"
         const val KEY_ERROR = "error"
         const val PHASE_DOWNLOAD = "download"
     }
