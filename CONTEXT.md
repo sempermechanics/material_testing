@@ -126,12 +126,11 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Latest: #154 (a 429 keeps the nonce), #171 (Terms back to 18+; keep
   `TERMS_VERSION` equal to material_testing's), the #155–#168 burn-down
   ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **Ported from material_testing, awaiting release.** The strain window is
-  entered in data points, default 5 (material_testing #20; stored and
-  exported values stay the VSG in px), and engine `v0.2.2` rejects
-  displacement outliers before the VSG (semper-dic-engine#3, material_testing
-  #21, which has the real-data before/after).
-- **Owed.** An app release for the burn-down's app half. The IAM grant for
+- **App release `v1.2-beta.1`** (beta, private GitHub Release, from `2214860`):
+  the burn-down's app half, and #180's strain window in data points and engine
+  `v0.2.2` outlier rejection ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
+- **Owed.** A device smoke of `v1.2-beta.1` and its public distribution
+  (website / Play). The IAM grant for
   ADR-006's `gateway` job (TD-27): its first dry-run failed on
   `apigateway.apis.get`. Video/AVI import has run only on emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"

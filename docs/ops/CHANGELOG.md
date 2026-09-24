@@ -12,6 +12,20 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-24 — App release v1.2-beta.1; strain window in points, engine v0.2.2 (#180)
+
+#180 ported two material_testing changes. The strain window is entered in
+data points (odd 3–31, default 5); the engine gets the VSG,
+`(window − 1) × step + 1` px, and sessions still store and export the VSG
+(material_testing #20). The `native/` submodule moved to engine `v0.2.2`,
+which rejects displacement outliers with an iterated 5×5 normalized median
+test before the VSG fit (semper-dic-engine#3, material_testing #21: on a
+published PMMA bend, 45 px strain RMSE over all frames 915 / 3874 / 2117 →
+412 / 394 / 392 µε). Merged as `2214860`; main CI green through Tier 3 and
+Tier 5. Released as `v1.2-beta.1` (beta channel, private GitHub Release,
+Release run 35987799464), which also ships the #155–#168 burn-down's app
+half and everything app-side since `v1.2-beta.0`. No backend change.
+
 ## 2026-09-24 — Tech-debt burn-down (#155–#168)
 
 Fourteen stacked PRs from the verified register in
