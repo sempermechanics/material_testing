@@ -15,7 +15,7 @@ import com.indicvision.semper.data.net.TokenStore
  */
 object LegalTerms {
 
-    const val TERMS_VERSION = "2026-09-15"
+    const val TERMS_VERSION = "2026-09-24"
 
     fun requiredVersion(context: Context): String =
         TokenStore.termsRequiredVersion(context) ?: TERMS_VERSION
