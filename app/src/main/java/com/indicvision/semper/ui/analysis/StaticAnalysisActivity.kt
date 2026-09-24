@@ -36,6 +36,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.MainThread
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
@@ -46,15 +47,18 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
+import com.google.android.material.snackbar.Snackbar
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.BeamEdgeTaps
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.ParamClipboard
 import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.TestType
+import com.indicvision.semper.data.WizardDraft
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.FaqRedirect
@@ -75,6 +79,7 @@ import java.io.IOException
  * extracts frames from a video), page 2 sets parameters + ROI and launches
  * the batch solve via [AnalysisViewModel]. Results open in ResultViewerActivity.
  */
+@MainThread
 class StaticAnalysisActivity : AppCompatActivity() {
 
     private companion object {
@@ -176,6 +181,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_static_analysis)
+        viewModel.attachDraft(WizardDraft(applicationContext))
         // Later wizard pages live in ViewStubs so the host layout stays under
         // lint's TooManyViews cap. Inflate before any findViewById of those IDs.
         // MissingInflatedId is suppressed at file level: those IDs live in the
@@ -367,21 +373,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         setupLoadCard()
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
-        // the extract-frames flow. Consumed once.
-        intent.getStringExtra(DicKeys.PICKED_REF_URI)?.let {
-            intent.removeExtra(DicKeys.PICKED_REF_URI)
-            handleReferenceImage(it.toUri())
-        }
-        intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
-            intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
-            handleVideo(it.toUri())
-        }
-        intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
-            intent.removeExtra(DicKeys.PICKED_DEF_URIS)
-            if (list.isNotEmpty()) {
-                onDeformedPicked(list.map { it.toUri() })
-            }
-        }
+        // the extract-frames flow. Consumed once: a process death restores
+        // the original Intent, extras and all, but the draft holds the result.
+        if (savedInstanceState == null) consumePickerHandOff()
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
         // and keep the wizard nav above the nav-bar gesture area so the top
         // controls aren't in the system swipe-down zone.
@@ -514,7 +508,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         target: Class<out Activity>,
         extras: Intent.() -> Unit = {},
     ) {
-        val tempFile = File(cacheDir, "temp_roi_ref.bin")
+        val tempFile = File(cacheDir, CacheJanitor.TEMP_ROI_REF)
         lifecycleScope.launch {
             val written = withContext(Dispatchers.IO) {
                 try {
@@ -551,6 +545,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * that depends on the mask stays after the read, in order.
      */
     private fun applyRoiResult(data: Intent) {
+        // After a process death whose draft was lost there is no reference
+        // left to measure this ROI against.
+        if (viewModel.realRefWidth == 0) {
+            Timber.w("ROI result with no reference; ignored")
+            return
+        }
         viewModel.roiX = data.getIntExtra(DicKeys.ROI_X, 0)
         viewModel.roiY = data.getIntExtra(DicKeys.ROI_Y, 0)
         viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
@@ -600,6 +600,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // bitmap crashes on the next draw — the superseded ones are GC-eligible.)
         refPreviewBmp?.recycle()
         refPreviewBmp = null
+        // Finishing is the one way out that no restore follows.
+        if (isFinishing) viewModel.discardDraft()
         super.onDestroy()
     }
 
@@ -1220,10 +1222,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val strainWin = currentStrainWindow()
 
         val roi = resolveRoi(subset) ?: return
-        val finalRectX = roi[0]
-        val finalRectY = roi[1]
-        val finalRectW = roi[2]
-        val finalRectH = roi[3]
+        // Frozen here: everything after Compute reads the run's spec, not the sliders.
+        val spec = RunSpec.of(
+            subset = subset,
+            step = step,
+            strainWindow = strainWin,
+            roi = roi,
+            mask = viewModel.roiMaskBytes,
+            use6x6 = currentUseKeysInterpolator(),
+            debugDir = EngineDebug.dirFor(cacheDir),
+        ).copy(mechanical = viewModel.mechanicalInputs(forSweep = false))
 
         // Hard stop: do not start a new analysis when the session quota is full.
         // Re-runs that update an existing Home row are still allowed.
@@ -1237,27 +1245,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             wireCancelButton { viewModel.cancelRequested = true }
 
-            val use6x6 = currentUseKeysInterpolator()
-            val maskData = viewModel.roiMaskBytes ?: ByteArray(0)
-
-            val debugDir = EngineDebug.dirFor(cacheDir)
-
-            val params = AnalysisViewModel.BatchAnalysisParams(
-                cacheDir = cacheDir,
-                subset = subset,
-                step = step,
-                strainWin = strainWin,
-                finalRectX = finalRectX,
-                finalRectY = finalRectY,
-                finalRectW = finalRectW,
-                finalRectH = finalRectH,
-                use6x6 = use6x6,
-                maskData = maskData,
-                debugDir = debugDir,
-                processingStartTime = overlayHelper.processingStartTime,
-            )
             // Survives Activity destroy; progress/outcome observed via StateFlow / SharedFlow.
-            viewModel.launchBatchAnalysis(applicationContext, params)
+            viewModel.launchBatchAnalysis(applicationContext, spec, cacheDir, overlayHelper.processingStartTime)
         }
     }
 
@@ -1275,7 +1264,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
         tvResult.text = getString(R.string.run_stopped_early_fmt, kept, planned)
         viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
         viewModel.lastBatchDirPath = outcome.batchDirPath
-        viewModel.hasCompletedAnalysis = true
         checkReady()
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.run_stopped_early_title)
@@ -1314,8 +1302,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
             viewModel = viewModel,
             sweep = sweep,
             frameNames = frameNames,
-            subsetSize = currentSubsetSize(),
-            strainWindow = currentStrainWindow(),
         )
     }
 
@@ -1462,6 +1448,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (plan.isEmpty()) return
         // Every combination shares the ROI, so the largest subset has to fit it.
         val roi = resolveRoi(plan.maxOf { it.subset }) ?: return
+        val spec = RunSpec.sweep(
+            RunSpec.Sweep(
+                plan = plan,
+                labels = plan.map { sweepHelper.combinationLabel(it) },
+                lineCutHorizontal = viewModel.lineCutHorizontal,
+                frameIndex = sweepHelper.resolvedSweepFrame(),
+            ),
+            roi = roi,
+            mask = viewModel.roiMaskBytes,
+            use6x6 = currentUseKeysInterpolator(),
+            debugDir = EngineDebug.dirFor(cacheDir),
+        ).copy(mechanical = viewModel.mechanicalInputs(forSweep = true))
 
         lifecycleScope.launch {
             if (!ensureCanStart()) return@launch
@@ -1473,23 +1471,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             wireCancelButton { viewModel.cancelRequested = true }
 
-            val debugDir = EngineDebug.dirFor(cacheDir)
-            val use6x6 = currentUseKeysInterpolator()
-
             // Handed to the view model rather than run here: a sweep is one
             // solve per combination, long enough that a rotation mid-run used to
             // cancel it and leave the half-written session behind.
             // BatchRunController tears the chrome down when it ends.
-            viewModel.launchVsgSweep(
-                applicationContext,
-                AnalysisViewModel.SweepRequest(
-                    plan = plan,
-                    labels = plan.map { sweepHelper.combinationLabel(it) },
-                    roi = roi,
-                    use6x6 = use6x6,
-                    debugDir = debugDir,
-                ),
-            )
+            viewModel.launchVsgSweep(applicationContext, spec)
         }
     }
 
@@ -1528,7 +1514,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) return
             // Route to lattice with all-failed nodes so the user can tap each for details.
             viewModel.sweepPlan = emptyList()
-            val plan = sweepHelper.currentPlan()
+            val plan = viewModel.runResult.value.spec?.sweep?.plan ?: sweepHelper.currentPlan()
             viewModel.sweepSkippedNodes = plan.map { point ->
                 SkippedNode(
                     subset = point.subset,
@@ -1556,9 +1542,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
             ).show()
         }
 
-        viewModel.lastDefPath = viewModel.defFilePaths.getOrNull(sweepHelper.resolvedSweepFrame()) ?: ""
+        val sweepFrame = viewModel.runResult.value.spec?.sweep?.frameIndex ?: sweepHelper.resolvedSweepFrame()
+        viewModel.lastDefPath = viewModel.defFilePaths.getOrNull(sweepFrame) ?: ""
         viewModel.lastBatchDirPath = outcome.batchDirPath
-        viewModel.hasCompletedAnalysis = true
         checkReady()
         // Stage the swept parameter space on the interactive lattice; it opens
         // the result viewer from there.
@@ -1753,27 +1739,54 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
     }
 
+    private fun consumePickerHandOff() {
+        intent.getStringExtra(DicKeys.PICKED_REF_URI)?.let {
+            intent.removeExtra(DicKeys.PICKED_REF_URI)
+            handleReferenceImage(it.toUri())
+        }
+        intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
+            intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
+            handleVideo(it.toUri())
+        }
+        intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
+            intent.removeExtra(DicKeys.PICKED_DEF_URIS)
+            if (list.isNotEmpty()) {
+                onDeformedPicked(list.map { it.toUri() })
+            }
+        }
+    }
+
+    /**
+     * Redraws the slots from the view model, after first reading back the
+     * draft when this is a restore from a process death (ADR-005). Runs
+     * straight through, without suspending, when there is nothing to read.
+     */
     private fun restoreUiFromViewModel() {
-        val bytes = viewModel.refBytes
-        if (bytes != null) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                val preview = withContext(SemperNativeLib.nativeDispatcher) {
+        lifecycleScope.launch {
+            val restore = viewModel.restoreDraft()
+            val bytes = viewModel.refBytes
+            if (bytes != null) {
+                refPreviewBmp = withContext(SemperNativeLib.nativeDispatcher) {
                     SemperNativeLib.getPreviewFromBytes(
                         bytes,
                         com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE,
                     )
                 }
-                withContext(Dispatchers.Main) {
-                    refPreviewBmp = preview
-                    wizardSlots.refreshRefSlot(refPreviewBmp)
-                    wizardSlots.refreshDefSlot()
-                    checkReady()
-                    applySubsetRecommendation()
-                }
             }
-        } else {
             wizardSlots.refreshRefSlot(refPreviewBmp)
             wizardSlots.refreshDefSlot()
+            when (restore) {
+                // Re-enter the page so it re-measures what it shows.
+                AnalysisViewModel.DraftRestore.RESTORED -> goToStep(viewModel.wizardStep, animate = false)
+                AnalysisViewModel.DraftRestore.LOST -> {
+                    goToStep(1, animate = false)
+                    val lost = getString(R.string.wizard_draft_lost)
+                    Snackbar.make(findViewById(android.R.id.content), lost, FaqRedirect.durationFor(lost))
+                        .setAnchorView(R.id.bottomNav)
+                        .show()
+                }
+                AnalysisViewModel.DraftRestore.NONE -> Unit
+            }
             checkReady()
             applySubsetRecommendation()
         }

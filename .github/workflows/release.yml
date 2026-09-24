@@ -30,7 +30,7 @@ jobs:
   verify-legal:
     name: Verify legal pages
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -45,9 +45,9 @@ jobs:
         run: python scripts/render_legal_pages.py --check
 
   verify-android:
-    name: Verify Android unit tests
+    name: Verify Android unit tests and quality gates
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -55,44 +55,35 @@ jobs:
       - uses: actions/checkout@v7
         # JVM unit tests do not loadLibrary — skip the OpenCV/engine tree.
 
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '17'
+      - uses: ./.github/actions/setup-android-build
 
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
-
-      - name: Android unit tests
-        run: ./gradlew :app:testDebugUnitTest
+      # Tier 1's checks, not just its tests: a release must not sign what CI
+      # would have stopped (TD-43).
+      - name: Android unit tests and quality gates
+        run: >
+          ./gradlew --continue --console=plain
+          :app:testDebugUnitTest
+          spotlessCheck
+          :app:detekt
+          :app:lintDebug
 
   verify-backend:
     name: Verify backend
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: backend/requirements-test.txt
-
-      - name: Backend lint and tests
-        working-directory: backend
-        run: |
-          pip install -r requirements-test.txt
-          ruff check app/ tests/ scripts/ ../scripts/
-          pytest tests/ -q --cov=app --cov-fail-under=75
+      - uses: ./.github/actions/backend-gate
 
   build-release:
     name: Build signed release
     if: github.ref == 'refs/heads/main'
     needs: [verify-legal, verify-android, verify-backend]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: release
     permissions:
@@ -103,12 +94,7 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - uses: ./.github/actions/setup-android-build
         with:
           validate-wrappers: false
 
@@ -129,10 +115,6 @@ jobs:
 
       - name: Build signed release APK
         env:
-          CCACHE_DIR: ${{ github.workspace }}/.ccache
-          CCACHE_MAXSIZE: 1G
-          CCACHE_COMPILERCHECK: content
-          CCACHE_SLOPPINESS: include_file_mtime,include_file_ctime,time_macros,file_macro
           SIGNING_KEYSTORE: app/release.keystore
           SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -152,13 +134,10 @@ jobs:
             -PnativeCompilerLauncher=ccache \
             -PversionName="${VERSION_NAME}" \
             -PversionCode="${{ github.run_number }}" \
-            -PrequireCloudApi=true
+            -PrequireCloudApi=true \
+            -PuploadCrashlyticsMapping=true
 
-      - name: Verify arm64-v8a .so in release APK
-        run: |
-          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          unzip -l "$APK" | grep -q "lib/arm64-v8a/libsemper_core.so" \
-            || { echo "MISSING arm64-v8a native lib"; exit 1; }
+      - uses: ./.github/actions/check-arm64-so
 
       # The whole point of the signing inputs above: prove the APK is actually
       # signed with the release key. Fails the release if signing did not happen.
@@ -229,8 +208,9 @@ jobs:
       # the mapping for the exact build that produced it. It cannot be regenerated
       # afterwards — if this file is lost, those crashes stay unreadable forever.
       # Deliberately NOT attached to the GitHub release: it is the deobfuscation
-      # key, and publishing it would undo the obfuscation for everyone. Archive it
-      # somewhere durable before the 90-day artifact retention expires.
+      # key, and publishing it would undo the obfuscation for everyone. The
+      # durable copy is Crashlytics (-PuploadCrashlyticsMapping=true above,
+      # TD-40); this artifact is the 90-day fallback for a manual retrace.
       - name: Upload R8 mapping
         uses: actions/upload-artifact@v7
         with:
@@ -241,8 +221,6 @@ jobs:
 
       - name: ccache statistics
         if: always()
-        env:
-          CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: ccache --show-stats
 
       # Same prefix as CI tier 5 so a Kotlin-only release reuses the last native
@@ -260,8 +238,9 @@ jobs:
   publish:
     name: Publish GitHub Release
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build-release
+    timeout-minutes: 10
     environment: release
     permissions:
       contents: write

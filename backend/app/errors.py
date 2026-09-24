@@ -125,6 +125,11 @@ APP_CHECK_REQUIRED = "app_check_required"
 RATE_LIMITED = "rate_limited"
 DRIVE_DOWNLOAD_FAILED = "drive_download_failed"
 DRIVE_META_FAILED = "drive_meta_failed"
+# Drive answered 404 for an object the index points at: it was deleted straight
+# in Drive, or the client's upload never landed. Not an outage, so never 502 —
+# a 5xx makes the app retry forever. Download → 404 (the app gives up and says
+# why); complete → 400 (the app discards the session and rebuilds it).
+DRIVE_FILE_GONE = "drive_file_gone"
 
 # Reported as `{"detail": …}` too: an unhandled exception on Cloud Run, and the
 # DependencyError codes the readiness probe and the Drive/Firestore clients
@@ -134,6 +139,10 @@ DRIVE_UNREACHABLE = "drive_unreachable"
 DRIVE_UNHEALTHY = "drive_unhealthy"
 FIRESTORE_UNREACHABLE = "firestore_unreachable"
 READYZ_FAILED = "readyz_failed"
+# 503: every attempt to bind an empty device lock lost to contention and the
+# lock is still empty. Nobody holds the licence, so the caller retries; it is
+# never reported as `license_device_mismatch`.
+DEVICE_LOCK_CONTENDED = "device_lock_contended"
 
 #: Codes the Android client branches on or surfaces by name. Changing
 #: one of these needs the matching edit in ApiErrors.kt in the same commit --
@@ -156,5 +165,6 @@ CLIENT_BRANCHED = frozenset(
         FEATURE_NOT_LICENSED,
         LICENSE_DEVICE_MISMATCH,
         APP_CHECK_REQUIRED,
+        DRIVE_FILE_GONE,
     }
 )

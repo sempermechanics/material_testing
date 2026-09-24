@@ -4,6 +4,7 @@ import android.app.Application
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.indicvision.semper.data.CacheJanitor
+import com.indicvision.semper.data.DevAuth
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.SeatHeartbeat
 import com.indicvision.semper.data.StorageBudget
@@ -59,13 +60,23 @@ class SemperApp : Application() {
      *
      * Skipped when there is no backend to attest to — an offline build, or the
      * emulator sign-in bypass — so neither pays for a Play Integrity handshake
-     * nothing will read.
+     * nothing will read. See [wantsAppCheck].
      */
     private fun installAppCheck() {
-        if (BuildConfig.INDIC_API_BASE_URL.isBlank() || BuildConfig.DEV_AUTH_BYPASS) return
+        if (!wantsAppCheck(BuildConfig.INDIC_API_BASE_URL, DevAuth.active)) return
         runCatching {
             FirebaseAppCheck.getInstance()
                 .installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
         }.onFailure { Timber.w(it, "App Check provider unavailable") }
     }
 }
+
+/**
+ * Whether this run should attest. Keyed on the bypass being *active*, not on
+ * `BuildConfig.DEV_AUTH_BYPASS`: that flag is on in every debug build unless
+ * local.properties turns it off, so testing it skipped App Check on real
+ * phones too, where the bypass never applies and the app talks to the backend
+ * like a release build.
+ */
+internal fun wantsAppCheck(apiBaseUrl: String, devAuthActive: Boolean): Boolean =
+    apiBaseUrl.isNotBlank() && !devAuthActive

@@ -12,9 +12,9 @@ import timber.log.Timber
  * fixes the silent-refresh pain the raw Google-token flow had. Returns null
  * only when nobody is signed in.
  */
-object TokenProvider {
+object TokenProvider : TokenSource {
 
-    suspend fun usableIdToken(): String? {
+    override suspend fun usableIdToken(): String? {
         val user = FirebaseAuth.getInstance().currentUser ?: return null
         return try {
             // getIdToken(false) returns the cached token, refreshing it if within

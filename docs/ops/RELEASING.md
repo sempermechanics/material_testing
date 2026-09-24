@@ -16,7 +16,7 @@ Private alpha uses the same **`beta`** Release channel — there is no separate
 3. Smoke sign-in, one analysis, backup/sync, and open results. Do not publish to
    Play or the public website for this ring.
 
-Archive the R8 mapping artifact before 90-day expiry (same as any beta).
+Check the R8 mapping reached Crashlytics (the release build uploads it); the workflow artifact is a 90-day fallback.
 
 ## Versioning
 
@@ -74,10 +74,12 @@ JVM unit tests, and backend pytest overlap instead of stacking:
 
 - `verify-legal` — `python scripts/render_legal_pages.py --check`: the published
   Privacy Policy and Terms still match `docs/legal/`.
-- `verify-android` — `./gradlew :app:testDebugUnitTest`. No engine/OpenCV
-  submodules: the JVM suite does not `loadLibrary`.
-- `verify-backend` — `ruff check app/ tests/ scripts/ ../scripts/` and
-  `pytest tests/ -q --cov=app --cov-fail-under=75`.
+- `verify-android` — CI tier 1's checks: `:app:testDebugUnitTest spotlessCheck
+  :app:detekt :app:lintDebug`. No engine/OpenCV submodules: the JVM suite does
+  not `loadLibrary`.
+- `verify-backend` — the shared `backend-gate` action (hashed lock, `pip-audit`,
+  ruff over `app/ tests/ scripts/ ../scripts/`, pytest at the 75 % floor), the
+  same one CI and Deploy run.
 
 `build-release` declares `needs: [verify-legal, verify-android, verify-backend]`,
 so none of the signing steps run if any of the above fails.
@@ -119,8 +121,10 @@ so none of the signing steps run if any of the above fails.
 **The R8 mapping is not attached to the GitHub Release, deliberately.** It is the
 deobfuscation key — publishing it would undo the obfuscation for everyone — but
 without it a field stack trace from that build is unreadable, and it cannot be
-regenerated afterwards. Archive it somewhere durable before the 90-day artifact
-retention expires. This is a step you have to take by hand.
+regenerated afterwards. The build passes `-PuploadCrashlyticsMapping=true`, so
+the Crashlytics Gradle plugin uploads the mapping to Firebase and field crashes
+stay readable there for the life of the project (TD-40). The 90-day workflow
+artifact is only the fallback for a manual `retrace`. Local builds never upload.
 
 ### `publish`
 
@@ -183,7 +187,11 @@ the documented environment and pushes the lock to that branch.
 **Dependabot cannot do this step.** It bumps `requirements.txt` and has no way to
 produce a hashed lock, so every backend Dependabot PR arrives with the two files
 out of step and tier 4 red. Run `Backend lock` against the Dependabot branch to
-fix the PR in place. A `Backend lock` check also runs on any PR touching either
+put the lock on the PR. Its push is made with the workflow's `GITHUB_TOKEN`,
+and GitHub starts no new workflow run for a push made with that token, so the
+PR's checks stay red on the old commit: re-run CI from the PR (Checks → Re-run
+all jobs) or push any follow-up commit yourself. A human push also stops
+Dependabot rebasing that PR. A `Backend lock` check also runs on any PR touching either
 file: when the committed lock is stale it fails and attaches the regenerated file
 as the `requirements-lock` artifact, so the fix is a download rather than a
 toolchain install.

@@ -30,7 +30,7 @@ produces:
 # address, so the backend sees the same path.
 #
 # Template — replace before `gcloud api-gateway api-configs create`:
-#   CLOUD_RUN_URL=$(gcloud run services describe indic-api --region REGION \
+#   CLOUD_RUN_URL=$(gcloud run services describe semper-api --region REGION \
 #                     --format='value(status.url)')
 #   # FIREBASE_PROJECT_ID must be the Auth project (e.g. indicvision-dic-app-auth),
 #   # which can differ from GOOGLE_CLOUD_PROJECT (e.g. indicvision-dic-app).
@@ -161,17 +161,6 @@ paths:
           health-requests: 1
       responses:
         '200': { description: OK }
-  /readyz:
-    get:
-      operationId: readyz
-      description: Readiness — Firestore + Drive probes; stable 503 detail codes.
-      security: []
-      x-google-quota:
-        metricCosts:
-          health-requests: 1
-      responses:
-        '200': { description: Ready }
-        '503': { description: Dependency unhealthy }
   /v1/me:
     get:
       operationId: getMe
@@ -810,26 +799,6 @@ paths:
         an unclaimed invite never entitled anyone. Removing a member who HAS
         signed in is the seat revoke route. An invite id belonging to another
         licence 404s identically to one that does not exist.
-      parameters:
-        - name: licenseId
-          in: path
-          required: true
-          type: string
-        - name: inviteKey
-          in: path
-          required: true
-          type: string
-      responses:
-        '200': { description: OK }
-        '403': { description: email_not_verified }
-        '404': { description: license_not_found or invite_not_found }
-        '429': { description: Rate limited }
-  /v1/campus/licenses/{licenseId}/invites/{inviteKey}:
-    delete:
-      operationId: campusRevokeInvite
-      description: >
-        Deprecated alias of DELETE
-        /v1/institutions/licenses/{licenseId}/invites/{inviteKey}.
       parameters:
         - name: licenseId
           in: path

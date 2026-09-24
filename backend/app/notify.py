@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 import requests
 
+from . import backoff
 from . import observability as obs
 from .config import settings
 
@@ -90,14 +91,8 @@ def _worker_loop() -> None:
 
 
 def _retry_delay(attempt: int, response: requests.Response | None) -> float:
-    if response is not None:
-        raw = response.headers.get("Retry-After")
-        if raw is not None:
-            try:
-                return max(0.5, float(raw))
-            except ValueError:
-                pass
-    return float(min(2 ** attempt, 16))
+    raw = response.headers.get("Retry-After") if response is not None else None
+    return backoff.retry_delay(attempt, raw, floor=0.5)
 
 
 def _deliver(job: _Job) -> None:

@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import current_user, ensure_web_step_up
+from ..deps import current_user, ensure_web_step_up, rate_limited
 from ..licenses import KIND_INSTITUTION, normalize_kind
 from ..models import InstitutionSeatAdd, InstitutionSeatPatch
 from ..validation import DocumentId, Uid
@@ -95,16 +95,22 @@ def list_my_licenses(user=Depends(current_user)):
     read a customer's roster. An empty list is the ordinary answer for the
     overwhelming majority of accounts and is not an error.
     """
-    if not rate_limit.institution_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
     if not user.get("emailVerified"):
         raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
     licenses = repo.list_licenses_administered_by(user.get("email") or "")
     return {"licenses": licenses}
 
 
-@router.get("/v1/institutions/licenses/{license_id}/seats")
-@router.get("/v1/campus/licenses/{license_id}/seats", include_in_schema=False)  # pre-rename alias
+@router.get(
+    "/v1/institutions/licenses/{license_id}/seats",
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)
+@router.get(
+    "/v1/campus/licenses/{license_id}/seats",
+    include_in_schema=False,
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)  # pre-rename alias
 def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_stepup)):
     """Every seat on this license: uid, email, device lock, status. No key
     plaintext — only the license's keyPrefix, same redaction as the
@@ -115,8 +121,6 @@ def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_stepup)):
     roster they are the same list — "who is on this licence" — even though
     only one of the two holds a uid and counts against `maxSeats`.
     """
-    if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     return {
         "license": repo.institution_license_summary(license_id),
         "seats": repo.list_institution_seats(license_id),
@@ -124,8 +128,15 @@ def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_stepup)):
     }
 
 
-@router.post("/v1/institutions/licenses/{license_id}/seats")
-@router.post("/v1/campus/licenses/{license_id}/seats", include_in_schema=False)  # pre-rename alias
+@router.post(
+    "/v1/institutions/licenses/{license_id}/seats",
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)
+@router.post(
+    "/v1/campus/licenses/{license_id}/seats",
+    include_in_schema=False,
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)  # pre-rename alias
 def add_seat(
     license_id: DocumentId,
     body: InstitutionSeatAdd,
@@ -148,8 +159,6 @@ def add_seat(
     it makes them eligible and consumes no slot; they check out a lease when
     they want to work.
     """
-    if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     code, seat, invite = repo.add_institution_member(
         license_id, body.email, invited_by_uid=ctx["user"]["uid"],
     )
@@ -172,8 +181,10 @@ def add_seat(
     return {"licenseId": license_id, "seat": seat, "invite": invite}
 
 
-@router.delete("/v1/institutions/licenses/{license_id}/invites/{invite_key}")
-@router.delete("/v1/campus/licenses/{license_id}/invites/{invite_key}", include_in_schema=False)
+@router.delete(
+    "/v1/institutions/licenses/{license_id}/invites/{invite_key}",
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)
 def revoke_invite(
     license_id: DocumentId,
     invite_key: DocumentId,
@@ -188,8 +199,6 @@ def revoke_invite(
     Nothing to undo on the account side — an unclaimed invite never entitled
     anyone. Removing a member who *has* signed in is the seat revoke route.
     """
-    if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.revoke_institution_invite(license_id, invite_key):
         raise HTTPException(404, errors.INVITE_NOT_FOUND)
     audit.record(
@@ -199,8 +208,15 @@ def revoke_invite(
     return {"licenseId": license_id, "inviteId": invite_key, "revoked": True}
 
 
-@router.patch("/v1/institutions/licenses/{license_id}/seats/{uid}")
-@router.patch("/v1/campus/licenses/{license_id}/seats/{uid}", include_in_schema=False)  # pre-rename alias
+@router.patch(
+    "/v1/institutions/licenses/{license_id}/seats/{uid}",
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)
+@router.patch(
+    "/v1/campus/licenses/{license_id}/seats/{uid}",
+    include_in_schema=False,
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)  # pre-rename alias
 def patch_seat(
     license_id: DocumentId,
     uid: Uid,
@@ -212,8 +228,6 @@ def patch_seat(
     *without* freeing the slot (still counts against maxSeats); `enabled=true`
     restores Professional in place — same uid/account, no data migration
     either direction. At least one field must be set."""
-    if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     if body.clearDeviceLock is None and body.enabled is None:
         raise HTTPException(400, errors.EMPTY_PATCH)
     cleared = {}
@@ -240,14 +254,19 @@ def patch_seat(
     return {"licenseId": license_id, "seat": seat}
 
 
-@router.delete("/v1/institutions/licenses/{license_id}/seats/{uid}")
-@router.delete("/v1/campus/licenses/{license_id}/seats/{uid}", include_in_schema=False)  # pre-rename alias
+@router.delete(
+    "/v1/institutions/licenses/{license_id}/seats/{uid}",
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)
+@router.delete(
+    "/v1/campus/licenses/{license_id}/seats/{uid}",
+    include_in_schema=False,
+    dependencies=[rate_limited(rate_limit.institution_bucket)],
+)  # pre-rename alias
 def revoke_seat(license_id: DocumentId, uid: Uid, ctx=Depends(institution_admin_stepup)):
     """Single-seat revoke: drops the holder to Demo (in place, no data loss)
     and frees the slot so another domain member can activate. Whole-key revoke
     stays on the Semper-staff POST /v1/admin/licenses/{id}/revoke path."""
-    if not rate_limit.institution_bucket.allow(ctx["user"]["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     if not repo.revoke_institution_seat(license_id, uid):
         raise HTTPException(404, errors.SEAT_NOT_FOUND)
     audit.record(

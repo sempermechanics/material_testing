@@ -6,7 +6,6 @@ budget, so a large analysis could not be uploaded at all. The request now
 reserves the session and a Cloud Task fills in the upload targets; the client
 polls the /uploads endpoint it already uses for resume.
 """
-import fake_firestore
 import pytest
 
 from app import audit, drive, main, rate_limit, tasks
@@ -22,10 +21,8 @@ def _file(name: str) -> dict:
 
 
 @pytest.fixture
-def store(monkeypatch):
-    store = fake_firestore.install(monkeypatch)
+def store(store, monkeypatch):
     store._data["users"] = {DEV_UID: {"email": "dev@test", "access_status": "APPROVED"}}
-    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
     monkeypatch.setattr(
@@ -44,6 +41,8 @@ def queued(monkeypatch):
     monkeypatch.setattr(
         tasks, "enqueue_provision", lambda sid: enqueued.append(sid) or True,
     )
+    # Queue every manifest, however small, so these tests exercise the worker.
+    monkeypatch.setattr(settings, "INLINE_PROVISION_MAX_FILES", 0)
     return enqueued
 
 
@@ -161,6 +160,8 @@ async def test_retry_of_create_joins_the_provisioning_session(store, queued, cli
 
     assert first["sessionId"] == second["sessionId"]
     assert len(store._data["sessions"]) == 1
+    # The retry answers with the same shape as /uploads, cursor included.
+    assert "nextPageToken" in second
 
 
 # --- failure ----------------------------------------------------------------
@@ -225,6 +226,216 @@ async def test_inline_path_still_returns_usable_targets(store, client, monkeypat
     assert body["status"] == "UPLOADING"
     assert len(body["uploads"]) == 1
     assert body["uploads"][0]["uploadUrl"] == "https://drive/resumable"
+    assert body["nextPageToken"] is None
+
+
+def test_one_listing_page_holds_a_whole_session():
+    """create_session returns the first page of upload targets. That page is
+    the whole manifest only while the file cap stays below the page size."""
+    from app import firestore_repo as repo
+    from app.config import settings
+
+    assert settings.MAX_FILES_PER_SESSION <= repo._LIST_SOFT_LIMIT
+
+
+async def test_small_manifest_is_provisioned_inline_even_with_a_queue(
+    store, client, monkeypatch,
+):
+    """A bundle upload is three files: the task hop plus the client's first
+    1 s poll cost more than opening three targets, so it stays inline."""
+    enqueued = []
+    monkeypatch.setattr(tasks, "enqueue_provision", lambda sid: enqueued.append(sid) or True)
+    monkeypatch.setattr(settings, "INLINE_PROVISION_MAX_FILES", 3)
+
+    small = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file(n) for n in "abc"]},
+    )).json()
+    big = (await client.post(
+        "/v1/sessions", json={"specimen": "t", "files": [_file(n) for n in "abcd"]},
+    )).json()
+
+    assert small["status"] == "UPLOADING" and len(small["uploads"]) == 3
+    assert big["status"] == "PROVISIONING" and big["uploads"] == []
+    assert enqueued == [big["sessionId"]]
+
+
+# --- the Drive folder walk is cached on the user ----------------------------
+
+async def test_folder_ids_are_stored_then_reused(store, client, monkeypatch):
+    """The four-level name walk is done once per user; later uploads pass the
+    stored ids, and the user doc is not rewritten when they have not changed."""
+    seen = []
+
+    def ensure(token, uid, sid, roles=None, cached=None, session_folder_id=None):
+        seen.append(dict(cached or {}))
+        return {"sessionFolderId": f"sf-{sid}", "userFolderId": "uf",
+                "sessionsFolderId": "ss", "bundle": f"sf-{sid}"}
+
+    monkeypatch.setattr(drive, "ensure_session_folders", ensure)
+    writes = []
+    real = repo.remember_user_folder
+
+    def remember(*a):
+        writes.append(a)
+        real(*a)
+
+    monkeypatch.setattr(repo, "remember_user_folder", remember)
+
+    for name in ("s1", "s2"):
+        await client.post("/v1/sessions", json={"specimen": name, "files": [_file("a")]})
+
+    assert seen[0] == {"userFolderId": None, "sessionsFolderId": None}
+    assert seen[1] == {"userFolderId": "uf", "sessionsFolderId": "ss"}
+    assert writes == [(DEV_UID, "uf", "ss")], "unchanged pointers were rewritten"
+    user = store._data["users"][DEV_UID]
+    assert (user["driveFolderId"], user["driveSessionsFolderId"]) == ("uf", "ss")
+
+
+def _folder_fakes(monkeypatch, *, alive, create_error=None):
+    """Record every Drive folder call ensure_session_folders makes."""
+    calls = []
+
+    def find_or_create(token, name, parent):
+        calls.append(("find_or_create", name, parent))
+        return f"id-{name}"
+
+    def create(token, name, parent):
+        calls.append(("create", name, parent))
+        if create_error:
+            raise create_error
+        return f"new-{name}"
+
+    def exists(token, fid):
+        calls.append(("exists", fid))
+        return alive
+
+    def delete(token, fid):
+        calls.append(("delete", fid))
+
+    monkeypatch.setattr(drive, "_find_or_create_folder", find_or_create)
+    monkeypatch.setattr(drive, "_create_folder", create)
+    monkeypatch.setattr(drive, "file_exists", exists)
+    monkeypatch.setattr(drive, "delete_file", delete)
+    return calls
+
+
+_CACHED = {"userFolderId": "uf", "sessionsFolderId": "ss"}
+
+
+def test_ensure_session_folders_skips_the_walk_when_the_cache_is_alive(monkeypatch):
+    """A live cache costs the existence check plus one create, run together —
+    no name search for a session id that was minted moments ago."""
+    calls = _folder_fakes(monkeypatch, alive=True)
+
+    out = drive.ensure_session_folders("tok", "u1", "sid1", roles={"bundle"}, cached=_CACHED)
+
+    assert sorted(calls) == [("create", "sid1", "ss"), ("exists", "ss")]
+    assert out["sessionFolderId"] == out["bundle"] == "new-sid1"
+    assert (out["userFolderId"], out["sessionsFolderId"]) == ("uf", "ss")
+
+
+def test_ensure_session_folders_rewalks_when_the_cached_folder_is_gone(monkeypatch):
+    """Deleted or trashed straight in Drive: never upload into it. The {sid}/
+    made alongside the check is removed and the walk rebuilds the tree."""
+    calls = _folder_fakes(monkeypatch, alive=False)
+
+    out = drive.ensure_session_folders("tok", "u1", "sid1", roles={"bundle"}, cached=_CACHED)
+
+    assert ("delete", "new-sid1") in calls, "left a folder under the stale session/"
+    walked = [c[1] for c in calls if c[0] == "find_or_create"]
+    assert walked == ["Research Storage", "user", "u1", "session", "sid1"]
+    assert out["sessionFolderId"] == "id-sid1"
+    assert (out["userFolderId"], out["sessionsFolderId"]) == ("id-u1", "id-session")
+
+
+def test_ensure_session_folders_rewalks_when_the_create_fails_under_a_gone_folder(monkeypatch):
+    """Drive 404s a create whose parent is gone; that is the stale cache, not an error."""
+    import requests
+
+    calls = _folder_fakes(monkeypatch, alive=False, create_error=requests.HTTPError("404"))
+
+    out = drive.ensure_session_folders("tok", "u1", "sid1", roles={"bundle"}, cached=_CACHED)
+
+    assert not [c for c in calls if c[0] == "delete"]
+    assert out["sessionFolderId"] == "id-sid1"
+
+
+def test_ensure_session_folders_raises_a_create_failure_under_a_live_folder(monkeypatch):
+    import requests
+
+    _folder_fakes(monkeypatch, alive=True, create_error=requests.HTTPError("500"))
+
+    with pytest.raises(requests.HTTPError):
+        drive.ensure_session_folders("tok", "u1", "sid1", roles={"bundle"}, cached=_CACHED)
+
+
+def test_ensure_session_folders_reuses_the_folder_from_an_earlier_attempt(monkeypatch):
+    """A Cloud Tasks retry must not make a second {sid}/ folder."""
+    calls = _folder_fakes(monkeypatch, alive=True)
+
+    out = drive.ensure_session_folders(
+        "tok", "u1", "sid1", roles={"bundle"}, cached=_CACHED, session_folder_id="old-sid1")
+
+    assert calls == [("exists", "ss")]
+    assert out["sessionFolderId"] == "old-sid1"
+
+
+def test_ensure_session_folders_without_a_cache_searches_for_the_session_folder(monkeypatch):
+    """After a walk nothing says whether an earlier attempt made {sid}/, so it
+    is found-or-created, never blindly created."""
+    calls = _folder_fakes(monkeypatch, alive=True)
+
+    out = drive.ensure_session_folders("tok", "u1", "sid1", roles={"bundle"}, cached={})
+
+    assert [c[1] for c in calls] == ["Research Storage", "user", "u1", "session", "sid1"]
+    assert all(c[0] == "find_or_create" for c in calls)
+    assert out["sessionFolderId"] == "id-sid1"
+
+
+async def test_a_retried_provision_passes_the_stored_session_folder(store, client, monkeypatch):
+    from app import session_provision
+
+    seen = []
+
+    def ensure(token, uid, sid, roles=None, cached=None, session_folder_id=None):
+        seen.append(session_folder_id)
+        return {"sessionFolderId": "sf-1", "userFolderId": "uf",
+                "sessionsFolderId": "ss", "bundle": "sf-1"}
+
+    monkeypatch.setattr(drive, "ensure_session_folders", ensure)
+    r = await client.post("/v1/sessions", json={"specimen": "s", "files": [_file("a")]})
+    sid = r.json()["sessionId"]
+    # Simulate a retry of a task whose earlier attempt stored the folder but
+    # did not open every upload target.
+    for f in store._data.get("files", {}).values():
+        if f.get("sessionId") == sid:
+            f["uploadUrl"] = None
+    session_provision.provision_session(sid)
+
+    assert seen == [None, "sf-1"]
+
+
+def test_enqueue_failure_is_an_error_event(monkeypatch, caplog):
+    """The 403 actAs failure sat unnoticed as a WARNING; it must be an error."""
+    import logging
+
+    class Boom:
+        def queue_path(self, *a):
+            return "q"
+
+        def create_task(self, **k):
+            raise PermissionError("403 lacks iam.serviceAccounts.actAs")
+
+    monkeypatch.setattr(settings, "TASKS_QUEUE", "q")
+    monkeypatch.setattr(settings, "TASKS_TARGET_BASE_URL", "https://run")
+    monkeypatch.setattr(settings, "GCP_PROJECT", "p")
+    monkeypatch.setattr(tasks, "_tasks_client", lambda: Boom())
+
+    with caplog.at_level(logging.ERROR, logger="indic.tasks"):
+        assert tasks.enqueue_provision("s1") is False
+
+    events = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert any('"errorCode":"tasks_enqueue_failed"' in m for m in events)
 
 
 # --- the task endpoint's identity ------------------------------------------

@@ -48,16 +48,25 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
 
     try:
         token = drive.access_token()
-        roles = {f["role"] for f in repo.iter_unprovisioned_files(sid)}
+        pending = list(repo.iter_unprovisioned_files(sid))
+        roles = {f["role"] for f in pending}
         if roles:
             # Only create the Drive subfolders this manifest actually uses (a
             # bundle upload needs none — Session.zip and metadata.json sit at
             # the session root).
-            folders = drive.ensure_session_folders(token, uid, sid, roles=roles)
-            repo.remember_user_folder(uid, folders["userFolderId"])
+            user = repo.get_user(uid) or {}
+            cached = {"userFolderId": user.get("driveFolderId"),
+                      "sessionsFolderId": user.get("driveSessionsFolderId")}
+            folders = drive.ensure_session_folders(
+                token, uid, sid, roles=roles, cached=cached,
+                session_folder_id=session.get("driveFolderId"))
+            # Write only when the pointers changed — the common upload reuses them.
+            if (folders["userFolderId"] != cached["userFolderId"]
+                    or folders.get("sessionsFolderId") != cached["sessionsFolderId"]):
+                repo.remember_user_folder(uid, folders["userFolderId"],
+                                          folders.get("sessionsFolderId"))
             repo.set_session_folder(sid, folders["sessionFolderId"])
-
-            pending = list(repo.iter_unprovisioned_files(sid))
+            folder_ms = (time.monotonic() - started) * 1000
 
             def open_one(f):
                 uri = drive.init_resumable(token, folders[f["role"]], f["name"], f["sizeBytes"])
@@ -73,6 +82,7 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
             provisioned = len(pending)
         else:
             provisioned = 0
+            folder_ms = 0.0
     except Exception as e:  # noqa: BLE001
         obs.log_event(log, logging.ERROR, "session_provision_failed",
                       outcome="error", errorCode="drive_provision_failed", dependency="drive")
@@ -88,7 +98,8 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
                                     error_code="drive_provision_failed")
         raise
 
-    repo.set_session_status(sid, "UPLOADING")
+    repo.set_session_status(sid, statuses.SESSION_UPLOADING)
     obs.log_event(log, logging.INFO, "session_provisioned", outcome="ok",
-                  count=provisioned, latencyMs=round((time.monotonic() - started) * 1000, 1))
-    return {"sessionId": sid, "provisioned": provisioned, "status": "UPLOADING"}
+                  count=provisioned, latencyMs=round((time.monotonic() - started) * 1000, 1),
+                  folderMs=round(folder_ms, 1))
+    return {"sessionId": sid, "provisioned": provisioned, "status": statuses.SESSION_UPLOADING}

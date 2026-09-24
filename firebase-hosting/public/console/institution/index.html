@@ -4,11 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Seats · Semper DIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/webp" href="../semper-icon.webp" />
   <link rel="stylesheet" href="../console.css" />
 </head>
 <body>
   <header>
-    <span class="brand">Semper&nbsp;DIC</span>
+    <a class="brand" href="https://sempermechanics.com/"><img src="../semper-mark.webp" alt="" width="28" height="28" />semper</a>
     <h1>Institution seats</h1>
     <span class="spacer"></span>
     <span id="who" class="muted"></span>
@@ -17,6 +21,22 @@
   </header>
 
   <main>
+    <!-- Outside #app: enrolment, step-up and sign-in errors report here while
+         the dashboard is still hidden. -->
+    <p id="status" class="muted"></p>
+
+    <!-- Shown instead of the seat manager when no licence names this
+         address as an administrator (institution.js decides). -->
+    <section class="card" id="notAdmin" hidden>
+      <h2>No institution licence to manage</h2>
+      <p class="muted">
+        No institution licence names <span id="notAdminWho" class="mono"></span>
+        as an administrator. If your institution has one, ask your Semper
+        contact to add this address to it.
+      </p>
+      <p><a href="../account/">Your account</a></p>
+    </section>
+
     <div id="app" hidden>
       <section class="card">
         <h2>Licence</h2>
@@ -29,7 +49,6 @@
                  autocomplete="off" spellcheck="false" />
           <button id="load">Open</button>
         </div>
-        <p id="status" class="muted"></p>
         <div id="summary"></div>
       </section>
 
@@ -57,6 +76,16 @@
 
     <p id="signedOut" class="muted">Sign in to manage your institution's seats.</p>
   </main>
+  <footer>
+    <span>&copy; <span id="year"></span> sempermechanics</span>
+    <nav>
+      <a href="https://sempermechanics.com/">sempermechanics.com</a>
+      <a href="https://sempermechanics.com/support/">Support</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/terms/">Terms</a>
+    </nav>
+  </footer>
+  <script type="module" src="../chrome.js"></script>
 
   <script type="module" src="institution.js"></script>
 </body>

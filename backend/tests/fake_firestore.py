@@ -1,7 +1,7 @@
 """A small in-memory Firestore double.
 
-Enough of the client surface for firestore_repo.py to run in tests without a
-live backend: documents, `.set/.update/.get/.delete`, `==` queries, `.count()`,
+Enough of the client surface for the repo package (`app/repo/`) to run in
+tests without a live backend: documents, `.set/.update/.get/.delete`, `==` queries, `.count()`,
 batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
 """
 import operator
@@ -11,6 +11,12 @@ from google.api_core.exceptions import AlreadyExists, NotFound
 
 
 class _Sentinel:
+    # No __dict__, so that jsonable_encoder rejects a sentinel that leaks into
+    # a response the way it rejects the real one (the real client's sentinel
+    # is likewise not encodable); with a __dict__ it would encode as {} and a
+    # write's return value reaching a response would pass here, 500 in prod.
+    __slots__ = ("name",)
+
     def __init__(self, name):
         self.name = name
 
@@ -283,6 +289,11 @@ class FakeClient:
 
     def collection(self, name):
         return _Collection(self, name)
+
+    def get_all(self, references, transaction=None):
+        # The real client yields in arbitrary order; reversing keeps callers
+        # honest about keying results by id rather than by position.
+        return [ref.get() for ref in reversed(list(references))]
 
     def batch(self):
         return _Batch(self)

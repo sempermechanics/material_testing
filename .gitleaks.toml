@@ -9,15 +9,19 @@ useDefault = true
 
 [allowlist]
 description = "Public/client identifiers and deleted historical noise (not Admin secrets)"
+# Paths stay exempt only while something legitimately lives there. Firebase
+# client config is public by design. The two commits are the only historical
+# adds that still need a pass, checked with a full-history scan on 2026-09-23
+# under CLI 8.24.3 (the action's) and 8.28.0 (TD-47): b9e9065 added the deleted
+# SupabaseManager.kt with a client key; 46e50fd is the one historical add of
+# local.properties. local.properties itself is NOT exempt, so a future
+# accidental commit of it (signing and API settings) gets scanned. Removed as
+# redundant: the SupabaseManager.kt path (its later commits add nothing), and
+# commits 9a3623a (its only hit is google-services.json) and 46dbc60 (no hit).
 paths = [
   '''(^|/)google-services\.json$''',
-  '''(^|/)local\.properties$''',
-  '''(^|/)SupabaseManager\.kt$''',
-  '''^docs/ops/website-sync/.*\.patch$''',
 ]
 commits = [
-  '''9a3623ad444512d0f8033a3aa067e44bdf0e7347''',
-  '''46dbc6056cab69da9a0d73560babe57afb139fd9''',
   '''46e50fd23512e481f4d1a4c3697eb3d6aec6d68f''',
   '''b9e90658bda6fcb1f1a6a5daed5e109dc8c520c5''',
 ]

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from .. import audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import attested_or_mfa_user, current_user
+from ..deps import attested_or_mfa_user, current_user, rate_limited
 from ..models import LicenseActivate
 from ..validation import require_header_identifier
 
@@ -16,8 +16,7 @@ def activate_license(
     x_device_id: str = Header(default=""),
 ):
     """Redeem a Professional (or re-entered) key locked to this email and device."""
-    if not rate_limit.license_activate_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.license_activate_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
     code, config = repo.activate_license(
         user["uid"], user.get("email") or "", device_id, body.key,
@@ -35,7 +34,7 @@ def activate_license(
         raise HTTPException(status, code)
     audit.record(
         user["uid"], device_id, action="LICENSE_ACTIVATE",
-        detail={"plan": (config or {}).get("plan")},
+        detail={"mode": (config or {}).get("mode")},
     )
     return {"config": config}
 
@@ -75,8 +74,7 @@ def checkout_lease(
     error in the account: the member stays eligible and demo, and the app
     offers to try again rather than treating it as a dead end.
     """
-    if not rate_limit.institution_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
     code, config = repo.checkout_lease(user, device_id)
     if code:
@@ -92,8 +90,7 @@ def release_lease(user=Depends(current_user)):
     succeeds. Audited, unlike checkout: a release is a discrete act, not a
     heartbeat.
     """
-    if not rate_limit.institution_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
+    rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
     code, config = repo.release_lease(user)
     if code:
         raise HTTPException(_LEASE_STATUS.get(code, 403), code)
@@ -104,7 +101,10 @@ def release_lease(user=Depends(current_user)):
     return {"config": config}
 
 
-@router.post("/v1/licenses/unbind")
+@router.post(
+    "/v1/licenses/unbind",
+    dependencies=[rate_limited(rate_limit.license_activate_bucket)],
+)
 def unbind_device(ctx=Depends(attested_or_mfa_user)):
     """"Use Semper on a different device" — the holder's own device change.
 
@@ -132,8 +132,6 @@ def unbind_device(ctx=Depends(attested_or_mfa_user)):
     user has legitimately just moved to.
     """
     user = ctx["user"]
-    if not rate_limit.license_activate_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
     license_id = user.get("licenseId") or ""
     if not license_id:
         raise HTTPException(404, errors.NO_LICENSE)

@@ -11,7 +11,7 @@
     "NestedBlockDepth",
     "ReturnCount",
 )
-@file:SuppressLint("DrawAllocation", "ClickableViewAccessibility")
+@file:SuppressLint("ClickableViewAccessibility")
 
 package com.indicvision.semper.ui.analysis
 
@@ -48,6 +48,9 @@ class StudioOverlayView @JvmOverloads constructor(
 
     /** Reused every draw: the drag rect is rebuilt on each touch move. */
     private val activeHoleScratch = RectF()
+
+    /** Reused every draw for the main ROI while it is dragged or implied. */
+    private val mainRectScratch = RectF()
     var onRoiChangedListener: ((RectF) -> Unit)? = null
     var imageView: ImageView? = null
         set(value) {
@@ -493,11 +496,11 @@ class StudioOverlayView @JvmOverloads constructor(
         val implicitFullImage = !hasValidRoi && (holes.isNotEmpty() || (isDrawing && isSubtractMode))
         if (hasValidRoi || (!isSubtractMode && isDrawing) || implicitFullImage) {
             val drawMainRect = when {
-                !isSubtractMode && isDrawing -> {
-                    RectF(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
+                !isSubtractMode && isDrawing -> mainRectScratch.apply {
+                    set(min(startX, endX), min(startY, endY), max(startX, endX), max(startY, endY))
                 }
                 hasValidRoi -> roiRect
-                else -> RectF(imageBounds)
+                else -> mainRectScratch.apply { set(imageBounds) }
             }
 
             // Use current mode if actively drawing, otherwise use the saved mode

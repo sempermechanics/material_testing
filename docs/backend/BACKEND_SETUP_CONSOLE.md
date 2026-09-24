@@ -142,7 +142,7 @@ manual create or labs, not the pilot CD path:
      | `GOOGLE_CLOUD_PROJECT` | your Project ID |
      | `FIREBASE_PROJECT_ID` | the Firebase project id from step 7 — omit if it is the same as above |
      | `AUTO_APPROVE_HD` | your domain, e.g. `yourdomain.com` — verified emails there are approved on first sign-in |
-     | `ADMIN_EMAILS` | comma-separated admin addresses |
+     | `ADMIN_EMAILS` | admin addresses, space-separated (commas and `;` also parse) |
      | `SUPPORT_EMAIL` | where "a new user is waiting for approval" mail goes — defaults to `support@sempermechanics.com` |
      | `NOTIFY_FROM` | verified Resend sender, e.g. `Semper <noreply@yourdomain.com>` — leave unset to disable notification mail |
 
@@ -167,7 +167,7 @@ manual create or labs, not the pilot CD path:
 
    - (Resources) CPU 1, Memory 512 MiB, Min instances 0, Max 10.
 7. **Create.** Wait for the build+deploy to finish; copy the service **URL**
-   (looks like `https://indic-api-xxxx.a.run.app`).
+   (looks like `https://semper-api-xxxx.a.run.app`).
 
 ## 8a. Cloud Tasks queue for session provisioning (recommended)
 
@@ -179,9 +179,9 @@ request just reserves the session.
 Skip this and the service provisions **inline** instead. That is correct and is
 how local dev and the tests run, but a large analysis will time out.
 
-1. ☰ → **Cloud Tasks → Create queue**. Name `indic-provision`, region the same as
+1. ☰ → **Cloud Tasks → Create queue**. Name `semper-provision`, region the same as
    Cloud Run. Set **Max attempts** 5 and **Max concurrent dispatches** 20.
-2. ☰ → **Cloud Run → indic-api → Permissions → Add principal**: the
+2. ☰ → **Cloud Run → semper-api → Permissions → Add principal**: the
    `indic-api@…` service account, role **Cloud Run Invoker**. Cloud Tasks calls
    back in with an OIDC token for this identity.
 3. ☰ → **IAM & Admin → IAM → Grant access**: the same service account, role
@@ -190,7 +190,7 @@ how local dev and the tests run, but a large analysis will time out.
 
    | Name | Value |
    |---|---|
-   | `TASKS_QUEUE` | `indic-provision` |
+   | `TASKS_QUEUE` | `semper-provision` |
    | `TASKS_LOCATION` | your region |
    | `TASKS_TARGET_BASE_URL` | the **Cloud Run** service URL, not the gateway |
    | `TASKS_INVOKER_SA` | `indic-api@<project-id>.iam.gserviceaccount.com` |
@@ -216,7 +216,7 @@ orgs) — an empty var clears the Cloud Run flag on the next deploy.
 
 ## 10. Prove Drive + Firestore work (browser only, no curl)
 Temporarily enable dev mode so you can call the API without a signed request:
-1. **Cloud Run** → click **indic-api** → **Edit & deploy new revision**.
+1. **Cloud Run** → click **semper-api** → **Edit & deploy new revision**.
 2. **Variables & Secrets** → add `DEV_INSECURE_AUTH` = `1`,
    `INSECURE_AUTH_I_ACCEPT_THE_RISK` = `1`, and `AUTO_APPROVE` = `1` →
    **Deploy**. The second variable is required on a deployed service: without
@@ -263,7 +263,7 @@ Temporarily enable dev mode so you can call the API without a signed request:
 > writes** and **Firestore writes**.
 
 ## 11. Turn dev mode OFF (important)
-Cloud Run → **indic-api** → **Edit & deploy new revision** → **Variables &
+Cloud Run → **semper-api** → **Edit & deploy new revision** → **Variables &
 Secrets** → delete `DEV_INSECURE_AUTH`, `INSECURE_AUTH_I_ACCEPT_THE_RISK` and
 `AUTO_APPROVE` → **Deploy**.
 Confirm `https://<your-url>/v1/me` now returns **401**.

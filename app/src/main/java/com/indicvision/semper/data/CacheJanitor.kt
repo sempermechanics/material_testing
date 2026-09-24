@@ -25,20 +25,31 @@ object CacheJanitor {
     /** Scratch files workers write straight into `cacheDir`, by name prefix. */
     private val WORKER_SCRATCH_PREFIXES = listOf("restore_", "upload_")
 
-    /** Share/export bundles, which the user may still be picking a target for. */
-    private const val SHARE_SUBDIR = "share"
+    /**
+     * Share/export bundles, which the user may still be picking a target for.
+     * Also the FileProvider `cache-path` in `res/xml/share_paths.xml`.
+     */
+    const val SHARE_SUBDIR = "share"
+
+    /** The ROI mask `RoiDrawActivity` hands back to the wizard. */
+    const val ROI_MASK_CACHE = "roi_mask_cache.bin"
+
+    /** The reference image `StaticAnalysisActivity` hands to `RoiDrawActivity`. */
+    const val TEMP_ROI_REF = "temp_roi_ref.bin"
+
+    /** The cloud account export, before the user picks where to save it. */
+    const val ACCOUNT_EXPORT = "semper-account-export.json"
 
     /**
      * Regenerable top-level cache files that are safe to drop on an explicit
-     * clear (ROI mask, temp ROI ref, account export). They are not covered by
-     * the worker-scratch prefixes and used to inflate the Temporary files size
-     * while Clear left them untouched.
+     * clear. They are not covered by the worker-scratch prefixes and used to
+     * inflate the Temporary files size while Clear left them untouched. Named
+     * here and used by their writers, so a rename cannot leave one unreclaimed.
      */
-    private val REGENERABLE_FILE_NAMES = setOf(
-        "roi_mask_cache.bin",
-        "temp_roi_ref.bin",
-        "semper-account-export.json",
-    )
+    private val REGENERABLE_FILE_NAMES = setOf(ROI_MASK_CACHE, TEMP_ROI_REF, ACCOUNT_EXPORT)
+
+    /** The directory share and export bundles are written to, created if missing. */
+    fun shareDir(cacheDir: File): File = File(cacheDir, SHARE_SUBDIR).apply { mkdirs() }
 
     /**
      * A worker can be running in a freshly started process, so its scratch file
@@ -70,10 +81,14 @@ object CacheJanitor {
 
     /**
      * Full sweep for app start, where no import, analysis or share can be in
-     * flight — the view model holding the staged image paths does not survive
-     * process death, so a committed import found here is already orphaned.
+     * flight. A committed import found here is orphaned unless a live
+     * [WizardDraft] still lists it — a wizard the system will restore after a
+     * process death (ADR-005). A draft past its age limit goes first.
      */
-    fun sweepOnStartup(context: Context): Long = sweep(context.cacheDir, SweepMode.STARTUP)
+    fun sweepOnStartup(context: Context): Long {
+        val keepImport = WizardDraft.reclaimIfStale(context.filesDir)
+        return sweep(context.cacheDir, SweepMode.STARTUP, keepImport)
+    }
 
     /**
      * Sweep for an explicit "clear cache", which can run while another screen
@@ -88,7 +103,7 @@ object CacheJanitor {
      */
     fun clearableUserBytes(context: Context): Long = measure(context.cacheDir, SweepMode.USER)
 
-    private fun sweep(cacheDir: File, mode: SweepMode): Long {
+    private fun sweep(cacheDir: File, mode: SweepMode, keepImport: Boolean = false): Long {
         if (!cacheDir.isDirectory) return 0L
         val now = System.currentTimeMillis()
         var freed = 0L
@@ -98,7 +113,7 @@ object CacheJanitor {
                 freed += visitShareDir(entry, now, mode, delete = true)
                 return@forEach
             }
-            if (isReclaimable(entry, now, mode)) freed += deleteTree(entry)
+            if (isReclaimable(entry, now, mode, keepImport)) freed += deleteTree(entry)
         }
 
         if (freed > 0) Timber.d("CacheJanitor reclaimed %d bytes (%s)", freed, mode)
@@ -119,7 +134,7 @@ object CacheJanitor {
         return total
     }
 
-    private fun isReclaimable(entry: File, now: Long, mode: SweepMode): Boolean {
+    private fun isReclaimable(entry: File, now: Long, mode: SweepMode, keepImport: Boolean = false): Boolean {
         val age = now - entry.lastModified()
         val scratchGrace = if (mode == SweepMode.USER) USER_ACTIVE_GRACE_MS else SCRATCH_MAX_AGE_MS
         return when {
@@ -128,8 +143,9 @@ object CacheJanitor {
             entry.name == FrameImportHelper.PREVIOUS_DIR_NAME -> true
             // A finished run moves its frames out, leaving this empty; a
             // cancelled one leaves the frames it never reached. Only startup
-            // may assume no other screen still holds these paths.
-            entry.name == FrameImportHelper.COMMITTED_DIR_NAME -> mode == SweepMode.STARTUP
+            // may assume no other screen still holds these paths, and only
+            // when no wizard draft is waiting to restore them.
+            entry.name == FrameImportHelper.COMMITTED_DIR_NAME -> mode == SweepMode.STARTUP && !keepImport
             WORKER_SCRATCH_PREFIXES.any { entry.name.startsWith(it) } -> age > scratchGrace
             entry.name in REGENERABLE_FILE_NAMES -> mode == SweepMode.USER || age > scratchGrace
             else -> false

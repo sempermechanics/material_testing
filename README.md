@@ -58,7 +58,7 @@ reports: [docs/app/REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)
 
 > **Lineage.** This repo holds the full history of
 > [`sempermechanics/semperdic-app`](https://github.com/sempermechanics/semperdic-app) at `bfe00e5`
-> (2026-09-21).
+> (2026-09-21), and merges the parent's `main` back in (last at `643462c`, 2026-09-24).
 > - **Same identity.** It keeps the `applicationId` (`com.indicvision.semper`), the backend and CI,
 >   so a build **replaces** Semper on a device.
 > - **Deploys.** The backend deploys from the parent repo only, so the deploy workflows here fail if run.

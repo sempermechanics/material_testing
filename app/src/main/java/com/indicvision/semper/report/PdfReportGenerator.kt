@@ -21,6 +21,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import java.io.IOException
 import java.io.OutputStream
 import java.util.Locale
 
@@ -125,7 +126,7 @@ object PdfReportGenerator {
             // Finish the still-open page before writing — PdfDocument rejects
             // writeTo()/close() while any page is unfinished.
             layout.finishCurrentPage()
-            pdfDocument.writeTo(outputStream)
+            writeChecked(pdfDocument, outputStream)
             emit(Progress.Complete)
         } catch (e: CancellationException) {
             throw e
@@ -162,7 +163,7 @@ object PdfReportGenerator {
 
             emit(Progress.Status("Finalizing PDF...", 98))
             layout.finishCurrentPage()
-            pdfDocument.writeTo(outputStream)
+            writeChecked(pdfDocument, outputStream)
 
             emit(Progress.Complete)
         } catch (e: CancellationException) {
@@ -417,6 +418,39 @@ private fun PdfLayoutEngine.drawDimensions(model: StressStrain.Model) {
     model.dimensions.forEach { (dimension, value) ->
         if (value > 0f) {
             drawKeyValue("${dimension.label}:", "%.3f %s".format(Locale.US, value, dimension.unit))
+        }
+    }
+}
+
+/**
+ * [PdfDocument.writeTo] drops an IOException its stream throws: the native
+ * writer stops, and the call returns normally. A full disk would then
+ * report Complete over a truncated file, so the stream's first failure is
+ * kept and rethrown here.
+ */
+private fun writeChecked(pdfDocument: PdfDocument, out: OutputStream) {
+    val checked = CheckedStream(out)
+    pdfDocument.writeTo(checked)
+    checked.failure?.let { throw it }
+}
+
+private class CheckedStream(private val out: OutputStream) : OutputStream() {
+    var failure: IOException? = null
+        private set
+
+    override fun write(b: Int) = guard { out.write(b) }
+
+    override fun write(b: ByteArray, off: Int, len: Int) = guard { out.write(b, off, len) }
+
+    override fun flush() = guard { out.flush() }
+
+    private inline fun guard(block: () -> Unit) {
+        failure?.let { throw it }
+        try {
+            block()
+        } catch (e: IOException) {
+            failure = e
+            throw e
         }
     }
 }

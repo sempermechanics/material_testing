@@ -90,6 +90,87 @@ internal object UploadWorkOutcomes {
     }
 
     /**
+     * How long after its last save a session's inputs may still be missing
+     * because they are being (re)written. The record is saved only once a batch
+     * finishes, but a re-run over the same session deletes its `.dat` files at
+     * the start and rewrites them before saving again.
+     */
+    const val STAGING_INPUT_GRACE_MS = 15 * 60 * 1000L
+
+    /**
+     * How long the inputs must have been seen missing, by the
+     * [INPUTS_MISSING_MARKER] clock, before they count as gone. A re-run only
+     * leaves no `.dat` on disk until its first frame lands, so this is far past
+     * that gap, and past a retry that happens to land in it.
+     */
+    const val INPUTS_MISSING_GRACE_MS = 10 * 60 * 1000L
+
+    /**
+     * File in the session dir (not `upload_staging/`, which a run can wipe)
+     * holding the epoch ms when an upload first found the inputs missing.
+     */
+    const val INPUTS_MISSING_MARKER = "upload_inputs_missing_since"
+
+    /** What to do when a prepare pass could not produce the report bundle. */
+    enum class IncompleteStaging { RETRY, INPUTS_GONE }
+
+    /**
+     * Whether the local files the report bake reads — the reference image and at
+     * least one frame's `.dat` — are on disk. The uploader never regenerates
+     * them, so their absence cannot fix itself by waiting.
+     */
+    fun stagingInputsOnDisk(sessionDir: File, frameCount: Int, refFile: File): Boolean =
+        refFile.isFile &&
+            refFile.length() > 0L &&
+            (0 until frameCount).any { SessionPaths.frameDat(sessionDir, it).isFile }
+
+    /**
+     * How long [sessionDir]'s inputs have been seen missing, as of [now].
+     *
+     * The first sighting stamps [INPUTS_MISSING_MARKER] and returns 0; inputs on
+     * disk delete it. A stamp older than [savedAt] (the row's `updatedAt`) is
+     * restarted: a re-run or restore has re-saved the session since, so an
+     * earlier gap says nothing about now. If the stamp cannot be written, the
+     * session's own age stands in.
+     */
+    fun inputsMissingForMs(sessionDir: File, inputsOnDisk: Boolean, savedAt: Long, now: Long): Long {
+        val marker = File(sessionDir, INPUTS_MISSING_MARKER)
+        val since = marker.takeIf { !inputsOnDisk && it.isFile }
+            ?.let { runCatching { it.readText().trim().toLong() }.getOrNull() }
+            ?.takeIf { it in savedAt..now }
+        return when {
+            inputsOnDisk -> {
+                marker.delete()
+                0L
+            }
+            since != null -> now - since
+            runCatching { marker.writeText(now.toString()) }.isSuccess -> 0L
+            else -> now - savedAt
+        }
+    }
+
+    /**
+     * Decide between "not ready yet" and "gone for good" after a prepare pass
+     * left the bundle incomplete.
+     *
+     * Retries while the inputs are on disk (the bake itself missed), while the
+     * session was saved within [STAGING_INPUT_GRACE_MS], or until they have been
+     * seen missing for [INPUTS_MISSING_GRACE_MS] ([inputsMissingForMs]). Only
+     * then are they treated as gone. A re-run that somehow outlasts this re-saves
+     * the record as PENDING and re-queues the upload on finishing.
+     */
+    fun classifyIncompleteStaging(
+        inputsOnDisk: Boolean,
+        sessionAgeMs: Long,
+        missingForMs: Long,
+    ): IncompleteStaging = when {
+        inputsOnDisk -> IncompleteStaging.RETRY
+        sessionAgeMs < STAGING_INPUT_GRACE_MS -> IncompleteStaging.RETRY
+        missingForMs < INPUTS_MISSING_GRACE_MS -> IncompleteStaging.RETRY
+        else -> IncompleteStaging.INPUTS_GONE
+    }
+
+    /**
      * Finished prepare output that must survive provision / Rebuild retries.
      * Incomplete dirs (killed mid-prepare, or report bake that produced nothing)
      * must not be treated as done.

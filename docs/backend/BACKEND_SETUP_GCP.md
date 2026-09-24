@@ -96,17 +96,27 @@ shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
 
 ### A2b. Deploy the composite indexes
 
-`backend/firestore.indexes.json` declares four composite indexes that the
-paginated session listing and the admin pending-user query need. A missing index
-does not fail at deploy time — it fails at runtime with `FAILED_PRECONDITION`, so
-deploy them before the first real client.
+`backend/firestore.indexes.json` declares the one composite index the
+duplicate-session lookup needs (`sessions`: `uid`, `localSessionId`, `status`).
+Every other query the backend and the consoles run is a single-field equality or
+`array-contains`, optionally ordered by `__name__`, and Firestore serves those
+from its automatic single-field indexes — do not add `field + __name__` entries
+to the file; the index API refuses them ("this index is not necessary") and
+aborts the whole deploy. A missing composite does not fail at deploy time — it
+fails at runtime with `FAILED_PRECONDITION`, so deploy before the first real
+client.
+
+The file has no `firebase.json` of its own, and the CLI refuses files outside
+its project directory, so the script stages it in a scratch directory (it
+deploys the deny-all `firestore.rules` the same way, with `rules`):
 
 ```bash
-firebase deploy --only firestore:indexes --project $PROJECT
+PROJECT=$PROJECT ./scripts/deploy-firestore.sh indexes
 ```
 
-**Check:** `gcloud firestore indexes composite list` shows four indexes in state
-`READY` (building can take a few minutes on a populated database).
+**Check:** `gcloud firestore indexes composite list --project $PROJECT` shows
+that one index in state `READY` (building can take a few minutes on a populated
+database).
 
 ### A3. Create the runtime service account
 ```bash
@@ -158,20 +168,28 @@ and large analyses will time out. Small deployments can skip this.
 ```bash
 gcloud services enable cloudtasks.googleapis.com --project $PROJECT
 
-gcloud tasks queues create indic-provision \
+gcloud tasks queues create semper-provision \
   --location=$REGION --project=$PROJECT \
   --max-attempts=5 --max-concurrent-dispatches=20
 
 # Cloud Tasks delivers with an OIDC token for this SA. Reusing $API_SA keeps it
 # to one identity; the service only accepts tokens whose email matches
 # TASKS_INVOKER_SA, so this is the identity /v1/tasks/* trusts.
-gcloud run services add-iam-policy-binding indic-api \
+gcloud run services add-iam-policy-binding semper-api \
   --member="serviceAccount:$API_SA" --role="roles/run.invoker" \
   --region=$REGION --project=$PROJECT
 
 # The API SA enqueues its own tasks.
 gcloud projects add-iam-policy-binding $PROJECT \
   --member="serviceAccount:$API_SA" --role="roles/cloudtasks.enqueuer"
+
+# A task that carries an OIDC token for $API_SA can only be created by a
+# caller allowed to act as $API_SA — here, itself. Scoped to that one SA, not
+# the project. Without it every enqueue fails with 403
+# iam.serviceAccounts.actAs and the service quietly provisions inline.
+gcloud iam service-accounts add-iam-policy-binding $API_SA \
+  --member="serviceAccount:$API_SA" --role="roles/iam.serviceAccountUser" \
+  --project=$PROJECT
 ```
 
 Then set these on the service (GitHub Environment or **repo-level** `vars` for
@@ -181,7 +199,7 @@ deploys (see table below):
 
 | Variable | Value |
 |---|---|
-| `TASKS_QUEUE` | `indic-provision` |
+| `TASKS_QUEUE` | `semper-provision` |
 | `TASKS_LOCATION` | `$REGION` |
 | `TASKS_TARGET_BASE_URL` | the Cloud Run service URL (not the gateway) |
 | `TASKS_INVOKER_SA` | `$API_SA` |
@@ -190,10 +208,14 @@ deploys (see table below):
 part of the public API and is absent from `gateway/openapi.yaml`. It is also the
 OIDC audience, so it must match exactly.
 
-**Check:** create a session with a few files; the response is
+Manifests of up to `INLINE_PROVISION_MAX_FILES` (default 8 — a bundle upload is
+three) are still provisioned inside the request: the task hop plus the
+client's first poll cost more than the work.
+
+**Check:** create a session with more than eight files; the response is
 `{"status": "PROVISIONING", "uploads": []}` and, within a second or two,
 `GET /v1/sessions/{sid}/uploads` reports `UPLOADING` with one target per file.
-`gcloud tasks queues describe indic-provision --location=$REGION` should show no
+`gcloud tasks queues describe semper-provision --location=$REGION` should show no
 backlog.
 
 ---
@@ -202,12 +224,12 @@ backlog.
 
 ### B1. Deploy to Cloud Run from source
 ```bash
-gcloud run deploy indic-api \
+gcloud run deploy semper-api \
   --source backend \
   --region $REGION \
   --service-account "$API_SA" \
-  --allow-unauthenticated \
-  --min-instances 0 --max-instances 10 \
+  --no-allow-unauthenticated \
+  --min-instances 1 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 300 \
   --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
   --set-env-vars "SUPPORT_EMAIL=support@sempermechanics.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
@@ -227,8 +249,8 @@ Everything above is required (or near enough). These are the rest of what
 
 | Variable | Default | What it does |
 |---|---|---|
-| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. Overridable per user via `PATCH /v1/admin/users/{uid}/config` |
-| `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. A key's own `maxAnalyses`, or a per-user override, takes precedence when tighter |
+| `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. **Not** overridable per user: `resolve_user_config` applies it to every demo account and ignores a `maxSessions` override (`backend/app/repo/user_config.py`, the `else` branch of `resolve_user_config`). Lifting one demo account's cap means attaching a licence (decided 2026-09-23, TD-28) |
+| `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. The first positive value wins, in this order: the per-user `maxSessions` override, then the licence's `maxAnalyses` (mirrored onto the user as `licenseMaxAnalyses`), then this variable — so an override of 999 beats a key's cap of 10, and a key's cap of 2000 beats this default. It is **not** "whichever is tighter". Falls back to the retired `PRO_MAX_SESSIONS_PER_USER` when unset (`config.py`) |
 | `ADMIN_WEB_MFA_ENABLED` | `1` | Whether browser dashboards may act via MFA at all. `0` restores attestation-only admin — every state change then needs the phone |
 | `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise an ordinary state change. Sudo mode, not a session length |
 | `ADMIN_WEB_REVOKE_REAUTH_SECONDS` | `120` | Tighter window for whole-licence revoke; the operator page forces password/Google re-auth plus TOTP before that call |
@@ -237,6 +259,8 @@ Everything above is required (or near enough). These are the rest of what
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
+| `INLINE_PROVISION_MAX_FILES` | `8` | Manifests this small provision inside `POST /v1/sessions` instead of through the queue. `0` sends everything through Cloud Tasks |
+| `CLIENT_NONCE_WINDOW_SECONDS` | `120` | How far a device-minted `t1.` nonce's timestamp may be from server time ([CLOUD_ARCHITECTURE_GCP.md §3](CLOUD_ARCHITECTURE_GCP.md)). `0` refuses client nonces, so every signed call fetches a challenge |
 | `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot keeps this at `1`. See the hardening note below |
 | `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
 | `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
@@ -262,8 +286,17 @@ Everything above is required (or near enough). These are the rest of what
 > promote (the previous revision keeps its env for rollback):
 >
 > ```bash
-> gcloud run services update indic-api --region $REGION >   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
+> gcloud run services update semper-api --region $REGION \
+>   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
 > ```
+>
+> The deploy workflow promotes with `--to-latest`, so the revision this
+> creates serves at once. A service last promoted before that change is still
+> pinned to its revision by name and the new one serves **0 %**: check with
+> `gcloud run services describe semper-api --region $REGION
+> --format='value(status.traffic)'` and, if so, run `gcloud run services
+> update-traffic semper-api --region $REGION --to-latest`. The promote also
+> removes every `cand-*` traffic tag, so none accumulate.
 
 **Production hardening: `REQUIRE_ATTESTED_UPLOADS=1` (live on pilot).**
 `GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this
@@ -301,19 +334,29 @@ gcloud secrets add-iam-policy-binding resend-api-key --member "serviceAccount:$A
 
 Then deploy with the `--set-secrets` flag shown in B1. Verify by signing in with
 a fresh non-admin, non-domain account: mail should land in support@ within
-seconds, and `gcloud run services logs read indic-api --region $REGION` should
+seconds, and `gcloud run services logs read semper-api --region $REGION` should
 carry no `access-request mail` warning.
 
-> `--allow-unauthenticated` is correct here: the service is public at the network
-> layer, and **auth is enforced in the app layer** (Firebase ID token + device
-> signature). Nothing sensitive is reachable without a valid token.
+> `--no-allow-unauthenticated` keeps Cloud Run private: only the service
+> accounts in C0 invoke it, and the API Gateway is the public door. **Auth is
+> still enforced in the app layer** (Firebase ID token + device signature).
+> Never deploy with `--allow-unauthenticated` — it binds `allUsers`.
+>
+> `--min-instances 1` keeps one instance warm: a cold start costs ~6 s on the
+> first sign-in or upload after idle. Use `0` for staging.
 
 Grab the URL:
 ```bash
-export URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
+export URL=$(gcloud run services describe semper-api --region $REGION --format='value(status.url)')
 echo $URL
 ```
-**Check:** `curl -s $URL/healthz` → `{"ok":true}`.
+**Check:** `curl -s $URL/readyz` → `{"ok":true}`. (`/healthz` on the
+`*.run.app` URL answers a Google-frontend 404 in this project without
+reaching the container — the deploy workflow uses `/readyz`; the route
+exists and `test_health.py` covers it, but do not use it as the smoke check.)
+`/readyz` is **not** published at the API Gateway: it costs a Firestore read
+and a Drive call per hit and names the failing dependency, so it is reachable
+only on the private `*.run.app` URL with an invoker token (the deploy smoke).
 
 ### B2. Redeploy in **insecure dev mode** to smoke-test Drive + Firestore
 
@@ -321,7 +364,7 @@ This bypasses the ID-token + device-signature checks (see `DEV_INSECURE_AUTH`
 in [config.py](../../backend/app/config.py)) so you can prove the storage path with
 plain curl, before any Android work. **Never leave this on.**
 ```bash
-gcloud run services update indic-api --region $REGION \
+gcloud run services update semper-api --region $REGION \
   --update-env-vars "DEV_INSECURE_AUTH=1,INSECURE_AUTH_I_ACCEPT_THE_RISK=1,AUTO_APPROVE=1"
 ```
 
@@ -386,11 +429,11 @@ curl -s -X POST "$URL/v1/files/$FID/complete" -H "content-type: application/json
 **Check (the payoff):**
 - `Semper-Research-Storage/Research Storage/user/dev-user/session/$SID/metadata/note.txt` exists in Drive.
 - Firestore → `sessions/$SID` shows `status: COMPLETED`; `files/$FID` shows `driveFileId`.
-- Cloud Run logs (`gcloud run services logs read indic-api --region $REGION`) show the requests, no errors.
+- Cloud Run logs (`gcloud run services logs read semper-api --region $REGION`) show the requests, no errors.
 
 ### B3. Turn dev mode OFF
 ```bash
-gcloud run services update indic-api --region $REGION \
+gcloud run services update semper-api --region $REGION \
   --remove-env-vars "DEV_INSECURE_AUTH,INSECURE_AUTH_I_ACCEPT_THE_RISK,AUTO_APPROVE"
 ```
 **Check:** `curl -s $URL/v1/me` (no token) → `401 missing_bearer`.
@@ -428,22 +471,26 @@ Run **invoker** token. So a **private** Cloud Run service is unreachable by the
 app — every call gets Google's HTML `403 Forbidden`. It needs a public front
 door.
 
-**Simplest — if your org allows it:** make Cloud Run public (app-layer auth then
-guards it):
-```bash
-gcloud run services add-iam-policy-binding indic-api --region asia-south1 \
-  --member="allUsers" --role="roles/run.invoker"
-```
-If this **fails** with `iam.allowedPolicyMemberDomains` / Domain Restricted
-Sharing, your org forbids public Cloud Run and forbids `allUsers`. Ask an org
-admin for a project-scoped exception (one change, $0, no code) — otherwise use
-the API Gateway workaround below.
+**Never bind `allUsers`.** Cloud Run stays private; only service accounts (and
+the owner, for manual smokes) hold `roles/run.invoker`. In production those are:
+
+| Principal | Why it invokes |
+|-----------|----------------|
+| `indic-gw@` (gateway SA) | The API Gateway forwards every client call |
+| `indic-api@` (runtime SA) | Cloud Tasks delivers `/v1/tasks/provision-session` with its OIDC token |
+| `indic-deployer@` | The deploy workflow smokes the tagged candidate at `/readyz` |
+| the owner account | Manual smokes; remove when not needed |
+
+Every one of them still needs a Firebase ID token for `/v1/*` — invoker only
+gets a request to the container. The public front door is the API Gateway
+below; `allUsers` would also expose `/readyz` and the Tasks callback's URL to
+anyone.
 
 > **IAP is not an option if you need external (non-domain) users:** IAP
 > authorizes via IAM, which the same DRS policy restricts — so IAP can only admit
 > your own Workspace domain. For external collaborators, use API Gateway.
 
-**Workaround (no policy change, supports external users) — API Gateway:**
+**API Gateway (no policy change, supports external users):**
 A managed **public** endpoint whose reachability is *not* granted via `allUsers`
 IAM, so DRS doesn't block it. The gateway invokes Cloud Run using **its own
 service account** (an org-internal principal DRS permits); Cloud Run stays
@@ -455,7 +502,7 @@ signature) runs unchanged — the client token arrives as
 # Reuse the same $PROJECT you set in Part A — do not reassign it here. Set
 # $REGION to wherever you deployed Cloud Run.
 REGION=asia-south1
-RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
+RUN_URL=$(gcloud run services describe semper-api --region $REGION --format='value(status.url)')
 
 # 1. APIs
 gcloud services enable apigateway.googleapis.com servicemanagement.googleapis.com \
@@ -464,7 +511,7 @@ gcloud services enable apigateway.googleapis.com servicemanagement.googleapis.co
 # 2. Gateway service account, granted invoker on the private Cloud Run service
 gcloud iam service-accounts create indic-gw
 GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
-gcloud run services add-iam-policy-binding indic-api --region $REGION \
+gcloud run services add-iam-policy-binding semper-api --region $REGION \
   --member="serviceAccount:$GW_SA" --role="roles/run.invoker"
 
 # 3. Create the API first: its managed service name is a placeholder input.
@@ -510,38 +557,66 @@ the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
 
 #### Redeploying the gateway after a route change
 
-CI never touches the gateway (a deploy job is tracked as TD-27 in
-[TECH_DEBT.md](../ops/TECH_DEBT.md)); `test_gateway_parity.py` only proves the
-committed spec matches the routers. Whenever `backend/gateway/openapi.yaml`
-changes — the licensing rollout added `/v1/licenses/*`, `/v1/me/terms`,
-`/v1/admin/licenses/*` and more — the live gateway must be moved to a new config
-by hand, **after** the Cloud Run revision that serves the new routes is promoted
-(a config that names a route the backend does not yet serve would 5xx, and the
-gateway 404s any route the config does not name).
+A production dispatch of `deploy-backend.yml` now runs a `gateway` job after
+the Cloud Run promote ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)). The
+order matters: a config that names a route the backend does not serve yet
+would 5xx, and the gateway 404s any route the config does not name.
+`test_gateway_parity.py` proves only that the committed spec matches the routers.
+
+Dispatch with `gateway_mode: dry-run` first. It renders the spec and puts its
+diff against the live config in the job summary. Re-dispatch with `apply` to
+create the config, switch, verify and roll back on failure. The deploy SA needs
+`roles/apigateway.admin` on the project and `roles/iam.serviceAccountUser` on
+`indic-gw@…`. Until those are granted, or when CI is unavailable, the block
+below is the manual fallback. It runs the same steps.
 
 API configs are immutable: create a new one and point the gateway at it.
 
 ```bash
+set -euo pipefail
 PROJECT=indicvision-dic-app REGION=asia-south1
-RUN_URL=$(gcloud run services describe indic-api --region $REGION --format='value(status.url)')
+# The Firebase Auth project, which is NOT the GCP project here (see §A above).
+# An empty value would pass the placeholder guard and produce the issuer
+# `https://securetoken.google.com/`, rejecting every token.
+FIREBASE_PROJECT_ID=indicvision-dic-app-auth
+RUN_URL=$(gcloud run services describe semper-api --region $REGION --format='value(status.url)')
 GW_SA=indic-gw@$PROJECT.iam.gserviceaccount.com
-
-# Same substitution + placeholder guard as step 3 above.
 GW_REGION=asia-northeast1
 MANAGED_SERVICE=$(gcloud api-gateway apis describe semper-api --format='value(managedService)')
-sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g"     -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g"     -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g"   backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
-grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__' &&   echo "unsubstituted placeholder remains" && exit 1
+for v in RUN_URL FIREBASE_PROJECT_ID MANAGED_SERVICE; do
+  [ -n "${!v}" ] || { echo "$v is empty"; exit 1; }
+done
+
+sed -e "s|__CLOUD_RUN_URL__|$RUN_URL|g" \
+    -e "s|__FIREBASE_PROJECT_ID__|$FIREBASE_PROJECT_ID|g" \
+    -e "s|__MANAGED_SERVICE__|$MANAGED_SERVICE|g" \
+  backend/gateway/openapi.yaml > backend/gateway/openapi.generated.yaml
+if grep -v '^[[:space:]]*#' backend/gateway/openapi.generated.yaml | grep -qE '__[A-Z_]+__'; then
+  echo "unsubstituted placeholder remains"; exit 1
+fi
 
 # Remember the config currently live — this is the rollback target.
-PREV_CFG=$(gcloud api-gateway gateways describe semper-gw --location $GW_REGION   --format='value(apiConfig)' | sed 's|.*/||')
+PREV_CFG=$(gcloud api-gateway gateways describe semper-gw --location $GW_REGION \
+  --format='value(apiConfig)' | sed 's|.*/||')
 echo "rollback: $PREV_CFG"
 
-# New config, named by date; then switch the gateway (takes a few minutes).
-NEW_CFG=v$(date +%Y%m%d)
-gcloud api-gateway api-configs create $NEW_CFG --api=semper-api   --openapi-spec=backend/gateway/openapi.generated.yaml   --backend-auth-service-account=$GW_SA
-gcloud api-gateway gateways update semper-gw --api=semper-api   --api-config=$NEW_CFG --location=$GW_REGION
-gcloud api-gateway gateways describe semper-gw --location $GW_REGION   --format='value(apiConfig,state)'
+# New config, named to the minute so a second deploy the same day cannot
+# collide; then switch the gateway (takes a few minutes).
+NEW_CFG=v$(date -u +%Y%m%d%H%M)
+gcloud api-gateway api-configs create $NEW_CFG --api=semper-api \
+  --openapi-spec=backend/gateway/openapi.generated.yaml \
+  --backend-auth-service-account=$GW_SA
+gcloud api-gateway gateways update semper-gw --api=semper-api \
+  --api-config=$NEW_CFG --location=$GW_REGION
+gcloud api-gateway gateways describe semper-gw --location $GW_REGION \
+  --format='value(apiConfig,state)'
 ```
+
+Earlier versions of this block never set `FIREBASE_PROJECT_ID`, named configs by
+day only, and ended the guard with `grep … && exit 1` — which, as a script's
+last line, exits 1 exactly when **no** placeholder remains. All three are fixed
+above, and the `gateway` job in `deploy-backend.yml` runs the same steps
+([ADR-006](../adr/ADR-006-gateway-deploy-job.md)).
 
 Verify from outside: an unauthenticated `GET https://<gateway>/v1/config` must
 answer **401** (route known, token missing), not 404 (route missing from the
@@ -583,7 +658,7 @@ creates the matching Android OAuth client for you. Full steps in
 ### C3. Configure the access model
 
 ```bash
-gcloud run services update indic-api --region asia-south1 \
+gcloud run services update semper-api --region asia-south1 \
   --update-env-vars AUTO_APPROVE_HD=indicvision.com \
   --remove-env-vars DEV_INSECURE_AUTH,INSECURE_AUTH_I_ACCEPT_THE_RISK,AUTO_APPROVE
 ```
@@ -597,10 +672,11 @@ gcloud run services update indic-api --region asia-south1 \
   an admin approves them individually.
 - `AUTO_APPROVE` (blanket approve-everyone) **removed**.
 
-Designate admins with `ADMIN_EMAILS` (comma-separated) — they're always
+Designate admins with `ADMIN_EMAILS` (space-separated; `,` and `;` also
+parse) — they're always
 approved and can call the admin API:
 ```bash
-gcloud run services update indic-api --region asia-south1 \
+gcloud run services update semper-api --region asia-south1 \
   --update-env-vars ADMIN_EMAILS=support@sempermechanics.com
 ```
 
@@ -641,7 +717,7 @@ Firestore directly.
   └── metadata/  metadata_<frame>.json   (device/time/engine info)
   ```
 - Firestore: `sessions/<sid>` → `COMPLETED`; `files/*` have `driveFileId`.
-- Backend logs for a run: `gcloud run services logs read indic-api --region asia-south1 --limit 50`.
+- Backend logs for a run: `gcloud run services logs read semper-api --region asia-south1 --limit 50`.
 
 ### C6. Approving outside collaborators
 

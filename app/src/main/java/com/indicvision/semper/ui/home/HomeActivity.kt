@@ -12,6 +12,7 @@ import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.isVisible
@@ -28,7 +29,6 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.CoachPrefs
-import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionRecord
@@ -57,6 +57,7 @@ import kotlinx.coroutines.withContext
  * synced). The + button opens the import source chooser straight away — there is
  * one acquisition path. The gear opens the behavioral settings drawer.
  */
+@MainThread
 class HomeActivity : AppCompatActivity() {
 
     private lateinit var list: RecyclerView
@@ -319,7 +320,7 @@ class HomeActivity : AppCompatActivity() {
                         val id = info.progress.getString(DicKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
                         val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, -1)
                         if (pct < 0) return@mapNotNull null
-                        id to SessionListAdapter.RowProgress(DicRestoreWorker.PHASE_DOWNLOAD, pct)
+                        id to SessionListAdapter.RowProgress(DicKeys.PHASE_DOWNLOAD, pct)
                     }
                     .toMap()
                 publishRowProgress()
@@ -331,7 +332,7 @@ class HomeActivity : AppCompatActivity() {
                         }
                         WorkInfo.State.FAILED -> {
                             if (!shownRestoreOutcomes.add(info.id)) return@forEach
-                            val reason = info.outputData.getString(DicRestoreWorker.KEY_ERROR)
+                            val reason = info.outputData.getString(DicKeys.DOWNLOAD_ERROR)
                                 ?: getString(R.string.restore_failed_generic)
                             CrispToast.show(
                                 this@HomeActivity,

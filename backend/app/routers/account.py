@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -9,16 +8,11 @@ from pydantic import BaseModel, Field
 
 from .. import audit, drive, errors, firestore_repo as repo, legal
 from .. import rate_limit
-from ..deps import any_status_user, current_user, verified_device
+from ..deps import any_status_user, current_user, rate_limited, verified_device
+from ._shared import json_dumps
 
 log = logging.getLogger("indic")
 router = APIRouter()
-
-
-def json_dumps(value) -> str:
-    """Compact JSON for the streamed export. `default=str` because Firestore
-    hands back datetimes, which json cannot serialise."""
-    return json.dumps(value, separators=(",", ":"), default=str)
 
 
 def _terms_block(user: dict) -> dict:
@@ -145,7 +139,7 @@ def app_config(user=Depends(current_user)):
     return repo.resolve_user_config(user)
 
 
-@router.get("/v1/me/export")
+@router.get("/v1/me/export", dependencies=[rate_limited(rate_limit.export_bucket)])
 def export_account(ctx=Depends(verified_device)):
     """GDPR data portability (Art. 20): everything we hold about the caller, as JSON.
 
@@ -159,8 +153,6 @@ def export_account(ctx=Depends(verified_device)):
     """
     user = ctx["user"]
     uid = user["uid"]
-    if not rate_limit.export_bucket.allow(uid):
-        raise HTTPException(429, errors.RATE_LIMITED)
     profile = repo.get_user(uid) or {}
 
     audit.record(uid, action="DATA_EXPORT", target={"type": "user", "id": uid})
@@ -224,7 +216,7 @@ def export_account(ctx=Depends(verified_device)):
     )
 
 
-@router.delete("/v1/me")
+@router.delete("/v1/me", dependencies=[rate_limited(rate_limit.erase_bucket)])
 def delete_account(ctx=Depends(verified_device)):
     """Erase the account and ALL of its data (GDPR right to erasure).
 
@@ -239,8 +231,6 @@ def delete_account(ctx=Depends(verified_device)):
     """
     user, device = ctx["user"], ctx["device"]
     uid = user["uid"]
-    if not rate_limit.erase_bucket.allow(uid):
-        raise HTTPException(429, errors.RATE_LIMITED)
     started = time.monotonic()
     token = drive.access_token()
 

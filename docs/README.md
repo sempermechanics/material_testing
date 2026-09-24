@@ -21,7 +21,7 @@ build it. This page routes you to the rest.
 | Know what the app may assume of the engine | [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md) |
 | Check the math, or write it up | [engine/MATHEMATICS.md](engine/MATHEMATICS.md) |
 | Add or run app tests | [app/TESTING.md](app/TESTING.md) |
-| Benchmark the app, or check a perf claim | [app/TESTING.md — Performance benchmarks](app/TESTING.md#performance-benchmarks), then [perf/](perf/) |
+| Benchmark the app, or check a perf claim | [app/TESTING.md — Performance benchmarks](app/TESTING.md#performance-benchmarks), then [perf/on-device-characterization.md](perf/on-device-characterization.md), [perf/round2-main-vs-branch.md](perf/round2-main-vs-branch.md), [perf/backup-restore-split.md](perf/backup-restore-split.md) |
 | Add or run engine tests | [engine/TESTING.md](engine/TESTING.md) |
 | Build, test or bump the engine pin | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | Know why CI is red / how tiers work | [ops/CI.md](ops/CI.md) |
@@ -29,6 +29,8 @@ build it. This page routes you to the rest.
 | Map GitHub Environments / secrets / main hygiene | [ops/ENVIRONMENTS.md](ops/ENVIRONMENTS.md) |
 | Production launch checklist | [ops/PRODUCTION_READINESS_GATE.md](ops/PRODUCTION_READINESS_GATE.md) |
 | Tech-debt status / deferred gates | [ops/TECH_DEBT.md](ops/TECH_DEBT.md) |
+| Know why a structural choice was made | [adr/](adr/README.md) — architecture decision records |
+| See what changed and when (history moved out of CONTEXT.md) | [ops/CHANGELOG.md](ops/CHANGELOG.md) |
 | Pick up a proposed improvement | [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md) |
 | Work on the cloud backend | [backend/CLOUD_ARCHITECTURE_GCP.md](backend/CLOUD_ARCHITECTURE_GCP.md) |
 | Deploy the backend myself | [backend/BACKEND_SETUP_GCP.md](backend/BACKEND_SETUP_GCP.md) (CLI) or [BACKEND_SETUP_CONSOLE.md](backend/BACKEND_SETUP_CONSOLE.md) (browser) |
@@ -36,6 +38,9 @@ build it. This page routes you to the rest.
 | Understand licensing, seats and entitlements | [backend/CLOUD_ARCHITECTURE_GCP.md §20](backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements) (design) · [OPERATING_MANUAL.md Appendix D](OPERATING_MANUAL.md) (mint / revoke / seat support) |
 | Use or deploy the web consoles | [backend/CLOUD_ARCHITECTURE_GCP.md §20.8](backend/CLOUD_ARCHITECTURE_GCP.md#208-the-consoles-and-what-a-browser-may-do) · [firebase-hosting/public/console/README.md](../firebase-hosting/public/console/README.md) |
 | Change the Firestore schema | [backend/FIRESTORE_SCHEMA_RUNBOOK.md](backend/FIRESTORE_SCHEMA_RUNBOOK.md) |
+| Back up, restore or drill Firestore | [backend/FIRESTORE_DATA_PROTECTION.md](backend/FIRESTORE_DATA_PROTECTION.md) |
+| Check the engine's performance floor | [engine/PERF_BASELINE_bd44af0.md](engine/PERF_BASELINE_bd44af0.md) (checked by hand in the engine repo; no CI job enforces it) |
+| Edit the privacy policy, terms or cookie notes | [legal/PRIVACY_POLICY.md](legal/PRIVACY_POLICY.md) · [legal/TERMS_OF_SERVICE.md](legal/TERMS_OF_SERVICE.md) · [legal/COOKIE_CONSENT.md](legal/COOKIE_CONSENT.md) — then `python scripts/render_legal_pages.py` |
 
 Nothing in `backend/` is needed to build, run, or contribute to the app — the
 analysis engine is entirely on-device and offline.
@@ -48,7 +53,8 @@ docs/
   engine/    the app-facing engine contract, plus stubs into the submodule's own docs
   backend/   the optional GCP cloud side — architecture, setup, sign-in
   legal/     privacy policy and terms — the source the hosted pages are generated from
-  ops/       running the project — CI, releases, environments, tech debt, readiness gate
+  ops/       running the project — CI, releases, environments, tech debt, readiness gate, changelog
+  adr/       architecture decision records
   perf/      measured before/after reports backing performance changes
   design/    UI wireframes kept as reference for a redesign in flight
 ```
@@ -105,6 +111,7 @@ in the project README — it is maintained in one place so the two cannot drift.
   [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md); if a change
   legitimately moves results, say so explicitly and update the contract on both
   sides.
-- Lint and detekt baselines are empty — new findings fail CI. A few large UI
-  files use targeted `@file:Suppress` for inherent size; prefer extracts.
+- Lint and detekt baselines are empty — new findings fail CI. Size and
+  complexity findings are silenced per file with `@file:Suppress` (81 files as
+  of 2026-09-23); prefer extracts over widening those lists.
 - Run `./gradlew spotlessApply` before pushing.

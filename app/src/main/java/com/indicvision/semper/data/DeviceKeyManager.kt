@@ -31,13 +31,40 @@ class DeviceKeyManager(private val context: Context) {
 
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
-    private companion object {
-        const val KEY_ALIAS = "IndicDeviceKeyEc"
-        const val PREFS = "indic_device"
-        const val K_DEVICE_ID = "device_id"
+    companion object {
+        private const val KEY_ALIAS = "IndicDeviceKeyEc"
+        private const val PREFS = "indic_device"
+        private const val K_DEVICE_ID = "device_id"
 
         // The infamous Android 2.2 bug value shared by many devices — never use it.
-        const val LEGACY_BAD_ANDROID_ID = "9774d56d682e549c"
+        private const val LEGACY_BAD_ANDROID_ID = "9774d56d682e549c"
+
+        /**
+         * Stable device id persisted on first use. Prefers a previously stored
+         * value so an upgrade cannot flip `dev-{uuid}` to `and-{ANDROID_ID}`. If
+         * none is stored, writes `and-{ANDROID_ID}` (app-scoped, survives
+         * reinstall) or a `dev-{uuid}` fallback.
+         *
+         * Needs no Keystore, unlike constructing a [DeviceKeyManager] (which
+         * loads the Keystore and may generate a key): screens that only show or
+         * mail the id call this, so a Keystore fault cannot crash them.
+         */
+        @Suppress("HardwareIds") // ANDROID_ID is app-scoped, not a hardware identifier
+        fun deviceId(context: Context): String {
+            val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            prefs.getString(K_DEVICE_ID, null)?.let { return it }
+            val androidId = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID,
+            )
+            val id = if (!androidId.isNullOrBlank() && androidId != LEGACY_BAD_ANDROID_ID) {
+                "and-$androidId"
+            } else {
+                "dev-" + UUID.randomUUID().toString()
+            }
+            prefs.edit { putString(K_DEVICE_ID, id) }
+            return id
+        }
     }
 
     init {
@@ -59,28 +86,8 @@ class DeviceKeyManager(private val context: Context) {
         }
     }
 
-    /**
-     * Stable device id persisted on first use. Prefers a previously stored value
-     * so an upgrade cannot flip `dev-{uuid}` to `and-{ANDROID_ID}`. If none is
-     * stored, writes `and-{ANDROID_ID}` (app-scoped, survives reinstall) or a
-     * `dev-{uuid}` fallback.
-     */
-    @Suppress("HardwareIds") // ANDROID_ID is app-scoped, not a hardware identifier
-    fun getDeviceId(): String {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        prefs.getString(K_DEVICE_ID, null)?.let { return it }
-        val androidId = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ANDROID_ID,
-        )
-        val id = if (!androidId.isNullOrBlank() && androidId != LEGACY_BAD_ANDROID_ID) {
-            "and-$androidId"
-        } else {
-            "dev-" + UUID.randomUUID().toString()
-        }
-        prefs.edit { putString(K_DEVICE_ID, id) }
-        return id
-    }
+    /** This device's id; see [deviceId]. */
+    fun getDeviceId(): String = deviceId(context)
 
     /** SubjectPublicKeyInfo as a standard PEM block (parsed by the backend). */
     fun getPublicKeyPem(): String {

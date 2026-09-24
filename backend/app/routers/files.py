@@ -7,12 +7,21 @@ from fastapi.responses import StreamingResponse
 
 from .. import audit, drive, errors, firestore_repo as repo, statuses
 from .. import rate_limit
-from ..deps import verified_device
+from ..deps import rate_limited, verified_device
 from ..models import FileComplete
 from ..validation import DocumentId
 
 log = logging.getLogger("indic")
 router = APIRouter()
+
+
+def _owned_file(file_id: str, user: dict) -> dict:
+    """The caller's file [file_id]. Someone else's reads as absent, not 403, so
+    a file id cannot be probed for existence (as `sessions._owned_session`)."""
+    rec = repo.get_file(file_id)
+    if not rec or rec.get("uid") != user["uid"]:
+        raise HTTPException(404, errors.FILE_NOT_FOUND)
+    return rec
 
 
 def _is_first_byte_request(byte_range: str | None) -> bool:
@@ -25,7 +34,7 @@ def _is_first_byte_request(byte_range: str | None) -> bool:
     return bool(match) and match.group(1) == "0"
 
 
-@router.get("/v1/files/{file_id}/content")
+@router.get("/v1/files/{file_id}/content", dependencies=[rate_limited(rate_limit.download_bucket)])
 def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_device)):
     """Stream one file back from Drive (restore).
 
@@ -41,14 +50,7 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     edge usually means that budget was exhausted mid-stream.
     """
     user = ctx["user"]
-    # Check the bucket before the audit write: audit.record is a Firestore
-    # .add(), so limiting afterwards still charges a write per rejected request
-    # and files a FILE_DOWNLOAD entry for a download that never happened.
-    if not rate_limit.download_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    f = repo.get_file(file_id)
-    if not f or f.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.FILE_NOT_FOUND)
+    f = _owned_file(file_id, user)
     if not repo.cloud_backup_enabled(user):
         raise HTTPException(403, errors.feature_not_licensed_detail())
     drive_file_id = f.get("driveFileId")
@@ -70,6 +72,9 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
         if isinstance(e, requests.HTTPError) and e.response is not None:
             if e.response.status_code == 416:
                 raise HTTPException(416, errors.RANGE_NOT_SATISFIABLE) from e
+            if e.response.status_code == 404:
+                log.error("drive download %s: object gone from Drive", drive_file_id)
+                raise HTTPException(404, errors.DRIVE_FILE_GONE) from e
         log.error("drive download %s failed: %s", drive_file_id, e)
         raise HTTPException(502, errors.DRIVE_DOWNLOAD_FAILED) from e
 
@@ -98,14 +103,13 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     )
 
 
-@router.post("/v1/files/{file_id}/complete")
+@router.post(
+    "/v1/files/{file_id}/complete",
+    dependencies=[rate_limited(rate_limit.file_complete_bucket)],
+)
 def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx["user"]
-    if not rate_limit.file_complete_bucket.allow(user["uid"]):
-        raise HTTPException(429, errors.RATE_LIMITED)
-    rec = repo.get_file(file_id)
-    if not rec or rec.get("uid") != user["uid"]:
-        raise HTTPException(404, errors.FILE_NOT_FOUND)
+    rec = _owned_file(file_id, user)
     # Verify the upload actually landed intact before trusting this completion.
     # The client uploads straight to Drive, so ask Drive for the real size/md5
     # and reject a truncated or corrupted object. Skipped on an idempotent retry
@@ -115,6 +119,8 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
             meta = drive.get_file_meta(drive.access_token(), body.driveFileId)
         except requests.HTTPError as e:
             log.error("drive meta for %s failed: %s", body.driveFileId, e)
+            if e.response is not None and e.response.status_code == 404:
+                raise HTTPException(400, errors.DRIVE_FILE_GONE) from e
             raise HTTPException(502, errors.DRIVE_META_FAILED) from e
         if meta["size"] != rec.get("sizeBytes"):
             raise HTTPException(422, errors.SIZE_MISMATCH)

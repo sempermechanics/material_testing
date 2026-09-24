@@ -4,11 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Licences · Semper DIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/webp" href="../semper-icon.webp" />
   <link rel="stylesheet" href="../console.css" />
 </head>
 <body>
   <header>
-    <span class="brand">Semper&nbsp;DIC</span>
+    <a class="brand" href="https://sempermechanics.com/"><img src="../semper-mark.webp" alt="" width="28" height="28" />semper</a>
     <h1>Operator</h1>
     <span class="spacer"></span>
     <span id="who" class="muted"></span>
@@ -18,43 +22,22 @@
   </header>
 
   <main>
+    <!-- Outside #app: enrolment, step-up and sign-in errors report here while
+         the dashboard is still hidden. -->
+    <p id="status" class="muted"></p>
+
+    <!-- The whole desk is for Semper staff; everyone else sees this and
+         nothing of the desk (operator.js decides from /v1/me). -->
+    <section class="card" id="notOperator" hidden>
+      <h2>Not an operator account</h2>
+      <p class="muted">
+        The operator desk is for Semper staff.
+        <span id="notOperatorWho" class="mono"></span> can open:
+      </p>
+      <p><a href="../account/">Your account</a> &middot; <a href="../institution/">Institution seats</a></p>
+    </section>
+
     <div id="app" hidden>
-      <p id="status" class="muted"></p>
-
-      <!-- Shown only while the account has no second factor. Everything
-           below it is read-only until one is enrolled, because the backend
-           refuses every state change without one. -->
-      <section class="card" id="enrolCard" hidden>
-        <h2>Set up two-factor authentication</h2>
-        <div class="note">
-          Minting, renewing and revoking a licence all change what customers
-          can do, so they need a second factor and a recent sign-in. Until you
-          enrol one, this page can look but not touch.
-        </div>
-        <div class="row">
-          <button id="enrolStart">Enrol an authenticator app</button>
-        </div>
-        <div id="enrolStep" hidden>
-          <p class="muted">
-            Add this key to your authenticator app by hand ("enter setup key"),
-            then type the 6-digit code it shows.
-          </p>
-          <!-- Deliberately no QR image. Every QR service is somebody else's
-               server, and the thing being encoded is the TOTP secret itself —
-               posting it to a third party to get a picture back would hand
-               away the second factor protecting licence issuance. Generating
-               one in-page would need an encoder we cannot visually verify, so
-               manual entry it is; every authenticator app supports it. -->
-          <p class="mono key" id="enrolSecret"></p>
-          <p class="muted">Account: <span id="enrolAccount" class="mono"></span> · Issuer: Semper DIC</p>
-          <div class="row">
-            <input id="enrolCode" inputmode="numeric" autocomplete="one-time-code"
-                   placeholder="6-digit code" size="12" />
-            <button id="enrolFinish">Confirm</button>
-          </div>
-        </div>
-      </section>
-
       <!-- ------------------------------------------------------- mint -->
       <section class="card">
         <h2>Issue a licence</h2>
@@ -114,7 +97,6 @@
 
         <div class="row">
           <button id="mint">Issue licence</button>
-          <span id="mintHint" class="muted"></span>
         </div>
 
         <!-- The key is shown once and never again: only its hash is stored. -->
@@ -133,6 +115,7 @@
           <h2 style="margin:0">Licences</h2>
           <span class="spacer"></span>
           <input id="filter" placeholder="Filter by key, domain or email" size="28" />
+          <label class="muted"><input type="checkbox" id="showRevoked" /> Show revoked<span id="revokedCount"></span></label>
           <button id="reload" class="secondary">Refresh</button>
         </div>
         <div class="wrap">
@@ -164,7 +147,7 @@
         <div class="wrap">
           <table>
             <thead>
-              <tr><th>Member</th><th>State</th><th>Device</th><th>Seat held until</th><th></th></tr>
+              <tr><th>Member</th><th>Status</th><th>Seat</th><th>Device</th><th></th></tr>
             </thead>
             <tbody id="rosterRows"></tbody>
           </table>
@@ -217,6 +200,16 @@
       Sign in with a Semper staff account to manage licences.
     </p>
   </main>
+  <footer>
+    <span>&copy; <span id="year"></span> sempermechanics</span>
+    <nav>
+      <a href="https://sempermechanics.com/">sempermechanics.com</a>
+      <a href="https://sempermechanics.com/support/">Support</a>
+      <a href="/privacy/">Privacy</a>
+      <a href="/terms/">Terms</a>
+    </nav>
+  </footer>
+  <script type="module" src="../chrome.js"></script>
 
   <script type="module" src="operator.js"></script>
 </body>

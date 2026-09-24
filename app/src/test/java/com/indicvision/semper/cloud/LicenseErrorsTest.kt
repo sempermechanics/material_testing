@@ -61,6 +61,14 @@ class LicenseErrorsTest {
     }
 
     @Test
+    fun `a backup gone from Drive says so on restore and on download`() {
+        val body = """{"detail":"${ApiErrors.DRIVE_FILE_GONE}"}"""
+        val gone = ctx.getString(com.indicvision.semper.R.string.restore_backup_gone)
+        assertEquals(gone, LicenseErrors.restoreMessage(ctx, body))
+        assertEquals(gone, LicenseErrors.downloadMessage(ctx, body))
+    }
+
+    @Test
     fun `unknown detail stays formatted rather than blank`() {
         val msg = LicenseErrors.restoreMessage(ctx, "something_else")
         assertEquals(

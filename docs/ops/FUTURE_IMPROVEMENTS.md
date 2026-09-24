@@ -49,6 +49,13 @@ stack when the app updates.
 Already flagged as "next architecture" in [../../CONTEXT.md](../../CONTEXT.md)
 and in [TECH_DEBT.md](TECH_DEBT.md) — this is the concrete shape.
 
+**Decided (2026-09-23):** [ADR-003](../adr/ADR-003-viewerargs-read-side.md).
+The audit found the readers' defaults disagree (subset 41 vs 0, step 5 vs 1,
+ROI image-size vs 0), and the two writers disagree on values — the fresh run
+passes the requested ROI while the session saves the resolved one (TD-61) — so
+the read side resolves a missing field from the `SessionRecord` before falling
+back to one documented default.
+
 ## FI-5 A way back from on-screen copy to its string
 
 **Affects** all of §A · §E2.5 · *debuggability*
@@ -66,17 +73,19 @@ change either way.
 
 **Affects** A5 · §E2.6 · *accuracy, debuggability*
 
-`StaticAnalysisActivity` (~1600 lines), ~15 helpers and ~40 public `var`s on
-`AnalysisViewModel` collectively hold what a run will use; the authoritative
+`StaticAnalysisActivity` (1,827 lines), 18 helper/controller types and 47
+public `var`s on `AnalysisViewModel` (counted 2026-09-23) collectively hold
+what a run will use; subset, step, overlap, strain window and interpolator
+exist only in slider/radio views until params are built. The authoritative
 record only exists once `SessionRepository.buildSessionRecord` assembles it at
 commit. "What settings did this run actually use?" has no single answer until
-then.
+then — and the viewer opened straight after a run reads the ViewModel instead,
+which is TD-61. **Decided:** [ADR-004](../adr/ADR-004-runspec.md).
 
-**Fix.** An immutable `RunSpec` (frames, order, ROI + mask, subset, step, strain
-window, interpolator, sweep plan) built once at Compute and passed to
-`DicBatchRunner` / `VsgStudyRunner` and to the session record. The wizard keeps
-its mutable editing state; the run gets a snapshot. This is the larger item on
-this list — do it on its own, after FI-1.
+**Done** (run-spec PR): `RunSpec` is built once at Compute; the batch params,
+the sweep, both session records and the viewer the run opens read it or the
+`RunResult` that carries it. The wizard keeps its mutable editing state. What
+went in and what stayed out: [ADR-004 As built](../adr/ADR-004-runspec.md#as-built-2026-09-23).
 
 ## FI-7 Retire the unattested `/uploads` reader
 
@@ -121,20 +130,44 @@ twice.
   same function twice; only the producer, two string resources and the MIME type
   differ. The `catch (CancellationException) { remove }` in both is dead — the
   `finally` two lines below already removes the banner.
-- **The support-mail intent is built three times** (`SettingsHelpSupportSection`
-  ×2, `PendingApprovalActivity` ×1), diagnostics body included.
-- **`.part`/`.full` sidecar names**, which are `DriveTransfer`'s privates, are
-  hand-rebuilt at five sites in `CloudRestore`; a rename there silently stops
-  five cleanup paths from cleaning up.
-- **The `tmp → renameTo → copy-fallback` promote idiom** now exists six times.
+- **The support-mail intent is built four times** (`SettingsHelpSupportSection`
+  ×2, `PendingApprovalActivity` ×1, `ui/limit/SessionLimitActivity.kt:83`),
+  diagnostics body included.
+- **`.part`/`.full` sidecar names** have no constant anywhere: they are spelled
+  inline in `DriveTransfer` (:263, :317), in `IndicApi.kt:213`, and hand-rebuilt
+  at five sites in `CloudRestore` (:309, :355, :598, :645, :767); a rename in one
+  place silently stops the other cleanup paths from cleaning up.
+- **The `tmp → renameTo → copy-fallback` promote idiom** exists six times
+  exactly (`DriveTransfer.kt:350,497`, `IndicApi.kt:219`,
+  `SessionEverythingExporter.kt:91`, `SessionStore.kt:467`, `SessionZip.kt:231`)
+  plus two variants (`SessionRepository.kt:105`, `DicBatchRunner.kt:182`).
   One `util/AtomicFiles.promote(tmp, dest)` covers all of them.
 - **Cache filenames** (`semper-account-export.json`, `roi_mask_cache.bin`,
   `temp_roi_ref.bin`) are spelled in both their writer and `CacheJanitor`'s
-  reclaim set; rename one and the janitor silently stops reclaiming it. The same
-  file already does this correctly for *directories*, via `EngineDebug.DIR_NAME`.
-- **`routers/sessions.py`** repeats the session-ownership guard, the page-size
-  clamp and the `page` response dict three times each; `routers/files.py` has the
-  file-doc variant of the guard twice.
+  reclaim set; rename one and the janitor silently stops reclaiming it. The
+  `"share"` subdirectory is worse: `CacheJanitor.SHARE_SUBDIR` is private and six
+  writers spell the name themselves. `EngineDebug.DIR_NAME` shows the right
+  pattern.
+- **`routers/sessions.py`** repeats the session-ownership guard four times
+  (:119, :162, :199, :305), and the page-size clamp (with two different
+  ceilings, 100 and 1000) and the `page` response dict three times each;
+  `routers/files.py` has the file-doc variant of the guard twice.
+
+**Done** (TD-54 in the backend-dedupe PR, the rest in the app-reuse PR):
+
+- `data/DownloadProgress` publishes both workers' progress; their keys are
+  `DicKeys.PHASE_DOWNLOAD` / `DicKeys.DOWNLOAD_ERROR`, and both give up on
+  `HttpStatus.NOT_FOUND` / `FORBIDDEN`.
+- `SettingsYourDataSection.runExport(kind, produce)` runs both exports; the dead
+  `CancellationException` catch is gone.
+- `ui/common/SupportMail` builds the intent, the fallback toast and the
+  diagnostics lines for all four screens.
+- `util/AtomicFiles` owns `PART_SUFFIX` / `FULL_SUFFIX`, `deleteSidecars` and
+  `promote(tmp, dest)`, used at every site above except `DicBatchRunner`, which
+  keeps `writeBytes` so the `.dat` is not read a second time.
+- `CacheJanitor.SHARE_SUBDIR`, `shareDir()` and the reclaimable file names are
+  public, and their writers use them.
+- `routers/files.py` has one `_owned_file` guard, like `sessions._owned_session`.
 
 ## FI-16 Licensing: the three things scale will find first
 
@@ -161,7 +194,9 @@ is 40 reads when a human asks. A 2000-seat one is 2000, and the operator
 console offers the button per licence with nothing between it and the click.
 The cheap fix is a cap with a "showing the first N" note; the durable one is to
 denormalise the answer — stamp the seat when the holder is next seen, so the
-report is a subcollection scan and no user reads at all.
+report is a subcollection scan and no user reads at all. The reads are one
+`db().get_all()` batch since TD-62 (`backend/app/repo/reconcile.py`), so the
+cost is documents read, not round trips.
 
 **Four hours is the worst case for a revoke reaching an idle device.**
 `LicenseConfigWorker` refreshes `/v1/config` every four hours, so an account
@@ -179,9 +214,16 @@ Remaining from the 2026-08-31 efficiency pass (the three higher-impact items —
 Firestore read order, SessionZip CRC reuse, viewer chrome animator guard — are
 shipped):
 
-- `DicUploadWorker`'s progress sampler writes to the WorkManager DB every 700 ms
-  with no change guard (~650 of ~857 writes on a ten-minute backup are no-ops).
-- `SettingsActivity` calls `listCompleted`, which has no cache, while
-  `listRestorable`'s 60-second cache exists *because* "the settings page asks on
-  every open".
-- `session_provision` pages the session's file collection twice per provision.
+- ~~`DicUploadWorker`'s progress sampler writes every 700 ms with no change
+  guard.~~ **Done:** `UploadProgressSampler` publishes only when phase or percent
+  moves (`UploadProgressSamplerTest`).
+- `SettingsActivity` calls `listCompleted` (`SettingsActivity.kt:240`), which has
+  no cache. The dead `listRestorable` pair and its 60-second cache were deleted
+  (TD-51), so a cache for `listCompleted` would be new code, and it would need
+  the invalidation the old one had after restores and erasures. Only worth it
+  if the settings open is measurably slow.
+- A session's file collection is paged twice on the **inline** provision path —
+  once in `session_provision.py:51` and again by `list_pending_uploads` in
+  `routers/sessions.py:469` — not twice inside `session_provision` as previously
+  written. Each page also costs one extra document read to resolve its cursor
+  (`backend/app/repo/_base.py:227-228`, `_cursor_page`).

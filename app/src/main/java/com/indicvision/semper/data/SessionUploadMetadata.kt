@@ -178,7 +178,7 @@ object SessionUploadMetadata {
     }
 
     fun deviceJson(context: Context): JSONObject = JSONObject()
-        .put("id", DeviceKeyManager(context).getDeviceId())
+        .put("id", DeviceKeyManager.deviceId(context))
         .put("manufacturer", Build.MANUFACTURER)
         .put("model", Build.MODEL)
         .put("os", "Android ${Build.VERSION.RELEASE}")
