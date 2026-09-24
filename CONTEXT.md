@@ -135,6 +135,11 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   inside the ROI and counts only textured patches (`SubsetRecommender`), the
   `VsgPlotView` y gutter fits its widest tick, `TouchImageView` keeps a zoom
   across a resize, and `AviReader.frameIndexAt` takes half a µs of slack.
+- **Ported from material_testing (this branch).** A flick at rest scale scrubbed
+  two frames (`TouchImageView`: fling and swipe both fired); the Macrobenchmark
+  `ScreenBenchmark.settingsScroll` failed on every run, looking for the
+  licence-only Cloud header. `scripts/ci_test_report.py` prints failing device
+  tests and benchmark medians into the CI log.
 - **material_testing shares this history.** It merged this repo's `main` at
   `643462c` (sempermechanics/material_testing#22), so the next sync either way
   is a plain `git merge`. Its lab features (test type, loads, reports) stay

@@ -41,7 +41,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
 | `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=75`, Firestore emulator suite | `backend` (PR); always on `main` push | ~5–10 min |
 | `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | main push / labels | ~15–40 / up to ~90 min |
-| `tier-benchmark` | Macrobenchmark cold/warm startup (`:benchmark`). Emulator **smoke**: `suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`; no numeric thresholds. API 34. | `benchmark` label / `run_benchmark` dispatch only | ~20–40 min |
+| `tier-benchmark` | Macrobenchmark cold/warm startup (`:benchmark`). Emulator **smoke**: `suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`; no numeric thresholds. API 34. `scripts/ci_test_report.py` prints failing tests and each metric's min / median / max (`BENCH …` lines) into the log, as Tier 3 does for its failures. | `benchmark` label / `run_benchmark` dispatch only | ~20–40 min |
 | `ci-ok` | Single required status check — every job above passed or was skipped | — | seconds |
 
 **There is no tier 2 here any more.** Host C++ builds, the DICe comparisons and
