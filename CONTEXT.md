@@ -151,7 +151,7 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
 - **Live 2026-09-24.** #154: signed routes take their rate-limit bucket as
   `dependencies=[deps.rate_limited(...)]`, resolved before `verified_device`,
-  so a 429 no longer spends the nonce; 429s send `Retry-After`. Production
+  so a 429 no longer spends the nonce; 429s send `Retry-After`. First live as
   `semper-api-35957034833-1`; proven from a Pixel 6 ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
 - **Terms back to 18+ (#171, reverts #169).** #169 (Terms §1.3 from 16, with
   a guardian agreeing under 18; version `2026-09-24`) went live on 2026-09-24
@@ -160,14 +160,15 @@ it. Preserve `-O3 -ffast-math` / OpenMP / LTO on release.
   byte for byte, so only users who accepted `2026-09-24` re-accept. Same
   revert as material_testing #15; keep both `TERMS_VERSION`s equal
   ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **Merged, not shipped (#155–#168).** The tech-debt burn-down
+- **Burn-down live on the backend 2026-09-24 (#155–#168).**
   ([TECH_DEBT.md](docs/ops/TECH_DEBT.md), [docs/adr/](docs/adr/README.md)
-  ADR-001..006). Backend changes (`app/repo/` package, route-aware access log,
-  `rate_limit.enforce`, bounded outbound `Retry-After`) go live with the next
-  `deploy-backend` dispatch, with #171; app changes (`RunSpec`, `ViewerArgs`,
-  wizard draft, `CloudApi` seam, checked PDF write) with the next release.
-  ADR-006's gateway job has never run: it waits on the owner's IAM grant and
-  a `dry-run` dispatch.
+  ADR-001..006.) Production `semper-api-35963412251-1` (run 35963412251, from
+  `11eddc5`, with #171) and staging serve it. App changes (`RunSpec`,
+  `ViewerArgs`, wizard draft, `CloudApi` seam, checked PDF write) ship with
+  the next release. ADR-006's first `gateway` run (dry-run) failed:
+  `apigateway.apis.get` denied, so the IAM grant is still owed. The live
+  gateway config still routes the removed campus invite-revoke alias (TD-45);
+  the backend 404s it and nothing calls it.
 - **Owed.** Video/AVI import (#136–#139) has run only on emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
   rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).

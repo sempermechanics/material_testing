@@ -101,7 +101,7 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       **They are live** on the hosted pages as literal text (TD-36, checked
       2026-09-23): `PRIVACY_POLICY.md:5` (name, address), `:7` (Grievance
       Officer name, email), `:18` (name), `:153` (region);
-      `TERMS_OF_SERVICE.md:6` (name, address), `:440` (name), `:441`
+      `TERMS_OF_SERVICE.md:6` (name, address), `:438` (name), `:439`
       (address) — rendered into `firebase-hosting/public/privacy/index.html`
       and `terms/index.html`. Values come from the operator; nobody else
       should fill them.
