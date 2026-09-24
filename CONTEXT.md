@@ -251,7 +251,7 @@ The run changed three things:
   takes them in, and local strain spikes to about 2,400,000 µε in 6 of 33
   frames. That is a `native/` change.
 
-**VSG = strain window in the docs (`docs/vsg-is-strain-window`).** The
+**VSG = strain window in the docs (PR #19, `docs/vsg-is-strain-window`, merged).** The
 engine reads `strain_window` as a circle's diameter in px, so the gauge is the
 window itself (`VsgStudy.vsgFor`, two device runs in its KDoc). The operating
 manual, WORKFLOWS §8.4.3, `docs/images/vsg.svg`, the glossaries and the
