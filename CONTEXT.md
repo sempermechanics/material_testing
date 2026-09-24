@@ -37,7 +37,7 @@ Use these words. Do not invent synonyms.
 | step | Grid spacing between tracked points, px |
 | ZNSSD | Match score; 0 = perfect, ≤ 0.15 accepted, < 0 failed-point sentinel |
 | ICGN | Iterative Gauss-Newton sub-pixel solver |
-| VSG | Strain window: least-squares plane fit, odd width |
+| VSG | Strain window: least-squares plane fit over a circle whose diameter is the window, in px (odd). VSG = window, not `(window − 1) × step + 1` (`VsgStudy.vsgFor`) |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
@@ -214,7 +214,7 @@ the steel run that is frames 1–28 up to 1.94 mε, pinned in
 surfaces keep it. It is the viewer's counterpart to the lab report's
 `GRAPH_ELASTIC`, which is unchanged. WORKFLOWS §8.4.14d–f and §8.2a.10a.
 
-**Tap editor crosshairs (`feat/tap-crosshair`).** In `BeamEdgeTapActivity`
+**Tap editor crosshairs (PR #17, `feat/tap-crosshair`, merged).** In `BeamEdgeTapActivity`
 each mark now draws crosshair lines across the whole photo, so the horizontal
 line can be laid along the beam's edge. The bottom mark is held to the top
 mark's x (`BeamTapPlacement`): the second tap only sets its height, so the
@@ -222,6 +222,15 @@ thickness is measured straight down however the finger slips sideways. Moving
 the top moves the bottom's line with it. Taps saved before this with
 different x's load as they were and line up on the next edit. WORKFLOWS
 §6a.3–6a.4.
+
+**VSG = strain window in the docs (`docs/vsg-is-strain-window`).** The
+engine reads `strain_window` as a circle's diameter in px, so the gauge is the
+window itself (`VsgStudy.vsgFor`, two device runs in its KDoc). The operating
+manual, WORKFLOWS §8.4.3, `docs/images/vsg.svg`, the glossaries and the
+strain-window ⓘ still said `(window − 1) × step + 1`, or counted points. They
+now match the code. The engine-vsg FAQ no longer says to coarsen the step: a
+window under twice the step leaves fewer than 3 points in the circle. Docs
+and one string only; no behaviour change.
 
 **Docs refresh with new screenshots (PR #12).** Every app screenshot in
 `docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile

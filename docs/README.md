@@ -89,7 +89,7 @@ in `native/docs/ARCHITECTURE.md` inside the engine submodule.
 | `corr` / ZNSSD | Match quality. 0 = perfect, > 0.15 = rejected, < 0 = failed-point sentinel |
 | `ICGN` | The iterative sub-pixel solver (`OptimizationEngine`) |
 | `RGDIC` | Reliability-guided propagation — solved points seed their neighbors |
-| `VSG` / strain window | Least-squares plane fit over neighboring points that turns displacement into strain. Odd width |
+| `VSG` / strain window | Least-squares plane fit over neighboring points that turns displacement into strain. The window is the diameter, in px, of the circle of points fitted, so the VSG equals it. Odd width |
 | `.dat` files | Binary results: 8 floats per point (x, y, u, v, exx, eyy, exy, znssd) |
 
 For the directory layout, see [Where — repository map](../README.md#where--repository-map)

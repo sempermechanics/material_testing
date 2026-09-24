@@ -29,7 +29,6 @@ import kotlin.math.roundToInt
  *    The sweep asks for that fraction as `subset ÷ N`; single analysis asks
  *    for a pixel step plus the linked overlap `1 − step/subset`;
  *  - the strain window then follows from the VSG relation below.
- *  - the strain window then follows from the VSG relation below.
  *
  * Every surviving combination is solved in its own right and lands in the
  * result viewer as its own frame, so the comparison is made on the real fields

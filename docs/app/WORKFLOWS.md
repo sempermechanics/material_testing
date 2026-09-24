@@ -753,7 +753,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.1a | Open it on a run that stopped early | Two extra rows: **Stopped early** and **Frames solved (n of N)** — the provenance survives a restart |
 | [ ] 8.4.1b | Open it on the summary GIF | Max and min of the GIF colour-bar ends, no mean, and no histogram |
 | [ ] 8.4.2 | Compare against what you entered in the wizard | They match |
-| [ ] 8.4.3 | Look for a **virtual strain gauge** row | There is none, deliberately: VSG is `(strain window − 1) × step + 1`, and both of those are already rows above it |
+| [ ] 8.4.3 | Look for a **virtual strain gauge** row | There is none, deliberately: the VSG is the strain window itself, a diameter in px (`VsgStudy.vsgFor`), and that is already a row above it |
 | [ ] 8.4.4 | Scrub to another combination and reopen | The values follow the new frame, not the run's first |
 | [ ] 8.4.5 | Open it on a sweep | A line-cut plot with colour-matched Exx / Eyy / Exy and the cut axis named |
 | [ ] 8.4.6 | Open it on a single-setting run | No line-cut section |
