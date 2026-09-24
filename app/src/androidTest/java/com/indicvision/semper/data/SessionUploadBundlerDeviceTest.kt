@@ -21,8 +21,9 @@ import java.nio.ByteOrder
 /**
  * Upload staging with the report renderer, which needs the platform's
  * PdfDocument: one PDF and five field maps per readable frame, sweep labels
- * made path-safe, and the scratch PDF gone afterwards. The CSV and progress
- * contract is JVM-tested in SessionUploadBundlerTest.
+ * made path-safe, and the scratch PDF gone afterwards. The CSV's two sections
+ * stay apart with rendering running between frames (TD-66); the rest of the
+ * CSV and progress contract is JVM-tested in SessionUploadBundlerTest.
  */
 @RunWith(AndroidJUnit4::class)
 class SessionUploadBundlerDeviceTest {
@@ -80,6 +81,7 @@ class SessionUploadBundlerDeviceTest {
             sweepLabels = listOf("S21/W15", "S31\\W19"),
         )
         val staging = File(root, "staging")
+        val csv = File(root, "a.csv")
         val counts = runBlocking {
             SessionUploadBundler.stageCsvAndBundles(
                 context,
@@ -88,7 +90,7 @@ class SessionUploadBundlerDeviceTest {
                 ref,
                 rawDir,
                 staging,
-                File(root, "a.csv"),
+                csv,
                 writeReports = true,
             )
         }
@@ -101,6 +103,11 @@ class SessionUploadBundlerDeviceTest {
             val maps = File(staging, "processed/$label").list()?.sorted()
             assertEquals(listOf("Exx.png", "Exy.png", "Eyy.png", "U.png", "V.png"), maps)
         }
+        val lines = csv.readLines()
+        val header = lines.indexOfFirst { it.startsWith("image,") }
+        assertEquals(10, lines.subList(0, header).count { it.startsWith("# speckle.png,") })
+        assertTrue("stats among the points", lines.subList(header, lines.size).none { it.startsWith("#") })
+        assertFalse("points staging file left", File(root, "a.csv.points.tmp").exists())
         assertFalse("sweeps get no animations", File(staging, "processed/animations").exists())
         assertFalse("scratch pdf removed", File(context.cacheDir, "upload_bundler_device_frame.pdf").exists())
     }

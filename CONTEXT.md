@@ -119,25 +119,24 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-24)
 
-- **Deployed.** Production is Cloud Run `semper-api` (`semper-api-35963412251-1`,
-  from `11eddc5`) behind API Gateway `semper-gw`; staging `semper-api-staging`;
+- **Deployed.** Production is Cloud Run `semper-api` (`semper-api-35992296245-1`,
+  from `4d5a0ab`) behind API Gateway `semper-gw` (config `v202609241122-44`,
+  now deployed by CI, ADR-006); staging `semper-api-staging`;
   project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)). Licensing
   is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
-  Latest: #154 (a 429 keeps the nonce), #171 (Terms back to 18+; keep
-  `TERMS_VERSION` equal to material_testing's), the #155–#168 burn-down
-  ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
-- **Ported from material_testing, awaiting release.** The strain window is
-  entered in data points, default 5 (material_testing #20; stored and
-  exported values stay the VSG in px), and engine `v0.2.2` rejects
-  displacement outliers before the VSG (semper-dic-engine#3, material_testing
-  #21, which has the real-data before/after). Four general-purpose fixes from
-  material_testing `3a1a941` / `c15efd3`: the speckle reading stays inside
-  the ROI and counts only textured patches (`SubsetRecommender`), the
-  `VsgPlotView` y gutter fits its widest tick, `TouchImageView` keeps a
-  zoom across a resize, and `AviReader.frameIndexAt` takes half a µs of slack.
-- **Owed.** An app release for the burn-down's app half. The IAM grant for
-  ADR-006's `gateway` job (TD-27): its first dry-run failed on
-  `apigateway.apis.get`. Video/AVI import has run only on emulators
+  Latest: the #155–#168 burn-down, #173/#179 backend dependency and base-image
+  bumps, #183 and the first CI gateway apply ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
+- **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`):
+  `v1.2-beta.1` (the burn-down's app half, #180's strain window in data points,
+  engine `v0.2.2`) plus #182, the upload CSV's stats rows above the point
+  section (TD-66) ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
+- **Ported from material_testing, awaiting release.** Four general-purpose
+  fixes from material_testing `3a1a941` / `c15efd3`: the speckle reading stays
+  inside the ROI and counts only textured patches (`SubsetRecommender`), the
+  `VsgPlotView` y gutter fits its widest tick, `TouchImageView` keeps a zoom
+  across a resize, and `AviReader.frameIndexAt` takes half a µs of slack.
+- **Owed.** A device smoke of `v1.2-beta.2` and its public distribution
+  (website / Play). Video/AVI import has run only on emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
   rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`; history in

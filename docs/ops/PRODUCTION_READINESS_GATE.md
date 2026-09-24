@@ -22,20 +22,38 @@ Strict binary PASS against all applicable external controls is **not** claimed.
 
 ### Security / data integrity
 
-- [ ] Deploy deny-all `firestore.rules` and confirm client SDK cannot read/write.
+- [x] Deploy deny-all `firestore.rules` (`./scripts/deploy-firestore.sh rules`) and confirm
+      client SDK cannot read/write. Deployed to `indicvision-dic-app` 2026-09-24;
+      anonymous REST reads of `users`, `licenses`, `sessions` and a create all
+      answer `403 PERMISSION_DENIED` ("Missing or insufficient permissions").
+      The Auth project has no Firestore database.
 - [ ] Confirm Firebase API key restrictions + App Check posture.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
 - [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`
       substituted) — pilot gateway is live; re-confirm quotas in console.
-- [ ] Confirm Cloud Run ingress, SA roles, Shared Drive Manager rights.
+- [ ] Confirm Cloud Run ingress, SA roles, Shared Drive Manager rights. Ingress
+      checked 2026-09-24: `all` on `semper-api`, as intended
+      ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) "Leave Cloud Run ingress at its
+      default"); an anonymous `GET /v1/config` on the `run.app` URL of production and
+      staging answers `403 Forbidden`. SA roles reviewed 2026-09-24: `run.invoker`
+      on `semper-api` is `indic-gw`, `indic-api`, `indic-deployer` and the owner's
+      user (no `allUsers`); `indic-api` holds only `datastore.user`,
+      `cloudtasks.enqueuer`, `logging.logWriter`; `indic-backup` only
+      `datastore.importExportAdmin` + `datastore.viewer`; the default compute SA
+      has no `roles/editor`. Open: `indic-deployer`'s project-wide
+      `storage.admin` and `iam.serviceAccountUser` (TD-71), and Shared Drive
+      Manager rights for `indic-api`.
 - [ ] Run and record one **Firestore restore drill**. The drill is automated
       (`.github/workflows/firestore-restore-drill.yml`) but needs a
       **`restore-drill` GitHub Environment** (separate from `production-backup`)
       plus one recorded RTO
       ([FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md)).
-- [ ] Confirm PITR / scheduled export job actually scheduled in GCP. The export
+- [x] Confirm PITR / scheduled export job actually scheduled in GCP. The export
       script already refuses to run without PITR, and now also fails if the
-      `challenges.expireAt` TTL policy is not ACTIVE.
+      `challenges.expireAt` TTL policy is not ACTIVE. Checked 2026-09-24:
+      `pointInTimeRecoveryEnablement` is `POINT_IN_TIME_RECOVERY_ENABLED`, the
+      `challenges.expireAt` TTL is `ACTIVE`, and the daily `firestore-backup.yml`
+      (`17 2 * * *`) succeeded on its scheduled runs of 2026-09-22, -23 and -24.
 - [x] Cloud Tasks queue and IAM for async session provisioning
       ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) §A6) — pilot
       `indic-provision`, renamed `semper-provision` / `semper-provision-staging` in #146 (2026-09-23), + `TASKS_*` vars. Keep vars set on redeploy.
@@ -126,9 +144,13 @@ build that calls them ships, or every sign-in ends at an unrecordable gate.
       [PRIVACY_POLICY.md](../legal/PRIVACY_POLICY.md); regenerate and **deploy
       Hosting** so `/terms/` and `/privacy/` show the new text before the app
       links to it.
-- [ ] Deploy the backend **and** redeploy API Gateway from the updated
+- [x] Deploy the backend **and** redeploy API Gateway from the updated
       `backend/gateway/openapi.yaml` (`POST /v1/me/terms`, `PUT /v1/me/consents`);
-      confirm with a curl that both reach Cloud Run through the gateway.
+      confirm with a curl that both reach Cloud Run through the gateway. Checked
+      2026-09-24 on config `v202609241122-44`: both answer an anonymous call with
+      `401 "Jwt is missing"` (the route exists and wants a token), where an
+      undefined path answers `404 "not defined by this API"`. A signed-in call
+      reaching Cloud Run is the Terms gate in the device pass below.
 - [ ] Manual device pass of the gate: fresh install → password sign-up → Terms
       screen before Pending/Home → Agree writes `users/{uid}.termsAccepted`;
       Google sign-in and email link show the same screen; Decline and Back sign
@@ -338,7 +360,8 @@ pre-licensing documents)
       can get a token and `monitor` would count 100 % missing.
 - [ ] §20.5 skew fallbacks (`plan` mirror, `/v1/campus/*` aliases) stay until
       adoption of a `mode`-reading build is high enough; retire in that order.
-- [ ] Gateway deploy job (TD-27): manual runbook for now.
+- [x] Gateway deploy job (TD-27): `deploy-backend.yml`'s `gateway` job; first
+      `apply` 2026-09-24 (run 35992296245, config `v202609241122-44`).
 - [ ] Per-user `maxSessions` override ignored in demo (TD-28): lifting one demo
       account's cap means attaching a licence.
 - [ ] Old-app restore UX: a pre-licensing build shows a generic "rejected"

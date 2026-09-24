@@ -93,11 +93,16 @@ the first run observational.
 
 1. [x] `gateway` job with `gateway_mode`, diff-and-skip, verify, rollback.
 2. [x] Rewrite the runbook; fix the three faults.
-3. [ ] Owner: grant the two roles; dispatch `dry-run`, then `apply`. The first
+3. [x] Owner: grant the two roles; dispatch `dry-run`, then `apply`. The first
    `dry-run` (run 35963412251, 2026-09-24) ran before the grant and failed at the
    diff step with `apigateway.apis.get` denied; the Cloud Run deploy it followed
-   succeeded.
-4. [ ] Close TD-27 after the first successful `apply`.
+   succeeded. The grant is in: the second (run 35990981043, 2026-09-24) read
+   the live config `v202609230845`, then failed on `base64: invalid input`
+   decoding its stored document; the decode now accepts either base64 alphabet
+   with or without padding (#183). The third `dry-run` (run 35991624707) diffed
+   cleanly, and `apply` (run 35992296245) created `v202609241122-44`, switched
+   `semper-gw` and passed both checks.
+4. [x] Close TD-27 after the first successful `apply` (2026-09-24).
 
 ## As built (2026-09-24)
 
@@ -117,8 +122,11 @@ the first run observational.
   `asia-northeast1`, `indic-gw@PROJECT`. Repo variables `GATEWAY_ID`,
   `GATEWAY_API`, `GATEWAY_REGION` and `GATEWAY_SA` override them.
 - The CORS check sends the first origin in `CONSOLE_ORIGINS`.
-- **Not run yet.** No one has dispatched it; it needs the IAM grant (item
-  3). Whether the live config's stored document is byte-equal to a fresh
-  render has not been checked either. The first `dry-run` shows it: a diff
-  of only whitespace or ordering means the skip would never fire, which is
-  harmless, since `apply` then just creates an identical config.
+- **First apply 2026-09-24** (run 35992296245): `v202609230845` →
+  `v202609241122-44`; `GET /v1/config` → 401, preflight → 200 with the
+  console origin. The stored document of the old config (`gw-prod-semper.yaml`)
+  matched a fresh render byte for byte apart from real changes (a comment and
+  the removed `/v1/campus` invite-revoke alias, TD-45), so an unchanged spec
+  does hit the skip.
+- The stored document comes back as base64 that GNU `base64 -d` rejects; the
+  diff step decodes it in Python (#183).
