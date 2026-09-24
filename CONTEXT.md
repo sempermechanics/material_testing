@@ -119,20 +119,19 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-24)
 
-- **Deployed.** Production is Cloud Run `semper-api` (`semper-api-35963412251-1`,
-  from `11eddc5`) behind API Gateway `semper-gw`; staging `semper-api-staging`;
+- **Deployed.** Production is Cloud Run `semper-api` (`semper-api-35992296245-1`,
+  from `4d5a0ab`) behind API Gateway `semper-gw` (config `v202609241122-44`,
+  now deployed by CI, ADR-006); staging `semper-api-staging`;
   project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)). Licensing
   is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
-  Latest: #154 (a 429 keeps the nonce), #171 (Terms back to 18+; keep
-  `TERMS_VERSION` equal to material_testing's), the #155–#168 burn-down
-  ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
+  Latest: the #155–#168 burn-down, #173/#179 backend dependency and base-image
+  bumps, #183 and the first CI gateway apply ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.1`** (beta, private GitHub Release, from `2214860`):
   the burn-down's app half, and #180's strain window in data points and engine
   `v0.2.2` outlier rejection ([CHANGELOG.md](docs/ops/CHANGELOG.md)).
 - **Owed.** A device smoke of `v1.2-beta.1` and its public distribution
-  (website / Play). The IAM grant for
-  ADR-006's `gateway` job (TD-27): its first dry-run failed on
-  `apigateway.apis.get`. Video/AVI import has run only on emulators
+  (website / Play). #182 (TD-66, upload CSV sections) is on `main` but not in
+  `v1.2-beta.1`; it ships with the next release. Video/AVI import has run only on emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). Unchecked "Licensing rollout"
   rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`; history in

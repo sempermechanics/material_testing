@@ -338,7 +338,8 @@ pre-licensing documents)
       can get a token and `monitor` would count 100 % missing.
 - [ ] §20.5 skew fallbacks (`plan` mirror, `/v1/campus/*` aliases) stay until
       adoption of a `mode`-reading build is high enough; retire in that order.
-- [ ] Gateway deploy job (TD-27): manual runbook for now.
+- [x] Gateway deploy job (TD-27): `deploy-backend.yml`'s `gateway` job; first
+      `apply` 2026-09-24 (run 35992296245, config `v202609241122-44`).
 - [ ] Per-user `maxSessions` override ignored in demo (TD-28): lifting one demo
       account's cap means attaching a licence.
 - [ ] Old-app restore UX: a pre-licensing build shows a generic "rejected"
