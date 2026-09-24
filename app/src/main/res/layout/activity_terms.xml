@@ -31,7 +31,7 @@
             android:layout_marginTop="4dp"
             android:textColor="@color/surface_outline"
             android:textSize="11sp"
-            tools:text="Terms version 2026-09-15" />
+            tools:text="Terms version 2026-09-24" />
 
         <TextView
             android:layout_width="match_parent"
