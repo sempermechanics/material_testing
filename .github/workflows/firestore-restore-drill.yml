@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   drill:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     environment: restore-drill
     steps:
@@ -47,7 +47,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install verification dependencies
-        run: pip install google-cloud-firestore==2.29.0
+        run: pip install google-cloud-firestore==2.31.0
 
       - id: pick
         name: Resolve export URI

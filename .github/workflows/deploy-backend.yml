@@ -58,7 +58,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -68,7 +68,7 @@ jobs:
     needs: test
     # Production ships only what is on main; staging may deploy a branch.
     if: github.event.inputs.environment != 'production' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: ${{ github.event.inputs.environment }}
     outputs:
@@ -373,7 +373,7 @@ jobs:
   gateway:
     needs: deploy
     if: github.event.inputs.environment == 'production' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: production
     env:

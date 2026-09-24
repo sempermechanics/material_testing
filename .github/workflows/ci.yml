@@ -27,7 +27,7 @@ permissions:
 jobs:
   secret-scan:
     name: Secret scan (full history)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # pull-requests:read needed by gitleaks-action on pull_request events.
     permissions:
@@ -71,7 +71,7 @@ jobs:
 
   legal-pages:
     name: Legal pages match their source
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     # The published /privacy/ and /terms/ pages are generated from
     # docs/legal/*.md. They were previously placeholders whose own body said
@@ -93,7 +93,7 @@ jobs:
 
   console-pages:
     name: Console pages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     # The consoles have no compiler and no build step, so nothing else in this
     # repository fails when a page's wiring goes stale: the pages load, look
@@ -123,7 +123,7 @@ jobs:
   # ===================================================================
   changes:
     name: Detect changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     # pull-requests:read for the Files API; Dependabot still 403s that API, so
     # PRs also pass base SHA below and paths-filter diffs via local git.
@@ -236,6 +236,9 @@ jobs:
             case "$HEAD_REF" in
               dependabot/pip/*) backend=true ;;
               dependabot/gradle/*) app=true ;;
+              # The backend image. Tier 4 runs on the runner's Python, not the
+              # image, but it is the nearest proof and beats gates-only (TD-68).
+              dependabot/docker/*) backend=true ;;
               dependabot/github_actions/*) ;; # gates only
               *)
                 # Unknown Dependabot ecosystem: stay gates-only.
@@ -280,7 +283,7 @@ jobs:
   # ===================================================================
   tier1-app-fast:
     name: Tier 1 — App fast
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: changes
     if: >-
@@ -317,7 +320,7 @@ jobs:
   # ===================================================================
   tier3-emulator-e2e:
     name: Tier 3 — Emulator E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     needs: [changes, tier1-app-fast]
     permissions:
@@ -347,7 +350,7 @@ jobs:
 
       - uses: ./.github/actions/enable-kvm
 
-      # ubuntu-latest images leave ~7GB free after SDK/emulator install; default AVD
+      # ubuntu-24.04 images leave ~7GB free after SDK/emulator install; default AVD
       # userdata wants ~7.4GB and fails with "Not enough space to create userdata partition".
       - name: Free disk space for AVD
         run: |
@@ -364,7 +367,9 @@ jobs:
           disable-animations: true
           # Cap below typical free space so AVD create succeeds on crowded runners.
           disk-size: 4G
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          # -no-metrics: without a metrics choice the emulator prints an
+          # "ACTION REQUIRED" banner that a future release turns into a blocking prompt.
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics
           script: >
             ./gradlew :app:connectedDebugAndroidTest
             -PabiFilters=x86_64
@@ -387,7 +392,7 @@ jobs:
   # ===================================================================
   tier4-backend:
     name: Tier 4 — Backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: changes
     if: >-
@@ -462,14 +467,15 @@ jobs:
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: '17'
+          # firebase-tools 15 dropped emulator support for Java < 21 (v15.0.0 notes).
+          java-version: '21'
 
       - name: Run Firestore emulator tier
         env:
           GOOGLE_CLOUD_PROJECT: semper-ci-emulator
           FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
         run: |
-          npm install -g firebase-tools@13.35.1
+          npm install -g firebase-tools@15.31.0
           firebase emulators:exec \
             --only firestore \
             --config firebase.emulator.json \
@@ -482,7 +488,7 @@ jobs:
   # ===================================================================
   tier5-signed-release:
     name: Tier 5 — Signed release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     needs: [changes, tier1-app-fast]
     permissions:
@@ -582,7 +588,7 @@ jobs:
   # ===================================================================
   tier-benchmark:
     name: Macrobenchmark startup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     needs: [changes, tier1-app-fast]
     permissions:
@@ -612,6 +618,8 @@ jobs:
           # startActivityAndWait cannot confirm launch.
           api-level: 34
           arch: x86_64
+          # The action's default options plus -no-metrics (see tier 3).
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
 
       # Numbers are smoke on an emulator, not a regression gate (see
@@ -631,7 +639,7 @@ jobs:
   # ===================================================================
   ci-ok:
     name: CI OK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: always()
     needs:
