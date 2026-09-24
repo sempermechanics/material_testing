@@ -123,7 +123,10 @@ within 10% of the gauge-point E.
 
 The viewer's Results section plots the whole test, out to 336 mε, so the
 elastic frames sit in a vertical line at the left edge. The lab-report PDF
-draws a separate elastic-region graph; the viewer does not.
+draws a separate elastic-region graph. The viewer has an **Elastic region**
+toggle beside the Results title (`report/ElasticRegion`). It zooms to the
+fitted frames plus half their strain span, which is frames 1–28 up to 1.94 mε
+here, with the fit line across it. It is pinned in `RealSteelModulusTest`.
 
 ### Reproduce
 

@@ -3,6 +3,7 @@ package com.indicvision.semper.ui.viewer
 import android.content.Context
 import com.indicvision.semper.R
 import com.indicvision.semper.report.ElasticModulus
+import com.indicvision.semper.report.ElasticRegion
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import java.util.Locale
@@ -44,6 +45,25 @@ object ViewerStressStrainResults {
             )
         }
     }
+
+    /**
+     * The elastic region zoomed in ([ElasticRegion]): the curve there, and the
+     * fitted line across it — the viewer's copy of the lab report's elastic graph.
+     */
+    fun elasticPlotSeries(context: Context, region: ElasticRegion.Plot): List<VsgPlotView.Series> = listOf(
+        VsgPlotView.Series(
+            label = context.getString(R.string.stress_strain_title),
+            color = VsgPlotView.paletteColor(context, 0),
+            points = region.points,
+        ),
+        VsgPlotView.Series(
+            label = context.getString(R.string.modulus_fit_label),
+            color = VsgPlotView.paletteColor(context, 1),
+            points = region.line,
+            markers = false,
+            muted = true,
+        ),
+    )
 
     fun resultsText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): String = buildList {
         if (curve.model is StressStrain.Model.Axial) {

@@ -61,6 +61,18 @@ class RealSteelModulusTest {
     }
 
     @Test
+    fun `the viewer's elastic region zooms to the fitted frames, not the 336 me curve`() {
+        // Window 0–2.49 mε: the 26 fitted frames plus frames 27–28, led by the origin.
+        val fit = ElasticModulus.fit(curve())!!
+
+        val region = ElasticRegion.of(curve(), fit)!!
+
+        assertEquals(29, region.points.size)
+        assertEquals(strainToStress.take(28), region.points.drop(1))
+        assertEquals(1.93949f, region.line.last().first, 0f)
+    }
+
+    @Test
     fun `E sits within ten percent of the dataset's own gauge points`() {
         // The dataset's stereo gauge points, 60 mm apart, over the same 26 frames.
         val gaugePointGPa = 157.5f

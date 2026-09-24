@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Results range toggle fill: the field pill's inverted checked half, and a light
+     track (viewer_range_track) unchecked so the other option shows on a white sheet. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/viewer_pill_on_bg" android:state_checked="true" />
+    <item android:color="@color/viewer_range_track" />
+</selector>

@@ -15,4 +15,7 @@ class ResultViewerViewModel : ViewModel() {
 
     /** Built on first Details open when the session has loads; a full batch decode, so kept. */
     var stressStrain: StressStrain.Curve? = null
+
+    /** Results plot zoomed to the elastic region E is fitted to, on both surfaces; else the whole test. */
+    var showElasticRegion: Boolean = false
 }

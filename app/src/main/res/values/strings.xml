@@ -732,6 +732,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="modulus_tensile_fmt">Young’s modulus E ≈ %1$s GPa, from the straight part of the curve (frames %2$d–%3$d, R² %4$s). Approximate: the strain comes from the camera, not an extensometer.</string>
     <string name="modulus_tensile_none">Young’s modulus E: not found. It needs at least three photos on the straight, early part of the curve, before the peak.</string>
     <string name="modulus_sign_caution">E came out negative or zero. Check the strain axis matches the direction the specimen is loaded in.</string>
+    <!-- Results plot range: the whole curve, or zoomed to the frames E is fitted to -->
+    <string name="results_range_whole">Whole test</string>
+    <string name="results_range_elastic">Elastic region</string>
+    <string name="results_range_desc">Plot range</string>
+    <string name="results_elastic_caption_fmt">Zoomed to frames %1$d–%2$d, the straight part E is fitted to, and the curve just past them. The grey line is the fit.</string>
     <string name="step_of_fmt">Step %1$d of %2$d</string>
     <string name="reference_meta_fmt">Reference · %1$d × %2$d px</string>
     

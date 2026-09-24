@@ -69,6 +69,11 @@
     <color name="viewer_pill_on_bg">#E6152430</color>
     <color name="viewer_pill_on_text">#FFFFFFFF</color>
 
+    <!-- Unchecked half of the Results Whole test / Elastic region toggle. The field
+         pill's white frost vanishes on the white Details sheet, so light theme uses
+         a solid light fill; night keeps the frost, which reads on the dark sheet. -->
+    <color name="viewer_range_track">@color/surface_outline</color>
+
     <color name="viewer_peek_scrim">#FFFFFFFF</color>       <!-- peek sheet surface -->
     <color name="viewer_peek_handle">#40152430</color>
     <color name="viewer_peek_text">#152430</color>

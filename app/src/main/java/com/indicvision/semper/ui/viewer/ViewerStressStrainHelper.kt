@@ -6,10 +6,12 @@ import android.view.View
 import android.widget.TextView
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.loadOfFrame
 import com.indicvision.semper.report.ElasticModulus
+import com.indicvision.semper.report.ElasticRegion
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import kotlinx.coroutines.Dispatchers
@@ -29,10 +31,21 @@ class ViewerStressStrainHelper(
     private val host: ResultViewerActivity,
     private val vm: ResultViewerViewModel,
 ) {
-    /** Where a curve is drawn: the Details sheet's section or the summary page. */
-    class Views(val plot: VsgPlotView, val caption: TextView, val result: TextView)
+    /**
+     * Where a curve is drawn: the Details sheet's section or the summary page.
+     * [range] is the Whole test / Elastic region toggle, inside its pill clip.
+     */
+    class Views(
+        val plot: VsgPlotView,
+        val caption: TextView,
+        val result: TextView,
+        val range: MaterialButtonToggleGroup,
+    )
 
     private var job: Job? = null
+
+    /** True while [bindRange] sets the toggle to match the ViewModel, so its listener ignores it. */
+    private var syncingRange = false
 
     /** Surfaces waiting for the running build; each is drawn when it lands. */
     private val waiting = mutableListOf<Views>()
@@ -77,6 +90,7 @@ class ViewerStressStrainHelper(
                 sheetView.findViewById(R.id.plotStressStrain),
                 sheetView.findViewById(R.id.tvStressStrainCaption),
                 sheetView.findViewById(R.id.tvStressStrainResult),
+                sheetView.findViewById(R.id.toggleStressStrainRange),
             ),
         )
     }
@@ -94,6 +108,7 @@ class ViewerStressStrainHelper(
     private fun build(views: Views) {
         views.plot.isVisible = false
         views.result.isVisible = false
+        (views.range.parent as View).isVisible = false
         views.caption.text = host.getString(R.string.stress_strain_progress_fmt, 0, host.loadsN.size)
         waiting += views
         if (job?.isActive == true) return
@@ -125,12 +140,12 @@ class ViewerStressStrainHelper(
 
     private fun draw(views: Views, curve: StressStrain.Curve) {
         val plot = views.plot
-        val caption = views.caption
         val result = views.result
         if (curve.isEmpty) {
             plot.isVisible = false
             result.isVisible = false
-            caption.setText(R.string.stress_strain_empty)
+            (views.range.parent as View).isVisible = false
+            views.caption.setText(R.string.stress_strain_empty)
             return
         }
         plot.isVisible = true
@@ -139,24 +154,69 @@ class ViewerStressStrainHelper(
         val current = if (host.isShowingSummary) null else curve.at(host.currentFrameIndex)
         val (xAxis, yAxis) = axisLabels(host, curve.model)
         val modulus = modulusOf(curve)
+        val region = modulus?.let { ElasticRegion.of(curve, it) }
+        bindRange(views, shown = region != null)
+        val zoomed = region?.takeIf { vm.showElasticRegion }
         val bending = curve.model.plotsLoadDeflection
         plot.setData(
-            plotSeries(host, curve, modulus),
+            zoomed?.let { ViewerStressStrainResults.elasticPlotSeries(host, it) } ?: plotSeries(host, curve, modulus),
             xAxis,
             yAxis,
             highlightX = if (bending) current?.deflectionMm else current?.strainMilli,
             xUnit = if (bending) ViewerBendingResults.UNIT_DEFLECTION else StressStrain.UNIT_STRAIN,
             yUnit = if (bending) ViewerBendingResults.UNIT_LOAD else StressStrain.UNIT_STRESS,
         )
-        caption.text = when {
+        views.caption.text = caption(curve, current, modulus?.takeIf { zoomed != null })
+        result.isVisible = true
+        result.text = resultsText(host, curve, modulus)
+    }
+
+    /**
+     * The Whole test / Elastic region toggle, [shown] only when there is an
+     * elastic fit to zoom to. The choice lives in the ViewModel, so both
+     * surfaces and a reopen keep it. The listener is attached once per view;
+     * the [check] made here to match the ViewModel is not a tap, so it does
+     * not redraw from inside a draw.
+     */
+    private fun bindRange(views: Views, shown: Boolean) {
+        val group = views.range
+        val clip = group.parent as View
+        clip.clipToOutline = true
+        clip.isVisible = shown
+        if (group.tag == null) {
+            group.tag = RANGE_BOUND
+            group.addOnButtonCheckedListener { _, id, isChecked ->
+                if (isChecked && !syncingRange) {
+                    vm.showElasticRegion = id == R.id.btnRangeElastic
+                    vm.stressStrain?.let { draw(views, it) }
+                }
+            }
+        }
+        syncingRange = true
+        group.check(if (vm.showElasticRegion) R.id.btnRangeElastic else R.id.btnRangeWhole)
+        syncingRange = false
+    }
+
+    /** The line under the plot; [zoomedFit] is the fit when the plot shows only its elastic region. */
+    private fun caption(curve: StressStrain.Curve, current: StressStrain.Point?, zoomedFit: ElasticModulus.Fit?) =
+        when {
+            host.isShowingSummary && zoomedFit != null -> host.getString(
+                R.string.results_elastic_caption_fmt,
+                zoomedFit.firstFrame + 1,
+                zoomedFit.lastFrame + 1,
+            )
             host.isShowingSummary -> host.resources.getQuantityString(
-                if (bending) R.plurals.results_summary_caption_bending_fmt else R.plurals.results_summary_caption_fmt,
+                if (curve.model.plotsLoadDeflection) {
+                    R.plurals.results_summary_caption_bending_fmt
+                } else {
+                    R.plurals.results_summary_caption_fmt
+                },
                 host.loadsN.size,
                 curve.points.size,
                 host.loadsN.size,
             )
             current == null -> host.getString(R.string.stress_strain_frame_skipped)
-            bending -> ViewerBendingResults.frameCaption(host, curve, current.frame)
+            curve.model.plotsLoadDeflection -> ViewerBendingResults.frameCaption(host, curve, current.frame)
                 ?: host.getString(R.string.stress_strain_frame_skipped)
             else -> host.getString(
                 R.string.stress_strain_caption_fmt,
@@ -166,13 +226,13 @@ class ViewerStressStrainHelper(
                 fmt(current.strainMilli),
             )
         }
-        result.isVisible = true
-        result.text = resultsText(host, curve, modulus)
-    }
 
     private fun fmt(value: Float): String = String.format(Locale.US, "%.3f", value).trimEnd('0').trimEnd('.')
 
     companion object {
+        /** Marks a range toggle whose listener is attached. */
+        private const val RANGE_BOUND = "range-bound"
+
         /**
          * [context] with the day palette, for plots drawn into a PDF: the
          * page is always white, and night ink (light grey axis titles) would
