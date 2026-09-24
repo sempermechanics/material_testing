@@ -756,3 +756,37 @@ def test_an_address_finds_the_licences_it_administers(emulator_repo):
 
     assert found == [mine], "a revoked or foreign licence reached the listing"
 
+
+
+def test_reconcile_matches_each_seat_to_its_own_holder(emulator_repo):
+    """Holders are read with one batched `get_all`, which returns snapshots in
+    no promised order. A report that paired a seat with the wrong account would
+    move holders between buckets, so each seat here is in a different state."""
+    license_id = _emu_institution(emulator_repo, max_seats=5, seating="assigned")
+    tag = uuid.uuid4().hex[:8]
+    users = [
+        _emu_user(emulator_repo, f"emu-{tag}-{i}", f"r{i}-{tag}@university.edu")
+        for i in range(3)
+    ]
+    for u in users:
+        err = emulator_repo.claim_seat(
+            license_id, u["uid"], u["email"], "",
+            {"licenseId": license_id, "mode": "licensed"},
+        )
+        assert err == "", err
+    holder, revoked, gone = users
+    assert emulator_repo.revoke_institution_seat(license_id, revoked["uid"]) is True
+    assert emulator_repo.revoke_institution_seat(license_id, gone["uid"]) is True
+    emulator_repo.db().collection("users").document(gone["uid"]).delete()
+
+    err, report = emulator_repo.reconcile_institution_seats(license_id)
+
+    assert err == ""
+    by_uid = {row["uid"]: row for row in report["seats"]}
+    assert set(by_uid) == {u["uid"] for u in users}
+    assert (by_uid[holder["uid"]]["bucket"], by_uid[holder["uid"]]["reason"]) == ("active", "")
+    assert by_uid[holder["uid"]]["email"] == holder["email"]
+    assert by_uid[gone["uid"]]["reason"] == emulator_repo.NO_ACCOUNT
+    assert by_uid[revoked["uid"]]["bucket"] in {"revokedConfirmed", "revokedStillRunning"}
+    assert by_uid[revoked["uid"]]["reason"] != emulator_repo.NO_ACCOUNT
+    assert report["entitled"] == 1

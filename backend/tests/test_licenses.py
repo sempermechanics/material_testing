@@ -202,7 +202,7 @@ async def test_demo_cannot_read_a_stored_file_back(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_activate_endpoint_happy_path(client, monkeypatch):
+async def test_activate_endpoint_happy_path(client, monkeypatch, audited):
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
@@ -222,6 +222,10 @@ async def test_activate_endpoint_happy_path(client, monkeypatch):
     )
     assert resp.status_code == 200
     assert resp.json()["config"]["plan"] == "professional"
+    # The audit trail records the current vocabulary only; `plan` stays a
+    # response mirror for old app builds, not something new rows carry (TD-45).
+    (row,) = [r for r in audited if r["action"] == "LICENSE_ACTIVATE"]
+    assert row["detail"] == {"mode": "licensed"}
 
 
 @pytest.mark.asyncio
@@ -1275,6 +1279,51 @@ def test_re_inviting_to_the_same_licence_is_a_no_op(store):
     assert err == ""
     assert invite["licenseId"] == license_id
     assert len(store._data["licenseInvites"]) == 1
+
+
+def test_a_starved_invite_claim_mints_no_demo_key(store, monkeypatch):
+    """TD-33: a claim that lost every attempt to contention, with nobody
+    winning, used to fall through to the Demo mint. The Demo `licenseId` then
+    short-circuited every later claim, so the invite stayed pending for good.
+    The request is now served unlicensed (Demo limits) and the next one claims.
+    """
+    store._data["users"] = {}
+    license_id = _mint_floating()["license"]["id"]
+    repo.add_institution_member(license_id, "busy@university.edu")
+    user = {"uid": "busy-1", "email": "busy@university.edu",
+            "access_status": "APPROVED", "emailVerified": True}
+    store._data["users"]["busy-1"] = dict(user)
+    demo_before = {k for k, v in store._data["licenses"].items() if v.get("mode") == "demo"}
+
+    real_claim = repo.claim_seat
+    monkeypatch.setattr(repo, "claim_seat", lambda *a, **k: repo._CONTENDED)
+    out = repo.ensure_entitlement(dict(user), "dev-1")
+
+    assert not out.get("licenseId")
+    assert repo.resolve_user_config(out)["mode"] == "demo"
+    assert {k for k, v in store._data["licenses"].items() if v.get("mode") == "demo"} == demo_before
+    assert len(repo.list_institution_invites(license_id)) == 1, "the invite must stay pending"
+
+    monkeypatch.setattr(repo, "claim_seat", real_claim)
+    out = repo.ensure_entitlement(dict(store._data["users"]["busy-1"], uid="busy-1"), "dev-1")
+    assert out["licenseId"] == license_id
+    assert out["mode"] == "licensed"
+    assert repo.list_institution_invites(license_id) == []
+
+
+def test_a_non_transient_claim_failure_still_mints_demo(store, monkeypatch):
+    """Seats exhausted is not going to clear on the next request, so the
+    account gets its Demo key rather than re-running the claim every time."""
+    store._data["users"] = {}
+    license_id = _mint_floating()["license"]["id"]
+    repo.add_institution_member(license_id, "full@university.edu")
+    user = {"uid": "full-1", "email": "full@university.edu",
+            "access_status": "APPROVED", "emailVerified": True}
+    store._data["users"]["full-1"] = dict(user)
+    monkeypatch.setattr(repo, "claim_seat", lambda *a, **k: "license_seats_exhausted")
+    out = repo.ensure_entitlement(dict(user), "dev-1")
+    assert out["licenseId"] and out["licenseId"] != license_id
+    assert out["mode"] == "demo"
 
 
 def test_a_revoked_invite_is_never_redeemed(store):

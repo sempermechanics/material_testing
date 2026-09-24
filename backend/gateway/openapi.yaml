@@ -813,26 +813,6 @@ paths:
         '403': { description: email_not_verified }
         '404': { description: license_not_found or invite_not_found }
         '429': { description: Rate limited }
-  /v1/campus/licenses/{licenseId}/invites/{inviteKey}:
-    delete:
-      operationId: campusRevokeInvite
-      description: >
-        Deprecated alias of DELETE
-        /v1/institutions/licenses/{licenseId}/invites/{inviteKey}.
-      parameters:
-        - name: licenseId
-          in: path
-          required: true
-          type: string
-        - name: inviteKey
-          in: path
-          required: true
-          type: string
-      responses:
-        '200': { description: OK }
-        '403': { description: email_not_verified }
-        '404': { description: license_not_found or invite_not_found }
-        '429': { description: Rate limited }
   /v1/institutions/licenses/{licenseId}/seats/{uid}:
     patch:
       operationId: institutionPatchSeat

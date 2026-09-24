@@ -2168,6 +2168,14 @@ def revoke_institution_invite(license_id: str, invite_key: str) -> bool:
 def claim_pending_invite(user: dict) -> dict:
     """Redeem a pending invite for an account that has just become usable.
 
+    See `_claim_pending_invite`, which also reports why a claim failed.
+    """
+    return _claim_pending_invite(user)[0]
+
+
+def _claim_pending_invite(user: dict) -> tuple[dict, str]:
+    """Redeem a pending invite; returns (user, error), error "" on no failure.
+
     Both licence kinds arrive here. An institution invite takes a seat; an
     individual one attaches the licence itself — the two ways a licence is
     delivered without anybody typing a key, and the only two. The invite
@@ -2191,27 +2199,27 @@ def claim_pending_invite(user: dict) -> dict:
     """
     uid = user.get("uid")
     if not uid or user.get("licenseId"):
-        return user
+        return user, ""
     if user.get("access_status") != "APPROVED" or not user.get("emailVerified"):
-        return user
+        return user, ""
     address = normalize_email(user.get("email"))
     if not address:
-        return user
+        return user, ""
 
     ref = _invite_ref(address)
     snap = ref.get()
     if not snap.exists:
-        return user
+        return user, ""
     license_id = ((snap.to_dict() or {}).get("licenseId") or "")
     lic = get_license(license_id) if license_id else None
     if not lic:
         # The licence was deleted out from under the invite. Drop it rather
         # than leaving a record that can never be redeemed.
         ref.delete()
-        return user
+        return user, ""
     if (lic.get("status") or "active") == "revoked":
         ref.delete()
-        return user
+        return user, ""
 
     # No device lock is passed either way: the invite predates any device
     # choice, and the lock is bound on the first authed request that carries a
@@ -2241,9 +2249,9 @@ def claim_pending_invite(user: dict) -> dict:
         # every browser request, since the consoles send no `X-Device-Id`.
         stored = db().collection("users").document(uid).get()
         if not stored.exists:
-            return user
-        return {**user, **(stored.to_dict() or {}), "uid": uid}
-    return {**user, **patch, "uid": uid}
+            return user, err
+        return {**user, **(stored.to_dict() or {}), "uid": uid}, err
+    return {**user, **patch, "uid": uid}, ""
 
 
 def ensure_entitlement(user: dict, device_id: str | None) -> dict:
@@ -2253,9 +2261,17 @@ def ensure_entitlement(user: dict, device_id: str | None) -> dict:
     The order is the point: `ensure_demo_license` stamps a `licenseId`, and
     every later call short-circuits on that field, so minting Demo first would
     strand the invite permanently.
+
+    That includes a claim that lost every transaction attempt to contention
+    with nobody winning (TD-33): the invite is still pending, so this request
+    is served without a licence — which resolves to Demo limits anyway — and
+    the next request claims again. Any other failure (seats exhausted, already
+    redeemed) is not transient, so Demo is minted as before.
     """
-    claimed = claim_pending_invite(user)
+    claimed, err = _claim_pending_invite(user)
     if claimed.get("licenseId"):
+        return claimed
+    if err == _CONTENDED:
         return claimed
     return ensure_demo_license(claimed, device_id)
 
@@ -2609,7 +2625,8 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
       periodic refresh is what shortens it.
 
     Costs one read per seat, which is why it is admin-tier and on demand
-    rather than a field on any hot path.
+    rather than a field on any hot path. The holders come back in one batched
+    `get_all` rather than one round trip per seat (TD-62).
     """
     lic_snap = db().collection("licenses").document(license_id).get()
     if not lic_snap.exists:
@@ -2626,12 +2643,21 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
         "revokedConfirmed": 0, "revokedStillRunning": 0,
     }
     entitled = 0
-    for seat_doc in db().collection("licenses").document(license_id) \
-            .collection("seats").stream():
-        seat = seat_doc.to_dict() or {}
-        uid = seat.get("uid") or seat_doc.id
-        user_snap = db().collection("users").document(uid).get()
-        user = user_snap.to_dict() if user_snap.exists else None
+    roster = [
+        (seat_doc.to_dict() or {}, seat_doc.id)
+        for seat_doc in db().collection("licenses").document(license_id)
+        .collection("seats").stream()
+    ]
+    uids = [seat.get("uid") or seat_id for seat, seat_id in roster]
+    users_ref = db().collection("users")
+    # get_all yields snapshots in no particular order; key them by id.
+    holders = {
+        snap.id: snap.to_dict()
+        for snap in db().get_all([users_ref.document(uid) for uid in dict.fromkeys(uids)])
+        if snap.exists
+    } if uids else {}
+    for (seat, _seat_id), uid in zip(roster, uids):
+        user = holders.get(uid)
 
         on_this_license = bool(user) and user.get("licenseId") == license_id
         holds = on_this_license and _stored_mode(user) == MODE_LICENSED

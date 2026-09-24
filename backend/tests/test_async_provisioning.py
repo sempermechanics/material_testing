@@ -163,6 +163,8 @@ async def test_retry_of_create_joins_the_provisioning_session(store, queued, cli
 
     assert first["sessionId"] == second["sessionId"]
     assert len(store._data["sessions"]) == 1
+    # The retry answers with the same shape as /uploads, cursor included.
+    assert "nextPageToken" in second
 
 
 # --- failure ----------------------------------------------------------------
@@ -227,6 +229,16 @@ async def test_inline_path_still_returns_usable_targets(store, client, monkeypat
     assert body["status"] == "UPLOADING"
     assert len(body["uploads"]) == 1
     assert body["uploads"][0]["uploadUrl"] == "https://drive/resumable"
+    assert body["nextPageToken"] is None
+
+
+def test_one_listing_page_holds_a_whole_session():
+    """create_session returns the first page of upload targets. That page is
+    the whole manifest only while the file cap stays below the page size."""
+    from app import firestore_repo as repo
+    from app.config import settings
+
+    assert settings.MAX_FILES_PER_SESSION <= repo._LIST_SOFT_LIMIT
 
 
 async def test_small_manifest_is_provisioned_inline_even_with_a_queue(

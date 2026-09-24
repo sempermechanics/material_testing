@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 from requests.adapters import HTTPAdapter
 
-from . import errors
+from . import backoff, errors
 from .config import settings
 from .google_auth import drive_access_token
 
@@ -73,14 +73,8 @@ def _headers(token: str) -> dict:
 
 
 def _retry_delay(response: requests.Response, attempt: int) -> float:
-    """Seconds to wait before retrying: honor Retry-After, else exponential."""
-    raw = response.headers.get("Retry-After")
-    if raw is not None:
-        try:
-            return max(0.0, float(raw))
-        except ValueError:
-            pass
-    return float(min(2 ** attempt, 16))
+    """Seconds to wait before retrying: honor Retry-After (capped), else exponential."""
+    return backoff.retry_delay(attempt, response.headers.get("Retry-After"))
 
 
 def _request_with_retry(
