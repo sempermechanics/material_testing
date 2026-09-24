@@ -1,7 +1,7 @@
 # Semper — Terms of Service
 
-**Last updated:** 2026-09-15  
-**Version:** 2026-09-15  
+**Last updated:** 2026-09-24  
+**Version:** 2026-09-24  
 **Product:** Semper (IndicVision DIC) — Android application, optional cloud services, and web console  
 **Operator:** [OPERATOR LEGAL NAME], [REGISTERED ADDRESS], Chennai, Tamil Nadu, India ("**we**", "**us**", "**IndicVision**")
 
@@ -27,8 +27,10 @@ is not offered to consumers. If you accept these Terms on behalf of an employer,
 institution, or other entity, you represent that you have authority to bind
 that entity, and "you" includes that entity.
 
-**1.3 Eligibility.** You must be at least 18 years old (or the age of majority
-where you live, if higher) and legally able to enter into contracts.
+**1.3 Eligibility.** You must be at least 16 years old. If you are under 18, or
+under the age of majority where you live, a parent or legal guardian must read
+and agree to these Terms for you, and is responsible for your use of the App
+and the Service.
 
 **1.4 Territory.** The Service is operated from India and is directed at users
 in India and in other markets where we choose to make it available. The
