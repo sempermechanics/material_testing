@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 
 /**
- * Cross-activity holder for subset / step / strain-window copied from a sweep
+ * Cross-activity holder for subset / step / VSG (px) copied from a sweep
  * lattice node and pasted into single-analysis settings. Survives process death
  * via SharedPreferences; paste does not clear so values stay until the next copy.
  */
@@ -17,17 +17,18 @@ object ParamClipboard {
     private const val KEY_WINDOW = "STRAIN_WINDOW"
     private const val KEY_HAS = "has_params"
 
-    data class Params(val subset: Int, val step: Int, val window: Int)
+    /** [vsg] is the strain window as the engine took it, a diameter in px; paste turns it back into points. */
+    data class Params(val subset: Int, val step: Int, val vsg: Int)
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun copy(context: Context, subset: Int, step: Int, window: Int) {
+    fun copy(context: Context, subset: Int, step: Int, vsg: Int) {
         prefs(context).edit {
             putBoolean(KEY_HAS, true)
             putInt(KEY_SUBSET, subset)
             putInt(KEY_STEP, step)
-            putInt(KEY_WINDOW, window)
+            putInt(KEY_WINDOW, vsg)
         }
     }
 
@@ -37,7 +38,7 @@ object ParamClipboard {
         return Params(
             subset = p.getInt(KEY_SUBSET, 0),
             step = p.getInt(KEY_STEP, 0),
-            window = p.getInt(KEY_WINDOW, 0),
+            vsg = p.getInt(KEY_WINDOW, 0),
         )
     }
 }

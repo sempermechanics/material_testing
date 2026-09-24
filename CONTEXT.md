@@ -37,7 +37,7 @@ Use these words. Do not invent synonyms.
 | step | Grid spacing between tracked points, px |
 | ZNSSD | Match score; 0 = perfect, ≤ 0.15 accepted, < 0 failed-point sentinel |
 | ICGN | Iterative Gauss-Newton sub-pixel solver |
-| VSG | Strain window: least-squares plane fit over a circle whose diameter is the window, in px (odd). VSG = window, not `(window − 1) × step + 1` (`VsgStudy.vsgFor`) |
+| VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd); VSG = `(window − 1) × step + 1` px (`VsgStudy.vsgFor`) is what the engine takes as its circle's diameter and what sessions store |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
@@ -223,7 +223,7 @@ the top moves the bottom's line with it. Taps saved before this with
 different x's load as they were and line up on the next edit. WORKFLOWS
 §6a.3–6a.4.
 
-**Bending on real images (`feat/bending-real-validation`).** A published PMMA
+**Bending on real images (PR #18, `feat/bending-real-validation`, merged).** A published PMMA
 3-point bend (Zenodo 1172068) was run through the app and compared point by
 point with the authors' own DIC
 ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md), case 2;
@@ -242,8 +242,9 @@ The run changed three things:
   (E 9% low). The instruction now sits over invisible copies of all three steps
   (`BeamTapStepText`), so its box is as tall as the longest at any width or
   font size.
-- **Bending's strain window starts at 45 px** (`TestType.defaultStrainWindow`;
-  tensile stays 15), on first open and on Reset. δ and E use displacement
+- **Bending's strain window starts wider** (`TestType.defaultStrainWindow`),
+  on first open and on Reset: 45 px then, 9 points (41 px at step 5) since
+  the window is entered in points (below). δ and E use displacement
   only. The cost is a band of about 20 px at the ROI edges with no strain,
   which also lowers the headline "converged" figure (97.6% → 92.8% here).
 - **Found, not fixed:** 0.02% of points are wrong matches with good ZNSSD,
@@ -259,6 +260,28 @@ strain-window ⓘ still said `(window − 1) × step + 1`, or counted points. Th
 now match the code. The engine-vsg FAQ no longer says to coarsen the step: a
 window under twice the step leaves fewer than 3 points in the circle. Docs
 and one string only; no behaviour change.
+
+**Strain window entered in data points (`feat/strain-window-points`).** The
+wizard's strain window and the sweep's window range are now counts of data
+points (odd, 3–31), not a pixel diameter. The VSG the engine gets is
+`(window − 1) × step + 1` px (`VsgStudy.vsgFor`); the engine's circle of that
+diameter takes in exactly the points within (window − 1) / 2 steps, so there
+is no engine change. A line under the slider shows the VSG at the current
+step. Defaults: tensile 5 points, bending 9 (21 and 41 px at step 5).
+- **Stored and exported values stay the VSG in px:** `strainWindow` in
+  `index.json` and `metadata.json`, sweep windows, skipped nodes, the
+  parameter clipboard, the CSV's `strain_window_px` and the PDF. Old sessions
+  keep their meaning. The window in points is shown beside the VSG whenever
+  the VSG is a whole odd count of steps (`VsgStudy.windowPointsFor`,
+  `StrainWindowText`), which every new session's is; older ones show
+  "VSG 15 px" alone.
+- **Sweeps:** each subset's step turns the window range into VSGs, so the
+  lattice's y axis is now VSG (px) and one window sits higher at a larger
+  subset. The CSV's sweep `strain_window` column holds points (empty for old
+  sweeps). `metadata.json`'s per-frame `vsg` was `(window − 1) × step + 1` on a
+  window that was already px; it is now the stored VSG.
+- WORKFLOWS §5.2.13–5.2.16, 5.2.25, 7.1.1, 8.4.3, 8.5.5; manual §6, §8 and
+  appendices; `docs/images/vsg.svg` redrawn; FAQ engine-vsg.
 
 **Docs refresh with new screenshots (PR #12).** Every app screenshot in
 `docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile

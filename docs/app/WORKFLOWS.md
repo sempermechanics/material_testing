@@ -438,12 +438,13 @@ and for real vendor decoders and camera files.
 | [ ] 5.2.11 | Type nonsense in a parameter field | Reverts to the previous value on commit |
 | [ ] 5.2.12 | Drag **step size** | Max is `min(30, subset/2)` so overlap stays ≥ 0.5; the overlap field mirrors it |
 | [ ] 5.2.12a | Type **overlap** on the step-size row | 0.50–0.99; step size rewrites to `round(subset × (1 − overlap))` |
-| [ ] 5.2.13 | Drag **strain window** | Odd values 5–101, field mirrors it. It starts at 15 for tensile (and untyped) analyses and **45 for bending** |
+| [ ] 5.2.13 | Drag **strain window** | Odd values 3–31, in **points**; the field mirrors it and the line under the slider reads "VSG N px at step S px", N = (window − 1) × step + 1. It starts at 5 for tensile (and untyped) analyses and **9 for bending** |
+| [ ] 5.2.13a | Change the **step** with the window fixed | The VSG line follows: window 5 reads VSG 21 px at step 5, 41 px at step 10 |
 | [ ] 5.2.13a | Open step 2 having never copied params from a lattice | No **Paste params** chip — it only appears when the clipboard holds a set |
-| [ ] 5.2.13b | Copy params from a sweep lattice (§7.3), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window (overlap follows step) and scrolls them into view |
+| [ ] 5.2.13b | Copy params from a sweep lattice (§7.3), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window (overlap follows step) and scrolls them into view. The window is the one whose VSG at the pasted step matches the node's |
 | [ ] 5.2.14 | Tap each ⓘ | Subset, step, overlap and strain window each explain themselves |
 | [ ] 5.2.15 | Switch the interpolator to **Keys 6×6** | Selection sticks; the run uses it |
-| [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, overlap follows step, strain window to the test type's default (15, bending 45), interpolator to Bicubic |
+| [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, overlap follows step, strain window to the test type's default (5 points, bending 9), interpolator to Bicubic |
 | [ ] 5.2.16a | After a failed run leaves an ❌ line on step 2, change subset / paste params / replace frames | The run-status line clears; the frame-size chip (if any) only shows when sizes still mismatch |
 | [ ] 5.2.17 | Load a well-speckled reference and watch the subset | It is pre-seeded from the SSSIG recommendation — until you touch it |
 | [ ] 5.2.18 | Draw an ROI smaller than the subset and tap **Compute** | "ROI too small" snackbar with a **Why?** action; that asks first whether to leave the app, then opens the ROI FAQ. The run does not start |
@@ -452,7 +453,7 @@ and for real vendor decoders and camera files.
 | [ ] 5.2.21 | Tap **Pick frame** (sweep, multi-frame) | Dialog with a radio list, a frame-number field and a live preview |
 | [ ] 5.2.23 | Drag the subset range handles | Both ends stay odd; min never crosses max |
 | [ ] 5.2.24 | Type a subset min above the max | Clamped so min ≤ max |
-| [ ] 5.2.25 | Drag the strain window range | Two handles like the subset's; the min and max boxes track it |
+| [ ] 5.2.25 | Drag the strain window range | Two handles like the subset's, in points (3–31, default 3–11); the min and max boxes track it |
 
 ### 5.3 Step 3 — Sweep summary `[sweep]`
 
@@ -595,7 +596,7 @@ aiming at a small target.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 7.1.1 | Open a sweep | Lattice with **subset across and strain window up**; the coach mark explains filled vs hollow (no persistent legend row) |
+| [ ] 7.1.1 | Open a sweep | Lattice with **subset across and VSG (px) up**: one window in points is a larger VSG at a larger subset's step, so the rows need not line up; the coach mark explains filled vs hollow (no persistent legend row) |
 | [ ] 7.1.1a | Look for axis titles on the result lattice | There are none — it draws compact, so only tick numbers and a "px" unit on the last subset tick. The coach mark is what names the axes |
 | [ ] 7.1.2 | Open a sweep that had failures | Skipped combinations are hollow rings with no fill — any surface behind them shows through |
 | [ ] 7.1.3 | Compare two different filled nodes | Same fill colour — node identity comes from position + the selection ring, not a colour key. The plot below only puts colour on the *focused* curve (§7.2.4) |
@@ -754,7 +755,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.1a | Open it on a run that stopped early | Two extra rows: **Stopped early** and **Frames solved (n of N)** — the provenance survives a restart |
 | [ ] 8.4.1b | Open it on the summary GIF | Max and min of the GIF colour-bar ends, no mean, and no histogram |
 | [ ] 8.4.2 | Compare against what you entered in the wizard | They match |
-| [ ] 8.4.3 | Look for a **virtual strain gauge** row | There is none, deliberately: the VSG is the strain window itself, a diameter in px (`VsgStudy.vsgFor`), and that is already a row above it |
+| [ ] 8.4.3 | Read the **strain window** row | "9-point window · VSG 41 px": the window in points and the VSG it gave, (window − 1) × step + 1. A session from before the window was counted in points shows "VSG 15 px" alone |
 | [ ] 8.4.4 | Scrub to another combination and reopen | The values follow the new frame, not the run's first |
 | [ ] 8.4.5 | Open it on a sweep | A line-cut plot with colour-matched Exx / Eyy / Exy and the cut axis named |
 | [ ] 8.4.6 | Open it on a single-setting run | No line-cut section |
@@ -791,7 +792,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.4a | Same, on a tensile run | Each cover has a **Mechanical Test** block (type, cross-section, strain, this frame's load and engineering stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a **Modulus E (approx.)** with its frames and R², and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
 | [ ] 8.5.4b | Same, on bending | The cover block names that test's dimensions and flexural stress; the curve page is titled the same way |
 | [ ] 8.5.4c | Same, on a sweep | Cover block shows the type and dimensions only; no curve page |
-| [ ] 8.5.5 | **CSV data** | `# semper_csv_version,2` preamble (reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean; typed sessions add `# test_type`, `# stress_model` (`axial` / `flexural`), that model's dimensions — `# cross_section_mm2`, or `# span_mm` / `# width_mm` / `# thickness_mm` — then `# load_axis`, `# load_unit,N`), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa` — the three motion columns and the two mechanical columns are written for every session, empty when a frame admits no fit / has no load; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image`. A typed, non-sweep tensile run ends with a `# mechanical_results` trailer after the point rows: `# elastic_modulus_gpa` (empty when no fit), `# elastic_fit_frames,a,b` and `# elastic_fit_r2`. `pandas.read_csv(path, comment='#')` reads it |
+| [ ] 8.5.5 | **CSV data** | `# semper_csv_version,2` preamble (reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean; typed sessions add `# test_type`, `# stress_model` (`axial` / `flexural`), that model's dimensions — `# cross_section_mm2`, or `# span_mm` / `# width_mm` / `# thickness_mm` — then `# load_axis`, `# load_unit,N`), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa` — the three motion columns and the two mechanical columns are written for every session, empty when a frame admits no fit / has no load; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` (`strain_window` in points, empty for a sweep stored before points; `vsg_px` the VSG). A typed, non-sweep tensile run ends with a `# mechanical_results` trailer after the point rows: `# elastic_modulus_gpa` (empty when no fit), `# elastic_fit_frames,a,b` and `# elastic_fit_r2`. `pandas.read_csv(path, comment='#')` reads it |
 | [ ] 8.5.6 | **Everything (.zip)** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |

@@ -568,7 +568,7 @@ class AnalysisViewModel : ViewModel() {
 
         sweepPlan = result.runs.map { it.point }
         sweepSkippedNodes = result.skipped.mapIndexed { index, point ->
-            SkippedNode(point.subset, point.step, point.strainWindow, result.skippedCodes[index])
+            SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
         }
         engineStatsArray = result.firstMetrics
         val executionTimeMs = (System.currentTimeMillis() - startedAt).toInt()
@@ -674,7 +674,7 @@ class AnalysisViewModel : ViewModel() {
             settings = SessionRecordSettings(
                 subset = first.subset,
                 step = first.step,
-                strainWin = first.strainWindow,
+                strainWin = first.vsg,
                 roiX = roi[0],
                 roiY = roi[1],
                 roiW = roi[2],
@@ -695,11 +695,11 @@ class AnalysisViewModel : ViewModel() {
             // viewer would render every frame at the first frame's step size.
             sweepSubsets = result.runs.map { it.point.subset },
             sweepSteps = result.runs.map { it.point.step },
-            sweepStrainWindows = result.runs.map { it.point.strainWindow },
+            sweepStrainWindows = result.runs.map { it.point.vsg },
             sweepLabels = summary.solvedLabels,
             lineCutHorizontal = lineCutHorizontal,
             sweepSkippedNodes = skipped.mapIndexed { index, point ->
-                SkippedNode(point.subset, point.step, point.strainWindow, result.skippedCodes[index])
+                SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
             },
             stopCode = result.engineErrorCode.also { lastStopCode = it },
             plannedFrameCount = result.runs.size + skipped.size,

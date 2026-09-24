@@ -52,7 +52,8 @@ so **only camera 1** was used, as a student's single phone would be.
   per deformed frame.
 - **App settings:** test type Tensile; area 12.5 mm²; load axis x; ROI
   1960 × 298 px at (20, 69); subset 19 px (the speckle check's suggestion);
-  step 5 px; strain window 15.
+  step 5 px; strain window 15 px (a VSG; the window is now entered in points,
+  and 15 px at step 5 is none of them).
 - **Result of the solve:** 40 of 40 frames on the curve, 96.1% of points
   converged, about 25 s on the emulator.
 
@@ -201,7 +202,9 @@ compared in pixels without any calibration.
   nose at x 1170, y 38.8 and 609.6 (570.8 px, 0.0543 mm/px; the edges are at
   39 and 611 by the intensity profile); ROI 2259 × 509 px at (59, 69); subset
   27 px (the speckle check's suggestion); step 5 px; strain window 45 px
-  (bending's default) and, in a second run, 15 px.
+  (bending's default then) and, in a second run, 15 px. Both are VSGs: the
+  window has since been entered in points, and bending's default is now
+  9 points, a 41 px VSG at step 5.
 - **Solve:** about 2 min 17 s on the emulator for 33 frames.
 
 The authors' field is referenced to image 0 and the app's to image 32, so
@@ -292,8 +295,8 @@ A wider window costs two things:
   contact zone under the nose.
 
 For bending that trade is worth it, because δ and E come from displacement and
-strain only draws the maps. That is why bending starts at 45 px
-(`TestType.defaultStrainWindow`). On a thin beam, a 45 px band can be a large
+strain only draws the maps. That is why bending starts at a wide window, now
+9 points, a 41 px VSG at step 5 (`TestType.defaultStrainWindow`). On a thin beam, a 45 px band can be a large
 share of the depth: lower the window, or frame closer.
 
 **Shear sign.** The authors' exy is engineering shear with y pointing up; the
@@ -318,7 +321,9 @@ This writes `pmma_00.png` (the reference) through `pmma_33.png`,
 3. L 75, b 12, t 31 mm. **Mark**: zoom in, tap the top and bottom edges under
    the nose at x ≈ 1170 (y ≈ 39 and 611). The readout should say about 572 px.
 4. ROI (Manual) x 60, y 70, 2260 × 510. Accept the suggested subset, and keep
-   step 5 and the strain window of 45. Compute.
+   step 5 and bending's window of 9 points (VSG 41 px). Compute. The tables
+   above were made at a 45 px VSG, which points at step 5 can't give, so
+   strain reads a little noisier at 41 px; δ and E don't depend on it.
 5. Pull `files/sessions/<session>/frame_NNNN.dat` as for case 1. Read the
    taps from the session's `loadPoint` in `files/sessions/index.json`, then:
 

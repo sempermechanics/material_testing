@@ -13,6 +13,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.indicvision.semper.R
+import com.indicvision.semper.ui.analysis.VsgStudy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -201,7 +202,16 @@ object PdfReportGenerator {
         layout.drawKeyValue("Subset Size:", "${data.subsetSize} px")
         layout.drawKeyValue("Step Size:", "${data.stepSize} px")
         layout.drawKeyValue("Strain Method:", data.strainMethod)
-        layout.drawKeyValue("Strain Window:", "${data.strainWindow} px")
+        // strainWindow is the VSG in px; sessions since the window was entered in points also get the count.
+        val windowPoints = VsgStudy.windowPointsFor(data.strainWindow, data.stepSize)
+        layout.drawKeyValue(
+            "Strain Window:",
+            if (windowPoints != null) {
+                "$windowPoints-point window (VSG ${data.strainWindow} px)"
+            } else {
+                "VSG ${data.strainWindow} px"
+            },
+        )
         layout.advanceY(40f)
 
         data.mechanical?.let { drawMechanicalBlock(layout, it) }

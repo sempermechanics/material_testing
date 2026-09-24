@@ -4,6 +4,7 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.TextView
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.R
 import com.indicvision.semper.data.ParamClipboard
@@ -26,6 +27,8 @@ class AnalysisSettingsSheetHelper(
     private val stepValue: EditText,
     private val overlapValue: EditText,
     private val strainValue: EditText,
+    /** The VSG in px the window in points gives at the current step. */
+    private val strainVsg: TextView,
     private val renderParamField: (EditText, Int) -> Unit,
     private val bindParamField: (EditText, Slider, (() -> Unit)?) -> Unit,
     private val showInfo: (titleRes: Int, bodyRes: Int) -> Unit,
@@ -43,6 +46,7 @@ class AnalysisSettingsSheetHelper(
             renderParamField(subsetValue, subset.value.toInt())
             renderParamField(stepValue, step.value.toInt())
             renderParamField(strainValue, strain.value.toInt())
+            strainVsg.text = StrainWindowText.vsgAt(strainVsg.context, strain.value.toInt(), step.value.toInt())
         }
         applyStepRangeForSubset()
         syncOverlapFromStep()
@@ -103,6 +107,7 @@ class AnalysisSettingsSheetHelper(
         applyStepRangeForSubset()
         syncOverlapFromStep()
         renderParamField(stepValue, step.value.toInt())
+        strainVsg.text = StrainWindowText.vsgAt(strainVsg.context, strain.value.toInt(), step.value.toInt())
     }
 
     /** Show Paste only when the sweep clipboard has values. */

@@ -73,7 +73,7 @@ Loads are CSV-only for now. Typing loads in the app is still an open decision.
   - The editor zooms (pinch or double-tap) and pans, and the zoom holds while you mark.
   - Under 40 px it warns, because a 1 px slip then moves E by more than 2.5%.
   - The second mark stays on the first mark's vertical line, so the thickness is measured straight down.
-- **Strain window:** bending starts at 45 px, not 15. δ and E come from displacement, so strain only draws the maps, and at 45 px they are about 2.5× less noisy. The cost is a band about 20 px wide along the ROI's edges with no strain (the outer fibres), which also lowers the "converged" figure. On a thin beam, lower it or frame closer.
+- **Strain window:** bending starts at 9 points, not 5: a 41 px VSG at step 5, not 21 px. δ and E come from displacement, so strain only draws the maps, and at about 45 px they are about 2.5× less noisy. The cost is a band about 20 px wide along the ROI's edges with no strain (the outer fibres), which also lowers the "converged" figure. On a thin beam, lower it or frame closer.
 - **Load steps:**
   - Frames within 0.5% of the largest load of each other form one averaged row, so a 1 fps video gives the same six rows as six photos.
   - Frames under 1% of the largest load (the reference, and frames before the hanger went on) are left out of the table, the average and the slope.
