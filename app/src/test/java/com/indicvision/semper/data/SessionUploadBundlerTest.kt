@@ -112,8 +112,10 @@ class SessionUploadBundlerTest {
         stage(record(dir, "speckle.png", "speckle.png", sweep = true), csv, false, temp.newFolder())
 
         val points = csv.readLines().filter { it.startsWith("speckle.png,") }
-        assertEquals(4, points.count { it.startsWith("speckle.png,21,5,15,15,") })
-        assertEquals(4, points.count { it.startsWith("speckle.png,31,7,19,19,") })
+        // Stored windows are VSGs in px; 15 at step 5 and 19 at step 7 are no
+        // whole count of points, so strain_window is empty and vsg_px has them.
+        assertEquals(4, points.count { it.startsWith("speckle.png,21,5,,15,") })
+        assertEquals(4, points.count { it.startsWith("speckle.png,31,7,,19,") })
     }
 
     @Test

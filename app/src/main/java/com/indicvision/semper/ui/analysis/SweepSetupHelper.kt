@@ -66,9 +66,9 @@ class SweepSetupHelper(
         /** Width of the subset window a fresh sweep suggests, centred on the recommendation. */
         const val SUGGESTED_SUBSET_SPAN = 20
 
-        /** Hard bounds on strain window input — the guardrail against a mistyped huge number. */
-        const val STRAIN_WIN_MIN_INPUT = VsgStudy.MIN_STRAIN_WINDOW
-        const val STRAIN_WIN_MAX_INPUT = VsgStudy.MAX_STRAIN_WINDOW
+        /** Hard bounds on strain window input, in data points — the guardrail against a mistyped huge number. */
+        const val STRAIN_WIN_MIN_INPUT = VsgStudy.MIN_WINDOW_POINTS
+        const val STRAIN_WIN_MAX_INPUT = VsgStudy.MAX_WINDOW_POINTS
 
         /** Longest edge of a frame thumbnail in the pick dialog. */
         private const val PREVIEW_MAX_EDGE = 480
@@ -212,7 +212,7 @@ class SweepSetupHelper(
 
     /**
      * Seeds the sweep inputs with the app's suggestions — a subset window
-     * centred on the SSSIG recommendation and a Max VSG a few times the subset.
+     * centred on the SSSIG recommendation and a strain window of 3 to 11 points.
      * Runs until the user edits a sweep control; after that their values stand.
      */
     fun seedSweepSuggestions() {
@@ -232,8 +232,8 @@ class SweepSetupHelper(
         val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
         viewModel.subsetMin = lo
         viewModel.subsetMax = hi
-        viewModel.strainWinMin = VsgStudy.MIN_STRAIN_WINDOW
-        viewModel.strainWinMax = VsgStudy.MAX_STRAIN_WINDOW
+        viewModel.strainWinMin = VsgStudy.DEFAULT_SWEEP_WINDOW_MIN
+        viewModel.strainWinMax = VsgStudy.DEFAULT_SWEEP_WINDOW_MAX
         writeSubsetRange(lo, hi)
         writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
         refreshSweepPlan()
@@ -241,7 +241,7 @@ class SweepSetupHelper(
 
     /**
      * The sweep grid the current inputs describe, capped to the subsets the ROI
-     * can hold: x subset sizes × y VSG sizes × z step sizes.
+     * can hold: x subset sizes × y strain windows, one step per subset.
      */
     fun currentPlan(): List<VsgStudy.Point> {
         val ceiling = callbacks.maxSubsetForRoi()
@@ -315,15 +315,15 @@ class SweepSetupHelper(
         }
     }
 
-    /** "N analyses · subset a–b px · window c–d" for a plan. */
+    /** "N analyses · subset a–b px · window c–d points" for a plan. */
     fun planSummary(plan: List<VsgStudy.Point>): String = activity.resources.getQuantityString(
         R.plurals.sweep_plan_grid_fmt,
         plan.size,
         plan.size,
         plan.minOf { it.subset },
         plan.maxOf { it.subset },
-        plan.minOf { it.strainWindow },
-        plan.maxOf { it.strainWindow },
+        plan.minOf { it.window },
+        plan.maxOf { it.window },
     )
 
     /** Short per-combination label; becomes the frame name in viewer and report. */
@@ -331,7 +331,7 @@ class SweepSetupHelper(
         R.string.sweep_frame_label_fmt,
         point.subset,
         point.step,
-        point.strainWindow,
+        point.window,
     )
 
     /** Centre-line cut over the reference image and current ROI. */
@@ -491,8 +491,7 @@ class SweepSetupHelper(
         refreshSweepPlan()
     }
 
-    private fun oddWindow(raw: Int): Int =
-        raw.coerceIn(STRAIN_WIN_MIN_INPUT, STRAIN_WIN_MAX_INPUT) or 1
+    private fun oddWindow(raw: Int): Int = VsgStudy.oddWindowPoints(raw)
 
     private fun commitStrainWinRange(rawLo: Int, rawHi: Int) {
         val lo = oddWindow(rawLo)
@@ -812,7 +811,7 @@ class SweepSetupHelper(
                 VsgLatticeView.Node(
                     subset = point.subset,
                     step = point.step,
-                    window = point.strainWindow,
+                    window = point.window,
                     vsg = point.vsg,
                     solved = true,
                 )

@@ -104,7 +104,7 @@ data class RunSpec(
         /** A sweep's spec: the plan's first combination stands in for the scalar settings. */
         fun sweep(sweep: Sweep, roi: IntArray, mask: ByteArray?, use6x6: Boolean, debugDir: File?): RunSpec {
             val first = sweep.plan.first()
-            return of(first.subset, first.step, first.strainWindow, roi, mask, use6x6, debugDir)
+            return of(first.subset, first.step, first.vsg, roi, mask, use6x6, debugDir)
                 .copy(sweep = sweep)
         }
 

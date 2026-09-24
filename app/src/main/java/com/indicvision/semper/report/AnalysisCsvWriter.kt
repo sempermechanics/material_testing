@@ -4,6 +4,7 @@
 package com.indicvision.semper.report
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.ui.analysis.VsgStudy
 import java.io.File
 import java.io.Writer
 import java.util.Locale
@@ -222,11 +223,16 @@ object AnalysisCsvWriter {
         }
     }
 
-    /** The constant leading columns for one frame (image name or sweep settings). */
+    /**
+     * The constant leading columns for one frame (image name or sweep settings).
+     * A sweep's `strain_window` is in data points, empty for a sweep stored
+     * before the window was counted in points; `vsg_px` is the stored window.
+     */
     private fun prefix(frame: Frame, sweep: Boolean): String {
         val image = escape(frame.image)
         if (!sweep) return "$image,"
-        return "$image,${frame.subset},${frame.step},${frame.strainWindow},${frame.strainWindow},"
+        val points = VsgStudy.windowPointsFor(frame.strainWindow, frame.step)?.toString().orEmpty()
+        return "$image,${frame.subset},${frame.step},$points,${frame.strainWindow},"
     }
 
     /** RFC-4180 quoting, only when the value needs it (image names rarely do). */

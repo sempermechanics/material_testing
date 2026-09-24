@@ -122,7 +122,7 @@ detail: `native/docs/ARCHITECTURE.md` · [docs/engine/](docs/engine/).
 |---|---|---|---|
 | Subset size | measured (41 px fallback) | 15–121, **odd** | Tracked window — larger = robust, less detail |
 | Step size | 5 px | 1–30 | Grid spacing between points |
-| Strain window | 15 px | 5–101, **odd** | VSG gauge length (displacement → strain) |
+| Strain window | 5 points | 3–31, **odd** | Data points per strain fit; VSG = (window − 1) × step + 1 px |
 
 Subset width is **suggested from the reference speckle** (SSSIG criterion, Pan
 et al. 2008): weak speckle → larger window. Typed evens snap to odd; out-of-range

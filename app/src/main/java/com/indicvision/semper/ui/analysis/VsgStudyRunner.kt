@@ -211,10 +211,10 @@ object VsgStudyRunner {
         skippedCodes: MutableList<Int>,
     ) {
         Timber.w(
-            "VSG sweep skipped subset=%d step=%d window=%d (engine code %d)",
+            "VSG sweep skipped subset=%d step=%d vsg=%dpx (engine code %d)",
             point.subset,
             point.step,
-            point.strainWindow,
+            point.vsg,
             engineCode,
         )
         skipped.add(point)
@@ -276,7 +276,7 @@ object VsgStudyRunner {
         return SemperNativeLib.computeFullFieldDirect(
             refBytes, defBytes, params.maskData,
             params.roiX, params.roiY, params.roiW, params.roiH,
-            point.step, point.subset, point.strainWindow,
+            point.step, point.subset, point.vsg,
             params.use6x6,
             buffer, silent, metrics,
         )

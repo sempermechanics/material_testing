@@ -2,7 +2,6 @@ package com.indicvision.semper.analysis
 
 import android.graphics.Rect
 import com.indicvision.semper.ui.analysis.NoiseFloorProbe
-import com.indicvision.semper.ui.analysis.VsgStudy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,9 +52,11 @@ class NoiseFloorProbeTest {
         // Not a hypothetical: this is the shipped defect, reproduced. A 4032 px
         // frame with a 47 px subset gives a step far wider than a 15 px window,
         // so the centre point is alone in its own window and the engine drops it.
+        // 15 px was the analysis default VSG the probe then borrowed.
+        val fixedVsg = 15
         val step = NoiseFloorProbe.probeStepFor(Rect(0, 0, 2400, 1800), subset = 47)
-        assertTrue("step should be coarse here", step > VsgStudy.DEFAULT_STRAIN_WINDOW)
-        assertEquals(1, supportPoints(step, VsgStudy.DEFAULT_STRAIN_WINDOW))
+        assertTrue("step should be coarse here", step > fixedVsg)
+        assertEquals(1, supportPoints(step, fixedVsg))
     }
 
     @Test
