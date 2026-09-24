@@ -379,9 +379,9 @@ vendor decoders and camera AVIs.
 | [ ] 5.2.12 | Drag **step size** | Max is `min(30, subset/2)` so overlap stays ≥ 0.5; the overlap field mirrors it |
 | [ ] 5.2.12a | Type **overlap** on the step-size row | 0.50–0.99; step size rewrites to `round(subset × (1 − overlap))` |
 | [ ] 5.2.13 | Drag **strain window** | Odd values 3–31, in **points**; the field mirrors it and the line under the slider reads "VSG N px at step S px", N = (window − 1) × step + 1. It starts at 5 |
-| [ ] 5.2.13a | Change the **step** with the window fixed | The VSG line follows: window 5 reads VSG 21 px at step 5, 41 px at step 10 |
 | [ ] 5.2.13a | Open step 2 having never copied params from a lattice | No **Paste params** chip — it only appears when the clipboard holds a set |
 | [ ] 5.2.13b | Copy params from a sweep lattice (§7.3), then return here | The chip appears beside **Reset**; tapping it fills subset, step and strain window (overlap follows step) and scrolls them into view. The window is the one whose VSG at the pasted step matches the node's |
+| [ ] 5.2.13c | Change the **step** with the window fixed | The VSG line follows: window 5 reads VSG 21 px at step 5, 41 px at step 10 |
 | [ ] 5.2.14 | Tap each ⓘ | Subset, step, overlap and strain window each explain themselves |
 | [ ] 5.2.15 | Switch the interpolator to **Keys 6×6** | Selection sticks; the run uses it |
 | [ ] 5.2.16 | Change several parameters, then tap **Reset** | Subset returns to the recommended value, step to 5, overlap follows step, strain window to 5 points, interpolator to Bicubic |
