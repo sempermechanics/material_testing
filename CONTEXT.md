@@ -143,7 +143,7 @@ material_testing #12. Still open for the owner and counsel: §1.2
 children needing verifiable parental consent that the clickwrap does not
 collect.
 
-**A 429 no longer spends the nonce (branch `fix/rate-limit-before-nonce`).**
+**A 429 no longer spends the nonce (#154, live 2026-09-24).**
 Erasing seven analyses from a Pixel 6 left two in the cloud: past the erase
 bucket's burst of three, each delete got a 429, and the app's unchanged retry
 came back 401 `nonce_invalid_or_replayed`, because the bucket was checked in
@@ -153,7 +153,10 @@ retry replayed a consumed server challenge and nothing recovered. The 21
 signed routes now take their bucket as `dependencies=[rate_limited(...)]`,
 resolved before the nonce is touched, and their 429s send `Retry-After`. No app
 change; installed builds are fixed by the deploy. Nothing was lost: a failed
-cloud erase keeps the local copy, so the two analyses can be erased again.
+cloud erase keeps the local copy. Production revision `semper-api-35957034833-1`
+(from `2fdb44c`) has served since 04:48Z; the same phone then erased four at
+once, the fourth got a 429, waited 2 s and its unchanged resend returned 200,
+with no 401 — the two left over are gone from the cloud too.
 
 **A starved device-lock bind is not a loss (`fix/deflake-device-lock-test`).**
 The emulator test `test_the_first_device_wins_an_unbound_lock` flaked (2 in 10
