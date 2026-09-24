@@ -247,10 +247,10 @@ The run changed three things:
   the window is entered in points (below). δ and E use displacement
   only. The cost is a band of about 20 px at the ROI edges with no strain,
   which also lowers the headline "converged" figure (97.6% → 92.8% here).
-- **Found, not fixed:** 0.02% of points are wrong matches with good ZNSSD,
-  under the nose and at the bottom fibre late in the test. The engine's VSG
-  takes them in, and local strain spikes to about 2,400,000 µε in 6 of 33
-  frames. That is a `native/` change.
+- **Found here, fixed in engine 0.2.2 (below):** 0.02% of points are wrong
+  matches with good ZNSSD, under the nose and at the bottom fibre late in the
+  test. The engine's VSG took them in, and local strain spiked to about
+  2,400,000 µε in 6 of 33 frames.
 
 **VSG = strain window in the docs (PR #19, `docs/vsg-is-strain-window`, merged).** The
 engine reads `strain_window` as a circle's diameter in px, so the gauge is the
@@ -261,7 +261,7 @@ now match the code. The engine-vsg FAQ no longer says to coarsen the step: a
 window under twice the step leaves fewer than 3 points in the circle. Docs
 and one string only; no behaviour change.
 
-**Strain window entered in data points (`feat/strain-window-points`).** The
+**Strain window entered in data points (PR #20, `feat/strain-window-points`, merged).** The
 wizard's strain window and the sweep's window range are now counts of data
 points (odd, 3–31), not a pixel diameter. The VSG the engine gets is
 `(window − 1) × step + 1` px (`VsgStudy.vsgFor`); the engine's circle of that
@@ -282,6 +282,23 @@ step. Defaults: tensile 5 points, bending 9 (21 and 41 px at step 5).
   window that was already px; it is now the stored VSG.
 - WORKFLOWS §5.2.13–5.2.16, 5.2.25, 7.1.1, 8.4.3, 8.5.5; manual §6, §8 and
   appendices; `docs/images/vsg.svg` redrawn; FAQ engine-vsg.
+
+**Engine 0.2.2: displacement outliers rejected before the VSG
+(`fix/engine-outlier-rejection`; engine PR sempermechanics/semper-dic-engine#3).**
+Wrong matches that pass ZNSSD, in clusters of up to about 15 points 20 px off,
+tilted every strain window they fell in. The engine now runs a normalized
+median test on u and v over 5×5 neighbours, repeated until stable
+(`StrainCalculator::reject_displacement_outliers`, `tuning::kOutlier*`). Rejected
+points are dropped like any other: fewer points in the `.dat`, counted in
+metrics slot 2. There is no format or metrics change and no app code change.
+- On the PMMA run (off device, the engine's filter and fit on the run's
+  displacements): 211 points rejected, no wrong match left, strain RMSE at a
+  45 px VSG over all 33 frames 915 / 3874 / 2117 → 412 / 394 / 392 µε
+  (exx / eyy / exy). δ RMSE 0.0074 → 0.0068 mm; E from the graph 2.000 →
+  1.998 GPa. The steel run loses nothing.
+- Emulator: `EnginePipelineSmokeTest` 9/9 and the full instrumented suite
+  pass on 0.2.2.
+- REAL_WORLD_VALIDATION case 2 has the before/after table.
 
 **Docs refresh with new screenshots (PR #12).** Every app screenshot in
 `docs/images/` was recaptured on 2026-09-23 in light theme, from the tensile
