@@ -73,17 +73,26 @@ object AnalysisCsvWriter {
     }
 
     /**
-     * Streaming writer: call [Appender.appendFieldStats] per frame (or let
-     * [write] do it), then [Appender.startPointSection], then [Appender.append]
-     * for point rows.
+     * Streaming writer. Two ways to drive it, both giving [write]'s layout:
+     *
+     *  - Stats first: [Appender.appendFieldStats] for every frame, then
+     *    [Appender.startPointSection], then [Appender.append] per frame. Point
+     *    rows go straight to [out].
+     *  - One pass: [Appender.appendFieldStats] and [Appender.append] per frame,
+     *    so each frame is decoded once (the upload bundle). Stats rows are held
+     *    in memory and point rows staged in a sibling `.points.tmp` file;
+     *    [Appender.close] writes the stats, then the point section, and deletes
+     *    the staging file.
      */
     fun open(out: File, sweep: Boolean, metadata: Metadata): Appender {
         val w = out.bufferedWriter(bufferSize = DicResult.CSV_BUFFER_BYTES)
         writeGlobalPreamble(w, metadata)
         w.append("# field_stats\n")
         w.append("# image,subset_px,step_px,strain_window_px,field,max,min,mean,unit\n")
-        return Appender(w, sweep, metadata)
+        return Appender(w, File(out.path + POINTS_STAGING_SUFFIX), sweep)
     }
+
+    private const val POINTS_STAGING_SUFFIX = ".points.tmp"
 
     /**
      * The three rigid-body motion values a point row ends with, without the
@@ -128,7 +137,7 @@ object AnalysisCsvWriter {
     }
 
     private fun writeFieldStatsRow(
-        w: Writer,
+        w: Appendable,
         frame: Frame,
         fieldKey: String,
         max: Float,
@@ -149,22 +158,33 @@ object AnalysisCsvWriter {
             .append('\n')
     }
 
-    /** One open CSV file; call [appendFieldStats] / [append] then [close]. */
+    /**
+     * One open CSV file; see [open] for the two call orders. Every `#` stats row
+     * lands before the blank line and the point header, whichever order is used.
+     */
     class Appender internal constructor(
         private val writer: Writer,
+        private val stagingFile: File,
         private val sweep: Boolean,
-        private val metadata: Metadata,
     ) : AutoCloseable {
         private val row = StringBuffer(DicResult.CSV_ROW_CAPACITY)
         private val formatter = DicResult.CsvPointFormatter()
+
+        // Stats rows wait here until the point section starts: five short rows
+        // a frame, never the point data.
+        private val pendingStats = StringBuilder()
         private var pointSectionStarted = false
 
+        // Point rows appended before the section started (the one-pass order).
+        private var staged: Writer? = null
+
         fun appendFieldStats(frame: Frame, data: FloatArray) {
+            check(!pointSectionStarted) { "field stats after the point section started" }
             FIELD_STATS.forEach { (fieldKey, dataIndex) ->
                 val stats = DicResult.fieldStats(data, dataIndex) ?: return@forEach
                 val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
                 writeFieldStatsRow(
-                    writer,
+                    pendingStats,
                     frame,
                     fieldKey,
                     stats[0],
@@ -177,15 +197,23 @@ object AnalysisCsvWriter {
 
         fun startPointSection() {
             if (pointSectionStarted) return
+            writer.append(pendingStats)
+            pendingStats.setLength(0)
             writer.append('\n')
             writer.append(pointHeader(sweep)).append('\n')
             pointSectionStarted = true
+            staged?.let { points ->
+                points.close()
+                staged = null
+                stagingFile.bufferedReader().use { it.copyTo(writer, DicResult.CSV_BUFFER_BYTES) }
+                stagingFile.delete()
+            }
         }
 
         fun append(frame: Frame) {
-            startPointSection()
+            val target = if (pointSectionStarted) writer else stagedWriter()
             writeFrame(
-                writer,
+                target,
                 frame,
                 prefix(frame, sweep),
                 row,
@@ -193,8 +221,17 @@ object AnalysisCsvWriter {
             )
         }
 
+        private fun stagedWriter(): Writer =
+            staged ?: stagingFile.bufferedWriter(bufferSize = DicResult.CSV_BUFFER_BYTES).also { staged = it }
+
         override fun close() {
-            writer.close()
+            try {
+                startPointSection()
+            } finally {
+                staged?.close()
+                stagingFile.delete()
+                writer.close()
+            }
         }
     }
 
