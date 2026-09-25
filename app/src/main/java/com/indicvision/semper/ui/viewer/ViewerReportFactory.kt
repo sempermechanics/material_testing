@@ -146,7 +146,7 @@ object ViewerReportFactory {
         return MechanicalCover(
             testType = type,
             model = host.stressModel,
-            loadN = host.loadsN.loadOfFrame(frameIndex),
+            loadN = host.loadsN.loadOfFrame(host.plannedFrameIndex(frameIndex)),
         )
     }
 }

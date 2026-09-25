@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.loadOfFrame
 import com.indicvision.semper.report.ElasticModulus
 import com.indicvision.semper.report.ElasticRegion
@@ -59,7 +60,7 @@ class ViewerStressStrainHelper(
 
     /** Dimension, load, torque and stress rows for the frame on screen; none on the summary. */
     fun rows(): List<Pair<String, String>> {
-        val loadN = host.loadsN.loadOfFrame(host.currentFrameIndex)
+        val loadN = host.loadsN.loadOfFrame(host.plannedFrameIndex(host.currentFrameIndex))
             ?.takeUnless { host.isShowingSummary }
             ?: return emptyList()
         val model = host.stressModel
@@ -114,7 +115,7 @@ class ViewerStressStrainHelper(
         waiting += views
         if (job?.isActive == true) return
         job = host.lifecycleScope.launch {
-            val files = host.summaryBatchFiles()
+            val byFrame = SessionPaths.datByPlannedFrame(host.summaryBatchFiles())
             val built = withContext(Dispatchers.Default) {
                 // Not suspending inside, so the section opens and closes on one thread.
                 Trace.beginSection(TRACE_BUILD)
@@ -122,7 +123,7 @@ class ViewerStressStrainHelper(
                     StressStrain.build(
                         loadsN = host.loadsN.toList(),
                         model = host.stressModel,
-                        frameData = { index -> files.getOrNull(index)?.let { DicResult.decodeDatFile(it) } },
+                        frameData = { frame -> byFrame[frame]?.let { DicResult.decodeDatFile(it) } },
                         onProgress = { done ->
                             host.lifecycleScope.launch(Dispatchers.Main.immediate) {
                                 val text = host.getString(R.string.stress_strain_progress_fmt, done, host.loadsN.size)
@@ -158,7 +159,7 @@ class ViewerStressStrainHelper(
         plot.isVisible = true
         plot.compactAxes = true
         // The summary is the whole test, so no frame is highlighted there.
-        val current = if (host.isShowingSummary) null else curve.at(host.currentFrameIndex)
+        val current = if (host.isShowingSummary) null else curve.at(host.plannedFrameIndex(host.currentFrameIndex))
         val (xAxis, yAxis) = axisLabels(host, curve.model)
         val modulus = modulusOf(curve)
         val region = modulus?.let { ElasticRegion.of(curve, it) }

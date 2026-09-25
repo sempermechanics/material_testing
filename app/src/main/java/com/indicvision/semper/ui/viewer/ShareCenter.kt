@@ -25,6 +25,7 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.loadOfFrame
 import com.indicvision.semper.imaging.BitmapDecode
@@ -622,10 +623,11 @@ class ShareCenter(private val host: ResultViewerActivity) {
      */
     private suspend fun sessionCurve(s: Snapshot, report: (Int, String) -> Unit): StressStrain.Curve =
         s.stressStrain ?: withContext(Dispatchers.Default) {
+            val byFrame = SessionPaths.datByPlannedFrame(s.batchFiles)
             StressStrain.build(
                 loadsN = s.loadsN.toList(),
                 model = s.stressModel,
-                frameData = { index -> s.batchFiles.getOrNull(index)?.let { DicResult.decodeDatFile(it) } },
+                frameData = { frame -> byFrame[frame]?.let { DicResult.decodeDatFile(it) } },
                 onProgress = { done -> report(0, "Stress–strain $done / ${s.loadsN.size}…") },
             )
         }
@@ -860,8 +862,12 @@ class ShareCenter(private val host: ResultViewerActivity) {
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step
 
-        /** The machine load of frame [index], or null without a load per frame or for this one. */
-        fun loadAt(index: Int): Float? = if (loadsN.size == batchFiles.size) loadsN.loadOfFrame(index) else null
+        /**
+         * The machine load behind the frame at position [index], or null without one.
+         * Loads are per planned frame, so past a skipped frame this is not
+         * `loadsN[index]` (TD-91).
+         */
+        fun loadAt(index: Int): Float? = loadsN.loadOfFrame(plannedAt(index))
 
         /** The planned frame behind the frame at position [index]. */
         fun plannedAt(index: Int): Int = plannedFrames.getOrElse(index) { index }
