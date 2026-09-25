@@ -805,6 +805,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- License expiry notice on Home. Advisory only — nothing is withdrawn
          while the renewal is outstanding. -->
     <string name="license_expiring_today">License expires today — email %1$s to renew</string>
+    <string name="license_expired">License expired — email %1$s to renew</string>
     <string name="license_grace">License expired — still working, email %1$s to renew</string>
     <string name="request_access_none">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>
@@ -949,6 +950,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <plurals name="share_csv_sub_fmt">
         <item quantity="one">Whole analysis · 1 frame, one file</item>
         <item quantity="other">Whole analysis · %1$d frames, one file</item>
+    </plurals>
+    <plurals name="sync_status_failed_fmt">
+        <item quantity="one">%1$d analysis could not be backed up</item>
+        <item quantity="other">%1$d analyses could not be backed up</item>
+    </plurals>
+    <plurals name="sync_status_local_fmt">
+        <item quantity="one">%1$d analysis not backed up</item>
+        <item quantity="other">%1$d analyses not backed up</item>
     </plurals>
     <plurals name="cloud_resync_fmt">
         <item quantity="one">1 analysis backup is missing from the cloud — re-uploading.</item>
