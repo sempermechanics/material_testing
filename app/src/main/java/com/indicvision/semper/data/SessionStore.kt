@@ -340,6 +340,21 @@ object SessionStore {
     }
 
     /**
+     * Removes the index row only; the directory stays. For a re-run that
+     * left nothing for the row to open, while the wizard still reads its
+     * images from the directory.
+     */
+    @WorkerThread
+    fun forget(context: Context, id: String): Unit = synchronized(lock) {
+        if (!mutateIndex(context) { it.filterNot { r -> r.id == id } }) return
+        val remaining = when (val snap = readIndex(context)) {
+            is IndexRead.Ok -> snap.records.size
+            else -> 0
+        }
+        TokenStore.refreshSessionLimit(context, remaining)
+    }
+
+    /**
      * Drop heavy local artifacts (`.dat` frames, raw images, processed / staging
      * trees) but keep the index row and `reference.png` so the Home thumbnail
      * survives. Leaves [SessionRecord.syncState] alone — typically [SYNCED] so

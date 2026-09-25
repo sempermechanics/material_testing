@@ -1331,7 +1331,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
         val kept = outcome.totalFrames
         val planned = viewModel.defFilePaths.size
-        tvResult.text = getString(R.string.run_stopped_early_fmt, kept, planned)
+        tvResult.text = getString(R.string.run_stopped_early_fmt, outcome.stoppedAtFrame, planned)
         viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
         viewModel.lastBatchDirPath = outcome.batchDirPath
         checkReady()
