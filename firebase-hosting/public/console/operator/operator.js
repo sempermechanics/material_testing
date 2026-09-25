@@ -5,7 +5,7 @@ import {
 import {
   seatCells, inviteCells, day, licenceStatePill,
   licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
-  isoDay, emailList, licenceEditPatch,
+  isoDay, emailList, licenceEditPatch, daysLeft,
 } from "../util.js";
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +27,7 @@ requireSignIn(async (user, resume) => {
   // Back from the Google re-authentication a revoke asked for: finish it
   // now, while the fresh sign-in is inside the backend's window.
   if (resume && resume.action === "revoke") resumeRevoke(resume.id);
+  if (resume && resume.action === "delete") resumeDelete(resume.id);
 });
 
 /**
@@ -416,7 +417,13 @@ function licenceRow(lic) {
   const convertButton = lic.kind !== "institution" && !demo
     ? `<button class="secondary" data-convert="${esc(lic.id)}">To institution</button>`
     : "";
-  const actions = revoked ? "" : `
+  // Revoked licences are what most deletes are for: the record of one is
+  // the audit trail until nobody needs it. A system Demo key is not deleted —
+  // the account would only be issued another.
+  const deleteButton = demo && lic.createdByUid === "system"
+    ? ""
+    : `<button class="danger" data-delete="${esc(lic.id)}">Delete</button>`;
+  const actions = revoked ? deleteButton : `
     <button class="secondary" data-edit="${esc(lic.id)}">Edit</button>
     ${lic.kind === "institution"
       ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>
@@ -424,7 +431,8 @@ function licenceRow(lic) {
       : `<button class="secondary" data-device="${esc(lic.id)}">New device</button>`}
     ${convertButton}
     <button class="secondary" data-history="${esc(lic.id)}">Devices</button>
-    <button class="danger" data-revoke="${esc(lic.id)}">Revoke</button>`;
+    <button class="danger" data-revoke="${esc(lic.id)}">Revoke</button>
+    ${deleteButton}`;
   return `
     <tr>
       <td class="mono">${esc(label)}</td>
@@ -444,6 +452,7 @@ $("licenceRows").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button");
   if (!btn) return;
   if (btn.dataset.edit) openEdit(btn.dataset.edit);
+  if (btn.dataset.delete) deleteLicence(btn.dataset.delete);
   if (btn.dataset.convert) openConvert(btn.dataset.convert);
   if (btn.dataset.revoke) revokeLicence(btn.dataset.revoke);
   if (btn.dataset.roster) openRoster(btn.dataset.roster);
@@ -892,6 +901,121 @@ async function sendRevoke(id, label) {
     setStatus(`Could not revoke: ${e.message}`, true);
   }
 }
+
+/* ------------------------------------------------------------- delete */
+
+async function deleteLicence(id) {
+  const label = labelOf(id);
+  const lic = findLicence(id) || {};
+  const live = lic.status !== "revoked";
+  const who = lic.kind === "institution"
+    ? `every one of the ${lic.seatsUsed ?? 0} people on its roster`
+    : "the person holding it";
+  if (!window.confirm(
+    `Delete ${label}?\n\n` +
+    (live ? `It is revoked first: ${who} drops to demo immediately. ` : "") +
+    "It leaves this list and is held under Recently deleted for 30 days, " +
+    "then purged. Nobody's saved analyses are touched.",
+  )) return;
+  const typed = window.prompt(`Type ${label} to delete this licence:`);
+  if (typed == null || typed.trim() !== label) {
+    setStatus("Delete cancelled — the key did not match.");
+    return;
+  }
+  await sendDelete(id, label);
+}
+
+/** The return leg of a delete that went to Google for a fresh sign-in. */
+async function resumeDelete(id) {
+  if (resumed) return;
+  resumed = true;
+  const label = labelOf(id);
+  if (!window.confirm(`Re-authenticated. Delete ${label} now?`)) {
+    setStatus("Delete cancelled.");
+    return;
+  }
+  await sendDelete(id, label);
+}
+
+async function sendDelete(id, label) {
+  try {
+    await stepUpForRevoke({ action: "delete", id });
+    const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, { method: "DELETE" });
+    licences = licences.filter((l) => l.id !== id);
+    if (searchHits) searchHits = searchHits.filter((l) => l.id !== id);
+    renderLicences();
+    if (roster && roster.id === id) closeRoster();
+    setStatus(`${label} deleted — restorable under Recently deleted until ${day(out.purgeAt)}.`);
+    if (!$("deletedWrap").hidden) loadDeleted();
+  } catch (e) {
+    if (e.message === ERR_CANCELLED) {
+      setStatus("Delete cancelled.");
+      return;
+    }
+    setStatus({
+      license_not_found: `${label} no longer exists.`,
+      demo_key_not_deletable: "A system Demo key is not deleted; the account would only get another.",
+    }[e.message] || `Could not delete: ${e.message}`, true);
+  }
+}
+
+$("loadDeleted").addEventListener("click", loadDeleted);
+
+async function loadDeleted() {
+  $("loadDeleted").textContent = "Refresh";
+  $("deletedWrap").hidden = false;
+  try {
+    const data = await api("/v1/admin/deleted-licenses?limit=50");
+    const rows = data.licenses || [];
+    $("deletedRows").innerHTML = rows.length
+      ? rows.map(deletedRow).join("")
+      : '<tr><td colspan="7" class="muted">Nothing deleted in the last 30 days.</td></tr>';
+  } catch (e) {
+    $("deletedRows").innerHTML =
+      `<tr><td colspan="7" class="err">Could not load: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function deletedRow(lic) {
+  const left = daysLeft(lic.purgeAt);
+  return `
+    <tr>
+      <td class="mono">${esc(lic.keyPrefix || lic.id.slice(0, 10))}</td>
+      <td>${esc(lic.kind)}</td>
+      <td class="muted">${esc(lic.domainLock || lic.emailLock || "—")}</td>
+      <td>${esc(lic.priorStatus || "—")}</td>
+      <td>${esc(day(lic.deletedAt))}</td>
+      <td>${left ? `${left} day${left === 1 ? "" : "s"}` : "due"}</td>
+      <td class="actions">${left
+        ? `<button class="secondary" data-restore="${esc(lic.id)}">Restore</button>` : ""}</td>
+    </tr>`;
+}
+
+$("deletedRows").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("button[data-restore]");
+  if (!btn) return;
+  const id = btn.dataset.restore;
+  btn.disabled = true;
+  try {
+    const lic = await api(
+      `/v1/admin/deleted-licenses/${encodeURIComponent(id)}/restore`, { method: "POST" },
+    );
+    showLicence(lic);
+    loadDeleted();
+    const label = lic.keyPrefix || id.slice(0, 10);
+    setStatus(lic.status === "revoked"
+      ? `${label} restored, revoked as it was.`
+      : `${label} restored — its holders are back on it, except anyone who took ` +
+        "another licence meanwhile.");
+  } catch (e) {
+    btn.disabled = false;
+    setStatus({
+      deleted_license_purged: "Too late: the 30 days have passed.",
+      deleted_license_not_found: "Already restored or purged.",
+      license_exists: "A licence with that key exists again.",
+    }[e.message] || `Could not restore: ${e.message}`, true);
+  }
+});
 
 /* ------------------------------------------------------------- roster */
 

@@ -83,6 +83,11 @@ from .repo.license_admin import (  # noqa: F401
 from .repo.upgrade import (  # noqa: F401
     convert_to_institution,
 )
+from .repo.deletion import (  # noqa: F401
+    delete_license,
+    list_deleted_licenses,
+    restore_license,
+)
 from .repo.institution_admin import (  # noqa: F401
     add_institution_member,
     institution_license_summary,
@@ -169,6 +174,7 @@ from .repo import (
     account,
     activation,
     claims,
+    deletion,
     devices,
     devlock,
     entitlement,
@@ -189,7 +195,7 @@ from .repo import (
 
 #: Every module of the package, each after everything it imports.
 PACKAGE = (_base, user_config, devlock, claims, invites, holders, mint, activation, entitlement,
-           license_admin, upgrade, institution_admin, licensing, devices, users, leases, seats,
+           license_admin, upgrade, deletion, institution_admin, licensing, devices, users, leases, seats,
            reconcile, account, sessions)
 _MISSING = object()
 

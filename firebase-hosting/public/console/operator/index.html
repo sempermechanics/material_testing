@@ -142,6 +142,29 @@
           <button id="loadMore" class="secondary" hidden>Load more</button></p>
       </section>
 
+      <!-- ----------------------------------------------------- deleted -->
+      <!-- Loaded on demand: most visits never look here, and it is a query. -->
+      <section class="card" id="deletedCard">
+        <div class="row">
+          <h2 style="margin:0">Recently deleted</h2>
+          <span class="spacer"></span>
+          <button id="loadDeleted" class="secondary">Show</button>
+        </div>
+        <p class="muted">
+          A deleted licence is held for 30 days, then purged for good. Restore
+          puts it and its holders back — except anyone who has taken another
+          licence since.
+        </p>
+        <div class="wrap" id="deletedWrap" hidden>
+          <table>
+            <thead>
+              <tr><th>Key</th><th>Kind</th><th>Locked to</th><th>Was</th>
+                <th>Deleted</th><th>Purged in</th><th></th></tr>
+            </thead>
+            <tbody id="deletedRows"></tbody>
+          </table>
+        </div>
+      </section>
       <!-- -------------------------------------------------------- edit -->
       <!-- One dialog for every change to a licence's terms. It replaced three
            window.prompt()s (Extend, Cap) that could each change one thing, and

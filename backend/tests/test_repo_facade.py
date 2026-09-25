@@ -112,9 +112,10 @@ LICENSING_IMPORTS = {
     "entitlement": {"_base", "claims", "invites", "mint"},
     "license_admin": {"_base", "claims", "invites", "mint"},
     "upgrade": {"_base", "claims", "invites", "mint", "license_admin"},
+    "deletion": {"_base", "claims", "holders", "invites", "mint", "license_admin"},
     "institution_admin": {"_base", "claims", "holders", "invites", "mint"},
     "licensing": {"claims", "invites", "holders", "mint", "activation", "entitlement",
-                  "license_admin", "upgrade", "institution_admin"},
+                  "license_admin", "upgrade", "deletion", "institution_admin"},
 }
 
 

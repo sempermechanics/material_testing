@@ -133,6 +133,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   past a skipped frame, Home headline, partial-run dialog). No audit TECH_DEBT rows remain.
 - **Bulk delete.** Backend half deployed (#226, [CHANGELOG](docs/ops/CHANGELOG.md)); app half
   merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere, cloud link cleared).
+- **Licence desk (open PRs, stacked #236 → #237 → #238 → PR 4):** fast list and one-row
+  refresh, one licence per person, edit/upgrade/convert, delete with a 30-day restore
+  ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)). Deploy owes indexes and two TTL policies.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever

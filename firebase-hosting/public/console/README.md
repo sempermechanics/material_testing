@@ -18,7 +18,7 @@ so `node --test` can run them; `auth.js` re-exports `esc` and `when`.
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
 | `/account` (`/console/account`) | Anyone with an account | See the licence, its term, the seat and the saved analyses; give a floating seat back, move the licence to a new device, download an analysis. The last two need **2FA**. |
 | `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members, withdraw an unclaimed invitation, see who holds a seat, put a member on hold, clear a device lock. |
-| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, extend a term, revoke a key, drive any institution roster, approve accounts. |
+| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, edit or upgrade one, revoke or delete a key (30-day restore), drive any institution roster, approve accounts. |
 
 ## The front door
 
@@ -93,6 +93,11 @@ also refuses a revoke on a session older than
 `ADMIN_WEB_REVOKE_REAUTH_SECONDS`. Nothing is deleted either way — revoking
 withdraws entitlement and leaves every saved analysis in place.
 
+**Delete** asks the same (it revokes first) and is offered on revoked rows
+too, but not on a system Demo key. The licence moves to **Recently deleted**,
+a card loaded only when opened (`GET /v1/admin/deleted-licenses`), which
+shows the days left and **Restore** until `purgeAt`.
+
 ## Deploying
 
 Use [`scripts/deploy-console.sh`](../../../scripts/deploy-console.sh) so the
@@ -128,7 +133,7 @@ reason: the SDK's auth iframe is now same-origin.
 
 A Google re-authentication unloads the page. The operator comes back signed
 in afresh with a one-line status saying what to repeat; the request that
-asked for the step-up was not sent. A revoke is the exception: the desk
+asked for the step-up was not sent. A revoke or delete is the exception: the desk
 stashes the licence id in sessionStorage before leaving (`resume` in
 `stepUp`), and on the return leg `requireSignIn` hands it back so the desk
 finishes the revoke after one plain confirmation — the who-is-affected

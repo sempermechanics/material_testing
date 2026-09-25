@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   esc, when, day, licenceState, licenceStatePill, leaseHeld, seatCells, inviteCells,
   errorDetail, licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
-  isoDay, emailList, licenceEditPatch,
+  isoDay, emailList, licenceEditPatch, daysLeft,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -198,4 +198,12 @@ test("helpers", () => {
   assert.equal(isoDay("2027-03-31T23:59:59Z"), "2027-03-31");
   assert.equal(isoDay(null), "");
   assert.deepEqual(emailList(" A@x.org, a@x.org ,, b@x.org"), ["a@x.org", "b@x.org"]);
+});
+
+test("days left in the deleted hold", () => {
+  const now = Date.parse("2026-09-25T12:00:00Z");
+  assert.equal(daysLeft("2026-10-25T12:00:00Z", now), 30);
+  assert.equal(daysLeft("2026-09-25T13:00:00Z", now), 1);
+  assert.equal(daysLeft("2026-09-24T00:00:00Z", now), 0);
+  assert.equal(daysLeft(null, now), 0);
 });
