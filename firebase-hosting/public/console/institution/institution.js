@@ -1,5 +1,5 @@
-import { requireSignIn, api, setStatus, esc, when } from "../auth.js";
-import { seatCells, inviteCells } from "../util.js";
+import { requireSignIn, api, setStatus, esc } from "../auth.js";
+import { seatCells, inviteCells, day, licenceStatePill } from "../util.js";
 
 let licenseId = "";
 
@@ -91,8 +91,8 @@ function render(data) {
     <p>
       <span class="pill">${esc(lic.keyPrefix || "licence")}</span>
       <span class="pill">${floating ? "shared seats" : "one seat each"}</span>
-      <span class="pill ${lic.status === "revoked" ? "off" : "ok"}">${esc(lic.status || "")}</span>
-      ${lic.expiresAt ? `<span class="pill warn">expires ${esc(when(lic.expiresAt))}</span>` : ""}
+      ${licenceStatePill(lic)}
+      ${lic.expiresAt ? `<span class="pill warn">ends ${esc(day(lic.expiresAt))}</span>` : ""}
     </p>
     <p class="muted">
       ${floating

@@ -1716,8 +1716,12 @@ nothing the backend would refuse and says where the account *can* go.
 reports what it did in the status line, which is pinned to the viewport while
 it holds a message and is not cleared by the list reload that follows. A
 revoked licence leaves the table at once — behind "Show revoked", since the
-record is the audit trail. Silence after a click is always a defect here: it
-is indistinguishable from a revoke that did not happen.
+record is the audit trail. Demo keys sit behind "Show Demo keys" the same way:
+one is minted for every account, so they outnumbered the licences anyone sold.
+The table has a Mode column, its status pill reads "in grace" or "expired" from
+the term rather than the stored `status`, and "Load more" pages past the first
+200. Silence after a click is always a defect here: it is indistinguishable
+from a revoke that did not happen.
 
 Destructive actions confirm twice — a dialog naming who is affected, then
 typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
@@ -1920,7 +1924,9 @@ not a refusal.
 #### The account page needs one call, not two
 
 `/v1/me`'s `license` block now carries `seating` and `leaseExpiresAt` alongside
-the term. Both were already in `license_summary`, and `/v1/config` already
+the term, and `held`: whether the stored mode is `licensed`. A Demo key and a
+licence revoked out from under the account both still have a kind and a
+prefix, so the page shows licence details and "Move licence" only when `held`. Both were already in `license_summary`, and `/v1/config` already
 returned them — but `/v1/config` is the larger answer, and a browser asking
 "what am I?" should not have to fetch product limits to find out whether it
 holds a seat until 14:20.
@@ -1993,12 +1999,20 @@ tell them whether anything actually happened.
 
 `GET /v1/admin/licenses/{id}/reconcile` is the second number. It reads every
 seat, reads that seat holder's user document, and sorts each into one of three
-buckets with a reason attached:
+buckets with a reason attached. An `active` seat with a reason occupies a seat
+without entitling anyone, and is counted in `notEntitled` (which replaced
+`neverClaimed`: a pending invitation has no seat, so the old reason could not
+occur, and the seats it did catch were idle for the four reasons below).
+`entitled` is the accounts the backend would answer licensed for: none once
+the licence is past its grace, though the stored modes still say `licensed`. `maxSeats` is `null` for an uncapped licence:
 
 | Bucket | Reason | Means |
 |---|---|---|
 | `active` | — | On the roster and holding the licence. |
-| `active` | `never_claimed` | Invited, never signed in. Occupies a seat, entitles nobody. |
+| `active` | `on_hold` | The seat is disabled. Occupies a seat, entitles nobody. |
+| `active` | `no_account` | No user document behind the seat. |
+| `active` | `moved_on` | The account is on a different licence now. |
+| `active` | `demoted` | The account points at this licence but is on Demo. |
 | `revokedConfirmed` | `checked_in` | Demoted, and the account has made a request since the revoke — so its device has re-read `/v1/config`. |
 | `revokedConfirmed` | `moved_on` | The account is on a different licence now. |
 | `revokedConfirmed` | `no_account` | No user document behind the seat. |

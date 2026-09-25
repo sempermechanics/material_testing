@@ -225,6 +225,12 @@ def license_summary(user: dict) -> dict:
         # Null on an assigned seat, which never needs one. On a floating seat
         # this is what the app renews before it lapses.
         "leaseExpiresAt": as_utc(user.get("leaseExpiresAt")),
+        # Whether a real licence is attached: false for a Demo key and for a
+        # licence revoked out from under the account, true for one that is
+        # merely expired or waiting on a floating seat. `mode` cannot say
+        # this — all four read demo — and the account page needs it to show
+        # licence details only to someone who has a licence.
+        "held": _stored_mode(user) == MODE_LICENSED,
     }
 
 
