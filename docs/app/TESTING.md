@@ -104,9 +104,7 @@ Results land in logcat (`adb logcat -d -s Benchmark:I`).
 fabricate a tensile session with a load per frame (`--ez results true`, 30 and 150
 frames), opens it on Results and toggles Whole test / Elastic region, reporting frame
 timing and the `Semper.viewer.stressStrain` trace section (the curve build over every
-frame's `.dat`). For both, the seeder also writes the `field_ranges.bin` sidecar a real
-batch run leaves, so the viewer's colour-scale pass reads it as it does on a phone;
-without it the benchmark measured the no-sidecar fallback instead (TD-87).
+frame's `.dat`).
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
@@ -121,16 +119,21 @@ matches CI. On the same emulator the job then runs the micro suite with the
 a regression gate; both suites' `*-benchmarkData.json` are uploaded, as
 `macrobenchmark-results` and `microbenchmark-results`.
 
-Two things that will otherwise cost you an afternoon:
+Three things that will otherwise cost you an afternoon:
 
 - **The shell cannot start a non-exported Activity** (API 34+). Macrobenchmark launches
   through the shell, so anything it drives must be exported — `app/src/benchmark/AndroidManifest.xml`
   exports the needed screens for the `benchmark` variant only, never for a shipped build.
-- **`startActivityAndWait` does not work on an API 37 emulator.** It confirms a launch by
-  parsing `dumpsys gfxinfo <pkg> framestats`, which comes back empty there for *every*
-  activity, so `StartupBenchmark`/`ScreenBenchmark` fail with "Unable to confirm activity
-  launch completion []". Run those on a physical device or an older image.
-  `ViewerScrubBenchmark` deliberately avoids that API and does run on the emulator.
+- **`startActivityAndWait` may not work on an API 37 emulator.** It confirms a launch by
+  parsing `dumpsys gfxinfo <pkg> framestats`, which came back empty for *every* activity
+  on an earlier API 37 image, so `StartupBenchmark`/`ScreenBenchmark` failed with "Unable
+  to confirm activity launch completion []". The Pixel_10_2 API 37 image runs them
+  (2026-09-25); if yours does not, use a physical device or an older image.
+  `ViewerScrubBenchmark` deliberately avoids that API.
+- **A seeded session needs its `field_ranges.bin`.** The viewer fixes the summary colour
+  scale on open; without the sidecar that pass decodes every frame, and at 150 frames its
+  garbage (~155 MB) is what `scrub150Frames` reported as max heap (TD-87).
+  `BenchmarkSeedActivity` writes the sidecar, and reseeds a cached session that lacks one.
 
 Results land as `*-benchmarkData.json` under the module's
 `build/outputs/connected_android_test_additional_output/`. A worked before/after

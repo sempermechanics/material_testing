@@ -25,6 +25,9 @@ import java.nio.ByteOrder
  * Extras: `frameCount` (default 150) and `pointsPerFrame` is fixed by the COLS×ROWS grid
  * below so the payload matches [HotPathMicroBenchmark]. Frames are cached on disk keyed
  * by frame count, so repeated benchmark iterations pay the fabrication cost once.
+ * The session also gets the `field_ranges.bin` sidecar a real analysis writes; without
+ * it the viewer decodes all N frames on open to fix the summary colour scale, and that
+ * pass's ~150 MB of garbage (150 frames) was what `scrub150Frames` reported as its peak.
  *
  * `results` (boolean) seeds a tensile test instead: a load per frame and a mean Exx
  * that rises with it, straight for the first two thirds (200 GPa at 10 mm²), then
@@ -74,12 +77,9 @@ class BenchmarkSeedActivity : Activity() {
      * landed in `MemoryUsageMetric` — i.e. the harness would have been measuring its own
      * fabrication cost instead of the viewer's.
      *
-     * It also writes the [FieldRangesStore] sidecar that `DicBatchRunner` writes for a
-     * real batch, so the viewer's colour-scale pass reads it instead of decoding every
-     * frame. Without it the benchmark measured only the no-sidecar fallback (older or
-     * restored sessions), whose ~1 MB per frame of garbage set the 150-frame heap
-     * (TD-87). The per-frame `valueRanges` columns are allocated here, in setup and on
-     * the first iteration only.
+     * The per-frame ranges come from the same scratch array, as `DicBatchRunner`
+     * computes them from each frame it has just solved. A dir cached before the sidecar
+     * existed is seeded again, so no device keeps a session without one.
      */
     private fun seedSession(frameCount: Int, results: Boolean): File {
         val kind = if (results) "results" else "bench"
@@ -88,18 +88,18 @@ class BenchmarkSeedActivity : Activity() {
         val expected = SessionPaths.frameDat(dir, frameCount - 1)
         val rangesFile = File(dir, FieldRangesStore.FILE_NAME)
         if (expected.exists() && rangesFile.exists()) return dir // already seeded
-        val fieldIndices = SummaryAnimation.FIELDS.map { it.second }.toIntArray()
-        val perFrameRanges = ArrayList<Map<Int, Pair<Float, Float>?>>(frameCount)
+        val fields = SummaryAnimation.FIELDS.map { it.second }.toIntArray()
+        val ranges = ArrayList<Map<Int, Pair<Float, Float>?>>(frameCount)
         val floats = FloatArray(COLS * ROWS * DicResult.STRIDE)
         val buf = ByteBuffer.allocate(floats.size * 4).order(ByteOrder.nativeOrder())
         for (i in 0 until frameCount) {
             fillFrame(floats, seed = i, exxOffset = if (results) strainMilli(i, frameCount) / 1000f else 0f)
+            ranges.add(VisualizationEngine.valueRanges(floats, fields))
             buf.clear()
             buf.asFloatBuffer().put(floats)
             SessionPaths.frameDat(dir, i).writeBytes(buf.array())
-            perFrameRanges.add(VisualizationEngine.valueRanges(floats, fieldIndices))
         }
-        FieldRangesStore.write(rangesFile, fieldIndices, perFrameRanges)
+        FieldRangesStore.write(rangesFile, fields, ranges)
         return dir
     }
 
