@@ -130,8 +130,8 @@ The session list and the only entry point to a new analysis.
    ├── Selection mode (long-press)
    │   ├── select all
    │   ├── rename                      (only with exactly one selected)
-   │   └── delete → "Delete device" / "Delete cloud" when the row has both;
-   │                a row with only one copy goes outright
+   │   └── delete → phone / cloud backup / everywhere when every row has both;
+   │                otherwise one Delete that removes every copy
    ├── Quota chip ...................... → 9. Session limit / 4. Settings
    ├── Pull-to-refresh                  (deep cloud reconcile, repairs blobs)
    ├── Empty state → "Start analysis"   (same as the FAB — no longer Settings)
@@ -167,10 +167,13 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, delete, close |
 | [ ] 3.11 | Select two rows | Rename disappears; delete still offered |
 | [ ] 3.12 | Rename a single selection | Text dialog; the new name persists after leaving and returning |
-| [ ] 3.13 | Delete one session that exists **both** on the phone and in the cloud | Choice of **"Delete device"** / **"Delete cloud"** — there is no single "delete everywhere" button on this branch |
-| [ ] 3.13a | Choose **Delete device** | Message pill: "Removed from this phone. Tap the row to download from the cloud." The row stays, now badged "Only in cloud" |
+| [ ] 3.13 | Delete one session that exists **both** on the phone and in the cloud | Choice of **Delete from this phone**, **Delete the cloud backup** and **Delete everywhere**, plus Cancel |
+| [ ] 3.13a | Choose **Delete from this phone** | Message pill: "Removed from this phone. Tap the row to download from the cloud." The row stays, now badged "Only in cloud" |
 | [ ] 3.13b | Delete a row that is already cloud-only, on device only | No-op branch — there is nothing local left to remove |
-| [ ] 3.14 | Delete several sessions | Same choice, with counts in the message. A selection with no cloud copy, or a cloud-only stub, is deleted outright rather than offering the choice |
+| [ ] 3.14 | Delete several sessions | Same three choices when every row is on both, with the count in the message. A selection with no cloud copy gets one plural confirm; a mixed selection or cloud-only stubs get one Delete that removes every copy |
+| [ ] 3.14a | Choose **Delete everywhere** for ten rows | The rows disappear at once; a message pill offers **Undo** for 5 s, then reads "Deleting 4 of 10…", then "10 analyses deleted." Production logs show ten DELETEs and no 404 |
+| [ ] 3.14b | Tap **Undo** inside the 5 s | The rows come back and nothing reaches the backend |
+| [ ] 3.14c | Delete while offline | The rows stay hidden; the delete runs when the network returns. If it still cannot reach the cloud, the pill names how many are left, with **Try again** |
 | [ ] 3.15 | Press Back in selection mode | Selection clears; the app does not exit |
 | [ ] 3.16 | Tap the quota chip below the cap | Settings (or the limit screen at the cap) |
 | [ ] 3.17 | Reach the quota cap | The chip turns red |
@@ -253,7 +256,7 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 | [ ] 4.14e | Look for a **Send to** sheet after a Download | There is none, by design: you already chose the destination, so the bytes go straight there |
 | [ ] 4.14f | Download a row whose cloud zip is unavailable | It falls back to packing the local session into the same destination |
 | [ ] 4.14g | Cause a Download to fail | The empty destination file is removed rather than left as a 0-byte zip, and the failure is named |
-| [ ] 4.15 | Tap the bin on a row with a local copy | Choice: cloud backup only / local + cloud / cancel |
+| [ ] 4.15 | Tap the bin on a row with a local copy | The same three choices as Home §3.13: phone / cloud backup / everywhere, plus Cancel |
 | [ ] 4.16 | Tap the bin on a cloud-only row | "Delete this backup forever?" naming the analysis |
 | [ ] 4.17 | Confirm any backup delete, then tap **Undo** within 5 s | The row returns; nothing is deleted server-side |
 | [ ] 4.18 | Confirm and wait past the undo window | The backup is really gone after a refresh |
@@ -823,7 +826,7 @@ are `B1`–`B4` in [../WORKFLOWS.md](../WORKFLOWS.md#b-app--background-and-data-
 | `DicUploadWorker` | Back up a session to the cloud |
 | `DicRestoreWorker` | Pull a session back into the app |
 | `DicBundleDownloadWorker` | Write a `Session.zip` into a SAF document the user picked first (§4.14c) |
-| `BackupDeleteWorker` | Erase a cloud backup after the undo window |
+| `BackupDeleteWorker` | Run a queued `SessionDeletes` job after the undo window: one analysis at a time, progress per row, and the ids still in the cloud |
 
 They are **no longer silent about failure**: a terminal upload failure surfaces on
 Home (message pill + a "why + retry" dialog on the badge), and a terminal restore
@@ -883,8 +886,6 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 | **Convergence view** (peak strain and noise vs VSG) | documented in `VsgPlotView` / `VsgStudy` | Never built — only line-cut plots exist |
 | `VsgStudyRunner.ERROR_ENGINE_FAILED` | `VsgStudyRunner` | Declared, never assigned or matched |
 | Frame-order *picker* mode | `FrameOrderHelper` | Only the initial state; the sort menu offers no way back once you sort |
-| `cloud_delete_backup_failed` string | `strings.xml` | Leftover from the pre-undo-window delete; the live path uses `delete_cloud_failed`. Its sibling `cloud_delete_backup_done` **is** used, by `SessionSelectionController.eraseCloudBackup` |
-| `delete_everywhere` string | `strings.xml` | Orphaned when the local+cloud delete became the two-way "Delete device" / "Delete cloud" choice (§3.13) |
 | `home_empty_restore` string | `strings.xml` | Orphaned when the empty state became **Start analysis** (§3.19) |
 | `download_analysis_save_title` / `_save_body` | `strings.xml` | Orphaned when Download started picking its SAF destination *before* enqueue — there is no confirm dialog left to title |
 | `delete_device_restore_action` string | `strings.xml` | Unused |

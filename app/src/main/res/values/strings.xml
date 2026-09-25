@@ -239,18 +239,17 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="selection_selected_desc">Selected</string>
     
     <string name="delete_confirm_body_local_multi">Permanently removes them from your phone. This can\'t be undone.</string>
-    <string name="delete_confirm_body_cloud_multi">%1$d of these are backed up. Delete cloud: Removes only the cloud copies (phone copies stay). Delete device: Only removes phone copies (cloud backups stay — tap a row to re-download).</string>
+    <!-- One set of delete choices, on Home and in Settings alike. -->
+    <string name="delete_choice_phone">Delete from this phone · keep the cloud backup</string>
+    <string name="delete_choice_cloud">Delete the cloud backup · keep it on this phone</string>
+    <string name="delete_choice_everywhere">Delete everywhere</string>
+    <string name="delete_progress_fmt">Deleting %1$d of %2$d…</string>
 
     <string name="delete_confirm_title">Delete this analysis?</string>
     <string name="delete_confirm_body_local">Permanently removes this analysis from your phone. This can\'t be undone.</string>
-    <string name="delete_confirm_body_cloud">Choose what to remove.\n\nDelete cloud removes the cloud copy and keeps this phone\'s copy.\n\nDelete device removes the phone copy and keeps the cloud backup.</string>
+    <string name="delete_confirm_body_cloud">This analysis is on your phone and in the cloud. Choose what to remove. A deleted cloud backup can\'t be recovered.</string>
     <string name="delete_confirm_body_cloud_only">Permanently erases this analysis from cloud storage and removes it from this list. This can\'t be undone.</string>
-    <string name="delete_cloud_backup">Delete cloud</string>
-    <string name="delete_everywhere">Delete everywhere</string>
-    <string name="delete_device_only">Delete device</string>
-    <string name="delete_everywhere_done">Analysis erased from this device and the cloud.</string>
     <string name="delete_device_only_done">Removed from this phone. Tap the row to download from the cloud.</string>
-    <string name="delete_cloud_failed">Couldn\'t reach the cloud, so nothing was deleted. Check your connection and try again.</string>
     <string name="download_analysis_title">Restore this analysis?</string>
     <string name="download_analysis_body">This analysis is only in the cloud on this phone. Restore it to open the results.</string>
     <string name="download_analysis_save_body">Choose where to save the Session.zip. The analysis already on this phone is left unchanged.</string>
@@ -363,7 +362,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="storage_auto_free_off">Off — analyses stay on this phone until you remove them</string>
     <string name="storage_auto_free_on_fmt">Release backed-up analyses when this phone holds over %1$d GB</string>
     <string name="storage_auto_free_info">Only analyses that finished backing up are released, oldest first. They stay in the cloud and download again when opened. Analyses that are not backed up are never touched.</string>
-    <string name="cloud_delete_pending">Backup deleted</string>
     <string name="action_undo">Undo</string>
     <string name="analysis_preferences">Analysis preferences</string>
     <string name="cloud_retry_backup">Retry backup</string>
@@ -378,12 +376,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_provision">Cloud backup setup could not be completed. Tap Try again.</string>
     <string name="cloud_backup_failed_missing_files">This analysis\'s results are no longer on this device, so it can\'t be backed up.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
-    <string name="cloud_delete_backup_title">Delete from backup</string>
-    <string name="cloud_delete_backup_body">Choose what to remove for this analysis.\n\nDeleting the cloud backup is permanent — the raw images, results and report are erased from the cloud and cannot be recovered.</string>
-    <string name="cloud_delete_backup_only">Delete cloud backup</string>
-    <string name="cloud_delete_backup_and_local">Delete local + cloud</string>
-    <string name="cloud_delete_backup_done">Cloud backup deleted.</string>
-    <string name="cloud_delete_backup_failed">Couldn\'t delete from cloud. Try again.</string>
     <string name="cloud_delete_forever_title">Delete this backup forever?</string>
     <string name="cloud_delete_forever_body">This permanently erases the cloud copy of \"%1$s\" — raw images, results and report. It cannot be undone, and it can never be restored to this or any other device.\n\nAnalyses still on this phone are not touched.</string>
     <string name="cloud_delete_forever_confirm">Delete forever</string>
@@ -898,6 +890,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">%1$d of these is backed up. Delete removes every copy, on your phone and in the cloud. This can\'t be undone.</item>
         <item quantity="other">%1$d of these are backed up. Delete removes every copy, on your phone and in the cloud. This can\'t be undone.</item>
     </plurals>
+    <plurals name="delete_confirm_body_choice_multi">
+        <item quantity="one">This analysis is on your phone and in the cloud. Choose what to remove. A deleted cloud backup can\'t be recovered.</item>
+        <item quantity="other">These %1$d analyses are on your phone and in the cloud. Choose what to remove. A deleted cloud backup can\'t be recovered.</item>
+    </plurals>
     <plurals name="delete_multi_working">
         <item quantity="one">Deleting 1 analysis…</item>
         <item quantity="other">Deleting %1$d analyses…</item>
@@ -905,6 +901,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <plurals name="delete_multi_done">
         <item quantity="one">1 analysis deleted.</item>
         <item quantity="other">%1$d analyses deleted.</item>
+    </plurals>
+    <plurals name="delete_cloud_multi_done">
+        <item quantity="one">Cloud backup deleted. The analysis stays on this phone.</item>
+        <item quantity="other">%1$d cloud backups deleted. The analyses stay on this phone.</item>
     </plurals>
     <plurals name="delete_multi_partial">
         <item quantity="one">1 deleted · %2$d still in the cloud (couldn\'t reach it).</item>

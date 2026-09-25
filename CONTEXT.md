@@ -102,7 +102,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-25)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-36120337264-1`, from `fd14374`)
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36122511953-1`, from `cb0e893`)
   behind API Gateway `semper-gw` (config `v202609250953-51`, deployed by CI, ADR-006);
   staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
@@ -144,6 +144,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   status, local quota count, restored stop reasons), #219 (PDF and share extremes), #220 (run
   counts, stale Home rows), #223 (counts, captions, report names, progress), #225 (frame names
   past a skipped frame, Home headline, partial-run dialog). No audit TECH_DEBT rows remain.
+- **Bulk delete.** Ten deletes from Home cost 61 DELETE requests over 100 s in production
+  (13 × 404, 38 × 429). Backend half deployed (#226, per-session erase bucket 1/s, burst 10);
+  app half merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere,
+  cloud link cleared).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever

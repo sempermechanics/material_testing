@@ -4,51 +4,21 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:paddingHorizontal="8dp"
-    android:paddingBottom="8dp">
+    android:paddingBottom="4dp">
 
     <TextView
         android:id="@+id/tvDeleteMessage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingHorizontal="16dp"
-        android:paddingBottom="12dp"
+        android:paddingBottom="8dp"
         android:textColor="@color/text_secondary"
         android:textSize="14sp" />
 
+    <!-- One full-width button per choice, stacked so each label reads in full. -->
     <LinearLayout
+        android:id="@+id/deleteChoices"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="horizontal">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnDeleteLeft"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:maxLines="3"
-            android:textAllCaps="false"
-            android:textSize="12sp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnDeleteMid"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:maxLines="3"
-            android:textAllCaps="false"
-            android:textSize="12sp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnDeleteRight"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:maxLines="3"
-            android:textAllCaps="false"
-            android:textSize="12sp" />
-    </LinearLayout>
+        android:orientation="vertical" />
 </LinearLayout>

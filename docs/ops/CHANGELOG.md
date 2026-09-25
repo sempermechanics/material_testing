@@ -12,6 +12,18 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-25 — Backend deploy: a session-delete bucket (#226)
+
+Production `semper-api-36122511953-1` from `cb0e893` (staging first, run
+36122073964 → `semper-api-staging-36122073964-1`; production run 36122511953).
+Candidate smoke passed on both; the gateway dry-run found the live config
+`v202609250953-51` already serves the spec.
+
+- #226: `DELETE /v1/sessions/{sid}` draws on its own `session_erase_bucket`
+  (1/s, burst 10) instead of sharing account erasure's (0.2/s, burst 3). Ten
+  deletes from Home had taken 61 requests over 100 s, 38 of them 429s. The app
+  half (#227: one paced queue, no re-sent deletes) ships with the next app release.
+
 ## 2026-09-25 — Backend and console deploy: wrong-information audit (#211, #215, #216, #221, #224)
 
 Production `semper-api-36120337264-1` from `fd14374` (staging first, run

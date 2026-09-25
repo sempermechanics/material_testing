@@ -85,7 +85,7 @@ When cloud is configured (`INDIC_API_BASE_URL`):
 | Bundle build | `SessionUploadBundler` | Render frame bundles + CSV lists offline-testable |
 | Restore | `CloudRestore` / `DicRestoreWorker` | Pull remote sessions back into local session dirs |
 | Bundle download | `DicBundleDownloadWorker` | Write a session `.zip` into a SAF document the user picked **before** enqueue. Falls back to packing the local session when the cloud copy is unavailable, and deletes the empty destination on failure |
-| Backup delete | `BackupDeleteWorker` | Erase a cloud backup once the 5-second undo window closes |
+| Delete queue | `SessionDeletes` / `BackupDeleteWorker` | Every delete that touches the cloud: one unique chain, a 5-second undo window, one analysis at a time, 429s waited out. Phone-only deletes stay inline (`CloudSync.eraseLocalOnly`). `ui/common/DeleteFeedback` reports progress and the outcome on Home and Settings |
 
 `IndicApi.listSessions` **pages**: it follows `nextPageToken` until the backend
 stops returning one, so a deep refresh sees the whole account rather than the
