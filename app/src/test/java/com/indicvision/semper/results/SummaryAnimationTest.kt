@@ -6,6 +6,7 @@ import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.viewer.SummaryAnimation
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -251,6 +252,44 @@ class SummaryAnimationTest {
         assertEquals(decoded, withStaleCache)
         // Not the vacuous case — the stale cache really did omit the third frame's range.
         assertTrue(decoded.getValue(DicResult.IDX_EXX).second > 8f)
+    }
+
+    @Test
+    fun `a decode with no sidecar writes one the next call reads`() = runBlocking {
+        // A session restored from the cloud has no sidecar, and the viewer runs this
+        // pass on every open: without the write-back each open decoded every frame.
+        val files = listOf(frame("a.dat", 0f, 1f), frame("b.dat", -5f, 0.5f), frame("c.dat", 0f, 9f))
+        val rangesFile = temp.root.resolve(FieldRangesStore.FILE_NAME)
+
+        val decoded = SummaryAnimation.globalRanges(files, rangesFile)
+
+        val saved = FieldRangesStore.read(rangesFile, summaryFieldIndices)
+        assertEquals(3, saved?.size)
+        assertEquals(decoded, SummaryAnimation.globalRanges(files, rangesFile))
+        val part = rangesFile.resolveSibling("${rangesFile.name}.part")
+        assertFalse("the .part sidecar is moved into place", part.exists())
+    }
+
+    @Test
+    fun `a stale sidecar is replaced by the decode it forced`() = runBlocking {
+        val originalFiles = listOf(frame("a.dat", 0f, 1f), frame("b.dat", -5f, 0.5f))
+        val rangesFile = rangesFileFor(originalFiles)
+        val grownFiles = originalFiles + frame("c.dat", 0f, 9f)
+
+        SummaryAnimation.globalRanges(grownFiles, rangesFile)
+
+        assertEquals(3, FieldRangesStore.read(rangesFile, summaryFieldIndices)?.size)
+    }
+
+    @Test
+    fun `an unreadable frame leaves no sidecar behind`() = runBlocking {
+        // Saving it would record the frame as having no points, for good.
+        val broken = temp.newFile("broken.dat").apply { writeBytes(ByteArray(7)) }
+        val rangesFile = temp.root.resolve(FieldRangesStore.FILE_NAME)
+
+        SummaryAnimation.globalRanges(listOf(broken, frame("good.dat", 0f, 4f)), rangesFile)
+
+        assertFalse(rangesFile.exists())
     }
 
     @Test
