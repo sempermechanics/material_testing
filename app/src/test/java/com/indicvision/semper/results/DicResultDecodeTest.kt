@@ -2,11 +2,14 @@
 
 package com.indicvision.semper.results
 
+import com.indicvision.semper.DatDecoder
 import com.indicvision.semper.DicResult
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -80,6 +83,38 @@ class DicResultDecodeTest {
         val fromBytes = DicResult.decodeDatBytes(bytes)
         assertNotNull(fromFile)
         assertArrayEquals(fromBytes, fromFile, 0f)
+    }
+
+    @Test
+    fun `decodeInto fills a big enough array and reports the frame's float count`() {
+        val big = temp.newFile("big.dat").apply {
+            writeBytes(bytesForPoints(6) { data, offset -> data[offset + DicResult.IDX_X] = offset + 1f })
+        }
+        val small = temp.newFile("small.dat").apply {
+            writeBytes(bytesForPoints(4) { data, offset -> data[offset + DicResult.IDX_U] = -offset - 1f })
+        }
+        val first = requireNotNull(DatDecoder.decodeInto(big, reuse = null))
+        assertEquals(6 * DicResult.STRIDE, first.floatCount)
+        assertEquals(first.floatCount, first.data.size)
+
+        val second = requireNotNull(DatDecoder.decodeInto(small, reuse = first.data))
+
+        assertSame(first.data, second.data)
+        assertEquals(4 * DicResult.STRIDE, second.floatCount)
+        assertArrayEquals(DicResult.decodeDatFile(small), second.data.copyOf(second.floatCount), 0f)
+    }
+
+    @Test
+    fun `decodeInto allocates when the array is too small`() {
+        val file = temp.newFile("frame.dat").apply {
+            writeBytes(bytesForPoints(5) { data, offset -> data[offset + DicResult.IDX_V] = offset * 0.5f })
+        }
+        val tooSmall = FloatArray(DicResult.STRIDE)
+
+        val decoded = requireNotNull(DatDecoder.decodeInto(file, reuse = tooSmall))
+
+        assertNotSame(tooSmall, decoded.data)
+        assertArrayEquals(DicResult.decodeDatFile(file), decoded.data, 0f)
     }
 
     @Test

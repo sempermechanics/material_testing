@@ -139,6 +139,29 @@ class VisualizationEngineTest {
     }
 
     @Test
+    fun `valueRanges over a reused, oversized buffer and columns matches a fresh call`() {
+        // globalRanges reuses one frame buffer and one set of columns across a batch
+        // (TD-87): a smaller frame must read only its own floats, never the tail an
+        // earlier, larger frame left, and must ignore what the columns held before.
+        val data = rampField(cols = 25, rows = 17, step = 4)
+        val fields = intArrayOf(
+            DicResult.IDX_U,
+            DicResult.IDX_V,
+            DicResult.IDX_EXX,
+            DicResult.IDX_EYY,
+            DicResult.IDX_EXY,
+        )
+        val tail = 3 * DicResult.STRIDE
+        val buffer = data.copyOf(data.size + tail).also { it.fill(1e9f, data.size, it.size) }
+        val scratch = Array(fields.size) { FloatArray(data.size / DicResult.STRIDE + 50) { -1e9f } }
+
+        val fresh = VisualizationEngine.valueRanges(data, fields)
+        val reused = VisualizationEngine.valueRanges(buffer, data.size, fields, scratch)
+
+        assertEquals(fresh, reused)
+    }
+
+    @Test
     fun `valueRanges is null per field when nothing correlates`() {
         val data = FloatArray(4 * DicResult.STRIDE) { -1f }
         val fields = intArrayOf(DicResult.IDX_U, DicResult.IDX_EXX)
