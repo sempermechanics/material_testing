@@ -502,6 +502,18 @@ export function requireSignIn(onReady) {
  * one, so callers can distinguish e.g. `no_floating_seat` from a real fault
  * rather than showing every failure as "something went wrong".
  */
+/**
+ * A request-validation 422 carries a list of `{msg, loc}` rather than a code;
+ * as an Error message that list read "[object Object]". Its sentences are
+ * the useful part ("maxAnalyses must be at least 25…").
+ */
+function errorDetail(detail) {
+  if (!Array.isArray(detail)) return detail;
+  return detail
+    .map((d) => String((d && d.msg) || d).replace(/^Value error, /, ""))
+    .join("; ");
+}
+
 export async function api(path, options = {}, { allowStepUp = true } = {}) {
   const send = async () => {
     const user = auth.currentUser;
@@ -517,7 +529,7 @@ export async function api(path, options = {}, { allowStepUp = true } = {}) {
     });
     const text = await resp.text();
     const body = text ? JSON.parse(text) : {};
-    if (!resp.ok) throw new Error(body.detail || `http_${resp.status}`);
+    if (!resp.ok) throw new Error(errorDetail(body.detail) || `http_${resp.status}`);
     return body;
   };
 
@@ -608,7 +620,7 @@ export function setStatus(message, isError = false) {
 
 // Pure helpers live in util.js, where `node --test` can reach them; the pages
 // keep importing them from here.
-export { esc, when } from "./util.js";
+export { esc, when, day } from "./util.js";
 
 /**
  * Confirm a destructive act by making the operator type the thing's name.

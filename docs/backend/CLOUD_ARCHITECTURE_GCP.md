@@ -480,7 +480,8 @@ users/{uid}                       (uid = Google 'sub')
                                    stays a pure function — §20.7)
   licenseExpiresAt                (Timestamp; absent when perpetual)
   licenseGraceDays: number        (absent reads as ZERO, not the fleet default; §20.6)
-  licenseMaxAnalyses: number      (optional per-license cloud cap)
+  licenseMaxAnalyses: number      (optional per-license cloud cap; the resolved
+                                   licensed ceiling is never below DEMO_MAX_ANALYSES)
   schemaVersion                   (stamped by backend/scripts/migrate_schema.py)
   createdAt, updatedAt, lastSeenAt (Timestamp)
   seenCheckpointAt                (Timestamp; stamped by a revoke — the instant
@@ -550,13 +551,17 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
   graceDays: number               (entitlement continues UNCHANGED this long past
                                    expiresAt; 0 is a hard cliff. §20.6)
   supportUntil                    (Timestamp, optional; informational — never gates)
-  maxAnalyses                      (optional, either kind)
+  maxAnalyses                      (optional, either kind; per holder, not per licence.
+                                   Mint/PATCH refuse < DEMO_MAX_ANALYSES, and
+                                   PATCH {"clearMaxAnalyses": true} removes it)
   createdByUid, createdAt, updatedAt
   updatedByUid, updatedAt         (set by the renewal route)
 
 licenses/{id}/seats/{uid}         (institution only — one doc per roster member)
   uid, email, deviceIdLock
   status: "active" | "disabled" | "revoked"
+                                  (a revoked seat cannot be held or resumed —
+                                   409 seat_revoked; the member is re-added)
   # floating only — the lease. Absent means "holds no seat right now", which
   # for most of a floating roster is the normal state.
   leaseExpiresAt                  (Timestamp; compared to now, never trusted
@@ -1552,6 +1557,17 @@ request that beat it has already granted the entitlement, and
 re-reading, returns early for a browser because consoles send no
 `X-Device-Id`.
 
+**An invite behind a Demo key is retried.** A claim that fails for a reason
+that can clear (a full assigned roster, a seat on hold) stamps
+`inviteBlockedAt` on the account, and the Demo key is minted as before. That
+key used to strand the invite for good: every later request short-circuits on
+the account holding a licence. Now an account that still holds Demo and carries
+the stamp tries the invite again at most every `_INVITE_RETRY` (15 minutes),
+so a seat freed later reaches the person it was promised to; the claim drops
+the superseded Demo key and the stamp. A withdrawn invite or a revoked licence
+clears the stamp. The bound is what keeps this off the per-request path: an
+unstamped account never reads the invite collection again.
+
 #### Checkout, and why there is no heartbeat route
 
 `POST /v1/licenses/checkout` claims or extends. Re-calling it **is** the
@@ -1593,6 +1609,18 @@ single-field inequality on one subcollection, so no composite index. It runs
 outside the transaction because a transaction may not query, and that is safe —
 releasing a genuinely expired lease is correct regardless of who wins the claim
 that follows.
+
+**A lease is counted until something uncounts it, expired or not.** Checkout
+adds one to `leasesActive`; only the sweep, a release, a hold or a revoke takes
+it off, and each decides from `_seat_lease_counted` (the seat still carries
+`leaseExpiresAt`), not from whether the lease is live. Release and revoke used
+to decrement only a live lease, so one cleared after it ran out but before the
+sweep reached it vanished from the sweep's query and its slot was lost for
+good. For the same reason a re-checkout of an expired, unswept lease renews it
+rather than counting it twice. Holding a seat (`enabled=false`) releases its
+lease, a whole-licence revoke clears every seat's lease and sets
+`leasesActive` to 0, and `_drop_user_to_demo_if_licensed` drops the holder's
+`leaseExpiresAt` copy, so no revoked or held account reads as holding a seat.
 
 **TTL is not involved.** As the `challenges` precedent already states in
 `firestore.indexes.json`, Firestore TTL is storage hygiene with up to a day of
@@ -1691,8 +1719,12 @@ nothing the backend would refuse and says where the account *can* go.
 reports what it did in the status line, which is pinned to the viewport while
 it holds a message and is not cleared by the list reload that follows. A
 revoked licence leaves the table at once — behind "Show revoked", since the
-record is the audit trail. Silence after a click is always a defect here: it
-is indistinguishable from a revoke that did not happen.
+record is the audit trail. Demo keys sit behind "Show Demo keys" the same way:
+one is minted for every account, so they outnumbered the licences anyone sold.
+The table has a Mode column, its status pill reads "in grace" or "expired" from
+the term rather than the stored `status`, and "Load more" pages past the first
+200. Silence after a click is always a defect here: it is indistinguishable
+from a revoke that did not happen.
 
 Destructive actions confirm twice — a dialog naming who is affected, then
 typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
@@ -1895,7 +1927,9 @@ not a refusal.
 #### The account page needs one call, not two
 
 `/v1/me`'s `license` block now carries `seating` and `leaseExpiresAt` alongside
-the term. Both were already in `license_summary`, and `/v1/config` already
+the term, and `held`: whether the stored mode is `licensed`. A Demo key and a
+licence revoked out from under the account both still have a kind and a
+prefix, so the page shows licence details and "Move licence" only when `held`. Both were already in `license_summary`, and `/v1/config` already
 returned them — but `/v1/config` is the larger answer, and a browser asking
 "what am I?" should not have to fetch product limits to find out whether it
 holds a seat until 14:20.
@@ -1968,12 +2002,20 @@ tell them whether anything actually happened.
 
 `GET /v1/admin/licenses/{id}/reconcile` is the second number. It reads every
 seat, reads that seat holder's user document, and sorts each into one of three
-buckets with a reason attached:
+buckets with a reason attached. An `active` seat with a reason occupies a seat
+without entitling anyone, and is counted in `notEntitled` (which replaced
+`neverClaimed`: a pending invitation has no seat, so the old reason could not
+occur, and the seats it did catch were idle for the four reasons below).
+`entitled` is the accounts the backend would answer licensed for: none once
+the licence is past its grace, though the stored modes still say `licensed`. `maxSeats` is `null` for an uncapped licence:
 
 | Bucket | Reason | Means |
 |---|---|---|
 | `active` | — | On the roster and holding the licence. |
-| `active` | `never_claimed` | Invited, never signed in. Occupies a seat, entitles nobody. |
+| `active` | `on_hold` | The seat is disabled. Occupies a seat, entitles nobody. |
+| `active` | `no_account` | No user document behind the seat. |
+| `active` | `moved_on` | The account is on a different licence now. |
+| `active` | `demoted` | The account points at this licence but is on Demo. |
 | `revokedConfirmed` | `checked_in` | Demoted, and the account has made a request since the revoke — so its device has re-read `/v1/config`. |
 | `revokedConfirmed` | `moved_on` | The account is on a different licence now. |
 | `revokedConfirmed` | `no_account` | No user document behind the seat. |

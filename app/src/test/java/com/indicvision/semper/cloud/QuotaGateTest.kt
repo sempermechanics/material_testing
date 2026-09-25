@@ -66,6 +66,18 @@ class QuotaGateTest {
     }
 
     @Test
+    fun `a licensed account stops at a known ceiling, like demo`() {
+        // Before this, licensed meant "no local cap": the run started, the
+        // upload bounced at 409, and the limit screen's re-check said clear.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 30))
+        TokenStore.setQuota(ctx, used = 29, localCount = 29)
+        assertFalse(TokenStore.isSessionLimitReached(ctx))
+
+        TokenStore.setQuota(ctx, used = 30, localCount = 30)
+        assertTrue(TokenStore.isSessionLimitReached(ctx))
+    }
+
+    @Test
     fun `a forced stop holds until fresh numbers arrive`() {
         AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 5, maxFilesPerSession = 600, maxFrames = 150))
         // 409 from the upload path forces the stop without fresh counts.
@@ -75,6 +87,23 @@ class QuotaGateTest {
         // A reconcile with under-limit numbers clears the forced stop.
         TokenStore.setQuota(ctx, used = 1, localCount = 1)
         assertFalse(TokenStore.isSessionLimitReached(ctx))
+    }
+
+    @Test
+    fun `a delete on the phone lowers used, but never below the server's count`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 5, maxFilesPerSession = 600, maxFrames = 150))
+        // Offline: the server last counted 2, the phone holds 5.
+        TokenStore.setQuota(ctx, used = 2, localCount = 5)
+        assertTrue(TokenStore.isSessionLimitReached(ctx))
+
+        // Deleting two on the phone takes the count, and the stop, with it.
+        TokenStore.refreshSessionLimit(ctx, localCount = 3)
+        assertEquals(3, TokenStore.quotaUsed(ctx))
+        assertFalse(TokenStore.isSessionLimitReached(ctx))
+
+        // The server's copies still count until a reconcile says otherwise.
+        TokenStore.refreshSessionLimit(ctx, localCount = 0)
+        assertEquals(2, TokenStore.quotaUsed(ctx))
     }
 
     @Test

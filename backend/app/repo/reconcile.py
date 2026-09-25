@@ -13,6 +13,7 @@ from ._base import (
     db,
 )
 from .user_config import (
+    _expiry_state,
     _stored_mode,
 )
 
@@ -35,8 +36,11 @@ NO_CHECKIN_SINCE_REVOKE = "no_checkin_since_revoke"
 MOVED_ON = "moved_on"
 NO_ACCOUNT = "no_account"
 CHECKED_IN = "checked_in"
-#: An active seat nobody has taken up. Counted inside `active`, not against it.
-NEVER_CLAIMED = "never_claimed"
+#: Why an active seat entitles nobody. Counted inside `active`, not against
+#: it. These were all reported as `never_claimed` ("invited but never signed
+#: in"), which none of them is: a seat is only ever created for an account.
+ON_HOLD = "on_hold"
+DEMOTED = "demoted"
 
 
 def _seat_revoked_at(seat: dict):
@@ -56,8 +60,10 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
 
     Three buckets, and the one that matters is the third:
 
-    * **active** — the seat is on the roster. `neverClaimed` counts the subset
-      nobody has signed in to take up; they are invited, not entitled.
+    * **active** — the seat is on the roster. `notEntitled` counts the subset
+      that entitles nobody, each with its reason: the seat is on hold
+      (`on_hold`), the account is gone (`no_account`) or on another licence
+      (`moved_on`), or it points here but was demoted (`demoted`).
     * **revokedConfirmed** — the seat is revoked and the revoke has landed:
       the account moved on, never existed, or is demoted *and* has made a
       request since, which is when its device last re-read its entitlement.
@@ -84,7 +90,7 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
         return errors.KIND_NOT_INSTITUTION, None
 
     seats, counts = [], {
-        "active": 0, "neverClaimed": 0,
+        "active": 0, "notEntitled": 0,
         "revokedConfirmed": 0, "revokedStillRunning": 0,
     }
     entitled = 0
@@ -110,10 +116,9 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
         last_seen = user.get("lastSeenAt") if user else None
 
         if seat.get("status") != "revoked":
-            bucket = "active"
-            reason = "" if holds else NEVER_CLAIMED
-            if not holds:
-                counts["neverClaimed"] += 1
+            bucket, reason = "active", _idle_reason(seat, user, on_this_license, holds)
+            if reason:
+                counts["notEntitled"] += 1
         elif holds:
             bucket, reason = "revokedStillRunning", STILL_LICENSED
         elif not user:
@@ -126,7 +131,10 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
             bucket, reason = "revokedStillRunning", NO_CHECKIN_SINCE_REVOKE
 
         counts[bucket] += 1
-        if holds:
+        # A licence past its grace entitles nobody, whatever the stored mode
+        # says; counting it read as a roster still in use. A floating member
+        # between leases still counts: the pool is theirs to draw on.
+        if holds and not _expiry_state(user)[0]:
             entitled += 1
         seats.append({
             "uid": uid,
@@ -143,7 +151,8 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
     intended = int(lic.get("seatsUsed") or 0)
     return "", {
         "licenseId": license_id,
-        "maxSeats": int(lic.get("maxSeats") or 0),
+        # None when the licence has no cap. 0 read as "no seats at all".
+        "maxSeats": int(lic["maxSeats"]) if lic.get("maxSeats") else None,
         # What IT believes, straight off the counter their console reads...
         "intended": intended,
         # ...what the counter would say if recounted from the seats themselves.
@@ -151,12 +160,30 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
         # from anything the buckets describe.
         "intendedRecounted": counts["active"],
         # Accounts the backend would answer "licensed" for under this licence
-        # right now. Equals active - neverClaimed + revokedStillRunning's
-        # still_licensed half, by construction.
+        # right now. Equals active - notEntitled + revokedStillRunning's
+        # still_licensed half while the licence is in term, and 0 once it has
+        # lapsed past grace.
         "entitled": entitled,
         "counts": counts,
         "seats": seats,
     }
+
+
+def _idle_reason(seat: dict, user: dict | None, on_this_license: bool, holds: bool) -> str:
+    """Why an active seat entitles nobody, or "" when it does.
+
+    An account that still holds the licence answers "" whatever the seat says,
+    so `notEntitled` never counts a seat whose account still holds the licence.
+    """
+    if holds:
+        return ""
+    if seat.get("status") == "disabled":
+        return ON_HOLD
+    if not user:
+        return NO_ACCOUNT
+    if not on_this_license:
+        return MOVED_ON
+    return DEMOTED
 
 
 def _seen_since(last_seen, revoked_at) -> bool:

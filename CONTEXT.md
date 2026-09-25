@@ -1,4 +1,4 @@
-# Semper — agent context
+﻿# Semper — agent context
 
 Read this before changing code. Commands: [CONTRIBUTING.md](CONTRIBUTING.md); screen maps:
 [ARCHITECTURE.md](docs/app/ARCHITECTURE.md); DIC primer: [docs/README.md](docs/README.md).
@@ -132,13 +132,17 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   - Pass 5: no cold-start gain from precompiling ([perf/startup.md](docs/perf/startup.md)).
   - Pass 6: no engine or viewer regression
     ([perf/engine-viewer-check-2026-09.md](docs/perf/engine-viewer-check-2026-09.md)).
-- **#200 (merged).** `HotPathMicroBenchmark` could not run in CI (TD-86): the debug manifest
-  now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
-  and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
-- **This branch (TD-87).** The 150-frame scrub heap (51 → 161 MB after TD-75) was the benchmark
-  running the no-sidecar colour-scale fallback; its seeder now writes the ranges sidecar.
+- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#200, TD-86: debug-only permission,
+  `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
+  161 → 21 MB). This branch has `globalRanges` reuse one frame buffer and set of columns.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
+- **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
+  the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
+  looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
+  #211 (open) floors the licensed cap at demo's, lets staff clear a
+  licence's cap, and has the app enforce a known licensed ceiling. The rest of that
+  wrong-info audit is phased; its deferred findings are TD-89…TD-121.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
   run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).

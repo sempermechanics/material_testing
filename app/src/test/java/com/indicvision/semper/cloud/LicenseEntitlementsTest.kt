@@ -107,8 +107,18 @@ class LicenseEntitlementsTest {
     }
 
     @Test
-    fun `a licensed account has no local analysis cap`() {
-        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 5))
+    fun `a licensed account is held to the backend ceiling once it is known`() {
+        // The server refuses the upload past maxSessions; the local gate has to
+        // agree, or the run starts, bounces at 409, and "Re-check" says clear.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 40))
+        assertFalse(LicenseEntitlements.unlimitedAnalysis(ctx))
+        assertEquals(40, LicenseEntitlements.analysisCap(ctx))
+    }
+
+    @Test
+    fun `a licensed account has no local cap before the ceiling is known`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 0))
+        assertTrue(LicenseEntitlements.unlimitedAnalysis(ctx))
         assertEquals(Int.MAX_VALUE, LicenseEntitlements.analysisCap(ctx))
     }
 
@@ -224,6 +234,19 @@ class LicenseEntitlementsTest {
     }
 
     @Test
+    fun `the countdown counts the licence's UTC days rather than rounding hours up`() {
+        // A licence ends at 23:59:59Z on its chosen day.
+        val expiresAt = Instant.parse("2026-10-01T23:59:59Z")
+        val threeHoursLeft = expiresAt.minusSeconds(3 * 3600).toEpochMilli()
+        applyLicensed(expiresAt.toString(), now = threeHoursLeft)
+        assertEquals(0L, LicenseEntitlements.daysUntilExpiry(ctx, threeHoursLeft))
+
+        val twentyFiveHoursLeft = expiresAt.minusSeconds(25 * 3600).toEpochMilli()
+        applyLicensed(expiresAt.toString(), now = twentyFiveHoursLeft)
+        assertEquals(1L, LicenseEntitlements.daysUntilExpiry(ctx, twentyFiveHoursLeft))
+    }
+
+    @Test
     fun `a notice appears inside the warning window`() {
         val now = 1_000_000_000_000L
         applyLicensed(Instant.ofEpochMilli(now + 9 * day).toString(), now = now)
@@ -293,10 +316,10 @@ class LicenseEntitlementsTest {
 
     @Test
     fun `an expiry offset from UTC lands on the instant it names`() {
-        // 06:46:40 five hours behind UTC is the same moment as 11:46:40Z,
-        // ten hours after `now` — inside the same day, so still 1 day out.
-        val now = 1_000_000_000_000L
-        applyLicensed("2001-09-09T06:46:40-05:00", now = now)
+        // 22:00 five hours behind UTC is 03:00Z the next day, so one UTC day
+        // out; read without its offset it would be later today, 0 days out.
+        val now = 1_000_000_000_000L // 2001-09-09T01:46:40Z
+        applyLicensed("2001-09-09T22:00:00-05:00", now = now)
         assertEquals(1L, LicenseEntitlements.expiryNoticeDays(ctx, now))
     }
 
@@ -371,16 +394,16 @@ class LicenseEntitlementsTest {
     @Test
     fun `the seat gate is independent of the analysis quota`() {
         // The reason this is a parallel predicate: a licensed institution
-        // member has no analysis cap, so every existing quota check waves them
-        // through regardless of whether they hold a seat.
+        // member is held only to the licensed ceiling, so every existing quota
+        // check waves them through regardless of whether they hold a seat.
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", licenseSeating = "floating"))
         assertTrue(LicenseEntitlements.seatRequiredToStart(ctx))
 
         AppRemoteConfig.apply(
             ctx,
-            AppConfigDto(mode = "licensed", licenseSeating = "floating", maxSessions = 5),
+            AppConfigDto(mode = "licensed", licenseSeating = "floating", maxSessions = 999),
         )
-        assertEquals(Int.MAX_VALUE, LicenseEntitlements.analysisCap(ctx))
+        assertEquals(999, LicenseEntitlements.analysisCap(ctx))
         assertFalse(LicenseEntitlements.seatRequiredToStart(ctx))
     }
 
