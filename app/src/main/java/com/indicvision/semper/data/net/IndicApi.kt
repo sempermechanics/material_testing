@@ -186,12 +186,23 @@ class IndicApi private constructor(context: Context) : CloudApi {
         )
     }
 
-    /** GET /v1/config — resolved product limits for this account. */
-    override suspend fun getConfig(idToken: String): AppConfigDto = withContext(Dispatchers.IO) {
-        json.decodeFromString(
-            authedGet(idToken, "$base/v1/config", approvedOnly),
-        )
+    /**
+     * GET /v1/config — resolved product limits for this account.
+     *
+     * At launch the status check and the cloud reconcile both ask for it within
+     * ~100 ms, so a call that arrives while one is running shares its answer
+     * (docs/perf/request-volume.md, Pass 2). Both callers hold the same signed-in
+     * user's token.
+     */
+    override suspend fun getConfig(idToken: String): AppConfigDto = configFlight.run {
+        withContext(Dispatchers.IO) {
+            json.decodeFromString(
+                authedGet(idToken, "$base/v1/config", approvedOnly),
+            )
+        }
     }
+
+    private val configFlight = SingleFlight<AppConfigDto>()
 
     /**
      * GET /v1/me/export — everything the cloud holds about this account, as JSON
