@@ -116,22 +116,32 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #203 (TD-81), Compute comes back after a single run fails outright, and a first frame
   that kept no points says why (the strain window with the run's VSG and step, nothing
   correlated, or an unreadable frame).
-- **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
-  awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
-  open on the Pixel 6; Pass 2 (#206, merged) shares the launch `/v1/config` fetch, 4 → 3.
-  Pass 3 measured App Check and changed nothing: one ~1.7 s attestation per cold
-  open, which only the Play account can remove. Pass 5 found no cold-start gain
-  from precompiling ([perf/startup.md](docs/perf/startup.md)), so there is no baseline profile.
-  Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs
-  6 + N Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+- **Measured optimisation (2026-09-25, all six passes done).** Request volume
+  ([perf/request-volume.md](docs/perf/request-volume.md)):
+  - Pass 1 (#191) runs `CloudSync.reconcile` one call at a time.
+  - Pass 2 (#206) shares the launch `/v1/config` fetch.
+  - Together: 12 → 3 requests per app open on the Pixel 6. Both are merged and
+    ship with the next app build.
+
+  Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs 6 + N
+  Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+
+  Measured, no change:
+  - Pass 3: one ~1.7 s App Check attestation per cold open, which only the Play
+    account can remove.
+  - Pass 5: no cold-start gain from precompiling ([perf/startup.md](docs/perf/startup.md)).
+  - Pass 6: no engine or viewer regression
+    ([perf/engine-viewer-check-2026-09.md](docs/perf/engine-viewer-check-2026-09.md)).
 - **#200 (merged).** `HotPathMicroBenchmark` could not run in CI (TD-86): the debug manifest
   now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
   and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
+- **This branch (TD-87).** The 150-frame scrub heap (51 → 161 MB after TD-75) was the benchmark
+  running the no-sidecar colour-scale fallback; its seeder now writes the ranges sidecar.
 - **Wrong-information audit (open PRs).** #211 floors a licensed quota at demo's and lets the
-  operator clear a licence's cap; `fix/app-wrong-info` fixes each PDF page's cover image and name,
-  the mixed bulk-delete prompt, the sweep export header, per-node reasons on an all-failed sweep,
-  and a restored sweep's skip count. Backend seat/lease counters and console labels come next;
-  the rest are TD-87..TD-119 (on #211).
+  operator clear a licence's cap; #212 fixes each PDF page's cover image and name, the mixed
+  bulk-delete prompt, the sweep export header, per-node reasons on an all-failed sweep, and a
+  restored sweep's skip count; #215 fixes the backend seat and lease counters. Console labels
+  come next; the rest are TD-88..TD-120 (on #211).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
