@@ -83,7 +83,7 @@ When cloud is configured (`INDIC_API_BASE_URL`):
 | Upload | `DicUploadWorker` | Resume/create remote session, stage artifacts, upload bundles |
 | Metadata JSON | `SessionUploadMetadata` | frames / device / engine JSON for the API |
 | Bundle build | `SessionUploadBundler` | Render frame bundles + CSV lists offline-testable |
-| Restore | `CloudRestore` / `DicRestoreWorker` | Pull remote sessions back into local session dirs |
+| Restore | `CloudRestore` / `DicRestoreWorker` | Pull remote sessions back into local session dirs. Home (row tap, multi-select **Restore**) and Settings both start one through `RestoreStart.start`, which writes the row first so either screen shows its progress; `RestoreFailureLedger` announces each failure once across both screens |
 | Bundle download | `DicBundleDownloadWorker` | Write a session `.zip` into a SAF document the user picked **before** enqueue. Falls back to packing the local session when the cloud copy is unavailable, and deletes the empty destination on failure |
 | Delete queue | `SessionDeletes` / `BackupDeleteWorker` | Every delete that touches the cloud: one unique chain, a 5-second undo window, one analysis at a time, 429s waited out. Phone-only deletes stay inline (`CloudSync.eraseLocalOnly`). `ui/common/DeleteFeedback` reports progress and the outcome on Home and Settings |
 

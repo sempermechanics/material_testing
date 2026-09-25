@@ -26,11 +26,12 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.RestoreFailureLedger
+import com.indicvision.semper.data.RestoreStart
 import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
@@ -75,6 +76,7 @@ class HomeActivity : AppCompatActivity() {
     /** Upload WorkInfo ids already refreshed on success, so we refresh once each. */
     private val shownSucceededUploads = mutableSetOf<java.util.UUID>()
 
+    /** Restore WorkInfo ids already refreshed for, so each refreshes the list once. */
     private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
 
     private lateinit var deleteFeedback: DeleteFeedback
@@ -225,11 +227,14 @@ class HomeActivity : AppCompatActivity() {
             selectionBar = findViewById(R.id.homeSelectionBar),
             selectionCount = findViewById(R.id.tvSelectionCount),
             btnSelectionRename = findViewById(R.id.btnSelectionRename),
+            btnSelectionRestore = findViewById(R.id.btnSelectionRestore),
             selectAllBox = findViewById(R.id.cbSelectionAll),
             fab = fab,
             backCallback = backCallback,
             onRefresh = { refresh() },
             onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
+            restoreEnabled = { showsCloudState() },
+            onRestore = { records -> startRestore(records) },
             onDeleteQueued = { workId, items ->
                 justQueuedDeletes += items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId }
                 deleteFeedback.queued(workId, items.size)
@@ -330,7 +335,9 @@ class HomeActivity : AppCompatActivity() {
                             if (shownRestoreOutcomes.add(info.id)) refresh()
                         }
                         WorkInfo.State.FAILED -> {
-                            if (!shownRestoreOutcomes.add(info.id)) return@forEach
+                            if (shownRestoreOutcomes.add(info.id)) refresh()
+                            // Once per failure across Home and Settings, not once per screen open.
+                            if (!RestoreFailureLedger.claim(this@HomeActivity, info.id)) return@forEach
                             val reason = info.outputData.getString(DicKeys.DOWNLOAD_ERROR)
                                 ?: getString(R.string.restore_failed_generic)
                             CrispToast.show(
@@ -338,7 +345,6 @@ class HomeActivity : AppCompatActivity() {
                                 reason,
                                 long = true,
                             )
-                            refresh()
                         }
                         WorkInfo.State.CANCELLED -> {
                             if (shownRestoreOutcomes.add(info.id)) refresh()
@@ -613,28 +619,40 @@ class HomeActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.download_analysis_title)
             .setMessage(R.string.download_analysis_body)
-            .setPositiveButton(R.string.download_analysis_confirm) { _, _ ->
-                enqueueDownload(record)
+            .setPositiveButton(R.string.restore_action) { _, _ ->
+                startRestore(listOf(record))
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     /**
-     * Queue a background restore and stay on Home. Row progress comes from
+     * Queue background restores and stay on Home. Row progress comes from
      * [observeRestoreProgress] (same badge/bar as uploads) so the list stays
-     * interactive — no blocking "Downloading…" dialog.
+     * interactive — no blocking "Downloading…" dialog. Rows go through
+     * [RestoreStart], the same path Settings uses.
      */
-    private fun enqueueDownload(record: SessionRecord) {
+    private fun startRestore(records: List<SessionRecord>) {
+        if (records.isEmpty()) return
         selection.clearSelection()
         lifecycleScope.launch {
-            val cloudId = CloudSync.resolveCloudIdFor(this@HomeActivity, record)
-            if (cloudId.isNullOrBlank()) {
-                Toast.makeText(this@HomeActivity, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
-                return@launch
+            var started = 0
+            var running = 0
+            for (record in records) {
+                val cloudId = CloudSync.resolveCloudIdFor(this@HomeActivity, record).orEmpty()
+                val result = withContext(Dispatchers.IO) {
+                    RestoreStart.start(this@HomeActivity, cloudId, record.id, record.name)
+                }
+                when (result) {
+                    RestoreStart.Result.STARTED -> started++
+                    RestoreStart.Result.ALREADY_RUNNING -> running++
+                    RestoreStart.Result.FAILED -> Unit
+                }
             }
-            CloudRestore.enqueueRestore(this@HomeActivity, cloudId, record.id)
-            Toast.makeText(this@HomeActivity, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
+            refresh(reconcile = false)
+            val summary = RestoreSummary.of(resources, records.size, started, running)
+            val length = if (summary.failed) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+            Toast.makeText(this@HomeActivity, summary.text, length).show()
         }
     }
 
