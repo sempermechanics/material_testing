@@ -97,10 +97,11 @@ from .repo.seats import (  # noqa: F401
 )
 from .repo.reconcile import (  # noqa: F401
     CHECKED_IN,
+    DEMOTED,
     MOVED_ON,
-    NEVER_CLAIMED,
     NO_ACCOUNT,
     NO_CHECKIN_SINCE_REVOKE,
+    ON_HOLD,
     reconcile_institution_seats,
     STILL_LICENSED,
 )

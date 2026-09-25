@@ -6,7 +6,7 @@
  * `/v1/sessions`, which carries the quota alongside the page.
  */
 import {
-  requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when,
+  requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when, day,
 } from "../auth.js";
 
 const $ = (id) => document.getElementById(id);
@@ -51,39 +51,61 @@ function renderLicence() {
   const floating = licence.seating === "floating";
   const holdsSeat = licence.leaseExpiresAt &&
     new Date(licence.leaseExpiresAt) > new Date();
+  // Whether a real licence is attached. A Demo key and a licence revoked out
+  // from under the account both have a kind and a prefix, and used to show
+  // them as if they were one. A backend without `held` is answered from mode.
+  const held = licence.held ?? licensed;
+  const lapsed = Date.parse(licence.graceEndsAt || licence.expiresAt || "") <= Date.now();
 
   const pills = [
     `<span class="pill ${licensed ? "ok" : "off"}">${licensed ? "licensed" : "demo"}</span>`,
   ];
-  if (licence.kind) pills.push(`<span class="pill">${esc(licence.kind)}</span>`);
-  if (licence.prefix) pills.push(`<span class="pill mono">${esc(licence.prefix)}</span>`);
-  if (licence.duration === "perpetual") pills.push('<span class="pill">no end date</span>');
-  if (licence.expiresAt) {
-    pills.push(
-      `<span class="pill ${licence.inGrace ? "warn" : ""}">` +
-      `${licence.inGrace ? "expired" : "expires"} ${esc(when(licence.expiresAt))}</span>`,
-    );
-  }
-  if (floating) {
-    pills.push(
-      holdsSeat
-        ? `<span class="pill ok">seat held until ${esc(when(licence.leaseExpiresAt))}</span>`
-        : '<span class="pill warn">no seat right now</span>',
-    );
+  if (held) {
+    if (licence.kind) pills.push(`<span class="pill">${esc(licence.kind)}</span>`);
+    if (licence.prefix) pills.push(`<span class="pill mono">${esc(licence.prefix)}</span>`);
+    if (licence.duration === "perpetual") pills.push('<span class="pill">no end date</span>');
+    if (licence.expiresAt) pills.push(endPill(lapsed));
+    if (floating && !lapsed) {
+      pills.push(
+        holdsSeat
+          ? `<span class="pill ok">seat held until ${esc(when(licence.leaseExpiresAt))}</span>`
+          : '<span class="pill warn">no seat right now</span>',
+      );
+    }
   }
   $("pills").innerHTML = `<p>${pills.join(" ")}</p>`;
-  $("explain").textContent = explain(licensed, floating, holdsSeat);
+  $("explain").textContent = explain(licensed, floating, holdsSeat, held, lapsed);
 
   // A seat can only be given back by whoever holds it, so the button
   // appears only when there is something to give back.
   $("release").hidden = !(floating && holdsSeat);
-  // Nothing to move if no licence was ever attached; the backend answers
-  // `no_license` in that case, which is a worse way to find out.
-  $("unbind").hidden = !licence.kind;
+  // Nothing to move without a licence. A Demo key has a kind too, so this
+  // used to offer to move one; the backend then moved nothing worth having.
+  $("unbind").hidden = !held;
 }
 
-function explain(licensed, floating, holdsSeat) {
-  if (!licensed && floating) {
+/**
+ * The end-date pill. "expired" used to mean the grace period, when the
+ * licence still works in full, and a licence past its grace said "expires"
+ * with a date already gone.
+ */
+function endPill(lapsed) {
+  const ends = esc(day(licence.expiresAt));
+  if (lapsed) return `<span class="pill off">expired ${ends}</span>`;
+  if (licence.inGrace) return `<span class="pill warn">ended ${ends}</span>`;
+  return `<span class="pill">ends ${ends}</span>`;
+}
+
+function explain(licensed, floating, holdsSeat, held, lapsed) {
+  if (!licensed && held && lapsed) {
+    return `Your licence ended on ${day(licence.expiresAt)} and its grace period ` +
+           "is over, so this account is on the demo. Your saved work is " +
+           "untouched. Ask your Semper contact or your IT department to renew it.";
+  }
+  // Only a seat you still hold on a live licence is waiting on a colleague.
+  // A seat on hold or removed reads as demo too, and was told to wait for a
+  // seat that was never coming.
+  if (!licensed && held && floating) {
     return "Every seat on your institution's licence is in use just now. " +
            "Your saved work is untouched, and Semper becomes licensed again " +
            "on this account as soon as a colleague finishes.";
@@ -95,7 +117,7 @@ function explain(licensed, floating, holdsSeat) {
   }
   if (licence.inGrace) {
     return "Your licence has passed its end date. Nothing is restricted yet, " +
-           `but full access ends ${when(licence.graceEndsAt)} unless it is renewed.`;
+           `but full access ends ${day(licence.graceEndsAt)} unless it is renewed.`;
   }
   if (floating) {
     return holdsSeat
