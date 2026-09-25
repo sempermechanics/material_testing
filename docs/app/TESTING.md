@@ -11,17 +11,18 @@ chunk own?" here.
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
 |-------|--------------|---------------------------|------------------------------|
 | **auth** | Splash → Auth / Pending / Home, re-auth, password rules | `auth/AccessRouterTest`, `ReauthFlowTest`, `PasswordPolicyTest` | `auth/FirebaseAuthIntegrationTest` |
-| **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability; the wizard across a process death | `analysis/AnalysisViewModelTest`, `WizardStateTest`, `VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecodeTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest`, `SweepSetupHelperTest`, `DicBatchRunnerLimitTest` | `ui/analysis/WizardDraftRestoreTest` |
+| **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability; the wizard across a process death | `analysis/AnalysisViewModelTest`, `WizardStateTest`, `VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecodeTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest`, `SweepSetupHelperTest`, `DicBatchRunnerLimitTest` | `ui/analysis/WizardDraftRestoreTest` (incl. a bending wizard's load log, taps and frame times) |
 | **session** | Session store durability, disk footprint, failure provenance | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `AnalysisCsvSectionsTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest`, `PdfReportGeneratorTest` | `report/PdfReportDeviceTest` |
-| **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ShareCenterTest`, `ui/viewer/ViewerArgsTest`, `analysis/RunSpecTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
+| **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ShareCenterTest`, `ui/viewer/ViewerArgsTest`, `analysis/RunSpecTest`, `viewer/TouchImageViewScrubTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
 | **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest`, `data/SessionUploadBundlerTest` | `data/SessionUploadBundlerDeviceTest` |
 | **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `DicSettingsMigrateTest` | — |
 | **analytics** | Consent-gated Firebase Analytics events | `analytics/SemperAnalyticsTest` | — |
 | **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |
 | **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
+| **lab** | Tensile and bending sessions: E from the phone's own `.dat` files, the viewer opening on Results, the Elastic region toggle, the lab-report PDF; viewer gestures (flick and slow swipe scrub one frame, pinch, pan, tap to probe); the beam-edge tap editor under real touches (bottom mark held to the top's x, zoom kept between taps) | `report/*` (`ElasticModulusTest`, `BeamDeflectionTest`, `LabReportTest`, …) | `e2e/LabWorkflowDeviceTest`, `e2e/BeamTapEditorGestureTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
-| **benchmark** | Startup / screen / viewer-scrub Macrobenchmarks | `:app` androidTest `benchmark/HotPathMicroBenchmark` | `:benchmark` module (label `benchmark` / workflow_dispatch) |
+| **benchmark** | Startup / screen / viewer-scrub / lab Results Macrobenchmarks | `:app` androidTest `benchmark/HotPathMicroBenchmark` | `:benchmark` module (label `benchmark` / workflow_dispatch) |
 
 ## Overlap rules
 
@@ -91,7 +92,11 @@ fixed, so a change in allocations is caused by the code and nothing else.
 **Macro (`:benchmark`) — "what does the user feel?"**
 `ViewerScrubBenchmark` seeds a synthetic session via the benchmark-variant-only
 `BenchmarkSeedActivity` and scrubs frames, reporting frame timing, max heap and the
-`Semper.viewer.decodeDat` trace section.
+`Semper.viewer.decodeDat` trace section. `LabResultsBenchmark` has the same seeder
+fabricate a tensile session with a load per frame (`--ez results true`, 30 and 150
+frames), opens it on Results and toggles Whole test / Elastic region, reporting frame
+timing and the `Semper.viewer.stressStrain` trace section (the curve build over every
+frame's `.dat`).
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
