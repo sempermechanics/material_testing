@@ -138,7 +138,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
   161 → 21 MB). #214 has `globalRanges` reuse one frame buffer and set of columns; #217
   (TD-88) saves the ranges sidecar after a full decode. A Pixel 6 run found a crash on open
-  in builds with no API URL and a signed-in session; `resolveStatus` now treats that as offline (TD-90).
+  in builds with no API URL and a signed-in session; `resolveStatus` and every `IndicApi` URL now treat that as offline (TD-90).
 - **Wrong-information audit, app half (merged, awaiting release):** #211 (enforce a known
   licensed ceiling), #212 (PDF page cover image and name, mixed bulk-delete prompt, sweep
   export header, per-node sweep reasons, restored skip count), #218 (licence countdown, backup
