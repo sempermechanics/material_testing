@@ -124,7 +124,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-24)
+## Current state (2026-09-25)
 
 - **Synced with `semperdic-app`.** This repo forked the parent at `bfe00e5`
   (2026-09-21) and merges its `main` with a plain `git merge`: `643462c`
@@ -158,6 +158,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `WizardDraftRestoreTest` covers a load log across a process death;
   `LabResultsBenchmark` times the Results page. The two-frame flick they caught
   is fixed by the parent's TD-72 (#194), which this sync brings.
+- **This branch (semperdic-app#200).** `HotPathMicroBenchmark` (from #25) never ran in CI
+  (TD-81); a debug-only permission and `am instrument` let it run.
 - **Owed.** Device runs on a physical phone, and video import beyond emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
   production state.

@@ -84,21 +84,16 @@ fixed, so a change in allocations is caused by the code and nothing else.
 
 ```bash
 ./gradlew :app:installDebug :app:installDebugAndroidTest
-./gradlew :app:connectedDebugAndroidTest \
-  -P android.testInstrumentationRunnerArguments.class=com.indicvision.semper.benchmark.HotPathMicroBenchmark \
-  -P android.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED
-```
-
-That list is CI's (API 34). An API 37 emulator also raises `ACTIVITY-MISSING` and
-`NOT-AOT-COMPILED`; add both, or every case fails at once. In PowerShell, quote the
-whole `-P…` argument: unquoted, the commas make an array and only `EMULATOR` arrives.
-Or skip Gradle once the APKs are installed:
-
-```bash
 adb shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark \
   -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED \
   com.indicvision.semper.test/androidx.test.runner.AndroidJUnitRunner
 ```
+
+Emulators on API 34 and 37 both raise `ACTIVITY-MISSING` and `NOT-AOT-COMPILED`
+besides `DEBUGGABLE`; leave one out and every case fails at once. Pass the list with
+`am instrument`, not `connectedDebugAndroidTest -P …suppressErrors=…`: through Gradle
+it arrives cut at its first comma, so only `EMULATOR` is suppressed (seen on Linux CI,
+TD-81). CI runs this command.
 
 Results land in logcat (`adb logcat -d -s Benchmark:I`).
 
@@ -120,7 +115,7 @@ CI's `tier-benchmark` job passes the same `suppressErrors` (plus
 `enabledRules=Macrobenchmark`) on an **API 34** emulator;
 `benchmark/build.gradle.kts` sets the same suppress list so a local emulator run
 matches CI. On the same emulator the job then runs the micro suite with the
-command above (`class=` filter, `DEBUGGABLE` suppressed). Numbers are smoke, not
+`am instrument` command above. Numbers are smoke, not
 a regression gate; both suites' `*-benchmarkData.json` are uploaded, as
 `macrobenchmark-results` and `microbenchmark-results`.
 
