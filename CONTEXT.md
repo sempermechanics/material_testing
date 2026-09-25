@@ -1,4 +1,4 @@
-# Semper — agent context
+﻿# Semper — agent context
 
 Read this before changing code. Commands: [CONTRIBUTING.md](CONTRIBUTING.md); screen maps:
 [ARCHITECTURE.md](docs/app/ARCHITECTURE.md); DIC primer: [docs/README.md](docs/README.md).
@@ -131,7 +131,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
   the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
   looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
-  `fix/licensed-quota-ceiling` (open) floors the licensed cap at demo's, lets staff clear a
+  #211 (open) floors the licensed cap at demo's, lets staff clear a
   licence's cap, and has the app enforce a known licensed ceiling. The rest of that
   wrong-info audit is phased; its deferred findings are TD-87…TD-119.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
