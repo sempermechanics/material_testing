@@ -133,6 +133,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   past a skipped frame, Home headline, partial-run dialog). No audit TECH_DEBT rows remain.
 - **Bulk delete.** Backend half deployed (#226, [CHANGELOG](docs/ops/CHANGELOG.md)); app half
   merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere, cloud link cleared).
+- **Demo-key cap (#232, in review):** a `maxAnalyses` on a demo key did nothing (SEMP-8AKN, "of 25");
+  the admin PATCH now answers `422 cap_on_demo_key` and the desk disables Cap on demo rows.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever

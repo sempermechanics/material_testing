@@ -110,6 +110,21 @@ def expiry_change_error(lic: dict, expires_at) -> str:
     return ""
 
 
+def analysis_cap_error(lic: dict) -> str:
+    """Why a new `maxAnalyses` may not be set on `lic`, or "".
+
+    A demo holder's allowance is `DEMO_MAX_ANALYSES` and nothing on the key
+    moves it (`resolve_user_config` reads the cap only for a licensed
+    account). A cap written to a demo key was stored, mirrored onto the
+    holder and answered 200, and changed nothing the holder could see.
+    Clearing one is still allowed: it only removes a number that never
+    applied.
+    """
+    if _license_mode(lic) == MODE_DEMO:
+        return errors.CAP_ON_DEMO_KEY
+    return ""
+
+
 def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     """Change a license's terms and push them to everyone already holding it.
 
@@ -126,7 +141,8 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
 
     Returns the updated public license, or None if there is no such license.
     Raises `LicenseTermsRejected`, before writing anything, for an expiry
-    that `expiry_change_error` refuses.
+    that `expiry_change_error` refuses or a cap that `analysis_cap_error`
+    refuses.
     """
     ref = db().collection("licenses").document(license_id)
     snap = ref.get()
@@ -135,6 +151,10 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     lic = snap.to_dict() or {}
 
     update = {k: v for k, v in patch.items() if v is not None}
+    if "maxAnalyses" in update:
+        err = analysis_cap_error(lic)
+        if err:
+            raise LicenseTermsRejected(err)
     clear_cap = bool(update.pop("clearMaxAnalyses", False))
     if clear_cap:
         update["maxAnalyses"] = _base.firestore.DELETE_FIELD

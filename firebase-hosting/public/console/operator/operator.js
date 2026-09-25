@@ -231,6 +231,7 @@ async function loadLicences({ keepStatus = false } = {}) {
     const data = await api(`/v1/admin/licenses?limit=${LICENCE_PAGE}`);
     licences = data.licenses || [];
     licencePage = data.page || {};
+    demoAllowance = Number.isInteger(data.demoMaxAnalyses) ? data.demoMaxAnalyses : null;
     renderLicences();
     if (!keepStatus) setStatus("");
     // A revoke is exactly the moment to ask again whether it landed.
@@ -247,6 +248,19 @@ async function loadLicences({ keepStatus = false } = {}) {
 
 let licencePage = {};
 const LICENCE_PAGE = 200;
+// DEMO_MAX_ANALYSES as the backend has it, from the licence list. Null until
+// a backend that sends it answers; the wording then leaves the number out.
+let demoAllowance = null;
+
+/**
+ * Why a demo key has no Cap. A demo holder gets the demo allowance whatever
+ * the key stores, and the backend refuses the edit (`cap_on_demo_key`). It
+ * used to answer 200 and change nothing, and the app kept showing "N of 25".
+ */
+function demoCapNote() {
+  const allowance = demoAllowance == null ? "the demo allowance" : `the demo allowance of ${demoAllowance}`;
+  return `Demo keys use ${allowance}; issue a licensed key to raise it.`;
+}
 
 /**
  * The next page of licences, appended. The desk used to stop at the first
@@ -338,11 +352,18 @@ function licenceRow(lic) {
     : "perpetual";
   const revoked = lic.status === "revoked";
   // Shown because it used to be invisible after mint: a cap typed at issue
-  // time reached every holder with no trace of it on this desk.
-  const cap = lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
+  // time reached every holder with no trace of it on this desk. A demo key
+  // shows the demo allowance instead: a number stored on one never applied.
+  const demo = lic.mode === "demo";
+  const cap = demo
+    ? `<span class="muted" title="${esc(demoCapNote())}">demo${demoAllowance == null ? "" : ` (${esc(demoAllowance)})`}</span>`
+    : lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
+  const capButton = demo
+    ? `<button class="secondary" disabled title="${esc(demoCapNote())}">Cap</button>`
+    : `<button class="secondary" data-cap="${esc(lic.id)}">Cap</button>`;
   const actions = revoked ? "" : `
     <button class="secondary" data-extend="${esc(lic.id)}">Extend</button>
-    <button class="secondary" data-cap="${esc(lic.id)}">Cap</button>
+    ${capButton}
     ${lic.kind === "institution"
       ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>
          <button class="secondary" data-verify="${esc(lic.id)}">Verify</button>`
@@ -436,7 +457,9 @@ async function setAnalysisCap(id) {
       : `${labelOf(id)} limit removed — holders get the licensed default.`);
     loadLicences({ keepStatus: true });
   } catch (e) {
-    setStatus(`Could not change the limit: ${e.message}`, true);
+    setStatus(e.message === "cap_on_demo_key"
+      ? `Could not change the limit: ${demoCapNote()}`
+      : `Could not change the limit: ${e.message}`, true);
   }
 }
 

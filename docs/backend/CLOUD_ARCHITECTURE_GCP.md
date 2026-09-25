@@ -563,7 +563,9 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
                                    expiresAt; 0 is a hard cliff. §20.6)
   supportUntil                    (Timestamp, optional; informational — never gates)
   maxAnalyses                      (optional, either kind; per holder, not per licence.
-                                   Mint/PATCH refuse < DEMO_MAX_ANALYSES, and
+                                   Mint/PATCH refuse < DEMO_MAX_ANALYSES; PATCH
+                                   refuses any value on a demo-mode key
+                                   (cap_on_demo_key), and
                                    PATCH {"clearMaxAnalyses": true} removes it)
   createdByUid, createdAt, updatedAt
   updatedByUid, updatedAt         (set by the renewal route)
@@ -1433,6 +1435,16 @@ turned timed (with no grace, since perpetual licences are minted without
 the device lock, and `update_license` checks again against what it reads.
 Ending a licence early is revoke; the operator desk reports the expiry the
 server stored, not the date typed.
+
+**A demo key takes no analysis cap.** `analysis_cap_error` refuses, with `422
+cap_on_demo_key`, any `maxAnalyses` on a demo-mode licence. `resolve_user_config`
+gives every non-licensed account `DEMO_MAX_ANALYSES` and never reads
+`licenseMaxAnalyses` for it, so the edit used to be stored, fanned out and
+answered 200 while the holder's app kept showing "N of 25". The route checks
+before the device lock, and `update_license` checks again. `clearMaxAnalyses`
+stays allowed on a demo key, to remove a cap stored before the refusal.
+`GET /v1/admin/licenses` returns `demoMaxAnalyses`, and the desk shows it on
+demo rows with the Cap button disabled.
 
 Terms only: `kind`, the email/device/domain locks and the key itself are fixed
 at mint. Changing *who* a license is for under existing holders is a different

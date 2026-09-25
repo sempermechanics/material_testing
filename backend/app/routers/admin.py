@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import audit, errors, firestore_repo as repo, statuses
 from .. import rate_limit
+from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION, seat_cap_below_roster
 from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
@@ -78,6 +79,9 @@ def admin_list_licenses(
     licenses, next_token = repo.list_licenses(limit=limit, page_token=page_token or None)
     return {
         "licenses": licenses,
+        # What every demo-mode key gives its holder, whatever the key stores.
+        # The desk shows it on demo rows instead of their `maxAnalyses`.
+        "demoMaxAnalyses": settings.DEMO_MAX_ANALYSES,
         "page": page_block(limit, len(licenses), next_token),
     }
 
@@ -168,12 +172,22 @@ def admin_update_license(
     can move to a new one. Nothing is revoked and nothing has to be typed —
     the next device to sign in binds. Use the seat route below for an
     institution member.
+
+    `maxAnalyses` on a demo-mode key is refused (422 `cap_on_demo_key`): a
+    demo holder gets `DEMO_MAX_ANALYSES` whatever the key stores, so the edit
+    would answer 200 and change nothing. `clearMaxAnalyses` is still allowed.
     """
     if body.maxSeats is not None:
         # Refused before the lock is touched, so nothing is half applied.
         current = repo.get_license(license_id)
         if current and seat_cap_below_roster(current, body.maxSeats):
             raise HTTPException(422, errors.MAX_SEATS_BELOW_USED)
+    if body.maxAnalyses is not None:
+        # Same order: a cap on a demo key is refused before the lock moves.
+        current = repo.get_license(license_id)
+        err = repo.analysis_cap_error(current) if current else ""
+        if err:
+            raise HTTPException(422, err)
     patch = body.model_dump(exclude_none=True)
     clear_lock = patch.pop("clearDeviceLock", False)
     if "expiresAt" in patch:

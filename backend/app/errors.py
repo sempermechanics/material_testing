@@ -117,6 +117,11 @@ DEVICE_CHANGE_TOO_SOON = "device_change_too_soon"
 # assigned roster. Lowering the cap removes nobody, so it would only make the
 # count read "12 of 10"; remove members first.
 MAX_SEATS_BELOW_USED = "max_seats_below_used"
+# 422 on a staff licence edit: a `maxAnalyses` on a demo-mode key. A demo
+# holder gets DEMO_MAX_ANALYSES whatever the key says (`resolve_user_config`),
+# so the edit was stored, mirrored and reported as done while the app kept
+# showing "N of 25". Raising a demo account's allowance is a licensed key.
+CAP_ON_DEMO_KEY = "cap_on_demo_key"
 
 # --- institution invites ---------------------------------------------------
 # An invite reserves a roster place for an address with no account yet. It is
