@@ -28,7 +28,8 @@ def purge_session(sid: str) -> None:
     repo.delete_session(sid)
 
 
-def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
+def provision_session(sid: str, *, purge_on_failure: bool = False,
+                      session: dict | None = None) -> dict:
     """Open a Drive resumable session for every file that still lacks one.
 
     Idempotent and resumable: it only looks at files with no uploadUrl, so a
@@ -39,10 +40,16 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
     session is rolled back completely. The queued path instead leaves it
     PROVISION_FAILED so Cloud Tasks can retry and a polling client is told to
     stop waiting.
+
+    The inline caller passes the `session` doc it has just written so it is not
+    read again, and answers the client from the returned `uploads` (the
+    targets opened here) instead of listing them back. The user doc is still
+    read here: the folder pointers must come from the stored doc, not from
+    whatever the auth layer handed the route.
     """
-    session = repo.get_session(sid)
+    session = session or repo.get_session(sid)
     if not session:
-        return {"sessionId": sid, "provisioned": 0, "status": "gone"}
+        return {"sessionId": sid, "provisioned": 0, "status": "gone", "uploads": []}
     uid = session["uid"]
     started = time.monotonic()
 
@@ -71,16 +78,17 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
             def open_one(f):
                 uri = drive.init_resumable(token, folders[f["role"]], f["name"], f["sizeBytes"])
                 repo.set_file_upload_url(f["fileId"], uri)
+                return repo.upload_target(f["fileId"], uri, f)
 
             # Bounded fan-out rather than a serial loop — same pattern as
             # drive.probe_files. Serially this was the whole problem.
-            if pending:
-                workers = max(1, min(settings.TASKS_PROVISION_WORKERS, len(pending)))
-                with ThreadPoolExecutor(max_workers=workers) as pool:
-                    for result in pool.map(open_one, pending):
-                        _ = result
+            # pool.map keeps the input order, which is the listing's (document id).
+            workers = max(1, min(settings.TASKS_PROVISION_WORKERS, len(pending)))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                uploads = list(pool.map(open_one, pending))
             provisioned = len(pending)
         else:
+            uploads = []
             provisioned = 0
             folder_ms = 0.0
     except Exception as e:  # noqa: BLE001
@@ -102,4 +110,5 @@ def provision_session(sid: str, *, purge_on_failure: bool = False) -> dict:
     obs.log_event(log, logging.INFO, "session_provisioned", outcome="ok",
                   count=provisioned, latencyMs=round((time.monotonic() - started) * 1000, 1),
                   folderMs=round(folder_ms, 1))
-    return {"sessionId": sid, "provisioned": provisioned, "status": statuses.SESSION_UPLOADING}
+    return {"sessionId": sid, "provisioned": provisioned, "status": statuses.SESSION_UPLOADING,
+            "uploads": uploads}

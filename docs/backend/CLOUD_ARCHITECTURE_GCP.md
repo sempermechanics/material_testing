@@ -325,6 +325,9 @@ Three properties worth knowing before you change this path:
 - **Small manifests skip the queue.** Up to `INLINE_PROVISION_MAX_FILES` (8)
   files are provisioned inside the request: a bundle backup is three, and the
   task hop plus the client's first poll cost more than opening three sessions.
+  The reply is built from the targets just opened (`provision_session` returns
+  them) rather than read back, so the inline path costs 6 + N Firestore reads
+  instead of 8 + 2N ([perf/request-volume.md](../perf/request-volume.md) Pass 4).
 - **The folder walk is cached.** The per-user and `sessions` folder IDs are
   kept on `users/{uid}` (`driveFolderId`, `driveSessionsFolderId`). A later
   session checks the cached `sessions` folder still exists (one `files.get`)
@@ -624,9 +627,9 @@ the way it does.
 | FastAPI app, middleware, lifespan | [`backend/app/main.py`](../../backend/app/main.py) | App factory; includes routers below |
 | Routes by prefix | [`backend/app/routers/`](../../backend/app/routers/) | `health`, `account`, `devices`, `sessions`, `files`, `provision_tasks`, `admin`, `licenses`, `institutions` |
 | License key format, hashing, `mode`/`kind` vocabulary | [`backend/app/licenses.py`](../../backend/app/licenses.py) | `SEMP-XXXX-XXXX-XXXX-XXXX`; sha256 hash is the Firestore doc id; `normalize_mode` / `normalize_kind` / `legacy_plan` (§20.5) |
-| Floating seats, leases, pool accounting | [`backend/app/repo/leases.py`](../../backend/app/repo/leases.py), `claim_seat` in [`repo/licensing.py`](../../backend/app/repo/licensing.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
-| Duration, grace, renewal fan-out | [`backend/app/repo/user_config.py`](../../backend/app/repo/user_config.py), [`repo/licensing.py`](../../backend/app/repo/licensing.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
-| Individual + institution license logic | [`backend/app/repo/licensing.py`](../../backend/app/repo/licensing.py), [`repo/seats.py`](../../backend/app/repo/seats.py), [`repo/devlock.py`](../../backend/app/repo/devlock.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
+| Floating seats, leases, pool accounting | [`backend/app/repo/leases.py`](../../backend/app/repo/leases.py), `claim_seat` in [`repo/claims.py`](../../backend/app/repo/claims.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
+| Duration, grace, renewal fan-out | [`backend/app/repo/user_config.py`](../../backend/app/repo/user_config.py), [`repo/claims.py`](../../backend/app/repo/claims.py), [`repo/license_admin.py`](../../backend/app/repo/license_admin.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
+| Individual + institution license logic | [`backend/app/repo/activation.py`](../../backend/app/repo/activation.py), [`repo/claims.py`](../../backend/app/repo/claims.py), [`repo/institution_admin.py`](../../backend/app/repo/institution_admin.py), [`repo/seats.py`](../../backend/app/repo/seats.py), [`repo/devlock.py`](../../backend/app/repo/devlock.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
 | Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script. Also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
@@ -735,10 +738,26 @@ gcloud projects add-iam-policy-binding $PROJECT \
 
 # Deployer SA (used by GitHub Actions via Workload Identity Federation — NO KEY)
 gcloud iam service-accounts create indic-deployer --project $PROJECT
-for R in run.admin artifactregistry.writer iam.serviceAccountUser cloudbuild.builds.editor; do
+for R in run.admin artifactregistry.writer cloudbuild.builds.editor apigateway.admin \
+         storage.bucketViewer; do
   gcloud projects add-iam-policy-binding $PROJECT \
     --member="serviceAccount:$DEPLOY_SA" --role="roles/$R"; done
+# Act as the runtime, gateway and default compute SAs only, not every SA in the project.
+for SA in $API_SA indic-gw@$PROJECT.iam.gserviceaccount.com \
+          $(gcloud projects describe $PROJECT --format='value(projectNumber)')-compute@developer.gserviceaccount.com; do
+  gcloud iam service-accounts add-iam-policy-binding $SA \
+    --member="serviceAccount:$DEPLOY_SA" --role="roles/iam.serviceAccountUser"; done
+# Source deploys upload to this bucket; the object roles stay on it alone.
+for R in storage.admin storage.objectAdmin; do
+  gcloud storage buckets add-iam-policy-binding gs://run-sources-$PROJECT-asia-south1 \
+    --member="serviceAccount:$DEPLOY_SA" --role="roles/$R"; done
 ```
+
+`storage.bucketViewer` holds only `storage.buckets.get` / `.list`. It is needed at
+project level because `gcloud run deploy --source` lists buckets to find the
+`run-sources-*` one; without it every deploy fails with `403 … storage.buckets.list`,
+as the staging runs of 2026-09-24 and 2026-09-25 did after the TD-71 clean-up. It
+grants no object access, so CI still cannot read or change the Firestore export bucket.
 
 **Drive membership (the only Workspace-side step, done by you, not the SA):**
 add `indic-api@indic-prod.iam.gserviceaccount.com` as **Manager** of the

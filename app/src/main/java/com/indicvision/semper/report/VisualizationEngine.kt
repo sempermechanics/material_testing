@@ -8,7 +8,7 @@
     "CyclomaticComplexMethod",
     "LongParameterList",
     "NestedBlockDepth",
-    "TooManyFunctions", // quickSelect + its partition/pivot/swap helpers stay next to their one caller
+    "TooManyFunctions", // quickSelect + its ninther/median/swap helpers stay next to their one caller
 )
 
 package com.indicvision.semper.report
@@ -63,6 +63,9 @@ object VisualizationEngine {
      */
     const val TRANSPARENT_INDEX = 255
     private const val LAST_COLOR = TRANSPARENT_INDEX - 1
+
+    /** Below this many values, [ninther] falls back to a plain median of three. */
+    private const val NINTHER_MIN_SIZE = 40
 
     /**
      * One byte per pixel, each an index into [JET_LUT] or [TRANSPARENT_INDEX],
@@ -136,40 +139,69 @@ object VisualizationEngine {
     internal fun quickSelect(values: FloatArray, k: Int, fromIndex: Int, toIndex: Int): Float {
         var lo = fromIndex
         var hi = toIndex - 1
-        while (lo < hi) {
-            val pivotIndex = medianOfThreePivotIndex(values, lo, hi)
-            val pivotFinal = partition(values, lo, hi, pivotIndex)
+        // Introselect: an input that defeats the pivot choice gets a bounded number of
+        // passes, then the rest of the range is sorted, capping the worst case at O(n log n).
+        var passesLeft = 2 * (Int.SIZE_BITS - (toIndex - fromIndex).countLeadingZeroBits())
+        while (lo < hi && passesLeft-- > 0) {
+            val pivot = values[ninther(values, lo, hi)]
+            // Three-way partition: [lo, lt) < pivot, [lt, gt] == pivot, (gt, hi] > pivot.
+            // A two-way partition on strict `<` settled one copy of a repeated value per
+            // pass, so a field of equal values made this quadratic.
+            var lt = lo
+            var gt = hi
+            var i = lo
+            while (i <= gt) {
+                val c = values[i].compareTo(pivot)
+                if (c < 0) {
+                    values.swapInPlace(i++, lt++)
+                } else if (c > 0) {
+                    values.swapInPlace(i, gt--)
+                } else {
+                    i++
+                }
+            }
             when {
-                k < pivotFinal -> hi = pivotFinal - 1
-                k > pivotFinal -> lo = pivotFinal + 1
-                else -> return values[k]
+                k < lt -> hi = lt - 1
+                k > gt -> lo = gt + 1
+                else -> return pivot
             }
         }
-        return values[lo]
+        // lo <= k <= hi throughout, so a finished search has lo == hi == k.
+        if (lo < hi) values.sort(lo, hi + 1)
+        return values[k]
     }
 
-    /** Median-of-three pivot choice — keeps quickSelect off its O(n^2) worst case on already-sorted-ish data. */
-    private fun medianOfThreePivotIndex(values: FloatArray, lo: Int, hi: Int): Int {
+    /**
+     * Tukey's ninther: the median of three medians of three, spread over the range.
+     * Median-of-three at the ends and middle, which this replaced, went wrong on sorted
+     * and staircase fields (a V field in grid order is a staircase): after the first
+     * partition those three stop being representative, and the p98 pick touched about
+     * n^1.5 elements (~370n at 1.2 M points). The ninther stays near 4n on every shape
+     * tried. It only reads, so the partition sees the range as it is.
+     */
+    private fun ninther(values: FloatArray, lo: Int, hi: Int): Int {
         val mid = lo + (hi - lo) / 2
-        if (values[mid].compareTo(values[lo]) < 0) values.swapInPlace(mid, lo)
-        if (values[hi].compareTo(values[lo]) < 0) values.swapInPlace(hi, lo)
-        if (values[hi].compareTo(values[mid]) < 0) values.swapInPlace(hi, mid)
-        return mid
+        val size = hi - lo + 1
+        if (size < NINTHER_MIN_SIZE) return medianOfThree(values, lo, mid, hi)
+        val e = size / 8
+        return medianOfThree(
+            values,
+            medianOfThree(values, lo, lo + e, lo + 2 * e),
+            medianOfThree(values, mid - e, mid, mid + e),
+            medianOfThree(values, hi - 2 * e, hi - e, hi),
+        )
     }
 
-    /** Lomuto partition around `values[pivotIndex]`; returns the pivot's final sorted position. */
-    private fun partition(values: FloatArray, lo: Int, hi: Int, pivotIndex: Int): Int {
-        val pivotValue = values[pivotIndex]
-        values.swapInPlace(pivotIndex, hi)
-        var storeIndex = lo
-        for (i in lo until hi) {
-            if (values[i].compareTo(pivotValue) < 0) {
-                values.swapInPlace(i, storeIndex)
-                storeIndex++
-            }
+    /** The index, of a, b and c, holding the median value in [Float.compareTo] order. */
+    private fun medianOfThree(values: FloatArray, a: Int, b: Int, c: Int): Int {
+        val ab = values[a].compareTo(values[b]) < 0
+        val bc = values[b].compareTo(values[c]) < 0
+        val ac = values[a].compareTo(values[c]) < 0
+        return when {
+            ab == bc -> b // a < b < c, or a >= b >= c
+            ab -> if (ac) c else a // b is the largest
+            else -> if (ac) a else c // b is the smallest
         }
-        values.swapInPlace(storeIndex, hi)
-        return storeIndex
     }
 
     private fun FloatArray.swapInPlace(i: Int, j: Int) {

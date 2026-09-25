@@ -95,15 +95,20 @@ def list_pending_uploads(
         url = f.get("uploadUrl")
         if f.get("status") == statuses.FILE_COMPLETED or not url:
             continue
-        out.append({
-            "fileId": d.id,
-            "uploadUrl": url,
-            "chunkSize": 32 * 1024 * 1024,  # the client uploads in chunks of this size (IndicApi.uploadResumable)
-            "name": f.get("name"),
-            "role": f.get("role"),
-            "sizeBytes": f.get("sizeBytes", 0),
-        })
+        out.append(upload_target(d.id, url, f))
     return out, next_token
+
+
+def upload_target(file_id: str, url: str, f: dict) -> dict:
+    """One entry of an upload manifest, as the app reads it."""
+    return {
+        "fileId": file_id,
+        "uploadUrl": url,
+        "chunkSize": 32 * 1024 * 1024,  # the client uploads in chunks of this size (IndicApi.uploadResumable)
+        "name": f.get("name"),
+        "role": f.get("role"),
+        "sizeBytes": f.get("sizeBytes", 0),
+    }
 
 
 def list_session_files(
@@ -314,27 +319,27 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate):
     Writing the parent first means a failure while staging files can never leave
     file docs (or a Drive subtree) with no session pointing at them: the reserved
     doc counts toward the quota and is reclaimable. `driveFolderId` is filled in
-    by [set_session_folder] once the folder exists.
+    by [set_session_folder] once the folder exists. Returns the doc as written.
     """
-    db().collection("sessions").document(sid).set(
-        {
-            "uid": user["uid"],
-            "deviceId": device.get("deviceId"),
-            "specimen": body.specimen,
-            "localSessionId": body.localSessionId,
-            # Reserved, but no upload targets yet. set_session_status moves it to
-            # PROVISIONING → UPLOADING (or PROVISION_FAILED).
-            "status": statuses.SESSION_PROVISIONING,
-            "driveFolderId": None,
-            "totalBytes": sum(f.bytes for f in body.files),
-            "fileCount": len(body.files),
-            "completedCount": 0,
-            "metrics": body.metrics,
-            "createdAt": _base.firestore.SERVER_TIMESTAMP,
-            "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-            "schemaVersion": SCHEMA_VERSION,
-        }
-    )
+    doc = {
+        "uid": user["uid"],
+        "deviceId": device.get("deviceId"),
+        "specimen": body.specimen,
+        "localSessionId": body.localSessionId,
+        # Reserved, but no upload targets yet. set_session_status moves it to
+        # PROVISIONING → UPLOADING (or PROVISION_FAILED).
+        "status": statuses.SESSION_PROVISIONING,
+        "driveFolderId": None,
+        "totalBytes": sum(f.bytes for f in body.files),
+        "fileCount": len(body.files),
+        "completedCount": 0,
+        "metrics": body.metrics,
+        "createdAt": _base.firestore.SERVER_TIMESTAMP,
+        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+        "schemaVersion": SCHEMA_VERSION,
+    }
+    db().collection("sessions").document(sid).set(doc)
+    return {**doc, "sessionId": sid}
 
 
 def set_session_folder(sid: str, folder_id: str):

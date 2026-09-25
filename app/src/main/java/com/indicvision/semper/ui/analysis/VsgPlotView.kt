@@ -223,6 +223,8 @@ class VsgPlotView @JvmOverloads constructor(
     /**
      * Called with the scrub x as a 0..1 fraction of the current viewport, so an
      * external slider can follow the finger (and vice-versa via [scrubToFraction]).
+     * Called with NaN when the scrub clears (the finger lifts, or a pinch or pan
+     * starts), so the slider goes back to rest instead of marking a line that is gone.
      */
     var onScrubMove: ((fraction: Float) -> Unit)? = null
 
@@ -483,7 +485,7 @@ class VsgPlotView @JvmOverloads constructor(
         val full = dataBounds() ?: return
         val b = viewport(full)
 
-        val left = dp(if (compactAxes) PAD_LEFT_COMPACT_DP else PAD_LEFT_FULL_DP)
+        val left = if (compactAxes) dp(PAD_LEFT_COMPACT_DP) else fullLeftPad(b)
         val right = width - dp(PAD_RIGHT_DP)
         val top = dp(PAD_TOP_DP)
         val bottom = height - dp(if (compactAxes) PAD_BOTTOM_COMPACT_DP else PAD_BOTTOM_FULL_DP)
@@ -695,6 +697,7 @@ class VsgPlotView @JvmOverloads constructor(
         if (scrubX == null) return
         scrubX = null
         onScrub?.invoke(Float.NaN, emptyList())
+        onScrubMove?.invoke(Float.NaN)
         invalidate()
     }
 
@@ -713,6 +716,19 @@ class VsgPlotView @JvmOverloads constructor(
             }
         }
         return null
+    }
+
+    /**
+     * The left gutter with a y title: the rotated title's band, then the
+     * widest tick label, each with its gap. A fixed gutter let a wide tick
+     * ("58.6", "435") run under the title.
+     */
+    private fun fullLeftPad(b: Bounds): Float {
+        val widestTick = (0..GRID_LINES).maxOf { i ->
+            textPaint.measureText(format(b.yMin + (b.yMax - b.yMin) * i / GRID_LINES))
+        }
+        val titleBand = textPaint.textSize * TITLE_BAND
+        return maxOf(dp(PAD_LEFT_FULL_DP), titleBand + widestTick + dp(TICK_GAP_DP) * 3f)
     }
 
     private fun drawGridTicks(canvas: Canvas, b: Bounds, f: Frame) {
@@ -772,5 +788,8 @@ class VsgPlotView @JvmOverloads constructor(
 private const val ALPHA_SOLID = 255
 private const val ALPHA_MUTED = 140
 private const val QUARTER_TURN = 90f
+
+/** A rotated title's width across its baseline: ascent plus descent, in text sizes. */
+private const val TITLE_BAND = 1.25f
 private const val LARGE_VALUE = 100f
 private const val SMALL_VALUE = 1f

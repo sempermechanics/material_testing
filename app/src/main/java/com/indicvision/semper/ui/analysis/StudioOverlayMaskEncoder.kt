@@ -1,13 +1,9 @@
-@file:Suppress("LongMethod")
-
 package com.indicvision.semper.ui.analysis
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
@@ -15,7 +11,14 @@ import androidx.core.graphics.createBitmap
 
 /**
  * ALPHA_8 ROI mask encoding extracted from [StudioOverlayView.generateMaskBytes].
- * Behavior identical: white = correlate, clear = void.
+ * White = correlate, clear = void.
+ *
+ * Only the holes are void. The background outside the crop stays opaque on
+ * purpose: the ROI rect (passed to the engine separately) already bounds the
+ * grid, and the engine drops any point whose subset touches a void pixel
+ * (`native/src/pipeline/full_field_solver.cpp`, "PURE SUBSETS ONLY"). A void
+ * background would cost a subset-radius band of points along every crop edge.
+ * That only holds because the crop is always a rectangle (TD-74).
  */
 object StudioOverlayMaskEncoder {
 
@@ -23,10 +26,6 @@ object StudioOverlayMaskEncoder {
         val realImageWidth: Int,
         val realImageHeight: Int,
         val imageBounds: RectF,
-        val hasValidRoi: Boolean,
-        val roiRect: RectF,
-        val mainRoiMode: StudioOverlayView.RoiMode,
-        val mainFreeformPath: Path,
         val holes: List<StudioOverlayView.Hole>,
     )
 
@@ -41,11 +40,6 @@ object StudioOverlayMaskEncoder {
         val scaleX = input.realImageWidth.toFloat() / input.imageBounds.width()
         val scaleY = input.realImageHeight.toFloat() / input.imageBounds.height()
 
-        val paintAdd = Paint().apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
-            isAntiAlias = false
-        }
         val paintSub = Paint().apply {
             color = Color.TRANSPARENT
             xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
@@ -53,30 +47,6 @@ object StudioOverlayMaskEncoder {
             isAntiAlias = false
         }
 
-        if (input.hasValidRoi) {
-            val mappedMainRect = RectF(
-                (input.roiRect.left - input.imageBounds.left) * scaleX,
-                (input.roiRect.top - input.imageBounds.top) * scaleY,
-                (input.roiRect.right - input.imageBounds.left) * scaleX,
-                (input.roiRect.bottom - input.imageBounds.top) * scaleY,
-            )
-            when (input.mainRoiMode) {
-                StudioOverlayView.RoiMode.RECTANGLE, StudioOverlayView.RoiMode.SQUARE ->
-                    maskCanvas.drawRect(mappedMainRect, paintAdd)
-                StudioOverlayView.RoiMode.CIRCLE, StudioOverlayView.RoiMode.ELLIPSE ->
-                    maskCanvas.drawOval(mappedMainRect, paintAdd)
-                StudioOverlayView.RoiMode.FREEFORM -> {
-                    val scaledPath = Path(input.mainFreeformPath)
-                    val matrix = Matrix()
-                    matrix.postTranslate(-input.imageBounds.left, -input.imageBounds.top)
-                    matrix.postScale(scaleX, scaleY)
-                    scaledPath.transform(matrix)
-                    maskCanvas.drawPath(scaledPath, paintAdd)
-                }
-            }
-        } else {
-            maskCanvas.drawRect(0f, 0f, input.realImageWidth.toFloat(), input.realImageHeight.toFloat(), paintAdd)
-        }
         for (hole in input.holes) {
             val mappedHole = RectF(
                 (hole.rect.left - input.imageBounds.left) * scaleX,
@@ -84,20 +54,7 @@ object StudioOverlayMaskEncoder {
                 (hole.rect.right - input.imageBounds.left) * scaleX,
                 (hole.rect.bottom - input.imageBounds.top) * scaleY,
             )
-            when (hole.mode) {
-                StudioOverlayView.RoiMode.RECTANGLE, StudioOverlayView.RoiMode.SQUARE ->
-                    maskCanvas.drawRect(mappedHole, paintSub)
-                StudioOverlayView.RoiMode.CIRCLE, StudioOverlayView.RoiMode.ELLIPSE ->
-                    maskCanvas.drawOval(mappedHole, paintSub)
-                StudioOverlayView.RoiMode.FREEFORM -> {
-                    val scaledPath = Path(hole.path)
-                    val matrix = Matrix()
-                    matrix.postTranslate(-input.imageBounds.left, -input.imageBounds.top)
-                    matrix.postScale(scaleX, scaleY)
-                    scaledPath.transform(matrix)
-                    maskCanvas.drawPath(scaledPath, paintSub)
-                }
-            }
+            maskCanvas.drawRect(mappedHole, paintSub)
         }
 
         val size = maskBitmap.rowBytes * maskBitmap.height

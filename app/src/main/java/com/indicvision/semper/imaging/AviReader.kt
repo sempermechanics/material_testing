@@ -35,6 +35,8 @@ internal object AviReader {
     /** `dwFlags` bit marking an index entry as a keyframe. */
     private const val AVIIF_KEYFRAME = 0x10L
 
+    private const val HALF_US = 0.5
+
     /** Random access over the file being demuxed. */
     interface Source {
         val size: Long
@@ -86,10 +88,14 @@ internal object AviReader {
         val durationMs: Long
             get() = if (fps > 0.0) ((frames.size / fps) * 1000.0).toLong() else 0L
 
-        /** The frame on screen at [timeUs], clamped to the stream. */
+        /**
+         * The frame on screen at [timeUs], clamped to the stream. Half a
+         * microsecond of slack: a frame's start rounded to whole µs can land
+         * just before it, and must still name that frame, not the one before.
+         */
         fun frameIndexAt(timeUs: Long): Int {
             if (frames.isEmpty() || fps <= 0.0) return 0
-            return (timeUs * fps / 1_000_000.0).toInt().coerceIn(0, frames.size - 1)
+            return ((timeUs + HALF_US) * fps / 1_000_000.0).toInt().coerceIn(0, frames.size - 1)
         }
 
         /** The last keyframe at or before [index]; 0 when the stream marks none. */

@@ -56,6 +56,9 @@ class TouchImageView @JvmOverloads constructor(
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private var dragArmed = false
 
+    /** One scrub per gesture: a fast swipe is both a fling and a long swipe. */
+    private var scrubbedThisGesture = false
+
     // --- CRITICAL FIX: Explicit dimensions provided by the Activity ---
     private var trueImageWidth = 0f
     private var trueImageHeight = 0f
@@ -107,6 +110,7 @@ class TouchImageView @JvmOverloads constructor(
                     start.set(last)
                     mode = 1
                     dragArmed = false
+                    scrubbedThisGesture = false
                 }
                 MotionEvent.ACTION_MOVE -> if (mode == 1 && !mScaleDetector.isInProgress && event.pointerCount == 1) {
                     if (!dragArmed) {
@@ -160,7 +164,8 @@ class TouchImageView @JvmOverloads constructor(
         val dy = curr.y - start.y
         if (hypot(dx, dy) < SWIPE_DISTANCE) return
         if (abs(dx) > abs(dy)) {
-            onScrubListener?.invoke(if (dx < 0f) 1 else -1)
+            // The GestureDetector sees ACTION_UP first, so a fling has already scrubbed.
+            if (!scrubbedThisGesture) onScrubListener?.invoke(if (dx < 0f) 1 else -1)
         } else if (dy > 0f) {
             // Swipe down may show chrome; hide is timer-only.
             onChromeSwipeListener?.invoke(true)
@@ -250,7 +255,16 @@ class TouchImageView @JvmOverloads constructor(
         super.onSizeChanged(w, h, oldw, oldh)
         viewWidth = w
         viewHeight = h
-        fitToScreen()
+        if (oldw <= 0 || oldh <= 0 || isAtRestScale()) {
+            fitToScreen()
+            return
+        }
+        // Zoomed in: a sibling changing height (e.g. a longer instruction) must not
+        // throw the zoom away mid-task. Keep the scale and the centre point.
+        recomputeScaleLimits()
+        matrix.postTranslate((w - oldw) / 2f, (h - oldh) / 2f)
+        limitPan()
+        publishMatrix()
     }
 
     private fun safeViewRect(): RectF? {
@@ -343,7 +357,8 @@ class TouchImageView @JvmOverloads constructor(
             val accept = isAtRestScale() &&
                 abs(velocityX) >= abs(velocityY) &&
                 abs(velocityX) >= FLING_MIN_VELOCITY
-            if (accept) {
+            if (accept && !scrubbedThisGesture) {
+                scrubbedThisGesture = true
                 onScrubListener?.invoke(if (velocityX < 0f) 1 else -1)
             }
             return accept

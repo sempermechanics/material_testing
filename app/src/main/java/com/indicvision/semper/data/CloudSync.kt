@@ -20,6 +20,8 @@ import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.IOException
@@ -36,6 +38,8 @@ import java.util.concurrent.TimeUnit
  */
 @Suppress("TooManyFunctions") // reconcile, erase variants, upload enqueue — one cloud facade
 object CloudSync {
+
+    private val reconcileLock = Mutex()
 
     /**
      * What a reconcile pass concluded.
@@ -89,58 +93,63 @@ object CloudSync {
             val appContext = context.applicationContext
             if (!api.enabled) return@withContext Outcome.Disabled
 
-            // Every screen resume lands here, and each check costs one Firestore
-            // read per cloud session. A successful check stays fresh for a few
-            // minutes; an explicit pull-to-refresh (deep) always goes through.
-            val prefs = appContext.getSharedPreferences("indic_cloudsync", Context.MODE_PRIVATE)
-            val sinceLast = System.currentTimeMillis() - prefs.getLong(K_LAST_RECONCILE_AT, 0L)
-            val throttled = !deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS
+            // Home starts one reconcile per finished upload/restore job, all at once.
+            // Run them one at a time so each later call sees the first one's
+            // timestamp and config and skips, instead of all passing the throttle.
+            reconcileLock.withLock {
+                // Every screen resume lands here, and each check costs one Firestore
+                // read per cloud session. A successful check stays fresh for a few
+                // minutes; an explicit pull-to-refresh (deep) always goes through.
+                val prefs = appContext.getSharedPreferences("indic_cloudsync", Context.MODE_PRIVATE)
+                val sinceLast = System.currentTimeMillis() - prefs.getLong(K_LAST_RECONCILE_AT, 0L)
+                val throttled = !deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS
 
-            val token = tokens.usableIdToken() ?: return@withContext Outcome.Offline
+                val token = tokens.usableIdToken() ?: return@withContext Outcome.Offline
 
-            refreshRemoteConfig(appContext, api, token, throttled)
+                refreshRemoteConfig(appContext, api, token, throttled)
 
-            // The expensive per-session reconcile below is throttled; the cheap
-            // config fetch above is not, so quota still recovers between reconciles.
-            if (throttled) {
-                Timber.d("Reconcile skipped — last successful check %d s ago", sinceLast / MS_PER_SECOND)
-                return@withContext Outcome.Skipped
-            }
-
-            val cloud = try {
-                api.listSessions(token, verify = deep)
-            } catch (e: IndicApi.NotApprovedException) {
-                Timber.w(e, "Cloud reconcile refused — account not approved")
-                return@withContext Outcome.Failed("your account isn't approved for cloud backup")
-            } catch (e: IndicApi.ApiException) {
-                // The server responded — so this is a real fault (404 = route not
-                // published on the gateway, 5xx = backend broken), not bad signal.
-                Timber.e(e, "Cloud reconcile FAILED with HTTP %d", e.code)
-                return@withContext Outcome.Failed("server returned HTTP ${e.code}")
-            } catch (e: IOException) {
-                Timber.w(e, "Cloud reconcile skipped — offline")
-                return@withContext Outcome.Offline
-            }
-
-            // Only COMPLETED cloud sessions count as a real backup.
-            val backedUp = cloud.sessions
-                .filter { it.status == "COMPLETED" && it.localSessionId.isNotBlank() }
-                .map { it.localSessionId }
-                .toSet()
-
-            var repaired = 0
-            SessionStore.list(appContext).forEach { record ->
-                val claimsSynced = record.syncState == SessionRecord.SyncState.SYNCED
-                if (claimsSynced && record.id !in backedUp) {
-                    // The cloud copy is gone (deleted) or never completed.
-                    Timber.i("Session %s claims SYNCED but is not in the cloud — repairing", record.id)
-                    SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.PENDING)
-                    repaired++
-                    if (reupload) enqueueUpload(appContext, record.id)
+                // The expensive per-session reconcile below is throttled; the cheap
+                // config fetch above is not, so quota still recovers between reconciles.
+                if (throttled) {
+                    Timber.d("Reconcile skipped — last successful check %d s ago", sinceLast / MS_PER_SECOND)
+                    return@withContext Outcome.Skipped
                 }
+
+                val cloud = try {
+                    api.listSessions(token, verify = deep)
+                } catch (e: IndicApi.NotApprovedException) {
+                    Timber.w(e, "Cloud reconcile refused — account not approved")
+                    return@withContext Outcome.Failed("your account isn't approved for cloud backup")
+                } catch (e: IndicApi.ApiException) {
+                    // The server responded — so this is a real fault (404 = route not
+                    // published on the gateway, 5xx = backend broken), not bad signal.
+                    Timber.e(e, "Cloud reconcile FAILED with HTTP %d", e.code)
+                    return@withContext Outcome.Failed("server returned HTTP ${e.code}")
+                } catch (e: IOException) {
+                    Timber.w(e, "Cloud reconcile skipped — offline")
+                    return@withContext Outcome.Offline
+                }
+
+                // Only COMPLETED cloud sessions count as a real backup.
+                val backedUp = cloud.sessions
+                    .filter { it.status == "COMPLETED" && it.localSessionId.isNotBlank() }
+                    .map { it.localSessionId }
+                    .toSet()
+
+                var repaired = 0
+                SessionStore.list(appContext).forEach { record ->
+                    val claimsSynced = record.syncState == SessionRecord.SyncState.SYNCED
+                    if (claimsSynced && record.id !in backedUp) {
+                        // The cloud copy is gone (deleted) or never completed.
+                        Timber.i("Session %s claims SYNCED but is not in the cloud — repairing", record.id)
+                        SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.PENDING)
+                        repaired++
+                        if (reupload) enqueueUpload(appContext, record.id)
+                    }
+                }
+                prefs.edit { putLong(K_LAST_RECONCILE_AT, System.currentTimeMillis()) }
+                Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
             }
-            prefs.edit { putLong(K_LAST_RECONCILE_AT, System.currentTimeMillis()) }
-            Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
         }
     }
 

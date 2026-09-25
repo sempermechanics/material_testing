@@ -9,6 +9,7 @@ package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Bundle
 import android.view.View
@@ -363,11 +364,11 @@ class RoiDrawActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.roi_full_image_selected, Toast.LENGTH_SHORT).show()
         } else {
             if (overlayRoi.hasValidRoi) {
-                val finalRoi = overlayRoi.getRelativeRoi()
-                rectX = finalRoi.left.toInt().coerceAtLeast(0)
-                rectY = finalRoi.top.toInt().coerceAtLeast(0)
-                rectW = finalRoi.width().toInt().coerceAtMost(realImageWidth - rectX)
-                rectH = finalRoi.height().toInt().coerceAtMost(realImageHeight - rectY)
+                val px = roiPixels(overlayRoi.getRelativeRoi(), realImageWidth, realImageHeight)
+                rectX = px.left
+                rectY = px.top
+                rectW = px.width()
+                rectH = px.height()
             } else {
                 rectX = 0
                 rectY = 0
@@ -415,4 +416,18 @@ class RoiDrawActivity : AppCompatActivity() {
         const val STATE_MANUAL = "roi_edit_manual"
         const val STATE_ERASE = "roi_edit_erase"
     }
+}
+
+/**
+ * The saved ROI in whole image pixels, clipped to the image. Edges are rounded,
+ * as the HUD rounds them: the overlay keeps the ROI in view pixels, so a typed
+ * 1000 comes back from the round trip as 999.9997, and truncating it handed the
+ * engine 999.
+ */
+internal fun roiPixels(roi: RectF, imageWidth: Int, imageHeight: Int): Rect {
+    val x = roi.left.roundToInt().coerceAtLeast(0)
+    val y = roi.top.roundToInt().coerceAtLeast(0)
+    val right = roi.right.roundToInt().coerceAtMost(imageWidth)
+    val bottom = roi.bottom.roundToInt().coerceAtMost(imageHeight)
+    return Rect(x, y, right, bottom)
 }
