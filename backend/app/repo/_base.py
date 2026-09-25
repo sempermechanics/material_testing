@@ -78,8 +78,9 @@ def _run_tx(body: Callable[[Any], T], *, on_contended: Callable[[], T]) -> T:
 #: to this module: `errors.py` names wire codes, and this one never reaches the
 #: wire. It exists so contention stops being indistinguishable in the logs from
 #: a licence that genuinely has no room left. Callers that hand a code to a
-#: route put it through `_public_claim_error` first, so no route's error
-#: mapping changes.
+#: route put it through `_public_claim_error` first, which answers
+#: `claim_contended` (503) — never `license_seats_exhausted`, which sent IT
+#: looking for a seat problem that a retry would have solved.
 _CONTENDED = "_contended"
 
 
