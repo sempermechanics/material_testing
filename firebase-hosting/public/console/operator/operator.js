@@ -3,8 +3,8 @@ import {
   stepUpForRevoke, ERR_CANCELLED,
 } from "../auth.js";
 import {
-  seatCells, inviteCells, day, licenceState, licenceStatePill,
-  licenceListPath, searchableLicenceText, upsertLicence,
+  seatCells, inviteCells, day, licenceStatePill,
+  licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
 } from "../util.js";
 
 const $ = (id) => document.getElementById(id);
@@ -111,22 +111,6 @@ $("mint").addEventListener("click", async () => {
   };
   for (const k of Object.keys(body)) if (body[k] === null) delete body[k];
 
-  // A second live licence for one address is almost never what was meant —
-  // renewal is Extend — and the backend mints it anyway, only reporting that
-  // the address is already promised elsewhere. Ask first. The backend is
-  // asked, not the rows on screen: those were only the first page.
-  if (kind === "individual" && body.emailLock) {
-    const already = await liveLicencesFor(body.emailLock);
-    if (already.length && !window.confirm(
-      `${body.emailLock} already holds ${already.map(labelOfLicence).join(", ")}.\n\n` +
-      "To renew, cancel and use Extend on that row. Issue a second licence " +
-      "anyway? It will not attach to their account.",
-    )) {
-      setStatus("Not issued.");
-      return;
-    }
-  }
-
   $("mint").disabled = true;
   setStatus("Issuing…");
   try {
@@ -145,7 +129,12 @@ $("mint").addEventListener("click", async () => {
     // that already signed in happens after the licence is written.
     if (out.license) refreshLicence(out.license.id);
   } catch (e) {
-    setStatus(mintError(e.message), true);
+    const held = alreadyLicensedId(e.message);
+    if (held) {
+      showHeldLicence(body.emailLock, held);
+    } else {
+      setStatus(mintError(e.message), true);
+    }
   } finally {
     $("mint").disabled = false;
   }
@@ -185,26 +174,18 @@ function mintOutcome(out, body) {
 }
 
 /**
- * Live individual licences locked to this address, from the backend. A
- * failed lookup answers none: the check is advice, and the mint itself is
- * the operator's call.
+ * One licence per person: the backend refused the mint because the address
+ * holds or is promised a live licence, and named it. Put that one in front
+ * of the operator — renewal is Extend on it, replacing it is revoke first.
+ * It may be an institution seat, so the filter is the address, not the id.
  */
-async function liveLicencesFor(email) {
-  const address = email.trim().toLowerCase();
-  try {
-    const data = await api(licenceListPath({ limit: 50, q: address }));
-    return (data.licenses || []).filter((l) =>
-      l.kind !== "institution" && !lapsed(l) &&
-      (l.emailLock || "").toLowerCase() === address);
-  } catch {
-    return [];
-  }
+async function showHeldLicence(email, id) {
+  setStatus(`Not issued: ${email} already has a live licence (shown below). ` +
+    "To renew it, use Extend. To replace it, revoke it first, then issue again.", true);
+  $("filter").value = email;
+  await refreshLicence(id);
+  searchLicences();
 }
-
-/** Past its expiry and grace — replacing one of these is what a new mint is for. */
-const lapsed = (l) => licenceState(l) === "expired";
-
-const labelOfLicence = (l) => l.keyPrefix || l.id.slice(0, 10);
 
 function mintError(code) {
   return {
@@ -858,6 +839,8 @@ $("addMember").addEventListener("click", async () => {
   } catch (e) {
     $("rosterHint").textContent = {
       invite_exists: "That address is already promised to a different licence.",
+      member_already_licensed: "That person already has a live licence. " +
+        "One licence per person: revoke the other one first.",
       license_seats_exhausted: "This licence has no seats left.",
       license_seat_disabled: "That seat is on hold — re-enable it instead.",
       claim_contended: "Busy just now — try again.",

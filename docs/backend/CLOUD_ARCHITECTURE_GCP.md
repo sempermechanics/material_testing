@@ -1267,21 +1267,47 @@ Minting an individual licence for an address that already has an approved,
 verified account attaches it at once (`create_individual_license` →
 `_attach_to_existing_holder`), dropping the system demo key the first
 post-deploy request stamped. The invite is still written for the case where no
-such account exists yet, and a holder of a *live* non-demo licence is left
-untouched (`claimError: holder_already_licensed`).
+such account exists yet.
+
+**One licence per person.** A person is an address; the device is a lock on
+the licence they hold, changed in place (staff "New device", IT unlock, or
+self-service with its cooldown), never by issuing a second licence. Every
+grant path asks `repo/holders.licence_held_by` first and refuses before
+writing anything:
+
+| Path | Refusal |
+|------|---------|
+| Staff mint (`POST /v1/admin/licenses`, individual) | `409 email_already_licensed: <licence id>` |
+| Key typed in the app (`POST /v1/licenses/activate`) | `409 already_licensed` |
+| IT adds a roster member or invite (`POST /v1/institutions/licenses/{id}/seats`) | `409 member_already_licensed` |
+
+An address holds a licence four ways, and all four count: its account points
+at it, an individual licence is locked to it (`emailLock`), it has a roster
+seat, or a pending invite promises it one. Only a *live* licence counts
+(`licence_is_live`): a revoked one, one past its grace, and the system Demo
+key do not, since replacing those is what a new licence is for. The licence
+being granted is excluded, so re-entering a key or re-adding a member is still
+a no-op. IT is not told which licence the person holds; the operator is, so
+the desk can show it. `_holds_only_a_demo_key`, which decides whether a mint
+may attach to an existing account, uses the same test.
+
+Before this, each path granted anyway: the mint only reported
+`inviteError: invite_exists` or `claimError: holder_already_licensed`, and a
+typed key or a roster add moved the account off its licence and left that one
+`redeemed` in their name. `backend/scripts/find_duplicate_licences.py` lists
+the addresses that hold two live licences from that time (read-only).
 
 **A mint is licence-first, delivery second, and delivery can fail without
 failing the mint.** The licence document is written, then the invite, then
-the attach. An address already promised to another live licence refuses the
-invite (`inviteError: invite_exists`), and the new licence exists undelivered —
-its key still redeems it through the support route. That is deliberate: a
-licence that has been paid for should never be lost to a delivery conflict,
-and the conflict is for a person to resolve, not the backend. The cost showed
-the first time a mint answered 500 after succeeding (#131): the retry minted a
-second licence for the same address, which could not attach. The operator
-desk now checks its own list for a live licence on the address before minting,
-and says for every mint whether the licence attached, is waiting for a first
-sign-in, or was not delivered and why. Renewal is Extend (§20.6), never a
+the attach. With the one-licence check in front, a conflict with another live
+licence is refused before the write; what is left is the rare delivery failure
+(`inviteError`, `claimError`), where the new licence exists undelivered and
+its key still redeems it through the support route. The cost of not checking
+first showed the first time a mint answered 500 after succeeding (#131): the
+retry minted a second licence for the same address, which could not attach —
+that retry is now a `409` naming the first. The operator desk says for every
+mint whether the licence attached, is waiting for a first sign-in, or was not
+delivered and why. Renewal is Extend (§20.6), never a
 second mint. A claim that loses every retry under contention is the one
 delivery failure nobody is told about —
 [TD-33](../ops/TECH_DEBT.md).

@@ -15,6 +15,10 @@ from .claims import (  # noqa: F401
     _license_mirror_patch,
     _public_claim_error,
 )
+from .holders import (  # noqa: F401
+    licence_held_by,
+    licence_is_live,
+)
 from .invites import (  # noqa: F401
     _delete_license_invites,
     find_user_by_email,

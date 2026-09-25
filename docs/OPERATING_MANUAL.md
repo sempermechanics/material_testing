@@ -747,10 +747,18 @@ approves/revokes accounts):
   request. If that address **already has an approved, verified account** — a
   demo user, or an account from before licensing — the licence attaches
   immediately at mint time instead; the response carries `claimedByUid`, and
-  the system demo key is dropped. An address whose account holds a *live*
-  non-demo licence is left alone (`claimError: holder_already_licensed`) —
-  revoke first, then mint again. It binds to the first device they sign in
-  on, and stays on that device. Nothing is sent to them and nothing is typed. `deviceIdLock` is
+  the system demo key is dropped. It binds to the first device they sign in
+  on, and stays on that device.
+- **One licence per person.** An address that already holds or is promised a
+  live licence — its own, an institution seat, or a pending invite — is
+  refused with `409 email_already_licensed: <licence id>`, and the desk shows
+  that licence. To renew, Extend it; to replace it, revoke it first, then
+  mint. A revoked licence, one past its grace, and the Demo key do not count.
+  The same rule refuses a key typed in the app (`409 already_licensed`) and an
+  IT roster add (`409 member_already_licensed`). To change the person's
+  device, use **New device** on their licence — never a second licence.
+  `backend/scripts/find_duplicate_licences.py --project <id>` lists anyone
+  who got two before the rule existed. Nothing is sent to them and nothing is typed. `deviceIdLock` is
   still accepted for the rare case where the device is known up front, but
   normal issuing leaves it empty.
 - **Institution**: `POST /v1/admin/licenses` with `kind: "institution"`, a
@@ -897,8 +905,10 @@ against nothing until it is claimed. On an assigned key a seat is licensed
 immediately; on a floating one it makes the member eligible, and they take a
 seat when they work.
 
-The refusals worth recognising are `409 invite_exists` (that address is
-already promised a place on a different licence — withdraw the other
+The refusals worth recognising are `409 member_already_licensed` (that
+person already holds, or is promised, a different live licence — one licence
+per person; Semper staff move them), `409 invite_exists` (the address is
+still invited to a different licence that has lapsed — withdraw that
 invitation first) and `409 license_seats_exhausted` on an assigned key.
 `503 claim_contended` is not a refusal: another request was claiming on the
 same licence at that moment, and adding the member again succeeds.

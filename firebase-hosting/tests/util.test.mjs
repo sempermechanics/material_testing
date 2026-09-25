@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   esc, when, day, licenceState, licenceStatePill, leaseHeld, seatCells, inviteCells,
-  errorDetail, licenceListPath, searchableLicenceText, upsertLicence,
+  errorDetail, licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -123,6 +123,14 @@ test("only an address, a domain or a key prefix is sent as a search", () => {
   assert.equal(searchableLicenceText("renewal"), false);
   assert.equal(searchableLicenceText("a@b"), false);
   assert.equal(searchableLicenceText(""), false);
+});
+
+test("a refused mint names the licence the address already holds", () => {
+  assert.equal(alreadyLicensedId("email_already_licensed: 1c2fff4d30"), "1c2fff4d30");
+  assert.equal(alreadyLicensedId("email_already_licensed:abc"), "abc");
+  assert.equal(alreadyLicensedId("email_already_licensed"), "");
+  assert.equal(alreadyLicensedId("invite_exists"), "");
+  assert.equal(alreadyLicensedId(undefined), "");
 });
 
 test("a changed licence replaces its row and a new one goes on top", () => {

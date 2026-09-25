@@ -142,6 +142,16 @@ export function searchableLicenceText(text) {
 }
 
 /**
+ * The licence a refused mint names, or "". One licence per person: the
+ * backend answers `email_already_licensed: <licence id>` when the address
+ * already holds or is promised a live one, so the desk can show it.
+ */
+export function alreadyLicensedId(code) {
+  const m = /^email_already_licensed:\s*([A-Za-z0-9_-]+)$/.exec(String(code ?? "").trim());
+  return m ? m[1] : "";
+}
+
+/**
  * `list` with `lic` in place of the row with its id, or at the top when it
  * is new. A change refreshes its own row this way; the desk used to reload
  * the first page after every change and drop every page loaded after it.
