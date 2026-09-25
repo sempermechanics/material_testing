@@ -83,28 +83,23 @@ class BatchRunControllerTest {
         )
     }
 
-    private fun outcome(
-        code: Int,
-        validPoints: Int,
-        frames: Int,
-        correlated: Int = -1,
-        saved: Boolean = validPoints > 0,
-        failedAt: Int = if (code < 0 || validPoints == 0) 0 else -1,
-    ) = AnalysisViewModel.BatchAnalysisOutcome(
-        engineErrorCode = code,
-        firstFrameValidPoints = validPoints,
-        totalFrames = frames,
-        executionTimeMs = 0,
-        batchDirPath = "",
-        failedFrameIndex = failedAt,
-        firstFrameCorrelatedPoints = correlated,
-        saved = saved,
-    )
+    /** A run is saved when its first frame kept points; [route]'s tests override that. */
+    private fun outcome(code: Int, validPoints: Int, frames: Int, correlated: Int = -1) =
+        AnalysisViewModel.BatchAnalysisOutcome(
+            engineErrorCode = code,
+            firstFrameValidPoints = validPoints,
+            totalFrames = frames,
+            executionTimeMs = 0,
+            batchDirPath = "",
+            failedFrameIndex = if (code < 0 || validPoints == 0) 0 else -1,
+            firstFrameCorrelatedPoints = correlated,
+            saved = validPoints > 0,
+        )
 
     /** Whether [outcome] opened the "stopped early, frames kept" dialog, and any failure dialog it raised. */
-    private fun route(outcome: AnalysisViewModel.BatchAnalysisOutcome, spec: RunSpec = strainFailSpec): Pair<Boolean, Shown?> {
+    private fun route(outcome: AnalysisViewModel.BatchAnalysisOutcome): Pair<Boolean, Shown?> {
         val viewModel = AnalysisViewModel()
-        viewModel.resetRunResult("", spec)
+        viewModel.resetRunResult("", strainFailSpec)
         var partial = false
         var shown: Shown? = null
         controller(Gate(), viewModel, onPartial = { partial = true }) { shown = it }
@@ -185,7 +180,7 @@ class BatchRunControllerTest {
     @Test
     fun `a run that stopped early with its frames saved says they are kept`() {
         val (partial, shown) = route(
-            outcome(EngineFailure.ENGINE_ERROR_FEATURES, validPoints = 500, frames = 3, failedAt = 3),
+            outcome(EngineFailure.ENGINE_ERROR_FEATURES, validPoints = 500, frames = 3).copy(failedFrameIndex = 3),
         )
         assertTrue(partial)
         assertNull(shown)
@@ -196,7 +191,7 @@ class BatchRunControllerTest {
         // Frame 1 kept no points, frames 2-3 solved, frame 4 failed: no record.
         listOf(EngineFailure.ENGINE_ERROR_FEATURES, AnalysisRunCodes.ERROR_LOW_CONVERGENCE).forEach { code ->
             val (partial, shown) = route(
-                outcome(code, validPoints = 0, frames = 2, correlated = 0, saved = false, failedAt = 3),
+                outcome(code, validPoints = 0, frames = 2, correlated = 0).copy(failedFrameIndex = 3),
             )
             assertFalse("code $code opened the frames-kept dialog", partial)
             // The first frame is why nothing was saved, so it is what the dialog explains.
