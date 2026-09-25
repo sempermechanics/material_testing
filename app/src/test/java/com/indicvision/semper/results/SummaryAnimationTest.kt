@@ -255,6 +255,34 @@ class SummaryAnimationTest {
     }
 
     @Test
+    fun `frames of different sizes give the ranges each frame gives on its own`() = runBlocking {
+        // The pass reuses one frame buffer and one set of columns, growing them for a
+        // larger frame (TD-87): small after large and large after small must both
+        // match decoding every frame separately.
+        val files = listOf(
+            frame("big.dat", -3f, 2f, points = 300),
+            frame("small.dat", 0f, 9f, points = 40),
+            frame("bigger.dat", -8f, 1f, points = 500),
+        )
+        val expected = mutableMapOf<Int, Pair<Float, Float>>()
+        for (file in files) {
+            val data = requireNotNull(DicResult.decodeDatFile(file))
+            VisualizationEngine.valueRanges(data, summaryFieldIndices).forEach { (valIndex, range) ->
+                if (range != null) {
+                    val seen = expected[valIndex]
+                    expected[valIndex] = if (seen == null) {
+                        range
+                    } else {
+                        minOf(seen.first, range.first) to maxOf(seen.second, range.second)
+                    }
+                }
+            }
+        }
+
+        assertEquals(expected, SummaryAnimation.globalRanges(files))
+    }
+
+    @Test
     fun `a decode with no sidecar writes one the next call reads`() = runBlocking {
         // A session restored from the cloud has no sidecar, and the viewer runs this
         // pass on every open: without the write-back each open decoded every frame.
