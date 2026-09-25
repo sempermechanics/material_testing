@@ -898,10 +898,15 @@ class ResultViewerActivity : AppCompatActivity() {
         dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilScaleMin).hint =
             getString(R.string.scale_min_value, unit)
 
-        val existing = scaleBoundsFor(currentDataIndex)
-        if (existing != null) {
-            etMin.setText((existing.first * multiplier).toString())
-            etMax.setText((existing.second * multiplier).toString())
+        val shown = cachedHeatmap != null && !showingSummary && !isGeneratingHeatmap
+        CustomScalePrefill.text(
+            custom = scaleBoundsFor(currentDataIndex),
+            shownMin = currentHeatmapMin.takeIf { shown },
+            shownMax = currentHeatmapMax.takeIf { shown },
+            multiplier = multiplier,
+        )?.let { (min, max) ->
+            etMin.setText(min)
+            etMax.setText(max)
         }
 
         MaterialAlertDialogBuilder(this)

@@ -13,6 +13,13 @@ object LabReportFormat {
     fun num(value: Float, decimals: Int): String = String.format(Locale.US, "%.${decimals}f", value)
 
     /**
+     * A modulus in GPa for a results line: one decimal for metals (153.6), two
+     * below 10 GPa, where one decimal would read PMMA's 2.00 and 2.09 as the
+     * same "2.0" and "2.1" and hide the gap between two estimates.
+     */
+    fun gpa(value: Float): String = num(value, if (abs(value) < SMALL_GPA) 2 else 1)
+
+    /**
      * The viewer's frame number (1-based) for 0-based deformed frames [first]
      * to [last]: "7", or "5–9" for a load held over several frames. The
      * table's S.No counts rows, which skips frames without a load or a field.
@@ -36,6 +43,8 @@ object LabReportFormat {
         }
         return "${String.format(Locale.US, "%.2f", mantissa)}×10${superscript(exp)}"
     }
+
+    private const val SMALL_GPA = 10f
 
     private fun superscript(n: Int): String = n.toString().map { c ->
         when (c) {

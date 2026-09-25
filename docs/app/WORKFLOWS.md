@@ -175,6 +175,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.15 | Press Back in selection mode | Selection clears; the app does not exit |
 | [ ] 3.16 | Tap the quota chip below the cap | Settings (or the limit screen at the cap) |
 | [ ] 3.17 | Reach the quota cap | The chip turns red |
+| [ ] 3.17a | Finish one analysis under a cap above 1 | The chip reads "1 / M analyses used" with the real cap M, in the secondary colour — not "1 / 1" |
 | [ ] 3.18 | Pull to refresh | Cloud reconcile runs; a repair or failure is reported by toast |
 | [ ] 3.19 | Open Home with no sessions | Empty state reading "Import photos or a video to start an analysis." with a **Start analysis** button — it does what the FAB does; it no longer opens Settings |
 | [ ] 3.20 | Tap **+** below the quota | The **Which test?** sheet (§3b) opens; picking a test opens the **New analysis** sheet (§3a) |
@@ -348,7 +349,7 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.15 | Load a reference with no measurable pattern at all (blank card) | Neither the readout nor either chip appears; no number is invented |
 | [ ] 5.1.16 | Open the sort menu → **Name A–Z** | Thumbnails reorder; the badge numbers renumber 1…N |
 | [ ] 5.1.17 | Choose **Date oldest first** | Order follows capture date, not filename |
-| [ ] 5.1.18 | Choose **Manual** | Hint toast about dragging; drag a thumbnail and it stays where dropped |
+| [ ] 5.1.18 | Choose **Manual** | Hint toast about dragging; drag a thumbnail and it stays where dropped, back at its normal size, with the badges renumbered |
 | [ ] 5.1.19 | Load a single deformed frame | The sort control is hidden |
 | [ ] 5.1.20 | Press Back on step 1 with inputs loaded | "Exit analysis?" confirmation. On steps 2 and 3 Back walks back a step instead — the confirm is step 1 only |
 | [ ] 5.1.21 | Open step 1 for the first time | Coach marks point at the reference dropzone, then the deformed one |
@@ -469,7 +470,7 @@ and for real vendor decoders and camera files.
 | [ ] 5.3.13 | Set samples to 9 | Clamped to 8 |
 | [ ] 5.3.14 | Set the subset min (on step 2) above what the ROI can hold | Warning chip: "Subset range starts above what this image and ROI can hold"; info icon opens the sweep-subset FAQ behind the leave-the-app confirm. **Compute** is disabled |
 | [ ] 5.3.15 | Set a strain window range that no subset can satisfy | Warning chip: "No combination fits this ceiling — raise Max strain window or lower the subset range"; info icon opens the empty-plan FAQ behind the same confirm. **Compute** is disabled |
-| [ ] 5.3.16 | Read a valid plan summary | "N analyses · subset a–b px · VSG c–d px" |
+| [ ] 5.3.16 | Read a valid plan summary | "N analyses · subset a–b px · window c–d points"; a one-combination plan reads "1 analysis" with its real subset and window, not "1–1" |
 
 ### 5.4 Running
 
@@ -671,7 +672,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
 | [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the reference — no drift |
 | [ ] 8.1.6 | Zoom, then switch field | Zoom and pan are preserved |
-| [ ] 8.1.7 | Tap the colour scale bar | Custom scale dialog, prefilled with the current bounds |
+| [ ] 8.1.7 | Tap the colour scale bar | Custom scale dialog, prefilled with the bounds the bar shows (the auto ones until a custom scale is set); **Apply** without edits leaves the scale as it is |
 | [ ] 8.1.8 | Enter min ≥ max and apply | Rejected with a snackbar and a **Why?** that opens the custom-scale FAQ |
 | [ ] 8.1.9 | Enter valid bounds and apply | The heatmap and the scale labels both change |
 | [ ] 8.1.10 | Switch field, then switch back | The custom bounds are remembered *per field* |
@@ -777,7 +778,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.14e | Tap **Elastic region** | The plot zooms to the frames E was fitted to plus half their strain span again (from the origin), with the fit line drawn across it, so the student can see where the curve leaves the line. Frames after the peak are left out. On the Zenodo steel run (docs/app/REAL_WORLD_VALIDATION.md) that is frames 1–28 up to 1.94 mε, where the whole test runs to 336 mε. The caption and the E / peak lines are unchanged |
 | [ ] 8.4.14f | With **Elastic region** on, close the sheet, step frames, reopen; go to the summary page | The choice is kept (ViewModel), on both surfaces and after rotating. On a frame outside the window the highlight line is off the plot; the caption still gives that frame's values |
 | [ ] 8.4.15 | Open it on a bending run without taps (made before this build) | Rows **Support span**, **Width**, **Thickness**, **Machine load**, **Flexural stress**; the curve's y-axis reads "Flexural stress (MPa)" |
-| [ ] 8.4.15a | Open a bending run with taps | Results shows the **load–deflection** graph (W on δ) with a muted slope line, then E from the graph (slope, R²), average E over the load steps ("n load steps" counts held loads, not frames), the mm/px scale and the approximate note. On the synthetic video of §5.1b.24: 141.5 GPa and 173.1 GPa over 6 load steps |
+| [ ] 8.4.15a | Open a bending run with taps | Results shows the **load–deflection** graph (W on δ) with a muted slope line, then E from the graph (slope, R²), average E over the load steps ("n load steps" counts held loads, not frames), the mm/px scale and the approximate note. On the synthetic video of §5.1b.24: 141.5 GPa and 173.1 GPa over 6 load steps. A modulus under 10 GPa (PMMA) shows two decimals, so two close values stay apart. The axes never read "-0.00" |
 
 ### 8.5 Share and export
 
@@ -791,7 +792,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.5.3c | **Lab report (PDF)** — first row, tensile run with loads, not a sweep | A journal-style write-up in the layout of the student's handwritten report ([STUDENT_LAB_WORKFLOW.md](STUDENT_LAB_WORKFLOW.md)): experiment and title, Name / Date lines, Aim, Materials required, Theory, the reference photo with the analysed region, Observations (area filled in; lengths and diameters as blank lines), a **DIC gauge length along x/y (px)** line; the observation table (S.No, Frame (the viewer's frame number), Load kN, Extension px, Stress MPa, Strain — Extension ÷ gauge length ≈ Strain; "—" once an end of the region has left the view) with **Elastic / Plastic / Break point** bracketed in the margin, Calculation for row 1 (stress, strain, and ΔL in px over the gauge), the elastic-region and full stress–strain graphs with E boxed, Results (E and peak stress, with the approximate note), and ruled Conclusions lines |
 | [ ] 8.5.3d | **Lab report (PDF)** on a bending run with taps | Offered first (absent until the thickness is tapped). Layout of Experiment 5: title, Aim, Experimental setup, Theory, procedure (a)–(d), the reference photo with the two taps and the probe circle, Observations (L, b, t, no-load reading = reference photo, mm/px), row-1 Calculation (M, y, I, σb, E), the table with **one row per load step** (unloaded frames left out; the **Frame** column gives the viewer's frame, or a range for a held load, so when the first frame carries no load, row 1 reads Frame 2), Results (average E, E from the graph) and the load–deflection graph with slope and E boxed |
 | [ ] 8.5.3d | Open Share on bending, on a sweep, or on a run without loads | No **Lab report** row (bending arrives in the next PR) |
-| [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page |
+| [ ] 8.5.4 | **PDF report** | Every frame's pages plus a telemetry page. Its sheet row reads "fields, stats, telemetry · All N frames", with the same "·" as the other rows |
 | [ ] 8.5.4a | Same, on a tensile run | Each cover has a **Mechanical Test** block (type, cross-section, strain, this frame's load and engineering stress); before telemetry a **Stress–Strain Curve** page with the plot, peak stress, and a **Modulus E (approx.)** with its frames and R², and a per-frame Load / Stress / Strain table continued over as many pages as needed. Progress shows "Stress–strain n / N…" first if the ⓘ sheet has not built the curve yet |
 | [ ] 8.5.4b | Same, on bending | The cover block names that test's dimensions and flexural stress; the curve page is titled the same way |
 | [ ] 8.5.4c | Same, on a sweep | Cover block shows the type and dimensions only; no curve page |

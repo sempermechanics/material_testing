@@ -4,6 +4,7 @@ import com.indicvision.semper.report.LabReport.Block
 import com.indicvision.semper.report.LabReport.Document
 import com.indicvision.semper.report.LabReport.Series
 import com.indicvision.semper.report.LabReportFormat.frameCell
+import com.indicvision.semper.report.LabReportFormat.gpa
 import com.indicvision.semper.report.LabReportFormat.num
 import com.indicvision.semper.report.LabReportFormat.sci
 import java.util.Locale
@@ -45,8 +46,8 @@ internal object LabReportBending {
                 add(Block.Calculation(calculation(model, summary)))
                 add(table(summary))
                 add(Block.Heading(LabReportText.RESULTS))
-                add(Block.Field(b.RESULT_MEAN, summary.meanModulusGPa?.let { "${num(it, 2)} GPa" } ?: b.NONE))
-                add(Block.Field(b.RESULT_GRAPH, summary.slopeModulusGPa?.let { "${num(it, 1)} GPa" } ?: b.NONE))
+                add(Block.Field(b.RESULT_MEAN, summary.meanModulusGPa?.let { "${gpa(it)} GPa" } ?: b.NONE))
+                add(Block.Field(b.RESULT_GRAPH, summary.slopeModulusGPa?.let { "${gpa(it)} GPa" } ?: b.NONE))
                 add(Block.Paragraph(b.APPROXIMATE_NOTE))
                 add(graph(summary))
             },
@@ -99,7 +100,7 @@ internal object LabReportBending {
             Series(listOf(from.toFloat() to it.at(from).toFloat(), to.toFloat() to it.at(to).toFloat()), isFit = true)
         }
         val annotation = if (line != null && summary.slopeModulusGPa != null) {
-            "Slope = ${num(line.slope.toFloat(), 2)} N/mm · E = ${num(summary.slopeModulusGPa, 1)} GPa"
+            "Slope = ${num(line.slope.toFloat(), 2)} N/mm · E = ${gpa(summary.slopeModulusGPa)} GPa"
         } else {
             null
         }
