@@ -135,6 +135,29 @@ def effective_mode(user: dict) -> str:
     return MODE_LICENSED
 
 
+#: Why a licensed account is on demo limits right now; see `inactive_licence_reason`.
+INACTIVE_LICENCE_ENDED = "licence_ended"
+INACTIVE_NO_SEAT = "no_seat"
+
+
+def inactive_licence_reason(user: dict) -> str:
+    """Why an account that holds a licence is resolving demo, or "".
+
+    `effective_mode` answers demo for two accounts that are not demo users at
+    all: a licence past its grace, and a floating member between leases. Both
+    get the demo cap on their next request while every analysis they stored
+    stays, so a quota refusal that only told them to delete one blamed the
+    wrong thing. This names the actual cause so the refusal can.
+    """
+    if _stored_mode(user) != MODE_LICENSED:
+        return ""
+    if _expiry_state(user)[0]:
+        return INACTIVE_LICENCE_ENDED
+    if normalize_seating(user.get("licenseSeating")) == SEATING_FLOATING and not _lease_live(user):
+        return INACTIVE_NO_SEAT
+    return ""
+
+
 def resolve_user_config(user: dict) -> dict:
     """Product limits and license entitlements for this account.
 

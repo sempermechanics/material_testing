@@ -1,10 +1,11 @@
 """Licence administration by Semper staff: listing, renewal fan-out, whole-key revoke.
 """
+from .. import errors
 from ..licenses import (
-    DURATION_TIMED,
     KIND_INSTITUTION,
     MODE_DEMO,
     MODE_LICENSED,
+    as_utc,
     normalize_kind,
 )
 
@@ -14,6 +15,7 @@ from ._base import (
     db,
     _license_mode,
     _mode_patch,
+    _now,
 )
 from .claims import (
     _license_mirror_patch,
@@ -65,6 +67,39 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
     return _license_public(license_id, {**lic, "status": "revoked"})
 
 
+class LicenseTermsRejected(Exception):
+    """A licence edit `update_license` refuses. `code` is the 422 detail."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
+def expiry_change_error(lic: dict, expires_at) -> str:
+    """Why this new `expiresAt` may not be applied to `lic`, or "".
+
+    The edit route is the desk's Extend button, and every holder follows the
+    licence the moment it is written. A date already past ended the licence
+    for all of them; one earlier than the current expiry shortened it; and
+    on a perpetual licence it turned an unending licence into a timed one
+    with no grace, because perpetual licences are minted without
+    `graceDays`. Each of those was then reported on the desk as "extended".
+    Ending a licence early is `revoke`; converting a perpetual licence is a
+    new key.
+    """
+    new = as_utc(expires_at)
+    if new is None:
+        return ""
+    if new <= _now():
+        return errors.EXPIRY_IN_PAST
+    current = as_utc(lic.get("expiresAt"))
+    if current is None:
+        return errors.LICENSE_PERPETUAL
+    if new < current:
+        return errors.EXPIRY_BEFORE_CURRENT
+    return ""
+
+
 def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     """Change a license's terms and push them to everyone already holding it.
 
@@ -80,6 +115,8 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     would quietly resurrect a revoked member on the next resolve.
 
     Returns the updated public license, or None if there is no such license.
+    Raises `LicenseTermsRejected`, before writing anything, for an expiry
+    that `expiry_change_error` refuses.
     """
     ref = db().collection("licenses").document(license_id)
     snap = ref.get()
@@ -90,10 +127,9 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     update = {k: v for k, v in patch.items() if v is not None}
     if not update:
         return _license_public(license_id, lic)
-    if "expiresAt" in update:
-        # A license given an expiry becomes timed; the mint-time validator
-        # cannot speak for an edit made years later.
-        update["duration"] = DURATION_TIMED
+    err = expiry_change_error(lic, update.get("expiresAt"))
+    if err:
+        raise LicenseTermsRejected(err)
     if "graceDays" in update:
         update["graceDays"] = max(0, int(update["graceDays"]))
     update["updatedAt"] = _base.firestore.SERVER_TIMESTAMP

@@ -347,14 +347,22 @@ async function extendLicence(id) {
     return;
   }
   try {
-    await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
+    const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify({ expiresAt: `${date.trim()}T23:59:59Z` }),
     });
-    setStatus(`${labelOf(id)} extended to ${date.trim()}.`);
+    // Say what the server stored, not what was typed.
+    setStatus(`${labelOf(id)} now expires ${when(out.expiresAt)}.`);
     loadLicences({ keepStatus: true });
   } catch (e) {
-    setStatus(`Could not extend: ${e.message}`, true);
+    setStatus({
+      expiry_in_past: "Could not extend: that date has already passed.",
+      expiry_before_current:
+        "Could not extend: that is earlier than the current expiry. " +
+        "Extend only moves it later.",
+      license_perpetual:
+        "Could not extend: this licence is perpetual and has no expiry.",
+    }[e.message] || `Could not extend: ${e.message}`, true);
   }
 }
 
@@ -666,6 +674,7 @@ $("addMember").addEventListener("click", async () => {
       invite_exists: "That address is already promised to a different licence.",
       license_seats_exhausted: "This licence has no seats left.",
       license_seat_disabled: "That seat is on hold — re-enable it instead.",
+      claim_contended: "Busy just now — try again.",
     }[e.message] || `Could not add: ${e.message}`;
   }
 });

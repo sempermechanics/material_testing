@@ -14,6 +14,7 @@ const $ = (id) => document.getElementById(id);
 let licence = {};        // the `license` block of /v1/me
 let sessions = [];       // every page loaded so far
 let nextToken = "";
+let quota = null;        // the `quota` block of /v1/sessions
 
 requireSignIn(() => {
   $("signedOut").hidden = true;
@@ -80,6 +81,7 @@ function renderLicence() {
   // Nothing to move if no licence was ever attached; the backend answers
   // `no_license` in that case, which is a worse way to find out.
   $("unbind").hidden = !licence.kind;
+  renderQuota();
 }
 
 function explain(licensed, floating, holdsSeat) {
@@ -180,15 +182,33 @@ async function loadSessions({ reset }) {
     sessions = sessions.concat(data.sessions || []);
     nextToken = (data.page || {}).nextPageToken || "";
     $("more").hidden = !nextToken;
-    const q = data.quota || {};
-    $("quota").textContent = q.max == null
-      ? `${q.used ?? sessions.length} analyses stored.`
-      : `${q.used ?? sessions.length} of ${q.max} analyses stored.`;
+    quota = data.quota || {};
+    renderQuota();
     renderSessions();
     setStatus("");
   } catch (e) {
     setStatus(`Could not list your analyses: ${e.message}`, true);
   }
+}
+
+// Also called from renderLicence: the two loads race, and whether the
+// licence is lapsed changes what an over-cap count means.
+function renderQuota() {
+  if (!quota) return;
+  const used = quota.used ?? sessions.length;
+  // A licence past its end, or a shared seat not held, drops the cap to the
+  // demo's and keeps everything stored — so "120 of 25" is not a count to
+  // delete down from, and must not read like one.
+  const lapsed = licence.mode && licence.mode !== "licensed" &&
+    (licence.seating === "floating" ||
+     (licence.expiresAt && new Date(licence.expiresAt) <= new Date()));
+  $("quota").textContent = quota.max == null
+    ? `${used} analyses stored.`
+    : used > quota.max && lapsed
+      ? `${used} analyses stored, all kept. While your licence is inactive ` +
+        `the demo limit of ${quota.max} applies, so new analyses sync again ` +
+        "once it is active."
+      : `${used} of ${quota.max} analyses stored.`;
 }
 
 function renderSessions() {

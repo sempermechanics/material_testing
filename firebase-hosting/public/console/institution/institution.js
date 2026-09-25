@@ -173,9 +173,13 @@ async function addMember() {
     );
   } catch (e) {
     setStatus(
-      e.message === "invite_exists"
-        ? `${email} is already promised a place on a different licence.`
-        : `Could not add ${email}: ${e.message}`,
+      {
+        invite_exists: `${email} is already promised a place on a different licence.`,
+        license_seats_exhausted: "This licence has no seats left.",
+        // Another request was claiming on this licence at the same moment.
+        // Nothing is wrong with it, and adding again succeeds.
+        claim_contended: "Busy just now — try again.",
+      }[e.message] || `Could not add ${email}: ${e.message}`,
       true,
     );
   }

@@ -539,10 +539,10 @@ def test_contention_is_not_reported_as_an_exhausted_licence(store, monkeypatch, 
     assert [r.levelname for r in records] == ["INFO"]
     assert "seats_exhausted" not in caplog.text
 
-    # The wire is unchanged: a caller who has to answer a route still gets a
-    # code that route already maps.
+    # A caller who has to answer a route gets the public code it names; the
+    # private marker never reaches the wire.
     assert repo._public_claim_error(
-        repo._CONTENDED, "license_seats_exhausted") == "license_seats_exhausted"
+        repo._CONTENDED, "claim_contended") == "claim_contended"
     assert repo._public_claim_error("license_revoked", "x") == "license_revoked"
 
 

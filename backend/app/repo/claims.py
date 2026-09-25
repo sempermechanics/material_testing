@@ -72,6 +72,26 @@ def _license_mirror_patch(lic: dict) -> dict:
     }
 
 
+def _claim_terms(user_patch: dict, lic: dict) -> dict:
+    """`user_patch` with its licence terms rebuilt from `lic`, in place.
+
+    Callers build the patch from a licence they read before the claim
+    transaction began. An `update_license` landing in between — an extension,
+    a new analysis cap — would otherwise be stamped over by the old terms on
+    the newest member, and its fan-out has already run without them, so the
+    member keeps the stale copy until the next edit. `lic` is the snapshot
+    the transaction read, which a concurrent edit cannot slip past.
+
+    Only a patch that carries the terms gets them: a caller writing something
+    else through the claim is not asking for a mirror. Mutating the caller's
+    dict is deliberate — they merge it into the config they answer with, and
+    that should describe what was stored.
+    """
+    if "licenseExpiresAt" in user_patch:
+        user_patch.update(_license_mirror_patch(lic))
+    return user_patch
+
+
 def _drop_superseded_demo(uid: str, license_id: str) -> None:
     """Delete the auto-minted Demo key an account has just stopped pointing at.
 
@@ -134,6 +154,10 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
     window where IT has revoked the invite but the seat is granted anyway, or
     where the invite is gone and the claim then fails — either way the roster
     and the invite list disagree.
+
+    The licence terms in `user_patch` are replaced with ones built from the
+    licence as read here, and the caller's dict is updated in place so what
+    it merges into its answer is what was stored — see `_claim_terms`.
     """
     lic_ref = db().collection("licenses").document(license_id)
     seat_ref = _seat_ref(license_id, uid)
@@ -193,7 +217,7 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             })
             tx.update(lic_ref, {"seatsUsed": _base.firestore.Increment(1)})
-        tx.update(user_ref, user_patch)
+        tx.update(user_ref, _claim_terms(user_patch, lic))
         if invite_ref is not None:
             tx.delete(invite_ref)
         return ""
@@ -239,6 +263,9 @@ def claim_individual_license(license_id: str, uid: str, email: str,
     No device lock is written here. Binding happens on the request path — see
     `revalidate_device_lock` — because this runs for a caller who may not have
     presented a device at all.
+
+    The licence terms in `user_patch` are refreshed in place, as in
+    `claim_seat`.
     """
     lic_ref = db().collection("licenses").document(license_id)
     user_ref = db().collection("users").document(uid)
@@ -267,7 +294,7 @@ def claim_individual_license(license_id: str, uid: str, email: str,
                 "redeemedByUid": uid,
                 "redeemedAt": _base.firestore.SERVER_TIMESTAMP,
             })
-        tx.update(user_ref, user_patch)
+        tx.update(user_ref, _claim_terms(user_patch, lic))
         if invite_ref is not None:
             tx.delete(invite_ref)
         return ""
