@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Filled primary button that visibly greys out while disabled -->
+<!-- Filled primary button: sky while enabled, a flat neutral while disabled so a
+     button the user cannot press never reads as one they can. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:alpha="0.35" android:color="@color/sky_primary" android:state_enabled="false" />
+    <item android:color="@color/surface_outline" android:state_enabled="false" />
     <item android:color="@color/sky_primary" />
 </selector>
