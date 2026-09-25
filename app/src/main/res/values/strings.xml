@@ -866,7 +866,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">%1$d frames</item>
     </plurals>
     <plurals name="session_sweep_headline_fmt">
-        <item quantity="one">%1$s · 1 of 1 solved · subset 1–1</item>
+        <item quantity="one">%1$s · 1 of %3$d solved · subset %4$d–%5$d</item>
         <item quantity="other">%1$s · %2$d of %3$d solved · subset %4$d–%5$d</item>
     </plurals>
     <plurals name="selection_count_fmt">
@@ -886,7 +886,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">%1$d analyses deleted.</item>
     </plurals>
     <plurals name="delete_multi_partial">
-        <item quantity="one">1 deleted · 1 still in the cloud (couldn\'t reach it).</item>
+        <item quantity="one">1 deleted · %2$d still in the cloud (couldn\'t reach it).</item>
         <item quantity="other">%1$d deleted · %2$d still in the cloud (couldn\'t reach it).</item>
     </plurals>
     <plurals name="license_expiring_fmt">
@@ -895,12 +895,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     </plurals>
 
     <plurals name="home_quota_fmt">
-        <item quantity="one">1 / 1 analyses used</item>
+        <item quantity="one">%1$d / %2$d analyses used</item>
         <item quantity="other">%1$d / %2$d analyses used</item>
     </plurals>
     <plurals name="cloud_backfill_body">
-        <item quantity="one">1 analysis(es) on this phone are not in the cloud. Upload them now?</item>
-        <item quantity="other">%1$d analysis(es) on this phone are not in the cloud. Upload them now?</item>
+        <item quantity="one">1 analysis on this phone is not in the cloud. Upload it now?</item>
+        <item quantity="other">%1$d analyses on this phone are not in the cloud. Upload them now?</item>
     </plurals>
     <plurals name="frames_capped_fmt">
         <item quantity="one">First 1 frame kept — raise Max frame in Settings</item>
@@ -915,19 +915,19 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">%1$s, and %2$d more</item>
     </plurals>
     <plurals name="sweep_plan_grid_fmt">
-        <item quantity="one">1 analyses · subset 1–1 px · window 1–1 points</item>
+        <item quantity="one">1 analysis · subset %2$d–%3$d px · window %4$d–%5$d points</item>
         <item quantity="other">%1$d analyses · subset %2$d–%3$d px · window %4$d–%5$d points</item>
     </plurals>
     <plurals name="sweep_partial_fmt">
-        <item quantity="one">1 of 1 combinations could not be solved and were skipped — the rest are shown.</item>
+        <item quantity="one">1 of %2$d combinations could not be solved and was skipped — the rest are shown.</item>
         <item quantity="other">%1$d of %2$d combinations could not be solved and were skipped — the rest are shown.</item>
     </plurals>
     <plurals name="vsg_lattice_summary_fmt">
-        <item quantity="one">1 combinations · 1 solved · 1 skipped · step subset÷1</item>
+        <item quantity="one">1 combination · %2$d solved · %3$d skipped · step subset÷%4$d</item>
         <item quantity="other">%1$d combinations · %2$d solved · %3$d skipped · step subset÷%4$d</item>
     </plurals>
     <plurals name="vsg_lattice_summary_short_fmt">
-        <item quantity="one">1 combinations · 1 solved · 1 skipped</item>
+        <item quantity="one">1 combination · %2$d solved · %3$d skipped</item>
         <item quantity="other">%1$d combinations · %2$d solved · %3$d skipped</item>
     </plurals>
     <plurals name="def_count_fmt">
@@ -939,23 +939,23 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">Reference · %1$d deformed frames</item>
     </plurals>
     <plurals name="share_caption_fmt">
-        <item quantity="one">frame 1 of 1 shown · photos share the current frame</item>
+        <item quantity="one">frame %1$d of %2$d shown · photos share the current frame</item>
         <item quantity="other">frame %1$d of %2$d shown · photos share the current frame</item>
     </plurals>
     <plurals name="share_pdf_sub_fmt">
-        <item quantity="one">fields, stats, telemetry . All 1 frame</item>
-        <item quantity="other">fields, stats, telemetry . All %1$d frames</item>
+        <item quantity="one">fields, stats, telemetry · All 1 frame</item>
+        <item quantity="other">fields, stats, telemetry · All %1$d frames</item>
     </plurals>
     <plurals name="share_csv_sub_fmt">
         <item quantity="one">Whole analysis · 1 frame, one file</item>
         <item quantity="other">Whole analysis · %1$d frames, one file</item>
     </plurals>
     <plurals name="cloud_resync_fmt">
-        <item quantity="one">1 analysis backup(s) missing from the cloud — re-uploading.</item>
-        <item quantity="other">%1$d analysis backup(s) missing from the cloud — re-uploading.</item>
+        <item quantity="one">1 analysis backup is missing from the cloud — re-uploading.</item>
+        <item quantity="other">%1$d analysis backups are missing from the cloud — re-uploading.</item>
     </plurals>
     <plurals name="limit_quota_fmt">
-        <item quantity="one">Using 1 of 1 analyses</item>
+        <item quantity="one">Using %1$d of %2$d analyses</item>
         <item quantity="other">Using %1$d of %2$d analyses</item>
     </plurals>
     <plurals name="extract_n_frames_fmt">

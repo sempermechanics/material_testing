@@ -116,8 +116,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   device tests and prints benchmark numbers in the CI log.
 - **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
   awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
-  open on the Pixel 6. Pass 4 (backend, open PR): an inline `POST /v1/sessions` builds its reply from the
-  targets it opened, 8 + 2N → 6 + N Firestore reads; needs a backend deploy.
+  open on the Pixel 6. Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs
+  6 + N Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
