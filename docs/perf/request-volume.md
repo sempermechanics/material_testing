@@ -56,25 +56,101 @@ by 1 / (1 − p) ≈ 6.3× [Estimated].
 | **total** | **19** | **5** (3.8× fewer), only when the burst happens |
 | Firestore reads for listings and config (S sessions; listing ≈ S + 4, config ≤ 3) | ≤ 8S + 62 | ≤ S + 13 |
 
-**Device, 2026-09-25 (Pixel 6, sideloaded debug build, 10 cold opens each, the
-reconcile throttle reset before every open).** The server log was not readable that
-day, so requests were counted on the phone: this build cannot attest, and
-`AppCheckHeader` logs one "No App Check token" line per request.
+**Device, 2026-09-25 (Pixel 6, sideloaded debug build, the reconcile throttle reset
+before every open so each open is a first open).** Counted per open from the
+production Cloud Run access log and the API Gateway log for the phone's uid, over
+the opens whose requests reached the server:
 
-| Requests per open (logcat proxy) | opens | median | range |
-|---|---|--:|--:|
-| before (main build of 2026-09-23) | 6 10 10 12 12 10 12 10 10 10 | 10 | 6–12 |
-| after (this PR) | 4 10 10 10 10 3 3 10 10 10 | 10 | 3–10 |
+| Requests per open (server log) | opens | median | `GET /v1/sessions` | `GET /v1/config` | `GET /v1/me` |
+|---|---|--:|--:|--:|--:|
+| before (main build of 2026-09-23) | 12 12 10 12 | 12 | 4–5 | 5–6 | 1 |
+| after (this PR) | 4 4 4 4 4 4 4 | 4 | 1 | 2 | 1 |
 
-[Measured] No change in the median, because the lever was not exercised: after
-the first open, no call logged "Reconcile skipped", so only one reconcile ran per
-open and there was nothing to collapse. The burst needs finished upload/restore
-jobs that WorkManager still keeps, and the phone had none left after its first
-open that day. On that first open the new build did collapse 4 calls into 1
-(3 × "Reconcile skipped", 4 requests in all). Which routes the other ~10 requests
-per open go to is **[Unknown]** until the saved launch windows are read against
-the access log (`launch_counts.py <label> --from windows-<label>.json`).
+[Measured] 3× fewer requests per open; the shift (8) is far outside the spread
+(≤ 2). Every "after" open logged 3 × "Reconcile skipped": the calls queued behind
+the first one found the check fresh. **Gate met** (1 listing per open).
+
+A first attempt counted "No App Check token" lines in logcat instead (this build
+cannot attest, so each request logs one). That count stayed near 10 per open on
+both builds and is not a request count: after about five quick restarts the phone
+stopped reaching the server at all (no gateway entry), and each failed attempt is
+retried and logged again. Why the phone went offline is **[Unknown]**; it happened
+on both builds.
 
 **Cost:** one private `Mutex`; no new dependency. The only behaviour change is
 that concurrent reconciles now wait for each other instead of overlapping. A
 waiting pull-to-refresh can take up to one extra listing's latency.
+
+## Pass 4: an inline session create stops reading back what it wrote
+
+Pass 4 is about Firestore cost per request, not the number of requests.
+
+**Instrument.** `backend/tests/test_read_budget.py` counts reads and writes as
+Firestore bills them against the store double:
+- a document get is 1 read;
+- a query is 1 read per document returned, at least 1;
+- a count is 1 read.
+
+It uses real device auth: the account lookup, the licence re-checks and the nonce
+claim all count.
+It freezes the cost of each route the app calls as `BUDGET`, so a change that adds a
+read fails the suite. Python 3.13, Windows 11; the counts are deterministic
+(3 runs, spread 0).
+
+| Route (S = 20 sessions stored, N = 3 files) | reads | writes |
+|---|--:|--:|
+| `GET /v1/config`, the account's first ever | 4 | 3 |
+| `GET /v1/config` | 1 | 0 |
+| `GET /v1/me` | 1 | 0 |
+| `GET /v1/sessions` | S + 2 = 22 | 0 |
+| `POST /v1/sessions` | 14 → **9** | 11 |
+| `POST /v1/files/{id}/complete`, each | 6 | 4 |
+| `DELETE /v1/sessions/{id}` | 7 | 5 |
+
+**Bottleneck.** Up to 8 files (a bundle upload is 3), a create provisions its
+Drive targets inside the request. It then read back what it had just written:
+- the session doc, once in `provision_session` and once in the route;
+- every file doc, through `list_pending_uploads`, to build the reply.
+
+**Amdahl ceiling.** One upload costs one create plus N completes: 14 + 3 × 6 =
+32 reads. The 1 + 1 + N re-reads are 5 of them, p ≈ 0.16, so at most 1.2× fewer
+reads per upload [Estimated]. The plan's gate was at least 3 fewer reads per
+create.
+
+**Lever:** redundant work elimination.
+- `repo.create_session` returns the doc it wrote, and the route passes it to
+  `provision_session`.
+- `provision_session` returns the targets it opened. They are built by
+  `repo.upload_target`, the same function the `/uploads` listing uses, and come
+  back in the listing's order.
+- The queued (Cloud Tasks) path still reads everything; its reply to Cloud Tasks
+  leaves the upload URLs out.
+
+| Files per create (N) | reads before (8 + 2N) | after (6 + N) |
+|--:|--:|--:|
+| 1 | 10 | 7 |
+| 3 | 14 | 9 |
+| 8 (largest inline manifest) | 24 | 14 |
+
+[Measured] against the store double; `test_create_reads_grow_once_per_file` keeps
+it. Per upload of 3 files: 32 → 27 reads (16 % fewer). **Gate met** (5 ≥ 3).
+
+**Correctness.** `test_inline_create_hands_back_what_the_uploads_listing_would`
+was written first and passed on the old code. It checks that the reply equals
+`list_pending_uploads` for the same session: status, targets, fields and order.
+The whole backend suite passes (539 passed, 23 skipped; coverage 89.4 %).
+
+**Not taken:**
+- Passing the route's `user` doc through as well would save 1 more read, about 3 %
+  of an upload, below the 5 % floor. It would also make the Drive folder pointers
+  depend on what the auth layer hands the route: under `DEV_INSECURE_AUTH` that is
+  a synthetic user, and `test_folder_ids_are_stored_then_reused` failed.
+- `iter_unprovisioned_files` (N reads) stays. It is what makes a retried
+  provisioning resume instead of opening a second upload URL.
+- The re-reads inside the `complete` transaction and the second licence check in
+  `verified_device` are there for correctness and security.
+
+**Latency** is **[Unknown]** until deployed. Three sequential Firestore round
+trips leave the request path (two gets and one query), so p50 should fall by
+roughly 10–30 ms [Estimated]. Check with
+`backend/scripts/perf_usage_report.py` on `POST /v1/sessions` before and after.

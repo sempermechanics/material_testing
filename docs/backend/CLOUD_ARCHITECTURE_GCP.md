@@ -325,6 +325,9 @@ Three properties worth knowing before you change this path:
 - **Small manifests skip the queue.** Up to `INLINE_PROVISION_MAX_FILES` (8)
   files are provisioned inside the request: a bundle backup is three, and the
   task hop plus the client's first poll cost more than opening three sessions.
+  The reply is built from the targets just opened (`provision_session` returns
+  them) rather than read back, so the inline path costs 6 + N Firestore reads
+  instead of 8 + 2N ([perf/request-volume.md](../perf/request-volume.md) Pass 4).
 - **The folder walk is cached.** The per-user and `sessions` folder IDs are
   kept on `users/{uid}` (`driveFolderId`, `driveSessionsFolderId`). A later
   session checks the cached `sessions` folder still exists (one `files.get`)
