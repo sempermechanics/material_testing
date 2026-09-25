@@ -224,7 +224,10 @@ has ever sent a token. Before `monitor` means anything:
 Meanwhile the exchange answers `403 App attestation failed` (seen 2026-09-24
 from a sideloaded debug build on a Pixel 6), and the SDK then backs off with
 `Too many attempts`; the app logs both at debug level and sends the request
-without a token.
+without a token. That first failed attestation costs about 1.3–1.8 s before a
+cold open's first status and session calls go out. Only the first requests per
+process wait, and a working attestation would remove the wait
+([perf/request-volume.md](../perf/request-volume.md), Pass 3).
 
 A sideloaded debug build still gets no token after that (Play Integrity does
 not recognise it); a debug-provider token registered in the console is the way

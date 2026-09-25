@@ -115,7 +115,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `scripts/ci_test_report.py` puts failing device tests and benchmark numbers in the CI log.
 - **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
   awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
-  open on the Pixel 6; Pass 2 (open PR) shares the launch `/v1/config` fetch, 4 → 3.
+  open on the Pixel 6; Pass 2 (#206, merged) shares the launch `/v1/config` fetch, 4 → 3.
+  Pass 3 measured App Check and changed nothing: one ~1.7 s attestation per cold
+  open, which only the Play account can remove.
   Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs
   6 + N Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
 - **This branch.** `HotPathMicroBenchmark` could not run in CI (TD-81): the debug manifest
