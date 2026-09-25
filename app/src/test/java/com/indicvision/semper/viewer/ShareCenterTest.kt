@@ -64,15 +64,20 @@ class ShareCenterTest {
         }
     }
 
-    private fun viewer(frameNames: List<String> = emptyList()): ResultViewerActivity {
-        val intent = ViewerArgs.ofFrames(
+    private fun viewer(
+        frameNames: List<String> = emptyList(),
+        loadsN: List<Float> = emptyList(),
+    ): ResultViewerActivity {
+        val args = ViewerArgs.ofFrames(
             batchDir.absolutePath,
             GRID * STEP,
             GRID * STEP,
             STEP,
             frameNames = frameNames,
             startFrame = 0,
-        ).toIntent(ApplicationProvider.getApplicationContext())
+        )
+        val tensile = args.copy(testType = "tensile", crossSectionMm2 = 10f, loadsN = loadsN)
+        val intent = (if (loadsN.isEmpty()) args else tensile).toIntent(ApplicationProvider.getApplicationContext())
         val activity = Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get()
         idleUntil(activity) { activity.buildShareSnapshot() != null }
         return activity
@@ -133,6 +138,18 @@ class ShareCenterTest {
         assertEquals("c.png", snapshot.nameAt(1))
         // Same rows as the cloud bundle's CSV (SessionUploadBundlerTest).
         assertEquals(mapOf("a.png" to GRID * GRID, "c.png" to GRID * GRID), csvRowsByImage(activity))
+    }
+
+    @Test
+    fun `past a skipped frame each frame keeps its own load`() {
+        // Loads are per planned frame; frame_001 (200 N) was never written. By
+        // position the export read 300 N as frame 2's load, then gave up (TD-91).
+        File(batchDir, "frame_001.dat").delete()
+        val activity = viewer(listOf("a.png", "b.png", "c.png"), loadsN = listOf(100f, 200f, 300f))
+
+        val snapshot = activity.buildShareSnapshot()!!
+        assertEquals(100f, snapshot.loadAt(0)!!, 0f)
+        assertEquals(300f, snapshot.loadAt(1)!!, 0f)
     }
 
     @Test

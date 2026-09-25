@@ -31,6 +31,18 @@ class SessionPathsFrameIndexTest {
     }
 
     @Test
+    fun `a planned frame finds its own file past a gap`() {
+        // A load or curve point for planned frame 2 must read frame_0002, not the
+        // listing's third file; a skipped frame has no file at all (TD-91).
+        val files = listOf(0, 2, 3).map { File(SessionPaths.frameDatName(it)) } + File("odd.dat")
+        val byFrame = SessionPaths.datByPlannedFrame(files)
+        assertEquals(setOf(0, 2, 3), byFrame.keys)
+        assertEquals(SessionPaths.frameDatName(2), byFrame.getValue(2).name)
+        assertEquals(SessionPaths.frameDatName(3), byFrame.getValue(3).name)
+        assertNull(byFrame[1])
+    }
+
+    @Test
     fun `other names have no index`() {
         assertNull(SessionPaths.frameIndexOf("ref.png"))
         assertNull(SessionPaths.frameIndexOf("frame_.dat"))

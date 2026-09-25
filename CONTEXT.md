@@ -143,7 +143,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   from a machine CSV, matched by time within 100 ms for video. Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
-  History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
+  Past a frame the batch skipped, the curve, E and each frame's load come from the right
+  frame (TD-91). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   (Results, Elastic toggle, lab-report PDF, viewer and tap-editor gestures) run in Tier 3;
   on a Galaxy S21+ (Android 15, 2026-09-25) they pass 9/9 and `VideoFrameExtractionDeviceTest`
