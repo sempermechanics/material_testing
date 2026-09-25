@@ -102,10 +102,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-25)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-35992296245-1`, from `4d5a0ab`)
-  behind API Gateway `semper-gw` (config `v202609241122-44`, deployed by CI, ADR-006);
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36120337264-1`, from `fd14374`)
+  behind API Gateway `semper-gw` (config `v202609250953-51`, deployed by CI, ADR-006);
   staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-  Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
+  Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
+  the wrong-information audit's backend and console fixes went out 2026-09-25 ([CHANGELOG](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
@@ -137,22 +138,18 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
   161 → 21 MB). #214 has `globalRanges` reuse one frame buffer and set of columns; #217
   (TD-88) saves the ranges sidecar after a full decode.
-- **Wrong-information audit.** Merged, awaiting release/deploy: #211 (licensed quota floored at
-  demo's; operator can clear a licence's cap), #212 (PDF page cover image and name, mixed
-  bulk-delete prompt, sweep export header, per-node sweep reasons, restored skip count), #215
-  (seat and lease counters), #216 (console labels and dates), #218 (licence countdown, backup
-  status, local quota count, restored stop reasons), #219 (PDF and share extremes), #220
-  (run counts, stale Home rows), #221 (backend Phase 2: lease sweep, claim contention, quota
-  cause, Extend limits, claim terms), #223 (counts, captions, report names, progress), #224
-  (backend Phase 3: cooldown date, seat cap, revoke count, invite expiry, provisioning retry,
-  failed uploads), #225 (frame names past a skipped frame, Home headline, partial-run dialog).
-  The audit has no open TECH_DEBT rows left.
+- **Wrong-information audit, app half (merged, awaiting release):** #211 (enforce a known
+  licensed ceiling), #212 (PDF page cover image and name, mixed bulk-delete prompt, sweep
+  export header, per-node sweep reasons, restored skip count), #218 (licence countdown, backup
+  status, local quota count, restored stop reasons), #219 (PDF and share extremes), #220 (run
+  counts, stale Home rows), #223 (counts, captions, report names, progress), #225 (frame names
+  past a skipped frame, Home headline, partial-run dialog). No audit TECH_DEBT rows remain.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
   the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
   looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
-  #211 (merged) floors the licensed cap at demo's and has the app enforce a known licensed ceiling.
+  The backend floor for a licensed cap (#211) is deployed; the app half ships with that release.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
   run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
