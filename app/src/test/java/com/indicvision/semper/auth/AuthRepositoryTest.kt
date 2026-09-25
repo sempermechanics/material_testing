@@ -162,6 +162,20 @@ class AuthRepositoryTest {
         assertEquals(emptyList<String>(), api.calls)
     }
 
+    @Test
+    fun `no backend configured is treated like offline`() = runBlocking {
+        // A build without INDIC_API_BASE_URL that still holds a signed-in,
+        // approved session opens Home from cache; the background re-check
+        // must not call /v1/me with an empty base URL (the process died).
+        api.enabled = false
+
+        assertTrue(repo.refreshStatus().isFailure)
+
+        TokenStore.setStatus(context, AccessStatus.APPROVED)
+        assertEquals(AccessStatus.OFFLINE_CACHE_APPROVED, repo.refreshStatus().getOrThrow())
+        assertEquals(emptyList<String>(), api.calls)
+    }
+
     // ------------------------------------------------------------- terms
 
     @Test
