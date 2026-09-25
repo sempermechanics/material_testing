@@ -223,6 +223,8 @@ class VsgPlotView @JvmOverloads constructor(
     /**
      * Called with the scrub x as a 0..1 fraction of the current viewport, so an
      * external slider can follow the finger (and vice-versa via [scrubToFraction]).
+     * Called with NaN when the scrub clears (the finger lifts, or a pinch or pan
+     * starts), so the slider goes back to rest instead of marking a line that is gone.
      */
     var onScrubMove: ((fraction: Float) -> Unit)? = null
 
@@ -695,6 +697,7 @@ class VsgPlotView @JvmOverloads constructor(
         if (scrubX == null) return
         scrubX = null
         onScrub?.invoke(Float.NaN, emptyList())
+        onScrubMove?.invoke(Float.NaN)
         invalidate()
     }
 
