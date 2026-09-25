@@ -39,7 +39,7 @@ You give it one reference frame and N deformed frames. It gives you five fields 
 
 **+** asks which test it is. That choice decides what the wizard asks for, and you make it once per analysis.
 
-<img src="images/test-type.png" width="260" alt="Which test? Tensile or Bending">
+<img src="images/test-type.png" width="260" alt="Which test? Tensile, Bending or 2D DIC">
 
 Formulas, accuracy and worked numbers: [app/STUDENT_LAB_WORKFLOW.md](app/STUDENT_LAB_WORKFLOW.md).
 

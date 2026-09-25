@@ -19,7 +19,7 @@ The results match [app/REAL_WORLD_VALIDATION.md](../app/REAL_WORLD_VALIDATION.md
 | File | Shows | Used in |
 |---|---|---|
 | `home.png` | Four analyses (tensile and bending) with **upload pending** badges | Manual §3, README |
-| `test-type.png` | **Which test?** with Tensile, Bending and 2D DIC | Manual §2, README |
+| `test-type.png` | **Which test?** with Tensile, Bending and 2D DIC (retaken 2026-09-25, API 36 emulator, same setup) | Manual §2, README |
 | `new-analysis-source.png` | Images tab: the gallery with a badged video | Manual §5 |
 | `media-picker-files-saf.png` | Files tab: the system browser in Downloads | Manual §5 |
 | `video-extract.png` | Video sampling in **Key frames** mode: 29 key frames | Manual §4 |
