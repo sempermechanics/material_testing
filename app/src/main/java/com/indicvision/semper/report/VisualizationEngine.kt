@@ -234,15 +234,30 @@ object VisualizationEngine {
      * Per-frame heatmaps use this. The summary GIF widens these same ends
      * across the batch: lowest scale-min, highest scale-max.
      */
-    fun valueRanges(data: FloatArray, valIndices: IntArray): Map<Int, Pair<Float, Float>?> {
+    fun valueRanges(data: FloatArray, valIndices: IntArray): Map<Int, Pair<Float, Float>?> =
+        valueRanges(data, data.size, valIndices, scratch = null)
+
+    /**
+     * [valueRanges] over the first [floatCount] floats of [data], filling [scratch]'s
+     * columns when there is one per field and each holds `floatCount / STRIDE` values
+     * (else new ones). The same values land in the same order, so the ranges are
+     * identical; a caller walking a batch reuses one set of columns (TD-87).
+     */
+    internal fun valueRanges(
+        data: FloatArray,
+        floatCount: Int,
+        valIndices: IntArray,
+        scratch: Array<FloatArray>?,
+    ): Map<Int, Pair<Float, Float>?> {
         // One primitive column per field, holding the same values in the same order as
         // the boxed MutableList<Float> collectors this replaced — so the sort and the
         // p02/p98 pick below are bit-identical. Five boxed columns cost ~20 B/value
         // (~100 MB at n=1M); these cost 4 B/value and allocate nothing per point.
-        val pointCount = data.size / DicResult.STRIDE
-        val columns = Array(valIndices.size) { FloatArray(pointCount) }
+        val pointCount = floatCount / DicResult.STRIDE
+        val columns = scratch?.takeIf { s -> s.size == valIndices.size && s.all { it.size >= pointCount } }
+            ?: Array(valIndices.size) { FloatArray(pointCount) }
         var count = 0
-        for (i in data.indices step DicResult.STRIDE) {
+        for (i in 0 until floatCount step DicResult.STRIDE) {
             if (!DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) continue
             for (c in valIndices.indices) {
                 columns[c][count] = data[i + valIndices[c]]

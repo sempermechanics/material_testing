@@ -7,10 +7,8 @@ package com.indicvision.semper
 
 import androidx.annotation.VisibleForTesting
 import java.io.File
-import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.channels.FileChannel
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.FieldPosition
@@ -34,9 +32,6 @@ object DicResult {
     const val MAX_ZNSSD = 0.15f
     const val STRAIN_TO_MILLISTRAIN = 1000f
 
-    /** Read chunk for [decodeDatFile]: keeps a small scratch buffer, not a second full copy. */
-    private const val DECODE_CHUNK_BYTES = BYTES_PER_POINT * 1024
-
     fun isValidDatBytes(bytes: ByteArray): Boolean = bytes.isNotEmpty() && bytes.size % BYTES_PER_POINT == 0
 
     /**
@@ -58,46 +53,7 @@ object DicResult {
      * Peak RAM is roughly the [FloatArray] plus a small read buffer — important
      * for heavy PLC frames on a 512 MB heap where `readBytes()` + decode OOM'd.
      */
-    fun decodeDatFile(file: File): FloatArray? {
-        val len = file.length()
-        if (len <= 0L || len > Int.MAX_VALUE.toLong() || len % BYTES_PER_POINT != 0L) return null
-        val floatCount = (len / 4L).toInt()
-        val out = FloatArray(floatCount)
-        val mapped = runCatching {
-            FileInputStream(file).channel.use { channel ->
-                val map = channel.map(FileChannel.MapMode.READ_ONLY, 0, len)
-                map.order(ByteOrder.nativeOrder()).asFloatBuffer().get(out)
-            }
-            true
-        }.getOrDefault(false)
-        return if (mapped) out else decodeDatChunked(file, floatCount, out)
-    }
-
-    /**
-     * Chunked-read fallback for [decodeDatFile]: reads the file through a small heap
-     * buffer into [out]. Kept for filesystems/sizes that cannot be memory-mapped.
-     */
-    private fun decodeDatChunked(file: File, floatCount: Int, out: FloatArray): FloatArray? {
-        val complete = FileInputStream(file).channel.use { channel ->
-            val buf = ByteBuffer.allocate(DECODE_CHUNK_BYTES).order(ByteOrder.nativeOrder())
-            var written = 0
-            var intact = true
-            while (written < floatCount && intact) {
-                buf.clear()
-                val n = channel.read(buf)
-                if (n <= 0 || n % 4 != 0) {
-                    intact = false
-                } else {
-                    buf.flip()
-                    val floats = n / 4
-                    buf.asFloatBuffer().get(out, written, floats)
-                    written += floats
-                }
-            }
-            intact && written == floatCount
-        }
-        return if (complete) out else null
-    }
+    fun decodeDatFile(file: File): FloatArray? = DatDecoder.decodeInto(file, reuse = null)?.data
 
     /**
      * The native engine writes a negative ZNSSD sentinel (CORR_INVALID = -1) for
