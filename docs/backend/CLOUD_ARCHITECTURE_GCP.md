@@ -738,10 +738,26 @@ gcloud projects add-iam-policy-binding $PROJECT \
 
 # Deployer SA (used by GitHub Actions via Workload Identity Federation — NO KEY)
 gcloud iam service-accounts create indic-deployer --project $PROJECT
-for R in run.admin artifactregistry.writer iam.serviceAccountUser cloudbuild.builds.editor; do
+for R in run.admin artifactregistry.writer cloudbuild.builds.editor apigateway.admin \
+         storage.bucketViewer; do
   gcloud projects add-iam-policy-binding $PROJECT \
     --member="serviceAccount:$DEPLOY_SA" --role="roles/$R"; done
+# Act as the runtime, gateway and default compute SAs only, not every SA in the project.
+for SA in $API_SA indic-gw@$PROJECT.iam.gserviceaccount.com \
+          $(gcloud projects describe $PROJECT --format='value(projectNumber)')-compute@developer.gserviceaccount.com; do
+  gcloud iam service-accounts add-iam-policy-binding $SA \
+    --member="serviceAccount:$DEPLOY_SA" --role="roles/iam.serviceAccountUser"; done
+# Source deploys upload to this bucket; the object roles stay on it alone.
+for R in storage.admin storage.objectAdmin; do
+  gcloud storage buckets add-iam-policy-binding gs://run-sources-$PROJECT-asia-south1 \
+    --member="serviceAccount:$DEPLOY_SA" --role="roles/$R"; done
 ```
+
+`storage.bucketViewer` holds only `storage.buckets.get` / `.list`. It is needed at
+project level because `gcloud run deploy --source` lists buckets to find the
+`run-sources-*` one; without it every deploy fails with `403 … storage.buckets.list`,
+as the staging runs of 2026-09-24 and 2026-09-25 did after the TD-71 clean-up. It
+grants no object access, so CI still cannot read or change the Firestore export bucket.
 
 **Drive membership (the only Workspace-side step, done by you, not the SA):**
 add `indic-api@indic-prod.iam.gserviceaccount.com` as **Manager** of the
