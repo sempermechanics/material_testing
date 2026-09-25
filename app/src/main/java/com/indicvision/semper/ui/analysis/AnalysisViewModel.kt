@@ -865,6 +865,13 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
          */
         val failedFrameIndex: Int = -1,
         val failedFrameName: String? = null,
+        /**
+         * Points ICGN accepted on the first frame, before outlier rejection and
+         * the strain fit; -1 when that frame never reached the engine. With
+         * [firstFrameValidPoints] at 0 it tells a strain window that fits no
+         * point from a frame where nothing correlated.
+         */
+        val firstFrameCorrelatedPoints: Int = -1,
     )
 
     /**

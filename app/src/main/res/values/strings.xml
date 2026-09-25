@@ -511,6 +511,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_decode">Image could not be decoded</string>
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
+    <!-- A single run whose first frame kept no points (engine code 0), split by how many points ICGN accepted there. -->
+    <plurals name="run_fail_strain_window_fmt">
+        <item quantity="one">%1$d point correlated, but it did not have enough solved neighbours to fill the strain window (VSG %2$d px at step %3$d px), so no strain could be fitted. Use a smaller strain window, a smaller step, or a larger region of interest.</item>
+        <item quantity="other">%1$d points correlated, but none had enough solved neighbours to fill the strain window (VSG %2$d px at step %3$d px), so no strain could be fitted. Use a smaller strain window, a smaller step, or a larger region of interest.</item>
+    </plurals>
+    <string name="run_fail_no_correlation">No point in the first frame correlated with the reference. Check that both images show the same speckled area, then try a larger subset or a different region of interest.</string>
     <string name="sweep_reason_unknown">Unknown engine error (code %1$d)</string>
     <string name="sweep_node_title_fmt">S%1$d · St%2$d · %3$s</string>
     <string name="sweep_node_skipped">This combination was skipped</string>

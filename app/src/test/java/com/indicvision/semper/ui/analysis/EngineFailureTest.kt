@@ -75,4 +75,15 @@ class EngineFailureTest {
         assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(0))
         assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(42))
     }
+
+    @Test
+    fun `a zero-point frame blames the strain window only when points correlated`() {
+        assertEquals(EngineFailure.ZeroPoints.STRAIN_WINDOW, EngineFailure.zeroPoints(441))
+        assertEquals(EngineFailure.ZeroPoints.NO_CORRELATION, EngineFailure.zeroPoints(0))
+        assertEquals(EngineFailure.ZeroPoints.NOT_RUN, EngineFailure.zeroPoints(-1))
+
+        assertEquals(R.string.url_faq_engine_vsg, EngineFailure.zeroPointsFaqUrlRes(441))
+        assertEquals(R.string.url_faq_engine_features, EngineFailure.zeroPointsFaqUrlRes(0))
+        assertEquals(R.string.url_faq_engine_init, EngineFailure.zeroPointsFaqUrlRes(-1))
+    }
 }

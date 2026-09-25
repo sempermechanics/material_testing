@@ -1,5 +1,5 @@
-# HRF format for Baseline Profiles — regenerate via Macrobenchmark on a device:
-#   ./gradlew :benchmark:connectedBenchmarkAndroidTest
-# Then copy the generated profile into this file (or replace via the
-# androidx.baselineprofile plugin when adopted). An empty profile is valid and
-# lets profileinstaller ship without blocking release builds.
+# HRF format for Baseline Profiles. Deliberately empty: on a Pixel 6, compiling
+# the whole app ahead of time starts it no faster than JIT (docs/perf/startup.md).
+# Measure with StartupHeadroomBenchmark before adding rules. There is no
+# generator; one would need a BaselineProfileRule test in :benchmark. An empty
+# profile is valid and profileinstaller still ships the libraries' own rules.

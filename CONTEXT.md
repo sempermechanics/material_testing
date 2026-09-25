@@ -126,29 +126,16 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-25)
 
-- **Synced with `semperdic-app`.** This repo forked the parent at `bfe00e5`
-  (2026-09-21) and merges its `main` with a plain `git merge`: `643462c`
-  (parent #188; here #22), `170ec6e` (parent #195), then `9288831` (parent
-  #205). The second brought the view-class tests (TD-57, Kover floor 49), the
-  licensing repo split (TD-64), the swipe and ROI-rounding fixes (TD-72,
-  TD-73) and a linear `quickSelect` on repeated values (TD-75). The third
-  brought one cloud reconcile at a time (#191), the ROI studio's unreachable
-  shape modes removed (TD-74), and the backend's inline-create read budget
-  (#202). Fixes made here go back: the ninther `quickSelect` (TD-76), A4 PDF
-  pages (TD-77) and the device-pass fixes (TD-79, TD-80, TD-82–TD-85) are in
-  the parent too; TD-78 and TD-81 are lab-only; the summary ranges
-  write-back (TD-87) is not ported yet. The first sync brought the #155–#168
-  burn-down (ADR-001…006), CI hardening and composites, App Check on real
-  phones, the rate-limit and nonce fixes, the one-pass upload CSV (#182) and the
-  coverage floor. The lab inputs ride upstream's seams: `RunSpec.mechanical`
-  (ADR-004), the `ViewerArgs` read side with a `SessionRecord` fallback
-  (ADR-003) and `WizardState` / `WizardDraft`, which keep the type,
-  dimensions, taps, frame times and the load log's text across a process death
-  (ADR-005). Upstream's key-frame sampling sheet (`VideoKeyframeHelper`) is
-  not taken; `VideoSamplingSheet` / `VideoKeyframes` cover it here. The other
-  way, the parent took this repo's four general-purpose fixes
-  (`SubsetRecommender` ROI speckle, `VsgPlotView` gutter, `TouchImageView`
-  zoom, `AviReader` µs slack) in sempermechanics/semperdic-app#189.
+- **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
+  `main` comes in with a plain `git merge`: `643462c` (here #22), `170ec6e`,
+  `9288831` (#32), then `ecd1a8b` (parent #214). The last brought the shared
+  `/v1/config` fetch (#206), Compute after a failed run (#203, here TD-88) and
+  `StartupHeadroomBenchmark`. General fixes made here go back (TD-76, TD-77,
+  TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-87 as parent #217, and the
+  four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
+  upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
+  `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
+  Upstream's `VideoKeyframeHelper` is not taken; `VideoSamplingSheet` covers it.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain, E from the
   longest straight leading run, the elastic-region view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
@@ -161,10 +148,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Elastic toggle, lab-report PDF, viewer and tap-editor gestures);
   `WizardDraftRestoreTest` covers a load log across a process death;
   `LabResultsBenchmark` times the Results page.
-- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#31, TD-86). This branch has the one
-  no-sidecar ranges pass reuse its frame buffer and columns (TD-87, from semperdic-app#214).
-- **Owed.** Device runs on a physical phone, and video import beyond emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
-  §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
+- **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). A session without
+  `field_ranges.bin` decodes once, into reused buffers, and saves it (#33, #34, TD-87);
+  `scrub150Frames` and `settingsScroll` pass on the API 37 emulator and a Pixel 6.
+- **Owed.** The lab end to end on a physical phone, and video import beyond emulators
+  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
   production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in
