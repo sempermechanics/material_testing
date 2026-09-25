@@ -107,6 +107,7 @@ EXPECTED = {
     ("POST", "/v1/admin/licenses"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
     ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP_FRESH,
+    ("POST", "/v1/admin/licenses/{license_id}/convert"): ADMIN_STEPUP,
     # A read, so plain ADMIN like GET /v1/admin/licenses: it changes
     # nothing and the second factor gates state changes.
     ("GET", "/v1/admin/licenses/{license_id}/reconcile"): ADMIN,
@@ -357,6 +358,7 @@ async def test_attested_user_cannot_complete_another_users_file(attacker, client
     ("GET", "/v1/admin/licenses/abc"),
     ("POST", "/v1/admin/licenses"),
     ("POST", "/v1/admin/licenses/abc/revoke"),
+    ("POST", "/v1/admin/licenses/abc/convert"),
     ("GET", "/v1/admin/licenses/abc/reconcile"),
 ])
 async def test_non_admin_is_refused_every_admin_route(attacker, client, method, path):

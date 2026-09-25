@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   esc, when, day, licenceState, licenceStatePill, leaseHeld, seatCells, inviteCells,
   errorDetail, licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
+  isoDay, emailList, licenceEditPatch,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -140,4 +141,61 @@ test("a changed licence replaces its row and a new one goes on top", () => {
   assert.equal(list[0].seatsUsed, 2);
   assert.deepEqual(upsertLicence(list, { id: "c" }).map((l) => l.id), ["c", "a", "b"]);
   assert.equal(upsertLicence(list, null), list);
+});
+
+const timed = {
+  id: "t", kind: "individual", duration: "timed", expiresAt: "2027-03-31T23:59:59Z",
+  graceDays: 14, maxAnalyses: null, note: "PO 1",
+};
+const form = (over = {}) => ({
+  expiry: "2027-03-31", perpetual: false, graceDays: "14", supportUntil: "",
+  maxAnalyses: "", note: "PO 1", ...over,
+});
+
+test("an unchanged dialog sends nothing", () => {
+  assert.equal(licenceEditPatch(timed, form()).error, "Nothing changed.");
+});
+
+test("a later end is an extension, an earlier one a confirmed downgrade", () => {
+  assert.deepEqual(licenceEditPatch(timed, form({ expiry: "2028-03-31" })),
+    { patch: { expiresAt: "2028-03-31T23:59:59Z" }, shortens: false, error: "" });
+  assert.deepEqual(licenceEditPatch(timed, form({ expiry: "2027-01-31" })),
+    { patch: { expiresAt: "2027-01-31T23:59:59Z", allowShorten: true }, shortens: true, error: "" });
+});
+
+test("never expires drops the end; giving a perpetual licence one is a downgrade", () => {
+  assert.deepEqual(licenceEditPatch(timed, form({ perpetual: true })).patch, { perpetual: true });
+  const perpetual = { ...timed, duration: "perpetual", expiresAt: null, graceDays: null };
+  const out = licenceEditPatch(perpetual, form({ expiry: "2027-06-30", graceDays: "" }));
+  assert.deepEqual(out.patch, { expiresAt: "2027-06-30T23:59:59Z", allowShorten: true });
+  assert.equal(out.shortens, true);
+  assert.equal(licenceEditPatch(perpetual, form({ expiry: "", graceDays: "" })).error, "Nothing changed.");
+});
+
+test("the cap is set, cleared, or left alone on a demo key", () => {
+  assert.deepEqual(licenceEditPatch(timed, form({ maxAnalyses: "500" })).patch, { maxAnalyses: 500 });
+  const capped = { ...timed, maxAnalyses: 500 };
+  assert.deepEqual(licenceEditPatch(capped, form({ maxAnalyses: "" })).patch, { clearMaxAnalyses: true });
+  assert.equal(licenceEditPatch(timed, form({ maxAnalyses: "9", capLocked: true })).error, "Nothing changed.");
+});
+
+test("an institution's seats, seating and IT contacts", () => {
+  const inst = { ...timed, kind: "institution", maxSeats: 10, seating: "assigned",
+    adminEmails: ["it@uni.edu"] };
+  const base = { maxSeats: "10", seating: "assigned", adminEmails: "it@uni.edu" };
+  assert.deepEqual(licenceEditPatch(inst, form({ ...base, maxSeats: "25", seating: "floating",
+    adminEmails: "IT@uni.edu, dean@uni.edu" })).patch,
+  { maxSeats: 25, seating: "floating", adminEmails: ["it@uni.edu", "dean@uni.edu"] });
+  assert.match(licenceEditPatch(inst, form({ ...base, adminEmails: " " })).error, /IT contact/);
+  assert.match(licenceEditPatch(inst, form({ ...base, maxSeats: "" })).error, /Seats/);
+});
+
+test("a time-limited licence cannot lose its date by accident", () => {
+  assert.match(licenceEditPatch(timed, form({ expiry: "" })).error, /Never expires/);
+});
+
+test("helpers", () => {
+  assert.equal(isoDay("2027-03-31T23:59:59Z"), "2027-03-31");
+  assert.equal(isoDay(null), "");
+  assert.deepEqual(emailList(" A@x.org, a@x.org ,, b@x.org"), ["a@x.org", "b@x.org"]);
 });

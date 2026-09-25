@@ -1307,7 +1307,7 @@ first showed the first time a mint answered 500 after succeeding (#131): the
 retry minted a second licence for the same address, which could not attach —
 that retry is now a `409` naming the first. The operator desk says for every
 mint whether the licence attached, is waiting for a first sign-in, or was not
-delivered and why. Renewal is Extend (§20.6), never a
+delivered and why. Renewal is an edit of the expiry (§20.6), never a
 second mint. A claim that loses every retry under contention is the one
 delivery failure nobody is told about —
 [TD-33](../ops/TECH_DEBT.md).
@@ -1462,15 +1462,31 @@ every non-revoked institution seat.
   the licence earlier; an edit landing in that gap would otherwise be stamped
   over on the newest holder after its fan-out had already passed them.
 
-**Extend only moves an expiry later.** `expiry_change_error` refuses, with
-`422`, an `expiresAt` that is already past (`expiry_in_past`), one earlier than
-the expiry in force (`expiry_before_current`), and any `expiresAt` on a
-perpetual licence (`license_perpetual`) — each of those ended, shortened, or
-turned timed (with no grace, since perpetual licences are minted without
-`graceDays`) the licence of everyone on it. The route checks before it touches
-the device lock, and `update_license` checks again against what it reads.
-Ending a licence early is revoke; the operator desk reports the expiry the
-server stored, not the date typed.
+**An expiry moves later unless a downgrade is asked for.** `expiry_change_error`
+refuses, with `422`, an `expiresAt` that is already past (`expiry_in_past`),
+one earlier than the expiry in force (`expiry_before_current`), and any
+`expiresAt` on a perpetual licence (`license_perpetual`) — each of those
+shortened, or turned timed, the licence of everyone on it, and used to be
+reported as "extended". A downgrade agreed with the customer sends
+`allowShorten: true` with the date, which the desk sends only after the key is
+typed; a perpetual licence given an end that way gets the fleet default grace,
+as a timed mint does. A past date is refused even then: ending a licence now
+is revoke. `perpetual: true` goes the other way and drops the expiry and
+grace. The operator desk reports the expiry the server stored, not the date
+typed.
+
+**How an institution licence is run is edited in place too.** `seating`,
+`maxSeats` and `adminEmails` (institution only; `422 institution_only` on an
+individual licence). Switching to floating needs a `maxSeats`
+(`floating_needs_max_seats`) and zeroes `leasesActive`; the new
+`licenseSeating` fans out, so every member checks out a lease from their next
+request. Switching to assigned makes `maxSeats` cap the roster, so it must
+hold everyone already on it (`max_seats_below_used`), and every lease is
+cleared, on the seats and on the holders. `license_edit_error` makes every one
+of these decisions before anything is written; the route calls it before it
+touches the device lock, and `update_license` calls it again against what it
+reads. `AdminLicenseUpdate` refuses unknown fields (`extra="forbid"`): a field
+it did not know used to be dropped and the edit answered 200.
 
 **A demo key takes no analysis cap.** `analysis_cap_error` refuses, with `422
 cap_on_demo_key`, any `maxAnalyses` on a demo-mode licence. `resolve_user_config`
@@ -1482,11 +1498,24 @@ stays allowed on a demo key, to remove a cap stored before the refusal.
 `GET /v1/admin/licenses` returns `demoMaxAnalyses`, and the desk shows it on
 demo rows with the Cap button disabled.
 
-Terms only: `kind`, the email/device/domain locks and the key itself are fixed
-at mint. Changing *who* a license is for under existing holders is a different
-operation with different consequences.
+`kind`, the email/device/domain locks and the key itself are fixed at mint.
+Changing *who* a license is for under existing holders is a different
+operation with different consequences — the one supported is individual to
+institution:
 
-Audited as `ADMIN_LICENSE_EXTEND`. Declared in `gateway/openapi.yaml` as well
+**`POST /v1/admin/licenses/{id}/convert`** (`repo/upgrade.py`) mints an
+institution licence (`domainLock`, `adminEmails`, `maxSeats`, `seating`) that
+carries the individual licence's expiry, grace, support date, analysis cap and
+note. The holder must have an address on the domain
+(`422 convert_domain_mismatch`); they are seated on it with the old licence's
+device lock through `claim_seat`, which moves their account in the same
+transaction, so their phone keeps working without a new sign-in. A holder who
+has not signed in yet has the invite moved instead. Only then is the
+individual licence revoked, with `supersededBy` naming its replacement (shown
+on the desk). A failed claim deletes the new licence and leaves the old one
+as it was. Audited as `ADMIN_LICENSE_CONVERT`.
+
+Edits are audited as `ADMIN_LICENSE_EXTEND`. Declared in `gateway/openapi.yaml` as well
 as FastAPI — ESPv2 rejects any path absent from the gateway spec.
 
 #### Activating an expired key is refused
@@ -1655,7 +1684,7 @@ clears the stamp. The bound is what keeps this off the per-request path: an
 unstamped account never reads the invite collection again. A licence past
 `expiresAt + graceDays` is one of those reasons: the claim refuses it as
 activation does (`_license_past_grace`), keeps the invite, and stamps the
-account, so an Extend delivers it on the next retry.
+account, so extending the expiry delivers it on the next retry.
 
 #### Checkout, and why there is no heartbeat route
 

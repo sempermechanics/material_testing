@@ -5,6 +5,7 @@ import {
 import {
   seatCells, inviteCells, day, licenceStatePill,
   licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
+  isoDay, emailList, licenceEditPatch,
 } from "../util.js";
 
 const $ = (id) => document.getElementById(id);
@@ -176,12 +177,12 @@ function mintOutcome(out, body) {
 /**
  * One licence per person: the backend refused the mint because the address
  * holds or is promised a live licence, and named it. Put that one in front
- * of the operator — renewal is Extend on it, replacing it is revoke first.
+ * of the operator — renewal is Edit on it, replacing it is revoke first.
  * It may be an institution seat, so the filter is the address, not the id.
  */
 async function showHeldLicence(email, id) {
   setStatus(`Not issued: ${email} already has a live licence (shown below). ` +
-    "To renew it, use Extend. To replace it, revoke it first, then issue again.", true);
+    "To renew it, use Edit. To replace it, revoke it first, then issue again.", true);
   $("filter").value = email;
   await refreshLicence(id);
   searchLicences();
@@ -410,22 +411,25 @@ function licenceRow(lic) {
   const cap = demo
     ? `<span class="muted" title="${esc(demoCapNote())}">demo${demoAllowance == null ? "" : ` (${esc(demoAllowance)})`}</span>`
     : lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
-  const capButton = demo
-    ? `<button class="secondary" disabled title="${esc(demoCapNote())}">Cap</button>`
-    : `<button class="secondary" data-cap="${esc(lic.id)}">Cap</button>`;
+  // An individual licensed key can become an institution one; a Demo key is
+  // not a licence anyone bought, so there is nothing to carry over.
+  const convertButton = lic.kind !== "institution" && !demo
+    ? `<button class="secondary" data-convert="${esc(lic.id)}">To institution</button>`
+    : "";
   const actions = revoked ? "" : `
-    <button class="secondary" data-extend="${esc(lic.id)}">Extend</button>
-    ${capButton}
+    <button class="secondary" data-edit="${esc(lic.id)}">Edit</button>
     ${lic.kind === "institution"
       ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>
          <button class="secondary" data-verify="${esc(lic.id)}">Verify</button>`
       : `<button class="secondary" data-device="${esc(lic.id)}">New device</button>`}
+    ${convertButton}
     <button class="secondary" data-history="${esc(lic.id)}">Devices</button>
     <button class="danger" data-revoke="${esc(lic.id)}">Revoke</button>`;
   return `
     <tr>
       <td class="mono">${esc(label)}</td>
-      <td>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}</td>
+      <td>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}${lic.supersededBy
+        ? '<br><span class="muted">replaced by an institution licence</span>' : ""}</td>
       <td>${esc(lic.mode)}</td>
       <td>${seatSummary(lic)}</td>
       <td>${term}</td>
@@ -439,8 +443,8 @@ function licenceRow(lic) {
 $("licenceRows").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button");
   if (!btn) return;
-  if (btn.dataset.extend) extendLicence(btn.dataset.extend);
-  if (btn.dataset.cap) setAnalysisCap(btn.dataset.cap);
+  if (btn.dataset.edit) openEdit(btn.dataset.edit);
+  if (btn.dataset.convert) openConvert(btn.dataset.convert);
   if (btn.dataset.revoke) revokeLicence(btn.dataset.revoke);
   if (btn.dataset.roster) openRoster(btn.dataset.roster);
   if (btn.dataset.device) clearLicenceDevice(btn.dataset.device);
@@ -456,67 +460,192 @@ const labelOf = (id) => {
   return lic ? (lic.keyPrefix || lic.id.slice(0, 10)) : id.slice(0, 10);
 };
 
-async function extendLicence(id) {
-  const date = window.prompt(
-    `New expiry for ${labelOf(id)} (YYYY-MM-DD).\n\n` +
-    "Everyone already on this licence is re-entitled immediately — " +
-    "nobody re-activates and no new key is issued.",
-  );
-  if (!date) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
-    setStatus("Enter the date as YYYY-MM-DD.", true);
-    return;
-  }
-  try {
-    const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ expiresAt: `${date.trim()}T23:59:59Z` }),
-    });
-    // Say what the server stored, not what was typed.
-    setStatus(`${labelOf(id)} now expires ${day(out.expiresAt)}.`);
-    showLicence(out);
-  } catch (e) {
-    setStatus({
-      expiry_in_past: "Could not extend: that date has already passed.",
-      expiry_before_current:
-        "Could not extend: that is earlier than the current expiry. " +
-        "Extend only moves it later.",
-      license_perpetual:
-        "Could not extend: this licence is perpetual and has no expiry.",
-    }[e.message] || `Could not extend: ${e.message}`, true);
-  }
+// ------------------------------------------------------------------ edit
+
+let editing = null;
+
+function openEdit(id) {
+  const lic = findLicence(id);
+  if (!lic) return;
+  editing = lic;
+  const institution = lic.kind === "institution";
+  const demo = lic.mode === "demo";
+  $("editName").textContent = labelOf(id);
+  $("editExpiry").value = isoDay(lic.expiresAt);
+  $("editPerpetual").checked = lic.duration !== "timed";
+  $("editGrace").value = lic.graceDays ?? "";
+  $("editSupport").value = isoDay(lic.supportUntil);
+  $("editCap").value = lic.maxAnalyses ?? "";
+  // A demo holder gets the demo allowance whatever the key says, so a cap on
+  // one is refused; say why instead of offering it.
+  $("editCap").disabled = demo;
+  $("editCap").title = demo ? demoCapNote() : "";
+  $("editInstitution").hidden = !institution;
+  $("editSeats").value = lic.maxSeats ?? "";
+  $("editSeating").value = lic.seating || "assigned";
+  $("editAdmins").value = (lic.adminEmails || []).join(", ");
+  $("editNote").value = lic.note || "";
+  syncEditTerm();
+  $("editHint").textContent = "";
+  $("editHint").className = "muted";
+  $("editDialog").showModal();
 }
 
-async function setAnalysisCap(id) {
-  const lic = findLicence(id) || {};
-  const current = lic.maxAnalyses == null ? "the licensed default" : lic.maxAnalyses;
-  const raw = window.prompt(
-    `Cloud analyses per person on ${labelOf(id)} (now ${current}).\n\n` +
-    "Enter a number for a plan sold with a limit, or leave it empty to " +
-    "remove the limit. Everyone on the licence gets the change at once.",
-    lic.maxAnalyses == null ? "" : String(lic.maxAnalyses),
-  );
-  if (raw === null) return;
-  const text = raw.trim();
-  if (text && !/^\d+$/.test(text)) {
-    setStatus("Enter a whole number, or leave it empty.", true);
+/** Never expires and a date are one choice, not two. */
+function syncEditTerm() {
+  const perpetual = $("editPerpetual").checked;
+  $("editExpiry").disabled = perpetual;
+  $("editGrace").disabled = perpetual;
+}
+
+function editHint(message, isError = true) {
+  $("editHint").textContent = message;
+  $("editHint").className = isError ? "err" : "muted";
+}
+
+$("editPerpetual").addEventListener("change", syncEditTerm);
+$("editCancel").addEventListener("click", () => $("editDialog").close());
+$("editForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const lic = editing;
+  if (!lic) return;
+  const { patch, shortens, error } = licenceEditPatch(lic, {
+    expiry: $("editExpiry").value,
+    perpetual: $("editPerpetual").checked,
+    graceDays: $("editGrace").value,
+    supportUntil: $("editSupport").value,
+    maxAnalyses: $("editCap").value,
+    capLocked: $("editCap").disabled,
+    maxSeats: $("editSeats").value,
+    seating: $("editSeating").value,
+    adminEmails: $("editAdmins").value,
+    note: $("editNote").value,
+  });
+  if (error) {
+    editHint(error);
     return;
   }
-  try {
-    const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify(text ? { maxAnalyses: Number(text) } : { clearMaxAnalyses: true }),
-    });
-    setStatus(text
-      ? `${labelOf(id)} now allows ${text} analyses per person.`
-      : `${labelOf(id)} limit removed — holders get the licensed default.`);
-    showLicence(out);
-  } catch (e) {
-    setStatus(e.message === "cap_on_demo_key"
-      ? `Could not change the limit: ${demoCapNote()}`
-      : `Could not change the limit: ${e.message}`, true);
+  const label = labelOf(lic.id);
+  // A downgrade is agreed with the customer, not clicked through: the key
+  // has to be typed, as for a revoke.
+  if (shortens) {
+    const typed = window.prompt(
+      `This shortens ${label}: its term ends ${patch.expiresAt.slice(0, 10)}` +
+      `${lic.duration === "timed" ? ` instead of ${isoDay(lic.expiresAt)}` : " (it was perpetual)"}` +
+      ", for everyone on it." +
+      `\n\nType ${label} to confirm:`,
+    );
+    if (typed == null || typed.trim() !== label) {
+      editHint("Not saved: the key was not typed.");
+      return;
+    }
   }
+  $("editSave").disabled = true;
+  try {
+    const out = await api(`/v1/admin/licenses/${encodeURIComponent(lic.id)}`, {
+      method: "PATCH", body: JSON.stringify(patch),
+    });
+    $("editDialog").close();
+    showLicence(out);
+    // Say what the server stored, not what was typed.
+    setStatus(`${label} saved — ${out.duration === "timed"
+      ? `ends ${day(out.expiresAt)}` : "perpetual"}. Everyone on it has the change.`);
+  } catch (e) {
+    editHint(editError(e.message));
+  } finally {
+    $("editSave").disabled = false;
+  }
+});
+
+function editError(code) {
+  return {
+    expiry_in_past: "That date has already passed. Ending a licence now is Revoke.",
+    expiry_before_current: "That is earlier than the current expiry.",
+    license_perpetual: "This licence is perpetual.",
+    cap_on_demo_key: demoCapNote(),
+    max_seats_below_used:
+      "More people are on the roster than that many seats. Remove members first, " +
+      "or raise Seats.",
+    floating_needs_max_seats: "A floating licence needs a number of seats.",
+    institution_only: "Seats, seating and IT contacts are for institution licences.",
+  }[code] || `Not saved: ${code}`;
 }
+
+// --------------------------------------------------------------- convert
+
+let converting = null;
+
+function openConvert(id) {
+  const lic = findLicence(id);
+  if (!lic) return;
+  converting = lic;
+  $("convertName").textContent = labelOf(id);
+  const email = lic.emailLock || "";
+  $("convertDomain").value = email.includes("@") ? email.split("@")[1] : "";
+  $("convertAdmins").value = "";
+  $("convertSeats").value = "";
+  $("convertSeating").value = "assigned";
+  $("convertFields").hidden = false;
+  $("convertedBox").hidden = true;
+  $("convertSave").hidden = false;
+  $("convertCancel").textContent = "Cancel";
+  $("convertHint").textContent = "";
+  $("convertHint").className = "muted";
+  $("convertDialog").showModal();
+}
+
+$("convertCancel").addEventListener("click", () => $("convertDialog").close());
+$("convertForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const lic = converting;
+  if (!lic) return;
+  const hint = (message) => {
+    $("convertHint").textContent = message;
+    $("convertHint").className = "err";
+  };
+  const seats = $("convertSeats").value.trim();
+  const body = {
+    domainLock: $("convertDomain").value.trim().toLowerCase(),
+    adminEmails: emailList($("convertAdmins").value),
+    seating: $("convertSeating").value,
+    ...(seats ? { maxSeats: Number(seats) } : {}),
+  };
+  if (!body.domainLock || !body.adminEmails.length) {
+    hint("A domain and at least one IT contact are needed.");
+    return;
+  }
+  if (body.seating === "floating" && !seats) {
+    hint("A floating licence needs a number of seats.");
+    return;
+  }
+  $("convertSave").disabled = true;
+  try {
+    const out = await api(`/v1/admin/licenses/${encodeURIComponent(lic.id)}/convert`, {
+      method: "POST", body: JSON.stringify(body),
+    });
+    $("convertedKey").textContent = out.key;
+    $("convertFields").hidden = true;
+    $("convertedBox").hidden = false;
+    $("convertSave").hidden = true;
+    $("convertCancel").textContent = "Done";
+    $("convertHint").className = "muted";
+    $("convertHint").textContent = out.claimedByUid
+      ? "The holder is on the new roster, on the same device."
+      : "Nobody had signed in yet: the invitation moved to the new licence.";
+    showLicence(out.license);
+    refreshLicence(lic.id);
+    setStatus(`${labelOf(lic.id)} is now institution licence ${out.license.keyPrefix}.`);
+  } catch (e) {
+    hint({
+      convert_domain_mismatch: "The holder's address is not on that domain.",
+      license_not_convertible: "Only an individual licensed key converts.",
+      license_revoked: "This licence is revoked.",
+      claim_contended: "Busy just now — try again.",
+    }[e.message] || `Not converted: ${e.message}`);
+  } finally {
+    $("convertSave").disabled = false;
+  }
+});
 
 async function clearLicenceDevice(id) {
   // The support answer to "my phone died". Emptying the lock is the whole

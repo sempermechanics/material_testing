@@ -74,10 +74,14 @@ from .repo.license_admin import (  # noqa: F401
     analysis_cap_error,
     expiry_change_error,
     get_license_public,
+    license_edit_error,
     LicenseTermsRejected,
     list_licenses,
     revoke_license,
     update_license,
+)
+from .repo.upgrade import (  # noqa: F401
+    convert_to_institution,
 )
 from .repo.institution_admin import (  # noqa: F401
     add_institution_member,
@@ -178,13 +182,14 @@ from .repo import (
     reconcile,
     seats,
     sessions,
+    upgrade,
     user_config,
     users,
 )
 
 #: Every module of the package, each after everything it imports.
 PACKAGE = (_base, user_config, devlock, claims, invites, holders, mint, activation, entitlement,
-           license_admin, institution_admin, licensing, devices, users, leases, seats,
+           license_admin, upgrade, institution_admin, licensing, devices, users, leases, seats,
            reconcile, account, sessions)
 _MISSING = object()
 
