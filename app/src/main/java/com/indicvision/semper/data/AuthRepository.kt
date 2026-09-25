@@ -594,7 +594,9 @@ class AuthRepository(
     }
 
     private suspend fun resolveStatus(): Result<String> {
-        val token = tokens.usableIdToken() ?: return offlineOrExpired()
+        // No backend configured: there is no URL to ask, so treat it as offline
+        // (OkHttp throws IllegalArgumentException on the bare "/v1/me" path).
+        val token = (if (api.enabled) tokens.usableIdToken() else null) ?: return offlineOrExpired()
         return try {
             // /v1/me and /v1/config are independent reads: in parallel they cost
             // one round-trip instead of two. A failed /me cancels the config call.
