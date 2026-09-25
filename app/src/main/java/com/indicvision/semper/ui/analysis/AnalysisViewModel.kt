@@ -439,6 +439,8 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         // A clean snapshot, as the batch path takes: a sweep used to inherit the
         // previous run's stop code, reference and planned-frame count.
         resetRunResult(batchDir.absolutePath, spec)
+        // A run that throws must not report the previous sweep's skipped nodes.
+        sweepSkippedNodes = emptyList()
 
         val result = VsgStudyRunner.run(
             bytes,

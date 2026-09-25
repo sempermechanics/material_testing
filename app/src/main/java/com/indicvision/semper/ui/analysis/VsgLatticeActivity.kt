@@ -73,6 +73,9 @@ import kotlin.math.roundToInt
 class VsgLatticeActivity : AppCompatActivity() {
 
     private companion object {
+        /** Every combination of a sweep solves the same one deformed image. */
+        const val SWEEP_DEFORMED_IMAGES = 1
+
         val STRAIN_OPTIONS = listOf(
             R.string.field_exx to DicResult.IDX_EXX,
             R.string.field_eyy to DicResult.IDX_EYY,
@@ -680,8 +683,15 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
         val ref = args.refName
         if (ref.isNotBlank()) {
-            val defs = args.frameNames.size
-            lines += resources.getQuantityString(R.plurals.vsg_export_images_fmt, defs, ref, defs)
+            // A sweep solves one deformed image (`RunSpec.Sweep.frameIndex`) with
+            // every combination. `frameNames` holds the combination labels, and
+            // counting those made a 12-node sweep "12 deformed images".
+            lines += resources.getQuantityString(
+                R.plurals.vsg_export_images_fmt,
+                SWEEP_DEFORMED_IMAGES,
+                ref,
+                SWEEP_DEFORMED_IMAGES,
+            )
         }
         val node = selectedNode()
         if (node != null) {
