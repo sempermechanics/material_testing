@@ -187,7 +187,7 @@ object MachineLoadMapper {
         if (nonZero.isEmpty()) return false
         return when (testType) {
             TestType.TENSILE -> nonZero.all { it < 0f }
-            TestType.BENDING -> false
+            TestType.BENDING, TestType.DIC_2D -> false
         }
     }
 }

@@ -211,19 +211,22 @@ so test it once here.
 ### 3b. Which test? — the test-type sheet
 
 Not an Activity: `TestTypeSheet`, a short bottom sheet the Home **+** opens
-before the media picker. Every test imports the machine's load log in the
-wizard (§5.1b); the type decides which specimen dimensions the card asks for
-and how a load becomes a stress.
+before the media picker. Tensile and bending import the machine's load log in
+the wizard (§5.1b); the type decides which specimen dimensions the card asks for
+and how a load becomes a stress. **2D DIC** is plain DIC: no load card, and the
+session is saved with no test type, like one made before test types existed.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 3b.1 | Tap **+** on Home | **Which test?** with two rows — Tensile and Bending — each with a caption: stress–strain curve and Young's modulus E for tensile; deflection, bending stress and E for bending |
+| [ ] 3b.1 | Tap **+** on Home | **Which test?** with three rows — Tensile, Bending and 2D DIC — each with a caption: stress–strain curve and Young's modulus E for tensile; deflection, bending stress and E for bending; displacement and strain maps only for 2D DIC |
 | [ ] 3b.2 | Swipe the sheet down | Nothing opens; Home is unchanged |
 | [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard's load card asks for span, width and thickness and has a **Load point → Mark** row (§5.1b, §6a); the strain-axis toggle is hidden |
 | [ ] 3b.4 | Rotate the phone between picking a test and picking media | The test survives — the resulting session still carries it |
 | [ ] 3b.5 | Finish any run, open the viewer, tap ⓘ | **Test type** is the first row of Settings used, naming the test picked in 3b.1 |
 | [ ] 3b.6 | Reopen that session from Home; back it up, delete it locally, restore it | The ⓘ row still shows the test after each reopen |
 | [ ] 3b.7 | Open a session made before this build | No **Test type** row; nothing else changes |
+| [ ] 3b.8 | Pick **2D DIC**, pick photos | The wizard has no load card; the strain window starts at 5 points; **Compute** needs only the reference and a deformed frame |
+| [ ] 3b.9 | Finish a 2D DIC run | The viewer opens on the looping summary, not **Results**; ⓘ has no **Test type** row; Share has no **Lab report** |
 
 ## 4. Settings
 

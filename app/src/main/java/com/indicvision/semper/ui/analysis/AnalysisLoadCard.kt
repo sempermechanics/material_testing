@@ -238,7 +238,8 @@ class AnalysisLoadCard(
     }
 
     private fun infoBodyRes(testType: TestType): Int = when (testType) {
-        TestType.TENSILE -> R.string.info_load_body
+        // Plain DIC has no load card; the branch only keeps the `when` exhaustive.
+        TestType.TENSILE, TestType.DIC_2D -> R.string.info_load_body
         TestType.BENDING -> R.string.info_load_body_bending
     }
 

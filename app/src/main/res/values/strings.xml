@@ -631,6 +631,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="test_type_bending">Bending test</string>
     <string name="test_type_sub_loads">Stress–strain curve and Young’s modulus E, from your photos and the machine’s load log.</string>
     <string name="test_type_sub_flexural">Deflection, bending stress and E from your photos, the hanger loads and the beam’s size.</string>
+    <string name="test_type_dic2d">2D DIC</string>
+    <string name="test_type_sub_dic2d">Displacement (U, V) and strain (Exx, Eyy, Exy) maps from your photos alone. No load log, no specimen size.</string>
 
     <!-- Machine load import (wizard step 1, every test type) -->
     <string name="load_card_title">Machine load</string>

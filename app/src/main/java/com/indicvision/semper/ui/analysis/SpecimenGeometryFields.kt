@@ -39,7 +39,7 @@ class SpecimenGeometryFields(
     init {
         val shown = when (viewModel.testType) {
             TestType.BENDING -> bending
-            TestType.TENSILE -> emptyList()
+            TestType.TENSILE, TestType.DIC_2D -> emptyList()
         }
         bending.forEach { it.view.isVisible = it in shown }
         shown.forEach(::bind)

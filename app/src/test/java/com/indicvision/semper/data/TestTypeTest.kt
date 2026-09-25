@@ -2,6 +2,7 @@ package com.indicvision.semper.data
 
 import com.indicvision.semper.ui.analysis.VsgStudy
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,19 +17,24 @@ class TestTypeTest {
     fun `wire names are stable and round-trip`() {
         assertEquals("tensile", TestType.TENSILE.wireName)
         assertEquals("bending", TestType.BENDING.wireName)
-        assertEquals(2, TestType.entries.size)
+        assertEquals("dic2d", TestType.DIC_2D.wireName)
+        assertEquals(3, TestType.entries.size)
         TestType.entries.forEach { assertEquals(it, TestType.fromWire(it.wireName)) }
     }
 
     @Test
-    fun `every test type takes machine loads`() {
-        TestType.entries.forEach { assertTrue(it.name, it.hasMachineLoad) }
+    fun `the two lab tests take machine loads and plain DIC does not`() {
+        assertTrue(TestType.TENSILE.hasMachineLoad)
+        assertTrue(TestType.BENDING.hasMachineLoad)
+        assertFalse(TestType.DIC_2D.hasMachineLoad)
     }
 
     @Test
     fun `bending starts with a wider strain window than tensile`() {
         assertEquals(5, TestType.TENSILE.defaultStrainWindow)
         assertEquals(9, TestType.BENDING.defaultStrainWindow)
+        // Plain DIC starts at the slider's own default, as before test types.
+        assertEquals(5, TestType.DIC_2D.defaultStrainWindow)
         // In data points: at the default 5 px step, a 21 px and a 41 px VSG.
         assertEquals(21, VsgStudy.vsgFor(TestType.TENSILE.defaultStrainWindow, 5))
         assertEquals(41, VsgStudy.vsgFor(TestType.BENDING.defaultStrainWindow, 5))
