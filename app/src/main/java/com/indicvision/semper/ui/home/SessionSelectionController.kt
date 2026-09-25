@@ -27,7 +27,7 @@ import java.util.UUID
 
 /**
  * Multi-select bar for the Home session list: selection set, select-all,
- * rename/delete prompts, and bar visibility. Dialogs use the Activity; list
+ * rename/restore/delete actions, and bar visibility. Dialogs use the Activity; list
  * refresh is a callback so the Activity keeps owning cloud reconcile.
  */
 class SessionSelectionController(
@@ -37,11 +37,16 @@ class SessionSelectionController(
     private val selectionBar: android.view.View,
     private val selectionCount: TextView,
     private val btnSelectionRename: ImageButton,
+    private val btnSelectionRestore: ImageButton,
     private val selectAllBox: MaterialCheckBox,
     private val fab: ImageButton,
     private val backCallback: OnBackPressedCallback,
     private val onRefresh: () -> Unit,
     private val onDeviceOnlyDeleted: () -> Unit = {},
+    /** False for an account that has no restore (demo), which hides the action. */
+    private val restoreEnabled: () -> Boolean = { true },
+    /** Restore these cloud-only rows to the phone; the host queues and reports. */
+    private val onRestore: (List<SessionRecord>) -> Unit = {},
     /** A cloud delete was queued: the host hides the rows and shows progress. */
     private val onDeleteQueued: (workId: UUID, items: List<SessionDeletes.Item>) -> Unit = { _, _ -> },
     private val enqueueDelete: (List<SessionDeletes.Item>) -> UUID = { SessionDeletes.enqueue(activity, it) },
@@ -73,6 +78,7 @@ class SessionSelectionController(
         btnSelectionRename.setOnClickListener {
             selectedRecords().singleOrNull()?.let { promptRename(it) }
         }
+        btnSelectionRestore.setOnClickListener { restoreSelected() }
     }
 
     /** Long-press on an unselected list: enters selection mode with that row. */
@@ -126,11 +132,31 @@ class SessionSelectionController(
             selectedIds.size,
         )
         btnSelectionRename.isVisible = selectedIds.size == 1
+        btnSelectionRestore.isVisible = canRestoreSelection()
         // Ticked only when every row is in the selection, so the box reports
         // the real state rather than just what was last tapped.
         val allIds = adapter.allIds()
         selectAllBox.isChecked = allIds.isNotEmpty() && selectedIds.size == allIds.size
     }
+
+    /**
+     * Restore is offered only when every selected row is in the cloud and not
+     * on this phone: a mixed selection would silently skip the rows that have
+     * nothing to restore.
+     */
+    private fun canRestoreSelection(): Boolean {
+        val records = selectedRecords()
+        return records.isNotEmpty() && restoreEnabled() && records.all { isCloudOnly(it) }
+    }
+
+    fun restoreSelected() {
+        if (!canRestoreSelection()) return
+        val records = selectedRecords()
+        clearSelection()
+        onRestore(records)
+    }
+
+    private fun isCloudOnly(record: SessionRecord): Boolean = !record.hasLocalData() && hasCloudCopy(record)
 
     /**
      * Bulk delete. Branches on local data + cloud the same way as [confirmDelete];

@@ -16,9 +16,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.AnyThread
 import androidx.annotation.MainThread
-import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
@@ -40,6 +38,8 @@ import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.LicenseErrors
+import com.indicvision.semper.data.RestoreFailureLedger
+import com.indicvision.semper.data.RestoreStart
 import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
@@ -401,9 +401,14 @@ class SettingsActivity : AppCompatActivity() {
         val targetLocalId = entry.record?.id ?: CloudRestore.targetLocalId(cloud)
         lifecycleScope.launch {
             val started = withContext(Dispatchers.IO) {
-                enqueueRestoreWithStub(entry, cloud, targetLocalId)
+                RestoreStart.start(this@SettingsActivity, cloud.sessionId, targetLocalId, entry.name)
             }
-            if (!started) {
+            if (started == RestoreStart.Result.ALREADY_RUNNING) {
+                markDownloading(key, true)
+                Toast.makeText(this@SettingsActivity, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            if (started != RestoreStart.Result.STARTED) {
                 Toast.makeText(this@SettingsActivity, R.string.restore_failed_generic, Toast.LENGTH_LONG).show()
                 return@launch
             }
@@ -420,15 +425,8 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun isRestoreWorkRunning(cloudSessionId: String): Boolean {
-        if (cloudSessionId.isBlank()) return false
-        val wm = runCatching { WorkManager.getInstance(this) }.getOrNull()
-        return wm != null &&
-            runCatching {
-                wm.getWorkInfosForUniqueWork(CloudRestore.workName(cloudSessionId)).get()
-                    .any { !it.state.isFinished }
-            }.getOrDefault(false)
-    }
+    private fun isRestoreWorkRunning(cloudSessionId: String): Boolean =
+        RestoreStart.isRunning(this, cloudSessionId)
 
     private fun isBundleDownloadRunning(cloudSessionId: String): Boolean {
         if (cloudSessionId.isBlank()) return false
@@ -452,69 +450,6 @@ class SettingsActivity : AppCompatActivity() {
         downloadingKeys.clear()
         downloadingKeys.addAll(next)
         analysesAdapter.setDownloadingKeys(downloadingKeys.toSet())
-    }
-
-    /** Writes the index, so [restoreBackup] calls it on the IO dispatcher. */
-    @WorkerThread
-    @Suppress("ReturnCount")
-    private fun enqueueRestoreWithStub(
-        entry: AnalysisEntry,
-        cloud: CloudSessionDto,
-        targetLocalId: String,
-    ): Boolean {
-        val existing = SessionStore.get(this, targetLocalId)
-        // Restore is only offered when local frames are missing.
-        if (existing?.hasLocalData() == true) return false
-        val stub = restoreStub(entry, cloud, targetLocalId, existing)
-        if (!SessionStore.upsert(this, stub, allowOverLimit = true)) return false
-        return try {
-            CloudRestore.enqueueRestore(this, cloud.sessionId, targetLocalId)
-            true
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Timber.e(e, "Could not enqueue restore")
-            if (existing == null) {
-                SessionStore.delete(this, targetLocalId)
-            } else {
-                SessionStore.upsert(this, existing, allowOverLimit = true)
-            }
-            false
-        }
-    }
-
-    @AnyThread
-    private fun restoreStub(
-        entry: AnalysisEntry,
-        cloud: CloudSessionDto,
-        targetLocalId: String,
-        existing: SessionRecord?,
-    ): SessionRecord {
-        val now = System.currentTimeMillis()
-        return existing?.copy(
-            name = existing.name.ifBlank { entry.name },
-            updatedAt = now,
-            cloudSessionId = cloud.sessionId,
-            syncState = SessionRecord.SyncState.SYNCED,
-        ) ?: SessionRecord(
-            id = targetLocalId,
-            name = entry.name,
-            createdAt = now,
-            updatedAt = now,
-            frameCount = 0,
-            subset = 0,
-            step = 0,
-            strainWindow = 0,
-            imgW = 0,
-            imgH = 0,
-            roiX = 0,
-            roiY = 0,
-            roiW = 0,
-            roiH = 0,
-            refPath = "",
-            refName = "",
-            sessionDir = SessionStore.dirFor(this, targetLocalId).absolutePath,
-            cloudSessionId = cloud.sessionId,
-            syncState = SessionRecord.SyncState.SYNCED,
-        )
     }
 
     /**
@@ -558,8 +493,9 @@ class SettingsActivity : AppCompatActivity() {
                         }
                         WorkInfo.State.FAILED -> {
                             if (key.isNotBlank()) transferBanner.remove(key)
-                            if (shownRestoreOutcomes.add(info.id)) {
-                                syncDownloadingKeys()
+                            if (shownRestoreOutcomes.add(info.id)) syncDownloadingKeys()
+                            // Once per failure across Home and Settings, not once per screen open.
+                            if (RestoreFailureLedger.claim(this@SettingsActivity, info.id)) {
                                 val reason = info.outputData.getString(DicKeys.DOWNLOAD_ERROR)
                                     ?: getString(R.string.restore_failed_generic)
                                 CrispToast.show(

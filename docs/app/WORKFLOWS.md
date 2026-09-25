@@ -155,20 +155,22 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.4 | Look at a session row | Thumbnail, name, "date · N frames" (or "Parameter sweep"), headline value, sync badge. A single-setting headline is the first frame's convergence — "97.5% converged", or "97.5% converged on frame 1" when the run has several frames |
 | [ ] 3.5 | Tap a normal session | Result viewer opens on frame 1 |
 | [ ] 3.6 | Tap a sweep session | **Lattice** opens, not the viewer |
-| [ ] 3.7 | Tap a row whose local files were deleted but which has a cloud backup | It carries an **"Only in cloud"** badge; tapping raises a **"Restore this analysis?"** dialog with a **Download** button, which queues a background restore and **leaves you on Home** — it does not open the analysis when it lands |
+| [ ] 3.7 | Tap a row whose local files were deleted but which has a cloud backup | It carries an **"Only in cloud"** badge; tapping raises a **"Restore this analysis?"** dialog with a **Restore** button, which queues a background restore and **leaves you on Home** — it does not open the analysis when it lands |
 | [ ] 3.7a | Tap a row with no local files *and* no cloud copy | "Session data gone" dialog — this is now the only case that reaches it |
 | [ ] 3.7b | Watch a row during a backup | The badge and an inline progress bar track the prepare and upload phases |
 | [ ] 3.7c | Watch a row during a restore or download | Same row progress. The bundle phase is deliberately **indeterminate** until the backend reports a percentage |
 | [ ] 3.7d | Let a restore fail terminally while on Home | A message pill names the reason here too, not only in Settings |
+| [ ] 3.7e | After 3.7d, reopen Home, then open Settings | The same failure is **not** announced again on either screen |
 | [ ] 3.8 | Tap a "Pending" sync badge | Upload is retried / queued |
 | [ ] 3.8a | Tap a "Failed" sync badge | A dialog names *why* the last backup failed (device conflict, too large, render ran out of memory, result files no longer on the device) with a **Try again** action — not a silent re-queue |
 | [ ] 3.8b | Let a background backup fail terminally while on Home | A message pill surfaces the reason once (quota-full is excluded — it has its own screen) |
 | [ ] 3.9 | Tap a badge with cloud backup switched off | Settings opens |
 | [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, delete, close |
+| [ ] 3.10a | Select several **Only in cloud** rows | A **Restore** (cloud-download) button joins the bar; tapping it queues one restore per row, shows "Restoring 3 analyses…" once, and each row shows its own progress. Add a row that is on the phone and the button goes away. Demo accounts never see it |
 | [ ] 3.11 | Select two rows | Rename disappears; delete still offered |
 | [ ] 3.12 | Rename a single selection | Text dialog; the new name persists after leaving and returning |
 | [ ] 3.13 | Delete one session that exists **both** on the phone and in the cloud | Choice of **Delete from this phone**, **Delete the cloud backup** and **Delete everywhere**, plus Cancel |
-| [ ] 3.13a | Choose **Delete from this phone** | Message pill: "Removed from this phone. Tap the row to download from the cloud." The row stays, now badged "Only in cloud" |
+| [ ] 3.13a | Choose **Delete from this phone** | Message pill: "Removed from this phone. Tap the row to restore it from the cloud." The row stays, now badged "Only in cloud" |
 | [ ] 3.13b | Delete a row that is already cloud-only, on device only | No-op branch — there is nothing local left to remove |
 | [ ] 3.14 | Delete several sessions | Same three choices when every row is on both, with the count in the message. A selection with no cloud copy gets one plural confirm; a mixed selection or cloud-only stubs get one Delete that removes every copy |
 | [ ] 3.14a | Choose **Delete everywhere** for ten rows | The rows disappear at once; a message pill offers **Undo** for 5 s, then reads "Deleting 4 of 10…", then "10 analyses deleted." Production logs show ten DELETEs and no 404 |
