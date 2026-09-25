@@ -150,7 +150,10 @@ The whole backend suite passes (539 passed, 23 skipped; coverage 89.4 %).
 - The re-reads inside the `complete` transaction and the second licence check in
   `verified_device` are there for correctness and security.
 
-**Latency** is **[Unknown]** until deployed. Three sequential Firestore round
-trips leave the request path (two gets and one query), so p50 should fall by
-roughly 10–30 ms [Estimated]. Check with
-`backend/scripts/perf_usage_report.py` on `POST /v1/sessions` before and after.
+**Latency.** Production `POST /v1/sessions`, 200s over the last 30 days, all
+N = 3 (9 requests, 2026-09-23/24): median 3158 ms, IQR 2704–3653 ms, range
+1180–6054 ms [Measured, `latencyMs` in the Cloud Run `http_access` log]. The
+Drive calls dominate that. The three Firestore round trips this removes (two gets
+and one query) are about 10–30 ms [Estimated], under 1 % and far inside the spread,
+so the latency gate is only "no rise". Re-read the same `http_access` lines after
+the deploy.
