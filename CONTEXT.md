@@ -152,6 +152,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
   and saves it (#33, #34, TD-87/TD-88). `scrub150Frames` and `settingsScroll` pass on the
   API 37 emulator and a Pixel 6. TD-86–TD-88 match the parent's numbers; its TD-81 is TD-89 here.
+  The Pixel 6 run found a crash on open with no API URL and a signed-in session; the status
+  check and every `IndicApi` URL now treat that as offline (TD-90, as in the parent).
 - **Owed.**
   - The lab end to end on a physical phone (`LabWorkflowDeviceTest`,
     `BeamTapEditorGestureTest`); only `scrub150Frames` and `settingsScroll` have run on one.
