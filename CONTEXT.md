@@ -143,9 +143,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
-- **Lab on the emulator (#24).** `e2e/LabWorkflowDeviceTest` and
-  `e2e/BeamTapEditorGestureTest` run the lab end to end in Tier 3 (Results,
-  Elastic toggle, lab-report PDF, viewer and tap-editor gestures);
+- **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and
+  `e2e/BeamTapEditorGestureTest` run the lab in Tier 3 (Results, Elastic toggle,
+  lab-report PDF, viewer and tap-editor gestures); all 9 pass on a Galaxy S21+
+  (Android 15, 2026-09-25);
   `WizardDraftRestoreTest` covers a load log across a process death;
   `LabResultsBenchmark` times the Results page.
 - **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
@@ -156,8 +157,6 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   The Pixel 6 run found a crash on open with no API URL and a signed-in session; the status
   check and every `IndicApi` URL now treat that as offline (TD-90, as in the parent).
 - **Owed.**
-  - The lab end to end on a physical phone (`LabWorkflowDeviceTest`,
-    `BeamTapEditorGestureTest`); only the benchmark suites have run on one.
   - Video import beyond emulators (MP4 and AVI, [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a).
   - Benchmark thresholds: the Pixel 6 medians exist; choosing gates from them is still
     open (`ScreenBenchmark` asserts none yet).
