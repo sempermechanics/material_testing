@@ -414,9 +414,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             engineFailureMessage = { code, frameIndex, frameName ->
                 engineFailureMessage(code, frameIndex, frameName)
             },
-            showEngineFailureDialog = { code, titleRes, frameIndex, frameName ->
-                showEngineFailureDialog(code, titleRes, frameIndex, frameName)
-            },
+            showEngineFailureDialog = ::showEngineFailureDialog,
             clearEngineFailFaq = { setEngineFailFaq(null) },
             onSweepProgress = ::showSweepProgress,
             onSweepFinished = ::onSweepFinished,
@@ -1568,20 +1566,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         return frameInfo + getString(EngineFailure.reasonRes(engineErrorCode), engineErrorCode)
     }
 
-    private fun showEngineFailureDialog(
-        engineErrorCode: Int,
-        titleRes: Int,
-        frameIndex: Int = -1,
-        frameName: String? = null,
-    ) {
-        val faqRes = EngineFailure.faqUrlRes(engineErrorCode)
-        setEngineFailFaq(faqRes)
-        FaqRedirect.errorDialog(
-            this,
-            getString(titleRes),
-            engineFailureMessage(engineErrorCode, frameIndex, frameName),
-            faqRes,
-        )
+    private fun showEngineFailureDialog(message: String, @StringRes titleRes: Int, @StringRes faqUrlRes: Int) {
+        setEngineFailFaq(faqUrlRes)
+        FaqRedirect.errorDialog(this, getString(titleRes), message, faqUrlRes)
     }
 
     private suspend fun ensureCanStart(): Boolean =
