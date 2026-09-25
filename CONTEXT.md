@@ -136,7 +136,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   shape modes removed (TD-74), and the backend's inline-create read budget
   (#202). Fixes made here go back: the ninther `quickSelect` (TD-76), A4 PDF
   pages (TD-77) and the device-pass fixes (TD-79, TD-80, TD-82–TD-85) are in
-  the parent too; TD-78 and TD-81 are lab-only. The first sync brought the #155–#168
+  the parent too; TD-78 and TD-81 are lab-only; the summary ranges
+  write-back (TD-87) is not ported yet. The first sync brought the #155–#168
   burn-down (ADR-001…006), CI hardening and composites, App Check on real
   phones, the rate-limit and nonce fixes, the one-pass upload CSV (#182) and the
   coverage floor. The lab inputs ride upstream's seams: `RunSpec.mechanical`
