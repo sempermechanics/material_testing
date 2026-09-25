@@ -50,6 +50,7 @@ import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
+import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
@@ -156,6 +157,9 @@ class ResultViewerActivity : AppCompatActivity() {
     private var isGeneratingHeatmap = false
 
     private var batchFiles: List<File> = emptyList()
+
+    /** The planned frame behind each of [batchFiles], by position; set with it. */
+    private var plannedFrames: List<Int> = emptyList()
 
     /**
      * Largest `.dat` size, computed once when [batchFiles] is set. The prefetch
@@ -340,6 +344,7 @@ class ResultViewerActivity : AppCompatActivity() {
             val dir = File(batchDirPath)
             if (dir.exists() && dir.isDirectory) {
                 batchFiles = dir.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name } ?: emptyList()
+                plannedFrames = SessionPaths.plannedFrameIndices(batchFiles)
                 maxDatBytes = batchFiles.maxOfOrNull { it.length() } ?: 0L
             }
         }
@@ -568,27 +573,6 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        // Keep the Home row's headline in sync with what was on screen.
-        // Sweeps already carry a stable caption (image + solved count) — don't
-        // overwrite it with the last field's peak reading.
-        if (isSweep) return
-        args.sessionLocalId?.let { localId ->
-            val data = rawData ?: return@let
-            val stats = DicResult.fieldStats(data, currentDataIndex) ?: return@let
-            val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) "m\u03b5" else "px"
-            val headline = "$currentTypeString max ${ReportBuilder.formatMetric(stats[0])} $unit"
-            lifecycleScope.launch(Dispatchers.IO) {
-                com.indicvision.semper.data.SessionStore.updateHeadline(
-                    this@ResultViewerActivity,
-                    localId,
-                    headline,
-                )
-            }
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         if (::chromeTop.isInitialized) {
@@ -800,7 +784,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // for the new frame. Scrubbing large frames no longer pays for an unused index.
         inspect.clearSpatialIndex()
         updateHeatmapFitBounds(data)
-        val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
+        val displayName = frameDisplayName(index)
         if (!showingSummary) {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
         }
@@ -995,8 +979,17 @@ class ResultViewerActivity : AppCompatActivity() {
      * The planned frame behind the [position]-th `.dat` on disk. A frame the
      * batch skipped leaves a gap in the numbering, so the two part ways there.
      */
-    internal fun plannedFrameIndex(position: Int): Int =
-        batchFiles.getOrNull(position)?.let { SessionPaths.frameIndexOf(it.name) } ?: position
+    internal fun plannedFrameIndex(position: Int): Int = plannedFrames.getOrElse(position) { position }
+
+    /**
+     * What the frame at [position] is called on screen: its image name (or a
+     * sweep's combination label), looked up by the planned frame, not the
+     * position, so a frame after a skipped one keeps its own name.
+     */
+    internal fun frameDisplayName(position: Int): String {
+        val planned = plannedFrameIndex(position)
+        return ReportImageNames.frameName(originalDefNames, planned) ?: "Frame ${planned + 1}"
+    }
 
     /**
      * The deformed image solved at [position], or null when it is not on disk.
@@ -1058,6 +1051,7 @@ class ResultViewerActivity : AppCompatActivity() {
             data = data,
             batchFiles = batchFiles,
             defNames = originalDefNames,
+            plannedFrames = plannedFrames,
             baseName = shareBaseName(),
             frameIndex = currentFrameIndex,
             imgW = imgW,

@@ -112,12 +112,10 @@ class BatchRunController(
             outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED -> Unit
             outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT ->
                 AnalysisNavHelper.openSessionLimit(activity)
-            outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
-                outcome.totalFrames > 0 -> {
-                clearEngineFailFaq()
-                onPartialRun(outcome)
-            }
-            outcome.engineErrorCode < 0 && outcome.totalFrames > 0 -> {
+            // Stopped early (low convergence included) with frames kept. Only a
+            // run that saved them may say so: a first frame that kept no points
+            // saves nothing, however many frames solved after it.
+            outcome.engineErrorCode < 0 && outcome.saved && outcome.totalFrames > 0 -> {
                 clearEngineFailFaq()
                 onPartialRun(outcome)
             }
@@ -143,7 +141,10 @@ class BatchRunController(
     private fun showNamedEngineFailure(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
         // Code 0 is "the first frame kept no points", which is not always the
         // strain window's fault: say which it was, with the run's own VSG and step.
-        val zeroPoints = outcome.engineErrorCode == 0
+        // A run that went on past such a frame and stopped later saved nothing
+        // because of that first frame, so it is the one to explain.
+        val zeroPoints = outcome.engineErrorCode == 0 ||
+            (outcome.firstFrameValidPoints <= 0 && outcome.failedFrameIndex > 0)
         val errorMsg = if (zeroPoints) {
             EngineFailure.zeroPointsMessage(
                 activity,

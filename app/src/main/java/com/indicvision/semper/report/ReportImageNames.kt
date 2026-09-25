@@ -10,9 +10,18 @@ object ReportImageNames {
     /** The reference as the user named it. */
     fun reference(refName: String): String = refName.ifBlank { "reference.png" }
 
+    /**
+     * Frame [index]'s name from the session's frame names, or null when it has
+     * none. [index] is the planned frame, never a position in the `.dat`
+     * listing: past a frame the batch skipped the two differ
+     * ([com.indicvision.semper.data.SessionPaths.plannedFrameIndices]).
+     */
+    fun frameName(frameNames: List<String>, index: Int): String? =
+        frameNames.getOrNull(index)?.takeIf { it.isNotBlank() }
+
     /** Frame [index]'s name from the session's frame names, else "Frame_N". */
     fun deformed(frameNames: List<String>, index: Int): String =
-        frameNames.getOrNull(index)?.takeIf { it.isNotBlank() } ?: "Frame_${index + 1}"
+        frameName(frameNames, index) ?: "Frame_${index + 1}"
 
     /** The specimen: the reference's name without its extension. */
     fun specimen(refName: String): String = refName.substringBeforeLast(".").ifBlank { "Batch Analysis" }

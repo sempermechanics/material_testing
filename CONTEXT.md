@@ -141,8 +141,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   demo's; operator can clear a licence's cap), #212 (PDF page cover image and name, mixed
   bulk-delete prompt, sweep export header, per-node sweep reasons, restored skip count), #215
   (seat and lease counters), #216 (console labels and dates), #218 (licence countdown, backup
-  status, local quota count, restored stop reasons), #219 (PDF and share extremes). Open: #220
-  (run counts, stale Home rows), #221 (backend Phase 2). The rest are the audit's TD rows.
+  status, local quota count, restored stop reasons), #219 (PDF and share extremes), #220
+  (run counts, stale Home rows), #221 (backend Phase 2: lease sweep, claim contention, quota
+  cause, Extend limits, claim terms), #223 (counts, captions, report names, progress), #224
+  (backend Phase 3: cooldown date, seat cap, revoke count, invite expiry, provisioning retry,
+  failed uploads), #225 (frame names past a skipped frame, Home headline, partial-run dialog).
+  The audit has no open TECH_DEBT rows left.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
