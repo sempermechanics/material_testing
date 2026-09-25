@@ -17,6 +17,22 @@ object RestoreStart {
 
     enum class Result { STARTED, ALREADY_RUNNING, FAILED }
 
+    /** One backup to restore into the row [targetLocalId]. */
+    data class Target(val cloudSessionId: String, val targetLocalId: String, val name: String)
+
+    /** How many of a batch were queued now, and how many were already on their way. */
+    data class Counts(val started: Int, val alreadyRunning: Int)
+
+    /** [start] each of [targets] in turn. Writes the index, so call it off the main thread. */
+    @WorkerThread
+    fun startAll(context: Context, targets: List<Target>): Counts {
+        val results = targets.map { start(context, it.cloudSessionId, it.targetLocalId, it.name) }
+        return Counts(
+            started = results.count { it == Result.STARTED },
+            alreadyRunning = results.count { it == Result.ALREADY_RUNNING },
+        )
+    }
+
     /**
      * Write the row the restore will fill, then queue [DicRestoreWorker].
      *

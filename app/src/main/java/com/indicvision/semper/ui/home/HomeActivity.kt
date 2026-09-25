@@ -26,6 +26,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CloudBackupListing
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicSettings
@@ -69,6 +70,8 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var fab: ImageButton
     private lateinit var tvHomeQuota: TextView
     private lateinit var tvHomeLicense: TextView
+    private lateinit var tvEmptyTitle: TextView
+    private lateinit var cloudBackups: CloudBackupsCard
 
     /** Upload WorkInfo ids already surfaced, so one failure isn't snackbar-spammed. */
     private val shownUploadFailures = mutableSetOf<java.util.UUID>()
@@ -151,6 +154,15 @@ class HomeActivity : AppCompatActivity() {
         swipeRefresh = findViewById(R.id.swipeRefresh)
         tvHomeQuota = findViewById(R.id.tvHomeQuota)
         tvHomeLicense = findViewById(R.id.tvHomeLicense)
+        tvEmptyTitle = findViewById(R.id.tvEmptyTitle)
+        cloudBackups = CloudBackupsCard(
+            card = findViewById(R.id.homeCloudBackups),
+            text = findViewById(R.id.tvCloudBackups),
+            restoreButton = findViewById(R.id.btnCloudBackupsRestore),
+            hideButton = findViewById(R.id.btnCloudBackupsHide),
+            onRestore = { targets -> queueRestores { targets } },
+            onHide = { backups -> hideCloudBackups(backups) },
+        )
         swipeRefresh.setColorSchemeResources(R.color.sky_primary)
         // Pull down = deep re-check: verify the blobs really exist in Drive,
         // not just that the backend's index says so.
@@ -459,6 +471,7 @@ class HomeActivity : AppCompatActivity() {
             // the list carries no sync badge, bar or "only in cloud" state.
             adapter.setSyncVisible(showsCloudState())
             emptyState.isVisible = sessions.isEmpty()
+            updateCloudBackups()
             updateQuotaIndicator(sessions.size)
             updateLicenseNotice()
             // A refresh can drop rows out from under a selection.
@@ -570,6 +583,8 @@ class HomeActivity : AppCompatActivity() {
                 if (!wasLimited && TokenStore.isSessionLimitReached(this)) {
                     openSessionLimitScreen()
                 }
+                // This check saved a fresh listing of the account's backups.
+                updateCloudBackups()
                 if (outcome.repaired > 0) {
                     // The rows changed underneath us — show the corrected state.
                     adapter.submit(visibleSessions())
@@ -635,25 +650,47 @@ class HomeActivity : AppCompatActivity() {
     private fun startRestore(records: List<SessionRecord>) {
         if (records.isEmpty()) return
         selection.clearSelection()
-        lifecycleScope.launch {
-            var started = 0
-            var running = 0
-            for (record in records) {
+        queueRestores {
+            records.map { record ->
                 val cloudId = CloudSync.resolveCloudIdFor(this@HomeActivity, record).orEmpty()
-                val result = withContext(Dispatchers.IO) {
-                    RestoreStart.start(this@HomeActivity, cloudId, record.id, record.name)
-                }
-                when (result) {
-                    RestoreStart.Result.STARTED -> started++
-                    RestoreStart.Result.ALREADY_RUNNING -> running++
-                    RestoreStart.Result.FAILED -> Unit
-                }
+                RestoreStart.Target(cloudId, record.id, record.name)
             }
+        }
+    }
+
+    /** Queue [targets] (rows, or backups from [cloudBackups]) and say what happened in one toast. */
+    private fun queueRestores(targets: suspend () -> List<RestoreStart.Target>) {
+        lifecycleScope.launch {
+            val batch = targets()
+            if (batch.isEmpty()) return@launch
+            val counts = withContext(Dispatchers.IO) { RestoreStart.startAll(this@HomeActivity, batch) }
             refresh(reconcile = false)
-            val summary = RestoreSummary.of(resources, records.size, started, running)
+            val summary = RestoreSummary.of(resources, batch.size, counts.started, counts.alreadyRunning)
             val length = if (summary.failed) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
             Toast.makeText(this@HomeActivity, summary.text, length).show()
         }
+    }
+
+    /**
+     * Offer the backups this phone has no row for, from the listing the last
+     * reconcile saved. Demo accounts have no restore, so they are offered nothing.
+     */
+    private fun updateCloudBackups() {
+        lifecycleScope.launch {
+            val offered = if (showsCloudState()) {
+                withContext(Dispatchers.IO) { CloudBackupListing.offered(this@HomeActivity) }
+            } else {
+                emptyList()
+            }
+            cloudBackups.show(offered)
+            tvEmptyTitle.setText(if (offered.isEmpty()) R.string.home_empty_title else R.string.home_empty_title_cloud)
+        }
+    }
+
+    private fun hideCloudBackups(backups: List<CloudBackupListing.Backup>) {
+        CloudBackupListing.hide(this, backups.map { it.cloudId })
+        updateCloudBackups()
+        Toast.makeText(this, R.string.cloud_backups_hidden, Toast.LENGTH_LONG).show()
     }
 
     /** Retry a failed/pending upload, or back up a local-only session when cloud is on. */

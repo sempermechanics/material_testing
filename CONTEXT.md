@@ -136,7 +136,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Pixel 6, 10 rows, Delete everywhere: 10 DELETEs, all 200, in ~17 s (was 61 in 100 s).
   **Restore (in review):** Home says Restore, restores a multi-selection, shares `RestoreStart`
   with Settings, and announces a failed restore once (`RestoreFailureLedger`). Pixel 6, 3 at
-  once: 13 requests, 0 × 429, ~17 s, so restores stay parallel.
+  once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud backups (in
+  review, after #234):** a card offers backups this phone has no row for (`CloudBackupListing`).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever

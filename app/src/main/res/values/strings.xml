@@ -888,6 +888,17 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Restoring %1$d. %2$d analysis couldn\'t be restored. Check your connection and try again.</item>
         <item quantity="other">Restoring %1$d. %2$d analyses couldn\'t be restored. Check your connection and try again.</item>
     </plurals>
+    <!-- Home: backups this phone has no row for (another phone, a reinstall). -->
+    <plurals name="cloud_backups_banner">
+        <item quantity="one">%1$d analysis in your cloud backup isn\'t on this phone.</item>
+        <item quantity="other">%1$d analyses in your cloud backup aren\'t on this phone.</item>
+    </plurals>
+    <string name="cloud_backups_hide">Hide</string>
+    <string name="cloud_backups_pick_title">Restore to this phone</string>
+    <string name="cloud_backups_item_fmt">%1$s · %2$s</string>
+    <string name="cloud_backups_unnamed">Analysis from your cloud backup</string>
+    <string name="cloud_backups_hidden">Hidden. They stay in your cloud backup, and Settings → Analyses data management can still restore them.</string>
+    <string name="home_empty_title_cloud">No analyses on this phone</string>
     <plurals name="selection_count_fmt">
         <item quantity="one">1 selected</item>
         <item quantity="other">%1$d selected</item>
