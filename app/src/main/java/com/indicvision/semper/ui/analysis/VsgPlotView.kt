@@ -71,6 +71,20 @@ class VsgPlotView @JvmOverloads constructor(
     data class Sample(val label: String, val value: Float, val color: Int)
 
     companion object {
+        /**
+         * Compact tick label: enough digits to separate neighbouring gridlines.
+         * A value that rounds to zero is written "0.00", never "-0.00": a padded
+         * axis starting a hair below zero once read that way.
+         */
+        internal fun tickLabel(value: Float): String {
+            val text = when {
+                abs(value) >= LARGE_VALUE -> String.format(Locale.US, "%.0f", value)
+                abs(value) >= SMALL_VALUE -> String.format(Locale.US, "%.1f", value)
+                else -> String.format(Locale.US, "%.2f", value)
+            }
+            return if (text.startsWith('-') && text.all { it == '-' || it == '0' || it == '.' }) text.drop(1) else text
+        }
+
         // Resource-backed, not literal ints: each slot needs an independent night
         // value (see values-night/colors.xml) since this view is shared with the
         // dark-glass viewer peek sheet. Under emphasis (dataviz skill: onDraw draws
@@ -777,12 +791,7 @@ class VsgPlotView @JvmOverloads constructor(
         textPaint.textAlign = Paint.Align.LEFT
     }
 
-    /** Compact tick label: enough digits to separate neighbouring gridlines. */
-    private fun format(value: Float): String = when {
-        abs(value) >= LARGE_VALUE -> String.format(Locale.US, "%.0f", value)
-        abs(value) >= SMALL_VALUE -> String.format(Locale.US, "%.1f", value)
-        else -> String.format(Locale.US, "%.2f", value)
-    }
+    private fun format(value: Float): String = tickLabel(value)
 }
 
 private const val ALPHA_SOLID = 255

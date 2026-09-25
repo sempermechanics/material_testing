@@ -336,6 +336,18 @@ class VsgPlotViewTest {
         assertEquals(0f to 20f, viewportX())
     }
 
+    // ── Tick labels ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `a tick that rounds to zero never reads -0`() {
+        assertEquals("0.00", VsgPlotView.tickLabel(-0.001f))
+        assertEquals("0.00", VsgPlotView.tickLabel(-0f))
+        assertEquals("-0.26", VsgPlotView.tickLabel(-0.26f))
+        assertEquals("-1.8", VsgPlotView.tickLabel(-1.8f))
+        assertEquals("-150", VsgPlotView.tickLabel(-150f))
+        assertEquals("1962", VsgPlotView.tickLabel(1962f))
+    }
+
     // ── Export and palette ───────────────────────────────────────────────────
 
     @Test
