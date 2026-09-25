@@ -263,5 +263,19 @@ N = 3 (9 requests, 2026-09-23/24): median 3158 ms, IQR 2704–3653 ms, range
 1180–6054 ms [Measured, `latencyMs` in the Cloud Run `http_access` log]. The
 Drive calls dominate that. The three Firestore round trips this removes (two gets
 and one query) are about 10–30 ms [Estimated], under 1 % and far inside the spread,
-so the latency gate is only "no rise". Re-read the same `http_access` lines after
-the deploy.
+so the latency gate is only "no rise".
+
+**After the deploy** (revision `semper-api-36096112375-1`, 2026-09-25). There were no
+real uploads yet, so the Pixel 6 made 10 on the main debug build (`883425d9`): copies
+of one 1-frame session, 3 files each, one at a time about 35 s apart.
+
+| `POST /v1/sessions`, N = 3 | n | median | IQR | range |
+|---|---|---|---|---|
+| Before (2026-09-23/24) | 9 | 3158 ms | 2704–3653 ms | 1180–6054 ms |
+| After (2026-09-25 08:40–08:46 UTC) | 10 | 2487 ms | 2399–2598 ms | 2328–3129 ms |
+
+[Measured, `latencyMs` in the `http_access` log; all 200.] **Gate met: no rise.**
+Do not credit the 671 ms drop to Pass 4. It is about 20 times the 10–30 ms that
+three Firestore round trips could save. The after-runs were back to back against one
+warm instance with one payload; the baseline was spread over two days and three
+revisions. It is the Drive calls that vary.
