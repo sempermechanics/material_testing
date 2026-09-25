@@ -14,7 +14,6 @@ from .. import errors
 from ..config import settings
 from ..licenses import (
     MODES,
-    as_utc,
     grace_ends_at,
     legacy_plan,
     normalize_mode,
@@ -79,8 +78,9 @@ def _run_tx(body: Callable[[Any], T], *, on_contended: Callable[[], T]) -> T:
 #: to this module: `errors.py` names wire codes, and this one never reaches the
 #: wire. It exists so contention stops being indistinguishable in the logs from
 #: a licence that genuinely has no room left. Callers that hand a code to a
-#: route put it through `_public_claim_error` first, so no route's error
-#: mapping changes.
+#: route put it through `_public_claim_error` first, which answers
+#: `claim_contended` (503) — never `license_seats_exhausted`, which sent IT
+#: looking for a seat problem that a retry would have solved.
 _CONTENDED = "_contended"
 
 
@@ -151,7 +151,7 @@ def _seat_ref(license_id: str, uid: str):
 # expiry is mirrored onto the user so `effective_mode` stays a pure function.
 
 def _lease_clear_patch() -> dict:
-    """Seat fields that record no lease. Written on release and on revoke."""
+    """Seat fields that record no lease. Written on release, hold and revoke."""
     return {
         "leaseExpiresAt": firestore.DELETE_FIELD,
         "leaseDeviceId": firestore.DELETE_FIELD,
@@ -159,19 +159,16 @@ def _lease_clear_patch() -> dict:
     }
 
 
-def _seat_lease_live(seat: dict) -> bool:
-    """Whether this seat document holds an unexpired lease.
+def _seat_lease_counted(seat: dict) -> bool:
+    """Whether this seat's lease is still counted in `leasesActive`.
 
-    Fails closed, like `_lease_live`: an unreadable lease frees the slot
-    rather than parking it.
+    Not whether the lease is live. Checkout counts a lease once,
+    and only the sweep, a release or a revoke uncounts it — so a lease that has
+    run out but not been swept yet is still in the count. Clearing one of
+    those without decrementing takes it out of the sweep's reach too, and the
+    slot is lost for good: the pool reads full with nobody on it.
     """
-    ends = as_utc(seat.get("leaseExpiresAt"))
-    if ends is None:
-        return False
-    try:
-        return ends > _now()
-    except TypeError:
-        return False
+    return seat.get("leaseExpiresAt") is not None
 
 
 def _license_past_grace(lic: dict) -> bool:

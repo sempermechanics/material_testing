@@ -21,6 +21,7 @@ import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.FieldRangesStore
@@ -57,6 +58,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // the OS may evict): one directory per Home-list session.
     val localSessionId = resolveLocalSessionId()
     val batchDir = SessionStore.dirFor(appContext, localSessionId)
+    // The Home row this run replaces, if it is a re-run. Its frames go next.
+    val previous = SessionStore.get(appContext, localSessionId)
     batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
 
     // Start every run from a clean result snapshot carrying its spec. Fields
@@ -317,15 +320,19 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         ?.delete()
 
     val executionTimeMs = (System.currentTimeMillis() - params.processingStartTime).toInt()
+    var recordSaved = false
 
-    if (firstFrameValidPoints > 0 && engineErrorCode != AnalysisViewModel.ERROR_CANCELLED) {
+    // A cancelled first run saves nothing. A cancelled re-run is saved like a
+    // partial one: the previous run's frames are already gone, so its row
+    // would otherwise go on describing them.
+    if (firstFrameValidPoints > 0 && (engineErrorCode != AnalysisViewModel.ERROR_CANCELLED || previous != null)) {
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
         lastRefPath = refPngPath
 
         val cloudEnabled = CloudSync.uploadsEnabled(appContext)
-        val saved = sessions.saveSession(
+        recordSaved = sessions.saveSession(
             appContext,
             sessions.buildSessionRecord(
                 appContext = appContext,
@@ -356,11 +363,20 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             ),
             enqueueCloudIfSaved = cloudEnabled,
         )
-        if (!saved) {
+        if (!recordSaved) {
             // Race: limit filled between the pre-check and persist.
             engineErrorCode = AnalysisViewModel.ERROR_SESSION_LIMIT
         } else if (!cloudEnabled) {
             Timber.d("Save to cloud is off — session %s stays local only", localSessionId)
+        }
+    } else if (previous != null) {
+        val framesOnDisk = batchDir.listFiles { f -> f.extension == "dat" }?.size ?: 0
+        val after = afterUnsavedRerun(previous, framesOnDisk, engineErrorCode, plannedFrames)
+        when {
+            after == null -> SessionStore.forget(appContext, localSessionId)
+            // The row now lists the frames this run left on disk, so they are
+            // kept even though the run wrote no record of its own.
+            after !== previous -> recordSaved = SessionStore.upsert(appContext, after)
         }
     }
 
@@ -375,6 +391,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             .takeIf { it >= 0 }
             ?.let { defFilePaths.getOrNull(it)?.substringAfterLast('/') },
         firstFrameCorrelatedPoints = firstFrameCorrelatedPoints,
+        saved = recordSaved,
     )
     if (firstFrameValidPoints > 0 &&
         engineErrorCode != AnalysisViewModel.ERROR_CANCELLED &&
@@ -405,4 +422,35 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         )
     }
     return outcome
+}
+
+/**
+ * What the Home row of a re-run that saved nothing should become. The run
+ * deleted the previous frames before it started, so the row can no longer
+ * describe them as on this phone.
+ *
+ * - Nothing on disk and a cloud copy: unchanged. The row reads "Only in
+ *   cloud", and the cloud copy is the run it describes.
+ * - Nothing on disk and no cloud copy: null, the row goes. There is no
+ *   analysis left anywhere for it to open.
+ * - Some frames on disk: it describes those, with no headline or stats from
+ *   the run that is gone, and as not backed up.
+ */
+internal fun afterUnsavedRerun(
+    previous: SessionRecord,
+    framesOnDisk: Int,
+    stopCode: Int,
+    plannedFrames: Int,
+): SessionRecord? = when {
+    framesOnDisk == 0 && previous.syncState == SessionRecord.SyncState.SYNCED -> previous
+    framesOnDisk == 0 -> null
+    else -> previous.copy(
+        updatedAt = System.currentTimeMillis(),
+        frameCount = framesOnDisk,
+        stopCode = stopCode,
+        plannedFrameCount = plannedFrames,
+        headline = "",
+        engineStats = emptyList(),
+        syncState = SessionRecord.SyncState.LOCAL_ONLY,
+    )
 }

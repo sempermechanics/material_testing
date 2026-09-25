@@ -35,6 +35,9 @@ from .repo.user_config import (  # noqa: F401
     cloud_backup_enabled,
     effective_mode,
     _grace_days,
+    INACTIVE_LICENCE_ENDED,
+    INACTIVE_NO_SEAT,
+    inactive_licence_reason,
     license_summary,
     resolve_user_config,
     set_user_config,
@@ -64,6 +67,8 @@ from .repo.entitlement import (  # noqa: F401
     ensure_entitlement,
 )
 from .repo.license_admin import (  # noqa: F401
+    expiry_change_error,
+    LicenseTermsRejected,
     list_licenses,
     revoke_license,
     update_license,
@@ -97,10 +102,11 @@ from .repo.seats import (  # noqa: F401
 )
 from .repo.reconcile import (  # noqa: F401
     CHECKED_IN,
+    DEMOTED,
     MOVED_ON,
-    NEVER_CLAIMED,
     NO_ACCOUNT,
     NO_CHECKIN_SINCE_REVOKE,
+    ON_HOLD,
     reconcile_institution_seats,
     STILL_LICENSED,
 )

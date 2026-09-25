@@ -170,6 +170,8 @@ def add_seat(
             errors.LICENSE_SEAT_DISABLED: 409,
             errors.INVITE_EXISTS: 409,
             errors.INVALID_EMAIL: 400,
+            # Lost the race for the seat, not out of seats: try again.
+            errors.CLAIM_CONTENDED: 503,
         }.get(code, 403)
         raise HTTPException(status, code)
     audit.record(
@@ -225,9 +227,10 @@ def patch_seat(
 ):
     """`clearDeviceLock=true` lets a seat holder re-bind to a new device
     without a Semper support ticket. `enabled=false` drops the seat to Demo
-    *without* freeing the slot (still counts against maxSeats); `enabled=true`
-    restores Professional in place — same uid/account, no data migration
-    either direction. At least one field must be set."""
+    *without* freeing the slot (still counts against maxSeats), releasing any
+    floating lease; `enabled=true` restores Professional in place — same
+    uid/account, no data migration either direction. A removed seat is 409
+    `seat_revoked`: it is re-added, not resumed. At least one field must be set."""
     if body.clearDeviceLock is None and body.enabled is None:
         raise HTTPException(400, errors.EMPTY_PATCH)
     cleared = {}
@@ -236,8 +239,9 @@ def patch_seat(
         if err:
             raise HTTPException(404, errors.SEAT_NOT_FOUND)
     if body.enabled is not None:
-        if not repo.set_seat_enabled(license_id, uid, body.enabled):
-            raise HTTPException(404, errors.SEAT_NOT_FOUND)
+        err = repo.set_seat_enabled(license_id, uid, body.enabled)
+        if err:
+            raise HTTPException(404 if err == errors.SEAT_NOT_FOUND else 409, err)
     audit.record(
         ctx["user"]["uid"], action="INSTITUTION_SEAT_PATCH",
         target={"type": "seat", "id": f"{license_id}/{uid}"},

@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.Dialog
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
@@ -12,6 +13,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.indicvision.semper.R
+import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -28,6 +30,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 import java.io.File
+import java.util.UUID
 
 /**
  * Home's multi-select: the selection set, the bar it swaps in for the title
@@ -59,6 +62,8 @@ class SessionSelectionControllerTest {
     }
     private var refreshes = 0
     private var deviceOnlyDeletes = 0
+    private val queuedDeletes = mutableListOf<List<SessionDeletes.Item>>()
+    private val announced = mutableListOf<Pair<UUID, Int>>()
 
     @Before
     fun setUp() {
@@ -86,6 +91,11 @@ class SessionSelectionControllerTest {
             backCallback = back,
             onRefresh = { refreshes++ },
             onDeviceOnlyDeleted = { deviceOnlyDeletes++ },
+            onDeleteQueued = { id, items -> announced += id to items.size },
+            enqueueDelete = { items ->
+                queuedDeletes += items
+                UUID(0L, queuedDeletes.size.toLong())
+            },
         )
         controller.bindBarActions(btnClose = close, btnDelete = delete)
     }
@@ -127,6 +137,25 @@ class SessionSelectionControllerTest {
 
     private fun dialogMessage(): String? =
         latestDialog().findViewById<TextView>(android.R.id.message)?.text?.toString()
+
+    /** The labels of the choice dialog's buttons, top to bottom. */
+    private fun choices(): List<MaterialButton> {
+        val box = latestDialog().findViewById<ViewGroup>(R.id.deleteChoices)
+        return (0 until box.childCount).map { box.getChildAt(it) as MaterialButton }
+    }
+
+    private fun pick(labelRes: Int) {
+        val label = activity.getString(labelRes)
+        choices().single { it.text.toString() == label }.performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    private fun confirmPositive() {
+        (latestDialog() as androidx.appcompat.app.AlertDialog)
+            .getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+            .performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
 
     // ── Selection set and bar ────────────────────────────────────────────────
 
@@ -231,24 +260,77 @@ class SessionSelectionControllerTest {
     }
 
     @Test
-    fun `an analysis on both offers device-only or cloud-only removal`() {
+    fun `an analysis on both offers phone, cloud or everywhere`() {
         val both = record("d", cloud = true)
         list(both)
         controller.confirmDelete(both)
-        val dialog = latestDialog()
 
         assertEquals(
             activity.getString(R.string.delete_confirm_body_cloud),
-            dialog.findViewById<TextView>(R.id.tvDeleteMessage).text.toString(),
+            latestDialog().findViewById<TextView>(R.id.tvDeleteMessage).text.toString(),
         )
         assertEquals(
-            activity.getString(R.string.delete_device_only),
-            dialog.findViewById<MaterialButton>(R.id.btnDeleteLeft).text.toString(),
+            listOf(R.string.delete_choice_phone, R.string.delete_choice_cloud, R.string.delete_choice_everywhere)
+                .map { activity.getString(it) },
+            choices().map { it.text.toString() },
         )
+    }
+
+    @Test
+    fun `rows on both can be deleted everywhere in one pass, as one queued job`() {
+        // 2026-09-25: this took a "Delete cloud" pass and then a "Delete
+        // device" pass, and the second re-sent every DELETE.
+        val rows = (1..10).map { record("r$it", cloud = true) }
+        adapter.submit(rows)
+        controller.selectAll()
+        delete.performClick()
         assertEquals(
-            activity.getString(R.string.delete_cloud_backup),
-            dialog.findViewById<MaterialButton>(R.id.btnDeleteMid).text.toString(),
+            activity.resources.getQuantityString(R.plurals.delete_confirm_body_choice_multi, 10, 10),
+            latestDialog().findViewById<TextView>(R.id.tvDeleteMessage).text.toString(),
         )
+
+        pick(R.string.delete_choice_everywhere)
+
+        assertEquals(1, queuedDeletes.size)
+        assertEquals(rows.map { it.id }, queuedDeletes.single().map { it.localId })
+        assertTrue(queuedDeletes.single().all { it.mode == SessionDeletes.Mode.EVERYWHERE })
+        assertEquals(rows.map { it.cloudSessionId }, queuedDeletes.single().map { it.cloudId })
+        assertEquals(listOf(UUID(0L, 1L) to 10), announced)
+        assertFalse(controller.inSelectionMode)
+    }
+
+    @Test
+    fun `deleting the cloud backup queues a cloud-only job`() {
+        val both = record("d", cloud = true)
+        list(both)
+        controller.confirmDelete(both)
+        pick(R.string.delete_choice_cloud)
+
+        assertEquals(listOf(SessionDeletes.Item("d", "cloud-d", SessionDeletes.Mode.CLOUD)), queuedDeletes.single())
+    }
+
+    @Test
+    fun `a cloud-only stub is queued, not erased on the screen`() {
+        val stub = record("s", local = false, cloud = true)
+        list(stub)
+        controller.confirmDelete(stub)
+        confirmPositive()
+
+        assertEquals(
+            listOf(SessionDeletes.Item("s", "cloud-s", SessionDeletes.Mode.EVERYWHERE)),
+            queuedDeletes.single(),
+        )
+    }
+
+    @Test
+    fun `phone-only rows never reach the queue`() {
+        list(a, b)
+        controller.selectAll()
+        delete.performClick()
+        confirmPositive()
+        pumpUntil { refreshes > 0 }
+
+        assertTrue(queuedDeletes.isEmpty())
     }
 
     @Test
@@ -273,7 +355,23 @@ class SessionSelectionControllerTest {
         list(a, cloudRow)
         controller.selectAll()
         delete.performClick()
-        assertEquals(activity.getString(R.string.delete_confirm_body_cloud_multi, 1), dialogMessage())
+        assertEquals(
+            activity.resources.getQuantityString(R.plurals.delete_confirm_body_everywhere_multi, 1, 1),
+            dialogMessage(),
+        )
+    }
+
+    @Test
+    fun `a mixed selection's prompt describes the one button it has`() {
+        // It used to explain "Delete cloud" and "Delete device" buttons that
+        // this dialog does not show, above a Delete that erases both copies.
+        list(a, record("d", cloud = true))
+        controller.selectAll()
+        delete.performClick()
+        val message = dialogMessage().orEmpty()
+        assertFalse(message.contains("Delete cloud"))
+        assertFalse(message.contains("Delete device"))
+        assertTrue(message.contains("on your phone and in the cloud"))
     }
 
     @Test
@@ -289,10 +387,11 @@ class SessionSelectionControllerTest {
         list(both)
         controller.startSelection(both)
         delete.performClick()
-        latestDialog().findViewById<MaterialButton>(R.id.btnDeleteLeft).performClick()
+        pick(R.string.delete_choice_phone)
         pumpUntil { refreshes > 0 }
 
         assertEquals(1, deviceOnlyDeletes)
+        assertTrue(queuedDeletes.isEmpty())
         assertFalse(controller.inSelectionMode)
     }
 

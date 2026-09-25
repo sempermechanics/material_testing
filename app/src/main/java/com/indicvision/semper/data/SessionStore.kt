@@ -167,6 +167,12 @@ data class SessionRecord(
     /** True when the frames are parameter combinations rather than images. */
     val isSweep: Boolean get() = sweepSteps.isNotEmpty()
 
+    /**
+     * What each frame is called in the viewer and its reports: a sweep's
+     * combination labels, else the deformed images' own names.
+     */
+    val frameNames: List<String> get() = if (isSweep) sweepLabels else defNames
+
     /** Planned combinations that never produced a frame. */
     val sweepSkipCount: Int
         get() {
@@ -351,15 +357,6 @@ object SessionStore {
     }
 
     @WorkerThread
-    fun updateHeadline(context: Context, id: String, headline: String) = synchronized(lock) {
-        mutateIndex(context) { records ->
-            records.map {
-                if (it.id == id) it.copy(headline = headline, updatedAt = System.currentTimeMillis()) else it
-            }
-        }
-    }
-
-    @WorkerThread
     fun markSynced(context: Context, id: String) = setSyncState(context, id, SessionRecord.SyncState.SYNCED)
 
     /** Remember which cloud session backs this analysis (so it can be erased). */
@@ -394,25 +391,33 @@ object SessionStore {
     }
 
     /**
+     * Removes the index row only; the directory stays. For a re-run that
+     * left nothing for the row to open, while the wizard still reads its
+     * images from the directory.
+     */
+    @WorkerThread
+    fun forget(context: Context, id: String): Unit = synchronized(lock) {
+        if (!mutateIndex(context) { it.filterNot { r -> r.id == id } }) return
+        val remaining = when (val snap = readIndex(context)) {
+            is IndexRead.Ok -> snap.records.size
+            else -> 0
+        }
+        TokenStore.refreshSessionLimit(context, remaining)
+    }
+
+    /**
      * Drop heavy local artifacts (`.dat` frames, raw images, processed / staging
      * trees) but keep the index row and `reference.png` so the Home thumbnail
      * survives. Leaves [SessionRecord.syncState] alone — typically [SYNCED] so
      * the row renders as "Only in cloud" via [SessionRecord.hasLocalData].
+     * What counts as heavy is [LocalArtifacts], shared with the Storage preview.
      */
     @WorkerThread
     fun dropLocalArtifacts(context: Context, id: String) = synchronized(lock) {
         val record = get(context, id) ?: return@synchronized
         val dir = File(record.sessionDir)
         if (!dir.isDirectory) return@synchronized
-        dir.listFiles()?.forEach { child ->
-            when {
-                child.isFile && child.extension.equals("dat", ignoreCase = true) -> child.delete()
-                child.isDirectory && child.name == SessionPaths.RAW_DEFORMED_SUBDIR ->
-                    child.deleteRecursively()
-                child.isDirectory && child.name == SessionPaths.PROCESSED_SUBDIR -> child.deleteRecursively()
-                child.isDirectory && child.name == SessionPaths.UPLOAD_STAGING_SUBDIR -> child.deleteRecursively()
-            }
-        }
+        LocalArtifacts.droppedIn(dir).forEach { child -> child.deleteRecursively() }
     }
 
     /**

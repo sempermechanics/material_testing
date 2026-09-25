@@ -81,7 +81,23 @@ LICENSE_DEVICE_MISMATCH = "license_device_mismatch"
 LICENSE_ALREADY_REDEEMED = "license_already_redeemed"
 LICENSE_SEAT_DISABLED = "license_seat_disabled"
 LICENSE_SEATS_EXHAUSTED = "license_seats_exhausted"
+# 503: the claim lost every transaction attempt to other requests on the same
+# licence. Nothing was granted and nothing is wrong with the licence — the
+# caller retries and, on a licence with room, wins. Never reported as
+# `license_seats_exhausted`, which told IT the licence was full when it wasn't.
+CLAIM_CONTENDED = "claim_contended"
+# 422 on a licence edit. Extend only moves an expiry later: a date already
+# past, or earlier than the one in force, would end or shorten the licence
+# for everyone on it, and a perpetual licence has no expiry to extend.
+EXPIRY_IN_PAST = "expiry_in_past"
+EXPIRY_BEFORE_CURRENT = "expiry_before_current"
+LICENSE_PERPETUAL = "license_perpetual"
 SEAT_NOT_FOUND = "seat_not_found"
+# Hold / resume on a seat that was removed. Resuming one used to reactivate it
+# without taking a slot back; the member is re-added instead.
+SEAT_REVOKED = "seat_revoked"
+# Hold / resume lost a race with another change to the same seat; try again.
+SEAT_BUSY = "seat_busy"
 NOT_ELIGIBLE = "not_eligible"
 NO_LICENSE = "no_license"
 NO_FLOATING_SEAT = "no_floating_seat"
@@ -94,8 +110,13 @@ EMAIL_NOT_VERIFIED = "email_not_verified"
 # Self-service device change only. Clearing a lock is not revoking — the
 # entitlement is untouched and the next device to sign in binds — so the only
 # thing that limits it is how often the holder may do it themselves. Staff and
-# IT are never subject to this.
+# IT are never subject to this. Sent as `device_change_too_soon: <ISO instant>`
+# (with `Retry-After`), the instant being when the holder may change again.
 DEVICE_CHANGE_TOO_SOON = "device_change_too_soon"
+# 422 on a staff licence edit: a `maxSeats` below the members already on an
+# assigned roster. Lowering the cap removes nobody, so it would only make the
+# count read "12 of 10"; remove members first.
+MAX_SEATS_BELOW_USED = "max_seats_below_used"
 
 # --- institution invites ---------------------------------------------------
 # An invite reserves a roster place for an address with no account yet. It is

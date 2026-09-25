@@ -128,9 +128,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge`: `643462c` (here #22), `170ec6e`,
-  `9288831` (#32), then `ecd1a8b` (parent #214). The last brought the shared
-  `/v1/config` fetch (#206), Compute after a failed run (#203, here TD-89) and
-  `StartupHeadroomBenchmark`. General fixes made here go back (TD-76, TD-77,
+  `9288831` (#32), `ecd1a8b` (#36), then `a7b932d` (parent #230). The last brought
+  the parent's wrong-information audit app fixes (#211's licensed ceiling, #212,
+  #218–#220, #223, #225), bulk delete's one paced queue (#227) and its TD-90 PRs,
+  which match #38 here. General fixes made here go back (TD-76, TD-77,
   TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-88 as parent #217, and the
   four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a

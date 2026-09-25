@@ -70,7 +70,7 @@ SplashActivity ─ session restore ─┬─ no session ────────
 | Field | Value |
 |---|---|
 | Entry | `ui/auth/SplashActivity` |
-| Chain | `data/AuthRepository` → `data/net/IndicApi.me` (with `getConfig` in parallel) → `ui/auth/AccessRouter` (+ `data/AccessStatus`), `data/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
+| Chain | `data/AuthRepository` → `data/net/IndicApi.me` (with `getConfig` in parallel, fetched again once if its `mode` disagrees with `me.license.mode`, as when the invite claim landed between the two) → `ui/auth/AccessRouter` (+ `data/AccessStatus`), `data/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
 | Writes | `data/net/TokenStore` cached uid / email / status / role |
 | Fails as | Routing error passed on as `DicKeys.ROUTING_ERROR`, shown by A1 as a red pill |
 | Tests | `auth/AccessRouterTest`, `auth/StatusRecheckTest` |
@@ -187,7 +187,7 @@ stays on the Activity.
 |---|---|
 | Writes | `<sessionDir>/frame_%04d.dat` (`data/SessionPaths`), `raw_deformed/`, reference copy and the index row via `data/SessionRepository.buildSessionRecord` → `data/SessionStore.upsert` |
 | Then | `SessionRepository` calls `data/CloudSync.enqueueUpload` → B1 when cloud backup is on |
-| Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart |
+| Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart, and in the backup's `metadata.json` `metrics` so it survives a restore. A re-run that saves nothing updates or drops its Home row to match what is left on disk (`DicBatchRunner.afterUnsavedRerun`); a cancelled re-run is saved as a partial run |
 | Signals | Timber; `android.os.Trace` sections; `analytics/SemperAnalytics` analysis started / completed / failed (consent-gated, buckets only) |
 | Tests | `analysis/VsgStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
 
@@ -298,10 +298,16 @@ failed download deletes the empty destination rather than leaving a 0-byte file.
 
 ### B4 Erase a cloud backup 🔒
 
-`ui/home/SessionSelectionController` or `SettingsActivity` → 5-second undo →
-`data/BackupDeleteWorker` → `CloudSync.eraseCloudBackup` / `eraseEverywhere` →
-`IndicApi.deleteSession` (C11). Settings re-lists with `CloudRestore.listCompleted`,
-which is uncached, so the list stops offering what no longer exists.
+`ui/home/SessionSelectionController` or `SettingsActivity` → `data/SessionDeletes.enqueue`
+(one unique `session-delete` chain, so a second confirm queues behind the first) →
+5-second undo → `data/BackupDeleteWorker` → one analysis at a time through
+`CloudSync.eraseCloudBackup` / `eraseEverywhere` → `IndicApi.deleteSession` (C11).
+A 429 waits 5 s and retries that analysis (up to six tries) instead of reporting it
+as still in the cloud; a cloud delete clears the row's `cloudSessionId`, so a later
+delete of the phone copy sends nothing. `ui/common/DeleteFeedback` shows Undo,
+"Deleting x of y…" and the outcome, with **Try again** for what is left. Settings
+re-lists with `CloudRestore.listCompleted`, which is uncached, so the list stops
+offering what no longer exists.
 
 ### B5 Reclaim local space
 
@@ -422,7 +428,7 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade
 | C17a | Route classes | `observability.classify_route` | `health` / `attest` / `login` / `config` / `account` / `backup` / `sync` / `restore` / `admin`; ids in paths collapse to `{id}` so nothing identifying lands in `routeTemplate` |
 | C18 | Audit trail 🔒 | `audit.record` | Append-only `audit_logs`: AUTH_DENIED, DEVICE_*, SESSION_CREATE/DELETE, UPLOAD_COMPLETE, FILE_DOWNLOAD, DATA_EXPORT, ACCOUNT_DELETE, ADMIN_*. Best-effort — an audit write never fails the request |
 | C19 | Access-request mail 🔒 | `notify.access_request` | On first PENDING user, mails support via Resend on a daemon worker with retry + per-uid idempotency. Off (silently) without `RESEND_API_KEY` |
-| C20 | Rate limits | `rate_limit.py` | Per-instance token buckets per uid (`export`, `erase`, `download`, `session`, `session_verify`, `challenge`, `device_register`, `file_complete`, `listing`, `admin`, `health`). The durable cross-instance limits are the gateway quotas in `backend/gateway/openapi.yaml` |
+| C20 | Rate limits | `rate_limit.py` | Per-instance token buckets per uid (`export`, `erase` (account), `session_erase` (one analysis), `download`, `session`, `session_verify`, `challenge`, `device_register`, `file_complete`, `listing`, `admin`, `health`). The durable cross-instance limits are the gateway quotas in `backend/gateway/openapi.yaml` |
 | C20a | Security headers | `main.py` `security_headers` | nosniff, `frame-ancestors 'none'`, no-referrer, Permissions-Policy, HSTS behind HTTPS |
 | C20b | Startup checks | `main.py` `_startup_checks` | Refuses to start on Cloud Run without the required env; refuses `DEV_INSECURE_AUTH` unless explicitly acknowledged; warns while `REQUIRE_ATTESTED_UPLOADS` is unset. Interactive docs are served locally only |
 

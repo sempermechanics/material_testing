@@ -95,7 +95,11 @@ def test_a_second_self_service_change_inside_the_cooldown_is_refused(store):
     err, cleared = repo.clear_device_lock(license_id, "solo-1", actor=repo.ACTOR_SELF)
 
     assert err == "device_change_too_soon"
-    assert cleared is None
+    # The refusal says when (TD-116): a cooldown from the change just made.
+    changed = store._data["licenses"][license_id]["deviceChangedAt"]
+    assert cleared == {"nextChangeAllowedAt": (
+        changed + timedelta(days=settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS)
+    ).isoformat()}
     assert store._data["licenses"][license_id]["deviceIdLock"] == "new-phone"
 
 
@@ -263,7 +267,11 @@ async def test_the_holder_cannot_change_device_twice_over_http(client, monkeypat
     resp = await client.post("/v1/licenses/unbind")
 
     assert resp.status_code == 429
-    assert resp.json()["detail"] == "device_change_too_soon"
+    # The code, then when the holder may change again (TD-116).
+    code, _, when = resp.json()["detail"].partition(": ")
+    assert code == "device_change_too_soon"
+    assert datetime.fromisoformat(when) > datetime.now(timezone.utc)
+    assert int(resp.headers["Retry-After"]) > 0
 
 
 @pytest.mark.asyncio

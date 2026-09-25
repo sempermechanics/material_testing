@@ -27,6 +27,8 @@ data class ReportData(
     val znssdHeatmap: Bitmap,
     val solverPathMap: Bitmap,
     val globalAvgZnssd: Float,
+    /** Accepted points [globalAvgZnssd] is the mean over, so frames can be pooled. */
+    val znssdAcceptedPoints: Int = 0,
 
     /** Traceability, e.g. "v1.4 (12) • arm64-v8a". Null when unavailable. */
     val appBuild: String? = null,

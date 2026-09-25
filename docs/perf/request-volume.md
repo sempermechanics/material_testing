@@ -210,8 +210,8 @@ read fails the suite. Python 3.13, Windows 11; the counts are deterministic
 | `GET /v1/config`, the account's first ever | 4 | 3 |
 | `GET /v1/config` | 1 | 0 |
 | `GET /v1/me` | 1 | 0 |
-| `GET /v1/sessions` | S + 2 = 22 | 0 |
-| `POST /v1/sessions` | 14 → **9** | 11 |
+| `GET /v1/sessions` | S + 2 = 22 (S + 3 = 23 since #224) | 0 |
+| `POST /v1/sessions` | 14 → **9** (10 since #224) | 11 |
 | `POST /v1/files/{id}/complete`, each | 6 | 4 |
 | `DELETE /v1/sessions/{id}` | 7 | 5 |
 
@@ -243,6 +243,14 @@ create.
 [Measured] against the store double; `test_create_reads_grow_once_per_file` keeps
 it. Per upload of 3 files: 32 → 27 reads (16 % fewer). **Gate met** (5 ≥ 3).
 
+**Later, deliberately (#224):** the quota count (`count_user_sessions`, used by
+both the create check and `quota.used` on the listing) now subtracts a second
+count of `PROVISION_FAILED` sessions, which store nothing and were charged as
+stored analyses. That is one more read on each of the two routes: create is
+7 + N, the listing S + 3. The status write that ends an inline create stays a
+plain write; only the queued path pays a read to keep a `COMPLETED` session
+from being moved back (TD-120).
+
 **Correctness.** `test_inline_create_hands_back_what_the_uploads_listing_would`
 was written first and passed on the old code. It checks that the reply equals
 `list_pending_uploads` for the same session: status, targets, fields and order.
@@ -263,5 +271,19 @@ N = 3 (9 requests, 2026-09-23/24): median 3158 ms, IQR 2704–3653 ms, range
 1180–6054 ms [Measured, `latencyMs` in the Cloud Run `http_access` log]. The
 Drive calls dominate that. The three Firestore round trips this removes (two gets
 and one query) are about 10–30 ms [Estimated], under 1 % and far inside the spread,
-so the latency gate is only "no rise". Re-read the same `http_access` lines after
-the deploy.
+so the latency gate is only "no rise".
+
+**After the deploy** (revision `semper-api-36096112375-1`, 2026-09-25). There were no
+real uploads yet, so the Pixel 6 made 10 on the main debug build (`883425d9`): copies
+of one 1-frame session, 3 files each, one at a time about 35 s apart.
+
+| `POST /v1/sessions`, N = 3 | n | median | IQR | range |
+|---|---|---|---|---|
+| Before (2026-09-23/24) | 9 | 3158 ms | 2704–3653 ms | 1180–6054 ms |
+| After (2026-09-25 08:40–08:46 UTC) | 10 | 2487 ms | 2399–2598 ms | 2328–3129 ms |
+
+[Measured, `latencyMs` in the `http_access` log; all 200.] **Gate met: no rise.**
+Do not credit the 671 ms drop to Pass 4. It is about 20 times the 10–30 ms that
+three Firestore round trips could save. The after-runs were back to back against one
+warm instance with one payload; the baseline was spread over two days and three
+revisions. It is the Drive calls that vary.

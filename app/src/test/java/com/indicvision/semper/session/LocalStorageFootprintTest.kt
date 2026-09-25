@@ -247,7 +247,23 @@ class LocalStorageFootprintTest {
 
         val reclaimable = StorageBudget.reclaimableBytes(ctx)
 
-        assertEquals(SessionStore.sizeOf(ctx, "synced"), reclaimable)
+        // The .dat frame and the raw image; reference.png stays behind.
+        assertEquals(512L + 2048L, reclaimable)
+    }
+
+    @Test
+    fun `the free-up preview promises exactly what freeing drops`() {
+        val synced = seedSession("synced", SessionRecord.SyncState.SYNCED)
+        // Small files a drop keeps: they used to be counted in the preview.
+        File(synced, "metadata.json").writeText("m".repeat(300))
+
+        val preview = StorageBudget.reclaimableBytes(ctx)
+        val sizeBefore = SessionStore.sizeOf(ctx, "synced")
+        val outcome = StorageBudget.freeAllBackedUp(ctx)
+
+        assertEquals(preview, outcome.freedBytes)
+        assertTrue(preview < sizeBefore)
+        assertTrue(File(synced, "metadata.json").exists())
     }
 
     /** A session directory with the artifacts a real run leaves behind. */

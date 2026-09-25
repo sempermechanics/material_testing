@@ -600,9 +600,17 @@ class AuthRepository(
         return try {
             // /v1/me and /v1/config are independent reads: in parallel they cost
             // one round-trip instead of two. A failed /me cancels the config call.
-            val (me, config) = coroutineScope {
+            val (me, fetched) = coroutineScope {
                 val config = async { suspendRunCatching { api.getConfig(token) } }
                 api.me(token) to config.await() // 200 = APPROVED
+            }
+            // A config read just before /v1/me's invite claim landed says demo,
+            // and a known config is not refetched while reconciles are
+            // throttled, so a new licensed user saw demo's 25. Ask once more.
+            val config = if (fetched.getOrNull()?.let { me.license?.disagreesWith(it) } == true) {
+                suspendRunCatching { api.getConfig(token) }
+            } else {
+                fetched
             }
             TokenStore.setStatus(appContext, AccessStatus.APPROVED)
             TokenStore.setRole(appContext, me.role ?: "user")

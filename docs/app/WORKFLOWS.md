@@ -130,8 +130,8 @@ The session list and the only entry point to a new analysis.
    ├── Selection mode (long-press)
    │   ├── select all
    │   ├── rename                      (only with exactly one selected)
-   │   └── delete → "Delete device" / "Delete cloud" when the row has both;
-   │                a row with only one copy goes outright
+   │   └── delete → phone / cloud backup / everywhere when every row has both;
+   │                otherwise one Delete that removes every copy
    ├── Quota chip ...................... → 9. Session limit / 4. Settings
    ├── Pull-to-refresh                  (deep cloud reconcile, repairs blobs)
    ├── Empty state → "Start analysis"   (same as the FAB — no longer Settings)
@@ -153,7 +153,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.2a | Acknowledge the beta notice on a fresh install | A second dialog asks whether to send crash reports; **declining is the default outcome** and nothing is collected until you accept |
 | [ ] 3.2b | Relaunch after answering it | It does not reappear; the choice is mirrored by the Settings toggle (§4, Your data) |
 | [ ] 3.3 | First visit | A coach mark points at the **+** button; Skip and Got it both dismiss it |
-| [ ] 3.4 | Look at a session row | Thumbnail, name, "date · N frames" (or "Parameter sweep"), headline value, sync badge |
+| [ ] 3.4 | Look at a session row | Thumbnail, name, "date · N frames" (or "Parameter sweep"), headline value, sync badge. A single-setting headline is the first frame's convergence — "97.5% converged", or "97.5% converged on frame 1" when the run has several frames |
 | [ ] 3.5 | Tap a normal session | Result viewer opens on frame 1 |
 | [ ] 3.6 | Tap a sweep session | **Lattice** opens, not the viewer |
 | [ ] 3.7 | Tap a row whose local files were deleted but which has a cloud backup | It carries an **"Only in cloud"** badge; tapping raises a **"Restore this analysis?"** dialog with a **Download** button, which queues a background restore and **leaves you on Home** — it does not open the analysis when it lands |
@@ -168,10 +168,13 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, delete, close |
 | [ ] 3.11 | Select two rows | Rename disappears; delete still offered |
 | [ ] 3.12 | Rename a single selection | Text dialog; the new name persists after leaving and returning |
-| [ ] 3.13 | Delete one session that exists **both** on the phone and in the cloud | Choice of **"Delete device"** / **"Delete cloud"** — there is no single "delete everywhere" button on this branch |
-| [ ] 3.13a | Choose **Delete device** | Message pill: "Removed from this phone. Tap the row to download from the cloud." The row stays, now badged "Only in cloud" |
+| [ ] 3.13 | Delete one session that exists **both** on the phone and in the cloud | Choice of **Delete from this phone**, **Delete the cloud backup** and **Delete everywhere**, plus Cancel |
+| [ ] 3.13a | Choose **Delete from this phone** | Message pill: "Removed from this phone. Tap the row to download from the cloud." The row stays, now badged "Only in cloud" |
 | [ ] 3.13b | Delete a row that is already cloud-only, on device only | No-op branch — there is nothing local left to remove |
-| [ ] 3.14 | Delete several sessions | Same choice, with counts in the message. A selection with no cloud copy, or a cloud-only stub, is deleted outright rather than offering the choice |
+| [ ] 3.14 | Delete several sessions | Same three choices when every row is on both, with the count in the message. A selection with no cloud copy gets one plural confirm; a mixed selection or cloud-only stubs get one Delete that removes every copy |
+| [ ] 3.14a | Choose **Delete everywhere** for ten rows | The rows disappear at once; a message pill offers **Undo** for 5 s, then reads "Deleting 4 of 10…", then "10 analyses deleted." Production logs show ten DELETEs and no 404 |
+| [ ] 3.14b | Tap **Undo** inside the 5 s | The rows come back and nothing reaches the backend |
+| [ ] 3.14c | Delete while offline | The rows stay hidden; the delete runs when the network returns. If it still cannot reach the cloud, the pill names how many are left, with **Try again** |
 | [ ] 3.15 | Press Back in selection mode | Selection clears; the app does not exit |
 | [ ] 3.16 | Tap the quota chip below the cap | Settings (or the limit screen at the cap) |
 | [ ] 3.17 | Reach the quota cap | The chip turns red |
@@ -271,12 +274,12 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 | [ ] 4.14e | Look for a **Send to** sheet after a Download | There is none, by design: you already chose the destination, so the bytes go straight there |
 | [ ] 4.14f | Download a row whose cloud zip is unavailable | It falls back to packing the local session into the same destination |
 | [ ] 4.14g | Cause a Download to fail | The empty destination file is removed rather than left as a 0-byte zip, and the failure is named |
-| [ ] 4.15 | Tap the bin on a row with a local copy | Choice: cloud backup only / local + cloud / cancel |
+| [ ] 4.15 | Tap the bin on a row with a local copy | The same three choices as Home §3.13: phone / cloud backup / everywhere, plus Cancel |
 | [ ] 4.16 | Tap the bin on a cloud-only row | "Delete this backup forever?" naming the analysis |
 | [ ] 4.17 | Confirm any backup delete, then tap **Undo** within 5 s | The row returns; nothing is deleted server-side |
 | [ ] 4.18 | Confirm and wait past the undo window | The backup is really gone after a refresh |
 | [ ] 4.18a | Expand **Storage** | Analyses and cache sizes are measured and shown, not left on "Measuring…" |
-| [ ] 4.18b | Tap **Free up space** with backed-up analyses present | A confirm dialog first, **naming how much it will reclaim**; accepting drops those local frames, the rows become "Only in cloud" on Home and the analyses total falls |
+| [ ] 4.18b | Tap **Free up space** with backed-up analyses present | A confirm dialog first, **naming how much it will reclaim** — only the frames, raw images and processed/staging folders it drops, not the kept `reference.png` / small files (`LocalArtifacts`), so the figure matches what is freed; accepting drops those local frames, the rows become "Only in cloud" on Home and the analyses total falls |
 | [ ] 4.18c | Tap it with nothing safely backed up | The button is **disabled** and the subtitle says there is nothing to free — it cannot strand un-backed-up data |
 | [ ] 4.18d | Tap **Clear cache** | The cache total drops; open analyses still work — only regenerable files go. At 0 bytes the button is disabled |
 | [ ] 4.18e | Drag the **auto-free** slider off 0 | The label names the budget in GB; at 0 it reads "off" |
@@ -503,6 +506,7 @@ extraction show determinate progress instead.
 | [ ] 5.5.1c | Acknowledge that dialog | The kept frames open in the viewer — the run does not leave you back on the settings page |
 | [ ] 5.5.1d | Press Back on that dialog | Nothing dismisses it; the only way on is through to the results |
 | [ ] 5.5.1e | Return to Home afterwards | The short analysis is listed with the frames it kept — not a phantom row from a run reported as failed |
+| [ ] 5.5.1n | First run of a batch whose frame 1 keeps no points, then later frames solve and one fails or decorrelates | The failure dialog explaining frame 1 (strain window, nothing correlated, or unreadable) — **not** "Stopped early … saved and open next": a run is saved only when frame 1 solves, and no Home row appears |
 | [ ] 5.5.1f | Read that Home row | "39 of 50 frames" and the reason, not a bare "39 frames" |
 | [ ] 5.5.1g | Open it and tap ⓘ | Settings used lists **Stopped early** and **Frames solved** |
 | [ ] 5.5.1h | Force-stop the app, reopen, look again | Both still say why — the reason is stored, not held in memory |
@@ -685,6 +689,7 @@ node. **Exit:** Home, or back to the Lattice.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.2.1 | Read the frame counter | The original filename (or the sweep label) plus "(i / N)" |
+| [ ] 8.2.1a | Open a batch the run skipped a frame of (one kept no points or would not read) | Every later frame keeps its own filename — in the counter, the share CSV's `image` column, each PDF page title and the ZIP's `results/NNN_<name>/` folders, numbered as planned (frame 3 stays `003_…`) — matching the cloud backup's CSV and `Frame_N` folders |
 | [ ] 8.2.2 | Tap **Next** | Advances one frame; the heatmap and stats update |
 | [ ] 8.2.3 | Reach the last frame | **Next** disables and fades |
 | [ ] 8.2.4 | Reach the first frame | **Prev** goes back to the summary, not nowhere |
@@ -833,7 +838,7 @@ and the lattice's **Save graph** (§7.3.4, straight to the system chooser).
 | [ ] 8.6.1 | Tap the home icon in the top chrome | Home, with the back stack cleared |
 | [ ] 8.6.2 | Press Back on a single-setting result | Wherever you came from |
 | [ ] 8.6.3 | Press Back on a sweep combination | The Lattice |
-| [ ] 8.6.4 | Leave a single-setting result and look at its Home row | The headline reads "<Field> max <value> <unit>" for the last field you viewed |
+| [ ] 8.6.4 | Leave a single-setting result and look at its Home row | The headline is unchanged by viewing — still the first frame's convergence (§3.4), whatever frame or field was on screen |
 | [ ] 8.6.5 | Leave a sweep and look at its Home row | The sweep caption is kept, not overwritten |
 | [ ] 8.6.6 | Look for rename or delete in the viewer | Neither exists — both live on Home |
 
@@ -870,10 +875,11 @@ sweep hitting the cap, or a background upload rejected with a quota error.
   management**, **Free up space** or auto-free controls (4.5–4.18g do not
   apply), and a stored copy is never pulled back. The upload is what the cap
   counts.
-- **Professional — individual key**: no local analysis cap
-  (`analysisCap()` returns unlimited); Semper staff mint and hand over the key.
+- **Professional — individual key**: capped at the backend's licensed
+  `maxSessions` (999 by default, never below demo's 25) once `/v1/config` has
+  reported it, and uncapped before; Semper staff mint and hand over the key.
 - **Professional — institution seat**: identical entitlement to an
-  individual key (uncapped) — an institution seat and an individual key resolve to
+  individual key — an institution seat and an individual key resolve to
   the exact same `mode=licensed` on device. What differs is only how the
   seat is administered: institution IT self-service via backend routes (see
   §20.4 of the doc above), not Semper staff, and not through this app.
@@ -887,7 +893,7 @@ for support recovery and have no caller in `app/src/`. What the app shows of a
 licence is its prefix, in Settings → Account (4.2a); the key itself never
 reaches the device. This screen's behaviour for a Professional account is
 unaffected either way: once `GET /v1/config` reports `mode=licensed`, the cap
-does not apply and 9.1 never triggers.
+is the licensed `maxSessions`, so 9.1 triggers only at that ceiling.
 
 **9.4 No seat right now (floating institution licence).** A separate gate from
 this screen, and not a limit: the account is on the roster but every seat is in
@@ -927,7 +933,7 @@ are `B1`–`B4` in [../WORKFLOWS.md](../WORKFLOWS.md#b-app--background-and-data-
 | `DicUploadWorker` | Back up a session to the cloud |
 | `DicRestoreWorker` | Pull a session back into the app |
 | `DicBundleDownloadWorker` | Write a `Session.zip` into a SAF document the user picked first (§4.14c) |
-| `BackupDeleteWorker` | Erase a cloud backup after the undo window |
+| `BackupDeleteWorker` | Run a queued `SessionDeletes` job after the undo window: one analysis at a time, progress per row, and the ids still in the cloud |
 
 They are **no longer silent about failure**: a terminal upload failure surfaces on
 Home (message pill + a "why + retry" dialog on the badge), and a terminal restore
@@ -987,8 +993,6 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 | **Convergence view** (peak strain and noise vs VSG) | documented in `VsgPlotView` / `VsgStudy` | Never built — only line-cut plots exist |
 | `VsgStudyRunner.ERROR_ENGINE_FAILED` | `VsgStudyRunner` | Declared, never assigned or matched |
 | Frame-order *picker* mode | `FrameOrderHelper` | Only the initial state; the sort menu offers no way back once you sort |
-| `cloud_delete_backup_failed` string | `strings.xml` | Leftover from the pre-undo-window delete; the live path uses `delete_cloud_failed`. Its sibling `cloud_delete_backup_done` **is** used, by `SessionSelectionController.eraseCloudBackup` |
-| `delete_everywhere` string | `strings.xml` | Orphaned when the local+cloud delete became the two-way "Delete device" / "Delete cloud" choice (§3.13) |
 | `home_empty_restore` string | `strings.xml` | Orphaned when the empty state became **Start analysis** (§3.19) |
 | `download_analysis_save_title` / `_save_body` | `strings.xml` | Orphaned when Download started picking its SAF destination *before* enqueue — there is no confirm dialog left to title |
 | `delete_device_restore_action` string | `strings.xml` | Unused |

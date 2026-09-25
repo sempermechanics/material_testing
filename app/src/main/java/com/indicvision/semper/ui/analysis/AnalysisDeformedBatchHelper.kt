@@ -11,6 +11,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.ui.common.FaqRedirect
+import com.indicvision.semper.util.ProgressCount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -73,7 +74,7 @@ object AnalysisDeformedBatchHelper {
                         status = activity.resources.getQuantityString(
                             R.plurals.analysis_importing_fmt,
                             uris.size,
-                            0,
+                            ProgressCount.current(0, uris.size),
                             uris.size,
                         ),
                     )
@@ -84,13 +85,15 @@ object AnalysisDeformedBatchHelper {
                     uris = uris,
                     cacheDir = cacheDir,
                     displayName = displayName,
+                    // done counts finished images: the bar follows it, the
+                    // label names the image being copied now.
                     onProgress = { done, total ->
                         overlayHelper.update(
                             percent = if (total > 0) (done * 100f / total) else 0f,
                             status = activity.resources.getQuantityString(
                                 R.plurals.analysis_importing_fmt,
                                 total,
-                                done,
+                                ProgressCount.current(done, total),
                                 total,
                             ),
                         )

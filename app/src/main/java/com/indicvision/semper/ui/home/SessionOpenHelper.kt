@@ -46,7 +46,7 @@ object SessionOpenHelper {
             batchDirPath = session.sessionDir,
             // A sweep names its frames after the combination behind them, and
             // needs each frame's own settings to render and describe it.
-            frameNames = if (session.isSweep) session.sweepLabels else session.defNames,
+            frameNames = session.frameNames,
             stopCode = session.stopCode,
             plannedFrames = session.plannedFrameCount,
             sessionId = session.id,

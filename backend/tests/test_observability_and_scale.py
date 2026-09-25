@@ -175,6 +175,8 @@ async def test_quota_race_accepts_soft_overshoot_window(client, monkeypatch):
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     from app import deps
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "maxSessions": 1})
+    # A licensed ceiling is floored at demo's, so demo's has to be 1 as well.
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 1)
     monkeypatch.setattr(repo, "count_user_sessions", lambda uid: 0)
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
     monkeypatch.setattr(

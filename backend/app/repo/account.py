@@ -1,12 +1,30 @@
 """Per-account records: the Drive user folder, terms and consent, and erasing everything.
 """
+import logging
+
+from ..licenses import (
+    KIND_INSTITUTION,
+    MODE_DEMO,
+    normalize_kind,
+)
 
 from . import _base
 from ._base import (
     db,
     _delete_query_until_empty,
+    get_license,
+    _license_mode,
     _now,
 )
+from .invites import (
+    _write_invite,
+)
+from .seats import (
+    revoke_institution_seat,
+)
+
+
+log = logging.getLogger("indic.firestore")
 
 
 def remember_user_folder(uid: str, folder_id: str, sessions_folder_id: str | None = None) -> None:
@@ -80,12 +98,56 @@ def list_user_devices(uid: str) -> list:
     return out
 
 
+def _give_back_license(uid: str) -> None:
+    """Return what this account held on a licence, before the account goes.
+
+    Erasing the user document used to leave its hold behind: an institution
+    seat went on counting against `seatsUsed` for somebody who no longer
+    exists, and an individual licence stayed `redeemed` by a deleted uid, so
+    the person could not get it back by signing up again.
+
+    A seat is revoked the usual way, which frees the slot and any lease. An
+    individual licence goes back to unused, unbound, and re-promised to its
+    address, so a fresh account at that address is licensed on its first
+    request, as the original one was. Demo keys are left alone: they are
+    minted per account and hold nothing anyone else is waiting for.
+    """
+    snap = db().collection("users").document(uid).get()
+    if not snap.exists:
+        return
+    license_id = (snap.to_dict() or {}).get("licenseId") or ""
+    lic = get_license(license_id) if license_id else None
+    if not lic or (lic.get("status") or "") == "revoked":
+        return
+    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+        revoke_institution_seat(license_id, uid)
+        return
+    if (lic.get("redeemedByUid") or "") != uid or _license_mode(lic) == MODE_DEMO:
+        return
+    db().collection("licenses").document(license_id).update({
+        "status": "unused",
+        "redeemedByUid": _base.firestore.DELETE_FIELD,
+        "redeemedAt": _base.firestore.DELETE_FIELD,
+        "deviceIdLock": "",
+        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+    })
+    email = lic.get("emailLock") or ""
+    if email:
+        err, _ = _write_invite(license_id, email, "system")
+        if err:
+            # The licence is free and its key still redeems it; only the
+            # automatic delivery is missing, as a mint that hits this says.
+            log.warning("re-invite after account delete failed license=%s err=%s",
+                        license_id, err)
+
+
 def delete_all_user_data(uid: str) -> dict:
     """Erase every Firestore record belonging to a user (GDPR account deletion).
 
     Sessions + their file docs, the device registrations, and the user profile
     itself. Audit records are intentionally kept: they hold no analysis content,
-    only the fact that actions (including this erasure) occurred.
+    only the fact that actions (including this erasure) occurred. A licence
+    seat or key the account held is given back first — see `_give_back_license`.
     """
     # File docs carry the uid, so the whole account is one query rather than one
     # per session. Deleting session by session meant a query and a batch commit
@@ -99,5 +161,6 @@ def delete_all_user_data(uid: str) -> dict:
     devices = _delete_query_until_empty(
         db().collection("devices").where("uid", "==", uid)
     )
+    _give_back_license(uid)
     db().collection("users").document(uid).delete()
     return {"sessions": sessions, "files": files, "devices": devices}

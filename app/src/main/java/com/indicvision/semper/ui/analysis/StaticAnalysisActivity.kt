@@ -1259,7 +1259,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
         val kept = outcome.totalFrames
         val planned = viewModel.defFilePaths.size
-        tvResult.text = getString(R.string.run_stopped_early_fmt, kept, planned)
+        tvResult.text = getString(R.string.run_stopped_early_fmt, outcome.stoppedAtFrame, planned)
         viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
         viewModel.lastBatchDirPath = outcome.batchDirPath
         checkReady()
@@ -1511,15 +1511,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (outcome.totalFrames == 0) {
             if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) return
             // Route to lattice with all-failed nodes so the user can tap each for details.
+            // Each node keeps its own reason; they used to all show the last one's.
             viewModel.sweepPlan = emptyList()
-            val plan = viewModel.runResult.value.spec?.sweep?.plan ?: sweepHelper.currentPlan()
-            viewModel.sweepSkippedNodes = plan.map { point ->
-                SkippedNode(
-                    subset = point.subset,
-                    step = point.step,
-                    strainWindow = point.vsg,
-                    code = outcome.engineErrorCode,
-                )
+            viewModel.sweepSkippedNodes = SkippedNode.forFailedSweep(viewModel.sweepSkippedNodes) {
+                val plan = viewModel.runResult.value.spec?.sweep?.plan ?: sweepHelper.currentPlan()
+                plan.map { point ->
+                    SkippedNode(
+                        subset = point.subset,
+                        step = point.step,
+                        strainWindow = point.vsg,
+                        code = outcome.engineErrorCode,
+                    )
+                }
             }
             viewModel.lastBatchDirPath = outcome.batchDirPath
             openResultViewer(sweep = true)

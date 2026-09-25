@@ -172,12 +172,15 @@ async def _measure(client, priv, meter):
 
 #: (reads, writes) per request, measured 2026-09-25. POST /v1/sessions was
 #: (14, 11) before the inline path stopped reading back what it had just written.
+#: GET and POST /v1/sessions each gained one read the same day (TD-121): the
+#: quota count subtracts a second count of PROVISION_FAILED sessions, which
+#: store nothing and were being charged as stored analyses.
 BUDGET = {
     "GET /v1/config (first ever)": (4, 3),
     "GET /v1/config": (1, 0),
     "GET /v1/me": (1, 0),
-    f"GET /v1/sessions (S={SESSIONS})": (SESSIONS + 2, 0),
-    f"POST /v1/sessions (N={FILES})": (9, 11),
+    f"GET /v1/sessions (S={SESSIONS})": (SESSIONS + 3, 0),
+    f"POST /v1/sessions (N={FILES})": (10, 11),
     "POST /v1/files/{id}/complete (each)": (6, 4),
     f"DELETE /v1/sessions/{{id}} (N={FILES})": (7, 5),
 }
@@ -197,8 +200,9 @@ async def test_firestore_cost_per_request_stays_in_budget(world, client, capsys)
 
 
 #: Reads for one POST /v1/sessions by manifest size, up to the largest manifest
-#: provisioned inline (INLINE_PROVISION_MAX_FILES). Before: 8 + 2N.
-CREATE_READS = {1: 7, 3: 9, 8: 14}
+#: provisioned inline (INLINE_PROVISION_MAX_FILES). Before: 8 + 2N, then 6 + N,
+#: then 7 + N with the failed-session count in the quota check (TD-121).
+CREATE_READS = {1: 8, 3: 10, 8: 15}
 
 
 @pytest.mark.asyncio

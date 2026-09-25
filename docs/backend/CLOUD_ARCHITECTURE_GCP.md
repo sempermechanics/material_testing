@@ -316,7 +316,14 @@ Three properties worth knowing before you change this path:
   cannot tell the difference beyond latency.
 - **A failed provision is recorded, not silent.** The task marks the session
   `PROVISION_FAILED` with an error code so Cloud Tasks can retry and a polling
-  client is told to stop waiting.
+  client is told to stop waiting. Such a session stores nothing, so it does
+  not count against the quota; a retry that provisions it counts it again.
+- **A retry never undoes a completion.** A task retried after every file
+  landed returns without touching Drive, and on the queued path
+  `set_session_status` reads and writes in one transaction that leaves
+  `COMPLETED` alone, so a finished analysis is never shown as uploading
+  again. (Inline, the targets have not left the request, so nothing can have
+  completed and the write stays plain.)
 - **A failed enqueue is an error, not a quiet fallback.** It logs
   `provision_enqueue_failed` at ERROR with `errorCode=tasks_enqueue_failed`
   and the exception type. Before it was logged, a missing
@@ -486,7 +493,8 @@ users/{uid}                       (uid = Google 'sub')
                                    stays a pure function — §20.7)
   licenseExpiresAt                (Timestamp; absent when perpetual)
   licenseGraceDays: number        (absent reads as ZERO, not the fleet default; §20.6)
-  licenseMaxAnalyses: number      (optional per-license cloud cap)
+  licenseMaxAnalyses: number      (optional per-license cloud cap; the resolved
+                                   licensed ceiling is never below DEMO_MAX_ANALYSES)
   schemaVersion                   (stamped by backend/scripts/migrate_schema.py)
   createdAt, updatedAt, lastSeenAt (Timestamp)
   seenCheckpointAt                (Timestamp; stamped by a revoke — the instant
@@ -510,9 +518,13 @@ sessions/{sessionId}
   status: "PENDING" | "PROVISIONING" | "PROVISION_FAILED"
         | "UPLOADING" | "COMPLETED" | "FAILED"
         (PROVISIONING and UPLOADING are IN_FLIGHT_STATUSES — both still
-         expect more bytes and both count against the session quota)
+         expect more bytes. Every status but PROVISION_FAILED counts
+         against the session quota: `count_user_sessions`, behind both the
+         create check and `quota.used`. COMPLETED is terminal —
+         provisioning never writes over it)
   driveFolderId                   (…/session/{sid} folder)
-  totalBytes, fileCount, completedCount
+  totalBytes, fileCount, completedCount   (totalBytes is the size declared
+                                  at create, not what is stored)
   metrics: { pointsConverged, avgIcgnIters, execMs }  // small, from device
   createdAt, updatedAt, completedAt
 
@@ -556,13 +568,17 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
   graceDays: number               (entitlement continues UNCHANGED this long past
                                    expiresAt; 0 is a hard cliff. §20.6)
   supportUntil                    (Timestamp, optional; informational — never gates)
-  maxAnalyses                      (optional, either kind)
+  maxAnalyses                      (optional, either kind; per holder, not per licence.
+                                   Mint/PATCH refuse < DEMO_MAX_ANALYSES, and
+                                   PATCH {"clearMaxAnalyses": true} removes it)
   createdByUid, createdAt, updatedAt
   updatedByUid, updatedAt         (set by the renewal route)
 
 licenses/{id}/seats/{uid}         (institution only — one doc per roster member)
   uid, email, deviceIdLock
   status: "active" | "disabled" | "revoked"
+                                  (a revoked seat cannot be held or resumed —
+                                   409 seat_revoked; the member is re-added)
   # floating only — the lease. Absent means "holds no seat right now", which
   # for most of a floating roster is the normal state.
   leaseExpiresAt                  (Timestamp; compared to now, never trusted
@@ -834,8 +850,9 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
   document ids in `validation.py` before they reach a Firestore query (§7).
 - **Rate limiting (implemented in-process; distributed layer still open):**
   `rate_limit.py` applies per-uid token buckets to challenge, session create,
-  download, export, erase, admin, listing, health, file-complete and
-  session-verify. Because the buckets live in the process, they bound one Cloud
+  download, export, erase (account: 0.2/s, burst 3), session erase (one
+  analysis: 1/s, burst 10, so a ten-row delete needs no retry), admin,
+  listing, health, file-complete and session-verify. Because the buckets live in the process, they bound one Cloud
   Run instance rather than the fleet — the cross-instance layer is API Gateway
   quotas in `openapi.yaml`, with Cloud Armor still to come when the service is
   public. [PRODUCTION_READINESS_GATE.md](../ops/PRODUCTION_READINESS_GATE.md)
@@ -1214,7 +1231,7 @@ guarantee as activation — never touches stored sessions/files. See
 
 | Action | Route | Effect |
 |---|---|---|
-| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff: device-attested, or from the operator desk with a second factor and a sign-in newer than `ADMIN_WEB_REVOKE_REAUTH_SECONDS`) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0. |
+| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff: device-attested, or from the operator desk with a second factor and a sign-in newer than `ADMIN_WEB_REVOKE_REAUTH_SECONDS`) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0; the response carries the reset counts. |
 | Single-seat revoke | `DELETE /v1/institutions/licenses/{id}/seats/{uid}` (institution IT) | Only that member drops to Demo; **frees the slot** for another domain member (including, after re-admission, the same member re-entering the key). |
 | Disable a seat | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores the licensed mode in place with no re-activation needed. |
 
@@ -1229,6 +1246,14 @@ mode is demo. Sessions stay listable throughout; re-activating restores
 retrieval with zero data loss. See
 `test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores`
 and `test_demo_after_downgrade_still_records_but_cannot_restore`.
+
+Because nothing is deleted, an account whose licence lapses can hold more
+analyses than the demo cap it drops to ("120/25"). The `409
+session_quota_exceeded` refusal keeps its code and counts but names the cause
+(`inactive_licence_reason`): a licence past its grace says it has ended, a
+floating member without a lease says no seat is free, and only a plain demo
+account is told to delete an older analysis. The account console shows such a
+count as stored and kept under the demo limit rather than as "120 of 25".
 
 Two consequences follow. An installed build that predates licensing keeps
 backing up after the backend deploys — its upload worker retries a 403 from
@@ -1399,6 +1424,21 @@ every non-revoked institution seat.
   — the same guard `_drop_user_to_demo_if_licensed` uses.
 - The fan-out is bounded by `seatsUsed`, and renewal is rare. That is what
   makes it the right side of the trade against a per-request read.
+- **A claim writes the terms it read in its own transaction.** `claim_seat`
+  and `claim_individual_license` rebuild the mirror in the caller's patch from
+  the licence snapshot the transaction read (`_claim_terms`). The callers read
+  the licence earlier; an edit landing in that gap would otherwise be stamped
+  over on the newest holder after its fan-out had already passed them.
+
+**Extend only moves an expiry later.** `expiry_change_error` refuses, with
+`422`, an `expiresAt` that is already past (`expiry_in_past`), one earlier than
+the expiry in force (`expiry_before_current`), and any `expiresAt` on a
+perpetual licence (`license_perpetual`) — each of those ended, shortened, or
+turned timed (with no grace, since perpetual licences are minted without
+`graceDays`) the licence of everyone on it. The route checks before it touches
+the device lock, and `update_license` checks again against what it reads.
+Ending a licence early is revoke; the operator desk reports the expiry the
+server stored, not the date typed.
 
 Terms only: `kind`, the email/device/domain locks and the key itself are fixed
 at mint. Changing *who* a license is for under existing holders is a different
@@ -1548,15 +1588,32 @@ revocation records.
 
 **A lost race is not a full pool.** The claim transactions answer a private
 `_CONTENDED` when they only lost the race; `claim_pending_invite` logs it at
-`info` rather than `warning`, and every route-facing caller maps it back
-through `_public_claim_error` (to `license_seats_exhausted` or
-`claim_contended`), so no wire code changed and contention stops reading in
-the logs like a licence with no room left. A failed claim then answers with
-the account **as stored**, re-read, not the caller's pre-race copy: the
+`info` rather than `warning`, and every route-facing caller maps it through
+`_public_claim_error` to `claim_contended`. Activation and adding a member
+answer that with `503`, the same as `device_lock_contended`, and the consoles
+say "Busy just now — try again." It used to map to `license_seats_exhausted`,
+which told IT the licence was full when a retry would have succeeded.
+
+A failed claim then answers with the account **as stored**, re-read, not the
+caller's pre-race copy: the
 request that beat it has already granted the entitlement, and
 `ensure_demo_license`, which would otherwise rescue the stale copy by
 re-reading, returns early for a browser because consoles send no
 `X-Device-Id`.
+
+**An invite behind a Demo key is retried.** A claim that fails for a reason
+that can clear (a full assigned roster, a seat on hold) stamps
+`inviteBlockedAt` on the account, and the Demo key is minted as before. That
+key used to strand the invite for good: every later request short-circuits on
+the account holding a licence. Now an account that still holds Demo and carries
+the stamp tries the invite again at most every `_INVITE_RETRY` (15 minutes),
+so a seat freed later reaches the person it was promised to; the claim drops
+the superseded Demo key and the stamp. A withdrawn invite or a revoked licence
+clears the stamp. The bound is what keeps this off the per-request path: an
+unstamped account never reads the invite collection again. A licence past
+`expiresAt + graceDays` is one of those reasons: the claim refuses it as
+activation does (`_license_past_grace`), keeps the invite, and stamps the
+account, so an Extend delivers it on the next retry.
 
 #### Checkout, and why there is no heartbeat route
 
@@ -1595,10 +1652,32 @@ committed is the one outcome that breaks the cap.
 `leasesActive` still drifts upward whenever an app is killed, uninstalled or
 goes offline mid-lease, so the counter alone cannot say whether the pool is
 full. `_sweep_expired_leases` reconciles it before a claim reads it: a
-single-field inequality on one subcollection, so no composite index. It runs
-outside the transaction because a transaction may not query, and that is safe —
-releasing a genuinely expired lease is correct regardless of who wins the claim
-that follows.
+single-field inequality on one subcollection, so no composite index. The query
+runs outside the transaction because a transaction may not query, and that is
+safe — releasing a genuinely expired lease is correct regardless of who wins
+the claim that follows.
+
+The query's answer is only a list of candidates, though: two checkouts
+arriving together both find the same expired seats. The sweep used to clear
+them in one batch and subtract the count, so both batches committed and each
+seat came off `leasesActive` twice, pushing it low or negative and letting the
+pool admit more than `maxSeats`. Each seat is now reclaimed in its own
+transaction (`_reclaim_expired_lease`) that re-reads it and clears it only if
+its lease is still present and still expired, decrementing by one in the same
+commit and never below zero. A reclaim that loses every attempt is skipped;
+the next checkout finds the seat if it is still expired.
+
+**A lease is counted until something uncounts it, expired or not.** Checkout
+adds one to `leasesActive`; only the sweep, a release, a hold or a revoke takes
+it off, and each decides from `_seat_lease_counted` (the seat still carries
+`leaseExpiresAt`), not from whether the lease is live. Release and revoke used
+to decrement only a live lease, so one cleared after it ran out but before the
+sweep reached it vanished from the sweep's query and its slot was lost for
+good. For the same reason a re-checkout of an expired, unswept lease renews it
+rather than counting it twice. Holding a seat (`enabled=false`) releases its
+lease, a whole-licence revoke clears every seat's lease and sets
+`leasesActive` to 0, and `_drop_user_to_demo_if_licensed` drops the holder's
+`leaseExpiresAt` copy, so no revoked or held account reads as holding a seat.
 
 **TTL is not involved.** As the `challenges` precedent already states in
 `firestore.indexes.json`, Firestore TTL is storage hygiene with up to a day of
@@ -1697,8 +1776,12 @@ nothing the backend would refuse and says where the account *can* go.
 reports what it did in the status line, which is pinned to the viewport while
 it holds a message and is not cleared by the list reload that follows. A
 revoked licence leaves the table at once — behind "Show revoked", since the
-record is the audit trail. Silence after a click is always a defect here: it
-is indistinguishable from a revoke that did not happen.
+record is the audit trail. Demo keys sit behind "Show Demo keys" the same way:
+one is minted for every account, so they outnumbered the licences anyone sold.
+The table has a Mode column, its status pill reads "in grace" or "expired" from
+the term rather than the stored `status`, and "Load more" pages past the first
+200. Silence after a click is always a defect here: it is indistinguishable
+from a revoke that did not happen.
 
 Destructive actions confirm twice — a dialog naming who is affected, then
 typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
@@ -1833,7 +1916,9 @@ Self-service re-binding is a licence-sharing vector. A second factor proves
 single licence round a lab. `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30)
 is counted against a `deviceChangedAt` stamp that only the self-service path
 writes; a second change inside the window answers
-`429 device_change_too_soon`, carrying `nextChangeAllowedAt`. Staff and IT
+`429 device_change_too_soon: <ISO instant>` — the instant being
+`deviceChangedAt` plus the cooldown — with `Retry-After` in seconds, and the
+account page shows that time. Staff and IT
 neither read nor write that stamp, so a support request always works — a lost
 phone does not wait 30 days.
 
@@ -1901,7 +1986,9 @@ not a refusal.
 #### The account page needs one call, not two
 
 `/v1/me`'s `license` block now carries `seating` and `leaseExpiresAt` alongside
-the term. Both were already in `license_summary`, and `/v1/config` already
+the term, and `held`: whether the stored mode is `licensed`. A Demo key and a
+licence revoked out from under the account both still have a kind and a
+prefix, so the page shows licence details and "Move licence" only when `held`. Both were already in `license_summary`, and `/v1/config` already
 returned them — but `/v1/config` is the larger answer, and a browser asking
 "what am I?" should not have to fetch product limits to find out whether it
 holds a seat until 14:20.
@@ -1974,12 +2061,20 @@ tell them whether anything actually happened.
 
 `GET /v1/admin/licenses/{id}/reconcile` is the second number. It reads every
 seat, reads that seat holder's user document, and sorts each into one of three
-buckets with a reason attached:
+buckets with a reason attached. An `active` seat with a reason occupies a seat
+without entitling anyone, and is counted in `notEntitled` (which replaced
+`neverClaimed`: a pending invitation has no seat, so the old reason could not
+occur, and the seats it did catch were idle for the four reasons below).
+`entitled` is the accounts the backend would answer licensed for: none once
+the licence is past its grace, though the stored modes still say `licensed`. `maxSeats` is `null` for an uncapped licence:
 
 | Bucket | Reason | Means |
 |---|---|---|
 | `active` | — | On the roster and holding the licence. |
-| `active` | `never_claimed` | Invited, never signed in. Occupies a seat, entitles nobody. |
+| `active` | `on_hold` | The seat is disabled. Occupies a seat, entitles nobody. |
+| `active` | `no_account` | No user document behind the seat. |
+| `active` | `moved_on` | The account is on a different licence now. |
+| `active` | `demoted` | The account points at this licence but is on Demo. |
 | `revokedConfirmed` | `checked_in` | Demoted, and the account has made a request since the revoke — so its device has re-read `/v1/config`. |
 | `revokedConfirmed` | `moved_on` | The account is on a different licence now. |
 | `revokedConfirmed` | `no_account` | No user document behind the seat. |

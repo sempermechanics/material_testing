@@ -31,6 +31,7 @@ import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.TestType
@@ -41,6 +42,7 @@ import com.indicvision.semper.ui.analysis.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
+import com.indicvision.semper.ui.common.DeleteFeedback
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
@@ -76,6 +78,14 @@ class HomeActivity : AppCompatActivity() {
     private val shownSucceededUploads = mutableSetOf<java.util.UUID>()
 
     private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
+
+    private lateinit var deleteFeedback: DeleteFeedback
+
+    /**
+     * Rows just queued for deletion, hidden until WorkManager lists their job
+     * (the enqueue lands asynchronously) or it ends.
+     */
+    private val justQueuedDeletes = mutableSetOf<String>()
     private var activeUploadProgress: Map<String, SessionListAdapter.RowProgress> = emptyMap()
     private var activeRestoreProgress: Map<String, SessionListAdapter.RowProgress> = emptyMap()
 
@@ -241,7 +251,16 @@ class HomeActivity : AppCompatActivity() {
             backCallback = backCallback,
             onRefresh = { refresh() },
             onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
+            onDeleteQueued = { workId, items ->
+                justQueuedDeletes += items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId }
+                deleteFeedback.queued(workId, items.size)
+                refresh(reconcile = false)
+            },
         )
+        deleteFeedback = DeleteFeedback(this, findViewById(R.id.homeRoot)) {
+            justQueuedDeletes.clear()
+            refresh(reconcile = false)
+        }
         selection.bindBarActions(
             btnClose = findViewById(R.id.btnSelectionClose),
             btnDelete = findViewById(R.id.btnSelectionDelete),
@@ -265,6 +284,7 @@ class HomeActivity : AppCompatActivity() {
 
         observeUploadFailures()
         observeRestoreProgress()
+        deleteFeedback.observe()
     }
 
     /**
@@ -437,10 +457,12 @@ class HomeActivity : AppCompatActivity() {
     /**
      * @param deep verify blobs really exist in Drive (pull-to-refresh) rather
      *   than trusting the backend index (cheap resume check).
+     * @param reconcile false only re-reads the phone's list, for a change made
+     *   here that the cloud check has nothing to add to.
      */
-    private fun refresh(deep: Boolean = false) {
+    private fun refresh(deep: Boolean = false, reconcile: Boolean = true) {
         lifecycleScope.launch {
-            val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
+            val sessions = visibleSessions()
             val cloudOnly = withContext(Dispatchers.IO) {
                 sessions.filter {
                     it.syncState == SessionRecord.SyncState.SYNCED && !it.hasLocalData()
@@ -458,6 +480,7 @@ class HomeActivity : AppCompatActivity() {
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
             TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
+            if (!reconcile) return@launch
             try {
                 reconcileWithCloud(deep)
             } finally {
@@ -490,7 +513,10 @@ class HomeActivity : AppCompatActivity() {
         tvHomeLicense.isVisible = true
         tvHomeLicense.text = when {
             LicenseEntitlements.inGrace(this) -> getString(R.string.license_grace, support)
-            days <= 0L -> getString(R.string.license_expiring_today, support)
+            // Past its day on a config fetched before it ended: the cache
+            // cannot say whether grace applies, only that the day has gone.
+            days < 0L -> getString(R.string.license_expired, support)
+            days == 0L -> getString(R.string.license_expiring_today, support)
             else -> resources.getQuantityString(
                 R.plurals.license_expiring_fmt,
                 days.toInt(),
@@ -561,8 +587,7 @@ class HomeActivity : AppCompatActivity() {
                 }
                 if (outcome.repaired > 0) {
                     // The rows changed underneath us — show the corrected state.
-                    val sessions = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity) }
-                    adapter.submit(sessions)
+                    adapter.submit(visibleSessions())
                     if (!showsCloudState()) return
                     Toast.makeText(
                         this,
@@ -686,6 +711,15 @@ class HomeActivity : AppCompatActivity() {
             .firstOrNull { it.state == WorkInfo.State.FAILED }
             ?.outputData?.getString(DicKeys.UPLOAD_FAIL_REASON)
     }.getOrNull()
+
+    /** The phone's analyses, less any a queued delete is about to remove. */
+    private suspend fun visibleSessions(): List<SessionRecord> {
+        val justQueued = justQueuedDeletes.toSet()
+        return withContext(Dispatchers.IO) {
+            val hidden = justQueued + SessionDeletes.pendingRowIds(this@HomeActivity)
+            SessionStore.list(this@HomeActivity).filterNot { it.id in hidden }
+        }
+    }
 
     private fun showDeviceOnlyKeptSnackbar() {
         CrispToast.show(this, getString(R.string.delete_device_only_done), long = true)
