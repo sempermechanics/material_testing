@@ -74,12 +74,73 @@ A first attempt counted "No App Check token" lines in logcat instead (this build
 cannot attest, so each request logs one). That count stayed near 10 per open on
 both builds and is not a request count: after about five quick restarts the phone
 stopped reaching the server at all (no gateway entry), and each failed attempt is
-retried and logged again. Why the phone went offline is **[Unknown]**; it happened
-on both builds.
+retried and logged again. [Note 2026-09-25, found in Pass 2] The phone had gone to
+sleep: with a 30 s screen timeout and Battery Saver on, the locked phone was dozing,
+and Android blocked the app's network (`dumpsys netpolicy`:
+`blocked=BATTERY_SAVER|DOZE|APP_BACKGROUND|DATA_SAVER`, process state `TPSL`).
+The app logged `UnknownHostException` while the shell could still reach the
+gateway. `launch_counts.py` now sends a wake key every 10 s and records whether
+the phone was awake at the end of each open.
 
 **Cost:** one private `Mutex`; no new dependency. The only behaviour change is
 that concurrent reconciles now wait for each other instead of overlapping. A
 waiting pull-to-refresh can take up to one extra listing's latency.
+
+## Pass 2: one config fetch per app open
+
+**Bottleneck.** After Pass 1 an app open made 4 requests, 2 of them
+`GET /v1/config`. `StatusRecheck` (`AuthRepository.resolveStatus`, which fetches
+`/v1/me` and `/v1/config` together) and Home's reconcile each fetched config. In
+the production access log for the phone's uid on 2026-09-25, the two fetches reach
+the server 20–100 ms apart on every open. Each takes 30–90 ms on the server, so
+the second one starts before the first has answered.
+
+The plan was to skip the reconcile's fetch when config had been fetched in the
+last 60 s. That can never trigger when the two overlap, so it was not built.
+
+**Lever:** request coalescing. `IndicApi.getConfig` runs through a
+`SingleFlight` (`data/net/SingleFlight.kt`): a call that arrives while one is
+running waits for the same answer.
+- Nothing is cached; the next call after one finishes fetches again.
+- A failure reaches every caller that joined, and the next call retries.
+- The shared call runs in its own scope, so a caller that gives up cancels only
+  its own wait.
+- The status check and the reconcile stay independent: no lock spans the two.
+
+**Amdahl ceiling.** Config is 2 of the 4 requests per open (p = 0.5). Collapsing
+it to 1 saves 1 of 4, 25 % [Estimated]. That clears the 5 % bar for adding a
+concurrency primitive.
+
+**Instrument (JVM).** `ConfigSingleFlightTest` starts K callers at once against a
+fetch that takes 50 ms. JVM, Windows 11.
+
+| Overlapping callers (K) | fetches without it | with it |
+|--:|--:|--:|
+| 2 | 2 | 1 |
+| 8 | 8 | 1 |
+| 32 | 32 | 1 |
+
+[Measured] Identical in every run (spread 0).
+
+**Device, 2026-09-25.** Pixel 6 on the production gateway, debug build, 10 opens
+each with 25 s per open. The reconcile throttle was reset before every open.
+Counts are per open from the Cloud Run access log.
+
+| Requests per open (server log) | opens | median | `GET /v1/config` | `GET /v1/me` | `GET /v1/sessions` |
+|---|---|--:|--:|--:|--:|
+| before (#191 build) | 4 4 4 4 4 4 4 4 4 (1 open sent none) | 4 | 2 | 1 | 1 |
+| after (this PR) | 3 3 3 3 3 3 3 3 3 3 | 3 | 1 | 1 | 1 |
+
+[Measured] Spread 0 on both runs, shift 1. **Gate met** (1 config fetch per
+open). Since #191's baseline of 12, requests per open are down 4×.
+
+The after run kept the screen awake with the wake key and checked that it held on
+all 10 opens. The before run did not; its one silent open is most likely the
+phone sleeping. The phone's own log showed no requests for that open either.
+
+**Cost:** one small class and 12 lines in `IndicApi`; no new dependency. A fetch
+started with one token answers any caller that joins within its ~100 ms flight.
+Every caller at launch holds the same signed-in user's token.
 
 ## Pass 4: an inline session create stops reading back what it wrote
 

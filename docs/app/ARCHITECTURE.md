@@ -126,6 +126,9 @@ place that answers "am I demo or licensed," and it reads through
 `GET /v1/config` last reported (`plan`, `cloudBackupEnabled`, `shareEnabled`,
 `licensePrefix`, `licenseKind`). Fails closed: before the first successful
 fetch, and on any ambiguous value, everything reads as Demo.
+At launch the status check and the cloud reconcile both ask for config, a few
+milliseconds apart; `IndicApi.getConfig` shares one in-flight request between
+them (`data/net/SingleFlight.kt`, [perf/request-volume.md](../perf/request-volume.md) Pass 2).
 
 `IndicApi.activateLicense()` calls `POST /v1/licenses/activate` (bearer +
 `X-Device-Id`, not device-signed) to redeem a key — see
