@@ -13,6 +13,14 @@ object LabReportFormat {
     fun num(value: Float, decimals: Int): String = String.format(Locale.US, "%.${decimals}f", value)
 
     /**
+     * The viewer's frame number (1-based) for 0-based deformed frames [first]
+     * to [last]: "7", or "5–9" for a load held over several frames. The
+     * table's S.No counts rows, which skips frames without a load or a field.
+     */
+    fun frameCell(first: Int, last: Int = first): String =
+        if (last == first) "${first + 1}" else "${first + 1}–${last + 1}"
+
+    /**
      * A strain the way the handwritten table writes it: "8.00×10⁻⁵". Zero and
      * non-finite values are written plainly.
      */

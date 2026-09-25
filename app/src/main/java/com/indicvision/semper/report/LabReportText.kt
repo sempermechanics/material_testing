@@ -60,8 +60,8 @@ object LabReportText {
         const val FINAL_DIAMETER = "Final diameter (mm)"
         const val FINAL_GAUGE_LENGTH = "Final gauge length (mm)"
 
-        val TABLE_HEADERS = listOf("S.No", "Load (kN)", "Extension (px)", "Stress (MPa)", "Strain")
-        val TABLE_WEIGHTS = listOf(0.10f, 0.20f, 0.22f, 0.22f, 0.26f)
+        val TABLE_HEADERS = listOf("S.No", "Frame", "Load (kN)", "Extension (px)", "Stress (MPa)", "Strain")
+        val TABLE_WEIGHTS = listOf(0.08f, 0.10f, 0.18f, 0.20f, 0.20f, 0.24f)
         const val ELASTIC = "Elastic"
         const val PLASTIC = "Plastic"
         const val BREAK = "Break point"
@@ -116,8 +116,9 @@ object LabReportText {
         const val NO_LOAD_VALUE = "reference photo = 0 mm"
         const val SCALE = "Scale from the thickness taps (mm per pixel)"
 
-        val TABLE_HEADERS = listOf("Sr. No", "Load W (N)", "Deflection δ (mm)", "Bending stress σb (MPa)", "E (GPa)")
-        val TABLE_WEIGHTS = listOf(0.10f, 0.19f, 0.23f, 0.30f, 0.18f)
+        val TABLE_HEADERS =
+            listOf("Sr. No", "Frame", "Load W (N)", "Deflection δ (mm)", "Bending stress σb (MPa)", "E (GPa)")
+        val TABLE_WEIGHTS = listOf(0.08f, 0.10f, 0.15f, 0.23f, 0.29f, 0.15f)
 
         const val SIGMA_FORMULA = "σb = M · y / I"
         fun momentLine(loadN: String, spanM: String, momentNm: String) =

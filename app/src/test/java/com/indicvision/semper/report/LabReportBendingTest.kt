@@ -58,7 +58,22 @@ class LabReportBendingTest {
 
         assertEquals(LabReportText.Bending.TABLE_HEADERS, table.headers)
         assertEquals(6, table.rows.size)
-        assertEquals(listOf("1", "41.99", "1.140", "9.645", "193.21"), table.rows[0])
+        assertEquals(listOf("1", "1", "41.99", "1.140", "9.645", "193.21"), table.rows[0])
+    }
+
+    @Test
+    fun `table rows name the viewer's frames when frames are dropped or held`() {
+        // The reference (no load) is dropped, and one load is held over frames 4–6,
+        // so Sr. No and the viewer's frame number part ways.
+        val taps = BeamEdgeTaps(0f, 0f, 0f, 127.6f)
+        val model = StressStrain.Model.Flexural(935f, 150f, 6.38f, true, BeamDeflection.Probe(taps, 6.38f))
+        val loads = listOf(0f, 40f, 50f, 60f, 60f, 60f, 70f)
+        val points = loads.mapIndexed { i, w -> StressStrain.Point(i, w, model.stressMPa(w), 0f, w / 40f) }
+        val doc = LabReport.of(StressStrain.Curve(model, points.size, points), null)!!
+        val table = doc.blocks.filterIsInstance<LabReport.Block.Table>().single()
+
+        assertEquals(listOf("1", "2", "3", "4"), table.rows.map { it[0] })
+        assertEquals(listOf("2", "3", "4–6", "7"), table.rows.map { it[1] })
     }
 
     @Test

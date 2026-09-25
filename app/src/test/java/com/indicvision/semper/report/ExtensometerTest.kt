@@ -77,7 +77,7 @@ class ExtensometerTest {
 
         val doc = LabReport.of(curve, null)!!
         val table = doc.blocks.filterIsInstance<LabReport.Block.Table>().single()
-        assertEquals(listOf("0.09", "0.18", LabReport.BLANK_CELL), table.rows.map { it[2] })
+        assertEquals(listOf("0.09", "0.18", LabReport.BLANK_CELL), table.rows.map { it[3] })
         val fields = doc.blocks.filterIsInstance<LabReport.Block.Field>().associate { it.label to it.value }
         assertEquals("90 — between the ends of the analysed region", fields["DIC gauge length along x (px)"])
         val calc = doc.blocks.filterIsInstance<LabReport.Block.Calculation>().single()

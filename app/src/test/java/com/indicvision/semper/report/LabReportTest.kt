@@ -71,10 +71,25 @@ class LabReportTest {
     fun `observation table rows carry load in kN, stress and a journal-style strain`() {
         val table = document().blocks.filterIsInstance<LabReport.Block.Table>().single()
 
-        assertEquals(listOf("S.No", "Load (kN)", "Extension (px)", "Stress (MPa)", "Strain"), table.headers)
+        assertEquals(listOf("S.No", "Frame", "Load (kN)", "Extension (px)", "Stress (MPa)", "Strain"), table.headers)
         assertEquals(15, table.rows.size)
-        assertEquals(listOf("1", "8.900", "—", "72.06", "8.00×10⁻⁵"), table.rows[0])
-        assertEquals("9.60×10⁻⁴", table.rows[11][4])
+        assertEquals(listOf("1", "1", "8.900", "—", "72.06", "8.00×10⁻⁵"), table.rows[0])
+        assertEquals("9.60×10⁻⁴", table.rows[11][5])
+    }
+
+    @Test
+    fun `the frame column follows the viewer when a frame has no point`() {
+        // Frame 3 (index 2) had no load row, so it is not on the curve.
+        val points = listOf(0, 1, 3, 4).map { f ->
+            val loadN = 1000f * (f + 1)
+            StressStrain.Point(f, loadN, model.stressMPa(loadN), 0.1f * (f + 1))
+        }
+        val curve = StressStrain.Curve(model, 5, points)
+        val table = LabReport.of(curve, ElasticModulus.fit(curve))!!.blocks
+            .filterIsInstance<LabReport.Block.Table>().single()
+
+        assertEquals(listOf("1", "2", "3", "4"), table.rows.map { it[0] })
+        assertEquals(listOf("1", "2", "4", "5"), table.rows.map { it[1] })
     }
 
     @Test
