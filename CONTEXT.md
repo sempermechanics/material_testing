@@ -152,8 +152,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
-- **Owed.** Device runs of the merged wizard (process death with a load log)
-  and of video import beyond emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
+- **Lab on the emulator (#24).** `e2e/LabWorkflowDeviceTest` and
+  `e2e/BeamTapEditorGestureTest` run the lab end to end in Tier 3 (Results,
+  Elastic toggle, lab-report PDF, viewer and tap-editor gestures);
+  `WizardDraftRestoreTest` covers a load log across a process death;
+  `LabResultsBenchmark` times the Results page. The two-frame flick they caught
+  is fixed by the parent's TD-72 (#194), which this sync brings.
+- **Owed.** Device runs on a physical phone, and video import beyond emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
   production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in

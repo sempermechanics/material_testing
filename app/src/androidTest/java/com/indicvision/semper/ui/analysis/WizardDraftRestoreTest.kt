@@ -5,6 +5,11 @@ import android.os.Parcel
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.indicvision.semper.data.BeamEdgeTaps
+import com.indicvision.semper.data.LoadCsvParse
+import com.indicvision.semper.data.MachineLoadCsv
+import com.indicvision.semper.data.SpecimenGeometry
+import com.indicvision.semper.data.TestType
 import com.indicvision.semper.data.WizardDraft
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -103,6 +108,50 @@ class WizardDraftRestoreTest {
     }
 
     @Test
+    fun aBendingWizardKeepsItsLoadLogTapsAndFrameTimes() {
+        val draft = WizardDraft(context)
+        val paths = (1..FRAMES).map { File(frames, "frame_$it.png").apply { writeBytes(byteArrayOf(it.toByte())) }.path }
+        val parsed = (MachineLoadCsv.parse(LOAD_LOG) as LoadCsvParse.Ok).csv
+        val geometry = SpecimenGeometry(
+            spanMm = 80f,
+            widthMm = 10f,
+            thicknessMm = 4f,
+            loadPoint = BeamEdgeTaps(topX = 320f, topY = 200f, bottomX = 320f, bottomY = 240f),
+        )
+        val before = AnalysisViewModel(SavedStateHandle()).apply {
+            attachDraft(draft)
+            refBytes = REF
+            realRefWidth = 640
+            realRefHeight = 480
+            defFilePaths = paths
+            defOriginalNames = paths.map { File(it).name }
+            defFrameDates = paths.map { Long.MAX_VALUE }
+            defFrameSizes = paths.associateWith { 640 to 480 }
+            defFrameTimesMs = listOf(500L, 1_000L, 1_500L)
+            testType = TestType.BENDING
+            this.geometry = geometry
+            setLoadLog(parsed, "run1.csv", LOAD_LOG)
+            refreshMachineLoads()
+        }
+        assertEquals(FRAMES, before.machineLoads?.matchedFrames)
+        awaitDraft("reference") { draft.readReference()?.contentEquals(REF) == true }
+        awaitDraft("load log") { draft.readLoadLog() == LOAD_LOG }
+
+        val saved = parcelled(before.saveWizardState())
+        val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved)))
+        after.attachDraft(WizardDraft(context))
+
+        assertEquals(AnalysisViewModel.DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(TestType.BENDING, after.testType)
+        assertEquals(geometry, after.geometry)
+        assertEquals(listOf(500L, 1_000L, 1_500L), after.defFrameTimesMs)
+        assertEquals("run1.csv", after.loadCsvName)
+        assertEquals(before.parsedLoadCsv, after.parsedLoadCsv)
+        assertEquals(before.machineLoads?.loadsN, after.machineLoads?.loadsN)
+        assertTrue(after.mechanicalInputsReady())
+    }
+
+    @Test
     fun leavingTheWizardDropsTheDraft() {
         val draft = WizardDraft(context)
         val vm = AnalysisViewModel(SavedStateHandle()).apply {
@@ -118,6 +167,13 @@ class WizardDraftRestoreTest {
         val REF = ByteArray(4096) { (it % 251).toByte() }
         val MASK = ByteArray(1024) { 1 }
         const val FRAMES = 3
+        val LOAD_LOG = """
+            Time (s),Load (N)
+            0.0,0.0
+            0.5,100.0
+            1.0,200.0
+            1.5,300.0
+        """.trimIndent()
         const val TIMEOUT_MS = 5_000L
         const val POLL_MS = 20L
     }
