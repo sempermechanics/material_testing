@@ -124,7 +124,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     ship with the next app build.
 
   Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs 6 + N
-  Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+  Firestore reads instead of 8 + 2N, with no rise in latency (median 2487 ms, n = 10)
+  ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
 
   Measured, no change:
   - Pass 3: one ~1.7 s App Check attestation per cold open, which only the Play
