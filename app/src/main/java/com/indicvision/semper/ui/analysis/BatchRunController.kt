@@ -3,6 +3,7 @@ package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint
 import android.view.WindowManager
 import android.widget.TextView
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -84,10 +85,15 @@ class BatchRunController(
         onSweepFinished(result.getOrNull())
     }
 
-    private fun handleBatchOutcome(result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {
+    @VisibleForTesting
+    internal fun handleBatchOutcome(result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {
         setProcessing(false)
         overlayHelper.hide()
         activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Once, before any branch: Compute was disabled for the run, and a branch
+        // that forgot to re-check left it disabled — a failed run could not be
+        // re-run after changing a setting, since the sliders never re-check.
+        checkReady()
 
         result.onFailure { e ->
             clearEngineFailFaq()
@@ -98,17 +104,14 @@ class BatchRunController(
                 .setMessage(activity.getString(R.string.analysis_unexpected_fmt, detail))
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
-            checkReady()
             return
         }
 
         val outcome = result.getOrThrow()
         when {
-            outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED -> checkReady()
-            outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT -> {
-                checkReady()
+            outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED -> Unit
+            outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT ->
                 AnalysisNavHelper.openSessionLimit(activity)
-            }
             outcome.engineErrorCode == AnalysisRunCodes.ERROR_LOW_CONVERGENCE &&
                 outcome.totalFrames > 0 -> {
                 clearEngineFailFaq()
@@ -126,7 +129,6 @@ class BatchRunController(
                 tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
                 viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
                 viewModel.lastBatchDirPath = outcome.batchDirPath
-                checkReady()
                 openResultViewer()
             }
         }
