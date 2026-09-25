@@ -12,6 +12,41 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-25 — Backend and console deploy: wrong-information audit (#211, #215, #216, #221, #224)
+
+Production `semper-api-36120337264-1` from `fd14374` (staging first, run
+36119768491 → `semper-api-staging-36119768491-1`; production run 36120311362 →
+`semper-api-36120311362-1` with the gateway dry-run, then run 36120337264 with
+`apply`). Candidate smoke passed on all three. The gateway diff was descriptions
+and documented response codes only; `apply` switched `semper-gw` from
+`v202609241122-44` to `v202609250953-51`, and the outside check answered 401 on
+`GET /v1/config` and 200 on the preflight. The console went out with
+`scripts/deploy-console.sh` to `indicvision-dic-app-auth`; `app.sempermechanics.com`
+serves it against the production gateway.
+
+- #211: a licensed analysis ceiling is never below demo's; staff can clear a
+  licence's per-person cap (`clearMaxAnalyses`); the operator form and table name
+  the field "Analyses / person".
+- #215: seat and lease counters — no resume on a removed seat, a lease that
+  expired unswept is still decremented, whole-licence revoke and account delete
+  free their seats and leases, a stranded invite is retried.
+- #216: console labels and dates — Mode column, expired/in-grace pills, expiry as
+  a UTC date, reconcile reasons instead of "never claimed", `held` on `/v1/me`.
+- #221: the lease sweep reclaims each seat in its own transaction; a lost race is
+  `503 claim_contended`, not "no seats left"; the quota refusal names an ended
+  licence or a missing seat; Extend refuses a past, earlier or perpetual expiry;
+  claims mirror the licence terms read inside the transaction.
+- #224: the device-change cooldown refusal carries its date (and `Retry-After`);
+  `maxSeats` below seats in use is `422 max_seats_below_used`; revoke returns the
+  reset counts; invites are not claimed onto a lapsed licence; a provisioning
+  retry cannot undo COMPLETED; failed uploads leave the quota and show no size.
+  The quota count now costs one more Firestore read on `GET` and `POST
+  /v1/sessions` (accepted by the owner over a new composite index;
+  [perf/request-volume.md](../perf/request-volume.md)).
+
+The audit's app half (#211's ceiling, #212, #218, #219, #220, #223, #225) ships
+with the next app release.
+
 ## 2026-09-25 — Backend deploy: inline create reads (#202), deployer IAM (TD-71)
 
 Production `semper-api-36096112375-1` from `300fb7f` (staging first, run
