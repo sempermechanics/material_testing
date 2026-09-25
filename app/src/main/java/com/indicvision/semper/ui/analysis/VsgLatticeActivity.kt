@@ -333,11 +333,15 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
         summary.isClickable = false
         summary.setOnClickListener(null)
-        summary.text = if (stepDenom > 0) {
+        // A cancelled sweep never reached some combinations; they are neither
+        // solved nor skipped, and counting only the two read as a finished plan.
+        val total = maxOf(args.plannedFrames, nodes.size)
+        val unreached = total - nodes.size
+        val counts = if (stepDenom > 0) {
             resources.getQuantityString(
                 R.plurals.vsg_lattice_summary_fmt,
-                nodes.size,
-                nodes.size,
+                total,
+                total,
                 solvedCount,
                 skippedCount,
                 stepDenom,
@@ -345,11 +349,16 @@ class VsgLatticeActivity : AppCompatActivity() {
         } else {
             resources.getQuantityString(
                 R.plurals.vsg_lattice_summary_short_fmt,
-                nodes.size,
-                nodes.size,
+                total,
+                total,
                 solvedCount,
                 skippedCount,
             )
+        }
+        summary.text = if (unreached > 0) {
+            counts + resources.getQuantityString(R.plurals.vsg_lattice_unreached_fmt, unreached, unreached)
+        } else {
+            counts
         }
     }
 

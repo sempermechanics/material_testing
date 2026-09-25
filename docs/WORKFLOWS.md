@@ -186,7 +186,7 @@ stays on the Activity.
 |---|---|
 | Writes | `<sessionDir>/frame_%04d.dat` (`data/SessionPaths`), `raw_deformed/`, reference copy and the index row via `data/SessionRepository.buildSessionRecord` → `data/SessionStore.upsert` |
 | Then | `SessionRepository` calls `data/CloudSync.enqueueUpload` → B1 when cloud backup is on |
-| Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart |
+| Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart. A re-run that saves nothing updates or drops its Home row to match what is left on disk (`DicBatchRunner.afterUnsavedRerun`); a cancelled re-run is saved as a partial run |
 | Signals | Timber; `android.os.Trace` sections; `analytics/SemperAnalytics` analysis started / completed / failed (consent-gated, buckets only) |
 | Tests | `analysis/VsgStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
 

@@ -926,6 +926,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">1 combination · %2$d solved · %3$d skipped · step subset÷%4$d</item>
         <item quantity="other">%1$d combinations · %2$d solved · %3$d skipped · step subset÷%4$d</item>
     </plurals>
+    <plurals name="vsg_lattice_unreached_fmt">
+        <item quantity="one">" · 1 not run"</item>
+        <item quantity="other">" · %1$d not run"</item>
+    </plurals>
     <plurals name="vsg_lattice_summary_short_fmt">
         <item quantity="one">1 combination · %2$d solved · %3$d skipped</item>
         <item quantity="other">%1$d combinations · %2$d solved · %3$d skipped</item>
