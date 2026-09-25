@@ -191,7 +191,6 @@ class ResultViewerActivity : AppCompatActivity() {
             viewerVm.currentDataIndex = value
         }
 
-    internal var currentDefPath: String? = null
     private var currentHeatmapMin = 0f
     private var currentHeatmapMax = 0f
 
@@ -326,8 +325,6 @@ class ResultViewerActivity : AppCompatActivity() {
         if (refPath != null) {
             decodeReferenceForDisplay(refPath)
         }
-
-        currentDefPath = args.defPath
 
         val batchDirPath = args.batchDirPath
         originalDefNames = args.frameNames
@@ -993,6 +990,29 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun buildReportData(frameIndex: Int, data: FloatArray): ReportData? =
         ViewerReportFactory.buildReportData(this, frameIndex, data)
+
+    /**
+     * The planned frame behind the [position]-th `.dat` on disk. A frame the
+     * batch skipped leaves a gap in the numbering, so the two part ways there.
+     */
+    internal fun plannedFrameIndex(position: Int): Int =
+        batchFiles.getOrNull(position)?.let { SessionPaths.frameIndexOf(it.name) } ?: position
+
+    /**
+     * The deformed image solved at [position], or null when it is not on disk.
+     * Every node of a sweep solves the one deformed image. A batch looks its
+     * frame up by the name the run persisted it under, since `raw_deformed/`
+     * keeps the user's own file names and sorts them alphabetically, not in
+     * frame order.
+     */
+    internal fun deformedImagePathAt(position: Int): String? {
+        if (isSweep) return defImagePaths.firstOrNull()
+        val planned = plannedFrameIndex(position)
+        val rawDir = args.batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
+        val persisted = originalDefNames.getOrNull(planned)?.let { name -> rawDir?.let { File(it, name) } }
+        return persisted?.takeIf { it.isFile }?.absolutePath
+            ?: args.defFilePaths.getOrNull(planned)?.takeIf { File(it).isFile }
+    }
 
     /** Everything ShareCenter needs, captured from the viewer's state. */
     /**
