@@ -136,8 +136,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   shape modes removed (TD-74), and the backend's inline-create read budget
   (#202). Fixes made here go back: the ninther `quickSelect` (TD-76), A4 PDF
   pages (TD-77) and the device-pass fixes (TD-79, TD-80, TD-82–TD-85) are in
-  the parent too; TD-78 and TD-81 are lab-only; the summary ranges
-  write-back (TD-87) is not ported yet. The first sync brought the #155–#168
+  the parent too, as is the summary ranges write-back (TD-88,
+  semperdic-app#217); TD-78 and TD-81 are lab-only. The parent's buffer reuse
+  for that pass came here in #33 (TD-87). The first sync brought the #155–#168
   burn-down (ADR-001…006), CI hardening and composites, App Check on real
   phones, the rate-limit and nonce fixes, the one-pass upload CSV (#182) and the
   coverage floor. The lab inputs ride upstream's seams: `RunSpec.mechanical`
@@ -161,8 +162,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Elastic toggle, lab-report PDF, viewer and tap-editor gestures);
   `WizardDraftRestoreTest` covers a load log across a process death;
   `LabResultsBenchmark` times the Results page.
-- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#31, TD-86). This branch has the one
-  no-sidecar ranges pass reuse its frame buffer and columns (TD-87, from semperdic-app#214).
+- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#31, TD-86). The seeded scrub session
+  has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
+  and saves it (#33, #34, TD-87/TD-88). TD numbers match the parent's from TD-86 on.
 - **Owed.** Device runs on a physical phone, and video import beyond emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
   production state.
