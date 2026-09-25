@@ -11,7 +11,7 @@ Phone-camera **2D digital image correlation (DIC)** for the first-semester
 machine's load log. The app gives you E and fills in your lab report.
 
 <p align="center">
-  <img src="docs/images/test-type.png" width="220" alt="Which test? Tensile or Bending">
+  <img src="docs/images/test-type.png" width="220" alt="Which test? Tensile, Bending or 2D DIC">
   &nbsp;
   <img src="docs/images/step1-tensile.png" width="220" alt="Tensile setup: frames, load log, cross-section">
   &nbsp;

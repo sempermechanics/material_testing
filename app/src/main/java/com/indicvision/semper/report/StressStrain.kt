@@ -129,7 +129,7 @@ object StressStrain {
                     loadAxisX,
                     BeamDeflection.Probe.of(geometry.loadPoint, geometry.thicknessMm),
                 )
-                TestType.TENSILE, null -> Axial(crossSectionMm2, loadAxisX)
+                TestType.TENSILE, TestType.DIC_2D, null -> Axial(crossSectionMm2, loadAxisX)
             }
         }
     }

@@ -255,16 +255,24 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      * Everything the session record stores about the test. A sweep varies
      * settings on one frame pair, so it records the type and dimensions but never
      * per-frame loads — there is no load-per-combination to plot.
+     *
+     * Plain 2D DIC records no test at all: a blank type is what every reader
+     * (viewer, CSV, PDF cover, cloud metadata) already takes as a plain DIC
+     * session, so the run saves exactly what it did before test types existed.
      */
-    fun mechanicalInputs(forSweep: Boolean): MechanicalTestInputs = MechanicalTestInputs(
-        testType = testType.wireName,
-        crossSectionMm2 = crossSectionMm2,
-        loadAxisX = loadAxisX,
-        geometry = geometry,
-        loadsN = if (forSweep) emptyList() else machineLoads?.loadsN.orEmpty(),
-        loadSource = if (forSweep) "" else loadCsvName,
-        loadMapping = if (forSweep) "" else machineLoads?.mapping?.name.orEmpty(),
-    )
+    fun mechanicalInputs(forSweep: Boolean): MechanicalTestInputs = if (!testType.hasMachineLoad) {
+        MechanicalTestInputs.NONE
+    } else {
+        MechanicalTestInputs(
+            testType = testType.wireName,
+            crossSectionMm2 = crossSectionMm2,
+            loadAxisX = loadAxisX,
+            geometry = geometry,
+            loadsN = if (forSweep) emptyList() else machineLoads?.loadsN.orEmpty(),
+            loadSource = if (forSweep) "" else loadCsvName,
+            loadMapping = if (forSweep) "" else machineLoads?.mapping?.name.orEmpty(),
+        )
+    }
 
     val defCount: Int get() = defFilePaths.size
 

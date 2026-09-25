@@ -66,8 +66,10 @@ Home → TestTypeSheet → StaticAnalysisActivity (wizard) → ResultViewerActiv
      → open session → ResultViewerActivity | VsgLatticeActivity
 ```
 
-The test type (`data/TestType`: tensile / bending) is chosen on Home and rides
-`DicKeys.TEST_TYPE` into the wizard. At Compute the type, the specimen
+The test type (`data/TestType`: tensile / bending / 2D DIC) is chosen on Home and rides
+`DicKeys.TEST_TYPE` into the wizard. 2D DIC has no load card and records no
+type (`MechanicalTestInputs.NONE`), so its session is a plain, untyped DIC
+session. For the lab tests, at Compute the type, the specimen
 dimensions and the per-frame machine loads are snapshotted as
 `RunSpec.mechanical` (`MechanicalTestInputs`), which the run commits to
 `SessionRecord` and `metadata.json` schema `/6` and the viewer reads back

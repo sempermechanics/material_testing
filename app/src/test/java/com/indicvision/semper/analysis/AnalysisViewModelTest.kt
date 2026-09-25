@@ -3,6 +3,7 @@ package com.indicvision.semper.analysis
 import com.indicvision.semper.data.BeamEdgeTaps
 import com.indicvision.semper.data.LoadCsvParse
 import com.indicvision.semper.data.MachineLoadCsv
+import com.indicvision.semper.data.MechanicalTestInputs
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
@@ -190,5 +191,28 @@ class AnalysisViewModelTest {
     @Test
     fun `tensile never asks for a load point`() {
         assertFalse(vm.loadPointMissing())
+    }
+
+    // ------------------------------------------------------------ plain 2D DIC
+
+    @Test
+    fun `plain DIC needs no loads or dimensions to compute`() {
+        vm.testType = TestType.DIC_2D
+        vm.refBytes = ByteArray(8)
+        vm.defFilePaths = listOf("/tmp/def0.png")
+
+        assertFalse(vm.loadPointMissing())
+        assertTrue(vm.mechanicalInputsReady())
+        assertTrue(vm.isReadyToCompute())
+    }
+
+    @Test
+    fun `plain DIC records no test, so the session is an untyped DIC session`() {
+        vm.testType = TestType.DIC_2D
+        // Left over from nothing a plain-DIC wizard shows, but must not leak into the record.
+        vm.crossSectionMm2 = 12f
+
+        assertEquals(MechanicalTestInputs.NONE, vm.mechanicalInputs(forSweep = false))
+        assertEquals(MechanicalTestInputs.NONE, vm.mechanicalInputs(forSweep = true))
     }
 }

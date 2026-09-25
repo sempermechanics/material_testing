@@ -39,7 +39,7 @@ You give it one reference frame and N deformed frames. It gives you five fields 
 
 **+** asks which test it is. That choice decides what the wizard asks for, and you make it once per analysis.
 
-<img src="images/test-type.png" width="260" alt="Which test? Tensile or Bending">
+<img src="images/test-type.png" width="260" alt="Which test? Tensile, Bending or 2D DIC">
 
 Formulas, accuracy and worked numbers: [app/STUDENT_LAB_WORKFLOW.md](app/STUDENT_LAB_WORKFLOW.md).
 
@@ -93,6 +93,12 @@ Blank lines are left where the app has no value, such as the final diameter, nam
 <img src="images/lab-report-tensile.png" width="720" alt="Tensile lab report: setup, observations, table, calculation, graphs, results">
 
 <img src="images/lab-report-bending.png" width="540" alt="Bending lab report: setup, observations, calculation, table, results, graph">
+
+### 2D DIC: the fields only
+
+Pick **2D DIC** when you only want the displacement and strain maps, with no load log and no specimen size.
+The wizard has no load card; pick the photos, set the ROI and tap **Compute** (§5).
+The analysis is saved as a plain DIC analysis: no **Results** page, no lab report, and no **Test type** row in ⓘ.
 
 ---
 
@@ -187,7 +193,7 @@ Blank lines are left where the app has no value, such as the final diameter, nam
 | Result | You land on |
 |---|---|
 | Tensile or bending | **Results** (curve or graph), then › through the frames |
-| An older analysis with no test type | The looping summary, then the frames |
+| 2D DIC, or an older analysis with no test type | The looping summary, then the frames |
 | Sweep | The result lattice |
 | Engine failed | A dialog naming the cause, the frame and the image |
 

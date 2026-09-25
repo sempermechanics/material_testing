@@ -86,7 +86,7 @@ class LabReportExporter(private val context: Context) {
                 when (TestType.fromWire(testType)) {
                     TestType.TENSILE -> true
                     TestType.BENDING -> hasLoadPoint
-                    null -> false
+                    TestType.DIC_2D, null -> false
                 }
     }
 }
