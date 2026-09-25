@@ -9,7 +9,16 @@ import pathlib
 import pytest
 
 from app import firestore_repo as repo
-from app.repo import _base, licensing, seats, user_config
+from app.repo import (
+    _base,
+    activation,
+    claims,
+    entitlement,
+    institution_admin,
+    licensing,
+    seats,
+    user_config,
+)
 
 REPO_DIR = pathlib.Path(__file__).resolve().parents[1] / "app" / "repo"
 
@@ -19,19 +28,20 @@ def _tree(module):
 
 
 def test_a_patch_through_the_facade_reaches_callers_inside_the_package():
-    """`ensure_entitlement` (licensing) calls `claim_seat` through its own
-    binding. A patch that reached only the facade would leave that caller on
+    """`ensure_entitlement` (entitlement) calls `claim_seat` through its own
+    binding, as do `activation` and `institution_admin`. A patch that reached only the facade would leave that caller on
     the real function and the test that set it would prove nothing."""
     real = repo.claim_seat
 
     def fake(*a, **k):
         return repo._CONTENDED
 
+    holders = (claims, activation, entitlement, institution_admin, licensing)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(repo, "claim_seat", fake)
-        assert licensing.claim_seat is fake
+        assert all(m.claim_seat is fake for m in holders)
         assert repo.claim_seat is fake
-    assert licensing.claim_seat is real
+    assert all(m.claim_seat is real for m in holders)
     assert repo.claim_seat is real
 
 
@@ -88,3 +98,52 @@ def test_only_base_binds_the_firestore_module():
         if "firestore" in vars(module)
     ]
     assert binders == []
+
+
+#: What each licensing module may import from the package (TD-64). Claims and
+#: invites are leaves; everything else builds on them, and `licensing` only
+#: re-exports.
+LICENSING_IMPORTS = {
+    "claims": {"_base"},
+    "invites": {"_base"},
+    "mint": {"_base", "claims", "invites"},
+    "activation": {"_base", "claims", "devlock", "user_config"},
+    "entitlement": {"_base", "claims", "invites", "mint"},
+    "license_admin": {"_base", "claims", "invites", "mint"},
+    "institution_admin": {"_base", "claims", "invites", "mint"},
+    "licensing": {"claims", "invites", "mint", "activation", "entitlement",
+                  "license_admin", "institution_admin"},
+}
+
+
+def _package_imports(module) -> set[str]:
+    return {
+        node.module for node in ast.walk(_tree(module))
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module
+    }
+
+
+def test_the_licensing_modules_import_only_their_layer():
+    by_name = {m.__name__.rsplit(".", 1)[1]: m for m in repo.PACKAGE}
+    extra = {
+        name: sorted(_package_imports(by_name[name]) - allowed)
+        for name, allowed in LICENSING_IMPORTS.items()
+        if _package_imports(by_name[name]) - allowed
+    }
+    assert extra == {}
+
+
+def test_licensing_only_re_exports():
+    """The old import path keeps working, but no code lands there again."""
+    defined = [
+        getattr(node, "name", None) or type(node).__name__
+        for node in _tree(licensing).body
+        if not isinstance(node, (ast.ImportFrom, ast.Expr))
+    ]
+    assert defined == []
+    by_name = {m.__name__.rsplit(".", 1)[1]: m for m in repo.PACKAGE}
+    for node in _tree(licensing).body:
+        if isinstance(node, ast.ImportFrom):
+            owner = by_name[node.module]
+            for alias in node.names:
+                assert getattr(licensing, alias.name) is vars(owner)[alias.name]

@@ -52,6 +52,7 @@ Forces:
    repo/users.py      get_or_create_user, list_users, set_user_status, …
    repo/config.py     resolve_user_config, effective_mode, set_user_config, …
    repo/licensing.py  mint, claims, invites, licence admin, institution queries
+                      (split again under TD-64; see "Licensing split")
    repo/devlock.py    bind/check/revalidate_device_lock
    repo/leases.py     checkout/release_lease, sweep
    repo/seats.py      clear_device_lock, set_seat_enabled, revoke seat
@@ -119,7 +120,13 @@ function body before and after must match, with only its module changing.
 - Harder: a name now has two bindings (the facade's and the submodule's), which
   the facade hides from tests; see "As built".
 - Revisit: if `licensing.py` itself passes ~1,000 lines, split mint / claims /
-  invites along the same acyclic edges. It is about 1,300 as built (TD-64).
+  invites along the same acyclic edges. It was about 1,300 as built, and was
+  split under TD-64 (see "Licensing split"); the largest licensing module is
+  now `mint.py`, under 400 lines.
+- A licensing change now lands in the module for its concern. A new repo
+  module has to join `PACKAGE` in import order or the facade tests fail; a
+  new licensing module also belongs in `LICENSING_IMPORTS` in
+  `tests/test_repo_facade.py`.
 
 ## As built (2026-09-23)
 
@@ -149,6 +156,51 @@ function-local `from . import audit` → `from .. import audit`.
 `tests/test_repo_facade.py` pins the propagation, the one-way imports, the
 facade's public names, and that only `_base` binds `firestore`.
 
+## Licensing split (TD-64, 2026-09-24)
+
+`repo/licensing.py` (1,298 lines) is cut along its call graph into seven
+modules. Code moved unchanged; `licensing.py` now only re-exports the 44 names
+it used to define, so `from app.repo.licensing import …` still works.
+
+```
+repo/claims.py             claim_seat, claim_individual_license,
+                           _drop_superseded_demo, and what a claim writes or
+                           answers: _license_mirror_patch, the two member
+                           patches, _emails_match, _public_claim_error
+repo/invites.py            invites (write, list, revoke, delete on revoke),
+                           find_user_by_email
+repo/mint.py               _write_license, ensure_demo_license, the two ops
+                           mints, _attach_to_existing_holder, _license_public
+repo/activation.py         activate_license (a typed key) and its two branches
+repo/entitlement.py        ensure_entitlement, claim_pending_invite
+repo/license_admin.py      list_licenses, update_license (renewal fan-out),
+                           revoke_license, _drop_user_to_demo_if_licensed
+repo/institution_admin.py  IT self-service: add member, roster, summary,
+                           licences an address administers
+```
+
+Edges (all toward `_base` omitted): mint → claims, invites; activation →
+claims, devlock, user_config; entitlement → claims, invites, mint;
+license_admin → claims, invites, mint; institution_admin → claims, invites,
+mint. Outside the licensing modules, users and devices → entitlement and
+seats → license_admin, where they used to import `licensing`. Claims and
+invites are leaves. Every module still reads `_base.db()` and
+`_base.firestore` by attribute, and each is in the facade's `PACKAGE`, so a
+patch through the facade still reaches every caller: `claim_seat` is bound in
+claims, activation, entitlement, institution_admin and the re-export.
+
+A helper with several consumers lives in a licensing module below all of them
+(`_license_public` in mint, `find_user_by_email` in invites), not in `_base`:
+there `_base.firestore` would have become `firestore` in its body, and the
+move would no longer be textually exact.
+
+Proof: `ast.dump` and the source text of all 44 definitions are equal before
+and after, and every global each one reads (nested transaction bodies
+included) resolves to the same object, or, for a moved function, to its new
+definition. `tests/test_repo_facade.py` adds `LICENSING_IMPORTS`, the imports
+each licensing module may make, and a test that `licensing.py` defines
+nothing.
+
 ## Action items
 
 1. [x] `_run_tx` at the ten sites; the ten `noqa: BLE001` go with it (TD-53).
@@ -158,4 +210,4 @@ facade's public names, and that only `_base` binds `firestore`.
        Not needed: the facade propagates patches (As built).
 4. [x] Full pytest (532 with the facade tests), emulator tier (23),
        `test_gateway_parity`, `test_route_authz_matrix`.
-5. [ ] Split `licensing.py` (TD-64).
+5. [x] Split `licensing.py` (TD-64); see "Licensing split".
