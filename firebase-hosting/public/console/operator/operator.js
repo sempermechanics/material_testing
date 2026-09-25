@@ -4,6 +4,7 @@ import {
 } from "../auth.js";
 import {
   seatCells, inviteCells, day, licenceState, licenceStatePill,
+  licenceListPath, searchableLicenceText, upsertLicence,
 } from "../util.js";
 
 const $ = (id) => document.getElementById(id);
@@ -112,10 +113,10 @@ $("mint").addEventListener("click", async () => {
 
   // A second live licence for one address is almost never what was meant —
   // renewal is Extend — and the backend mints it anyway, only reporting that
-  // the address is already promised elsewhere. Ask first, from the list
-  // already on screen.
+  // the address is already promised elsewhere. Ask first. The backend is
+  // asked, not the rows on screen: those were only the first page.
   if (kind === "individual" && body.emailLock) {
-    const already = liveLicencesFor(body.emailLock);
+    const already = await liveLicencesFor(body.emailLock);
     if (already.length && !window.confirm(
       `${body.emailLock} already holds ${already.map(labelOfLicence).join(", ")}.\n\n` +
       "To renew, cancel and use Extend on that row. Issue a second licence " +
@@ -132,15 +133,17 @@ $("mint").addEventListener("click", async () => {
     const out = await api("/v1/admin/licenses", {
       method: "POST", body: JSON.stringify(body),
     });
-    // An institution mint returns no plaintext key — there is nothing for
-    // anyone to type, membership is the roster. An individual one returns
-    // a key for support recovery only; delivery is the sign-in.
+    // Both kinds return the plaintext key, once. An individual one is for
+    // support recovery only; delivery is the sign-in. An institution one is
+    // what members on the domain can redeem, besides IT's roster.
     if (out.key) {
       $("mintedKey").textContent = out.key;
       $("mintedBox").hidden = false;
     }
-    setStatus(...mintOutcome(out, body.emailLock));
-    loadLicences({ keepStatus: true });
+    setStatus(...mintOutcome(out, body));
+    // Read back rather than show the mint's answer: attaching to an account
+    // that already signed in happens after the licence is written.
+    if (out.license) refreshLicence(out.license.id);
   } catch (e) {
     setStatus(mintError(e.message), true);
   } finally {
@@ -153,9 +156,12 @@ $("mint").addEventListener("click", async () => {
  * exists in every case; what varies is whether it reached the person, and
  * each way it did not is something the operator has to act on.
  */
-function mintOutcome(out, email) {
-  if (!out.key) return ["Institution licence issued."];
-  const who = email || "that address";
+function mintOutcome(out, body) {
+  if (body.kind === "institution") {
+    return [`Institution licence issued. People with a verified ${body.domainLock || "domain"} ` +
+      "address can redeem the key below, or IT adds them from the roster."];
+  }
+  const who = body.emailLock || "that address";
   if (out.inviteError === "invite_exists") {
     return [`Issued, but ${who} is already promised another licence — this ` +
       "one will not attach. Revoke whichever of the two is not wanted.", true];
@@ -178,11 +184,21 @@ function mintOutcome(out, email) {
   return [`Issued. It attaches when ${who} first signs in.`];
 }
 
-function liveLicencesFor(email) {
+/**
+ * Live individual licences locked to this address, from the backend. A
+ * failed lookup answers none: the check is advice, and the mint itself is
+ * the operator's call.
+ */
+async function liveLicencesFor(email) {
   const address = email.trim().toLowerCase();
-  return licences.filter((l) =>
-    l.kind !== "institution" && l.mode !== "demo" && l.status !== "revoked" &&
-    !lapsed(l) && (l.emailLock || "").toLowerCase() === address);
+  try {
+    const data = await api(licenceListPath({ limit: 50, q: address }));
+    return (data.licenses || []).filter((l) =>
+      l.kind !== "institution" && !lapsed(l) &&
+      (l.emailLock || "").toLowerCase() === address);
+  } catch {
+    return [];
+  }
 }
 
 /** Past its expiry and grace — replacing one of these is what a new mint is for. */
@@ -207,35 +223,41 @@ $("copyKey").addEventListener("click", () => {
 /* ----------------------------------------------------------- licences */
 
 $("reload").addEventListener("click", () => loadLicences());
-$("filter").addEventListener("input", renderLicences);
-$("showRevoked").addEventListener("change", renderLicences);
-$("showDemo").addEventListener("change", renderLicences);
+$("filter").addEventListener("input", onFilterInput);
+// The backend leaves Demo and revoked licences out, so showing them is a
+// fetch, not a redraw.
+$("showRevoked").addEventListener("change", () => loadLicences());
+$("showDemo").addEventListener("change", () => loadLicences());
 $("loadMore").addEventListener("click", () => loadMoreLicences());
 
+const listPath = (extra = {}) => licenceListPath({
+  limit: LICENCE_PAGE,
+  showDemo: $("showDemo").checked,
+  showRevoked: $("showRevoked").checked,
+  ...extra,
+});
+
 /**
- * Fetch and redraw the licence table.
+ * Fetch and redraw the licence table, from its first page.
  *
- * `keepStatus` is for the reload that follows a change: the status line then
- * holds what the change did ("SEMP-4K2P revoked.", or why it failed), and a
- * "Loading…" written over it and cleared half a second later is how every
- * result on this desk used to vanish before anyone could read it.
+ * A change to one licence does not come here: it refreshes that row
+ * (`refreshLicence`). Reloading the first page after every change was the
+ * desk's slowness, and it dropped every page loaded with "Load more".
  */
-async function loadLicences({ keepStatus = false } = {}) {
-  if (!keepStatus) setStatus("Loading…");
-  // Every caller of this is either a page load or something that just
-  // changed a licence or a seat, so any reconciliation already on screen
-  // describes a state that no longer exists.
+async function loadLicences() {
+  setStatus("Loading…");
   const wasOpen = $("verifyCard").hidden ? "" : $("verifyCard").dataset.licence;
   verified = {};
+  searchHits = null;
   try {
-    const data = await api(`/v1/admin/licenses?limit=${LICENCE_PAGE}`);
+    const data = await api(listPath());
     licences = data.licenses || [];
     licencePage = data.page || {};
     demoAllowance = Number.isInteger(data.demoMaxAnalyses) ? data.demoMaxAnalyses : null;
     renderLicences();
-    if (!keepStatus) setStatus("");
-    // A revoke is exactly the moment to ask again whether it landed.
+    setStatus("");
     if (wasOpen) loadVerified(wasOpen);
+    if (searchableLicenceText($("filter").value)) searchLicences();
   } catch (e) {
     setStatus(
       e.message === "not_admin"
@@ -246,8 +268,37 @@ async function loadLicences({ keepStatus = false } = {}) {
   }
 }
 
+/**
+ * Re-read one licence and redraw its row, after something changed it. The
+ * status line keeps what the change said; any seat check on screen for it
+ * is re-run, because a change is exactly when to ask again.
+ */
+async function refreshLicence(id) {
+  try {
+    showLicence(await api(`/v1/admin/licenses/${encodeURIComponent(id)}`));
+  } catch (e) {
+    setStatus(`Changed, but the row could not be re-read: ${e.message}. Refresh to see it.`, true);
+  }
+}
+
+/** Put a licence the backend just returned into the table. */
+function showLicence(lic) {
+  if (!lic || !lic.id) return;
+  licences = upsertLicence(licences, lic);
+  if (searchHits) searchHits = upsertLicence(searchHits, lic);
+  delete verified[lic.id];
+  renderLicences();
+  if (!$("verifyCard").hidden && $("verifyCard").dataset.licence === lic.id) loadVerified(lic.id);
+}
+
 let licencePage = {};
-const LICENCE_PAGE = 200;
+// Newest first, and without Demo keys, so the first page is the one wanted.
+const LICENCE_PAGE = 50;
+// Licences the backend found for the filter text, or null when the filter
+// is not a search. They join the loaded rows, since a match may be on a page
+// nobody has loaded.
+let searchHits = null;
+let searchTimer = 0;
 // DEMO_MAX_ANALYSES as the backend has it, from the licence list. Null until
 // a backend that sends it answers; the wording then leaves the number out.
 let demoAllowance = null;
@@ -263,8 +314,33 @@ function demoCapNote() {
 }
 
 /**
+ * The filter narrows the loaded rows at once. An address, a domain or a key
+ * prefix is also looked up on the backend, after a pause in typing, so a
+ * licence past the loaded pages is found too.
+ */
+function onFilterInput() {
+  clearTimeout(searchTimer);
+  searchHits = null;
+  renderLicences();
+  if (searchableLicenceText($("filter").value)) searchTimer = setTimeout(searchLicences, 300);
+}
+
+async function searchLicences() {
+  const q = $("filter").value.trim();
+  try {
+    const data = await api(listPath({ q }));
+    // Typing moved on while this was in flight: its answer is for old text.
+    if ($("filter").value.trim() !== q) return;
+    searchHits = data.licenses || [];
+    renderLicences();
+  } catch (e) {
+    setStatus(`Could not search: ${e.message}`, true);
+  }
+}
+
+/**
  * The next page of licences, appended. The desk used to stop at the first
- * 200 and say only "more exist", so any licence past them could not be
+ * page and say only "more exist", so any licence past it could not be
  * found, filtered for, or acted on from here.
  */
 async function loadMoreLicences() {
@@ -272,10 +348,9 @@ async function loadMoreLicences() {
   if (!token) return;
   $("loadMore").disabled = true;
   try {
-    const data = await api(
-      `/v1/admin/licenses?limit=${LICENCE_PAGE}&page_token=${encodeURIComponent(token)}`,
-    );
-    licences = licences.concat(data.licenses || []);
+    const data = await api(listPath({ pageToken: token }));
+    const loaded = new Set(licences.map((l) => l.id));
+    licences = licences.concat((data.licenses || []).filter((l) => !loaded.has(l.id)));
     licencePage = data.page || {};
     renderLicences();
   } catch (e) {
@@ -289,34 +364,30 @@ async function loadMoreLicences() {
 // key can still be looked up — but out of the way by default: a revoke that
 // left its row in place with only the pill changed read as a revoke that had
 // not happened. Demo keys likewise: one is minted for every account, so they
-// outnumbered the licences anyone sold and read as live customer keys.
+// outnumbered the licences anyone sold and read as live customer keys. The
+// backend leaves both out of the list; a row revoked since it loaded is left
+// out here.
 function renderLicences() {
   const q = $("filter").value.trim().toLowerCase();
   const showRevoked = $("showRevoked").checked;
   const showDemo = $("showDemo").checked;
-  const isDemo = (l) => l.mode === "demo";
-  const revokedCount = licences.filter((l) => l.status === "revoked" && !isDemo(l)).length;
-  const demoCount = licences.filter(isDemo).length;
-  const rows = licences.filter((l) =>
+  const matches = (l) => !q || [l.keyPrefix, l.domainLock, l.emailLock, l.note]
+    .some((v) => (v || "").toLowerCase().includes(q));
+  const found = new Set((searchHits || []).map((l) => l.id));
+  const pool = (searchHits || []).concat(licences.filter((l) => !found.has(l.id)));
+  const rows = pool.filter((l) =>
     (showRevoked || l.status !== "revoked") &&
-    (showDemo || !isDemo(l)) &&
-    (!q || [l.keyPrefix, l.domainLock, l.emailLock, l.note]
-      .some((v) => (v || "").toLowerCase().includes(q))));
+    (showDemo || l.mode !== "demo") &&
+    (found.has(l.id) || matches(l)));
   $("licenceRows").innerHTML = rows.length
     ? rows.map(licenceRow).join("")
-    : '<tr><td colspan="9" class="muted">Nothing matches.</td></tr>';
-  $("revokedCount").textContent = revokedCount ? ` (${revokedCount})` : "";
-  $("demoCount").textContent = demoCount ? ` (${demoCount})` : "";
-  const hiddenParts = [
-    !showRevoked && revokedCount ? `${revokedCount} revoked` : "",
-    !showDemo && demoCount ? `${demoCount} Demo` : "",
-  ].filter(Boolean);
-  const hidden = hiddenParts.length ? `, ${hiddenParts.join(" and ")} hidden` : "";
-  // Counted from what is loaded, not from the last page's size: after
-  // "Load more" the page count is only the newest page.
+    : `<tr><td colspan="9" class="muted">${q && !searchHits && searchableLicenceText(q)
+      ? "Searching…" : "Nothing matches."}</td></tr>`;
+  const hidden = [!showRevoked ? "revoked" : "", !showDemo ? "Demo" : ""].filter(Boolean);
+  const note = hidden.length ? ` (${hidden.join(" and ")} hidden)` : "";
   $("licencePaging").textContent = licencePage.hasMore
-    ? `Showing the first ${licences.length}${hidden}; more exist.`
-    : `${licences.length} licence(s)${hidden}.`;
+    ? `Newest ${licences.length} shown${note}; more exist.`
+    : `${licences.length} licence(s)${note}.`;
   $("loadMore").hidden = !licencePage.hasMore;
 }
 
@@ -396,8 +467,11 @@ $("licenceRows").addEventListener("click", (ev) => {
   if (btn.dataset.verify) openVerified(btn.dataset.verify);
 });
 
+const findLicence = (id) =>
+  licences.find((l) => l.id === id) || (searchHits || []).find((l) => l.id === id);
+
 const labelOf = (id) => {
-  const lic = licences.find((l) => l.id === id);
+  const lic = findLicence(id);
   return lic ? (lic.keyPrefix || lic.id.slice(0, 10)) : id.slice(0, 10);
 };
 
@@ -419,7 +493,7 @@ async function extendLicence(id) {
     });
     // Say what the server stored, not what was typed.
     setStatus(`${labelOf(id)} now expires ${day(out.expiresAt)}.`);
-    loadLicences({ keepStatus: true });
+    showLicence(out);
   } catch (e) {
     setStatus({
       expiry_in_past: "Could not extend: that date has already passed.",
@@ -433,7 +507,7 @@ async function extendLicence(id) {
 }
 
 async function setAnalysisCap(id) {
-  const lic = licences.find((l) => l.id === id) || {};
+  const lic = findLicence(id) || {};
   const current = lic.maxAnalyses == null ? "the licensed default" : lic.maxAnalyses;
   const raw = window.prompt(
     `Cloud analyses per person on ${labelOf(id)} (now ${current}).\n\n` +
@@ -448,14 +522,14 @@ async function setAnalysisCap(id) {
     return;
   }
   try {
-    await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
+    const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(text ? { maxAnalyses: Number(text) } : { clearMaxAnalyses: true }),
     });
     setStatus(text
       ? `${labelOf(id)} now allows ${text} analyses per person.`
       : `${labelOf(id)} limit removed — holders get the licensed default.`);
-    loadLicences({ keepStatus: true });
+    showLicence(out);
   } catch (e) {
     setStatus(e.message === "cap_on_demo_key"
       ? `Could not change the limit: ${demoCapNote()}`
@@ -473,12 +547,12 @@ async function clearLicenceDevice(id) {
     "their analyses are untouched — this is not a revoke.",
   )) return;
   try {
-    await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
+    const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify({ clearDeviceLock: true }),
     });
     setStatus(`${labelOf(id)} unbound — the next device to sign in takes it.`);
-    loadLicences({ keepStatus: true });
+    showLicence(out);
   } catch (e) {
     setStatus(`Could not unbind: ${e.message}`, true);
   }
@@ -636,7 +710,7 @@ $("verifyReload").addEventListener("click", () => {
 
 async function revokeLicence(id) {
   const label = labelOf(id);
-  const lic = licences.find((l) => l.id === id) || {};
+  const lic = findLicence(id) || {};
   const who = lic.kind === "institution"
     ? `every one of the ${lic.seatsUsed ?? 0} people on its roster`
     : "the person holding it";
@@ -663,9 +737,17 @@ async function resumeRevoke(id) {
   if (resumed) return;
   resumed = true;
   const label = labelOf(id);
-  const lic = licences.find((l) => l.id === id);
+  // The first page may not hold it; ask for the licence itself.
+  let lic = findLicence(id);
   if (!lic) {
-    setStatus(`Re-authenticated, but ${label} is no longer listed — nothing revoked.`, true);
+    try {
+      lic = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`);
+    } catch {
+      lic = null;
+    }
+  }
+  if (!lic) {
+    setStatus(`Re-authenticated, but ${label} no longer exists — nothing revoked.`, true);
     return;
   }
   if (lic.status === "revoked") {
@@ -685,14 +767,12 @@ async function sendRevoke(id, label) {
     const out = await api(
       `/v1/admin/licenses/${encodeURIComponent(id)}/revoke`, { method: "POST" },
     );
-    // Show it now, from the answer, rather than after the list round-trip.
-    licences = licences.map((l) => (l.id === id ? { ...l, ...out, status: "revoked" } : l));
-    renderLicences();
+    // The answer is the revoked licence; there is nothing to reload.
+    showLicence({ ...out, status: "revoked" });
     setStatus(
       `${label} revoked — its holder is on demo from their next request.` +
       ($("showRevoked").checked ? "" : " Tick “Show revoked” to see it."),
     );
-    loadLicences({ keepStatus: true });
     if (roster && roster.id === id) closeRoster();
   } catch (e) {
     if (e.message === ERR_CANCELLED) {
@@ -774,7 +854,7 @@ $("addMember").addEventListener("click", async () => {
       ? "Added — they are entitled now."
       : "Invited — they join the moment they first sign in.";
     loadRoster();
-    loadLicences({ keepStatus: true });
+    refreshLicence(roster.id);
   } catch (e) {
     $("rosterHint").textContent = {
       invite_exists: "That address is already promised to a different licence.",
@@ -811,7 +891,7 @@ $("rosterRows").addEventListener("click", async (ev) => {
       await api(`${base}/invites/${encodeURIComponent(btn.dataset.invite)}`, { method: "DELETE" });
     } else return;
     loadRoster();
-    loadLicences({ keepStatus: true });
+    refreshLicence(roster.id);
   } catch (e) {
     $("rosterHint").textContent = `Could not update: ${e.message}`;
   }

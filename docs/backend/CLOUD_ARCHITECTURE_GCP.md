@@ -593,11 +593,12 @@ audit_logs/{autoId}               (append-only)
 ```
 
 **Indexing.**
-- `backend/firestore.indexes.json` is the source of truth and defines **four
-  composite indexes**: `sessions(uid, localSessionId, status)`,
-  `sessions(uid, __name__)`, `users(access_status, __name__)` and
-  `files(sessionId, __name__)`. The paginated listing and the admin pending-user
-  query both need one. Deploy them with
+- `backend/firestore.indexes.json` is the source of truth. It declares
+  `sessions(uid, localSessionId, status)` and three for the staff licence list
+  (§20.6): `licenses(mode, createdAt DESC)`, `licenses(mode, status, createdAt
+  DESC)` and `licenses(status, createdAt DESC)`. Equality filters ordered by
+  `__name__` (`sessions(uid)`, `users(access_status)`, `files(sessionId)`) are
+  served by the automatic single-field indexes. Deploy with
   `firebase deploy --only firestore:indexes` — a missing index shows up as a
   `FAILED_PRECONDITION` at runtime, not at deploy time.
 - **Exempt** large/opaque fields from indexing (`publicKeyPem`, `uploadUrl`,
@@ -1420,6 +1421,15 @@ every non-revoked institution seat.
   — the same guard `_drop_user_to_demo_if_licensed` uses.
 - The fan-out is bounded by `seatsUsed`, and renewal is rare. That is what
   makes it the right side of the trade against a per-request read.
+- **It runs only when a mirrored term changes.** The mirror carries the expiry,
+  grace, duration, seating and analysis cap; an edit to the note, the support
+  date or `maxSeats` changes no user document and writes none. When it runs,
+  the holders are read with one `get_all` and written in batches of
+  `_BATCH_LIMIT` (`_update_refs`), not one read and one write each.
+- **Whole-licence revoke is batched the same way, and repeatable.** A seat or
+  licence already revoked keeps its `revokedAt` (reconciliation dates a seat
+  revoke from it), and every seat's holder is re-checked, so running revoke
+  again repairs a seat revoke whose demotion never landed.
 - **A claim writes the terms it read in its own transaction.** `claim_seat`
   and `claim_individual_license` rebuild the mirror in the caller's patch from
   the licence snapshot the transaction read (`_claim_terms`). The callers read
@@ -1784,10 +1794,18 @@ it holds a message and is not cleared by the list reload that follows. A
 revoked licence leaves the table at once — behind "Show revoked", since the
 record is the audit trail. Demo keys sit behind "Show Demo keys" the same way:
 one is minted for every account, so they outnumbered the licences anyone sold.
-The table has a Mode column, its status pill reads "in grace" or "expired" from
-the term rather than the stored `status`, and "Load more" pages past the first
-200. Silence after a click is always a defect here: it is indistinguishable
-from a revoke that did not happen.
+Both are left out by the query (`GET /v1/admin/licenses?include_demo=…
+&include_revoked=…`), not by the browser, and the list is newest first
+(`createdAt` descending) in pages of 50; it used to be the whole collection in
+key-hash order, so the licences anyone sold were scattered among one Demo key
+per account. A change refreshes only its own row, from the answer or from
+`GET /v1/admin/licenses/{id}`, instead of reloading the first page and
+dropping every page loaded after it. The filter box also searches the backend
+(`q=`) by exact email, domain or key prefix, so a licence on an unloaded page
+is found. The table has a Mode column, its status pill reads "in grace" or
+"expired" from the term rather than the stored `status`, and "Load more"
+pages past the first 50. Silence after a click is always a defect here: it is
+indistinguishable from a revoke that did not happen.
 
 Destructive actions confirm twice — a dialog naming who is affected, then
 typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
@@ -1982,8 +2000,8 @@ and it is a route rather than a field on `/v1/me` for a stated reason: `/v1/me`
 promises to cost no extra Firestore read, and the Android app calls it on every
 launch. Underneath, `list_licenses_administered_by` runs a single
 `array_contains` on `licenses.adminEmails` and filters kind and status in
-Python, so no composite index is needed; the index is declared in
-`firestore.indexes.json` anyway, per that file's own convention. It is
+Python, so the automatic single-field index serves it and nothing is
+declared in `firestore.indexes.json`. It is
 `USER`-tier and requires a verified email — the same bar
 `institution_admin_context` sets, since an unverified address cannot be named
 as an administrator in the first place. Administering nothing is an empty list,

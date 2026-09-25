@@ -153,17 +153,22 @@ that one start. Without this the desk loaded twice on every return leg, both
 copies received the revoke, and the second load's status reset erased
 whatever the first reported.
 
-Results stay on screen. The reload that follows a change passes
-`keepStatus`, so "SEMP-4K2P revoked." or "Could not revoke: …" is not
-overwritten by "Loading…" half a second later, and the status line is pinned
-to the top of the viewport while it holds a message — it sits above the mint
-card, and the licence table is well below it. Revoked licences are hidden
-behind "Show revoked": a revoke that left its row in place with only the pill
-changed read as one that had not happened. Before an individual mint the desk
-checks the list for a live licence on the same address and asks first — the
-backend mints the second one anyway and only reports `invite_exists` — and
-every mint says whether the licence reached the person: attached, waiting
-for their first sign-in, or not delivered and why.
+Results stay on screen. A change refreshes only the row it touched — from
+the PATCH or revoke answer, or `GET /v1/admin/licenses/{id}` after a mint or a
+roster change — so "SEMP-4K2P revoked." or "Could not revoke: …" is never
+overwritten by a reload, and pages loaded with "Load more" stay loaded. The
+status line is pinned to the top of the viewport while it holds a message — it
+sits above the mint card, and the licence table is well below it. The list is
+newest first, 50 a page; Demo keys and revoked licences are left out by the
+backend unless "Show Demo keys" / "Show revoked" is ticked. A revoke that left
+its row in place with only the pill changed read as one that had not
+happened. The filter narrows the loaded rows at once, and an email, domain or
+key prefix is also searched on the backend (`q=`), so a licence on a page
+nobody loaded is found. Before an individual mint the desk asks the backend
+for a live licence on the same address and asks first — the backend mints the
+second one anyway and only reports `invite_exists` — and every mint says
+whether the licence reached the person: attached, waiting for their first
+sign-in, or not delivered and why.
 
 ### Go-live checklist (Identity Platform + consoles)
 
