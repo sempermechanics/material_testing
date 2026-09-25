@@ -53,12 +53,27 @@ by 1 / (1 − p) ≈ 6.3× [Estimated].
 | `GET /v1/sessions` | 8 | 1 |
 | `GET /v1/config` | 10 | 3 |
 | `GET /v1/me` | 1 | 1 |
-| **total** | **19** | **5** (3.8× fewer) |
+| **total** | **19** | **5** (3.8× fewer), only when the burst happens |
 | Firestore reads for listings and config (S sessions; listing ≈ S + 4, config ≤ 3) | ≤ 8S + 62 | ≤ S + 13 |
 
-**Device confirmation: [Unknown].** It needs this build on the phone and a
-`launch_counts.py` run before and after in the same hour. The run force-stops and
-opens the app 5 times, then counts the uid's requests per route from the access log.
+**Device, 2026-09-25 (Pixel 6, sideloaded debug build, 10 cold opens each, the
+reconcile throttle reset before every open).** The server log was not readable that
+day, so requests were counted on the phone: this build cannot attest, and
+`AppCheckHeader` logs one "No App Check token" line per request.
+
+| Requests per open (logcat proxy) | opens | median | range |
+|---|---|--:|--:|
+| before (main build of 2026-09-23) | 6 10 10 12 12 10 12 10 10 10 | 10 | 6–12 |
+| after (this PR) | 4 10 10 10 10 3 3 10 10 10 | 10 | 3–10 |
+
+[Measured] No change in the median, because the lever was not exercised: after
+the first open, no call logged "Reconcile skipped", so only one reconcile ran per
+open and there was nothing to collapse. The burst needs finished upload/restore
+jobs that WorkManager still keeps, and the phone had none left after its first
+open that day. On that first open the new build did collapse 4 calls into 1
+(3 × "Reconcile skipped", 4 requests in all). Which routes the other ~10 requests
+per open go to is **[Unknown]** until the saved launch windows are read against
+the access log (`launch_counts.py <label> --from windows-<label>.json`).
 
 **Cost:** one private `Mutex`; no new dependency. The only behaviour change is
 that concurrent reconciles now wait for each other instead of overlapping. A
