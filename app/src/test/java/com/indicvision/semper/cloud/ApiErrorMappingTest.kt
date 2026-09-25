@@ -110,6 +110,24 @@ class ApiErrorMappingTest {
         assertEquals("""{"detail":"session_quota_exceeded: 5/5"}""", ex.body)
     }
 
+    @Test
+    fun `no backend configured is an IOException, not a bare path`() {
+        // OkHttp throws IllegalArgumentException on "/v1/me"; callers only
+        // expect IOException, so a blank base must never reach it (TD-90).
+        val ex = assertThrows(IndicApi.CloudNotConfiguredException::class.java) {
+            IndicApiHttp.endpoint("", "/v1/me")
+        }
+        assertTrue("callers catch IOException", java.io.IOException::class.java.isInstance(ex))
+        assertThrows(IndicApi.CloudNotConfiguredException::class.java) { IndicApiHttp.endpoint("  ", "") }
+    }
+
+    @Test
+    fun `a configured backend joins base and path`() {
+        val base = "https://api.example.invalid"
+        assertEquals("$base/v1/me", IndicApiHttp.endpoint(base, "/v1/me"))
+        assertEquals(base, IndicApiHttp.endpoint(base, ""))
+    }
+
     private fun response(requestId: String?): Response =
         Response.Builder()
             .request(Request.Builder().url("https://example.invalid/v1/sessions").build())

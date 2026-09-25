@@ -68,6 +68,9 @@ class IndicApi private constructor(context: Context) : CloudApi {
      */
     override val enabled: Boolean get() = base.isNotBlank() && !DevAuth.active
 
+    /** The backend URL for [path]; see [IndicApiHttp.endpoint]. */
+    private fun url(path: String): String = IndicApiHttp.endpoint(base, path)
+
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val octet = "application/octet-stream".toMediaType()
     private val drive = DriveTransfer(client, downloadClient, octet)
@@ -91,6 +94,12 @@ class IndicApi private constructor(context: Context) : CloudApi {
     }
 
     class NotApprovedException : IOException(ApiErrors.NOT_APPROVED)
+
+    /**
+     * No backend is configured (`INDIC_API_BASE_URL` is empty). An [IOException],
+     * so every caller treats it like offline instead of crashing (TD-90).
+     */
+    class CloudNotConfiguredException : IOException("Cloud backend is not configured (INDIC_API_BASE_URL).")
 
     /** The Terms this build carries are older than the ones the server publishes (409). */
     class TermsVersionMismatchException(val requestId: String? = null) : IOException(ApiErrors.TERMS_VERSION_MISMATCH)
@@ -178,7 +187,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
     /** GET /v1/me. Throws [NotApprovedException] for a PENDING/SUSPENDED user. */
     override suspend fun me(idToken: String): MeResponse = withContext(Dispatchers.IO) {
         json.decodeFromString(
-            authedGet(idToken, "$base/v1/me") { code, body, ref ->
+            authedGet(idToken, url("/v1/me")) { code, body, ref ->
                 if (code == HttpStatus.FORBIDDEN) throw NotApprovedException()
                 if (code == HttpStatus.CONFLICT) throwForMeConflict(body, ref)
                 throw ApiException(code, body, ref)
@@ -197,7 +206,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
     override suspend fun getConfig(idToken: String): AppConfigDto = configFlight.run {
         withContext(Dispatchers.IO) {
             json.decodeFromString(
-                authedGet(idToken, "$base/v1/config", approvedOnly),
+                authedGet(idToken, url("/v1/config"), approvedOnly),
             )
         }
     }
@@ -245,7 +254,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
             osVersion = "Android ${android.os.Build.VERSION.RELEASE}",
             appVersion = BuildConfig.VERSION_NAME,
         )
-        val req = Request.Builder().url("$base/v1/devices/register")
+        val req = Request.Builder().url(url("/v1/devices/register"))
             .header("Authorization", "Bearer $idToken")
             .post(json.encodeToString(body).toRequestBody(jsonMedia)).build()
         client.newCall(req).execute().use { resp ->
@@ -273,7 +282,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      */
     override suspend fun activateLicense(idToken: String, key: String): AppConfigDto = withContext(Dispatchers.IO) {
         val body = LicenseActivateRequest(key = key)
-        val req = Request.Builder().url("$base/v1/licenses/activate")
+        val req = Request.Builder().url(url("/v1/licenses/activate"))
             .header("Authorization", "Bearer $idToken")
             .header("X-Device-Id", device.getDeviceId())
             .post(json.encodeToString(body).toRequestBody(jsonMedia)).build()
@@ -309,7 +318,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     private suspend fun seatCall(idToken: String, action: String): AppConfigDto =
         withContext(Dispatchers.IO) {
-            val req = Request.Builder().url("$base/v1/licenses/$action")
+            val req = Request.Builder().url(url("/v1/licenses/$action"))
                 .header("Authorization", "Bearer $idToken")
                 .header("X-Device-Id", device.getDeviceId())
                 .post(EMPTY_JSON.toRequestBody(jsonMedia)).build()
@@ -340,7 +349,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * [version] — the app is older than the published Terms.
      */
     override suspend fun acceptTerms(idToken: String, version: String): Unit = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/me/terms")
+        val req = Request.Builder().url(url("/v1/me/terms"))
             .header("Authorization", "Bearer $idToken")
             .header("X-Device-Id", device.getDeviceId())
             .post(json.encodeToString(TermsAcceptanceBody(version)).toRequestBody(jsonMedia)).build()
@@ -355,7 +364,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     /** PUT /v1/me/consents — grant or withdraw the optional product-improvement consent. */
     override suspend fun setImprovementConsent(idToken: String, granted: Boolean): Unit = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url("$base/v1/me/consents")
+        val req = Request.Builder().url(url("/v1/me/consents"))
             .header("Authorization", "Bearer $idToken")
             .header("X-Device-Id", device.getDeviceId())
             .put(json.encodeToString(ConsentUpdateBody(granted)).toRequestBody(jsonMedia)).build()
@@ -390,7 +399,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
                 if (!pageToken.isNullOrBlank()) append("&page_token=").append(pageToken)
             }
             val page: ListSessionsResponse = json.decodeFromString(
-                authedGet(idToken, "$base/v1/sessions?$qs", approvedOnly),
+                authedGet(idToken, url("/v1/sessions?$qs"), approvedOnly),
             )
             all += page.sessions
             lastQuota = page.quota
@@ -460,7 +469,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
         idToken: String,
         sessionId: String,
     ): SessionFilesResponse = withContext(Dispatchers.IO) {
-        json.decodeFromString(authedGet(idToken, "$base/v1/sessions/$sessionId/files"))
+        json.decodeFromString(authedGet(idToken, url("/v1/sessions/$sessionId/files")))
     }
 
     /**
@@ -491,7 +500,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
     ) = drive.downloadFile(
         fileId,
         dest,
-        base,
+        url(""), // the base; DriveTransfer appends its own paths
         expectedBytes = length,
         rangeStart = rangeStart,
     ) { path ->
@@ -507,7 +516,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
     ) = drive.downloadFile(
         fileId,
         dest,
-        base,
+        url(""), // the base; DriveTransfer appends its own paths
         expectedBytes = expectedBytes,
         onBytes = onBytes,
     ) { path ->
@@ -518,9 +527,9 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     /** GET /v1/admin/users?status=… (admin ID token; no device signature). */
     override suspend fun listUsers(idToken: String, status: String): List<AdminUserDto> = withContext(Dispatchers.IO) {
-        val url = if (status.isBlank()) "$base/v1/admin/users" else "$base/v1/admin/users?status=$status"
+        val usersUrl = url(if (status.isBlank()) "/v1/admin/users" else "/v1/admin/users?status=$status")
         json.decodeFromString<AdminUsersResponse>(
-            authedGet(idToken, url) { code, body, ref ->
+            authedGet(idToken, usersUrl) { code, body, ref ->
                 if (code == HttpStatus.FORBIDDEN) {
                     throw ApiException(HttpStatus.FORBIDDEN, ApiErrors.NOT_ADMIN, ref)
                 } else {
@@ -580,7 +589,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
         nonce: String,
     ): Response {
         val headers = signedHeaders(idToken, method, path, bodyBytes, nonce)
-        val builder = Request.Builder().url("$base$path").headers(headers)
+        val builder = Request.Builder().url(url(path)).headers(headers)
         when (method) {
             "GET" -> builder.get()
             "POST" -> builder.post(bodyBytes.toRequestBody(jsonMedia))
@@ -628,7 +637,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     /** POST /v1/challenge → single-use nonce bound to (uid, deviceId). */
     private fun fetchChallenge(idToken: String): String {
-        val req = Request.Builder().url("$base/v1/challenge")
+        val req = Request.Builder().url(url("/v1/challenge"))
             .header("Authorization", "Bearer $idToken")
             .header("X-Device-Id", device.getDeviceId())
             .post(ByteArray(0).toRequestBody(jsonMedia)).build()

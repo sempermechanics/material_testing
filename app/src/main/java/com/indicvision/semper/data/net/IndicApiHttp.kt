@@ -39,6 +39,16 @@ internal object IndicApiHttp {
     fun apiException(resp: Response): IndicApi.ApiException =
         IndicApi.ApiException(resp.code, bodyText(resp), requestIdOf(resp))
 
+    /**
+     * [base] + [path] for a backend call. With no backend configured the URL
+     * would be the bare [path], which OkHttp rejects with an unchecked
+     * IllegalArgumentException that killed the process wherever a caller only
+     * expected [IOException]. [IndicApi.CloudNotConfiguredException] is an
+     * [IOException], so every caller treats it like offline (TD-90).
+     */
+    fun endpoint(base: String, path: String): String =
+        if (base.isBlank()) throw IndicApi.CloudNotConfiguredException() else base + path
+
     fun bodyText(resp: Response): String = try {
         resp.body.string()
     } catch (e: IOException) {
