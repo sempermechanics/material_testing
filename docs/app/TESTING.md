@@ -99,7 +99,9 @@ Results land in logcat (`adb logcat -d -s Benchmark:I`).
 **Macro (`:benchmark`) — "what does the user feel?"**
 `ViewerScrubBenchmark` seeds a synthetic session via the benchmark-variant-only
 `BenchmarkSeedActivity` and scrubs frames, reporting frame timing, max heap and the
-`Semper.viewer.decodeDat` trace section.
+`Semper.viewer.decodeDat` trace section. The seeder also writes the `field_ranges.bin`
+sidecar a real batch run leaves, so the viewer's colour-scale pass reads it as it does
+on a phone; without it the benchmark measured the no-sidecar fallback instead (TD-87).
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
