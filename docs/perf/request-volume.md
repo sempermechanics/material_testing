@@ -142,6 +142,53 @@ phone sleeping. The phone's own log showed no requests for that open either.
 started with one token answers any caller that joins within its ~100 ms flight.
 Every caller at launch holds the same signed-in user's token.
 
+## Pass 3: App Check, measured and left alone
+
+**Premise.** The plan was to stop retrying App Check for 60 s after a failure.
+It assumed each request paid its own failed attestation, as in the burst of
+2026-09-24: 19 requests per open, each asking Firebase, answered with "Too many
+attempts". Passes 1 and 2 cut that to 3 requests per open.
+
+**Instrument.** A temporary, uncommitted debug line in `AppCheckHeader.intercept`
+timed each token wait. A scratch script then ran 10 opens on the Pixel 6 and
+counted `requestIntegrityToken` calls in logcat. The build was a sideloaded debug
+build; Play Integrity refuses every build until the Play account exists (see
+[AUTH_SETUP.md](../backend/AUTH_SETUP.md) §3.2).
+
+| Per app open, 10 opens | median | IQR |
+|---|--:|--:|
+| Play Integrity attestations | 1 | 0.25 |
+| Token wait, `/v1/me` and `/v1/config` (they share the one attestation) | 1767 ms | 475 ms |
+| Token wait, `/v1/sessions` (answered from the SDK's own backoff) | 2–8 ms | — |
+| Cold start (`am start -W` TotalTime) | 726 ms | 128 ms |
+
+[Measured] The Firebase SDK already backs off after a failed attestation, so
+only the first request per process waits. A backoff in the app could save at
+most the 2–8 ms of the later calls, under 1 % of the wait. That is below the 5 %
+floor, so it was not built.
+
+**Second lever: start the attestation in `SemperApp.onCreate`.** The signed-in
+user's attestation would start at process start instead of at the first API
+call. The SDK shares a fetch in flight, so the status check would wait only for
+the rest of it. Built and measured:
+
+| 10 opens each | before | after |
+|---|--:|--:|
+| Token wait for `/v1/me` and `/v1/config`, median (IQR) | 1767 ms (475) | 1702 ms (694) |
+| Cold start, median (IQR) | 726 ms (128) | 700 ms (36) |
+
+[Measured] A 65 ms shift, well inside the spread: reverted. The status check
+already starts from Splash, a few hundred ms into the process. The SDK then has
+to fetch a challenge over the network before it calls Play Integrity. In both
+builds that call is made within ~40 ms of Home appearing. The wait left over is
+the Play Integrity handshake itself.
+
+**What would remove it.** A build that attests gets a token the SDK caches for
+its lifetime, so later opens don't wait at all. That needs the Play account
+(AUTH_SETUP §3.2, step 3). Until then every build pays about 1.3–1.8 s before
+its first status and session calls on each cold open. Home is already on
+screen by then: this delays the cloud data, not the app.
+
 ## Pass 4: an inline session create stops reading back what it wrote
 
 Pass 4 is about Firestore cost per request, not the number of requests.
