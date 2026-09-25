@@ -149,6 +149,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (13 × 404, 38 × 429). Backend half deployed (#226, per-session erase bucket 1/s, burst 10);
   app half merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere,
   cloud link cleared).
+- **A cap on a demo key did nothing** (SEMP-8AKN set to 100 on 2026-09-25; the holder still
+  saw "of 25"). The admin PATCH now refuses it (`422 cap_on_demo_key`) and the desk disables
+  Cap on demo rows; in review, not deployed.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever

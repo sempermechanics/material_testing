@@ -817,6 +817,17 @@ PATCH /v1/admin/licenses/{licenseId}
 {"clearMaxAnalyses": true}
 ```
 
+**A demo key has no cap to set.** Every account gets a system-minted demo key
+(`createdByUid: "system"`, `mode: "demo"`), and a demo holder gets the demo
+allowance (`DEMO_MAX_ANALYSES`, 25) whatever the key stores
+(`resolve_user_config` reads a licence cap only for a licensed account). A
+`maxAnalyses` on a demo key is refused with `422 cap_on_demo_key` and nothing
+changes. On the desk a demo row's **Cap** button is disabled and its
+"Analyses / person" column reads "demo (25)". To give that person more
+analyses, issue them a licensed key. `clearMaxAnalyses` is still accepted on a
+demo key; use it to remove a cap stored before this refusal existed, which
+never applied (SEMP-8AKN, set to 100 on 2026-09-25, is one).
+
 Renewing is also the fix when someone reports being dropped to Demo
 unexpectedly — check the key's `expiresAt` in `GET /v1/admin/licenses` first;
 an account past `expiresAt + graceDays` is the expected outcome, not a bug.

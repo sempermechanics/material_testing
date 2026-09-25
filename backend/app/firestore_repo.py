@@ -67,6 +67,7 @@ from .repo.entitlement import (  # noqa: F401
     ensure_entitlement,
 )
 from .repo.license_admin import (  # noqa: F401
+    analysis_cap_error,
     expiry_change_error,
     LicenseTermsRejected,
     list_licenses,

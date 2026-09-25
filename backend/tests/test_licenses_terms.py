@@ -467,6 +467,109 @@ async def test_admin_clear_cap_over_http(client, monkeypatch):
     assert "maxAnalyses" not in store._data["licenses"][license_id]
 
 
+# ====================================================== cap on a demo key
+# A demo holder gets DEMO_MAX_ANALYSES whatever the key stores, so a cap
+# written to a system-minted demo key answered 200 and changed nothing: the
+# app kept showing "N of 25" (SEMP-8AKN, 2026-09-25).
+
+def _demo_holder(store, uid="u1", email="a@b.com", device="dev-1"):
+    """A signed-in account with the demo key `ensure_demo_license` mints."""
+    user = repo.ensure_demo_license(_signed_in(store, uid, email), device)
+    license_id = user["licenseId"]
+    lic = store._data["licenses"][license_id]
+    assert (lic["mode"], lic["createdByUid"], lic["status"]) == ("demo", "system", "redeemed")
+    return license_id
+
+
+def test_a_cap_on_a_demo_key_is_refused_before_anything_is_written(store, monkeypatch):
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    store._data["users"] = {}
+    license_id = _demo_holder(store)
+    before_lic = dict(store._data["licenses"][license_id])
+    before_user = dict(store._data["users"]["u1"])
+
+    with pytest.raises(repo.LicenseTermsRejected) as exc:
+        repo.update_license(license_id, {"maxAnalyses": 100}, "admin")
+
+    assert exc.value.code == "cap_on_demo_key"
+    assert store._data["licenses"][license_id] == before_lic
+    assert store._data["users"]["u1"] == before_user
+    assert repo.resolve_user_config(store._data["users"]["u1"])["maxSessions"] == 25
+
+
+@pytest.mark.asyncio
+async def test_admin_cap_on_a_demo_key_is_a_422_that_leaves_the_device_lock(
+    store, client, monkeypatch,
+):
+    """Refused in the route, before `clearDeviceLock` in the same request runs."""
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    store._data["users"] = {}
+    license_id = _demo_holder(store)
+
+    resp = await client.patch(
+        f"/v1/admin/licenses/{license_id}",
+        json={"maxAnalyses": 100, "clearDeviceLock": True},
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "cap_on_demo_key"
+    lic = store._data["licenses"][license_id]
+    assert "maxAnalyses" not in lic
+    assert lic["deviceIdLock"] == "dev-1"
+    assert "licenseMaxAnalyses" not in store._data["users"]["u1"]
+
+
+@pytest.mark.asyncio
+async def test_admin_can_clear_a_cap_already_stored_on_a_demo_key(store, client, monkeypatch):
+    """The state SEMP-8AKN was left in: a cap on the key and its holder that
+    never applied. Clearing it is allowed; it removes a number, nothing else."""
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    store._data["users"] = {}
+    license_id = _demo_holder(store)
+    store._data["licenses"][license_id]["maxAnalyses"] = 100
+    store._data["users"]["u1"]["licenseMaxAnalyses"] = 100
+
+    resp = await client.patch(
+        f"/v1/admin/licenses/{license_id}", json={"clearMaxAnalyses": True},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["maxAnalyses"] is None
+    assert resp.json()["mode"] == "demo"
+    assert "maxAnalyses" not in store._data["licenses"][license_id]
+    assert "licenseMaxAnalyses" not in store._data["users"]["u1"]
+    assert repo.resolve_user_config(store._data["users"]["u1"])["maxSessions"] == 25
+
+
+@pytest.mark.asyncio
+async def test_admin_cap_on_a_licensed_key_still_reaches_the_holder(store, client, monkeypatch):
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    store._data["users"] = {
+        "u1": {"email": "a@b.com", "access_status": "APPROVED", "mode": "demo"},
+    }
+    minted = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+    )
+    license_id = minted["license"]["id"]
+    err, _ = repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+    assert err == ""
+
+    resp = await client.patch(f"/v1/admin/licenses/{license_id}", json={"maxAnalyses": 100})
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["maxAnalyses"] == 100
+    assert repo.resolve_user_config(store._data["users"]["u1"])["maxSessions"] == 100
+
+
+@pytest.mark.asyncio
+async def test_admin_licence_list_carries_the_demo_allowance(store, client, monkeypatch):
+    """The desk shows this on demo rows instead of whatever the key stores."""
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    resp = await client.get("/v1/admin/licenses")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["demoMaxAnalyses"] == 25
+
+
 @pytest.mark.asyncio
 async def test_me_reports_the_license_summary(client, monkeypatch):
     fake_firestore.install(monkeypatch)
