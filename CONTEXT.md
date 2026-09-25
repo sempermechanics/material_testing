@@ -102,8 +102,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-25)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-35992296245-1`, from `4d5a0ab`)
-  behind API Gateway `semper-gw` (config `v202609241122-44`, deployed by CI, ADR-006);
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36122511953-1`, from `cb0e893`)
+  behind API Gateway `semper-gw` (config `v202609250953-51`, deployed by CI, ADR-006);
   staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
@@ -147,10 +147,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (backend Phase 3: cooldown date, seat cap, revoke count, invite expiry, provisioning retry,
   failed uploads), #225 (frame names past a skipped frame, Home headline, partial-run dialog).
   The audit has no open TECH_DEBT rows left.
-- **Bulk delete (open PRs, `fix/delete-one-path` + `fix/session-erase-bucket`).** Ten deletes
-  from Home cost 61 DELETE requests over 100 s in production (13 × 404, 38 × 429). One queue
-  (`SessionDeletes`), a Delete everywhere choice, the cloud link cleared after a cloud delete,
-  and a per-session erase bucket (1/s, burst 10) on the backend.
+- **Bulk delete.** Ten deletes from Home cost 61 DELETE requests over 100 s in production
+  (13 × 404, 38 × 429). Backend half deployed (#226, per-session erase bucket 1/s, burst 10);
+  app half open (#227: one `SessionDeletes` queue, Delete everywhere, cloud link cleared).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
