@@ -190,6 +190,25 @@ What it says:
   x86_64), not a regression. Compare allocations like for like: phone to phone,
   emulator image to the same image.
 
+### Real-device gates
+
+[`benchmark/gates.json`](../../benchmark/gates.json) turns these Pixel 6 medians into
+gates: a result fails when it is more than 30 % over its reference (startup and screen
+times, frame CPU P90, scrub max heap, the Results curve build). After a run on a phone:
+
+```bash
+python scripts/ci_test_report.py --gates benchmark/gates.json \
+  benchmark/build/outputs/connected_android_test_additional_output \
+  app/build/outputs/connected_android_test_additional_output
+```
+
+It prints `GATE ok …` per reference, an `::error` per breach, and exits 1 if any gate
+is over. Gates are keyed by the device the JSON records (`context.build.device`, `oriole`
+for the Pixel 6); a device the file does not list, CI's emulator included, is reported
+and never gated, and CI does not pass `--gates`. To gate another phone, add its
+codename with medians from a clean run of both suites. Microbenchmark times are not
+gated: debuggable and not AOT-compiled, they are relative numbers only.
+
 ### Known coverage gaps
 
 Worth knowing before you assume something is protected:

@@ -1,0 +1,23 @@
+{
+  "_doc": "Real-device benchmark gates, checked by scripts/ci_test_report.py --gates. Keyed by the benchmark JSON's context.build.device; a device not listed (CI's emulator, other phones) is reported, never gated. A gate is the reference median (or percentile) times (1 + margin). References: docs/app/TESTING.md, 'Pixel 6 against the CI emulator'.",
+  "margin": 0.30,
+  "devices": {
+    "oriole": {
+      "label": "Pixel 6, Android 17 (API 37), 2026-09-25",
+      "reference": {
+        "StartupBenchmark.coldStartup timeToInitialDisplayMs": 378,
+        "StartupBenchmark.warmStartup timeToInitialDisplayMs": 81,
+        "ScreenBenchmark.settingsColdStartup timeToInitialDisplayMs": 334,
+        "ScreenBenchmark.analysisWizardColdStartup timeToInitialDisplayMs": 369,
+        "ScreenBenchmark.settingsScroll frameDurationCpuMs P90": 8.5,
+        "ViewerScrubBenchmark.scrub150Frames memoryHeapSizeMaxKb": 22300,
+        "ViewerScrubBenchmark.scrub150Frames frameDurationCpuMs P90": 8.4,
+        "ViewerScrubBenchmark.scrub10Frames memoryHeapSizeMaxKb": 18800,
+        "LabResultsBenchmark.results30Frames Semper.viewer.stressStrainSumMs": 40,
+        "LabResultsBenchmark.results150Frames Semper.viewer.stressStrainSumMs": 132,
+        "LabResultsBenchmark.results30Frames frameDurationCpuMs P90": 9.1,
+        "LabResultsBenchmark.results150Frames frameDurationCpuMs P90": 7.3
+      }
+    }
+  }
+}
