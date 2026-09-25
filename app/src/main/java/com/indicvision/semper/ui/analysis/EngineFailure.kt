@@ -1,5 +1,6 @@
 package com.indicvision.semper.ui.analysis
 
+import android.content.Context
 import androidx.annotation.StringRes
 import com.indicvision.semper.R
 
@@ -54,6 +55,58 @@ object EngineFailure {
         Cause.CONVERGENCE -> R.string.sweep_reason_low_convergence
         Cause.UNKNOWN -> R.string.sweep_reason_unknown
         Cause.VSG -> R.string.sweep_reason_vsg
+    }
+
+    /**
+     * Why a single run's first frame kept no points (engine code 0). Code 0
+     * alone reads as a strain-window failure, but it is also what a frame
+     * where nothing correlated returns; the points ICGN accepted there
+     * ([AnalysisViewModel.BatchAnalysisOutcome.firstFrameCorrelatedPoints])
+     * tell the two apart.
+     */
+    enum class ZeroPoints {
+        /** Points correlated; none kept enough solved neighbours for the strain fit. */
+        STRAIN_WINDOW,
+
+        /** ICGN accepted no point. */
+        NO_CORRELATION,
+
+        /** The frame never reached the engine: it could not be read. */
+        NOT_RUN,
+    }
+
+    fun zeroPoints(correlatedPoints: Int): ZeroPoints = when {
+        correlatedPoints > 0 -> ZeroPoints.STRAIN_WINDOW
+        correlatedPoints == 0 -> ZeroPoints.NO_CORRELATION
+        else -> ZeroPoints.NOT_RUN
+    }
+
+    /**
+     * The dialog text for [zeroPoints]; [spec] is the run's, for the VSG and
+     * step it names. Without one, the strain case falls back to [reasonRes].
+     */
+    fun zeroPointsMessage(context: Context, correlatedPoints: Int, spec: RunSpec?): String =
+        when (zeroPoints(correlatedPoints)) {
+            ZeroPoints.STRAIN_WINDOW -> if (spec != null) {
+                context.resources.getQuantityString(
+                    R.plurals.run_fail_strain_window_fmt,
+                    correlatedPoints,
+                    correlatedPoints,
+                    spec.strainWindow,
+                    spec.step,
+                )
+            } else {
+                context.getString(reasonRes(0), 0)
+            }
+            ZeroPoints.NO_CORRELATION -> context.getString(R.string.run_fail_no_correlation)
+            ZeroPoints.NOT_RUN -> context.getString(R.string.sweep_fail_init)
+        }
+
+    @StringRes
+    fun zeroPointsFaqUrlRes(correlatedPoints: Int): Int = when (zeroPoints(correlatedPoints)) {
+        ZeroPoints.STRAIN_WINDOW -> R.string.url_faq_engine_vsg
+        ZeroPoints.NO_CORRELATION -> R.string.url_faq_engine_features
+        ZeroPoints.NOT_RUN -> R.string.url_faq_engine_init
     }
 
     @StringRes

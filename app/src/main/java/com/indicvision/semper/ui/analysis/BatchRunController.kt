@@ -31,7 +31,7 @@ class BatchRunController(
     private val onPartialRun: (AnalysisViewModel.BatchAnalysisOutcome) -> Unit,
     private val openResultViewer: () -> Unit,
     private val engineFailureMessage: (code: Int, frameIndex: Int, frameName: String?) -> String,
-    private val showEngineFailureDialog: (code: Int, titleRes: Int, frameIndex: Int, frameName: String?) -> Unit,
+    private val showEngineFailureDialog: (message: String, titleRes: Int, faqUrlRes: Int) -> Unit,
     private val clearEngineFailFaq: () -> Unit,
     private val onSweepProgress: (VsgStudyRunner.Progress) -> Unit,
     private val onSweepFinished: (AnalysisViewModel.BatchAnalysisOutcome?) -> Unit,
@@ -135,17 +135,24 @@ class BatchRunController(
     }
 
     private fun showNamedEngineFailure(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
-        val errorMsg = engineFailureMessage(
-            outcome.engineErrorCode,
-            outcome.failedFrameIndex,
-            outcome.failedFrameName,
-        )
+        // Code 0 is "the first frame kept no points", which is not always the
+        // strain window's fault: say which it was, with the run's own VSG and step.
+        val zeroPoints = outcome.engineErrorCode == 0
+        val errorMsg = if (zeroPoints) {
+            EngineFailure.zeroPointsMessage(
+                activity,
+                outcome.firstFrameCorrelatedPoints,
+                viewModel.runResult.value.spec,
+            )
+        } else {
+            engineFailureMessage(outcome.engineErrorCode, outcome.failedFrameIndex, outcome.failedFrameName)
+        }
+        val faqRes = if (zeroPoints) {
+            EngineFailure.zeroPointsFaqUrlRes(outcome.firstFrameCorrelatedPoints)
+        } else {
+            EngineFailure.faqUrlRes(outcome.engineErrorCode)
+        }
         tvResult.text = "❌ Error: $errorMsg"
-        showEngineFailureDialog(
-            outcome.engineErrorCode,
-            R.string.analysis_failed_title,
-            outcome.failedFrameIndex,
-            outcome.failedFrameName,
-        )
+        showEngineFailureDialog(errorMsg, R.string.analysis_failed_title, faqRes)
     }
 }

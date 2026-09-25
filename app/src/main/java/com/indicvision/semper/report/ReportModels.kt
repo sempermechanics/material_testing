@@ -115,6 +115,10 @@ data class EngineStats(
         /** Number of core metric slots (indices 0..15) every engine writes. */
         const val CORE_SLOT_COUNT = 16
 
+        /** Points ICGN accepted via the mesh (path A) and the flood fill (path B). */
+        const val SLOT_PATH_A_POINTS = 3
+        const val SLOT_PATH_B_POINTS = 4
+
         /** Mean ICGN iteration count. */
         const val SLOT_AVG_ITERS = 8
 
@@ -144,8 +148,8 @@ data class EngineStats(
                 totalPointsAttempted = a[0].toInt(),
                 totalPointsSolved = a[1].toInt(),
                 totalPointsRejected = a[2].toInt(),
-                pathAPoints = a[3].toInt(),
-                pathBPoints = a[4].toInt(),
+                pathAPoints = a[SLOT_PATH_A_POINTS].toInt(),
+                pathBPoints = a[SLOT_PATH_B_POINTS].toInt(),
                 simplexCalls = a[5].toInt(),
                 simplexSaved = a[6].toInt(),
                 finalDeadPoints = a[7].toInt(),

@@ -71,6 +71,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val refBytes = refBytes ?: error("Reference missing")
 
     var firstFrameValidPoints = 0
+    var firstFrameCorrelatedPoints = -1
     var firstFrameAvgIters = 0f
     var engineErrorCode = 0
 
@@ -245,6 +246,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
         if (frameIndex == 0) {
             firstFrameValidPoints = validPointsCount
+            firstFrameCorrelatedPoints = (
+                metricsCatcher[EngineStats.SLOT_PATH_A_POINTS] + metricsCatcher[EngineStats.SLOT_PATH_B_POINTS]
+                ).toInt()
             engineStatsArray = metricsCatcher.clone()
             firstFrameAvgIters = metricsCatcher[EngineStats.SLOT_AVG_ITERS]
         }
@@ -369,6 +373,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         failedFrameName = failedFrameIndex
             .takeIf { it >= 0 }
             ?.let { defFilePaths.getOrNull(it)?.substringAfterLast('/') },
+        firstFrameCorrelatedPoints = firstFrameCorrelatedPoints,
     )
     if (firstFrameValidPoints > 0 &&
         engineErrorCode != AnalysisViewModel.ERROR_CANCELLED &&
