@@ -31,14 +31,6 @@ class SessionPathsFrameIndexTest {
     }
 
     @Test
-    fun `a frame is named by its planned index`() {
-        val names = listOf("a.png", "", "c.png")
-        assertEquals("c.png", SessionPaths.frameName(names, 2))
-        assertNull("blank is no name", SessionPaths.frameName(names, 1))
-        assertNull("past the list", SessionPaths.frameName(names, 3))
-    }
-
-    @Test
     fun `other names have no index`() {
         assertNull(SessionPaths.frameIndexOf("ref.png"))
         assertNull(SessionPaths.frameIndexOf("frame_.dat"))

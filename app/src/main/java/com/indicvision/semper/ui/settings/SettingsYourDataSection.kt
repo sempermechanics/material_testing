@@ -22,6 +22,7 @@ import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.viewer.SendToSheet
+import com.indicvision.semper.util.ProgressCount
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -145,7 +146,12 @@ class SettingsYourDataSection(
                         activity.transferBanner.updateProgress(
                             kind.key,
                             pct,
-                            activity.getString(R.string.export_progress_fmt, done, total),
+                            // done counts finished sessions; the label names the one in progress.
+                            activity.getString(
+                                R.string.export_progress_fmt,
+                                ProgressCount.current(done, total),
+                                total,
+                            ),
                         )
                     }
                 }

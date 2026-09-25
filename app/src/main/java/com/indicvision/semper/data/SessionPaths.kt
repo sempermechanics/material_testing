@@ -37,17 +37,10 @@ object SessionPaths {
     /**
      * The planned frame index behind each `.dat` of a sorted listing, by
      * position. A name that does not parse keeps its position. Everything that
-     * names a frame (viewer, share, reports) looks its name up by this index,
-     * as the cloud bundle already does, so the two agree past a skipped frame.
+     * names a frame (viewer, share, reports) looks its name up by this index
+     * (`ReportImageNames.frameName`), as the cloud bundle does, so the two
+     * agree past a skipped frame.
      */
     fun plannedFrameIndices(datFiles: List<File>): List<Int> =
         datFiles.mapIndexed { position, file -> frameIndexOf(file.name) ?: position }
-
-    /**
-     * The name of planned frame [planned] in a session's planned-order name
-     * list, or null when it has none. The caller picks its own fallback, which
-     * should number the frame `planned + 1`.
-     */
-    fun frameName(names: List<String>, planned: Int): String? =
-        names.getOrNull(planned)?.takeIf { it.isNotBlank() }
 }

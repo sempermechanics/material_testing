@@ -124,7 +124,13 @@ class BatchRunController(
             }
             else -> {
                 clearEngineFailFaq()
-                tvResult.text = "✅ Computed ${outcome.totalFrames} frames!"
+                // The runner records the planned count on a saved run; frames that
+                // kept no points are skipped, so kept can be below planned.
+                tvResult.text = RunSummaryText.computed(
+                    activity.resources,
+                    kept = outcome.totalFrames,
+                    planned = viewModel.lastPlannedFrames,
+                )
                 viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
                 viewModel.lastBatchDirPath = outcome.batchDirPath
                 openResultViewer()

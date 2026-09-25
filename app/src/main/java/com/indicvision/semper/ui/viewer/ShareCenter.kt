@@ -24,12 +24,12 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.LicenseEntitlements
-import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
+import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeterminateProgressDialog
@@ -500,7 +500,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val sweepImage = s.defImagePaths.firstOrNull()?.let { File(it).name } ?: "image"
         val frames = s.batchFiles.mapIndexed { index, file ->
             AnalysisCsvWriter.Frame(
-                image = if (sweep) sweepImage else s.nameAt(index) ?: "Frame_${s.plannedAt(index) + 1}",
+                // Named as the cloud bundle's CSV names it, by the planned frame.
+                image = if (sweep) sweepImage else ReportImageNames.deformed(s.defNames, s.plannedAt(index)),
                 subset = s.subsetPerFrame?.getOrNull(index) ?: s.subset,
                 step = s.stepPerFrame?.getOrNull(index) ?: s.step,
                 strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: s.strainWindow,
@@ -745,7 +746,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val roiH: Int = 0,
         /**
          * The planned frame behind each of [batchFiles], by position
-         * ([SessionPaths.plannedFrameIndices]). Past a frame the batch skipped
+         * (`SessionPaths.plannedFrameIndices`). Past a frame the batch skipped
          * the position and the planned frame part ways.
          */
         val plannedFrames: List<Int> = emptyList(),
@@ -757,7 +758,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         fun plannedAt(index: Int): Int = plannedFrames.getOrElse(index) { index }
 
         /** The name of the frame at position [index], or null when it has none. */
-        fun nameAt(index: Int): String? = SessionPaths.frameName(defNames, plannedAt(index))
+        fun nameAt(index: Int): String? = ReportImageNames.frameName(defNames, plannedAt(index))
     }
 
     private companion object {

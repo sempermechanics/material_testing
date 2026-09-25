@@ -5,6 +5,7 @@ import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.analysis.AnalysisRunCodes
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
@@ -50,6 +51,7 @@ class BatchRunControllerTest {
         gate: Gate,
         viewModel: AnalysisViewModel = AnalysisViewModel(),
         onPartial: () -> Unit = {},
+        resultLine: TextView? = null,
         onDialog: (Shown) -> Unit = {},
     ): BatchRunController {
         activity = Robolectric.buildActivity(AppCompatActivity::class.java)
@@ -68,7 +70,7 @@ class BatchRunControllerTest {
             activity = activity,
             viewModel = viewModel,
             overlayHelper = overlay,
-            tvResult = TextView(activity),
+            tvResult = resultLine ?: TextView(activity),
             setProcessing = { gate.processing = it },
             checkReady = { gate.computeEnabled = !gate.processing },
             onPartialRun = { onPartial() },
@@ -218,5 +220,33 @@ class BatchRunControllerTest {
         )
         assertComputeUsableAfter("success", Result.success(outcome(code = 0, validPoints = 500, frames = 3)))
         assertComputeUsableAfter("exception", Result.failure(IllegalStateException("boom")))
+    }
+
+    /** The status line a finished run leaves, with [planned] frames recorded by the runner. */
+    private fun successLine(kept: Int, planned: Int): String {
+        val viewModel = AnalysisViewModel()
+        viewModel.lastPlannedFrames = planned
+        val line = TextView(ApplicationProvider.getApplicationContext<Application>())
+        controller(Gate(), viewModel, resultLine = line)
+            .handleBatchOutcome(Result.success(outcome(code = 0, validPoints = 500, frames = kept)))
+        return line.text.toString()
+    }
+
+    @Test
+    fun `a finished run counts its frames with a plural, not a hard-coded English line`() {
+        assertEquals("✅ Computed 1 frame", successLine(kept = 1, planned = 1))
+        assertEquals("✅ Computed 3 frames", successLine(kept = 3, planned = 3))
+    }
+
+    @Test
+    fun `frames dropped for keeping no points are counted, not hidden`() {
+        assertEquals(
+            "✅ Computed 3 of 5 frames — 2 frames kept no valid points",
+            successLine(kept = 3, planned = 5),
+        )
+        assertEquals(
+            "✅ Computed 4 of 5 frames — 1 frame kept no valid points",
+            successLine(kept = 4, planned = 5),
+        )
     }
 }
