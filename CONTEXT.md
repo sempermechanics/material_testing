@@ -114,9 +114,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **This branch (#197).** `ScreenBenchmark.settingsScroll` skips the two licence-only
   settings headers (it failed on every run); `scripts/ci_test_report.py` names failing
   device tests and prints benchmark numbers in the CI log.
-- **Request volume (#191).** One app open sent 19 backend requests (10 config, 8 session
-  listings). `CloudSync.reconcile` now runs one call at a time, so Home's simultaneous
-  calls list the cloud once ([perf/request-volume.md](docs/perf/request-volume.md)).
+- **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
+  awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
+  open on the Pixel 6. Pass 4 (backend, open PR): an inline `POST /v1/sessions` builds its reply from the
+  targets it opened, 8 + 2N → 6 + N Firestore reads; needs a backend deploy.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
