@@ -112,7 +112,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (`SubsetRecommender` reads speckle inside the ROI from textured patches only,
   `VsgPlotView` y gutter, `TouchImageView` zoom across a resize, `AviReader` µs slack);
   #197, `settingsScroll` skips the licence-only settings headers and
-  `scripts/ci_test_report.py` puts failing device tests and benchmark numbers in the CI log.
+  `scripts/ci_test_report.py` puts failing device tests and benchmark numbers in the CI log;
+  #203 (TD-81), Compute comes back after a single run fails outright, and a first frame
+  that kept no points says why (the strain window with the run's VSG and step, nothing
+  correlated, or an unreadable frame).
 - **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
   awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
   open on the Pixel 6; Pass 2 (open PR) shares the launch `/v1/config` fetch, 4 → 3.
