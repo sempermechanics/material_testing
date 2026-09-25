@@ -99,7 +99,9 @@ Results land in logcat (`adb logcat -d -s Benchmark:I`).
 **Macro (`:benchmark`) — "what does the user feel?"**
 `ViewerScrubBenchmark` seeds a synthetic session via the benchmark-variant-only
 `BenchmarkSeedActivity` and scrubs frames, reporting frame timing, max heap and the
-`Semper.viewer.decodeDat` trace section.
+`Semper.viewer.decodeDat` trace section. The seeder also writes the `field_ranges.bin`
+sidecar a real batch run leaves, so the viewer's colour-scale pass reads it as it does
+on a phone; without it the benchmark measured the no-sidecar fallback instead (TD-87).
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
@@ -159,8 +161,11 @@ Macrobenchmark / Baseline Profile (`:benchmark` module — not part of default C
   -P android.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
 ```
 CI runs this only with the `benchmark` PR label or workflow_dispatch
-`run_benchmark`. Ship `app/src/main/baseline-prof.txt` + `profileinstaller`;
-regenerate the profile from Macrobenchmark output when tightening startup.
+`run_benchmark`. `app/src/main/baseline-prof.txt` holds only comments, and
+`profileinstaller` ships the AndroidX libraries' own profile rules. A profile of
+the app's own startup path has nothing to gain: on a Pixel 6, `Full` compilation
+starts no faster than `None` ([perf/startup.md](../perf/startup.md), which has the
+`StartupHeadroomBenchmark` steps). Measure that again before generating one.
 
 ## What not to test here
 

@@ -116,16 +116,27 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #203 (TD-81), Compute comes back after a single run fails outright, and a first frame
   that kept no points says why (the strain window with the run's VSG and step, nothing
   correlated, or an unreadable frame).
-- **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
-  awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
-  open on the Pixel 6; Pass 2 (#206, merged) shares the launch `/v1/config` fetch, 4 → 3.
-  Pass 3 measured App Check and changed nothing: one ~1.7 s attestation per cold
-  open, which only the Play account can remove.
-  Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs
-  6 + N Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+- **Measured optimisation (2026-09-25, all six passes done).** Request volume
+  ([perf/request-volume.md](docs/perf/request-volume.md)):
+  - Pass 1 (#191) runs `CloudSync.reconcile` one call at a time.
+  - Pass 2 (#206) shares the launch `/v1/config` fetch.
+  - Together: 12 → 3 requests per app open on the Pixel 6. Both are merged and
+    ship with the next app build.
+
+  Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs 6 + N
+  Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+
+  Measured, no change:
+  - Pass 3: one ~1.7 s App Check attestation per cold open, which only the Play
+    account can remove.
+  - Pass 5: no cold-start gain from precompiling ([perf/startup.md](docs/perf/startup.md)).
+  - Pass 6: no engine or viewer regression
+    ([perf/engine-viewer-check-2026-09.md](docs/perf/engine-viewer-check-2026-09.md)).
 - **#200 (merged).** `HotPathMicroBenchmark` could not run in CI (TD-86): the debug manifest
   now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
   and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
+- **This branch (TD-87).** The 150-frame scrub heap (51 → 161 MB after TD-75) was the benchmark
+  running the no-sidecar colour-scale fallback; its seeder now writes the ranges sidecar.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
@@ -133,7 +144,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
   #211 (open) floors the licensed cap at demo's, lets staff clear a
   licence's cap, and has the app enforce a known licensed ceiling. The rest of that
-  wrong-info audit is phased; its deferred findings are TD-87…TD-119.
+  wrong-info audit is phased; its deferred findings are TD-88…TD-120.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
   run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
