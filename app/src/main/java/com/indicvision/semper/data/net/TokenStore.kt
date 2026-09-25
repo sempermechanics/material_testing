@@ -110,8 +110,8 @@ object TokenStore {
 
     /**
      * True when the account may not create another analysis (hard stop).
-     * Professional has no local analysis cap. Demo uses the 25-run ceiling
-     * even before [AppRemoteConfig] has been fetched.
+     * Both modes stop at the backend's ceiling once [AppRemoteConfig] has it.
+     * Before that, demo uses the 25-run ceiling and licensed has none.
      */
     @Suppress("ReturnCount")
     fun isSessionLimitReached(context: Context): Boolean {

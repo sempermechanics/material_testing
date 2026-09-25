@@ -128,6 +128,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
+- **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
+  the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
+  looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
+  `fix/licensed-quota-ceiling` (open) floors the licensed cap at demo's, lets staff clear a
+  licence's cap, and has the app enforce a known licensed ceiling. The rest of that
+  wrong-info audit is phased; its deferred findings are TD-87…TD-119.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
   run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).

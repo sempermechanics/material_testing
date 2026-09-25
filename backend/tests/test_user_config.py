@@ -52,7 +52,7 @@ def test_resolve_prefers_positive_user_overrides_on_professional(store, monkeypa
     cfg = repo.resolve_user_config({
         "uid": "u1",
         "plan": "professional",
-        "maxSessions": 12,
+        "maxSessions": 40,
         "maxFilesPerSession": 800,
         "maxFrames": 100,
         "datCodecEncodingEnabled": True,
@@ -70,12 +70,26 @@ def test_resolve_prefers_positive_user_overrides_on_professional(store, monkeypa
         "leaseHeartbeatMinutes": 30,
         "cloudBackupEnabled": True,
         "shareEnabled": True,
-        "maxSessions": 12,
+        "maxSessions": 40,
         "maxFilesPerSession": 800,
         "maxFrames": 100,
         "datCodecEncodingEnabled": True,
         "licensePrefix": "",
     }
+
+
+@pytest.mark.parametrize("user, expected", [
+    ({"licenseMaxAnalyses": 1}, 25),
+    ({"maxSessions": 1}, 25),
+    ({"maxSessions": 1, "licenseMaxAnalyses": 40}, 25),
+    ({"licenseMaxAnalyses": 40}, 40),
+    ({}, 999),
+])
+def test_licensed_ceiling_is_never_below_demo(store, monkeypatch, user, expected):
+    """A licence adds analyses; a stored cap under demo is floored at demo's."""
+    _limit_env(monkeypatch)
+    cfg = repo.resolve_user_config({"uid": "u1", "mode": "licensed", **user})
+    assert cfg["maxSessions"] == expected
 
 
 def test_expired_professional_falls_back_to_demo(store, monkeypatch):
@@ -189,14 +203,14 @@ async def test_admin_patch_user_config(client, monkeypatch):
 
     resp = await client.patch(
         "/v1/admin/users/u1/config",
-        json={"plan": "professional", "maxSessions": 9},
+        json={"plan": "professional", "maxSessions": 90},
     )
     assert resp.status_code == 200
     body = resp.json()
     assert body["uid"] == "u1"
     assert body["config"]["plan"] == "professional"
-    assert body["config"]["maxSessions"] == 9
-    assert store._data["users"]["u1"]["maxSessions"] == 9
+    assert body["config"]["maxSessions"] == 90
+    assert store._data["users"]["u1"]["maxSessions"] == 90
     assert store._data["users"]["u1"]["plan"] == "professional"
 
 
@@ -216,14 +230,14 @@ async def test_list_sessions_quota_uses_resolved_max(client, monkeypatch):
     monkeypatch.setattr(
         deps,
         "_DEV_USER",
-        {**deps._DEV_USER, "maxSessions": 7},
+        {**deps._DEV_USER, "maxSessions": 70},
     )
     monkeypatch.setattr(repo, "list_user_sessions", lambda uid, limit=50, page_token=None: ([], None))
     monkeypatch.setattr(repo, "count_user_sessions", lambda uid: 0)
 
     resp = await client.get("/v1/sessions")
     assert resp.status_code == 200
-    assert resp.json()["quota"] == {"used": 0, "max": 7}
+    assert resp.json()["quota"] == {"used": 0, "max": 70}
 
 
 def test_resolve_reads_the_pre_rename_plan_field(store, monkeypatch):

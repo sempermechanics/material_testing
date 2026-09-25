@@ -73,8 +73,8 @@ object LicenseEntitlements {
      *
      * A **parallel** gate to the quota one, not a widening of it: an
      * institution member is [MODE_LICENSED], so `isSessionLimitReached` and
-     * `analysisCap` never fire for them. Without this they would sail past
-     * every existing check.
+     * `analysisCap` only fire for them at the licensed ceiling. Without this
+     * a member with no seat would sail past every existing check.
      *
      * Reads [isLicensed] as the answer rather than the cached lease date. The
      * backend already folds the lease into `mode` — it resolves demo the
@@ -88,7 +88,15 @@ object LicenseEntitlements {
     fun seatHeartbeatMinutes(context: Context): Int =
         AppRemoteConfig.leaseHeartbeatMinutes(context)
 
-    fun unlimitedAnalysis(context: Context): Boolean = isLicensed(context)
+    /**
+     * Licensed with no ceiling on file yet. Once `/v1/config` reports one, a
+     * licensed account is held to it like demo is: the server refuses the
+     * upload past it, so letting the run start only to bounce at 409 — and
+     * then telling the user on "Re-check" that the limit had cleared — was
+     * the app contradicting itself.
+     */
+    fun unlimitedAnalysis(context: Context): Boolean =
+        isLicensed(context) && !AppRemoteConfig.isKnown(context)
 
     /**
      * Past the license's expiry but still fully entitled — a renewal is
@@ -139,8 +147,8 @@ object LicenseEntitlements {
     }
 
     /**
-     * Local analysis cap. Demo is 25 even before config has been fetched.
-     * A licensed account has no local analysis cap.
+     * Local analysis cap: the backend's `maxSessions` once known. Before that,
+     * demo is 25 and a licensed account is uncapped.
      */
     fun analysisCap(context: Context): Int {
         if (unlimitedAnalysis(context)) return Int.MAX_VALUE

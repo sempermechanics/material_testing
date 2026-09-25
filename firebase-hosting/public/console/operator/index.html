@@ -87,8 +87,15 @@
           <label>Grace days <span class="muted">(after expiry)</span>
             <input id="graceDays" type="number" min="0" max="365" placeholder="fleet default" disabled />
           </label>
-          <label>Analysis cap
-            <input id="maxAnalyses" type="number" min="1" placeholder="unlimited" />
+          <!-- Per person, not per licence: the number of analyses each holder
+               may keep in the cloud. It was labelled "Analysis cap" and, being
+               the only number on an individual licence, got read as "1 licence". -->
+          <label>Cloud analyses per person <span class="muted">(usually empty)</span>
+            <input id="maxAnalyses" type="number" min="1" placeholder="licensed default" />
+            <span class="muted">
+              Only for a plan sold with a limit. Empty gives the licensed default;
+              a limit below the demo allowance is refused.
+            </span>
           </label>
           <label class="wide">Note <span class="muted">(who it is for, PO number)</span>
             <input id="note" placeholder="Prof. Chen, PO 4471" />
@@ -123,6 +130,7 @@
             <thead>
               <tr>
                 <th>Key</th><th>Kind</th><th>Seats</th><th>Term</th>
+                <th>Analyses / person</th>
                 <th>Status</th><th>Institution</th><th></th>
               </tr>
             </thead>

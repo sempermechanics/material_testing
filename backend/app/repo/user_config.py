@@ -157,10 +157,14 @@ def resolve_user_config(user: dict) -> dict:
     mode = summary["mode"]
     is_licensed = mode == MODE_LICENSED
     if is_licensed:
-        max_sessions = (
+        # Never below the demo ceiling: a licence adds analyses, it does not
+        # take them away. The operator's cap box was the one number on an
+        # individual licence, so a "1" meant as "one licence" was easy to store.
+        max_sessions = max(
             _positive_int_override(user, "maxSessions")
             or _positive_int_override(user, "licenseMaxAnalyses")
-            or settings.LICENSED_MAX_SESSIONS_PER_USER
+            or settings.LICENSED_MAX_SESSIONS_PER_USER,
+            settings.DEMO_MAX_ANALYSES,
         )
     else:
         max_sessions = settings.DEMO_MAX_ANALYSES

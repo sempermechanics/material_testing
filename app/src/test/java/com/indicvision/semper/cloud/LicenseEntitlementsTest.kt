@@ -107,8 +107,18 @@ class LicenseEntitlementsTest {
     }
 
     @Test
-    fun `a licensed account has no local analysis cap`() {
-        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 5))
+    fun `a licensed account is held to the backend ceiling once it is known`() {
+        // The server refuses the upload past maxSessions; the local gate has to
+        // agree, or the run starts, bounces at 409, and "Re-check" says clear.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 40))
+        assertFalse(LicenseEntitlements.unlimitedAnalysis(ctx))
+        assertEquals(40, LicenseEntitlements.analysisCap(ctx))
+    }
+
+    @Test
+    fun `a licensed account has no local cap before the ceiling is known`() {
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 0))
+        assertTrue(LicenseEntitlements.unlimitedAnalysis(ctx))
         assertEquals(Int.MAX_VALUE, LicenseEntitlements.analysisCap(ctx))
     }
 
@@ -371,16 +381,16 @@ class LicenseEntitlementsTest {
     @Test
     fun `the seat gate is independent of the analysis quota`() {
         // The reason this is a parallel predicate: a licensed institution
-        // member has no analysis cap, so every existing quota check waves them
-        // through regardless of whether they hold a seat.
+        // member is held only to the licensed ceiling, so every existing quota
+        // check waves them through regardless of whether they hold a seat.
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", licenseSeating = "floating"))
         assertTrue(LicenseEntitlements.seatRequiredToStart(ctx))
 
         AppRemoteConfig.apply(
             ctx,
-            AppConfigDto(mode = "licensed", licenseSeating = "floating", maxSessions = 5),
+            AppConfigDto(mode = "licensed", licenseSeating = "floating", maxSessions = 999),
         )
-        assertEquals(Int.MAX_VALUE, LicenseEntitlements.analysisCap(ctx))
+        assertEquals(999, LicenseEntitlements.analysisCap(ctx))
         assertFalse(LicenseEntitlements.seatRequiredToStart(ctx))
     }
 

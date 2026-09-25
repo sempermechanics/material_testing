@@ -66,6 +66,18 @@ class QuotaGateTest {
     }
 
     @Test
+    fun `a licensed account stops at a known ceiling, like demo`() {
+        // Before this, licensed meant "no local cap": the run started, the
+        // upload bounced at 409, and the limit screen's re-check said clear.
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 30))
+        TokenStore.setQuota(ctx, used = 29, localCount = 29)
+        assertFalse(TokenStore.isSessionLimitReached(ctx))
+
+        TokenStore.setQuota(ctx, used = 30, localCount = 30)
+        assertTrue(TokenStore.isSessionLimitReached(ctx))
+    }
+
+    @Test
     fun `a forced stop holds until fresh numbers arrive`() {
         AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 5, maxFilesPerSession = 600, maxFrames = 150))
         // 409 from the upload path forces the stop without fresh counts.
