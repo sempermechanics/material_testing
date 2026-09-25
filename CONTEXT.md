@@ -140,7 +140,7 @@ Kover `minBound` 37, enforced by `:app:koverVerify` in tier 1 and `ciReleaseGate
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual
 reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-24)
+## Current state (2026-09-25)
 
 - **Synced with `semperdic-app`.** This repo forked the parent at `bfe00e5`
   (2026-09-21) and merged its `main` again at `643462c` (parent #188; here
@@ -164,12 +164,14 @@ reference, not CI. Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
-- **Lab on the emulator (this branch).** `e2e/LabWorkflowDeviceTest` and
+- **Lab on the emulator, merged (#24).** `e2e/LabWorkflowDeviceTest` and
   `e2e/BeamTapEditorGestureTest` run the lab end to end in Tier 3 (Results,
   Elastic toggle, lab-report PDF, viewer and tap-editor gestures);
   `WizardDraftRestoreTest` covers a load log across a process death;
-  `LabResultsBenchmark` times the Results page. Fixed with them: a flick at rest
-  scale scrubbed two frames (`TouchImageView`: fling and swipe both fired).
+  `LabResultsBenchmark` times the Results page. A full run with benchmarks was
+  green on every tier. Fixed with them: a flick scrubbed two frames
+  (`TouchImageView`); the parent fixed the same bug on its own (its TD-72), so
+  on the next sync take the parent's `TouchImageView`.
 - **Owed.** Device runs on a physical phone, and video import beyond emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
   production state.
