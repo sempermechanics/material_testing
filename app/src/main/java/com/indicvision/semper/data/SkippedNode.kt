@@ -19,6 +19,14 @@ data class SkippedNode(
 
         fun encodeJson(nodes: List<SkippedNode>): String = json.encodeToString(nodes)
 
+        /**
+         * The nodes of a sweep that solved nothing. The run's own per-node codes
+         * win; [planned] (every node under one code) covers only a run that
+         * ended before it recorded any.
+         */
+        fun forFailedSweep(recorded: List<SkippedNode>, planned: () -> List<SkippedNode>): List<SkippedNode> =
+            recorded.ifEmpty(planned)
+
         fun decodeJson(raw: String?): List<SkippedNode> {
             if (raw.isNullOrBlank()) return emptyList()
             return json.decodeFromString(raw)

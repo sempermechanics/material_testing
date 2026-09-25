@@ -42,6 +42,22 @@ class SkippedNodeTest {
     }
 
     @Test
+    fun `a failed sweep keeps each node's own code`() {
+        val recorded = listOf(
+            SkippedNode(subset = 21, step = 5, strainWindow = 15, code = 12),
+            SkippedNode(subset = 25, step = 5, strainWindow = 15, code = 7),
+        )
+        val nodes = SkippedNode.forFailedSweep(recorded) { error("the plan is only a fallback") }
+        assertEquals(listOf(12, 7), nodes.map { it.code })
+    }
+
+    @Test
+    fun `a sweep that recorded nothing falls back to the plan`() {
+        val planned = listOf(SkippedNode(subset = 21, step = 5, strainWindow = 15, code = 3))
+        assertEquals(planned, SkippedNode.forFailedSweep(emptyList()) { planned })
+    }
+
+    @Test
     fun `blank json decodes to empty list`() {
         assertTrue(SkippedNode.decodeJson(null).isEmpty())
         assertTrue(SkippedNode.decodeJson("  ").isEmpty())
