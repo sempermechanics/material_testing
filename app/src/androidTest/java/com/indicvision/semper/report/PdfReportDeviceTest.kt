@@ -18,7 +18,7 @@ import java.io.OutputStream
 /**
  * The PDF report drawn by the platform's real PdfDocument, which Robolectric
  * cannot run: the stages, a document that starts `%PDF`, one cover per
- * readable frame, every frame's bitmaps released once it is drawn, and a
+ * readable frame, A4 pages, every frame's bitmaps released once it is drawn, and a
  * failed write reported as Error rather than Complete.
  */
 @RunWith(AndroidJUnit4::class)
@@ -51,6 +51,11 @@ class PdfReportDeviceTest {
     private fun pageCount(pdf: ByteArray): Int =
         Regex("/Type\\s*/Page[^s]").findAll(String(pdf, Charsets.ISO_8859_1)).count()
 
+    /** Every page's MediaBox as written; A4 is 595 x 842 pt. */
+    private fun mediaBoxes(pdf: ByteArray): Set<String> =
+        Regex("/MediaBox\\s*\\[([^\\]]*)]").findAll(String(pdf, Charsets.ISO_8859_1))
+            .map { it.groupValues[1].trim().split(Regex("\\s+")).joinToString(" ") }.toSet()
+
     @Test
     fun singleReportWritesAPdf() {
         val out = ByteArrayOutputStream()
@@ -60,6 +65,7 @@ class PdfReportDeviceTest {
         assertEquals("%PDF", String(out.toByteArray().copyOf(4), Charsets.US_ASCII))
         // Cover, three field pages (U+V, Exx+Eyy, Exy+ZNSSD), telemetry.
         assertEquals(SINGLE_PAGES, pageCount(out.toByteArray()))
+        assertEquals(setOf("0 0 595 842"), mediaBoxes(out.toByteArray()))
     }
 
     @Test

@@ -264,6 +264,10 @@ class LabWorkflowDeviceTest {
         val magic = ByteArray(PDF_MAGIC.length)
         file.inputStream().use { it.read(magic) }
         assertEquals(PDF_MAGIC, String(magic, Charsets.US_ASCII))
+        // A4 in points; the 2480 x 3508 design space is scaled onto it.
+        val boxes = Regex("/MediaBox\\s*\\[([^\\]]*)]").findAll(file.readBytes().toString(Charsets.ISO_8859_1))
+            .map { it.groupValues[1].trim().split(Regex("\\s+")).joinToString(" ") }.toSet()
+        assertEquals(setOf("0 0 595 842"), boxes)
         file.delete()
     }
 
