@@ -3,6 +3,7 @@ package com.indicvision.semper.report
 import com.indicvision.semper.report.LabReport.Block
 import com.indicvision.semper.report.LabReport.Document
 import com.indicvision.semper.report.LabReport.Series
+import com.indicvision.semper.report.LabReportFormat.frameCell
 import com.indicvision.semper.report.LabReportFormat.num
 import com.indicvision.semper.report.LabReportFormat.sci
 import java.util.Locale
@@ -77,6 +78,7 @@ internal object LabReportBending {
         val rows = summary.loadSteps.mapIndexed { i, step ->
             listOf(
                 "${i + 1}",
+                frameCell(step.frame, step.lastFrame),
                 num(step.loadN, 2),
                 num(step.deflectionMm, DEFLECTION_DECIMALS),
                 num(step.stressMPa, STRESS_DECIMALS),

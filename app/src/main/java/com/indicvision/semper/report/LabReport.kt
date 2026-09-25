@@ -1,5 +1,6 @@
 package com.indicvision.semper.report
 
+import com.indicvision.semper.report.LabReportFormat.frameCell
 import com.indicvision.semper.report.LabReportFormat.num
 import com.indicvision.semper.report.LabReportFormat.sci
 import java.util.Locale
@@ -161,6 +162,7 @@ object LabReport {
         val rows = curve.points.mapIndexed { i, p ->
             listOf(
                 "${i + 1}",
+                frameCell(p.frame),
                 num(p.loadN / NEWTONS_PER_KN, LOAD_DECIMALS),
                 p.extensionPx?.let { num(it, EXTENSION_DECIMALS) } ?: BLANK_CELL,
                 num(p.stressMPa, 2),

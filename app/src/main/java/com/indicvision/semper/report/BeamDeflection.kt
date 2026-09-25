@@ -112,13 +112,17 @@ object BeamDeflection {
     fun modulusFromSlopeGPa(slopeNPerMm: Double, spanMm: Float, secondMomentMm4: Float): Float =
         modulusGPa(slopeNPerMm.toFloat(), spanMm, 1f, secondMomentMm4) ?: Float.NaN
 
-    /** One load step, as a row of the lab's observation table. [modulusGPa] is null when δ is too small. */
+    /**
+     * One load step, as a row of the lab's observation table. [modulusGPa] is null
+     * when δ is too small. A load held over several frames runs [frame] to [lastFrame].
+     */
     data class Step(
         val frame: Int,
         val loadN: Float,
         val deflectionMm: Float,
         val stressMPa: Float,
         val modulusGPa: Float?,
+        val lastFrame: Int = frame,
     )
 
     /**
@@ -162,7 +166,8 @@ object BeamDeflection {
         val held = loadSteps(steps).map { run ->
             val w = run.map { it.loadN }.average().toFloat()
             val d = run.map { it.deflectionMm }.average().toFloat()
-            Step(run.first().frame, w, d, run.map { it.stressMPa }.average().toFloat(), stepE(w, d))
+            val stress = run.map { it.stressMPa }.average().toFloat()
+            Step(run.first().frame, w, d, stress, stepE(w, d), lastFrame = run.last().frame)
         }
         val moduli = held.mapNotNull { it.modulusGPa }
         val line = LinearFit.fit(

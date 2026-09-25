@@ -97,7 +97,7 @@ Loads are CSV-only for now. Typing loads in the app is still an open decision.
   3. Theory;
   4. figure (the reference with the region);
   5. Observations (area, DIC gauge);
-  6. table: S.No, Load, Extension (px), Stress, Strain, with Elastic / Plastic / Break point bracketed;
+  6. table: S.No, Frame, Load, Extension (px), Stress, Strain, with Elastic / Plastic / Break point bracketed;
   7. Calculation for row 1;
   8. graphs: the elastic region with its line, and the full curve with E;
   9. Results;
@@ -113,7 +113,7 @@ Loads are CSV-only for now. Typing loads in the app is still an open decision.
   5. figure (the taps and the probe);
   6. Observations (L, b, t, no-load = reference, mm/px);
   7. Calculation for row 1 (M, y, I, σb, E);
-  8. table with one row per load step;
+  8. table with one row per load step: Sr. No, Frame, W, δ, σb, E. Frame is the viewer's number, a range such as 4–6 when a load is held over several frames; Sr. No counts rows, so the two differ once an unloaded frame is left out;
   9. Results (average E, E from the graph);
   10. graph with the slope and E boxed.
 
