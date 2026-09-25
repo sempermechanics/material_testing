@@ -557,6 +557,8 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
 licenses/{id}/seats/{uid}         (institution only — one doc per roster member)
   uid, email, deviceIdLock
   status: "active" | "disabled" | "revoked"
+                                  (a revoked seat cannot be held or resumed —
+                                   409 seat_revoked; the member is re-added)
   # floating only — the lease. Absent means "holds no seat right now", which
   # for most of a floating roster is the normal state.
   leaseExpiresAt                  (Timestamp; compared to now, never trusted
@@ -1552,6 +1554,17 @@ request that beat it has already granted the entitlement, and
 re-reading, returns early for a browser because consoles send no
 `X-Device-Id`.
 
+**An invite behind a Demo key is retried.** A claim that fails for a reason
+that can clear (a full assigned roster, a seat on hold) stamps
+`inviteBlockedAt` on the account, and the Demo key is minted as before. That
+key used to strand the invite for good: every later request short-circuits on
+the account holding a licence. Now an account that still holds Demo and carries
+the stamp tries the invite again at most every `_INVITE_RETRY` (15 minutes),
+so a seat freed later reaches the person it was promised to; the claim drops
+the superseded Demo key and the stamp. A withdrawn invite or a revoked licence
+clears the stamp. The bound is what keeps this off the per-request path: an
+unstamped account never reads the invite collection again.
+
 #### Checkout, and why there is no heartbeat route
 
 `POST /v1/licenses/checkout` claims or extends. Re-calling it **is** the
@@ -1593,6 +1606,18 @@ single-field inequality on one subcollection, so no composite index. It runs
 outside the transaction because a transaction may not query, and that is safe —
 releasing a genuinely expired lease is correct regardless of who wins the claim
 that follows.
+
+**A lease is counted until something uncounts it, expired or not.** Checkout
+adds one to `leasesActive`; only the sweep, a release, a hold or a revoke takes
+it off, and each decides from `_seat_lease_counted` (the seat still carries
+`leaseExpiresAt`), not from whether the lease is live. Release and revoke used
+to decrement only a live lease, so one cleared after it ran out but before the
+sweep reached it vanished from the sweep's query and its slot was lost for
+good. For the same reason a re-checkout of an expired, unswept lease renews it
+rather than counting it twice. Holding a seat (`enabled=false`) releases its
+lease, a whole-licence revoke clears every seat's lease and sets
+`leasesActive` to 0, and `_drop_user_to_demo_if_licensed` drops the holder's
+`leaseExpiresAt` copy, so no revoked or held account reads as holding a seat.
 
 **TTL is not involved.** As the `challenges` precedent already states in
 `firestore.indexes.json`, Firestore TTL is storage hygiene with up to a day of

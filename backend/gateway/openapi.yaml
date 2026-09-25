@@ -713,6 +713,7 @@ paths:
         '400': { description: empty_patch }
         '403': { description: email_not_verified }
         '404': { description: license_not_found or seat_not_found }
+        '409': { description: "Hold or resume on a removed seat or a revoked licence, or lost a race with another change to it (seat_revoked, license_revoked, seat_busy)" }
         '429': { description: Rate limited }
     delete:
       operationId: campusRevokeSeat
@@ -819,9 +820,10 @@ paths:
       description: >
         Institution self-service. clearDeviceLock=true lets a seat holder
         re-bind to a new device without a Semper support ticket. enabled=false
-        drops the seat to demo but does NOT free the slot (still counts
-        against maxSeats); enabled=true restores the licensed mode in place,
-        no data migration either direction. At least one field is required.
+        drops the seat to demo and releases its floating lease but does NOT
+        free the slot (still counts against maxSeats); enabled=true restores
+        the licensed mode in place, no data migration either direction. A
+        removed seat cannot be held or resumed. At least one field is required.
       parameters:
         - name: licenseId
           in: path
@@ -836,6 +838,7 @@ paths:
         '400': { description: empty_patch }
         '403': { description: email_not_verified }
         '404': { description: license_not_found or seat_not_found }
+        '409': { description: "Hold or resume on a removed seat or a revoked licence, or lost a race with another change to it (seat_revoked, license_revoked, seat_busy)" }
         '429': { description: Rate limited }
     delete:
       operationId: institutionRevokeSeat

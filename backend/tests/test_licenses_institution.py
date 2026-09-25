@@ -151,7 +151,7 @@ def test_disable_seat_drops_to_demo_without_freeing_slot(store):
     repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
 
-    assert repo.set_seat_enabled(license_id, "u1", False) is True
+    assert repo.set_seat_enabled(license_id, "u1", False) == ""
     assert store._data["users"]["u1"]["plan"] == "demo"
     # Slot is still occupied — a second student cannot claim it while disabled.
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
@@ -163,7 +163,7 @@ def test_disable_seat_drops_to_demo_without_freeing_slot(store):
     assert cfg is None
 
     # Re-enabling restores Professional in place, no re-activation needed.
-    assert repo.set_seat_enabled(license_id, "u1", True) is True
+    assert repo.set_seat_enabled(license_id, "u1", True) == ""
     assert store._data["users"]["u1"]["plan"] == "professional"
 
 
