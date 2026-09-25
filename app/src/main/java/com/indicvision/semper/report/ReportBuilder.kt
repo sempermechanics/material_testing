@@ -42,7 +42,19 @@ object ReportBuilder {
     )
     private val FIELD_KEYS = listOf("U", "V", "Exx", "Eyy", "Exy", "ZNSSD")
 
-    data class FieldExtrema(val maxIdx: Int, val minIdx: Int)
+    data class FieldExtrema(val maxIdx: Int, val minIdx: Int) {
+        /**
+         * The field's value at the max / min marker, in display units, or null
+         * when nothing was marked. This is what "Max" / "Min" report: the
+         * points the markers sit on. The colour scale's ends are percentiles,
+         * widened on a flat field, and need not be any point's value.
+         */
+        fun maxValue(data: FloatArray, dataIndex: Int): Float? = valueAt(data, maxIdx, dataIndex)
+        fun minValue(data: FloatArray, dataIndex: Int): Float? = valueAt(data, minIdx, dataIndex)
+
+        private fun valueAt(data: FloatArray, pointIdx: Int, dataIndex: Int): Float? =
+            if (pointIdx < 0) null else data[pointIdx + dataIndex] * DicResult.strainMultiplier(dataIndex)
+    }
 
     data class ReportBuildParams(
         val data: FloatArray,
@@ -298,6 +310,7 @@ object ReportBuilder {
                 bakeAnnotationsToCanvas(
                     tempCanvas, renderW, renderH, actualMin, actualMax,
                     FIELD_KEYS[fieldIndex], unit, extrema.maxIdx, extrema.minIdx, data,
+                    dataIndex = dataIndex,
                     drawMinMarker = params.drawMinMarker,
                     coordScale = renderScale,
                     imageName = params.deformedImageName,
@@ -316,8 +329,8 @@ object ReportBuilder {
                         fieldName = FIELD_NAMES[fieldIndex],
                         fieldKey = FIELD_KEYS[fieldIndex],
                         unit = unit,
-                        minValue = actualMin * multiplier,
-                        maxValue = actualMax * multiplier,
+                        minValue = extrema.minValue(data, dataIndex) ?: (actualMin * multiplier),
+                        maxValue = extrema.maxValue(data, dataIndex) ?: (actualMax * multiplier),
                         meanValue = mean * multiplier,
                         stdDevValue = stdDev * multiplier,
                         meanType = meanTypeString,
@@ -367,6 +380,7 @@ object ReportBuilder {
         maxIdx: Int,
         minIdx: Int,
         dataArray: FloatArray,
+        dataIndex: Int? = null,
         drawMinMarker: Boolean = true,
         coordScale: Float = 1f,
         imageName: String? = null,
@@ -374,6 +388,7 @@ object ReportBuilder {
         val multiplier = if (unit == "mε") DicResult.STRAIN_TO_MILLISTRAIN else 1f
         val maxVal = maxValRaw * multiplier
         val minVal = minValRaw * multiplier
+        val marked = FieldExtrema(maxIdx, minIdx)
 
         val textSize = width * 0.025f
         val padding = width * 0.02f
@@ -390,8 +405,9 @@ object ReportBuilder {
             "Semper Analysis Report",
             imageName?.takeIf { it.isNotBlank() }?.let { "Image: $it" },
             "Field: $typeString [$unit]",
-            "Max: ${formatMetric(maxVal)}",
-            "Min: ${formatMetric(minVal)}",
+            // The marked points' values; the colour bar below keeps the scale's ends.
+            "Max: ${formatMetric(dataIndex?.let { marked.maxValue(dataArray, it) } ?: maxVal)}",
+            "Min: ${formatMetric(dataIndex?.let { marked.minValue(dataArray, it) } ?: minVal)}",
         )
         var maxTextWidth = 0f
         for (line in infoText) {

@@ -44,6 +44,26 @@ class ReportBuilderTest {
     }
 
     @Test
+    fun `the reported max and min are the marked points' values, in display units`() {
+        val data = syntheticField(100)
+        val extrema = ReportBuilder.computeFieldExtrema(data, DicResult.IDX_EXX, absoluteStrainValues = false)
+
+        val max = extrema.maxValue(data, DicResult.IDX_EXX)!!
+        assertEquals(data[extrema.maxIdx + DicResult.IDX_EXX] * DicResult.STRAIN_TO_MILLISTRAIN, max, 0f)
+        // A real point's value, so the table's value and location agree.
+        assertTrue((0 until 100).any { it * 0.001f * DicResult.STRAIN_TO_MILLISTRAIN == max })
+        assertEquals(null, ReportBuilder.FieldExtrema(-1, -1).maxValue(data, DicResult.IDX_EXX))
+    }
+
+    @Test
+    fun `a signed search marks the most negative strain, not the one nearest zero`() {
+        val data = syntheticField(100)
+        for (i in 0 until 100) data[i * DicResult.STRIDE + DicResult.IDX_EXX] = (i - 50) * 0.001f
+        val signed = ReportBuilder.computeFieldExtrema(data, DicResult.IDX_EXX, absoluteStrainValues = false)
+        assertTrue(data[signed.minIdx + DicResult.IDX_EXX] < -0.04f)
+    }
+
+    @Test
     fun `empty or all-rejected field returns FieldExtrema -1 -1`() {
         val empty = ReportBuilder.computeFieldExtrema(FloatArray(0), DicResult.IDX_U)
         assertEquals(ReportBuilder.FieldExtrema(-1, -1), empty)

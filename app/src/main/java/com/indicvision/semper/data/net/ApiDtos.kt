@@ -22,7 +22,21 @@ data class MeResponse(
     val terms: TermsDto? = null,
     /** null = never answered; the app treats that as "not asked", never as consent. */
     @SerialName("improvement_consent") val improvementConsent: Boolean? = null,
+    /** Read only to cross-check the /v1/config fetched beside it. */
+    val license: MeLicenseDto? = null,
 )
+
+/** The part of /v1/me's `license` block the app reads: the effective mode. */
+@Serializable
+data class MeLicenseDto(val mode: String = "") {
+    /**
+     * True when [config] was answered in a different mode than this. /v1/me
+     * claims a pending invitation as it answers, and the /v1/config fetched
+     * beside it can read the account a moment before that lands.
+     */
+    fun disagreesWith(config: AppConfigDto): Boolean =
+        mode.isNotBlank() && config.mode.isNotBlank() && !mode.equals(config.mode, ignoreCase = true)
+}
 
 /** Which Terms version the server requires, and which (if any) this account accepted. */
 @Serializable

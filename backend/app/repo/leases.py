@@ -18,7 +18,7 @@ from ._base import (
     _license_past_grace,
     _now,
     _run_tx,
-    _seat_lease_live,
+    _seat_lease_counted,
     _seat_ref,
 )
 from .user_config import (
@@ -148,7 +148,9 @@ def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
         if seat.get("status") in ("revoked", "disabled"):
             return "not_eligible"
 
-        renewing = _seat_lease_live(seat)
+        # A lease still in the count — live, or run out and not swept yet —
+        # already holds its slot, so taking it up again must not add another.
+        renewing = _seat_lease_counted(seat)
         if not renewing:
             max_seats = (lic_snap.to_dict() or {}).get("maxSeats") if lic_snap.exists else None
             active = int((lic_snap.to_dict() or {}).get("leasesActive") or 0)
@@ -199,14 +201,16 @@ def release_lease(user: dict) -> tuple[str, dict | None]:
         seat_snap = seat_ref.get(transaction=tx)
         if not seat_snap.exists:
             return "not_eligible"
-        held = _seat_lease_live(seat_snap.to_dict() or {})
+        held = _seat_lease_counted(seat_snap.to_dict() or {})
         tx.update(seat_ref, {
             **_lease_clear_patch(),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
         if held:
-            # Only decrement for a lease that was actually counted. A second
-            # release, or one after expiry, must not push the pool negative.
+            # Only decrement for a lease that is still counted. A second
+            # release must not push the pool negative; one after expiry but
+            # before the sweep must decrement, or clearing the lease here
+            # hides it from the sweep and the slot leaks.
             tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(-1)})
         tx.update(user_ref, {
             "leaseExpiresAt": _base.firestore.DELETE_FIELD,

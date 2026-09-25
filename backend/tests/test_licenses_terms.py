@@ -402,6 +402,18 @@ async def test_me_reports_the_license_summary(client, monkeypatch):
     assert body["license"]["inGrace"] is True
     assert body["license"]["duration"] == "timed"
     assert body["license"]["kind"] == "institution"
+    assert body["license"]["held"] is True
     # Identity is unchanged — this is additive.
     assert body["uid"] == "dev-user"
     assert body["access_status"] == "APPROVED"
+
+
+@pytest.mark.parametrize(("stored", "held"), [("licensed", True), ("demo", False)])
+def test_the_summary_says_whether_a_real_licence_is_attached(stored, held):
+    """A Demo key and a revoked licence both read demo, as does an expired
+    one; only the stored mode tells the account page which has a licence."""
+    expired = datetime.now(timezone.utc) - timedelta(days=30)
+    user = {"mode": stored, "licenseKind": "individual", "licenseExpiresAt": expired}
+    summary = repo.license_summary(user)
+    assert summary["mode"] == "demo"
+    assert summary["held"] is held

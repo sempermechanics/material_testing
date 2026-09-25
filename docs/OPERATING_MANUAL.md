@@ -609,7 +609,10 @@ identity first, on the sign-in screen itself — whichever way you normally sign
 in: password, Google, or an emailed link. Your address is filled in and cannot be
 changed; you are proving *this* account. Back out and nothing happens. Once
 confirmed it erases the cloud copy, this device, and the sign-in itself, and
-signs you out. If the cloud cannot be reached nothing is deleted at all.
+signs you out. If the cloud cannot be reached nothing is deleted at all. A
+licence goes back first: an institution seat is freed for someone else, and an
+individual licence is released and re-offered to the same address, so signing
+up again with it is licensed straight away.
 
 **Quota.** The Home chip reads `Using N of M analyses` and turns red at the cap.
 Not a paywall — email support from the limit screen, or delete something and
@@ -872,6 +875,15 @@ already promised a place on a different licence — withdraw the other
 invitation first) and `409 license_seats_exhausted` on an assigned key.
 `503 claim_contended` is not a refusal: another request was claiming on the
 same licence at that moment, and adding the member again succeeds.
+
+An invitation to a full assigned key is not lost. The person signs in to Demo,
+and within about 15 minutes of a seat freeing up their account claims it on
+its own. The console counts pending invitations beside the seats taken.
+
+**Hold and Resume** (`PATCH .../seats/{uid}` with `enabled`) work on a current
+member only. A held seat keeps its place against the cap but gives up a
+floating seat it was using. A removed member cannot be resumed (`409
+seat_revoked`); add their address again instead, which takes a free seat.
 
 **One address for everybody.** `sempermechanics.com/login` is the only web
 address anyone needs — a customer, an IT contact, or Semper staff (it forwards

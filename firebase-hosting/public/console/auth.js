@@ -608,7 +608,7 @@ export function setStatus(message, isError = false) {
 
 // Pure helpers live in util.js, where `node --test` can reach them; the pages
 // keep importing them from here.
-export { esc, when } from "./util.js";
+export { esc, when, day } from "./util.js";
 
 /**
  * Confirm a destructive act by making the operator type the thing's name.

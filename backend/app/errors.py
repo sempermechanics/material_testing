@@ -93,6 +93,11 @@ EXPIRY_IN_PAST = "expiry_in_past"
 EXPIRY_BEFORE_CURRENT = "expiry_before_current"
 LICENSE_PERPETUAL = "license_perpetual"
 SEAT_NOT_FOUND = "seat_not_found"
+# Hold / resume on a seat that was removed. Resuming one used to reactivate it
+# without taking a slot back; the member is re-added instead.
+SEAT_REVOKED = "seat_revoked"
+# Hold / resume lost a race with another change to the same seat; try again.
+SEAT_BUSY = "seat_busy"
 NOT_ELIGIBLE = "not_eligible"
 NO_LICENSE = "no_license"
 NO_FLOATING_SEAT = "no_floating_seat"
