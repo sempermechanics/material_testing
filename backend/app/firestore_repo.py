@@ -39,29 +39,41 @@ from .repo.user_config import (  # noqa: F401
     resolve_user_config,
     set_user_config,
 )
-from .repo.licensing import (  # noqa: F401
-    activate_license,
-    add_institution_member,
+from .repo.claims import (  # noqa: F401
     claim_individual_license,
-    claim_pending_invite,
     claim_seat,
+    _individual_member_patch,
+    _public_claim_error,
+)
+from .repo.invites import (  # noqa: F401
+    find_user_by_email,
+    invite_institution_member,
+    list_institution_invites,
+    revoke_institution_invite,
+)
+from .repo.mint import (  # noqa: F401
     create_individual_license,
     create_institution_license,
     ensure_demo_license,
+)
+from .repo.activation import (  # noqa: F401
+    activate_license,
+)
+from .repo.entitlement import (  # noqa: F401
+    claim_pending_invite,
     ensure_entitlement,
-    find_user_by_email,
-    _individual_member_patch,
-    institution_license_summary,
-    invite_institution_member,
-    is_institution_admin,
-    list_institution_invites,
-    list_institution_seats,
+)
+from .repo.license_admin import (  # noqa: F401
     list_licenses,
-    list_licenses_administered_by,
-    _public_claim_error,
-    revoke_institution_invite,
     revoke_license,
     update_license,
+)
+from .repo.institution_admin import (  # noqa: F401
+    add_institution_member,
+    institution_license_summary,
+    is_institution_admin,
+    list_institution_seats,
+    list_licenses_administered_by,
 )
 from .repo.devlock import (  # noqa: F401
     bind_device_lock,
@@ -138,10 +150,17 @@ from .repo.sessions import (  # noqa: F401
 from .repo import (
     _base,
     account,
+    activation,
+    claims,
     devices,
     devlock,
+    entitlement,
+    institution_admin,
+    invites,
     leases,
+    license_admin,
     licensing,
+    mint,
     reconcile,
     seats,
     sessions,
@@ -150,7 +169,8 @@ from .repo import (
 )
 
 #: Every module of the package, each after everything it imports.
-PACKAGE = (_base, user_config, devlock, licensing, devices, users, leases, seats,
+PACKAGE = (_base, user_config, devlock, claims, invites, mint, activation, entitlement,
+           license_admin, institution_admin, licensing, devices, users, leases, seats,
            reconcile, account, sessions)
 _MISSING = object()
 
