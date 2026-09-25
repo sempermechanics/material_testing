@@ -238,7 +238,9 @@ Over all 33 frames: **RMSE 0.0074 mm**, 0.5% of the 1.396 mm peak; bias
 
 Both E values are within 1%. The app's Results showed "E from the graph ≈
 2.0 GPa (slope 6777.73 N/mm, R² 0.9993)" and "Average E ≈ 2.1 GPa (31 load
-steps)". The slope is pinned in `RealPmmaBendingTest`.
+steps)". One decimal hid the 5% gap between the two, so a modulus under
+10 GPa now shows two ("2.00" and "2.10"; `LabReportFormat.gpa`, TD-81). The
+slope is pinned in `RealPmmaBendingTest`.
 
 The handbook E of PMMA is 2.4–3.3 GPa. This beam is deep (span only 2.4
 times the depth), so shear adds to the deflection and W L³ / (48 δ I), which

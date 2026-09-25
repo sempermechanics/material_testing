@@ -1,6 +1,7 @@
 package com.indicvision.semper.report
 
 import com.indicvision.semper.report.LabReportFormat.frameCell
+import com.indicvision.semper.report.LabReportFormat.gpa
 import com.indicvision.semper.report.LabReportFormat.num
 import com.indicvision.semper.report.LabReportFormat.sci
 import java.util.Locale
@@ -195,7 +196,7 @@ object LabReport {
     private fun tensileGraphs(curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): List<Block> {
         val t = LabReportText.Tensile
         val fitSeries = modulus?.let { fitLine(curve, it) }
-        val annotation = modulus?.let { "E = ${num(it.modulusGPa, 1)} GPa" }
+        val annotation = modulus?.let { "E = ${gpa(it.modulusGPa)} GPa" }
         return buildList {
             if (modulus != null && fitSeries != null) {
                 val elastic = curve.points.filter { modulus.covers(it.frame) }.map { it.strainMilli to it.stressMPa }
@@ -233,7 +234,7 @@ object LabReport {
 
     /** "194.0 GPa (frames 1–12, R² 0.9989)" — the one wording for E everywhere. */
     fun modulusSummary(fit: ElasticModulus.Fit): String =
-        "${num(fit.modulusGPa, 1)} GPa (frames ${fit.firstFrame + 1}–${fit.lastFrame + 1}, " +
+        "${gpa(fit.modulusGPa)} GPa (frames ${fit.firstFrame + 1}–${fit.lastFrame + 1}, " +
             "R² ${String.format(Locale.US, "%.4f", fit.r2)})"
 
     private const val NEWTONS_PER_KN = 1000f
