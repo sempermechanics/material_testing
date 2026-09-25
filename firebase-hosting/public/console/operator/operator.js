@@ -290,7 +290,7 @@ function renderLicences() {
       .some((v) => (v || "").toLowerCase().includes(q))));
   $("licenceRows").innerHTML = rows.length
     ? rows.map(licenceRow).join("")
-    : '<tr><td colspan="8" class="muted">Nothing matches.</td></tr>';
+    : '<tr><td colspan="9" class="muted">Nothing matches.</td></tr>';
   $("revokedCount").textContent = revokedCount ? ` (${revokedCount})` : "";
   $("demoCount").textContent = demoCount ? ` (${demoCount})` : "";
   const hiddenParts = [
@@ -307,7 +307,9 @@ function renderLicences() {
 }
 
 function seatSummary(lic) {
-  if (lic.kind !== "institution") return "1";
+  // An individual licence has no seat count to show; a bare "1" here read as
+  // a number someone had chosen, next to a cap column that also held numbers.
+  if (lic.kind !== "institution") return "—";
   const cap = lic.maxSeats == null ? "∞" : lic.maxSeats;
   // The two counts mean different things, and conflating them is the
   // easiest mistake to make when reading this table: on a floating licence
@@ -335,8 +337,12 @@ function licenceRow(lic) {
     ? `until ${esc(day(lic.expiresAt))}${lic.graceDays ? ` +${lic.graceDays}d` : ""}`
     : "perpetual";
   const revoked = lic.status === "revoked";
+  // Shown because it used to be invisible after mint: a cap typed at issue
+  // time reached every holder with no trace of it on this desk.
+  const cap = lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
   const actions = revoked ? "" : `
     <button class="secondary" data-extend="${esc(lic.id)}">Extend</button>
+    <button class="secondary" data-cap="${esc(lic.id)}">Cap</button>
     ${lic.kind === "institution"
       ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>
          <button class="secondary" data-verify="${esc(lic.id)}">Verify</button>`
@@ -350,6 +356,7 @@ function licenceRow(lic) {
       <td>${esc(lic.mode)}</td>
       <td>${seatSummary(lic)}</td>
       <td>${term}</td>
+      <td>${cap}</td>
       <td>${licenceStatePill(lic)}</td>
       <td class="muted">${esc(lic.domainLock || lic.emailLock || "—")}</td>
       <td class="actions">${actions}</td>
@@ -360,6 +367,7 @@ $("licenceRows").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button");
   if (!btn) return;
   if (btn.dataset.extend) extendLicence(btn.dataset.extend);
+  if (btn.dataset.cap) setAnalysisCap(btn.dataset.cap);
   if (btn.dataset.revoke) revokeLicence(btn.dataset.revoke);
   if (btn.dataset.roster) openRoster(btn.dataset.roster);
   if (btn.dataset.device) clearLicenceDevice(btn.dataset.device);
@@ -392,6 +400,35 @@ async function extendLicence(id) {
     loadLicences({ keepStatus: true });
   } catch (e) {
     setStatus(`Could not extend: ${e.message}`, true);
+  }
+}
+
+async function setAnalysisCap(id) {
+  const lic = licences.find((l) => l.id === id) || {};
+  const current = lic.maxAnalyses == null ? "the licensed default" : lic.maxAnalyses;
+  const raw = window.prompt(
+    `Cloud analyses per person on ${labelOf(id)} (now ${current}).\n\n` +
+    "Enter a number for a plan sold with a limit, or leave it empty to " +
+    "remove the limit. Everyone on the licence gets the change at once.",
+    lic.maxAnalyses == null ? "" : String(lic.maxAnalyses),
+  );
+  if (raw === null) return;
+  const text = raw.trim();
+  if (text && !/^\d+$/.test(text)) {
+    setStatus("Enter a whole number, or leave it empty.", true);
+    return;
+  }
+  try {
+    await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(text ? { maxAnalyses: Number(text) } : { clearMaxAnalyses: true }),
+    });
+    setStatus(text
+      ? `${labelOf(id)} now allows ${text} analyses per person.`
+      : `${labelOf(id)} limit removed — holders get the licensed default.`);
+    loadLicences({ keepStatus: true });
+  } catch (e) {
+    setStatus(`Could not change the limit: ${e.message}`, true);
   }
 }
 
