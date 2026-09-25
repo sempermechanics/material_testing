@@ -132,16 +132,15 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   - Pass 5: no cold-start gain from precompiling ([perf/startup.md](docs/perf/startup.md)).
   - Pass 6: no engine or viewer regression
     ([perf/engine-viewer-check-2026-09.md](docs/perf/engine-viewer-check-2026-09.md)).
-- **#200 (merged).** `HotPathMicroBenchmark` could not run in CI (TD-86): the debug manifest
-  now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
-  and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
-- **This branch (TD-87).** The 150-frame scrub heap (51 → 161 MB after TD-75) was the benchmark
-  running the no-sidecar colour-scale fallback; its seeder now writes the ranges sidecar.
+- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#200, TD-86: debug-only permission,
+  `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
+  161 → 21 MB). #214 has `globalRanges` reuse one frame buffer and set of columns; #217
+  (TD-88) saves the ranges sidecar after a full decode.
 - **Wrong-information audit (open PRs).** #211 floors a licensed quota at demo's and lets the
   operator clear a licence's cap; #212 fixes each PDF page's cover image and name, the mixed
   bulk-delete prompt, the sweep export header, per-node reasons on an all-failed sweep, and a
   restored sweep's skip count; #215 fixes the backend seat and lease counters. Console labels
-  come next; the rest are TD-88..TD-120 (on #211).
+  come next; the rest are TD-89..TD-121 (on #211).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has

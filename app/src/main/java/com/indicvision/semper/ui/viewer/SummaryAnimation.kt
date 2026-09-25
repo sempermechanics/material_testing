@@ -5,6 +5,7 @@
 
 package com.indicvision.semper.ui.viewer
 
+import com.indicvision.semper.DatDecoder
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.GifEncoder
@@ -263,8 +264,8 @@ class SummaryAnimation(private val spec: Spec) {
          *   analysis time (see [com.indicvision.semper.ui.analysis.AnalysisViewModel]).
          *   Used only when present and its frame count matches [batchFiles] exactly —
          *   anything else (missing, corrupt, a resumed/edited batch whose frame count
-         *   has since changed) falls back to decoding every frame, unchanged from
-         *   before this cache existed. Either path returns bit-identical values: the
+         *   has since changed) falls back to decoding every frame, and that decode
+         *   then writes the sidecar for next time. Either path returns bit-identical values: the
          *   cache holds the exact same [VisualizationEngine.valueRanges] output the
          *   fallback would (re)compute, just computed once instead of on every call.
          * @param onProgress optional `(done, total)` after each frame is considered
@@ -292,20 +293,60 @@ class SummaryAnimation(private val spec: Spec) {
             }
 
             val spans = mutableMapOf<Int, Pair<Float, Float>>()
+            // Kept for the sidecar; null once a frame fails to decode.
+            var perFrame: MutableList<Map<Int, Pair<Float, Float>?>>? = ArrayList(total)
             // One frame at a time. The previous chain kept every ByteArray and
             // FloatArray alive until the pass finished — a heavy PLC band OOM'd
             // the 512 MB heap before the first GIF frame was built.
+            // The frame buffer and the per-field columns are reused across frames,
+            // growing only for a larger frame: allocating both per frame (~1 MB at
+            // 19 200 points, ~50 MB at 1 M) set the viewer's heap on a batch with no
+            // ranges sidecar (TD-87).
+            var frameBuffer: FloatArray? = null
+            var columns: Array<FloatArray>? = null
             batchFiles.forEachIndexed { index, file ->
                 currentCoroutineContext().ensureActive()
-                val data = runCatching { DicResult.decodeDatFile(file) }.getOrNull()
-                if (data != null) {
-                    VisualizationEngine.valueRanges(data, indices).forEach { (valIndex, range) ->
+                val decoded = runCatching { DatDecoder.decodeInto(file, frameBuffer) }.getOrNull()
+                if (decoded != null) {
+                    frameBuffer = decoded.data
+                    val points = decoded.floatCount / DicResult.STRIDE
+                    val frameColumns = columns?.takeIf { cols -> cols.all { it.size >= points } }
+                        ?: Array(indices.size) { FloatArray(points) }
+                    columns = frameColumns
+                    val frameRanges =
+                        VisualizationEngine.valueRanges(decoded.data, decoded.floatCount, indices, frameColumns)
+                    frameRanges.forEach { (valIndex, range) ->
                         if (range != null) spans[valIndex] = widen(spans[valIndex], range)
                     }
+                    perFrame?.add(frameRanges)
+                } else {
+                    perFrame = null
                 }
                 onProgress(index + 1, total)
             }
+            perFrame?.let { saveRanges(rangesFile, indices, it) }
             return spans
+        }
+
+        /**
+         * Saves a full decode's per-frame ranges as the sidecar, so the next call
+         * reads them instead. A batch from an analysis already has one; a session
+         * restored from the cloud, or written before the sidecar existed, did not,
+         * and decoded every frame on every viewer open and backup. Written only when
+         * every frame decoded: an unreadable frame would otherwise be stored as
+         * "no points" for good. Best effort, like the analysis-time write.
+         */
+        private fun saveRanges(
+            rangesFile: File?,
+            indices: IntArray,
+            perFrame: List<Map<Int, Pair<Float, Float>?>>,
+        ) {
+            if (rangesFile == null || perFrame.isEmpty()) return
+            runCatching {
+                val part = AtomicFiles.partOf(rangesFile)
+                FieldRangesStore.write(part, indices, perFrame)
+                AtomicFiles.promote(part, rangesFile)
+            }.onFailure { Timber.w(it, "Could not save summary field ranges") }
         }
 
         private fun widen(seen: Pair<Float, Float>?, range: Pair<Float, Float>): Pair<Float, Float> =

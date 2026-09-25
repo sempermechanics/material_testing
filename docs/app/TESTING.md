@@ -121,11 +121,12 @@ Two things that will otherwise cost you an afternoon:
 - **The shell cannot start a non-exported Activity** (API 34+). Macrobenchmark launches
   through the shell, so anything it drives must be exported — `app/src/benchmark/AndroidManifest.xml`
   exports the needed screens for the `benchmark` variant only, never for a shipped build.
-- **`startActivityAndWait` does not work on an API 37 emulator.** It confirms a launch by
-  parsing `dumpsys gfxinfo <pkg> framestats`, which comes back empty there for *every*
-  activity, so `StartupBenchmark`/`ScreenBenchmark` fail with "Unable to confirm activity
-  launch completion []". Run those on a physical device or an older image.
-  `ViewerScrubBenchmark` deliberately avoids that API and does run on the emulator.
+- **`startActivityAndWait` may not work on an API 37 emulator.** It confirms a launch by
+  parsing `dumpsys gfxinfo <pkg> framestats`, which came back empty for *every* activity
+  on an earlier API 37 image, so `StartupBenchmark`/`ScreenBenchmark` failed with "Unable
+  to confirm activity launch completion []". The Pixel_10_2 API 37 image runs them
+  (2026-09-25); if yours does not, use a physical device or an older image.
+  `ViewerScrubBenchmark` deliberately avoids that API.
 
 Results land as `*-benchmarkData.json` under the module's
 `build/outputs/connected_android_test_additional_output/`. A worked before/after
