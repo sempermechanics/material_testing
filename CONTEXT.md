@@ -116,14 +116,22 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #203 (TD-81), Compute comes back after a single run fails outright, and a first frame
   that kept no points says why (the strain window with the run's VSG and step, nothing
   correlated, or an unreadable frame).
-- **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
-  awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
-  open on the Pixel 6; Pass 2 (#206, merged) shares the launch `/v1/config` fetch, 4 → 3.
-  Pass 3 measured App Check and changed nothing: one ~1.7 s attestation per cold
-  open, which only the Play account can remove. Pass 5 found no cold-start gain
-  from precompiling ([perf/startup.md](docs/perf/startup.md)), so there is no baseline profile.
-  Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs
-  6 + N Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+- **Measured optimisation (2026-09-25, all six passes done).** Request volume
+  ([perf/request-volume.md](docs/perf/request-volume.md)):
+  - Pass 1 (#191) runs `CloudSync.reconcile` one call at a time.
+  - Pass 2 (#206) shares the launch `/v1/config` fetch.
+  - Together: 12 → 3 requests per app open on the Pixel 6. Both are merged and
+    ship with the next app build.
+
+  Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs 6 + N
+  Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+
+  Measured, no change:
+  - Pass 3: one ~1.7 s App Check attestation per cold open, which only the Play
+    account can remove.
+  - Pass 5: no cold-start gain from precompiling ([perf/startup.md](docs/perf/startup.md)).
+  - Pass 6: no engine or viewer regression
+    ([perf/engine-viewer-check-2026-09.md](docs/perf/engine-viewer-check-2026-09.md)).
 - **#200 (merged).** `HotPathMicroBenchmark` could not run in CI (TD-86): the debug manifest
   now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
   and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
