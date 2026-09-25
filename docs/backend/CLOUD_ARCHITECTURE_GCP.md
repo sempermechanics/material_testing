@@ -480,7 +480,8 @@ users/{uid}                       (uid = Google 'sub')
                                    stays a pure function — §20.7)
   licenseExpiresAt                (Timestamp; absent when perpetual)
   licenseGraceDays: number        (absent reads as ZERO, not the fleet default; §20.6)
-  licenseMaxAnalyses: number      (optional per-license cloud cap)
+  licenseMaxAnalyses: number      (optional per-license cloud cap; the resolved
+                                   licensed ceiling is never below DEMO_MAX_ANALYSES)
   schemaVersion                   (stamped by backend/scripts/migrate_schema.py)
   createdAt, updatedAt, lastSeenAt (Timestamp)
   seenCheckpointAt                (Timestamp; stamped by a revoke — the instant
@@ -550,7 +551,9 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
   graceDays: number               (entitlement continues UNCHANGED this long past
                                    expiresAt; 0 is a hard cliff. §20.6)
   supportUntil                    (Timestamp, optional; informational — never gates)
-  maxAnalyses                      (optional, either kind)
+  maxAnalyses                      (optional, either kind; per holder, not per licence.
+                                   Mint/PATCH refuse < DEMO_MAX_ANALYSES, and
+                                   PATCH {"clearMaxAnalyses": true} removes it)
   createdByUid, createdAt, updatedAt
   updatedByUid, updatedAt         (set by the renewal route)
 

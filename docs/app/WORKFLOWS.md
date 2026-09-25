@@ -763,10 +763,11 @@ sweep hitting the cap, or a background upload rejected with a quota error.
   management**, **Free up space** or auto-free controls (4.5–4.18g do not
   apply), and a stored copy is never pulled back. The upload is what the cap
   counts.
-- **Professional — individual key**: no local analysis cap
-  (`analysisCap()` returns unlimited); Semper staff mint and hand over the key.
+- **Professional — individual key**: capped at the backend's licensed
+  `maxSessions` (999 by default, never below demo's 25) once `/v1/config` has
+  reported it, and uncapped before; Semper staff mint and hand over the key.
 - **Professional — institution seat**: identical entitlement to an
-  individual key (uncapped) — an institution seat and an individual key resolve to
+  individual key — an institution seat and an individual key resolve to
   the exact same `mode=licensed` on device. What differs is only how the
   seat is administered: institution IT self-service via backend routes (see
   §20.4 of the doc above), not Semper staff, and not through this app.
@@ -780,7 +781,7 @@ for support recovery and have no caller in `app/src/`. What the app shows of a
 licence is its prefix, in Settings → Account (4.2a); the key itself never
 reaches the device. This screen's behaviour for a Professional account is
 unaffected either way: once `GET /v1/config` reports `mode=licensed`, the cap
-does not apply and 9.1 never triggers.
+is the licensed `maxSessions`, so 9.1 triggers only at that ceiling.
 
 **9.4 No seat right now (floating institution licence).** A separate gate from
 this screen, and not a limit: the account is on the roster but every seat is in
