@@ -42,8 +42,8 @@ class LabReportPdf(
         val ring: Pair<PointF, Float>? = null,
     )
 
-    private val pageWidth = 2480f
-    private val pageHeight = 3508f
+    private val pageWidth = PdfA4.DESIGN_WIDTH
+    private val pageHeight = PdfA4.DESIGN_HEIGHT
     private val margin = 170f
     private val left = margin + 40f
     private val right = pageWidth - margin - 40f
@@ -104,8 +104,7 @@ class LabReportPdf(
     private fun newPage() {
         finishPage()
         pageNumber++
-        val info = PdfDocument.PageInfo.Builder(pageWidth.toInt(), pageHeight.toInt(), pageNumber).create()
-        val started = requireNotNull(document).startPage(info)
+        val started = PdfA4.startPage(requireNotNull(document), pageNumber)
         page = started
         val c = started.canvas
         canvas = c
