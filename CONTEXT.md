@@ -160,8 +160,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Elastic toggle, lab-report PDF, viewer and tap-editor gestures);
   `WizardDraftRestoreTest` covers a load log across a process death;
   `LabResultsBenchmark` times the Results page.
-- **This branch (semperdic-app#200).** `HotPathMicroBenchmark` (from #25) never ran in CI
-  (TD-86); a debug-only permission and `am instrument` let it run.
+- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#31, TD-86). This branch ports TD-87 from
+  semperdic-app#208/#214: the seeder writes the ranges sidecar, `globalRanges` reuses buffers.
 - **Owed.** Device runs on a physical phone, and video import beyond emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
   production state.

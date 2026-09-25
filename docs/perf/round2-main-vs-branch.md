@@ -158,10 +158,13 @@ corroborating only where they agree (150 frames).
 
 ## Reproduce
 ```bash
-# after ./gradlew :app:installDebug :app:installDebugAndroidTest
-./gradlew :app:connectedDebugAndroidTest \
-  -P android.testInstrumentationRunnerArguments.class=com.indicvision.semper.benchmark.HotPathMicroBenchmark \
-  -P android.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED
-# results: app/build/outputs/connected_android_test_additional_output/.../*-benchmarkData.json
+./gradlew :app:installDebug :app:installDebugAndroidTest
+adb shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark \
+  -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED \
+  com.indicvision.semper.test/androidx.test.runner.AndroidJUnitRunner
+# results: adb pull /sdcard/Android/media/com.indicvision.semper (*-benchmarkData.json)
 ```
+Through `connectedDebugAndroidTest -P …suppressErrors=…` the list arrives cut at its first
+comma, so only `EMULATOR` is suppressed and every case fails (TD-86); see
+[TESTING.md](../app/TESTING.md) for the current command.
 Run the same on `a2af8e7` (with the harness files copied on top) for the baseline column.

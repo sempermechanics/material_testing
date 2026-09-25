@@ -83,13 +83,15 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     }
 
     /**
-     * Kicks off the one decode pass that fixes every field's colour scale.
+     * Kicks off the one pass that fixes every field's colour scale.
      *
-     * This walks **every frame in the batch**, so on a 150-frame session it is a full
-     * N-frame decode + range scan. It used to run on every viewer open, even when the
-     * viewer opened straight onto a frame and the summary was never looked at — the
-     * dominant driver of peak heap on large batches. It is now started on demand from
-     * [show] (and is idempotent, so repeated shows do not re-scan).
+     * `ResultViewerActivity` starts it on every open of a multi-frame, non-sweep session,
+     * since single frames also take their colour scale from the sequence range
+     * ([sequenceRange]); [show] calls it too. It is idempotent, so repeated calls do
+     * not re-scan. A batch run writes the [FieldRangesStore] sidecar, and then the pass
+     * decodes nothing. Without it (older or restored sessions) the pass decodes and
+     * range-scans **every frame**, about 1 MB of garbage per frame at 19 200 points,
+     * which set the 150-frame heap (TD-87).
      */
     fun start() {
         if (host.summaryBatchFiles().isEmpty()) return

@@ -5,6 +5,7 @@
 
 package com.indicvision.semper.ui.viewer
 
+import com.indicvision.semper.DatDecoder
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.GifEncoder
@@ -295,13 +296,25 @@ class SummaryAnimation(private val spec: Spec) {
             // One frame at a time. The previous chain kept every ByteArray and
             // FloatArray alive until the pass finished — a heavy PLC band OOM'd
             // the 512 MB heap before the first GIF frame was built.
+            // The frame buffer and the per-field columns are reused across frames,
+            // growing only for a larger frame: allocating both per frame (~1 MB at
+            // 19 200 points, ~50 MB at 1 M) set the viewer's heap on a batch with no
+            // ranges sidecar (TD-87).
+            var frameBuffer: FloatArray? = null
+            var columns: Array<FloatArray>? = null
             batchFiles.forEachIndexed { index, file ->
                 currentCoroutineContext().ensureActive()
-                val data = runCatching { DicResult.decodeDatFile(file) }.getOrNull()
-                if (data != null) {
-                    VisualizationEngine.valueRanges(data, indices).forEach { (valIndex, range) ->
-                        if (range != null) spans[valIndex] = widen(spans[valIndex], range)
-                    }
+                val decoded = runCatching { DatDecoder.decodeInto(file, frameBuffer) }.getOrNull()
+                if (decoded != null) {
+                    frameBuffer = decoded.data
+                    val points = decoded.floatCount / DicResult.STRIDE
+                    val frameColumns = columns?.takeIf { cols -> cols.all { it.size >= points } }
+                        ?: Array(indices.size) { FloatArray(points) }
+                    columns = frameColumns
+                    VisualizationEngine.valueRanges(decoded.data, decoded.floatCount, indices, frameColumns)
+                        .forEach { (valIndex, range) ->
+                            if (range != null) spans[valIndex] = widen(spans[valIndex], range)
+                        }
                 }
                 onProgress(index + 1, total)
             }

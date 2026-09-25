@@ -104,7 +104,9 @@ Results land in logcat (`adb logcat -d -s Benchmark:I`).
 fabricate a tensile session with a load per frame (`--ez results true`, 30 and 150
 frames), opens it on Results and toggles Whole test / Elastic region, reporting frame
 timing and the `Semper.viewer.stressStrain` trace section (the curve build over every
-frame's `.dat`).
+frame's `.dat`). For both, the seeder also writes the `field_ranges.bin` sidecar a real
+batch run leaves, so the viewer's colour-scale pass reads it as it does on a phone;
+without it the benchmark measured the no-sidecar fallback instead (TD-87).
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
