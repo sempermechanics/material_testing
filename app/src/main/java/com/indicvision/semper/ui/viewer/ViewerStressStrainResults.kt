@@ -4,6 +4,7 @@ import android.content.Context
 import com.indicvision.semper.R
 import com.indicvision.semper.report.ElasticModulus
 import com.indicvision.semper.report.ElasticRegion
+import com.indicvision.semper.report.LabReportFormat
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import java.util.Locale
@@ -73,7 +74,7 @@ object ViewerStressStrainResults {
                 } else {
                     context.getString(
                         R.string.modulus_tensile_fmt,
-                        String.format(Locale.US, "%.1f", modulus.modulusGPa),
+                        LabReportFormat.gpa(modulus.modulusGPa),
                         modulus.firstFrame + 1,
                         modulus.lastFrame + 1,
                         String.format(Locale.US, "%.4f", modulus.r2),

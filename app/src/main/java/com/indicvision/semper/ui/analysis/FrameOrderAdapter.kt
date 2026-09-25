@@ -46,6 +46,10 @@ class FrameOrderAdapter(
     override fun onBindViewHolder(holder: Holder, position: Int, payloads: MutableList<Any>) {
         if (payloads.contains(PAYLOAD_BADGE)) {
             holder.setBadge(position + 1)
+            // The refresh follows a drop, and the change animation it triggers
+            // cancels the drop's shrink mid-way; settle the tile here instead.
+            holder.itemView.animate().cancel()
+            applyDragging(holder.itemView, dragging = false, animate = false)
             return
         }
         super.onBindViewHolder(holder, position, payloads)

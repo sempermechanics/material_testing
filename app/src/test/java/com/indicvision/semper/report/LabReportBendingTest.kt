@@ -91,7 +91,7 @@ class LabReportBendingTest {
         val doc = document()
         val fields = doc.blocks.filterIsInstance<LabReport.Block.Field>().associate { it.label to it.value }
 
-        assertEquals("173.58 GPa", fields[LabReportText.Bending.RESULT_MEAN])
+        assertEquals("173.6 GPa", fields[LabReportText.Bending.RESULT_MEAN])
         assertEquals("142.0 GPa", fields[LabReportText.Bending.RESULT_GRAPH])
         assertEquals("0.0500", fields[LabReportText.Bending.SCALE])
         val graph = doc.blocks.filterIsInstance<LabReport.Block.Graph>().single()

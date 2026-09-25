@@ -3,6 +3,7 @@ package com.indicvision.semper.ui.viewer
 import android.content.Context
 import com.indicvision.semper.R
 import com.indicvision.semper.report.BeamDeflection
+import com.indicvision.semper.report.LabReportFormat.gpa
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import java.util.Locale
@@ -87,6 +88,4 @@ object ViewerBendingResults {
             step.modulusGPa?.let(::gpa) ?: "—",
         )
     }
-
-    private fun gpa(value: Float): String = String.format(Locale.US, "%.1f", value)
 }
