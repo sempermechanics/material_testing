@@ -151,16 +151,17 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `LabResultsBenchmark` times the Results page.
 - **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
   has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
-  and saves it (#33, #34, TD-87/TD-88). `scrub150Frames` and `settingsScroll` pass on the
-  API 37 emulator and a Pixel 6. TD-86–TD-88 match the parent's numbers; its TD-81 is TD-89 here.
+  and saves it (#33, #34, TD-87/TD-88). Both suites pass in full on a Pixel 6 (Android 17,
+  2026-09-25); the medians against CI's API 34 emulator are in
+  [TESTING.md](docs/app/TESTING.md). TD-86–TD-88 match the parent's numbers; its TD-81 is TD-89 here.
   The Pixel 6 run found a crash on open with no API URL and a signed-in session; the status
   check and every `IndicApi` URL now treat that as offline (TD-90, as in the parent).
 - **Owed.**
   - The lab end to end on a physical phone (`LabWorkflowDeviceTest`,
-    `BeamTapEditorGestureTest`); only `scrub150Frames` and `settingsScroll` have run on one.
+    `BeamTapEditorGestureTest`); only the benchmark suites have run on one.
   - Video import beyond emulators (MP4 and AVI, [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a).
-  - Benchmark thresholds: the full `:benchmark` suite once on real hardware, then medians
-    as a gate (`ScreenBenchmark` asserts none yet).
+  - Benchmark thresholds: the Pixel 6 medians exist; choosing gates from them is still
+    open (`ScreenBenchmark` asserts none yet).
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.

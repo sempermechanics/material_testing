@@ -119,7 +119,7 @@ matches CI. On the same emulator the job then runs the micro suite with the
 a regression gate; both suites' `*-benchmarkData.json` are uploaded, as
 `macrobenchmark-results` and `microbenchmark-results`.
 
-Three things that will otherwise cost you an afternoon:
+Four things that will otherwise cost you an afternoon:
 
 - **The shell cannot start a non-exported Activity** (API 34+). Macrobenchmark launches
   through the shell, so anything it drives must be exported — `app/src/benchmark/AndroidManifest.xml`
@@ -128,16 +128,67 @@ Three things that will otherwise cost you an afternoon:
   parsing `dumpsys gfxinfo <pkg> framestats`, which came back empty for *every* activity
   on an earlier API 37 image, so `StartupBenchmark`/`ScreenBenchmark` failed with "Unable
   to confirm activity launch completion []". The Pixel_10_2 API 37 image runs them
-  (2026-09-25); if yours does not, use a physical device or an older image.
+  (2026-09-25), and so does a Pixel 6 on Android 17; if yours does not, use a physical
+  device or an older image.
   `ViewerScrubBenchmark` deliberately avoids that API.
 - **A seeded session needs its `field_ranges.bin`.** The viewer fixes the summary colour
   scale on open; without the sidecar that pass decodes every frame, and at 150 frames its
   garbage (~155 MB) is what `scrub150Frames` reported as max heap (TD-87).
   `BenchmarkSeedActivity` writes the sidecar, and reseeds a cached session that lacks one.
 
+- **The connected task installs over whatever is on the phone, then uninstalls it.**
+  `:benchmark:connectedBenchmarkAndroidTest` installs the `benchmark` build over an
+  existing `com.indicvision.semper` (same debug key), keeping its data, and uninstalls
+  the app when it finishes, taking that data with it. Back up anything you need first.
+  A signed-in session left over from a debug install also changes the launch route
+  (Splash → Home rather than sign-in); before TD-90 that crashed both `StartupBenchmark`
+  cases on a build with no `INDIC_API_BASE_URL`.
+
 Results land as `*-benchmarkData.json` under the module's
 `build/outputs/connected_android_test_additional_output/`. A worked before/after
 comparison is in [../perf/round2-main-vs-branch.md](../perf/round2-main-vs-branch.md).
+
+### Pixel 6 against the CI emulator (2026-09-25)
+
+Pixel 6 (`oriole`), Android 17 (API 37, `CP2A.260705.006`), battery 100 %, over
+wireless adb, at `main` @ `05aac72` plus the `resolveStatus` half of the TD-90
+fix (#38). Reference: CI run 36109382066, API 34 x86_64 emulator. Macro 12/12 passed (the three
+`StartupHeadroomBenchmark` cases skip unless `-e startupHeadroom true`, as in CI);
+micro `OK (10 tests)`. Medians unless marked; heap is `memoryHeapSizeMaxKb` / 1000.
+
+| Benchmark | Emulator (CI) | Pixel 6 |
+|---|---|---|
+| Cold start, time to initial display | 966 ms | 378 ms |
+| Warm start, time to initial display | 81 ms | 81 ms |
+| Settings cold start | 650 ms | 334 ms |
+| Wizard cold start | 691 ms | 369 ms |
+| `settingsScroll` frame CPU P50 / P90 | 5.0 / 5.9 ms | 6.6 / 8.5 ms |
+| `scrub150Frames` max heap | 21.2 MB | 22.3 MB |
+| `scrub150Frames` frame CPU P50 / P90 | 6.0 / 7.7 ms | 5.4 / 8.4 ms |
+| `scrub10Frames` max heap | 17.8 MB | 18.8 MB |
+| LabResults curve build, 30 frames | 123 ms | 40 ms |
+| LabResults curve build, 150 frames | 238 ms | 132 ms |
+| LabResults frame CPU P90 (30 / 150 frames) | 602 / 596 ms | 9.1 / 7.3 ms |
+| micro `valueRanges_150frames` | 786 ms | 1453 ms |
+| micro `decodeDatFile_oneFrame` | 0.43 ms | 0.49 ms |
+
+What it says:
+
+- **Startup and the Results curve are 1.8–3× faster on the phone**; warm start is the
+  same. The emulator's LabResults frame P90 of ~600 ms is its software renderer, not
+  the app: the phone draws the same screens at 7–9 ms.
+- **Scrub heap agrees within 1 MB**, so the TD-87 sidecar fix holds on real hardware
+  (164 MB before). Both runs show one ~71 MB iteration out of five (phone 70.6,
+  CI 71.8): the first one, in which the seeder fabricates the session in the app
+  process. The median is the number to compare.
+- **Micro times are 1.1–4.4× slower on the phone** (debuggable and not
+  AOT-compiled on both, against a server x86 core). They are relative numbers only,
+  as the CI job says. Allocation counts are the signal and match to ±0.1 in 7 of 10
+  cases; `generateHeatmap_oneFrame` (22.4 vs 17.2), `buildReport_oneFrame` (1714 vs
+  1599) and `valueRanges_150frames` (4625 vs 4509) differ by a fixed amount on
+  identical code, which points at the platform (API 37 arm64 against API 34
+  x86_64), not a regression. Compare allocations like for like: phone to phone,
+  emulator image to the same image.
 
 ### Known coverage gaps
 
