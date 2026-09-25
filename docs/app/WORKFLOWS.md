@@ -401,8 +401,8 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.1a.1 | Pick a video (a badged tile in the grid, or via Files) | Sampling sheet opens with resolution, source fps and duration |
-| [ ] 5.1a.2 | Switch the mode between **Keyframes (DIC)** and **Fixed interval** | Keyframes hides the fps slider and notes it extracts sync I-frames; Fixed interval shows the slider, and dragging it updates the estimated frame count live |
-| [ ] 5.1a.2a | Extract in **Fixed interval** over the whole clip, then scrub the deformed frames | Consecutive frames differ — not runs of repeats of the same I-frame |
+| [ ] 5.1a.2 | Switch the mode between **Frame rate** and **Key frames** (the toggle needs a clip with two or more key frames, 5.1a.13) | Key frames hides the fps slider and notes that key frames are stored whole; Frame rate shows the slider, and dragging it updates the estimated frame count live |
+| [ ] 5.1a.2a | Extract in **Frame rate** over the whole clip, then scrub the deformed frames | Consecutive frames differ — not runs of repeats of the same I-frame |
 | [ ] 5.1a.3 | Drag the time-segment handles | Estimate updates; the button relabels to "Extract N frames" |
 | [ ] 5.1a.4 | Choose settings that exceed *Max frames* | The estimate shows the cap being applied |
 | [ ] 5.1a.5 | Tap **Extract** | Progress overlay; frame 0 becomes the reference, the rest deformed |

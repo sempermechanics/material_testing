@@ -158,8 +158,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   The Pixel 6 run found a crash on open with no API URL and a signed-in session; the status
   check and every `IndicApi` URL now treat that as offline (TD-90, as in the parent).
 - **Owed.**
-  - Video import by hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a: sampling
-    sheet, caps, unsupported and truncated AVI, a real UTM clip); extraction passes.
+  - Video import by hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a) and with a
+    real UTM clip. On the API 37 emulator (2026-09-25) 5.1a.1–5.1a.9 pass with synthetic clips.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.
