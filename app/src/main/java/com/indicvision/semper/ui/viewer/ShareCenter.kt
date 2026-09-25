@@ -371,11 +371,14 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val canvas = Canvas(out)
         canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
         canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
-        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex)
+        // Signed, as the PDF does: with absolute values "MIN" marked the strain
+        // nearest zero under a label giving the most negative.
+        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
         val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
         ReportBuilder.bakeAnnotationsToCanvas(
             canvas, renderW, renderH, actualMin, actualMax,
             typeString, unit, extrema.maxIdx, extrema.minIdx, data,
+            dataIndex = dataIndex,
             coordScale = renderScale,
             imageName = sourceImageName(s, frameIndex),
         )

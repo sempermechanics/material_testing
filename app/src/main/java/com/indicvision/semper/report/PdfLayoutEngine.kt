@@ -363,6 +363,8 @@ class PdfLayoutEngine(
             ),
             colWeights = listOf(0.4f, 0.3f, 0.3f),
         )
+        canvas?.drawText(EXTREMA_NOTE, margin, cursorY, bodyPaintLeft)
+        cursorY += 60f
 
         val remainingSpace = blockHeight - (cursorY - startY) - 40f
         val scale = contentWidth / field.bakedHeatmap.width
@@ -429,5 +431,9 @@ class PdfLayoutEngine(
         /** Inset and line pitch of [drawNotice]'s box. */
         const val NOTICE_PAD = 40f
         const val NOTICE_LINE = 55f
+
+        /** Why the field table's max / min can differ from the CSV's. */
+        const val EXTREMA_NOTE =
+            "Max / min leave out the top and bottom 2% of points as outliers; the CSV gives raw extremes."
     }
 }
