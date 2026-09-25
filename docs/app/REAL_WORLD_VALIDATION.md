@@ -355,7 +355,7 @@ This writes `pmma_00.png` (the reference) through `pmma_33.png`,
 1. Copy the frames and the CSV to the device.
 2. New analysis → Bending → reference `pmma_00.png`, deformed frames
    `pmma_01`–`pmma_33`, load log `pmma_loads.csv` (N).
-3. L 75, b 12, t 31 mm. **Mark**: zoom in, tap the top and bottom edges under
+3. L 75, b 12, t 31 mm. **Beam height → Set**: zoom in, tap the top and bottom edges under
    the nose at x ≈ 1170 (y ≈ 39 and 611). The readout should say about 572 px.
 4. ROI (Manual) x 60, y 70, 2260 × 510. Accept the suggested subset, and keep
    step 5 and bending's window of 9 points (VSG 41 px). Compute. The tables
