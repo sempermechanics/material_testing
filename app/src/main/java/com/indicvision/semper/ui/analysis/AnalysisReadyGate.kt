@@ -32,7 +32,6 @@ object AnalysisReadyGate {
 
         val nextEnabled = ready && !isProcessing
         btnNext.isEnabled = nextEnabled
-        btnNext.alpha = if (nextEnabled) 1.0f else 0.4f
         tvNextReason.text = when {
             viewModel.refBytes == null -> activity.getString(R.string.next_reason_ref)
             viewModel.defFilePaths.isEmpty() -> activity.getString(R.string.next_reason_def)
@@ -67,7 +66,6 @@ object AnalysisReadyGate {
             sizeError == null &&
             !viewModel.sweepMode
         btnCalculateFullField.isEnabled = computeEnabled
-        btnCalculateFullField.alpha = if (computeEnabled) 1.0f else 0.4f
 
         val sweepEnabled = ready &&
             viewModel.settingsReviewed &&

@@ -373,7 +373,6 @@ class SweepSetupHelper(
     fun setRunSweepEnabled(enabled: Boolean) {
         if (!::btnRunSweep.isInitialized) return
         btnRunSweep.isEnabled = enabled
-        btnRunSweep.alpha = if (enabled) 1.0f else 0.4f
     }
 
     // ------------------------------------------------------------------
