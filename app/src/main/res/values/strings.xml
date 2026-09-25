@@ -877,6 +877,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Delete 1 analysis?</item>
         <item quantity="other">Delete %1$d analyses?</item>
     </plurals>
+    <!-- A mixed selection gets one Delete button, which erases every copy; it
+         used to describe "Delete cloud" / "Delete device" buttons it did not have. -->
+    <plurals name="delete_confirm_body_everywhere_multi">
+        <item quantity="one">%1$d of these is backed up. Delete removes every copy, on your phone and in the cloud. This can\'t be undone.</item>
+        <item quantity="other">%1$d of these are backed up. Delete removes every copy, on your phone and in the cloud. This can\'t be undone.</item>
+    </plurals>
     <plurals name="delete_multi_working">
         <item quantity="one">Deleting 1 analysis…</item>
         <item quantity="other">Deleting %1$d analyses…</item>

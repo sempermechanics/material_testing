@@ -273,7 +273,23 @@ class SessionSelectionControllerTest {
         list(a, cloudRow)
         controller.selectAll()
         delete.performClick()
-        assertEquals(activity.getString(R.string.delete_confirm_body_cloud_multi, 1), dialogMessage())
+        assertEquals(
+            activity.resources.getQuantityString(R.plurals.delete_confirm_body_everywhere_multi, 1, 1),
+            dialogMessage(),
+        )
+    }
+
+    @Test
+    fun `a mixed selection's prompt describes the one button it has`() {
+        // It used to explain "Delete cloud" and "Delete device" buttons that
+        // this dialog does not show, above a Delete that erases both copies.
+        list(a, record("d", cloud = true))
+        controller.selectAll()
+        delete.performClick()
+        val message = dialogMessage().orEmpty()
+        assertFalse(message.contains("Delete cloud"))
+        assertFalse(message.contains("Delete device"))
+        assertTrue(message.contains("on your phone and in the cloud"))
     }
 
     @Test

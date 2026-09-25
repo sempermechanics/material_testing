@@ -127,6 +127,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **#200 (merged).** `HotPathMicroBenchmark` could not run in CI (TD-86): the debug manifest
   now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
   and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
+- **Wrong-information audit (open PRs).** #211 floors a licensed quota at demo's and lets the
+  operator clear a licence's cap; `fix/app-wrong-info` fixes each PDF page's cover image and name,
+  the mixed bulk-delete prompt, the sweep export header, per-node reasons on an all-failed sweep,
+  and a restored sweep's skip count. Backend seat/lease counters and console labels come next;
+  the rest are TD-87..TD-119 (on #211).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
