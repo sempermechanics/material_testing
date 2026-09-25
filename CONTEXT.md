@@ -143,12 +143,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
-- **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and
-  `e2e/BeamTapEditorGestureTest` run the lab in Tier 3 (Results, Elastic toggle,
-  lab-report PDF, viewer and tap-editor gestures); all 9 pass on a Galaxy S21+
-  (Android 15, 2026-09-25);
-  `WizardDraftRestoreTest` covers a load log across a process death;
-  `LabResultsBenchmark` times the Results page.
+- **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
+  (Results, Elastic toggle, lab-report PDF, viewer and tap-editor gestures) run in Tier 3;
+  on a Galaxy S21+ (Android 15, 2026-09-25) they pass 9/9 and `VideoFrameExtractionDeviceTest`
+  6/6 (MP4 and AVI). `WizardDraftRestoreTest` covers a load log across a process death.
 - **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
   has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
   and saves it (#33, #34, TD-87/TD-88). Both suites pass in full on a Pixel 6 (Android 17,
@@ -157,15 +155,15 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   The Pixel 6 run found a crash on open with no API URL and a signed-in session; the status
   check and every `IndicApi` URL now treat that as offline (TD-90, as in the parent).
 - **Owed.**
-  - Video import beyond emulators (MP4 and AVI, [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a).
+  - Video import by hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a: sampling
+    sheet, caps, unsupported and truncated AVI, a real UTM clip); extraction passes.
   - Benchmark thresholds: the Pixel 6 medians exist; choosing gates from them is still
     open (`ScreenBenchmark` asserts none yet).
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
-  [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in
-  [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
+  [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps
 
