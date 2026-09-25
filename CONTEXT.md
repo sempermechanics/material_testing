@@ -111,6 +111,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
   (`SubsetRecommender` reads speckle inside the ROI from textured patches only,
   `VsgPlotView` y gutter, `TouchImageView` zoom across a resize, `AviReader` µs slack).
+- **This branch (#197).** `ScreenBenchmark.settingsScroll` skips the two licence-only
+  settings headers (it failed on every run); `scripts/ci_test_report.py` names failing
+  device tests and prints benchmark numbers in the CI log.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has

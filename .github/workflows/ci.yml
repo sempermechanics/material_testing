@@ -379,6 +379,11 @@ jobs:
             -Pandroid.testInstrumentationRunnerArguments.notPackage=com.indicvision.semper.benchmark
             --console=plain
 
+      # Gradle names no failing test in the log; the report is in the build dir.
+      - name: Report instrumented test results
+        if: always()
+        run: python3 scripts/ci_test_report.py app/build/outputs/androidTest-results
+
       - uses: ./.github/actions/prune-cache
         with:
           key-prefix: cxx-x86_64-
@@ -647,6 +652,16 @@ jobs:
       # docs/app/TESTING.md), but leaving them uncaptured means every run answers
       # only pass/fail. Keep the raw *-benchmarkData.json/.perfetto-trace files so
       # a real regression is at least visible by hand until thresholds exist.
+      # Failing test names and each benchmark's min / median / max into the log.
+      - name: Report benchmark results
+        if: always()
+        run: >
+          python3 scripts/ci_test_report.py
+          benchmark/build/outputs/androidTest-results
+          benchmark/build/outputs/connected_android_test_additional_output
+          app/build/outputs/androidTest-results
+          app/build/outputs/connected_android_test_additional_output
+
       - name: Upload benchmark results
         if: always()
         uses: actions/upload-artifact@v7

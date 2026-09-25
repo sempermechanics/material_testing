@@ -127,7 +127,16 @@ class ScreenBenchmark {
                 }
             }
             val header = device.findObject(selector)
-                ?: error("$id not found — settings section header missing")
+            if (header == null) {
+                // The seeded benchmark app has no licence, and SettingsActivity
+                // leaves the cloud sections out for an unlicensed account.
+                // Looking for it flung to the bottom; the next header is above.
+                if (id in LICENSED_ONLY_HEADERS) {
+                    repeat(SCROLL_ATTEMPTS) { scroll.fling(Direction.UP) }
+                    return@forEach
+                }
+                error("$id not found — settings section header missing")
+            }
             header.click()
             device.waitForIdle()
         }
@@ -153,5 +162,8 @@ class ScreenBenchmark {
             "headerAnalysisPrefs",
             "headerHelpSupport",
         )
+
+        /** Shown only when `LicenseEntitlements.cloudBackupEnabled` (backup and restore). */
+        private val LICENSED_ONLY_HEADERS = setOf("headerCloud", "headerAnalysesData")
     }
 }
