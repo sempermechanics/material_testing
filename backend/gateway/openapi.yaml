@@ -498,7 +498,7 @@ paths:
         '200': { description: OK }
         '403': { description: "No second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: "No license attached to this account, or no seat on it (no_license, seat_not_found)" }
-        '429': { description: "Rate limited, or another change is too soon (device_change_too_soon)" }
+        '429': { description: "Rate limited, or another change is too soon (device_change_too_soon: <ISO instant the holder may change again>, with Retry-After)" }
   /v1/licenses/activate:
     post:
       operationId: activateLicense
@@ -551,7 +551,9 @@ paths:
         individual license from the device it is on so the customer can move to
         a new one, and may be sent alone. Use
         PATCH /v1/admin/licenses/{licenseId}/seats/{uid}/device for a member of
-        an institution license.
+        an institution license. A maxSeats below the members already on an
+        assigned institution roster is refused with 422 max_seats_below_used;
+        remove members first.
       parameters:
         - name: licenseId
           in: path

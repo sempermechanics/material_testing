@@ -62,6 +62,10 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             })
         ref.update({"seatsUsed": 0, "leasesActive": 0})
+        # Answer with the counts just written. The desk merges this reply
+        # into its row, and the pre-revoke snapshot showed a revoked licence
+        # with every seat still taken until the list reloaded.
+        lic = {**lic, "seatsUsed": 0, "leasesActive": 0}
         _delete_license_invites(license_id)
     else:
         redeemer = lic.get("redeemedByUid")

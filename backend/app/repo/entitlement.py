@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 
-from .. import statuses
+from .. import errors, statuses
 from ..licenses import (
     KIND_INSTITUTION,
     MODE_DEMO,
@@ -17,6 +17,7 @@ from ._base import (
     _CONTENDED,
     db,
     get_license,
+    _license_past_grace,
     _now,
 )
 from .claims import (
@@ -128,10 +129,16 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
         _clear_invite_block(uid, user)
         return user, ""
 
+    if _license_past_grace(lic):
+        # Activation refuses the same licence. Claimed anyway, the account
+        # pointed at a licence that grants nothing and resolved demo with no
+        # reason given. Unlike a revoke this can clear — Extend renews in
+        # place — so the invite stays and is retried like a full roster.
+        err = errors.LICENSE_EXPIRED
     # No device lock is passed either way: the invite predates any device
     # choice, and the lock is bound on the first authed request that carries a
     # device id — see revalidate_device_lock.
-    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+    elif normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
         patch = _institution_member_patch(license_id, lic)
         if user.get(_INVITE_BLOCKED_AT) is not None:
             patch[_INVITE_BLOCKED_AT] = _base.firestore.DELETE_FIELD

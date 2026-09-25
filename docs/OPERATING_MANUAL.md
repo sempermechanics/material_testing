@@ -790,7 +790,10 @@ This extends the key **in place**. Everyone already on it — the individual
 holder, or every non-revoked institution seat — is re-entitled without issuing
 a new key or asking anyone to re-activate. Send only the fields that change;
 `maxSeats`, `maxAnalyses`, `supportUntil` and `note` can be edited the same
-way. What you cannot change is who the key is *for*: `kind` and the
+way. A `maxSeats` below the members already on an assigned institution roster
+is refused (`422 max_seats_below_used`) — it would remove nobody and only make
+the count read "12 of 10"; remove members first. A floating licence's pool may
+be smaller than its roster. What you cannot change is who the key is *for*: `kind` and the
 email/device/domain locks are fixed at mint, and a key that needs different
 locks is a new key.
 
@@ -966,8 +969,9 @@ back as part of the clear.
 
 Only the holder's own change waits out a cooldown; a support request never
 does, so a lost phone is fixed the same day. `429 device_change_too_soon`
-means the holder has already moved device inside the window — the response
-says when they may again, and staff or IT can do it for them meanwhile.
+means the holder has already moved device inside the window — the detail
+carries the instant they may again (`device_change_too_soon: <ISO time>`), and
+the account page shows it, and staff or IT can do it for them meanwhile.
 
 **The order on the new device matters.** Sign in first, then let one authed
 request bind the licence, and only then restore. Restoring first fails as

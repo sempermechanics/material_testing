@@ -50,6 +50,13 @@ def provision_session(sid: str, *, purge_on_failure: bool = False,
     session = session or repo.get_session(sid)
     if not session:
         return {"sessionId": sid, "provisioned": 0, "status": "gone", "uploads": []}
+    if session.get("status") == statuses.SESSION_COMPLETED:
+        # A retry that arrives after every file landed has nothing to open,
+        # and must not report — or write — the session as uploading again.
+        # `set_session_status` also refuses to leave COMPLETED, for a
+        # completion that lands while this runs.
+        return {"sessionId": sid, "provisioned": 0,
+                "status": statuses.SESSION_COMPLETED, "uploads": []}
     uid = session["uid"]
     started = time.monotonic()
 
@@ -106,7 +113,10 @@ def provision_session(sid: str, *, purge_on_failure: bool = False,
                                     error_code="drive_provision_failed")
         raise
 
-    repo.set_session_status(sid, statuses.SESSION_UPLOADING)
+    # Inline, the upload targets are still in this response, so nothing can
+    # have completed yet and the COMPLETED guard (one more read) is skipped.
+    repo.set_session_status(sid, statuses.SESSION_UPLOADING,
+                            keep_completed=not purge_on_failure)
     obs.log_event(log, logging.INFO, "session_provisioned", outcome="ok",
                   count=provisioned, latencyMs=round((time.monotonic() - started) * 1000, 1),
                   folderMs=round(folder_ms, 1))

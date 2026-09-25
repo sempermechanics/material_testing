@@ -1,3 +1,6 @@
+import math
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from .. import audit, errors, firestore_repo as repo
@@ -136,13 +139,14 @@ def unbind_device(ctx=Depends(attested_or_mfa_user)):
     if not license_id:
         raise HTTPException(404, errors.NO_LICENSE)
     err, cleared = repo.clear_device_lock(license_id, user["uid"], actor=repo.ACTOR_SELF)
+    if err == errors.DEVICE_CHANGE_TOO_SOON:
+        # 429, not 403: the answer is "not yet", and the caller is told
+        # when. Nothing about their entitlement has changed.
+        raise _too_soon((cleared or {}).get("nextChangeAllowedAt") or "")
     if err:
         status = {
             errors.LICENSE_NOT_FOUND: 404,
             errors.SEAT_NOT_FOUND: 404,
-            # 429, not 403: the answer is "not yet", and the caller is told
-            # when. Nothing about their entitlement has changed.
-            errors.DEVICE_CHANGE_TOO_SOON: 429,
         }.get(err, 403)
         raise HTTPException(status, err)
     audit.record(
@@ -153,3 +157,24 @@ def unbind_device(ctx=Depends(attested_or_mfa_user)):
     return {"licenseId": license_id, "deviceIdLock": "",
             "previousDeviceId": (cleared or {}).get("previousDeviceId") or "",
             "nextChangeAllowedAt": (cleared or {}).get("nextChangeAllowedAt") or ""}
+
+
+def _too_soon(next_allowed: str) -> HTTPException:
+    """`429 device_change_too_soon: <ISO instant>`, plus `Retry-After`.
+
+    The instant goes after a colon, as the counts do on
+    `session_quota_exceeded`, so a caller matching on the code still matches.
+    The refusal used to be the bare code, and the account page could only
+    say "recently" to someone waiting up to a month.
+    """
+    if not next_allowed:
+        return HTTPException(429, errors.DEVICE_CHANGE_TOO_SOON)
+    detail = f"{errors.DEVICE_CHANGE_TOO_SOON}: {next_allowed}"
+    try:
+        when = datetime.fromisoformat(next_allowed)
+    except ValueError:
+        return HTTPException(429, detail)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    wait = max(0, math.ceil((when - datetime.now(timezone.utc)).total_seconds()))
+    return HTTPException(429, detail, headers={"Retry-After": str(wait)})

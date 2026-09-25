@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   esc, when, day, licenceState, licenceStatePill, leaseHeld, seatCells, inviteCells,
+  errorDetail,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -89,4 +90,14 @@ test("a licence's state follows its end and grace, not only its status", () => {
   // No grace: expiry is the cliff.
   assert.equal(licenceState(lic({ expiresAt: "2026-09-22T23:59:59Z" }), NOW), "expired");
   assert.match(licenceStatePill(lic({ expiresAt: "2026-09-22T23:59:59Z" }), NOW), /pill off/);
+});
+
+test("an error detail splits at its first colon only (TD-116)", () => {
+  assert.deepEqual(errorDetail("no_license"), { code: "no_license", rest: "" });
+  // An ISO instant carries colons of its own.
+  assert.deepEqual(
+    errorDetail("device_change_too_soon: 2026-10-25T08:00:00+00:00"),
+    { code: "device_change_too_soon", rest: "2026-10-25T08:00:00+00:00" },
+  );
+  assert.deepEqual(errorDetail(undefined), { code: "", rest: "" });
 });
