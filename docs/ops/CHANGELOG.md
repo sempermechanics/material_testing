@@ -12,6 +12,26 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-25 — Backend and console deploy: no analysis cap on a demo key (#232)
+
+Production `semper-api-36132773366-1` from `eb18ef8` (staging first, run
+36132056688 → `semper-api-staging-36132056688-1`; production run 36132401032 →
+`semper-api-36132401032-1` with the gateway dry-run, then run 36132773366 with
+`apply`). Candidate smoke passed on all three. The gateway diff was descriptions
+only; `apply` switched `semper-gw` from `v202609250953-51` to `v202609251206-56`,
+and the outside check answered 401 on `GET /v1/config` and 200 on the preflight.
+The console went out with `scripts/deploy-console.sh` to `indicvision-dic-app-auth`
+(only `operator/operator.js` changed).
+
+- #232: `PATCH /v1/admin/licenses/{id}` refuses `maxAnalyses` on a demo-mode key
+  with `422 cap_on_demo_key`. A demo holder gets `DEMO_MAX_ANALYSES` whatever the
+  key stores, so the edit had answered 200 and changed nothing. `clearMaxAnalyses`
+  is still accepted. `GET /v1/admin/licenses` returns `demoMaxAnalyses`; the
+  operator desk shows "demo (25)" on demo rows and disables their Cap button.
+- The case that found it: the system demo key SEMP-8AKN was given a cap of 100 at
+  11:17 UTC and its holder still saw "of 25". The stored cap was cleared from the
+  desk at 11:53 UTC (audited `clearMaxAnalyses`), before the new console shipped.
+
 ## 2026-09-25 — Measured optimisation, all six passes
 
 Request volume ([perf/request-volume.md](../perf/request-volume.md)):
