@@ -22,6 +22,46 @@ export function when(iso) {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
 }
 
+/**
+ * A licence end as the calendar day it was set to, or an em dash for null.
+ *
+ * Licence ends are stored as the last second of the chosen day in UTC
+ * (`YYYY-MM-DDT23:59:59Z`), so they are read back in UTC. `when` renders the
+ * local time instead, and east of UTC that moved the day picked: an expiry set
+ * for 30 June showed as 1 July, 05:29.
+ */
+export function day(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString(undefined, {
+      timeZone: "UTC", year: "numeric", month: "short", day: "numeric",
+    });
+}
+
+/**
+ * Where a licence is in its life: "revoked", "expired" (past its grace too,
+ * so it grants nothing), "in grace" (past its end, still fully usable), or
+ * its stored status. The stored status never changes when a licence runs out,
+ * so a lapsed licence used to show a green "redeemed" pill.
+ */
+export function licenceState(lic, now = Date.now()) {
+  if (lic.status === "revoked") return "revoked";
+  const ends = Date.parse(lic.expiresAt || "");
+  const graceEnds = Date.parse(lic.graceEndsAt || lic.expiresAt || "");
+  if (Number.isFinite(graceEnds) && graceEnds <= now) return "expired";
+  if (Number.isFinite(ends) && ends <= now) return "in grace";
+  return lic.status || "unused";
+}
+
+/** The pill for `licenceState`. */
+export function licenceStatePill(lic, now = Date.now()) {
+  const state = licenceState(lic, now);
+  const tone = { revoked: "off", expired: "off", "in grace": "warn" }[state] || "ok";
+  return `<span class="pill ${tone}">${esc(state)}</span>`;
+}
+
 /** Whether a floating lease ending at `iso` is still held at `now` (ms). */
 export function leaseHeld(iso, now = Date.now()) {
   const end = Date.parse(iso || "");

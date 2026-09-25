@@ -19,7 +19,7 @@ from ._base import (
     _mode_patch,
     _now,
     _run_tx,
-    _seat_lease_live,
+    _seat_lease_counted,
     _seat_ref,
 )
 from .license_admin import (
@@ -168,22 +168,54 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     return err, cleared
 
 
-def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> bool:
-    """Disable drops the seat holder to Demo but does NOT free the slot — the
-    seat still counts against maxSeats so IT can re-enable without a fresh
-    activation. Enable restores the licensed mode in place, no data migration."""
+def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> str:
+    """Hold or resume a seat. Error code, or "".
+
+    Hold drops the holder to Demo but does NOT free the slot — the seat still
+    counts against maxSeats so IT can resume it without a fresh activation. A
+    floating lease is released, though: a seat on hold cannot check out, so a
+    lease left on it would only fill the pool until it expired. Resume
+    restores the licensed mode in place, no data migration.
+
+    A revoked seat, or a seat on a revoked licence, is refused either way.
+    Resuming one used to set it active again without taking a slot back —
+    licensed, on the roster, and not counted in `seatsUsed` — and holding one
+    made a freed slot look occupied.
+    """
+    lic_ref = db().collection("licenses").document(license_id)
     ref = _seat_ref(license_id, uid)
-    snap = ref.get()
-    if not snap.exists:
-        return False
-    ref.update({
-        "status": "active" if enabled else "disabled",
-        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-    })
+
+    @_base.firestore.transactional
+    def _set(tx) -> str:
+        snap = ref.get(transaction=tx)
+        lic_snap = lic_ref.get(transaction=tx)
+        if not snap.exists:
+            return errors.SEAT_NOT_FOUND
+        seat = snap.to_dict() or {}
+        if seat.get("status") == "revoked":
+            return errors.SEAT_REVOKED
+        if lic_snap.exists and (lic_snap.to_dict() or {}).get("status") == "revoked":
+            return errors.LICENSE_REVOKED
+        patch = {
+            "status": "active" if enabled else "disabled",
+            "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+        }
+        release = not enabled and _seat_lease_counted(seat)
+        if release:
+            patch.update(_lease_clear_patch())
+        tx.update(ref, patch)
+        if release and lic_snap.exists:
+            tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(-1)})
+        return ""
+
+    # Losing means a revoke, checkout or another hold landed on this seat
+    # first. Nothing was written; IT tries again against the new state.
+    err = _run_tx(_set, on_contended=lambda: errors.SEAT_BUSY)
+    if err:
+        return err
     if not enabled:
         _drop_user_to_demo_if_licensed(uid, license_id)
     else:
-        seat = snap.to_dict() or {}
         user_ref = db().collection("users").document(uid)
         user_snap = user_ref.get()
         if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
@@ -191,8 +223,7 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> bool:
                 **_mode_patch(MODE_LICENSED),
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             })
-        del seat
-    return True
+    return ""
 
 
 def revoke_institution_seat(license_id: str, uid: str) -> bool:
@@ -202,8 +233,9 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
     Transactional for the same reason `claim_seat` is, and against the mirror
     image of its race: two concurrent revokes of one seat both read a status
     that is not yet "revoked", both decrement, and the pool undercounts by one
-    forever. A releasable lease is dropped in the same commit — a revoked seat
-    must not keep occupying a floating slot.
+    forever. A counted lease is dropped in the same commit — a revoked seat
+    must not keep occupying a floating slot, and one that ran out unswept is
+    still in the count (see `_seat_lease_counted`).
     """
     lic_ref = db().collection("licenses").document(license_id)
     seat_ref = _seat_ref(license_id, uid)
@@ -218,7 +250,7 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
             return True  # idempotent: already revoked, counters already settled
         lic_snap = lic_ref.get(transaction=tx)
         seats_used = int((lic_snap.to_dict() or {}).get("seatsUsed") or 0) if lic_snap.exists else 0
-        held_lease = _seat_lease_live(seat)
+        held_lease = _seat_lease_counted(seat)
 
         tx.update(seat_ref, {
             "status": "revoked",

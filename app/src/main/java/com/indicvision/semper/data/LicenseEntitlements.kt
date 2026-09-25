@@ -2,7 +2,6 @@ package com.indicvision.semper.data
 
 import android.content.Context
 import com.indicvision.semper.data.net.AppRemoteConfig
-import kotlin.math.ceil
 
 /**
  * Client view of the account's demo / licensed entitlements.
@@ -30,7 +29,7 @@ object LicenseEntitlements {
      */
     const val STALE_CACHE_MS = 7L * 24 * 60 * 60 * 1000
 
-    private const val MILLIS_PER_DAY = 24.0 * 60 * 60 * 1000
+    private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
 
     fun mode(context: Context): String {
         val stored = AppRemoteConfig.mode(context)
@@ -106,14 +105,18 @@ object LicenseEntitlements {
     fun inGrace(context: Context): Boolean = isLicensed(context) && AppRemoteConfig.inGrace(context)
 
     /**
-     * Whole days until the license expires, or null when there is nothing to
-     * warn about: a perpetual license, a demo account, no expiry on file, or
+     * Calendar days until the license's last day, in UTC, or null when there
+     * is nothing to warn about: a perpetual license, a demo account, no expiry on file, or
      * a cache too old to trust.
      *
      * Never a gate. A cached expiry can be arbitrarily stale — a renewal may
      * have landed while the device was offline — so this only ever decides
      * whether to show a notice. [mode] remains the only thing that changes
      * what the app will do.
+     *
+     * Counted in UTC days because a licence ends at 23:59:59Z on its chosen
+     * day, the day the consoles show. Rounding the hours up made three hours
+     * left read "expires tomorrow" and 25 hours "in 2 days".
      */
     fun daysUntilExpiry(context: Context, now: Long = System.currentTimeMillis()): Long? {
         val expiresAt = AppRemoteConfig.licenseExpiresAtMillis(context)
@@ -123,7 +126,7 @@ object LicenseEntitlements {
         return if (!worthWarningAbout) {
             null
         } else {
-            ceil((expiresAt - now).toDouble() / MILLIS_PER_DAY).toLong()
+            Math.floorDiv(expiresAt, MILLIS_PER_DAY) - Math.floorDiv(now, MILLIS_PER_DAY)
         }
     }
 

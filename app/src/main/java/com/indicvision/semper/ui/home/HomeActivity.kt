@@ -469,7 +469,10 @@ class HomeActivity : AppCompatActivity() {
         tvHomeLicense.isVisible = true
         tvHomeLicense.text = when {
             LicenseEntitlements.inGrace(this) -> getString(R.string.license_grace, support)
-            days <= 0L -> getString(R.string.license_expiring_today, support)
+            // Past its day on a config fetched before it ended: the cache
+            // cannot say whether grace applies, only that the day has gone.
+            days < 0L -> getString(R.string.license_expired, support)
+            days == 0L -> getString(R.string.license_expiring_today, support)
             else -> resources.getQuantityString(
                 R.plurals.license_expiring_fmt,
                 days.toInt(),

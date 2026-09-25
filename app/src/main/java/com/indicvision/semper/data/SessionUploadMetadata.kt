@@ -76,6 +76,10 @@ object SessionUploadMetadata {
             .put("pointsConverged", record.pointsConverged)
             .put("avgIterations", record.avgIterations.toDouble())
             .put("executionTimeMs", record.executionTimeMs)
+            // Why a run ended short, and what it set out to do. Without them a
+            // restored run that stopped at 39 of 50 reads as a clean 39-frame test.
+            .put("stopCode", record.stopCode)
+            .put("plannedFrameCount", record.plannedFrameCount)
         if (record.isSweep) {
             metrics
                 .put("isSweep", true)
