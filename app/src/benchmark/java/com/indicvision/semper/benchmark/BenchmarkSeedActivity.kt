@@ -7,6 +7,9 @@ import android.content.Intent
 import android.os.Bundle
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.report.FieldRangesStore
+import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.ui.viewer.SummaryAnimation
 import com.indicvision.semper.ui.viewer.ViewerArgs
 import java.io.File
 import java.nio.ByteBuffer
@@ -53,12 +56,22 @@ class BenchmarkSeedActivity : Activity() {
      * 100 MB while seeding 150 frames, and since that happens inside the app process it
      * landed in `MemoryUsageMetric` — i.e. the harness would have been measuring its own
      * fabrication cost instead of the viewer's.
+     *
+     * It also writes the [FieldRangesStore] sidecar that `DicBatchRunner` writes for a
+     * real batch, so the viewer's colour-scale pass reads it instead of decoding every
+     * frame. Without it the benchmark measured only the no-sidecar fallback (older or
+     * restored sessions), whose ~1 MB per frame of garbage set the 150-frame heap
+     * (TD-87). The per-frame `valueRanges` columns are allocated here, in setup and on
+     * the first iteration only.
      */
     private fun seedSession(frameCount: Int): File {
         val dir = File(File(filesDir, "sessions"), "bench_${frameCount}_${COLS}x$ROWS")
         dir.mkdirs()
         val expected = SessionPaths.frameDat(dir, frameCount - 1)
-        if (expected.exists()) return dir // already seeded
+        val rangesFile = File(dir, FieldRangesStore.FILE_NAME)
+        if (expected.exists() && rangesFile.exists()) return dir // already seeded
+        val fieldIndices = SummaryAnimation.FIELDS.map { it.second }.toIntArray()
+        val perFrameRanges = ArrayList<Map<Int, Pair<Float, Float>?>>(frameCount)
         val floats = FloatArray(COLS * ROWS * DicResult.STRIDE)
         val buf = ByteBuffer.allocate(floats.size * 4).order(ByteOrder.nativeOrder())
         for (i in 0 until frameCount) {
@@ -66,7 +79,9 @@ class BenchmarkSeedActivity : Activity() {
             buf.clear()
             buf.asFloatBuffer().put(floats)
             SessionPaths.frameDat(dir, i).writeBytes(buf.array())
+            perFrameRanges.add(VisualizationEngine.valueRanges(floats, fieldIndices))
         }
+        FieldRangesStore.write(rangesFile, fieldIndices, perFrameRanges)
         return dir
     }
 

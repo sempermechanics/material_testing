@@ -135,6 +135,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **#200 (merged).** `HotPathMicroBenchmark` could not run in CI (TD-86): the debug manifest
   now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
   and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
+- **This branch (TD-87).** The 150-frame scrub heap (51 → 161 MB after TD-75) was the benchmark
+  running the no-sidecar colour-scale fallback; its seeder now writes the ranges sidecar.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
