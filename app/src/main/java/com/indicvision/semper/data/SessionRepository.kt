@@ -165,7 +165,7 @@ class SessionRepository {
             refName = refName,
             sessionDir = batchDir.absolutePath,
             defNames = defNames,
-            headline = String.format(Locale.US, "%.1f%% converged", convergence),
+            headline = SessionHeadline.firstFrameConvergence(convergence, defNames.size),
             engineStats = engineStatsArray?.toList() ?: emptyList(),
             stopCode = stopCode,
             plannedFrameCount = plannedFrameCount,

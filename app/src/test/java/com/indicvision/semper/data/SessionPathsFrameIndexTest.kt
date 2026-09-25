@@ -3,6 +3,7 @@ package com.indicvision.semper.data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.io.File
 
 /**
  * The viewer names and pictures a frame from the index in its `.dat` name, not
@@ -21,6 +22,20 @@ class SessionPathsFrameIndexTest {
     fun `a listing with a gap keeps each file's own index`() {
         val listing = listOf(0, 1, 3).map(SessionPaths::frameDatName)
         assertEquals(listOf(0, 1, 3), listing.map(SessionPaths::frameIndexOf))
+    }
+
+    @Test
+    fun `a listing maps each position to its planned frame`() {
+        val files = listOf(0, 2, 3).map { File(SessionPaths.frameDatName(it)) } + File("odd.dat")
+        assertEquals(listOf(0, 2, 3, 3), SessionPaths.plannedFrameIndices(files))
+    }
+
+    @Test
+    fun `a frame is named by its planned index`() {
+        val names = listOf("a.png", "", "c.png")
+        assertEquals("c.png", SessionPaths.frameName(names, 2))
+        assertNull("blank is no name", SessionPaths.frameName(names, 1))
+        assertNull("past the list", SessionPaths.frameName(names, 3))
     }
 
     @Test

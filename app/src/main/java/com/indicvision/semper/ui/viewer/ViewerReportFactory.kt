@@ -129,9 +129,8 @@ object ViewerReportFactory {
                 // Named from the same planned frame as the cover image, so the
                 // two agree past a frame the batch skipped. A sweep's names are
                 // its combination labels, one per node.
-                deformedImageName = host.originalDefNames
-                    .getOrNull(if (host.isSweep) frameIndex else host.plannedFrameIndex(frameIndex))
-                    ?: "Frame_${frameIndex + 1}",
+                deformedImageName = (if (host.isSweep) frameIndex else host.plannedFrameIndex(frameIndex))
+                    .let { planned -> host.originalDefNames.getOrNull(planned) ?: "Frame_${planned + 1}" },
             ),
         )
     }

@@ -19,6 +19,7 @@ import com.indicvision.semper.data.net.CloudFileDto
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import com.indicvision.semper.util.suspendRunCatching
@@ -867,7 +868,7 @@ object CloudRestore {
 
     /**
      * The Home-list headline for a restored session: for a sweep, the specimen
-     * plus solved/total and subset span; otherwise the converged percentage.
+     * plus solved/total and subset span; otherwise [SessionHeadline]'s first-frame convergence.
      * Skips are counted from the parsed nodes: backups write a `nodes` array,
      * and counting the legacy `subsets` list alone read 0 for every new one.
      */
@@ -878,7 +879,10 @@ object CloudRestore {
         stats: List<Float>,
     ): String {
         val sweep = engine.optJSONObject("sweep")
-            ?: return String.format(java.util.Locale.US, "%.1f%% converged", stats.getOrElse(15) { 0f })
+            ?: return SessionHeadline.firstFrameConvergence(
+                stats.getOrElse(EngineStats.SLOT_CONVERGENCE) { 0f },
+                defNames.size,
+            )
         val solved = meta.optInt("frameCount", defNames.size)
         val skipCount = SkippedNode.fromMetadata(sweep.optJSONObject("skipped")).size
         val image = defNames.firstOrNull().orEmpty().ifBlank { meta.optString("specimen", "frame") }
