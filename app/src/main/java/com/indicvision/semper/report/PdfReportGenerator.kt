@@ -75,9 +75,11 @@ object PdfReportGenerator {
         val brandLogo = decodeBrandLogo(resources)
         val layout = PdfLayoutEngine(pdfDocument, brandLogo)
         try {
-            // Telemetry is per-analysis, not per-frame, so one page closes the
-            // document. Holds no bitmaps, so it survives the recycling below.
+            // The session's engine stats are its first frame's, so one page
+            // closes the document; its ZNSSD is pooled over every frame drawn.
+            // Holds no bitmaps, so it survives the recycling below.
             var telemetrySource: ReportData? = null
+            val znssdFrames = mutableListOf<ZnssdFrame>()
 
             for (index in 0 until frameCount) {
                 currentCoroutineContext().ensureActive()
@@ -85,6 +87,7 @@ object PdfReportGenerator {
                 emit(Progress.Status("Frame ${index + 1} of $frameCount…", percent))
                 val data = dataAt(index) ?: continue
                 if (telemetrySource == null) telemetrySource = data
+                znssdFrames += ZnssdFrame(data.globalAvgZnssd, data.znssdAcceptedPoints)
 
                 drawCoverPage(layout, data, frameTitle(index), frameCount)
                 drawFieldPages(layout, data)
@@ -93,7 +96,7 @@ object PdfReportGenerator {
 
             telemetrySource?.let {
                 emit(Progress.Status("Compiling Engine Telemetry...", TELEMETRY_PROGRESS))
-                drawTelemetryPage(layout, it)
+                drawTelemetryPage(layout, it, TelemetrySummary.batch(znssdFrames))
             }
 
             // Finish the still-open page before writing — PdfDocument rejects
@@ -132,7 +135,7 @@ object PdfReportGenerator {
 
             currentCoroutineContext().ensureActive()
             emit(Progress.Status("Compiling Engine Telemetry...", 90))
-            drawTelemetryPage(layout, data)
+            drawTelemetryPage(layout, data, TelemetrySummary.single(data))
 
             emit(Progress.Status("Finalizing PDF...", 98))
             layout.finishCurrentPage()
@@ -231,10 +234,14 @@ object PdfReportGenerator {
         data.deformedImage.recycle()
     }
 
-    /** Final page: engine telemetry (shared by single and batch reports). */
-    private fun drawTelemetryPage(layout: PdfLayoutEngine, data: ReportData) {
+    /**
+     * Final page: engine telemetry (shared by single and batch reports).
+     * [summary] says what the quality rows are over — one frame, or pooled.
+     */
+    private fun drawTelemetryPage(layout: PdfLayoutEngine, data: ReportData, summary: TelemetrySummary) {
         layout.newPage()
         layout.drawTitle("Engine Performance Log")
+        summary.scopeNote?.let { layout.drawNotice(it) }
 
         val stats = data.engineStats
 
@@ -255,8 +262,8 @@ object PdfReportGenerator {
         layout.drawTable(
             headers = listOf("Metric", "Value"),
             rows = listOf(
-                listOf("Global Average ZNSSD (Correlation)", "%.5f".format(data.globalAvgZnssd)),
-                listOf("Overall Convergence Rate", "%.2f %%".format(stats.convergencePercent)),
+                listOf(summary.avgZnssdLabel, "%.5f".format(summary.avgZnssd)),
+                listOf(summary.convergenceLabel, "%.2f %%".format(stats.convergencePercent)),
                 listOf("Average ICGN Iterations", "%.2f".format(stats.avgIcgnIterations)),
             ),
             colWeights = listOf(0.7f, 0.3f),

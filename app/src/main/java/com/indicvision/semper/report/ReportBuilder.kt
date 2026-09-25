@@ -208,19 +208,6 @@ object ReportBuilder {
         return FieldExtrema(maxIdx, minIdx)
     }
 
-    fun computeGlobalAvgZnssd(data: FloatArray): Float {
-        var total = 0f
-        var count = 0
-        for (i in data.indices step DicResult.STRIDE) {
-            val corr = data[i + DicResult.IDX_ZNSSD]
-            if (DicResult.isAcceptedPoint(corr)) {
-                total += corr
-                count++
-            }
-        }
-        return if (count > 0) total / count else 0f
-    }
-
     fun buildReport(params: ReportBuildParams): ReportData {
         val data = params.data
         val baseImg = params.baseImg
@@ -344,6 +331,7 @@ object ReportBuilder {
             }
         }
 
+        val znssd = ZnssdFrame.of(data)
         return ReportData(
             sessionId = params.sessionId,
             specimenName = params.specimenName,
@@ -361,7 +349,8 @@ object ReportBuilder {
             engineStats = params.engineStats,
             znssdHeatmap = correlationHeatmap ?: createBitmap(1, 1, Bitmap.Config.ARGB_8888),
             solverPathMap = createBitmap(1, 1, Bitmap.Config.ARGB_8888),
-            globalAvgZnssd = computeGlobalAvgZnssd(data),
+            globalAvgZnssd = znssd.mean,
+            znssdAcceptedPoints = znssd.points,
             appBuild = appBuildLabel(),
             rigidBody = RigidBodyFit.fit(data),
         )
