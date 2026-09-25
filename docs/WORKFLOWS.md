@@ -297,10 +297,16 @@ failed download deletes the empty destination rather than leaving a 0-byte file.
 
 ### B4 Erase a cloud backup 🔒
 
-`ui/home/SessionSelectionController` or `SettingsActivity` → 5-second undo →
-`data/BackupDeleteWorker` → `CloudSync.eraseCloudBackup` / `eraseEverywhere` →
-`IndicApi.deleteSession` (C11). Settings re-lists with `CloudRestore.listCompleted`,
-which is uncached, so the list stops offering what no longer exists.
+`ui/home/SessionSelectionController` or `SettingsActivity` → `data/SessionDeletes.enqueue`
+(one unique `session-delete` chain, so a second confirm queues behind the first) →
+5-second undo → `data/BackupDeleteWorker` → one analysis at a time through
+`CloudSync.eraseCloudBackup` / `eraseEverywhere` → `IndicApi.deleteSession` (C11).
+A 429 waits 5 s and retries that analysis (up to six tries) instead of reporting it
+as still in the cloud; a cloud delete clears the row's `cloudSessionId`, so a later
+delete of the phone copy sends nothing. `ui/common/DeleteFeedback` shows Undo,
+"Deleting x of y…" and the outcome, with **Try again** for what is left. Settings
+re-lists with `CloudRestore.listCompleted`, which is uncached, so the list stops
+offering what no longer exists.
 
 ### B5 Reclaim local space
 

@@ -147,6 +147,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (backend Phase 3: cooldown date, seat cap, revoke count, invite expiry, provisioning retry,
   failed uploads), #225 (frame names past a skipped frame, Home headline, partial-run dialog).
   The audit has no open TECH_DEBT rows left.
+- **Bulk delete (open PRs, `fix/delete-one-path` + `fix/session-erase-bucket`).** Ten deletes
+  from Home cost 61 DELETE requests over 100 s in production (13 × 404, 38 × 429). One queue
+  (`SessionDeletes`), a Delete everywhere choice, the cloud link cleared after a cloud delete,
+  and a per-session erase bucket (1/s, burst 10) on the backend.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
