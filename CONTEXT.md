@@ -114,7 +114,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #197, `settingsScroll` skips the licence-only settings headers and
   `scripts/ci_test_report.py` puts failing device tests and benchmark numbers in the CI log.
 - **This branch.** `HotPathMicroBenchmark` could not run in CI (TD-78): the debug manifest
-  now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds.
+  now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
+  and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
