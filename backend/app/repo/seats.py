@@ -106,7 +106,8 @@ def clear_device_lock(license_id: str, uid: str = "", *,
 
     On success the second element is the audit detail, including the device
     that was given up — the other half of the record `revalidate_device_lock`
-    writes when the replacement binds.
+    writes when the replacement binds. On `device_change_too_soon` it is
+    `{"nextChangeAllowedAt": <ISO instant>}`, so the refusal can say when.
     """
     lic_snap = db().collection("licenses").document(license_id).get()
     if not lic_snap.exists:
@@ -146,7 +147,11 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         doc = snap.to_dict() or {}
         changed = as_utc(doc.get("deviceChangedAt"))
         if cooldown and changed and now - changed < cooldown:
-            return errors.DEVICE_CHANGE_TOO_SOON, None
+            # The refusal says when, as the success does: "not yet" with no
+            # date left the holder guessing how long to wait.
+            return errors.DEVICE_CHANGE_TOO_SOON, {
+                "nextChangeAllowedAt": (changed + cooldown).isoformat(),
+            }
         tx.update(ref, {
             "deviceIdLock": "",
             "deviceChangedAt": now,
@@ -159,9 +164,12 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         }
 
     # Two self-service clears at once is the only way to lose on contention,
-    # and the cooldown is exactly what one of them must lose.
+    # and the cooldown is exactly what one of them must lose. The winner has
+    # just stamped `now`, so the next change is a cooldown from here.
     err, cleared = _run_tx(
-        _clear, on_contended=lambda: (errors.DEVICE_CHANGE_TOO_SOON, None),
+        _clear, on_contended=lambda: (errors.DEVICE_CHANGE_TOO_SOON, {
+            "nextChangeAllowedAt": (now + cooldown).isoformat(),
+        }),
     )
     if not err:
         _restore_holder_mode(license_id, lic, ref, scope, uid)

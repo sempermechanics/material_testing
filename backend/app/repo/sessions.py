@@ -136,16 +136,52 @@ def list_session_files(
 
 
 # ---------------- async provisioning ----------------
-def set_session_status(sid: str, status: str, error_code: str | None = None) -> None:
+def set_session_status(sid: str, status: str, error_code: str | None = None,
+                       *, keep_completed: bool = True) -> None:
+    """Move a session to `status`. COMPLETED is terminal and is never left.
+
+    Every caller is provisioning, and a Cloud Tasks retry of it can land
+    after the last file completed. Writing UPLOADING (or PROVISION_FAILED)
+    over COMPLETED then showed a finished analysis as still uploading. The
+    read and the write share a transaction, so a completion that lands
+    between them — `bump_session_progress` writes the same document — makes
+    this retry and see it.
+
+    `keep_completed=False` is a plain write, for the inline create: its
+    upload targets have not left the request yet, so nothing can have
+    completed, and the guard's read would be paid on every analysis.
+    """
     patch = {"status": status, "updatedAt": _base.firestore.SERVER_TIMESTAMP}
     if error_code:
         patch["provisionError"] = error_code
     elif status != statuses.SESSION_PROVISION_FAILED:
         patch["provisionError"] = _base.firestore.DELETE_FIELD
-    try:
-        db().collection("sessions").document(sid).update(patch)
-    except NotFound:
+    ref = db().collection("sessions").document(sid)
+    if not keep_completed:
+        try:
+            ref.update(patch)
+        except NotFound:
+            pass
         return
+
+    def _open(snap) -> bool:
+        return snap.exists and (snap.to_dict() or {}).get("status") != statuses.SESSION_COMPLETED
+
+    @_base.firestore.transactional
+    def _set(tx) -> None:
+        if _open(ref.get(transaction=tx)):
+            tx.update(ref, patch)
+
+    def _guarded_write() -> None:
+        # Losing every attempt means files are completing right now. A plain
+        # guarded write still beats leaving the status unwritten.
+        if _open(ref.get()):
+            try:
+                ref.update(patch)
+            except NotFound:
+                pass
+
+    _run_tx(_set, on_contended=_guarded_write)
 
 
 def iter_unprovisioned_files(sid: str):
@@ -276,9 +312,21 @@ def iter_user_sessions(uid: str):
 
 
 def count_user_sessions(uid: str) -> int:
-    """How many analyses this user already has in the cloud (quota check)."""
-    agg = db().collection("sessions").where("uid", "==", uid).count().get()
-    return int(agg[0][0].value)
+    """How many analyses count against this user's quota.
+
+    The one count behind both the create-time check and `quota.used` on
+    `GET /v1/sessions`, so the two cannot disagree. A PROVISION_FAILED
+    session stores nothing — its upload targets were never opened — and
+    counting it charged the user for an upload that never happened, next to
+    the new session the app creates for the same analysis. Two equality counts rather than one `!=` query: `!=` also
+    drops a document with no `status`, and it needs a composite index.
+    A failed session that a Cloud Tasks retry later provisions counts again
+    from then on; the quota is soft, so that overshoot is accepted.
+    """
+    sessions = db().collection("sessions").where("uid", "==", uid)
+    total = int(sessions.count().get()[0][0].value)
+    failed = sessions.where("status", "==", statuses.SESSION_PROVISION_FAILED).count().get()
+    return max(0, total - int(failed[0][0].value))
 
 
 #: Session states that still expect more bytes. PROVISIONING is included so a

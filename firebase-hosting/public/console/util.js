@@ -99,3 +99,18 @@ export function inviteCells(invite) {
       <td><span class="pill off">—</span></td>
       <td class="muted">joins at first sign-in</td>`;
 }
+
+/**
+ * A backend error detail split into its code and what follows the code.
+ *
+ * Some codes carry a value after a colon — `session_quota_exceeded: 25/25 …`,
+ * `device_change_too_soon: <ISO instant>` — and an instant has colons of its
+ * own, so only the first one separates. Pages match on `code`.
+ */
+export function errorDetail(detail) {
+  const text = String(detail ?? "");
+  const at = text.indexOf(":");
+  return at < 0
+    ? { code: text.trim(), rest: "" }
+    : { code: text.slice(0, at).trim(), rest: text.slice(at + 1).trim() };
+}

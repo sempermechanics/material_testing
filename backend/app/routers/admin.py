@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import audit, errors, firestore_repo as repo, statuses
 from .. import rate_limit
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
-from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
+from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION, seat_cap_below_roster
 from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
 from ..validation import AccessStatus, DocumentId, PageToken, Uid
 from ._shared import clamp_page_size, page_block
@@ -169,6 +169,11 @@ def admin_update_license(
     the next device to sign in binds. Use the seat route below for an
     institution member.
     """
+    if body.maxSeats is not None:
+        # Refused before the lock is touched, so nothing is half applied.
+        current = repo.get_license(license_id)
+        if current and seat_cap_below_roster(current, body.maxSeats):
+            raise HTTPException(422, errors.MAX_SEATS_BELOW_USED)
     patch = body.model_dump(exclude_none=True)
     clear_lock = patch.pop("clearDeviceLock", False)
     if "expiresAt" in patch:

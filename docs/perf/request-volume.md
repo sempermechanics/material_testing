@@ -210,8 +210,8 @@ read fails the suite. Python 3.13, Windows 11; the counts are deterministic
 | `GET /v1/config`, the account's first ever | 4 | 3 |
 | `GET /v1/config` | 1 | 0 |
 | `GET /v1/me` | 1 | 0 |
-| `GET /v1/sessions` | S + 2 = 22 | 0 |
-| `POST /v1/sessions` | 14 → **9** | 11 |
+| `GET /v1/sessions` | S + 2 = 22 (S + 3 = 23 since #224) | 0 |
+| `POST /v1/sessions` | 14 → **9** (10 since #224) | 11 |
 | `POST /v1/files/{id}/complete`, each | 6 | 4 |
 | `DELETE /v1/sessions/{id}` | 7 | 5 |
 
@@ -242,6 +242,14 @@ create.
 
 [Measured] against the store double; `test_create_reads_grow_once_per_file` keeps
 it. Per upload of 3 files: 32 → 27 reads (16 % fewer). **Gate met** (5 ≥ 3).
+
+**Later, deliberately (#224):** the quota count (`count_user_sessions`, used by
+both the create check and `quota.used` on the listing) now subtracts a second
+count of `PROVISION_FAILED` sessions, which store nothing and were charged as
+stored analyses. That is one more read on each of the two routes: create is
+7 + N, the listing S + 3. The status write that ends an inline create stays a
+plain write; only the queued path pays a read to keep a `COMPLETED` session
+from being moved back (TD-120).
 
 **Correctness.** `test_inline_create_hands_back_what_the_uploads_listing_would`
 was written first and passed on the old code. It checks that the reply equals

@@ -498,7 +498,7 @@ paths:
         '200': { description: OK }
         '403': { description: "No second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: "No license attached to this account, or no seat on it (no_license, seat_not_found)" }
-        '429': { description: "Rate limited, or another change is too soon (device_change_too_soon)" }
+        '429': { description: "Rate limited, or another change is too soon (device_change_too_soon: <ISO instant the holder may change again>, with Retry-After)" }
   /v1/licenses/activate:
     post:
       operationId: activateLicense
@@ -554,7 +554,9 @@ paths:
         PATCH /v1/admin/licenses/{licenseId}/seats/{uid}/device for a member of
         an institution license. clearMaxAnalyses=true drops the per-user
         analysis cap so holders get the licensed default; maxAnalyses below
-        DEMO_MAX_ANALYSES is refused.
+        DEMO_MAX_ANALYSES is refused. A maxSeats below the members already on an
+        assigned institution roster is refused with 422 max_seats_below_used;
+        remove members first.
       parameters:
         - name: licenseId
           in: path
@@ -565,7 +567,7 @@ paths:
         '401': { description: Missing or invalid device attestation }
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: License not found }
-        '422': { description: "No field set, a value out of range, or an expiresAt that is past, earlier than the current one, or on a perpetual licence (expiry_in_past, expiry_before_current, license_perpetual)" }
+        '422': { description: "No field set, a value out of range, or an expiresAt that is past, earlier than the current one, or on a perpetual licence (expiry_in_past, expiry_before_current, license_perpetual), or a maxSeats below the seats in use (max_seats_below_used)" }
         '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/seats/{uid}/device:
     patch:

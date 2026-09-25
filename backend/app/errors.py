@@ -110,8 +110,13 @@ EMAIL_NOT_VERIFIED = "email_not_verified"
 # Self-service device change only. Clearing a lock is not revoking — the
 # entitlement is untouched and the next device to sign in binds — so the only
 # thing that limits it is how often the holder may do it themselves. Staff and
-# IT are never subject to this.
+# IT are never subject to this. Sent as `device_change_too_soon: <ISO instant>`
+# (with `Retry-After`), the instant being when the holder may change again.
 DEVICE_CHANGE_TOO_SOON = "device_change_too_soon"
+# 422 on a staff licence edit: a `maxSeats` below the members already on an
+# assigned roster. Lowering the cap removes nobody, so it would only make the
+# count read "12 of 10"; remove members first.
+MAX_SEATS_BELOW_USED = "max_seats_below_used"
 
 # --- institution invites ---------------------------------------------------
 # An invite reserves a roster place for an address with no account yet. It is

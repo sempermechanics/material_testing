@@ -316,7 +316,14 @@ Three properties worth knowing before you change this path:
   cannot tell the difference beyond latency.
 - **A failed provision is recorded, not silent.** The task marks the session
   `PROVISION_FAILED` with an error code so Cloud Tasks can retry and a polling
-  client is told to stop waiting.
+  client is told to stop waiting. Such a session stores nothing, so it does
+  not count against the quota; a retry that provisions it counts it again.
+- **A retry never undoes a completion.** A task retried after every file
+  landed returns without touching Drive, and on the queued path
+  `set_session_status` reads and writes in one transaction that leaves
+  `COMPLETED` alone, so a finished analysis is never shown as uploading
+  again. (Inline, the targets have not left the request, so nothing can have
+  completed and the write stays plain.)
 - **A failed enqueue is an error, not a quiet fallback.** It logs
   `provision_enqueue_failed` at ERROR with `errorCode=tasks_enqueue_failed`
   and the exception type. Before it was logged, a missing
@@ -505,9 +512,13 @@ sessions/{sessionId}
   status: "PENDING" | "PROVISIONING" | "PROVISION_FAILED"
         | "UPLOADING" | "COMPLETED" | "FAILED"
         (PROVISIONING and UPLOADING are IN_FLIGHT_STATUSES — both still
-         expect more bytes and both count against the session quota)
+         expect more bytes. Every status but PROVISION_FAILED counts
+         against the session quota: `count_user_sessions`, behind both the
+         create check and `quota.used`. COMPLETED is terminal —
+         provisioning never writes over it)
   driveFolderId                   (…/session/{sid} folder)
-  totalBytes, fileCount, completedCount
+  totalBytes, fileCount, completedCount   (totalBytes is the size declared
+                                  at create, not what is stored)
   metrics: { pointsConverged, avgIcgnIters, execMs }  // small, from device
   createdAt, updatedAt, completedAt
 
@@ -1213,7 +1224,7 @@ guarantee as activation — never touches stored sessions/files. See
 
 | Action | Route | Effect |
 |---|---|---|
-| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff: device-attested, or from the operator desk with a second factor and a sign-in newer than `ADMIN_WEB_REVOKE_REAUTH_SECONDS`) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0. |
+| Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff: device-attested, or from the operator desk with a second factor and a sign-in newer than `ADMIN_WEB_REVOKE_REAUTH_SECONDS`) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0; the response carries the reset counts. |
 | Single-seat revoke | `DELETE /v1/institutions/licenses/{id}/seats/{uid}` (institution IT) | Only that member drops to Demo; **frees the slot** for another domain member (including, after re-admission, the same member re-entering the key). |
 | Disable a seat | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores the licensed mode in place with no re-activation needed. |
 
@@ -1592,7 +1603,10 @@ the stamp tries the invite again at most every `_INVITE_RETRY` (15 minutes),
 so a seat freed later reaches the person it was promised to; the claim drops
 the superseded Demo key and the stamp. A withdrawn invite or a revoked licence
 clears the stamp. The bound is what keeps this off the per-request path: an
-unstamped account never reads the invite collection again.
+unstamped account never reads the invite collection again. A licence past
+`expiresAt + graceDays` is one of those reasons: the claim refuses it as
+activation does (`_license_past_grace`), keeps the invite, and stamps the
+account, so an Extend delivers it on the next retry.
 
 #### Checkout, and why there is no heartbeat route
 
@@ -1895,7 +1909,9 @@ Self-service re-binding is a licence-sharing vector. A second factor proves
 single licence round a lab. `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (default 30)
 is counted against a `deviceChangedAt` stamp that only the self-service path
 writes; a second change inside the window answers
-`429 device_change_too_soon`, carrying `nextChangeAllowedAt`. Staff and IT
+`429 device_change_too_soon: <ISO instant>` — the instant being
+`deviceChangedAt` plus the cooldown — with `Retry-After` in seconds, and the
+account page shows that time. Staff and IT
 neither read nor write that stamp, so a support request always works — a lost
 phone does not wait 30 days.
 

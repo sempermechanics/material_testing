@@ -8,6 +8,7 @@
 import {
   requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when, day,
 } from "../auth.js";
+import { errorDetail } from "../util.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -175,14 +176,19 @@ $("unbind").addEventListener("click", async () => {
   }
 });
 
-function unbindError(code) {
+function unbindError(detail) {
+  // The cooldown refusal carries the instant it ends after the code.
+  const { code, rest } = errorDetail(detail);
   return {
     // Not a refusal of entitlement: a second factor proves who is asking,
     // not how often, so the cooldown is what stops one licence being
     // passed round a lab.
     device_change_too_soon:
-      "You have moved this licence recently. Ask your IT contact or Semper " +
-      "support if you need to move it again now.",
+      "You have moved this licence recently" +
+      // Local date and time, as the success message gives it: the cooldown
+      // ends at the instant of the last move, not at a day boundary.
+      (rest ? `, so you can move it yourself again after ${when(rest)}` : "") +
+      ". Ask your IT contact or Semper support if you need to move it now.",
     mfa_required:
       "Set up two-factor authentication first — moving a licence needs it.",
     no_license: "There is no licence on this account to move.",
@@ -258,7 +264,7 @@ function sessionRow(s) {
           <div class="muted mono">${esc(s.sessionId)}</div></td>
       <td>${state}</td>
       <td>${done ? s.completedCount : `${s.completedCount || 0} of ${s.fileCount || 0}`}</td>
-      <td>${esc(size(s.totalBytes))}</td>
+      <td>${storedSize(s)}</td>
       <td class="actions">
         <button class="secondary" data-download="${esc(s.sessionId)}"
                 ${canDownload ? "" : "disabled"}>Download</button>
@@ -302,6 +308,17 @@ function downloadError(detail) {
     drive_download_failed:
       "Storage did not answer. The analysis is intact; try again shortly.",
   }[code] || `Could not download: ${code}`;
+}
+
+/**
+ * The Size cell. `totalBytes` is the size the phone declared when the upload
+ * began, not what is stored: a failed upload stores nothing and one still
+ * running stores part of it, and both used to read as the full size.
+ */
+function storedSize(s) {
+  if (s.status === "COMPLETED") return esc(size(s.totalBytes));
+  if (s.status === "PROVISION_FAILED" || !Number(s.totalBytes)) return "—";
+  return `<span class="muted">${esc(size(s.totalBytes))} when done</span>`;
 }
 
 /** Bytes as something a person reads, matching the app's own rounding. */
