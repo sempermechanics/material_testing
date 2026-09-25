@@ -152,9 +152,15 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
   and saves it (#33, #34, TD-87/TD-88). `scrub150Frames` and `settingsScroll` pass on the
   API 37 emulator and a Pixel 6. TD-86–TD-88 match the parent's numbers; its TD-81 is TD-89 here.
-- **Owed.** The lab end to end on a physical phone, and video import beyond emulators
-  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
-  production state.
+- **Owed.**
+  - The lab end to end on a physical phone (`LabWorkflowDeviceTest`,
+    `BeamTapEditorGestureTest`); only `scrub150Frames` and `settingsScroll` have run on one.
+  - Video import beyond emulators (MP4 and AVI, [WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a).
+  - Benchmark thresholds: the full `:benchmark` suite once on real hardware, then medians
+    as a gate (`ScreenBenchmark` asserts none yet).
+  - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
+    first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
+  - The parent owns deploys and releases; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in
   [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
