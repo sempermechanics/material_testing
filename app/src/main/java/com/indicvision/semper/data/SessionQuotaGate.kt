@@ -31,7 +31,7 @@ object SessionQuotaGate {
         val max = LicenseEntitlements.analysisCap(context)
         val used = maxOf(TokenStore.quotaUsed(context), existingCount)
         if (used >= max) {
-            TokenStore.setQuota(context, used, existingCount)
+            TokenStore.refreshSessionLimit(context, existingCount)
             Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
             return false
         }

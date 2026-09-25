@@ -6,7 +6,10 @@ import com.indicvision.semper.cloud.FakeCloudApi
 import com.indicvision.semper.cloud.FakeTokens
 import com.indicvision.semper.data.AccessStatus
 import com.indicvision.semper.data.AuthRepository
+import com.indicvision.semper.data.net.AppConfigDto
+import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.MeLicenseDto
 import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.TermsDto
 import com.indicvision.semper.data.net.TokenStore
@@ -75,6 +78,31 @@ class AuthRepositoryTest {
 
         assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
         assertTrue("config still fetched", "getConfig" in api.calls)
+    }
+
+    @Test
+    fun `a config read before the invite claim landed is asked again`() = runBlocking {
+        serverUp(approved().copy(license = MeLicenseDto(mode = "licensed")))
+        val answers = ArrayDeque(
+            listOf(
+                AppConfigDto(maxSessions = 25, mode = "demo"),
+                AppConfigDto(maxSessions = 999, mode = "licensed"),
+            ),
+        )
+        api.onGetConfig = { answers.removeFirst() }
+
+        assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
+        assertEquals(2, api.calls.count { it == "getConfig" })
+        assertEquals(999, AppRemoteConfig.maxSessions(context))
+    }
+
+    @Test
+    fun `a config that agrees with me is fetched once`() = runBlocking {
+        serverUp(approved().copy(license = MeLicenseDto(mode = "demo")))
+        api.onGetConfig = { AppConfigDto(maxSessions = 25, mode = "demo") }
+
+        assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
+        assertEquals(1, api.calls.count { it == "getConfig" })
     }
 
     @Test
