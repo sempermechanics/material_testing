@@ -33,4 +33,14 @@ object SessionPaths {
      */
     fun frameIndexOf(name: String): Int? =
         FRAME_DAT_NAME.matchEntire(name)?.groupValues?.get(1)?.toIntOrNull()
+
+    /**
+     * The planned frame index behind each `.dat` of a sorted listing, by
+     * position. A name that does not parse keeps its position. Everything that
+     * names a frame (viewer, share, reports) looks its name up by this index
+     * (`ReportImageNames.frameName`), as the cloud bundle does, so the two
+     * agree past a skipped frame.
+     */
+    fun plannedFrameIndices(datFiles: List<File>): List<Int> =
+        datFiles.mapIndexed { position, file -> frameIndexOf(file.name) ?: position }
 }

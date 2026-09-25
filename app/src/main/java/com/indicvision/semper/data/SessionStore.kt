@@ -297,15 +297,6 @@ object SessionStore {
     }
 
     @WorkerThread
-    fun updateHeadline(context: Context, id: String, headline: String) = synchronized(lock) {
-        mutateIndex(context) { records ->
-            records.map {
-                if (it.id == id) it.copy(headline = headline, updatedAt = System.currentTimeMillis()) else it
-            }
-        }
-    }
-
-    @WorkerThread
     fun markSynced(context: Context, id: String) = setSyncState(context, id, SessionRecord.SyncState.SYNCED)
 
     /** Remember which cloud session backs this analysis (so it can be erased). */

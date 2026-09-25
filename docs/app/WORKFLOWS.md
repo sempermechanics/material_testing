@@ -152,7 +152,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.2a | Acknowledge the beta notice on a fresh install | A second dialog asks whether to send crash reports; **declining is the default outcome** and nothing is collected until you accept |
 | [ ] 3.2b | Relaunch after answering it | It does not reappear; the choice is mirrored by the Settings toggle (§4, Your data) |
 | [ ] 3.3 | First visit | A coach mark points at the **+** button; Skip and Got it both dismiss it |
-| [ ] 3.4 | Look at a session row | Thumbnail, name, "date · N frames" (or "Parameter sweep"), headline value, sync badge |
+| [ ] 3.4 | Look at a session row | Thumbnail, name, "date · N frames" (or "Parameter sweep"), headline value, sync badge. A single-setting headline is the first frame's convergence — "97.5% converged", or "97.5% converged on frame 1" when the run has several frames |
 | [ ] 3.5 | Tap a normal session | Result viewer opens on frame 1 |
 | [ ] 3.6 | Tap a sweep session | **Lattice** opens, not the viewer |
 | [ ] 3.7 | Tap a row whose local files were deleted but which has a cloud backup | It carries an **"Only in cloud"** badge; tapping raises a **"Restore this analysis?"** dialog with a **Download** button, which queues a background restore and **leaves you on Home** — it does not open the analysis when it lands |
@@ -442,6 +442,7 @@ extraction show determinate progress instead.
 | [ ] 5.5.1c | Acknowledge that dialog | The kept frames open in the viewer — the run does not leave you back on the settings page |
 | [ ] 5.5.1d | Press Back on that dialog | Nothing dismisses it; the only way on is through to the results |
 | [ ] 5.5.1e | Return to Home afterwards | The short analysis is listed with the frames it kept — not a phantom row from a run reported as failed |
+| [ ] 5.5.1n | First run of a batch whose frame 1 keeps no points, then later frames solve and one fails or decorrelates | The failure dialog explaining frame 1 (strain window, nothing correlated, or unreadable) — **not** "Stopped early … saved and open next": a run is saved only when frame 1 solves, and no Home row appears |
 | [ ] 5.5.1f | Read that Home row | "39 of 50 frames" and the reason, not a bare "39 frames" |
 | [ ] 5.5.1g | Open it and tap ⓘ | Settings used lists **Stopped early** and **Frames solved** |
 | [ ] 5.5.1h | Force-stop the app, reopen, look again | Both still say why — the reason is stored, not held in memory |
@@ -606,6 +607,7 @@ node. **Exit:** Home, or back to the Lattice.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.2.1 | Read the frame counter | The original filename (or the sweep label) plus "(i / N)" |
+| [ ] 8.2.1a | Open a batch the run skipped a frame of (one kept no points or would not read) | Every later frame keeps its own filename — in the counter, the share CSV's `image` column, each PDF page title and the ZIP's `results/NNN_<name>/` folders, numbered as planned (frame 3 stays `003_…`) — matching the cloud backup's CSV and `Frame_N` folders |
 | [ ] 8.2.2 | Tap **Next** | Advances one frame; the heatmap and stats update |
 | [ ] 8.2.3 | Reach the last frame | **Next** disables and fades |
 | [ ] 8.2.4 | Reach the first frame | **Prev** goes back to the summary, not nowhere |
@@ -726,7 +728,7 @@ and the lattice's **Save graph** (§7.3.4, straight to the system chooser).
 | [ ] 8.6.1 | Tap the home icon in the top chrome | Home, with the back stack cleared |
 | [ ] 8.6.2 | Press Back on a single-setting result | Wherever you came from |
 | [ ] 8.6.3 | Press Back on a sweep combination | The Lattice |
-| [ ] 8.6.4 | Leave a single-setting result and look at its Home row | The headline reads "<Field> max <value> <unit>" for the last field you viewed |
+| [ ] 8.6.4 | Leave a single-setting result and look at its Home row | The headline is unchanged by viewing — still the first frame's convergence (§3.4), whatever frame or field was on screen |
 | [ ] 8.6.5 | Leave a sweep and look at its Home row | The sweep caption is kept, not overwritten |
 | [ ] 8.6.6 | Look for rename or delete in the viewer | Neither exists — both live on Home |
 

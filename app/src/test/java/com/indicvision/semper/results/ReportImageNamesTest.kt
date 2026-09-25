@@ -3,6 +3,7 @@ package com.indicvision.semper.results
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.report.ReportImageNames
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -35,6 +36,14 @@ class ReportImageNamesTest {
         assertEquals("IMG_0003.JPG", ReportImageNames.deformed(names, 1))
         assertEquals("Frame_3", ReportImageNames.deformed(names, 2))
         assertEquals("Frame_4", ReportImageNames.deformed(names, 3))
+    }
+
+    @Test
+    fun `a frame with no name of its own has none, so each caller picks its fallback`() {
+        val names = listOf("a.png", "", "c.png")
+        assertEquals("c.png", ReportImageNames.frameName(names, 2))
+        assertNull("blank is no name", ReportImageNames.frameName(names, 1))
+        assertNull("past the list", ReportImageNames.frameName(names, 3))
     }
 
     @Test

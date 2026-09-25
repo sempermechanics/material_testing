@@ -320,6 +320,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         ?.delete()
 
     val executionTimeMs = (System.currentTimeMillis() - params.processingStartTime).toInt()
+    var recordSaved = false
 
     // A cancelled first run saves nothing. A cancelled re-run is saved like a
     // partial one: the previous run's frames are already gone, so its row
@@ -331,7 +332,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         lastRefPath = refPngPath
 
         val cloudEnabled = CloudSync.uploadsEnabled(appContext)
-        val saved = sessions.saveSession(
+        recordSaved = sessions.saveSession(
             appContext,
             sessions.buildSessionRecord(
                 appContext = appContext,
@@ -361,7 +362,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             ),
             enqueueCloudIfSaved = cloudEnabled,
         )
-        if (!saved) {
+        if (!recordSaved) {
             // Race: limit filled between the pre-check and persist.
             engineErrorCode = AnalysisViewModel.ERROR_SESSION_LIMIT
         } else if (!cloudEnabled) {
@@ -372,7 +373,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         val after = afterUnsavedRerun(previous, framesOnDisk, engineErrorCode, plannedFrames)
         when {
             after == null -> SessionStore.forget(appContext, localSessionId)
-            after !== previous -> SessionStore.upsert(appContext, after)
+            // The row now lists the frames this run left on disk, so they are
+            // kept even though the run wrote no record of its own.
+            after !== previous -> recordSaved = SessionStore.upsert(appContext, after)
         }
     }
 
@@ -387,6 +390,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             .takeIf { it >= 0 }
             ?.let { defFilePaths.getOrNull(it)?.substringAfterLast('/') },
         firstFrameCorrelatedPoints = firstFrameCorrelatedPoints,
+        saved = recordSaved,
     )
     if (firstFrameValidPoints > 0 &&
         engineErrorCode != AnalysisViewModel.ERROR_CANCELLED &&

@@ -29,6 +29,7 @@ import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
+import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeterminateProgressDialog
@@ -80,7 +81,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val v = host.layoutInflater.inflate(R.layout.sheet_share, null)
         sheet.setContentView(v)
 
-        val frameName = s.defNames.getOrNull(s.frameIndex) ?: "Frame ${s.frameIndex + 1}"
+        val frameName = s.nameAt(s.frameIndex) ?: "Frame ${s.plannedAt(s.frameIndex) + 1}"
         v.findViewById<TextView>(R.id.tvShareCaption).text =
             host.resources.getQuantityString(
                 R.plurals.share_caption_fmt,
@@ -392,7 +393,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         if (s.stepPerFrame != null) {
             return s.defImagePaths.firstOrNull()?.let { File(it).name }
         }
-        return s.defNames.getOrNull(frameIndex)?.takeIf { it.isNotBlank() }
+        return s.nameAt(frameIndex)
     }
 
     /**
@@ -499,7 +500,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val sweepImage = s.defImagePaths.firstOrNull()?.let { File(it).name } ?: "image"
         val frames = s.batchFiles.mapIndexed { index, file ->
             AnalysisCsvWriter.Frame(
-                image = if (sweep) sweepImage else s.defNames.getOrNull(index) ?: "Frame_${index + 1}",
+                // Named as the cloud bundle's CSV names it, by the planned frame.
+                image = if (sweep) sweepImage else ReportImageNames.deformed(s.defNames, s.plannedAt(index)),
                 subset = s.subsetPerFrame?.getOrNull(index) ?: s.subset,
                 step = s.stepPerFrame?.getOrNull(index) ?: s.step,
                 strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: s.strainWindow,
@@ -562,9 +564,9 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     private fun frameTitle(index: Int): String {
         val s = requireSnapshot()
-        val name = s.defNames.getOrNull(index)?.takeIf { it.isNotBlank() }
+        val name = s.nameAt(index)
         return if (name == null) {
-            "DIC Analysis Report — Frame ${index + 1}"
+            "DIC Analysis Report — Frame ${s.plannedAt(index) + 1}"
         } else {
             "DIC Analysis Report — $name"
         }
@@ -656,8 +658,11 @@ class ShareCenter(private val host: ResultViewerActivity) {
         for ((index, file) in s.batchFiles.withIndex()) {
             onProgress(index + 1, s.batchFiles.size)
             val data = DicResult.decodeDatFile(file) ?: continue
-            val prefix = (index + 1).toString().padStart(3, '0')
-            val frameName = s.defNames.getOrNull(index)?.substringBeforeLast('.') ?: "Frame_${index + 1}"
+            // Numbered by the planned frame, like the cloud bundle's Frame_N, so
+            // a frame after a skipped one keeps its own number and name.
+            val frameNumber = s.plannedAt(index) + 1
+            val prefix = frameNumber.toString().padStart(3, '0')
+            val frameName = s.nameAt(index)?.substringBeforeLast('.') ?: "Frame_$frameNumber"
             val folder = "photos_$ts/results/${prefix}_$frameName"
             val baseCache = mutableMapOf<Pair<Int, Int>, Bitmap>()
             try {
@@ -695,6 +700,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
     data class Snapshot(
         val data: FloatArray,
         val batchFiles: List<File>,
+        /** Frame names in planned-frame order; look one up with [nameAt]. */
         val defNames: List<String>,
         /** Filename-safe base for exports, e.g. the specimen/reference name. */
         val baseName: String,
@@ -738,9 +744,21 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val roiY: Int = 0,
         val roiW: Int = 0,
         val roiH: Int = 0,
+        /**
+         * The planned frame behind each of [batchFiles], by position
+         * (`SessionPaths.plannedFrameIndices`). Past a frame the batch skipped
+         * the position and the planned frame part ways.
+         */
+        val plannedFrames: List<Int> = emptyList(),
     ) {
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step
+
+        /** The planned frame behind the frame at position [index]. */
+        fun plannedAt(index: Int): Int = plannedFrames.getOrElse(index) { index }
+
+        /** The name of the frame at position [index], or null when it has none. */
+        fun nameAt(index: Int): String? = ReportImageNames.frameName(defNames, plannedAt(index))
     }
 
     private companion object {

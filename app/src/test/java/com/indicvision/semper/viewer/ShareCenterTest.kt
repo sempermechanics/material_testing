@@ -64,9 +64,15 @@ class ShareCenterTest {
         }
     }
 
-    private fun viewer(): ResultViewerActivity {
-        val intent = ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
-            .toIntent(ApplicationProvider.getApplicationContext())
+    private fun viewer(frameNames: List<String> = emptyList()): ResultViewerActivity {
+        val intent = ViewerArgs.ofFrames(
+            batchDir.absolutePath,
+            GRID * STEP,
+            GRID * STEP,
+            STEP,
+            frameNames = frameNames,
+            startFrame = 0,
+        ).toIntent(ApplicationProvider.getApplicationContext())
         val activity = Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get()
         idleUntil(activity) { activity.buildShareSnapshot() != null }
         return activity
@@ -103,6 +109,39 @@ class ShareCenterTest {
         for (f in 1..FRAMES) {
             assertEquals(GRID * GRID, lines.count { it.startsWith("Frame_$f,") })
         }
+    }
+
+    /** The share CSV's point rows, keyed by their image column. */
+    private fun csvRowsByImage(activity: ResultViewerActivity): Map<String, Int> {
+        val dest = File(temp.root, "picked_${System.nanoTime()}.csv")
+        ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
+        idleUntil(activity) { ShadowToast.getLatestToast() != null }
+        val lines = dest.readLines()
+        val header = lines.indexOfFirst { it.startsWith("image,") }
+        return lines.drop(header + 1).filter { it.isNotBlank() }.groupingBy { it.substringBefore(',') }.eachCount()
+    }
+
+    @Test
+    fun `past a skipped frame every frame keeps its own name`() {
+        // The batch skipped frame 2 (b.png): frame_001 was never written.
+        File(batchDir, "frame_001.dat").delete()
+        val activity = viewer(listOf("a.png", "b.png", "c.png"))
+
+        assertEquals("c.png", activity.frameDisplayName(1))
+        val snapshot = activity.buildShareSnapshot()!!
+        assertEquals(2, snapshot.plannedAt(1))
+        assertEquals("c.png", snapshot.nameAt(1))
+        // Same rows as the cloud bundle's CSV (SessionUploadBundlerTest).
+        assertEquals(mapOf("a.png" to GRID * GRID, "c.png" to GRID * GRID), csvRowsByImage(activity))
+    }
+
+    @Test
+    fun `an unnamed frame past a skipped one is numbered as planned`() {
+        File(batchDir, "frame_001.dat").delete()
+        val activity = viewer()
+
+        assertEquals("Frame 3", activity.frameDisplayName(1))
+        assertEquals(mapOf("Frame_1" to GRID * GRID, "Frame_3" to GRID * GRID), csvRowsByImage(activity))
     }
 
     @Test

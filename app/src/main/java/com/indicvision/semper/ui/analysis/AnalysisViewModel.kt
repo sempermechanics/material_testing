@@ -754,6 +754,14 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
          * point from a frame where nothing correlated.
          */
         val firstFrameCorrelatedPoints: Int = -1,
+        /**
+         * Whether a Home row holds this run's frames: its own record was
+         * written, or a re-run's row now lists the frames it left on disk. A
+         * first run writes a record only when its first frame kept points, so
+         * later frames can solve (a non-zero [totalFrames]) with nothing
+         * saved; only a saved run may be told its frames are kept.
+         */
+        val saved: Boolean = false,
     ) {
         /**
          * The 1-based frame the run stopped at, numbered as the error below it
