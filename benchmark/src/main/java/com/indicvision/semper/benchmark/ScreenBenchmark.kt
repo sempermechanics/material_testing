@@ -11,6 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Direction
+import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import org.junit.Rule
 import org.junit.Test
@@ -38,13 +39,12 @@ import org.junit.runner.RunWith
  * therefore exported for the `benchmark` variant only, via the overlay at
  * `app/src/benchmark/AndroidManifest.xml`.
  *
- * **Known environment limitation:** on an API 37 emulator these still fail with
- * "Unable to confirm activity launch completion []" — `startActivityAndWait`
- * confirms a launch by parsing `dumpsys gfxinfo <pkg> framestats`, which comes back
- * empty there for *every* activity (exported or not, trampoline or not). Anything
- * built on `startActivityAndWait`/`StartupTimingMetric` is therefore unrunnable on
- * that emulator; run these on a physical device or an older API image.
- * [ViewerScrubBenchmark] deliberately avoids that API and does run.
+ * **Known environment limitation:** on an earlier API 37 emulator image these failed
+ * with "Unable to confirm activity launch completion []" — `startActivityAndWait`
+ * confirms a launch by parsing `dumpsys gfxinfo <pkg> framestats`, which came back
+ * empty there for *every* activity. The Pixel_10_2 API 37 image runs them (2026-09-25);
+ * if a launch cannot be confirmed, use a physical device or an older API image.
+ * [ViewerScrubBenchmark] deliberately avoids that API.
  *
  * Run: `./gradlew :benchmark:connectedBenchmarkAndroidTest`
  *
@@ -88,10 +88,7 @@ class ScreenBenchmark {
             expandAllSettingsSections()
         },
     ) {
-        val scroll = device.wait(Until.findObject(By.res(PACKAGE, "settingsScroll")), FIND_TIMEOUT_MS)
-            ?: error("settingsScroll not found — did SettingsActivity fail to render standalone?")
-        // Keep the gesture clear of the system back/nav edges.
-        scroll.setGestureMargin(device.displayWidth / GESTURE_MARGIN_FRACTION)
+        val scroll = settingsList()
         repeat(FLINGS) { scroll.fling(Direction.DOWN) }
         repeat(FLINGS) { scroll.fling(Direction.UP) }
         device.waitForIdle()
@@ -114,34 +111,52 @@ class ScreenBenchmark {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
-    private fun MacrobenchmarkScope.expandAllSettingsSections() {
+    /**
+     * The settings list, looked up again for every gesture: expanding a section
+     * re-lays the list out, and a [UiObject2] held across that went stale mid-fling.
+     */
+    private fun MacrobenchmarkScope.settingsList(): UiObject2 {
         val scroll = device.wait(Until.findObject(By.res(PACKAGE, "settingsScroll")), FIND_TIMEOUT_MS)
             ?: error("settingsScroll not found — did SettingsActivity fail to render standalone?")
+        // Keep the gesture clear of the system back/nav edges.
         scroll.setGestureMargin(device.displayWidth / GESTURE_MARGIN_FRACTION)
+        return scroll
+    }
+
+    /**
+     * Opens every section, searching for each header from the top in half-screen
+     * steps. Flings overshot: once Storage was open, one fling could carry "Your
+     * data" past the top of a tall screen, and later flings only went further down.
+     */
+    private fun MacrobenchmarkScope.expandAllSettingsSections() {
         SECTION_HEADERS.forEach { id ->
-            val selector = By.res(PACKAGE, id)
-            if (!device.hasObject(selector)) {
-                var attempts = 0
-                while (!device.hasObject(selector) && attempts++ < SCROLL_ATTEMPTS) {
-                    scroll.fling(Direction.DOWN)
-                }
-            }
-            val header = device.findObject(selector)
+            val header = findHeader(id)
             if (header == null) {
                 // The seeded benchmark app has no licence, and SettingsActivity
                 // leaves the cloud sections out for an unlicensed account.
-                // Looking for it flung to the bottom; the next header is above.
-                if (id in LICENSED_ONLY_HEADERS) {
-                    repeat(SCROLL_ATTEMPTS) { scroll.fling(Direction.UP) }
-                    return@forEach
-                }
+                if (id in LICENSED_ONLY_HEADERS) return@forEach
                 error("$id not found — settings section header missing")
             }
             header.click()
             device.waitForIdle()
         }
-        repeat(SCROLL_ATTEMPTS) { scroll.fling(Direction.UP) }
-        device.waitForIdle()
+        scrollToTop()
+    }
+
+    private fun MacrobenchmarkScope.findHeader(id: String): UiObject2? {
+        val selector = By.res(PACKAGE, id)
+        scrollToTop()
+        repeat(SCROLL_ATTEMPTS) {
+            device.findObject(selector)?.let { return it }
+            if (!settingsList().scroll(Direction.DOWN, SCROLL_STEP)) return device.findObject(selector)
+        }
+        return device.findObject(selector)
+    }
+
+    private fun MacrobenchmarkScope.scrollToTop() {
+        repeat(SCROLL_ATTEMPTS) {
+            if (!settingsList().scroll(Direction.UP, 1f)) return
+        }
     }
 
     companion object {
@@ -152,7 +167,10 @@ class ScreenBenchmark {
         private const val FLINGS = 3
         private const val FIND_TIMEOUT_MS = 5_000L
         private const val GESTURE_MARGIN_FRACTION = 5
-        private const val SCROLL_ATTEMPTS = 8
+        private const val SCROLL_ATTEMPTS = 20
+
+        /** Half a screen: a header is a few dp tall, so a step never jumps one. */
+        private const val SCROLL_STEP = 0.5f
         private val SECTION_HEADERS = listOf(
             "headerAccount",
             "headerCloud",

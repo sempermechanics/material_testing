@@ -83,13 +83,14 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     }
 
     /**
-     * Kicks off the one decode pass that fixes every field's colour scale.
+     * Kicks off the one pass that fixes every field's colour scale.
      *
-     * This walks **every frame in the batch**, so on a 150-frame session it is a full
-     * N-frame decode + range scan. It used to run on every viewer open, even when the
-     * viewer opened straight onto a frame and the summary was never looked at — the
-     * dominant driver of peak heap on large batches. It is now started on demand from
-     * [show] (and is idempotent, so repeated shows do not re-scan).
+     * [ResultViewerActivity] calls this on open for any single-setting batch of two or
+     * more frames, and [show] calls it again; it is idempotent, so neither re-scans.
+     * A batch with a `field_ranges.bin` sidecar only reads it. One without walks
+     * **every frame in the batch** — on 150 frames a full N-frame decode and range
+     * scan — and then saves the sidecar ([SummaryAnimation.globalRanges]), so that
+     * cost is paid once per session rather than on every open.
      */
     fun start() {
         if (host.summaryBatchFiles().isEmpty()) return
