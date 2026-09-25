@@ -124,16 +124,19 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-24)
+## Current state (2026-09-25)
 
 - **Synced with `semperdic-app`.** This repo forked the parent at `bfe00e5`
   (2026-09-21) and merges its `main` with a plain `git merge`: `643462c`
-  (parent #188; here #22), then `170ec6e` (parent #195), which brought the
-  view-class tests (TD-57, Kover floor 49), the licensing repo split (TD-64),
-  the swipe and ROI-rounding fixes (TD-72, TD-73) and a linear `quickSelect`
-  on repeated values (TD-75: `valueRanges` and report builds had gone
-  quadratic on fields with many equal strains). TD-76, made here and sent
-  back, gives it a ninther pivot for sorted and staircase fields. The first sync brought the #155–#168
+  (parent #188; here #22), `170ec6e` (parent #195), then `9288831` (parent
+  #205). The second brought the view-class tests (TD-57, Kover floor 49), the
+  licensing repo split (TD-64), the swipe and ROI-rounding fixes (TD-72,
+  TD-73) and a linear `quickSelect` on repeated values (TD-75). The third
+  brought one cloud reconcile at a time (#191), the ROI studio's unreachable
+  shape modes removed (TD-74), and the backend's inline-create read budget
+  (#202). Fixes made here go back: the ninther `quickSelect` (TD-76), A4 PDF
+  pages (TD-77) and the device-pass fixes (TD-79, TD-80, TD-82–TD-85) are in
+  the parent too; TD-78 and TD-81 are lab-only. The first sync brought the #155–#168
   burn-down (ADR-001…006), CI hardening and composites, App Check on real
   phones, the rate-limit and nonce fixes, the one-pass upload CSV (#182) and the
   coverage floor. The lab inputs ride upstream's seams: `RunSpec.mechanical`
@@ -156,8 +159,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `e2e/BeamTapEditorGestureTest` run the lab end to end in Tier 3 (Results,
   Elastic toggle, lab-report PDF, viewer and tap-editor gestures);
   `WizardDraftRestoreTest` covers a load log across a process death;
-  `LabResultsBenchmark` times the Results page. The two-frame flick they caught
-  is fixed by the parent's TD-72 (#194), which this sync brings.
+  `LabResultsBenchmark` times the Results page.
 - **Owed.** Device runs on a physical phone, and video import beyond emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
   §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
   production state.
