@@ -100,7 +100,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-24)
+## Current state (2026-09-25)
 
 - **Deployed.** Cloud Run `semper-api` (`semper-api-35992296245-1`, from `4d5a0ab`)
   behind API Gateway `semper-gw` (config `v202609241122-44`, deployed by CI, ADR-006);
@@ -110,14 +110,16 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
   (`SubsetRecommender` reads speckle inside the ROI from textured patches only,
-  `VsgPlotView` y gutter, `TouchImageView` zoom across a resize, `AviReader` µs slack).
-- **This branch (#197).** `ScreenBenchmark.settingsScroll` skips the two licence-only
-  settings headers (it failed on every run); `scripts/ci_test_report.py` names failing
-  device tests and prints benchmark numbers in the CI log.
+  `VsgPlotView` y gutter, `TouchImageView` zoom across a resize, `AviReader` µs slack);
+  #197, `settingsScroll` skips the licence-only settings headers and
+  `scripts/ci_test_report.py` puts failing device tests and benchmark numbers in the CI log.
 - **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
   awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
   open on the Pixel 6. Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs
   6 + N Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+- **This branch.** `HotPathMicroBenchmark` could not run in CI (TD-81): the debug manifest
+  now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
+  and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
