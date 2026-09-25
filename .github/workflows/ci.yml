@@ -635,6 +635,11 @@ jobs:
       # One emulator boot, two suites; each line is its own command, and a failing
       # one fails the step. The micro run is a debug build on an emulator, hence
       # DEBUGGABLE in its suppress list: its numbers are relative, not absolutes.
+      # It goes through `am instrument`, not connectedDebugAndroidTest: an
+      # instrumentation argument passed through Gradle arrives cut at its first
+      # comma (only EMULATOR was suppressed, TD-86), and API 34 raises
+      # ACTIVITY-MISSING and NOT-AOT-COMPILED too. `am instrument` exits 0 on test
+      # failures, so the grep on its summary line is the pass/fail.
       - name: Run startup Macrobenchmarks and hot-path Microbenchmarks
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
@@ -646,7 +651,13 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
             ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
-            ./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache -Pandroid.testInstrumentationRunnerArguments.class=com.indicvision.semper.benchmark.HotPathMicroBenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED --console=plain
+            ./gradlew :app:installDebug :app:installDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
+            "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED com.indicvision.semper.test/androidx.test.runner.AndroidJUnitRunner | tee micro-instrument.txt
+            mkdir -p app/build/outputs/connected_android_test_additional_output
+            "$ANDROID_HOME/platform-tools/adb" pull /sdcard/Android/media/com.indicvision.semper.test app/build/outputs/connected_android_test_additional_output || true
+            "$ANDROID_HOME/platform-tools/adb" pull /sdcard/Android/media/com.indicvision.semper app/build/outputs/connected_android_test_additional_output || true
+            "$ANDROID_HOME/platform-tools/adb" logcat -d -s Benchmark:I || true
+            grep -q "^OK (" micro-instrument.txt
 
       # Numbers are smoke on an emulator, not a regression gate (see
       # docs/app/TESTING.md), but leaving them uncaptured means every run answers
