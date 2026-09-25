@@ -112,7 +112,7 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     ): Pair<String, String> = unscripted("uploadResumable")
 
     private inline fun <T> record(name: String, block: () -> T): T {
-        calls += name
+        synchronized(calls) { calls += name } // concurrency tests call from several threads
         return block()
     }
 
