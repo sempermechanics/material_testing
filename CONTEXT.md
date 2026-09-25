@@ -102,11 +102,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-25)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-36122511953-1`, from `cb0e893`)
-  behind API Gateway `semper-gw` (config `v202609250953-51`, deployed by CI, ADR-006);
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36132773366-1`, from `eb18ef8`)
+  behind API Gateway `semper-gw` (config `v202609251206-56`, deployed by CI, ADR-006);
   staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
-  the wrong-information audit's backend and console fixes went out 2026-09-25 ([CHANGELOG](docs/ops/CHANGELOG.md)).
+  the wrong-information audit's fixes and #232 (no cap on a demo key) went out 2026-09-25 ([CHANGELOG](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
@@ -133,8 +133,6 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   past a skipped frame, Home headline, partial-run dialog). No audit TECH_DEBT rows remain.
 - **Bulk delete.** Backend half deployed (#226, [CHANGELOG](docs/ops/CHANGELOG.md)); app half
   merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere, cloud link cleared).
-- **Demo-key cap (#232, in review):** a `maxAnalyses` on a demo key did nothing (SEMP-8AKN, "of 25");
-  the admin PATCH now answers `422 cap_on_demo_key` and the desk disables Cap on demo rows.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
