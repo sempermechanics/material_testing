@@ -136,19 +136,18 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
   161 → 21 MB). #214 has `globalRanges` reuse one frame buffer and set of columns; #217
   (TD-88) saves the ranges sidecar after a full decode.
-- **Wrong-information audit (open PRs).** #211 floors a licensed quota at demo's and lets the
-  operator clear a licence's cap; #212 fixes each PDF page's cover image and name, the mixed
-  bulk-delete prompt, the sweep export header, per-node reasons on an all-failed sweep, and a
-  restored sweep's skip count; #215 fixes the backend seat and lease counters. Console labels
-  come next; the rest are TD-89..TD-121 (on #211).
+- **Wrong-information audit.** Merged, awaiting release/deploy: #211 (licensed quota floored at
+  demo's; operator can clear a licence's cap), #212 (PDF page cover image and name, mixed
+  bulk-delete prompt, sweep export header, per-node sweep reasons, restored skip count), #215
+  (seat and lease counters), #216 (console labels and dates), #218 (licence countdown, backup
+  status, local quota count, restored stop reasons), #219 (PDF and share extremes). Open: #220
+  (run counts, stale Home rows), #221 (backend Phase 2). The rest are the audit's TD rows.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
   the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
   looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
-  #211 (open) floors the licensed cap at demo's, lets staff clear a
-  licence's cap, and has the app enforce a known licensed ceiling. The rest of that
-  wrong-info audit is phased; its deferred findings are TD-89…TD-121.
+  #211 (merged) floors the licensed cap at demo's and has the app enforce a known licensed ceiling.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
   run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
