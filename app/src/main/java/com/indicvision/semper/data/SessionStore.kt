@@ -122,6 +122,12 @@ data class SessionRecord(
     /** True when the frames are parameter combinations rather than images. */
     val isSweep: Boolean get() = sweepSteps.isNotEmpty()
 
+    /**
+     * What each frame is called in the viewer and its reports: a sweep's
+     * combination labels, else the deformed images' own names.
+     */
+    val frameNames: List<String> get() = if (isSweep) sweepLabels else defNames
+
     /** Planned combinations that never produced a frame. */
     val sweepSkipCount: Int
         get() {
@@ -338,21 +344,14 @@ object SessionStore {
      * trees) but keep the index row and `reference.png` so the Home thumbnail
      * survives. Leaves [SessionRecord.syncState] alone — typically [SYNCED] so
      * the row renders as "Only in cloud" via [SessionRecord.hasLocalData].
+     * What counts as heavy is [LocalArtifacts], shared with the Storage preview.
      */
     @WorkerThread
     fun dropLocalArtifacts(context: Context, id: String) = synchronized(lock) {
         val record = get(context, id) ?: return@synchronized
         val dir = File(record.sessionDir)
         if (!dir.isDirectory) return@synchronized
-        dir.listFiles()?.forEach { child ->
-            when {
-                child.isFile && child.extension.equals("dat", ignoreCase = true) -> child.delete()
-                child.isDirectory && child.name == SessionPaths.RAW_DEFORMED_SUBDIR ->
-                    child.deleteRecursively()
-                child.isDirectory && child.name == SessionPaths.PROCESSED_SUBDIR -> child.deleteRecursively()
-                child.isDirectory && child.name == SessionPaths.UPLOAD_STAGING_SUBDIR -> child.deleteRecursively()
-            }
-        }
+        LocalArtifacts.droppedIn(dir).forEach { child -> child.deleteRecursively() }
     }
 
     /**

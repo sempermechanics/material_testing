@@ -1093,20 +1093,7 @@ class ResultViewerActivity : AppCompatActivity() {
         tvFinding.text = getString(R.string.viewer_edge_title_fmt, currentTypeString, frameBit)
 
         if (showingSummary) {
-            val seq = summary.boundsFor(index)
-            val placeholder = getString(R.string.stat_empty)
-            val multiplier = DicResult.strainMultiplier(index)
-            val maxText = if (seq != null) {
-                ReportBuilder.formatMetric(seq.second * multiplier)
-            } else {
-                placeholder
-            }
-            val minText = if (seq != null) {
-                ReportBuilder.formatMetric(seq.first * multiplier)
-            } else {
-                placeholder
-            }
-            detailStats = getString(R.string.viewer_stats_sequence_fmt, maxText, minText, unit)
+            detailStats = SummaryCaption.text(resources, summary.boundsFor(index), index, unit)
             tvStatsCaption.text = detailStats
             return
         }

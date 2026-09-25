@@ -2,11 +2,19 @@ package com.indicvision.semper.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.SessionEverythingExporter
+import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.net.TokenStore
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -22,6 +30,53 @@ import org.robolectric.annotation.Config
 class SessionEverythingExporterTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
+
+    @Before
+    fun setUp() {
+        TokenStore.clear(context)
+        SessionStore.deleteAll(context)
+    }
+
+    @After
+    fun tearDown() {
+        SessionStore.deleteAll(context)
+        TokenStore.clear(context)
+    }
+
+    /** A local session with one readable frame; image size 0 skips report rendering. */
+    private fun seedSession(id: String) {
+        val dir = SessionStore.dirFor(context, id)
+        val bytes = java.nio.ByteBuffer.allocate(DicResult.BYTES_PER_POINT).order(java.nio.ByteOrder.nativeOrder())
+        repeat(DicResult.STRIDE) { bytes.putFloat(0.01f) }
+        SessionPaths.frameDat(dir, 0).writeBytes(bytes.array())
+        SessionStore.upsert(
+            context,
+            SessionRecord(
+                id = id, name = id, createdAt = 1L, updatedAt = 1L, frameCount = 1,
+                subset = 21, step = 5, strainWindow = 15,
+                imgW = 0, imgH = 0, roiX = 0, roiY = 0, roiW = 0, roiH = 0,
+                refPath = "", refName = "ref.png", sessionDir = dir.absolutePath,
+                defNames = listOf("a.png"),
+            ),
+        )
+    }
+
+    @Test
+    fun `progress counts sessions finished, reaching the total only once the last is in`() = runBlocking {
+        seedSession("first")
+        seedSession("second")
+        val ticks = mutableListOf<Pair<Int, Int>>()
+
+        val result = SessionEverythingExporter.exportMasterZip(context) { done, total ->
+            ticks += done to total
+        }
+
+        assertNotNull(result)
+        // It used to tick (index + 1) before building each session, so the
+        // banner read 100% while the last session was still being packed.
+        assertEquals(listOf(0 to 2, 1 to 2, 2 to 2), ticks)
+        assertEquals(2, result!!.sessionCount)
+    }
 
     @Test
     fun `nothing to export yields no file rather than an empty zip`() = runBlocking {
