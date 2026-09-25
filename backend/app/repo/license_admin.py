@@ -131,6 +131,9 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     lic = snap.to_dict() or {}
 
     update = {k: v for k, v in patch.items() if v is not None}
+    clear_cap = bool(update.pop("clearMaxAnalyses", False))
+    if clear_cap:
+        update["maxAnalyses"] = _base.firestore.DELETE_FIELD
     if not update:
         return _license_public(license_id, lic)
     err = expiry_change_error(lic, update.get("expiresAt"))
@@ -143,6 +146,10 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     ref.update(update)
 
     merged = {**lic, **update}
+    if clear_cap:
+        # The sentinel is for Firestore; the mirror and the response read the
+        # licence as it now stands, without a cap.
+        merged.pop("maxAnalyses", None)
     mirror = _license_mirror_patch(merged)
     for uid in _license_holder_uids(ref, merged):
         _refresh_license_mirror(uid, license_id, mirror)

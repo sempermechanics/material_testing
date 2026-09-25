@@ -1,10 +1,10 @@
 """Answers that named the wrong cause, or described state that was not true.
 
 Each section pins one fix: the lease sweep counted a reclaimed seat twice
-(TD-100), a lost claim race was reported as a full licence (TD-101), a quota
-refusal told a lapsed licence holder to delete analyses (TD-103), Extend could
-shorten or end a licence and still say "extended" (TD-104), and a claim wrote
-the licence terms it read before its transaction (TD-105).
+(TD-101), a lost claim race was reported as a full licence (TD-102), a quota
+refusal told a lapsed licence holder to delete analyses (TD-104), Extend could
+shorten or end a licence and still say "extended" (TD-105), and a claim wrote
+the licence terms it read before its transaction (TD-106).
 
 The fake store has no transaction isolation, so a race is staged by hand: the
 loser's stale read is taken first, the winner commits, then the loser's
@@ -74,7 +74,7 @@ def _checkout(store, uid):
     return repo.checkout_lease({**store._data["users"][uid], "uid": uid}, f"dev-{uid}")
 
 
-# ============================================================ TD-100 sweep
+# ============================================================ TD-101 sweep
 # The sweep's query runs outside a transaction, so two checkouts arriving
 # together both find the same expired seat. Only one of them may count it.
 
@@ -156,7 +156,7 @@ def test_a_reclaim_that_loses_every_attempt_counts_nothing(store, monkeypatch):
     assert store._data["licenses"][license_id]["leasesActive"] == 1
 
 
-# ================================================== TD-101 lost claim race
+# ================================================== TD-102 lost claim race
 # Losing the race is not a full licence. IT was told "no seats left" when a
 # retry would have succeeded.
 
@@ -209,7 +209,7 @@ async def test_a_lost_race_is_503_over_http_on_both_routes(client, monkeypatch):
     assert activated.json()["detail"] == "claim_contended"
 
 
-# ============================================ TD-103 quota names the cause
+# ============================================ TD-104 quota names the cause
 
 def _licensed(**extra):
     return {"mode": "licensed", "licenseKind": "institution", **extra}
@@ -265,7 +265,7 @@ async def test_the_quota_refusal_says_why_the_cap_dropped(client, monkeypatch, e
     assert says in detail
 
 
-# ================================================ TD-104 Extend only extends
+# ================================================ TD-105 Extend only extends
 
 def _timed(store, days=30):
     minted = repo.create_individual_license(
@@ -339,7 +339,7 @@ async def test_a_refusal_that_only_update_license_sees_is_still_422(client, monk
     assert resp.json()["detail"] == "expiry_in_past"
 
 
-# ============================================ TD-105 claim writes live terms
+# ============================================ TD-106 claim writes live terms
 
 def test_a_seat_claim_writes_the_terms_read_in_its_transaction(store):
     store._data["users"] = {

@@ -552,7 +552,9 @@ paths:
         individual license from the device it is on so the customer can move to
         a new one, and may be sent alone. Use
         PATCH /v1/admin/licenses/{licenseId}/seats/{uid}/device for a member of
-        an institution license.
+        an institution license. clearMaxAnalyses=true drops the per-user
+        analysis cap so holders get the licensed default; maxAnalyses below
+        DEMO_MAX_ANALYSES is refused.
       parameters:
         - name: licenseId
           in: path
