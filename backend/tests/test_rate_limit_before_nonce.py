@@ -75,7 +75,7 @@ async def test_a_rate_limited_erase_can_be_resent_unchanged(signed_user, client,
     path = "/v1/sessions/s-gone"
     headers = _headers(signed_user, "DELETE", path, f"t1.{int(time.time())}.{'A' * 22}")
 
-    monkeypatch.setattr(rate_limit.erase_bucket, "allow", lambda key: False)
+    monkeypatch.setattr(rate_limit.session_erase_bucket, "allow", lambda key: False)
     r = await client.delete(path, headers=headers)
     assert r.status_code == 429
     assert r.json()["detail"] == "rate_limited"
@@ -83,7 +83,7 @@ async def test_a_rate_limited_erase_can_be_resent_unchanged(signed_user, client,
     assert claimed == [], "the nonce was spent on a request the limit refused"
 
     # The client's retry: byte-for-byte the same request, now under the limit.
-    monkeypatch.setattr(rate_limit.erase_bucket, "allow", lambda key: True)
+    monkeypatch.setattr(rate_limit.session_erase_bucket, "allow", lambda key: True)
     r = await client.delete(path, headers=headers)
     assert r.status_code == 404
     assert r.json()["detail"] == "session_not_found"
@@ -172,3 +172,32 @@ def test_retry_after_is_the_wait_for_one_token():
         assert bucket.allow("k")
     assert not bucket.allow("k")
     assert bucket.retry_after("k") == 5
+
+
+def test_a_ten_row_delete_fits_the_session_erase_bucket():
+    """Home deletes a multi-select one analysis at a time: ten go straight through."""
+    bucket = rate_limit.TokenBucket(rate_per_sec=1.0, burst=10.0)
+    assert all(bucket.allow("k") for _ in range(10))
+    assert not bucket.allow("k")
+    assert bucket.retry_after("k") == 1
+    live = rate_limit.session_erase_bucket
+    assert (live._rate, live._burst) == (1.0, 10.0)
+
+
+def test_session_and_account_erasure_use_separate_buckets():
+    """Deleting analyses must not spend the tight account-erasure tokens, or the reverse."""
+    from app.routers import account, sessions
+
+    def buckets_for(method, path):
+        for route in [*sessions.router.routes, *account.router.routes]:
+            if getattr(route, "path", None) == path and method in getattr(route, "methods", ()):
+                return {
+                    id(cell.cell_contents)
+                    for dep in route.dependencies
+                    for cell in (dep.dependency.__closure__ or ())
+                    if isinstance(cell.cell_contents, rate_limit.TokenBucket)
+                }
+        raise AssertionError(f"{method} {path} not found")
+
+    assert buckets_for("DELETE", "/v1/sessions/{sid}") == {id(rate_limit.session_erase_bucket)}
+    assert buckets_for("DELETE", "/v1/me") == {id(rate_limit.erase_bucket)}

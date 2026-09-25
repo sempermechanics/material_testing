@@ -51,6 +51,7 @@ import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
+import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
@@ -172,6 +173,9 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private var batchFiles: List<File> = emptyList()
 
+    /** The planned frame behind each of [batchFiles], by position; set with it. */
+    private var plannedFrames: List<Int> = emptyList()
+
     /**
      * Largest `.dat` size, computed once when [batchFiles] is set. The prefetch
      * heap guard used to `stat()` every file on every frame load (3F syscalls per
@@ -206,7 +210,6 @@ class ResultViewerActivity : AppCompatActivity() {
             viewerVm.currentDataIndex = value
         }
 
-    internal var currentDefPath: String? = null
     private var currentHeatmapMin = 0f
     private var currentHeatmapMax = 0f
 
@@ -346,8 +349,6 @@ class ResultViewerActivity : AppCompatActivity() {
             decodeReferenceForDisplay(refPath)
         }
 
-        currentDefPath = args.defPath
-
         val batchDirPath = args.batchDirPath
         originalDefNames = args.frameNames
         refImagePath = refPath
@@ -362,6 +363,7 @@ class ResultViewerActivity : AppCompatActivity() {
             val dir = File(batchDirPath)
             if (dir.exists() && dir.isDirectory) {
                 batchFiles = dir.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name } ?: emptyList()
+                plannedFrames = SessionPaths.plannedFrameIndices(batchFiles)
                 maxDatBytes = batchFiles.maxOfOrNull { it.length() } ?: 0L
             }
         }
@@ -605,27 +607,6 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        // Keep the Home row's headline in sync with what was on screen.
-        // Sweeps already carry a stable caption (image + solved count) — don't
-        // overwrite it with the last field's peak reading.
-        if (isSweep) return
-        args.sessionLocalId?.let { localId ->
-            val data = rawData ?: return@let
-            val stats = DicResult.fieldStats(data, currentDataIndex) ?: return@let
-            val unit = if (DicResult.isStrainFieldIndex(currentDataIndex)) "m\u03b5" else "px"
-            val headline = "$currentTypeString max ${ReportBuilder.formatMetric(stats[0])} $unit"
-            lifecycleScope.launch(Dispatchers.IO) {
-                com.indicvision.semper.data.SessionStore.updateHeadline(
-                    this@ResultViewerActivity,
-                    localId,
-                    headline,
-                )
-            }
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         if (::chromeTop.isInitialized) {
@@ -838,7 +819,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // for the new frame. Scrubbing large frames no longer pays for an unused index.
         inspect.clearSpatialIndex()
         updateHeatmapFitBounds(data)
-        val displayName = originalDefNames.getOrNull(index) ?: "Frame ${index + 1}"
+        val displayName = frameDisplayName(index)
         if (!showingSummary) {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
         }
@@ -1029,6 +1010,38 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun buildReportData(frameIndex: Int, data: FloatArray): ReportData? =
         ViewerReportFactory.buildReportData(this, frameIndex, data)
 
+    /**
+     * The planned frame behind the [position]-th `.dat` on disk. A frame the
+     * batch skipped leaves a gap in the numbering, so the two part ways there.
+     */
+    internal fun plannedFrameIndex(position: Int): Int = plannedFrames.getOrElse(position) { position }
+
+    /**
+     * What the frame at [position] is called on screen: its image name (or a
+     * sweep's combination label), looked up by the planned frame, not the
+     * position, so a frame after a skipped one keeps its own name.
+     */
+    internal fun frameDisplayName(position: Int): String {
+        val planned = plannedFrameIndex(position)
+        return ReportImageNames.frameName(originalDefNames, planned) ?: "Frame ${planned + 1}"
+    }
+
+    /**
+     * The deformed image solved at [position], or null when it is not on disk.
+     * Every node of a sweep solves the one deformed image. A batch looks its
+     * frame up by the name the run persisted it under, since `raw_deformed/`
+     * keeps the user's own file names and sorts them alphabetically, not in
+     * frame order.
+     */
+    internal fun deformedImagePathAt(position: Int): String? {
+        if (isSweep) return defImagePaths.firstOrNull()
+        val planned = plannedFrameIndex(position)
+        val rawDir = args.batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
+        val persisted = originalDefNames.getOrNull(planned)?.let { name -> rawDir?.let { File(it, name) } }
+        return persisted?.takeIf { it.isFile }?.absolutePath
+            ?: args.defFilePaths.getOrNull(planned)?.takeIf { File(it).isFile }
+    }
+
     /** Everything ShareCenter needs, captured from the viewer's state. */
     /**
      * A filename-safe base for exports, drawn from the specimen/reference name so
@@ -1073,6 +1086,7 @@ class ResultViewerActivity : AppCompatActivity() {
             data = data,
             batchFiles = batchFiles,
             defNames = originalDefNames,
+            plannedFrames = plannedFrames,
             baseName = shareBaseName(),
             frameIndex = currentFrameIndex,
             imgW = imgW,
@@ -1138,20 +1152,7 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         if (showingSummary) {
-            val seq = summary.boundsFor(index)
-            val placeholder = getString(R.string.stat_empty)
-            val multiplier = DicResult.strainMultiplier(index)
-            val maxText = if (seq != null) {
-                ReportBuilder.formatMetric(seq.second * multiplier)
-            } else {
-                placeholder
-            }
-            val minText = if (seq != null) {
-                ReportBuilder.formatMetric(seq.first * multiplier)
-            } else {
-                placeholder
-            }
-            detailStats = getString(R.string.viewer_stats_sequence_fmt, maxText, minText, unit)
+            detailStats = SummaryCaption.text(resources, summary.boundsFor(index), index, unit)
             tvStatsCaption.text = detailStats
             return
         }

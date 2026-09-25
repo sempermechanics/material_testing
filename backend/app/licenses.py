@@ -117,6 +117,23 @@ def normalize_seating(raw) -> str:
     return value if value in SEATINGS else SEATING_ASSIGNED
 
 
+def seat_cap_below_roster(lic: dict, max_seats) -> bool:
+    """Whether `max_seats` would cap this licence below the roster it has.
+
+    On an assigned institution licence `maxSeats` caps the roster and
+    `seatsUsed` is who is on it. A cap below that removes nobody; it only
+    made the IT page read "12 of 10 seats taken". Members are removed first.
+    A floating licence caps concurrent leases, not the roster, so a roster
+    larger than the pool is its normal state; an individual licence has no
+    seats.
+    """
+    if max_seats is None or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+        return False
+    if normalize_seating(lic.get("seating")) == SEATING_FLOATING:
+        return False
+    return int(max_seats) < int(lic.get("seatsUsed") or 0)
+
+
 def as_utc(value):
     """A tz-aware UTC datetime, or None if `value` is not a datetime.
 

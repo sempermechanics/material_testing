@@ -185,6 +185,14 @@ object CloudSync {
 
         /** Local files gone, but the cloud copy could not be reached — it still exists. */
         LOCAL_ONLY_CLOUD_UNREACHABLE,
+
+        /**
+         * The server asked us to slow down (429 after the interceptor's own
+         * retries). Nothing was deleted; the same request can be sent again
+         * once a token is back, which [SessionDeletes] does rather than
+         * reporting the analysis as still in the cloud.
+         */
+        RATE_LIMITED,
     }
 
     /**
@@ -222,7 +230,7 @@ object CloudSync {
             EraseResult.ERASED_EVERYWHERE
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "Cloud erase failed for %s — leaving local copy intact", localSessionId)
-            EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+            failureOf(e)
         }
     }
 
@@ -307,8 +315,9 @@ object CloudSync {
      *
      * When a local record does point at this backup, it drops back to
      * LOCAL_ONLY so the Home badge stops claiming a backup that no longer
-     * exists. Returns false if the cloud could not be reached, in which case
-     * nothing was deleted.
+     * exists, and forgets the link so that a later delete of the phone copy
+     * does not ask the backend to erase this backup a second time. Anything
+     * but [EraseResult.ERASED_EVERYWHERE] means nothing was deleted.
      */
     suspend fun eraseCloudBackup(
         context: Context,
@@ -316,49 +325,33 @@ object CloudSync {
         localSessionId: String,
         api: CloudApi = IndicApi.get(context),
         tokens: TokenSource = TokenProvider,
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): EraseResult = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        if (!api.enabled) return@withContext false
-        val token = tokens.usableIdToken() ?: return@withContext false
+        if (!api.enabled) return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+        val token = tokens.usableIdToken() ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         try {
             api.deleteSession(token, cloudSessionId)
-            if (SessionStore.get(appContext, localSessionId) != null) {
-                SessionStore.setSyncState(appContext, localSessionId, SessionRecord.SyncState.LOCAL_ONLY)
-            }
+            forgetCloudCopy(appContext, localSessionId)
             Timber.i("Deleted cloud backup %s", cloudSessionId)
-            true
+            EraseResult.ERASED_EVERYWHERE
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "Cloud backup delete failed for %s", cloudSessionId)
-            false
+            failureOf(e)
         }
     }
 
-    /**
-     * Erase the cloud backup for a local [SessionRecord], resolving the backend
-     * id via [resolveCloudIdFor]. Local files stay; sync state becomes LOCAL_ONLY.
-     */
-    suspend fun eraseCloudBackup(
-        context: Context,
-        record: SessionRecord,
-        api: CloudApi = IndicApi.get(context),
-        tokens: TokenSource = TokenProvider,
-    ): EraseResult =
-        withContext(Dispatchers.IO) {
-            val appContext = context.applicationContext
-            if (!api.enabled) return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
-            val token = tokens.usableIdToken()
-                ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
-            val cloudId = resolveCloudId(api, token, record)
-                ?: run {
-                    // Nothing in the cloud to erase — demote the badge anyway.
-                    SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.LOCAL_ONLY)
-                    return@withContext EraseResult.ERASED_EVERYWHERE
-                }
-            if (eraseCloudBackup(appContext, cloudId, record.id, api, tokens)) {
-                EraseResult.ERASED_EVERYWHERE
-            } else {
-                EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
-            }
+    /** The local row no longer has a cloud copy: LOCAL_ONLY, and no link to follow. */
+    internal fun forgetCloudCopy(appContext: Context, localSessionId: String) {
+        if (SessionStore.get(appContext, localSessionId) == null) return
+        SessionStore.setSyncState(appContext, localSessionId, SessionRecord.SyncState.LOCAL_ONLY)
+        SessionStore.setCloudSessionId(appContext, localSessionId, "")
+    }
+
+    private fun failureOf(e: Exception): EraseResult =
+        if (e is IndicApi.ApiException && e.code == HTTP_TOO_MANY_REQUESTS) {
+            EraseResult.RATE_LIMITED
+        } else {
+            EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         }
 
     /** Backend session id for a local analysis, or null if none is known. */
@@ -448,6 +441,7 @@ object CloudSync {
     }
 
     private const val BACKOFF_SECONDS = 30L
+    private const val HTTP_TOO_MANY_REQUESTS = 429
     private const val K_LAST_RECONCILE_AT = "last_reconcile_at"
     private const val RECONCILE_MIN_INTERVAL_MS = 5 * 60 * 1000L
     private const val MS_PER_SECOND = 1000L

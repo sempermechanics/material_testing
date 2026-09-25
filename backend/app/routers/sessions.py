@@ -112,7 +112,7 @@ def list_sessions(
     }
 
 
-@router.delete("/v1/sessions/{sid}", dependencies=[rate_limited(rate_limit.erase_bucket)])
+@router.delete("/v1/sessions/{sid}", dependencies=[rate_limited(rate_limit.session_erase_bucket)])
 def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     """Erase one analysis from the cloud (GDPR right to erasure).
 
@@ -359,6 +359,22 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     )
 
 
+#: The sentence after the counts in a quota refusal, by why the cap is what it
+#: is. A licence that has ended, or a shared seat not held, drops the cap to
+#: the demo's while keeping every analysis stored — "120/25" is then not
+#: something deleting one would fix, and saying so sent people to the wrong
+#: remedy. The code before the colon is what the app branches on, unchanged.
+_QUOTA_REMEDY = {
+    "": "Delete an older analysis to sync a new one.",
+    repo.INACTIVE_LICENCE_ENDED:
+        "Your licence has ended, so the demo limit applies. Renew it to sync "
+        "new analyses; nothing stored has been removed.",
+    repo.INACTIVE_NO_SEAT:
+        "No shared seat is free right now, so the demo limit applies. New "
+        "analyses sync once you hold a seat; nothing stored has been removed.",
+}
+
+
 @router.post("/v1/sessions", dependencies=[rate_limited(rate_limit.session_bucket)])
 def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device)):
     """Record an analysis: create the session and hand back its upload slots.
@@ -395,7 +411,7 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
         raise HTTPException(
             409,
             f"{errors.SESSION_QUOTA_EXCEEDED}: {used}/{cfg['maxSessions']} analyses stored. "
-            "Delete an older analysis to sync a new one.",
+            + _QUOTA_REMEDY.get(repo.inactive_licence_reason(user), _QUOTA_REMEDY[""]),
         )
 
     sid = uuid.uuid4().hex

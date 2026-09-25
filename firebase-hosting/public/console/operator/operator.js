@@ -2,7 +2,9 @@ import {
   requireSignIn, api, setStatus, esc, when, confirmByTyping,
   stepUpForRevoke, ERR_CANCELLED,
 } from "../auth.js";
-import { seatCells, inviteCells } from "../util.js";
+import {
+  seatCells, inviteCells, day, licenceState, licenceStatePill,
+} from "../util.js";
 
 const $ = (id) => document.getElementById(id);
 let licences = [];
@@ -184,10 +186,7 @@ function liveLicencesFor(email) {
 }
 
 /** Past its expiry and grace — replacing one of these is what a new mint is for. */
-function lapsed(l) {
-  const end = Date.parse(l.graceEndsAt || l.expiresAt || "");
-  return Number.isFinite(end) && end < Date.now();
-}
+const lapsed = (l) => licenceState(l) === "expired";
 
 const labelOfLicence = (l) => l.keyPrefix || l.id.slice(0, 10);
 
@@ -210,6 +209,8 @@ $("copyKey").addEventListener("click", () => {
 $("reload").addEventListener("click", () => loadLicences());
 $("filter").addEventListener("input", renderLicences);
 $("showRevoked").addEventListener("change", renderLicences);
+$("showDemo").addEventListener("change", renderLicences);
+$("loadMore").addEventListener("click", () => loadMoreLicences());
 
 /**
  * Fetch and redraw the licence table.
@@ -227,7 +228,7 @@ async function loadLicences({ keepStatus = false } = {}) {
   const wasOpen = $("verifyCard").hidden ? "" : $("verifyCard").dataset.licence;
   verified = {};
   try {
-    const data = await api("/v1/admin/licenses?limit=200");
+    const data = await api(`/v1/admin/licenses?limit=${LICENCE_PAGE}`);
     licences = data.licenses || [];
     licencePage = data.page || {};
     renderLicences();
@@ -245,33 +246,70 @@ async function loadLicences({ keepStatus = false } = {}) {
 }
 
 let licencePage = {};
+const LICENCE_PAGE = 200;
+
+/**
+ * The next page of licences, appended. The desk used to stop at the first
+ * 200 and say only "more exist", so any licence past them could not be
+ * found, filtered for, or acted on from here.
+ */
+async function loadMoreLicences() {
+  const token = licencePage.nextPageToken;
+  if (!token) return;
+  $("loadMore").disabled = true;
+  try {
+    const data = await api(
+      `/v1/admin/licenses?limit=${LICENCE_PAGE}&page_token=${encodeURIComponent(token)}`,
+    );
+    licences = licences.concat(data.licenses || []);
+    licencePage = data.page || {};
+    renderLicences();
+  } catch (e) {
+    setStatus(`Could not load more licences: ${e.message}`, true);
+  } finally {
+    $("loadMore").disabled = false;
+  }
+}
 
 // Revoked licences are kept — the record is the audit trail, and a revoked
 // key can still be looked up — but out of the way by default: a revoke that
 // left its row in place with only the pill changed read as a revoke that had
-// not happened.
+// not happened. Demo keys likewise: one is minted for every account, so they
+// outnumbered the licences anyone sold and read as live customer keys.
 function renderLicences() {
   const q = $("filter").value.trim().toLowerCase();
   const showRevoked = $("showRevoked").checked;
-  const revokedCount = licences.filter((l) => l.status === "revoked").length;
+  const showDemo = $("showDemo").checked;
+  const isDemo = (l) => l.mode === "demo";
+  const revokedCount = licences.filter((l) => l.status === "revoked" && !isDemo(l)).length;
+  const demoCount = licences.filter(isDemo).length;
   const rows = licences.filter((l) =>
     (showRevoked || l.status !== "revoked") &&
+    (showDemo || !isDemo(l)) &&
     (!q || [l.keyPrefix, l.domainLock, l.emailLock, l.note]
       .some((v) => (v || "").toLowerCase().includes(q))));
   $("licenceRows").innerHTML = rows.length
     ? rows.map(licenceRow).join("")
-    : '<tr><td colspan="7" class="muted">Nothing matches.</td></tr>';
+    : '<tr><td colspan="9" class="muted">Nothing matches.</td></tr>';
   $("revokedCount").textContent = revokedCount ? ` (${revokedCount})` : "";
-  const count = licencePage.count ?? licences.length;
-  const hidden = !showRevoked && revokedCount
-    ? `, ${revokedCount} revoked hidden` : "";
+  $("demoCount").textContent = demoCount ? ` (${demoCount})` : "";
+  const hiddenParts = [
+    !showRevoked && revokedCount ? `${revokedCount} revoked` : "",
+    !showDemo && demoCount ? `${demoCount} Demo` : "",
+  ].filter(Boolean);
+  const hidden = hiddenParts.length ? `, ${hiddenParts.join(" and ")} hidden` : "";
+  // Counted from what is loaded, not from the last page's size: after
+  // "Load more" the page count is only the newest page.
   $("licencePaging").textContent = licencePage.hasMore
-    ? `Showing the first ${count}${hidden}; more exist.`
-    : `${count} licence(s)${hidden}.`;
+    ? `Showing the first ${licences.length}${hidden}; more exist.`
+    : `${licences.length} licence(s)${hidden}.`;
+  $("loadMore").hidden = !licencePage.hasMore;
 }
 
 function seatSummary(lic) {
-  if (lic.kind !== "institution") return "1";
+  // An individual licence has no seat count to show; a bare "1" here read as
+  // a number someone had chosen, next to a cap column that also held numbers.
+  if (lic.kind !== "institution") return "—";
   const cap = lic.maxSeats == null ? "∞" : lic.maxSeats;
   // The two counts mean different things, and conflating them is the
   // easiest mistake to make when reading this table: on a floating licence
@@ -296,11 +334,15 @@ function verifiedNote(id) {
 function licenceRow(lic) {
   const label = lic.keyPrefix || lic.id.slice(0, 10);
   const term = lic.duration === "timed"
-    ? `until ${esc(when(lic.expiresAt))}${lic.graceDays ? ` +${lic.graceDays}d` : ""}`
+    ? `until ${esc(day(lic.expiresAt))}${lic.graceDays ? ` +${lic.graceDays}d` : ""}`
     : "perpetual";
   const revoked = lic.status === "revoked";
+  // Shown because it used to be invisible after mint: a cap typed at issue
+  // time reached every holder with no trace of it on this desk.
+  const cap = lic.maxAnalyses == null ? '<span class="muted">default</span>' : esc(lic.maxAnalyses);
   const actions = revoked ? "" : `
     <button class="secondary" data-extend="${esc(lic.id)}">Extend</button>
+    <button class="secondary" data-cap="${esc(lic.id)}">Cap</button>
     ${lic.kind === "institution"
       ? `<button class="secondary" data-roster="${esc(lic.id)}">Roster</button>
          <button class="secondary" data-verify="${esc(lic.id)}">Verify</button>`
@@ -311,9 +353,11 @@ function licenceRow(lic) {
     <tr>
       <td class="mono">${esc(label)}</td>
       <td>${esc(lic.kind)}${lic.seating === "floating" ? " · shared" : ""}</td>
+      <td>${esc(lic.mode)}</td>
       <td>${seatSummary(lic)}</td>
       <td>${term}</td>
-      <td><span class="pill ${revoked ? "off" : "ok"}">${esc(lic.status)}</span></td>
+      <td>${cap}</td>
+      <td>${licenceStatePill(lic)}</td>
       <td class="muted">${esc(lic.domainLock || lic.emailLock || "—")}</td>
       <td class="actions">${actions}</td>
     </tr>`;
@@ -323,6 +367,7 @@ $("licenceRows").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button");
   if (!btn) return;
   if (btn.dataset.extend) extendLicence(btn.dataset.extend);
+  if (btn.dataset.cap) setAnalysisCap(btn.dataset.cap);
   if (btn.dataset.revoke) revokeLicence(btn.dataset.revoke);
   if (btn.dataset.roster) openRoster(btn.dataset.roster);
   if (btn.dataset.device) clearLicenceDevice(btn.dataset.device);
@@ -347,14 +392,51 @@ async function extendLicence(id) {
     return;
   }
   try {
-    await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
+    const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify({ expiresAt: `${date.trim()}T23:59:59Z` }),
     });
-    setStatus(`${labelOf(id)} extended to ${date.trim()}.`);
+    // Say what the server stored, not what was typed.
+    setStatus(`${labelOf(id)} now expires ${day(out.expiresAt)}.`);
     loadLicences({ keepStatus: true });
   } catch (e) {
-    setStatus(`Could not extend: ${e.message}`, true);
+    setStatus({
+      expiry_in_past: "Could not extend: that date has already passed.",
+      expiry_before_current:
+        "Could not extend: that is earlier than the current expiry. " +
+        "Extend only moves it later.",
+      license_perpetual:
+        "Could not extend: this licence is perpetual and has no expiry.",
+    }[e.message] || `Could not extend: ${e.message}`, true);
+  }
+}
+
+async function setAnalysisCap(id) {
+  const lic = licences.find((l) => l.id === id) || {};
+  const current = lic.maxAnalyses == null ? "the licensed default" : lic.maxAnalyses;
+  const raw = window.prompt(
+    `Cloud analyses per person on ${labelOf(id)} (now ${current}).\n\n` +
+    "Enter a number for a plan sold with a limit, or leave it empty to " +
+    "remove the limit. Everyone on the licence gets the change at once.",
+    lic.maxAnalyses == null ? "" : String(lic.maxAnalyses),
+  );
+  if (raw === null) return;
+  const text = raw.trim();
+  if (text && !/^\d+$/.test(text)) {
+    setStatus("Enter a whole number, or leave it empty.", true);
+    return;
+  }
+  try {
+    await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(text ? { maxAnalyses: Number(text) } : { clearMaxAnalyses: true }),
+    });
+    setStatus(text
+      ? `${labelOf(id)} now allows ${text} analyses per person.`
+      : `${labelOf(id)} limit removed — holders get the licensed default.`);
+    loadLicences({ keepStatus: true });
+  } catch (e) {
+    setStatus(`Could not change the limit: ${e.message}`, true);
   }
 }
 
@@ -414,8 +496,10 @@ async function showDeviceHistory(id) {
  */
 const SEAT_PROSE = {
   "": "On the roster and holding the licence.",
-  never_claimed:
-    "Invited but never signed in. Occupies a seat; entitles nobody.",
+  on_hold: "On hold. Occupies a seat; entitles nobody until it is resumed.",
+  no_account: "There is no account behind this seat. Occupies a seat; entitles nobody.",
+  moved_on: "The account is on a different licence now. Occupies a seat here; entitles nobody.",
+  demoted: "The account points here but is on Demo. Occupies a seat; entitles nobody.",
   still_licensed:
     "The revoke did not land — this account is still licensed. " +
     "Revoke the seat again to repair it.",
@@ -423,6 +507,10 @@ const SEAT_PROSE = {
     "Revoked, but this account has not been back since. The device may " +
     "still be running on the licence it cached.",
   checked_in: "Revoked, and the account has been back since to hear it.",
+};
+
+// moved_on and no_account are reasons for both a live and a revoked seat.
+const REVOKED_PROSE = {
   moved_on: "Revoked, and the account is on a different licence now.",
   no_account: "Revoked, and there is no account behind the seat.",
 };
@@ -479,10 +567,12 @@ function verifiedSummary(report) {
   } else {
     parts.push('<span class="ok">Every revoke has landed.</span>');
   }
-  if (c.neverClaimed) {
+  // `neverClaimed` is what a backend before this change calls the same count.
+  const idle = c.notEntitled ?? c.neverClaimed;
+  if (idle) {
     parts.push(
-      `${c.neverClaimed} seat${c.neverClaimed === 1 ? "" : "s"} ` +
-      "held by someone who has never signed in.",
+      `${idle} seat${idle === 1 ? " is" : "s are"} on the roster without ` +
+      "entitling anyone — see below for why.",
     );
   }
   // A counter that disagrees with its own seats is a different fault from
@@ -498,7 +588,8 @@ function verifiedSummary(report) {
 }
 
 function verifiedRow(s) {
-  const prose = SEAT_PROSE[s.reason] ?? s.reason;
+  const prose = (s.bucket !== "active" && REVOKED_PROSE[s.reason]) ||
+    SEAT_PROSE[s.reason] || s.reason;
   const pill = SEAT_PILL[s.bucket] || "off";
   // Revoked seats are dated by the revoke; live ones have nothing to date.
   const seen = s.lastSeenAt ? esc(when(s.lastSeenAt)) : "never";
@@ -666,6 +757,7 @@ $("addMember").addEventListener("click", async () => {
       invite_exists: "That address is already promised to a different licence.",
       license_seats_exhausted: "This licence has no seats left.",
       license_seat_disabled: "That seat is on hold — re-enable it instead.",
+      claim_contended: "Busy just now — try again.",
     }[e.message] || `Could not add: ${e.message}`;
   }
 });

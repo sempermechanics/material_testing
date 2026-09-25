@@ -29,6 +29,10 @@ object SessionEverythingExporter {
     /**
      * Packages every local session that still has on-device frame data.
      * Returns null when nothing can be exported or writing fails.
+     *
+     * [onProgress] gets how many sessions are finished: 0 up front, then once
+     * after each session is in the archive, so the last tick is the finished
+     * archive rather than the start of its last session.
      */
     suspend fun exportMasterZip(
         context: Context,
@@ -49,18 +53,19 @@ object SessionEverythingExporter {
 
         try {
             ZipOutputStream(master.outputStream().buffered()).use { masterZip ->
+                onProgress(0, sessions.size)
                 sessions.forEachIndexed { index, record ->
                     // The copy below is blocking IO, so cancellation (the
                     // banner's Cancel) is only seen here, between sessions.
                     ensureActive()
+                    buildSessionEverythingZip(app, record, stagingRoot, index, ts)?.let { sessionZip ->
+                        val entryName = sanitizeZipName(record.name, record.id) + ".zip"
+                        masterZip.putNextEntry(ZipEntry(entryName))
+                        sessionZip.inputStream().use { it.copyTo(masterZip) }
+                        masterZip.closeEntry()
+                        sessionZip.delete()
+                    }
                     onProgress(index + 1, sessions.size)
-                    val sessionZip = buildSessionEverythingZip(app, record, stagingRoot, index, ts)
-                        ?: return@forEachIndexed
-                    val entryName = sanitizeZipName(record.name, record.id) + ".zip"
-                    masterZip.putNextEntry(ZipEntry(entryName))
-                    sessionZip.inputStream().use { it.copyTo(masterZip) }
-                    masterZip.closeEntry()
-                    sessionZip.delete()
                 }
             }
             if (master.length() == 0L) {

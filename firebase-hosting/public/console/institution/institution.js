@@ -1,5 +1,5 @@
-import { requireSignIn, api, setStatus, esc, when } from "../auth.js";
-import { seatCells, inviteCells } from "../util.js";
+import { requireSignIn, api, setStatus, esc } from "../auth.js";
+import { seatCells, inviteCells, day, licenceStatePill } from "../util.js";
 
 let licenseId = "";
 
@@ -76,19 +76,29 @@ function render(data) {
   const floating = lic.seating === "floating";
   const cap = lic.maxSeats == null ? "unlimited" : lic.maxSeats;
   const inUse = floating ? (lic.leasesActive ?? 0) : (lic.seatsUsed ?? 0);
+  // Invites hold no seat until claimed, so they are counted apart rather
+  // than left out: a roster of pending invites used to read "0 of 10 taken"
+  // with nothing to say ten people were already promised a place.
+  const invited = (data.invites || []).length;
+  const invitedNote = invited
+    ? ` ${invited} more ${invited === 1 ? "is" : "are"} invited and ` +
+      (floating
+        ? "join the roster when they first sign in."
+        : `take a seat when they first sign in, if one is free.`)
+    : "";
 
   $("summary").innerHTML = `
     <p>
       <span class="pill">${esc(lic.keyPrefix || "licence")}</span>
       <span class="pill">${floating ? "shared seats" : "one seat each"}</span>
-      <span class="pill ${lic.status === "revoked" ? "off" : "ok"}">${esc(lic.status || "")}</span>
-      ${lic.expiresAt ? `<span class="pill warn">expires ${esc(when(lic.expiresAt))}</span>` : ""}
+      ${licenceStatePill(lic)}
+      ${lic.expiresAt ? `<span class="pill warn">ends ${esc(day(lic.expiresAt))}</span>` : ""}
     </p>
     <p class="muted">
       ${floating
         ? `<strong>${inUse} of ${cap}</strong> seats in use right now, across
-           ${data.seats.length} people on the roster.`
-        : `<strong>${inUse} of ${cap}</strong> seats taken.`}
+           ${data.seats.length} people on the roster.${invitedNote}`
+        : `<strong>${inUse} of ${cap}</strong> seats taken.${invitedNote}`}
     </p>`;
 
   $("rosterHelp").textContent = floating
@@ -114,6 +124,15 @@ function render(data) {
 }
 
 function seatRow(seat) {
+  // A removed member holds nothing to hold, resume or unlock. Resume used to
+  // be offered here and reactivated the seat without taking a slot back;
+  // adding the address again is how someone comes back.
+  if (seat.status === "revoked") {
+    return `
+    <tr>${seatCells(seat)}
+      <td class="actions muted">add again to restore</td>
+    </tr>`;
+  }
   return `
     <tr>${seatCells(seat)}
       <td class="actions">
@@ -173,9 +192,13 @@ async function addMember() {
     );
   } catch (e) {
     setStatus(
-      e.message === "invite_exists"
-        ? `${email} is already promised a place on a different licence.`
-        : `Could not add ${email}: ${e.message}`,
+      {
+        invite_exists: `${email} is already promised a place on a different licence.`,
+        license_seats_exhausted: "This licence has no seats left.",
+        // Another request was claiming on this licence at the same moment.
+        // Nothing is wrong with it, and adding again succeeds.
+        claim_contended: "Busy just now — try again.",
+      }[e.message] || `Could not add ${email}: ${e.message}`,
       true,
     );
   }
@@ -201,6 +224,12 @@ async function act(action, uid) {
     );
     await load();
   } catch (e) {
-    setStatus(`Could not complete that: ${e.message}`, true);
+    setStatus(ACT_ERRORS[e.message] || `Could not complete that: ${e.message}`, true);
   }
 }
+
+const ACT_ERRORS = {
+  seat_revoked: "That member was removed. Add their address again to restore them.",
+  license_revoked: "This licence has been revoked, so its seats cannot be changed.",
+  seat_busy: "That seat changed while you were acting on it. Try again.",
+};

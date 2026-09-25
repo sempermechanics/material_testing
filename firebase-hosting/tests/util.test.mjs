@@ -4,7 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  esc, when, leaseHeld, seatCells, inviteCells,
+  esc, when, day, licenceState, licenceStatePill, leaseHeld, seatCells, inviteCells,
+  errorDetail,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -61,4 +62,42 @@ test("invite cells line up with seat cells", () => {
   const html = inviteCells({ id: "k", email: "new@uni.edu" });
   assert.equal(html.match(/<td/g).length, 4);
   assert.match(html, /invited/);
+});
+
+test("a licence end shows the day it was set to, in any time zone", () => {
+  // Stored as the last second of the chosen day, UTC. Rendered locally this
+  // read as the next day anywhere east of UTC.
+  const shown = day("2026-06-30T23:59:59Z");
+  assert.match(shown, /30/);
+  assert.doesNotMatch(shown, /1|Jul/);
+  assert.equal(day(null), "—");
+  assert.equal(day("garbage"), "—");
+});
+
+test("a licence's state follows its end and grace, not only its status", () => {
+  const lic = (over) => ({ status: "redeemed", ...over });
+  assert.equal(licenceState(lic({}), NOW), "redeemed");
+  assert.equal(licenceState(lic({ status: "revoked" }), NOW), "revoked");
+  assert.equal(licenceState(lic({
+    expiresAt: "2026-09-30T23:59:59Z", graceEndsAt: "2026-10-14T23:59:59Z",
+  }), NOW), "redeemed");
+  assert.equal(licenceState(lic({
+    expiresAt: "2026-09-20T23:59:59Z", graceEndsAt: "2026-10-04T23:59:59Z",
+  }), NOW), "in grace");
+  assert.equal(licenceState(lic({
+    expiresAt: "2026-09-01T23:59:59Z", graceEndsAt: "2026-09-15T23:59:59Z",
+  }), NOW), "expired");
+  // No grace: expiry is the cliff.
+  assert.equal(licenceState(lic({ expiresAt: "2026-09-22T23:59:59Z" }), NOW), "expired");
+  assert.match(licenceStatePill(lic({ expiresAt: "2026-09-22T23:59:59Z" }), NOW), /pill off/);
+});
+
+test("an error detail splits at its first colon only (TD-116)", () => {
+  assert.deepEqual(errorDetail("no_license"), { code: "no_license", rest: "" });
+  // An ISO instant carries colons of its own.
+  assert.deepEqual(
+    errorDetail("device_change_too_soon: 2026-10-25T08:00:00+00:00"),
+    { code: "device_change_too_soon", rest: "2026-10-25T08:00:00+00:00" },
+  );
+  assert.deepEqual(errorDetail(undefined), { code: "", rest: "" });
 });

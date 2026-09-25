@@ -28,13 +28,11 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AuthRepository
-import com.indicvision.semper.data.BackupDeleteWorker
 import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DicBundleDownloadWorker
@@ -42,6 +40,7 @@ import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.LicenseErrors
+import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.CloudSessionDto
@@ -49,6 +48,7 @@ import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeleteChoiceDialog
+import com.indicvision.semper.ui.common.DeleteFeedback
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.home.SessionOpenHelper
@@ -57,7 +57,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 /**
  * Settings: account, cloud preferences, per-analysis data management, data
@@ -104,6 +103,7 @@ class SettingsActivity : AppCompatActivity() {
 
     internal lateinit var transferBanner: TransferBannerController
     private lateinit var yourDataSection: SettingsYourDataSection
+    private lateinit var deleteFeedback: DeleteFeedback
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -154,6 +154,8 @@ class SettingsActivity : AppCompatActivity() {
             wireCollapsible(R.id.headerAnalysesData, R.id.bodyAnalysesData, R.id.ivAnalysesDataChevron)
             observeRestoreOutcomes()
             observeBundleDownloadOutcomes()
+            deleteFeedback = DeleteFeedback(this, findViewById(R.id.settingsRoot)) { wireAnalysesDataSection() }
+            deleteFeedback.observe()
             wireCloudSection()
             wireAnalysesDataSection()
         } else {
@@ -205,10 +207,10 @@ class SettingsActivity : AppCompatActivity() {
         switchWifi.setOnCheckedChangeListener { _, checked -> DicSettings.setUploadWifiOnly(this, checked) }
 
         lifecycleScope.launch {
-            val pending = withContext(Dispatchers.IO) {
-                SessionStore.list(this@SettingsActivity).count { it.syncState == SessionRecord.SyncState.PENDING }
+            val states = withContext(Dispatchers.IO) {
+                SessionStore.list(this@SettingsActivity).map { it.syncState }
             }
-            status.setText(if (pending > 0) R.string.badge_pending else R.string.sync_status_up_to_date)
+            status.text = BackupStatus.text(resources, states)
         }
     }
 
@@ -718,7 +720,7 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(R.string.cloud_delete_forever_title)
             .setMessage(getString(R.string.cloud_delete_forever_body, name))
             .setPositiveButton(R.string.cloud_delete_forever_confirm) { _, _ ->
-                scheduleDelete(row, session.sessionId, session.localSessionId, alsoLocal = false)
+                scheduleDelete(row, session.localSessionId, session.sessionId, SessionDeletes.Mode.CLOUD)
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
@@ -727,32 +729,37 @@ class SettingsActivity : AppCompatActivity() {
     private fun showDeleteBackupChoice(record: SessionRecord, cloud: CloudSessionDto, row: View) {
         DeleteChoiceDialog.show(
             activity = this,
-            title = getString(R.string.cloud_delete_backup_title),
-            message = getString(R.string.cloud_delete_backup_body),
-            leftLabel = getString(R.string.cloud_delete_backup_only),
-            midLabel = getString(R.string.cloud_delete_backup_and_local),
-            rightLabel = getString(R.string.action_cancel),
-            onLeft = { scheduleDelete(row, cloud.sessionId, record.id, alsoLocal = false) },
-            onMid = { scheduleDelete(row, cloud.sessionId, record.id, alsoLocal = true) },
+            title = getString(R.string.delete_confirm_title),
+            message = getString(R.string.delete_confirm_body_cloud),
+            choices = listOf(
+                DeleteChoiceDialog.Choice(getString(R.string.delete_choice_phone)) {
+                    lifecycleScope.launch {
+                        CloudSync.eraseLocalOnly(this@SettingsActivity, record.id)
+                        toast(getString(R.string.delete_device_only_done))
+                        wireAnalysesDataSection()
+                    }
+                },
+                DeleteChoiceDialog.Choice(getString(R.string.delete_choice_cloud)) {
+                    scheduleDelete(row, record.id, cloud.sessionId, SessionDeletes.Mode.CLOUD)
+                },
+                DeleteChoiceDialog.Choice(getString(R.string.delete_choice_everywhere)) {
+                    scheduleDelete(row, record.id, cloud.sessionId, SessionDeletes.Mode.EVERYWHERE)
+                },
+            ),
         )
     }
 
     /**
-     * The safety net: the row goes at once, but the deletion sits in
-     * [BackupDeleteWorker] for the undo window and only then reaches the
-     * backend — so a mis-tapped bin followed by a reflexive confirm is still
+     * The safety net: the row goes at once, but the deletion waits in
+     * [SessionDeletes] for the undo window and only then reaches the backend,
+     * so a mis-tapped bin followed by a reflexive confirm is still
      * recoverable. Leaving the page (or the app) does not abandon it: the user
      * confirmed, and the worker retries if the network is down.
      */
-    private fun scheduleDelete(row: View, cloudSessionId: String, localSessionId: String, alsoLocal: Boolean) {
+    private fun scheduleDelete(row: View, localSessionId: String, cloudSessionId: String, mode: SessionDeletes.Mode) {
         analysesAdapter.removeAt(analysesList.getChildAdapterPosition(row))
-        BackupDeleteWorker.enqueue(this, cloudSessionId, localSessionId, alsoLocal)
-        Snackbar.make(findViewById(R.id.settingsRoot), R.string.cloud_delete_pending, UNDO_WINDOW_MS)
-            .setAction(R.string.action_undo) {
-                BackupDeleteWorker.cancel(this, cloudSessionId)
-                wireAnalysesDataSection()
-            }
-            .show()
+        val workId = SessionDeletes.enqueue(this, listOf(SessionDeletes.Item(localSessionId, cloudSessionId, mode)))
+        deleteFeedback.queued(workId, 1)
     }
 
     // Host helpers used by extracted sections.
@@ -864,8 +871,5 @@ class SettingsActivity : AppCompatActivity() {
         const val ZIP_MIME = "application/zip"
         const val JSON_MIME = "application/json"
         const val PERCENT_MAX = 100
-
-        /** Snackbar shows for exactly as long as the delete stays cancellable. */
-        val UNDO_WINDOW_MS = TimeUnit.SECONDS.toMillis(BackupDeleteWorker.UNDO_WINDOW_SECONDS).toInt()
     }
 }

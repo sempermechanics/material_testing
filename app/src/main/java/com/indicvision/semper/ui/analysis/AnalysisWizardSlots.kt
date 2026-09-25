@@ -61,9 +61,7 @@ class AnalysisWizardSlots(
         defCard.visibility = if (n > 0) View.VISIBLE else View.GONE
         if (n > 0) {
             tvDefName.text = activity.resources.getQuantityString(R.plurals.def_count_fmt, n, n)
-            val first = viewModel.defFilePaths.first().substringAfterLast('/')
-            val last = viewModel.defFilePaths.last().substringAfterLast('/')
-            tvDefMeta.text = if (n == 1) first else "$first … $last"
+            tvDefMeta.text = deformedRangeLabel(viewModel.defFilePaths, viewModel.defOriginalNames)
             // Match the icon to what the user actually picked — the frames are
             // image files either way, so only the source tells them apart.
             ivDefIcon.setImageResource(
@@ -114,4 +112,18 @@ class AnalysisWizardSlots(
         formatWarnRow.findViewById<TextView>(R.id.tvWarnText).text =
             activity.getString(R.string.lossy_format_warning_fmt, lossy.joinToString(", "))
     }
+}
+
+/**
+ * The deformed card's "first … last": the frames as the user named them
+ * ([originalNames], index-aligned with [paths]), not the staged cache copies
+ * ("0000_IMG_1234.JPG"). A staged name stands in only where no original is known.
+ */
+internal fun deformedRangeLabel(paths: List<String>, originalNames: List<String>): String {
+    if (paths.isEmpty()) return ""
+    val aligned = originalNames.size == paths.size
+    fun nameAt(i: Int): String =
+        originalNames.getOrNull(i)?.takeIf { aligned && it.isNotBlank() } ?: paths[i].substringAfterLast('/')
+    val first = nameAt(0)
+    return if (paths.size == 1) first else "$first … ${nameAt(paths.lastIndex)}"
 }

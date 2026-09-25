@@ -6,8 +6,9 @@ import com.indicvision.semper.data.net.TokenStore
 import timber.log.Timber
 
 /**
- * Analysis-quota gate for new local sessions. Demo accounts stop at
- * [LicenseEntitlements.DEMO_MAX_ANALYSES]. Professional has no local cap.
+ * Analysis-quota gate for new local sessions. Every account stops at
+ * [LicenseEntitlements.analysisCap]: the backend's ceiling once known, else
+ * [LicenseEntitlements.DEMO_MAX_ANALYSES] for demo and none for licensed.
  * [SessionStore.upsert] stays CRUD-only and consults this gate when inserting
  * a new id (unless [allowOverLimit] on the caller).
  */
@@ -31,7 +32,7 @@ object SessionQuotaGate {
         val max = LicenseEntitlements.analysisCap(context)
         val used = maxOf(TokenStore.quotaUsed(context), existingCount)
         if (used >= max) {
-            TokenStore.setQuota(context, used, existingCount)
+            TokenStore.refreshSessionLimit(context, existingCount)
             Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
             return false
         }

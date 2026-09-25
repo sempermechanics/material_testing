@@ -560,6 +560,8 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         // A clean snapshot, as the batch path takes: a sweep used to inherit the
         // previous run's stop code, reference and planned-frame count.
         resetRunResult(batchDir.absolutePath, spec)
+        // A run that throws must not report the previous sweep's skipped nodes.
+        sweepSkippedNodes = emptyList()
 
         val result = VsgStudyRunner.run(
             bytes,
@@ -586,7 +588,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         }
         engineStatsArray = result.firstMetrics
         lastStopCode = result.engineErrorCode
-        lastPlannedFrames = result.runs.size + result.skipped.size
+        // The plan, not what was reached: runs + skipped leaves out combinations
+        // a cancel never got to, and a cancelled sweep then read as complete.
+        lastPlannedFrames = sweep.plan.size
         val executionTimeMs = (System.currentTimeMillis() - startedAt).toInt()
 
         if (result.runs.isEmpty()) {
@@ -709,7 +713,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
                 SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
             },
             stopCode = result.engineErrorCode,
-            plannedFrameCount = result.runs.size + skipped.size,
+            plannedFrameCount = sweep.plan.size,
             headline = summary.headline,
         )
         sessions.saveSession(appContext, record, enqueueCloudIfSaved = cloudEnabled)
@@ -733,7 +737,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         // a skip mid-sweep does not shift later names onto the wrong frame.
         val labelByPoint = sweep.plan.zip(sweep.labels).toMap()
         val solvedLabels = result.runs.map { labelByPoint[it.point].orEmpty() }
-        val totalPlanned = result.runs.size + result.skipped.size
+        val totalPlanned = sweep.plan.size
         val existing = SessionStore.get(appContext, localSessionId)
         // Regenerate the sweep auto-name each run (keyed to the original createdAt
         // so the timestamp is stable), unless the user renamed the session — so a
@@ -872,7 +876,22 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
          * point from a frame where nothing correlated.
          */
         val firstFrameCorrelatedPoints: Int = -1,
-    )
+        /**
+         * Whether a Home row holds this run's frames: its own record was
+         * written, or a re-run's row now lists the frames it left on disk. A
+         * first run writes a record only when its first frame kept points, so
+         * later frames can solve (a non-zero [totalFrames]) with nothing
+         * saved; only a saved run may be told its frames are kept.
+         */
+        val saved: Boolean = false,
+    ) {
+        /**
+         * The 1-based frame the run stopped at, numbered as the error below it
+         * numbers it. The kept count is not that: a frame the engine failed on
+         * is not kept, while the low-convergence stop keeps the frame it stops on.
+         */
+        val stoppedAtFrame: Int get() = if (failedFrameIndex >= 0) failedFrameIndex + 1 else totalFrames
+    }
 
     /**
      * Full-field batch compute + offline upload queue. All JNI calls run on the native dispatcher.

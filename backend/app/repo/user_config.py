@@ -135,6 +135,29 @@ def effective_mode(user: dict) -> str:
     return MODE_LICENSED
 
 
+#: Why a licensed account is on demo limits right now; see `inactive_licence_reason`.
+INACTIVE_LICENCE_ENDED = "licence_ended"
+INACTIVE_NO_SEAT = "no_seat"
+
+
+def inactive_licence_reason(user: dict) -> str:
+    """Why an account that holds a licence is resolving demo, or "".
+
+    `effective_mode` answers demo for two accounts that are not demo users at
+    all: a licence past its grace, and a floating member between leases. Both
+    get the demo cap on their next request while every analysis they stored
+    stays, so a quota refusal that only told them to delete one blamed the
+    wrong thing. This names the actual cause so the refusal can.
+    """
+    if _stored_mode(user) != MODE_LICENSED:
+        return ""
+    if _expiry_state(user)[0]:
+        return INACTIVE_LICENCE_ENDED
+    if normalize_seating(user.get("licenseSeating")) == SEATING_FLOATING and not _lease_live(user):
+        return INACTIVE_NO_SEAT
+    return ""
+
+
 def resolve_user_config(user: dict) -> dict:
     """Product limits and license entitlements for this account.
 
@@ -157,10 +180,14 @@ def resolve_user_config(user: dict) -> dict:
     mode = summary["mode"]
     is_licensed = mode == MODE_LICENSED
     if is_licensed:
-        max_sessions = (
+        # Never below the demo ceiling: a licence adds analyses, it does not
+        # take them away. The operator's cap box was the one number on an
+        # individual licence, so a "1" meant as "one licence" was easy to store.
+        max_sessions = max(
             _positive_int_override(user, "maxSessions")
             or _positive_int_override(user, "licenseMaxAnalyses")
-            or settings.LICENSED_MAX_SESSIONS_PER_USER
+            or settings.LICENSED_MAX_SESSIONS_PER_USER,
+            settings.DEMO_MAX_ANALYSES,
         )
     else:
         max_sessions = settings.DEMO_MAX_ANALYSES
@@ -225,6 +252,12 @@ def license_summary(user: dict) -> dict:
         # Null on an assigned seat, which never needs one. On a floating seat
         # this is what the app renews before it lapses.
         "leaseExpiresAt": as_utc(user.get("leaseExpiresAt")),
+        # Whether a real licence is attached: false for a Demo key and for a
+        # licence revoked out from under the account, true for one that is
+        # merely expired or waiting on a floating seat. `mode` cannot say
+        # this — all four read demo — and the account page needs it to show
+        # licence details only to someone who has a licence.
+        "held": _stored_mode(user) == MODE_LICENSED,
     }
 
 

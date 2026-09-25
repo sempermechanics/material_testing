@@ -5,6 +5,7 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
@@ -18,6 +19,7 @@ import com.indicvision.semper.data.net.CloudFileDto
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import com.indicvision.semper.util.suspendRunCatching
@@ -781,6 +783,7 @@ object CloudRestore {
         return dest
     }
 
+    @VisibleForTesting
     internal data class RestoreRecordTarget(
         val localId: String,
         val cloudSessionId: String,
@@ -789,6 +792,7 @@ object CloudRestore {
         val existing: SessionRecord?,
     )
 
+    @VisibleForTesting
     internal fun recordFrom(meta: JSONObject, target: RestoreRecordTarget): SessionRecord {
         val engine = meta.optJSONObject("engine") ?: JSONObject()
         val roi = engine.optJSONObject("roi") ?: JSONObject()
@@ -827,6 +831,10 @@ object CloudRestore {
             pointsConverged = metrics.optInt("pointsConverged", 0),
             avgIterations = metrics.optDouble("avgIterations", 0.0).toFloat(),
             executionTimeMs = metrics.optInt("executionTimeMs", 0),
+            // Absent from backups made before they were written: read as a
+            // completed run, which is what those records said too.
+            stopCode = metrics.optInt("stopCode", 0),
+            plannedFrameCount = metrics.optInt("plannedFrameCount", 0),
             cloudSessionId = target.cloudSessionId,
             // It came from the cloud, so it is by definition backed up.
             syncState = SessionRecord.SyncState.SYNCED,
@@ -911,18 +919,23 @@ object CloudRestore {
 
     /**
      * The Home-list headline for a restored session: for a sweep, the specimen
-     * plus solved/total and subset span; otherwise the converged percentage.
+     * plus solved/total and subset span; otherwise [SessionHeadline]'s first-frame convergence.
+     * Skips are counted from the parsed nodes: backups write a `nodes` array,
+     * and counting the legacy `subsets` list alone read 0 for every new one.
      */
-    private fun restoredHeadline(
+    internal fun restoredHeadline(
         meta: JSONObject,
         engine: JSONObject,
         defNames: List<String>,
         stats: List<Float>,
     ): String {
         val sweep = engine.optJSONObject("sweep")
-            ?: return String.format(java.util.Locale.US, "%.1f%% converged", stats.getOrElse(15) { 0f })
+            ?: return SessionHeadline.firstFrameConvergence(
+                stats.getOrElse(EngineStats.SLOT_CONVERGENCE) { 0f },
+                defNames.size,
+            )
         val solved = meta.optInt("frameCount", defNames.size)
-        val skipCount = sweep.optJSONObject("skipped")?.optJSONArray("subsets")?.length() ?: 0
+        val skipCount = SkippedNode.fromMetadata(sweep.optJSONObject("skipped")).size
         val image = defNames.firstOrNull().orEmpty().ifBlank { meta.optString("specimen", "frame") }
         val subsets = intList(sweep.optJSONArray("subsets"))
         val lo = subsets.minOrNull() ?: engine.optInt("subset", 0)

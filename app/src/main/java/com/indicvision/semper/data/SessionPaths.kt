@@ -23,4 +23,24 @@ object SessionPaths {
     fun frameDatName(index: Int): String = String.format(Locale.US, FRAME_DAT_FMT, index)
 
     fun frameDat(sessionDir: File, index: Int): File = File(sessionDir, frameDatName(index))
+
+    private val FRAME_DAT_NAME = Regex("""frame_(\d+)\.dat""")
+
+    /**
+     * The planned frame index a `frame_%04d.dat` name was written for, or null.
+     * A frame the batch skipped leaves a gap in the numbering, so the position
+     * of a file in the sorted listing is not its index once one has.
+     */
+    fun frameIndexOf(name: String): Int? =
+        FRAME_DAT_NAME.matchEntire(name)?.groupValues?.get(1)?.toIntOrNull()
+
+    /**
+     * The planned frame index behind each `.dat` of a sorted listing, by
+     * position. A name that does not parse keeps its position. Everything that
+     * names a frame (viewer, share, reports) looks its name up by this index
+     * (`ReportImageNames.frameName`), as the cloud bundle does, so the two
+     * agree past a skipped frame.
+     */
+    fun plannedFrameIndices(datFiles: List<File>): List<Int> =
+        datFiles.mapIndexed { position, file -> frameIndexOf(file.name) ?: position }
 }

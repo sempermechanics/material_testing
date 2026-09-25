@@ -5,6 +5,7 @@ import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.analysis.AnalysisRunCodes
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
@@ -13,6 +14,8 @@ import com.indicvision.semper.ui.analysis.ComputeOverlayHelper
 import com.indicvision.semper.ui.analysis.EngineFailure
 import com.indicvision.semper.ui.analysis.RunSpec
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -47,6 +50,8 @@ class BatchRunControllerTest {
     private fun controller(
         gate: Gate,
         viewModel: AnalysisViewModel = AnalysisViewModel(),
+        onPartial: () -> Unit = {},
+        resultLine: TextView? = null,
         onDialog: (Shown) -> Unit = {},
     ): BatchRunController {
         activity = Robolectric.buildActivity(AppCompatActivity::class.java)
@@ -65,10 +70,10 @@ class BatchRunControllerTest {
             activity = activity,
             viewModel = viewModel,
             overlayHelper = overlay,
-            tvResult = TextView(activity),
+            tvResult = resultLine ?: TextView(activity),
             setProcessing = { gate.processing = it },
             checkReady = { gate.computeEnabled = !gate.processing },
-            onPartialRun = {},
+            onPartialRun = { onPartial() },
             openResultViewer = {},
             engineFailureMessage = { _, _, _ -> "" },
             showEngineFailureDialog = { message, _, faqUrlRes -> onDialog(Shown(message, faqUrlRes)) },
@@ -78,6 +83,7 @@ class BatchRunControllerTest {
         )
     }
 
+    /** A run is saved when its first frame kept points; [route]'s tests override that. */
     private fun outcome(code: Int, validPoints: Int, frames: Int, correlated: Int = -1) =
         AnalysisViewModel.BatchAnalysisOutcome(
             engineErrorCode = code,
@@ -87,7 +93,19 @@ class BatchRunControllerTest {
             batchDirPath = "",
             failedFrameIndex = if (code < 0 || validPoints == 0) 0 else -1,
             firstFrameCorrelatedPoints = correlated,
+            saved = validPoints > 0,
         )
+
+    /** Whether [outcome] opened the "stopped early, frames kept" dialog, and any failure dialog it raised. */
+    private fun route(outcome: AnalysisViewModel.BatchAnalysisOutcome): Pair<Boolean, Shown?> {
+        val viewModel = AnalysisViewModel()
+        viewModel.resetRunResult("", strainFailSpec)
+        var partial = false
+        var shown: Shown? = null
+        controller(Gate(), viewModel, onPartial = { partial = true }) { shown = it }
+            .handleBatchOutcome(Result.success(outcome))
+        return partial to shown
+    }
 
     /** The dialog a zero-point first frame raises, for a run with [spec]. */
     private fun zeroPointDialog(correlated: Int, spec: RunSpec): Shown {
@@ -160,6 +178,28 @@ class BatchRunControllerTest {
     }
 
     @Test
+    fun `a run that stopped early with its frames saved says they are kept`() {
+        val (partial, shown) = route(
+            outcome(EngineFailure.ENGINE_ERROR_FEATURES, validPoints = 500, frames = 3).copy(failedFrameIndex = 3),
+        )
+        assertTrue(partial)
+        assertNull(shown)
+    }
+
+    @Test
+    fun `frames that solved after a first frame that kept nothing are not called saved`() {
+        // Frame 1 kept no points, frames 2-3 solved, frame 4 failed: no record.
+        listOf(EngineFailure.ENGINE_ERROR_FEATURES, AnalysisRunCodes.ERROR_LOW_CONVERGENCE).forEach { code ->
+            val (partial, shown) = route(
+                outcome(code, validPoints = 0, frames = 2, correlated = 0).copy(failedFrameIndex = 3),
+            )
+            assertFalse("code $code opened the frames-kept dialog", partial)
+            // The first frame is why nothing was saved, so it is what the dialog explains.
+            assertEquals(activity.getString(R.string.run_fail_no_correlation), shown?.message)
+        }
+    }
+
+    @Test
     fun `the other endings leave Compute usable too`() {
         assertComputeUsableAfter(
             "cancel",
@@ -175,5 +215,33 @@ class BatchRunControllerTest {
         )
         assertComputeUsableAfter("success", Result.success(outcome(code = 0, validPoints = 500, frames = 3)))
         assertComputeUsableAfter("exception", Result.failure(IllegalStateException("boom")))
+    }
+
+    /** The status line a finished run leaves, with [planned] frames recorded by the runner. */
+    private fun successLine(kept: Int, planned: Int): String {
+        val viewModel = AnalysisViewModel()
+        viewModel.lastPlannedFrames = planned
+        val line = TextView(ApplicationProvider.getApplicationContext<Application>())
+        controller(Gate(), viewModel, resultLine = line)
+            .handleBatchOutcome(Result.success(outcome(code = 0, validPoints = 500, frames = kept)))
+        return line.text.toString()
+    }
+
+    @Test
+    fun `a finished run counts its frames with a plural, not a hard-coded English line`() {
+        assertEquals("✅ Computed 1 frame", successLine(kept = 1, planned = 1))
+        assertEquals("✅ Computed 3 frames", successLine(kept = 3, planned = 3))
+    }
+
+    @Test
+    fun `frames dropped for keeping no points are counted, not hidden`() {
+        assertEquals(
+            "✅ Computed 3 of 5 frames — 2 frames kept no valid points",
+            successLine(kept = 3, planned = 5),
+        )
+        assertEquals(
+            "✅ Computed 4 of 5 frames — 1 frame kept no valid points",
+            successLine(kept = 4, planned = 5),
+        )
     }
 }

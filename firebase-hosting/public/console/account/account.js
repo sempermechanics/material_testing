@@ -6,14 +6,16 @@
  * `/v1/sessions`, which carries the quota alongside the page.
  */
 import {
-  requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when,
+  requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when, day,
 } from "../auth.js";
+import { errorDetail } from "../util.js";
 
 const $ = (id) => document.getElementById(id);
 
 let licence = {};        // the `license` block of /v1/me
 let sessions = [];       // every page loaded so far
 let nextToken = "";
+let quota = null;        // the `quota` block of /v1/sessions
 
 requireSignIn(() => {
   $("signedOut").hidden = true;
@@ -51,39 +53,62 @@ function renderLicence() {
   const floating = licence.seating === "floating";
   const holdsSeat = licence.leaseExpiresAt &&
     new Date(licence.leaseExpiresAt) > new Date();
+  // Whether a real licence is attached. A Demo key and a licence revoked out
+  // from under the account both have a kind and a prefix, and used to show
+  // them as if they were one. A backend without `held` is answered from mode.
+  const held = licence.held ?? licensed;
+  const lapsed = Date.parse(licence.graceEndsAt || licence.expiresAt || "") <= Date.now();
 
   const pills = [
     `<span class="pill ${licensed ? "ok" : "off"}">${licensed ? "licensed" : "demo"}</span>`,
   ];
-  if (licence.kind) pills.push(`<span class="pill">${esc(licence.kind)}</span>`);
-  if (licence.prefix) pills.push(`<span class="pill mono">${esc(licence.prefix)}</span>`);
-  if (licence.duration === "perpetual") pills.push('<span class="pill">no end date</span>');
-  if (licence.expiresAt) {
-    pills.push(
-      `<span class="pill ${licence.inGrace ? "warn" : ""}">` +
-      `${licence.inGrace ? "expired" : "expires"} ${esc(when(licence.expiresAt))}</span>`,
-    );
-  }
-  if (floating) {
-    pills.push(
-      holdsSeat
-        ? `<span class="pill ok">seat held until ${esc(when(licence.leaseExpiresAt))}</span>`
-        : '<span class="pill warn">no seat right now</span>',
-    );
+  if (held) {
+    if (licence.kind) pills.push(`<span class="pill">${esc(licence.kind)}</span>`);
+    if (licence.prefix) pills.push(`<span class="pill mono">${esc(licence.prefix)}</span>`);
+    if (licence.duration === "perpetual") pills.push('<span class="pill">no end date</span>');
+    if (licence.expiresAt) pills.push(endPill(lapsed));
+    if (floating && !lapsed) {
+      pills.push(
+        holdsSeat
+          ? `<span class="pill ok">seat held until ${esc(when(licence.leaseExpiresAt))}</span>`
+          : '<span class="pill warn">no seat right now</span>',
+      );
+    }
   }
   $("pills").innerHTML = `<p>${pills.join(" ")}</p>`;
-  $("explain").textContent = explain(licensed, floating, holdsSeat);
+  $("explain").textContent = explain(licensed, floating, holdsSeat, held, lapsed);
 
   // A seat can only be given back by whoever holds it, so the button
   // appears only when there is something to give back.
   $("release").hidden = !(floating && holdsSeat);
-  // Nothing to move if no licence was ever attached; the backend answers
-  // `no_license` in that case, which is a worse way to find out.
-  $("unbind").hidden = !licence.kind;
+  // Nothing to move without a licence. A Demo key has a kind too, so this
+  // used to offer to move one; the backend then moved nothing worth having.
+  $("unbind").hidden = !held;
+  renderQuota();
 }
 
-function explain(licensed, floating, holdsSeat) {
-  if (!licensed && floating) {
+/**
+ * The end-date pill. "expired" used to mean the grace period, when the
+ * licence still works in full, and a licence past its grace said "expires"
+ * with a date already gone.
+ */
+function endPill(lapsed) {
+  const ends = esc(day(licence.expiresAt));
+  if (lapsed) return `<span class="pill off">expired ${ends}</span>`;
+  if (licence.inGrace) return `<span class="pill warn">ended ${ends}</span>`;
+  return `<span class="pill">ends ${ends}</span>`;
+}
+
+function explain(licensed, floating, holdsSeat, held, lapsed) {
+  if (!licensed && held && lapsed) {
+    return `Your licence ended on ${day(licence.expiresAt)} and its grace period ` +
+           "is over, so this account is on the demo. Your saved work is " +
+           "untouched. Ask your Semper contact or your IT department to renew it.";
+  }
+  // Only a seat you still hold on a live licence is waiting on a colleague.
+  // A seat on hold or removed reads as demo too, and was told to wait for a
+  // seat that was never coming.
+  if (!licensed && held && floating) {
     return "Every seat on your institution's licence is in use just now. " +
            "Your saved work is untouched, and Semper becomes licensed again " +
            "on this account as soon as a colleague finishes.";
@@ -95,7 +120,7 @@ function explain(licensed, floating, holdsSeat) {
   }
   if (licence.inGrace) {
     return "Your licence has passed its end date. Nothing is restricted yet, " +
-           `but full access ends ${when(licence.graceEndsAt)} unless it is renewed.`;
+           `but full access ends ${day(licence.graceEndsAt)} unless it is renewed.`;
   }
   if (floating) {
     return holdsSeat
@@ -151,14 +176,19 @@ $("unbind").addEventListener("click", async () => {
   }
 });
 
-function unbindError(code) {
+function unbindError(detail) {
+  // The cooldown refusal carries the instant it ends after the code.
+  const { code, rest } = errorDetail(detail);
   return {
     // Not a refusal of entitlement: a second factor proves who is asking,
     // not how often, so the cooldown is what stops one licence being
     // passed round a lab.
     device_change_too_soon:
-      "You have moved this licence recently. Ask your IT contact or Semper " +
-      "support if you need to move it again now.",
+      "You have moved this licence recently" +
+      // Local date and time, as the success message gives it: the cooldown
+      // ends at the instant of the last move, not at a day boundary.
+      (rest ? `, so you can move it yourself again after ${when(rest)}` : "") +
+      ". Ask your IT contact or Semper support if you need to move it now.",
     mfa_required:
       "Set up two-factor authentication first — moving a licence needs it.",
     no_license: "There is no licence on this account to move.",
@@ -180,15 +210,36 @@ async function loadSessions({ reset }) {
     sessions = sessions.concat(data.sessions || []);
     nextToken = (data.page || {}).nextPageToken || "";
     $("more").hidden = !nextToken;
-    const q = data.quota || {};
-    $("quota").textContent = q.max == null
-      ? `${q.used ?? sessions.length} analyses stored.`
-      : `${q.used ?? sessions.length} of ${q.max} analyses stored.`;
+    quota = data.quota || {};
+    renderQuota();
     renderSessions();
     setStatus("");
   } catch (e) {
     setStatus(`Could not list your analyses: ${e.message}`, true);
   }
+}
+
+// Also called from renderLicence: the two loads race, and whether the
+// licence is lapsed changes what an over-cap count means.
+function renderQuota() {
+  if (!quota) return;
+  const used = quota.used ?? sessions.length;
+  // A licence past its grace, or a shared seat not held, drops the cap to
+  // the demo's and keeps everything stored — so "120 of 25" is not a count
+  // to delete down from, and must not read like one. Same reading as
+  // renderLicence: a held licence that is not in licensed mode is inactive.
+  // A backend without `held` is answered from the seating and the end date.
+  const lapsedByDate =
+    Date.parse(licence.graceEndsAt || licence.expiresAt || "") <= Date.now();
+  const held = licence.held ?? (licence.seating === "floating" || lapsedByDate);
+  const inactive = Boolean(held && licence.mode && licence.mode !== "licensed");
+  $("quota").textContent = quota.max == null
+    ? `${used} analyses stored.`
+    : used > quota.max && inactive
+      ? `${used} analyses stored, all kept. While your licence is inactive ` +
+        `the demo limit of ${quota.max} applies, so new analyses sync again ` +
+        "once it is active."
+      : `${used} of ${quota.max} analyses stored.`;
 }
 
 function renderSessions() {
@@ -213,7 +264,7 @@ function sessionRow(s) {
           <div class="muted mono">${esc(s.sessionId)}</div></td>
       <td>${state}</td>
       <td>${done ? s.completedCount : `${s.completedCount || 0} of ${s.fileCount || 0}`}</td>
-      <td>${esc(size(s.totalBytes))}</td>
+      <td>${storedSize(s)}</td>
       <td class="actions">
         <button class="secondary" data-download="${esc(s.sessionId)}"
                 ${canDownload ? "" : "disabled"}>Download</button>
@@ -257,6 +308,17 @@ function downloadError(detail) {
     drive_download_failed:
       "Storage did not answer. The analysis is intact; try again shortly.",
   }[code] || `Could not download: ${code}`;
+}
+
+/**
+ * The Size cell. `totalBytes` is the size the phone declared when the upload
+ * began, not what is stored: a failed upload stores nothing and one still
+ * running stores part of it, and both used to read as the full size.
+ */
+function storedSize(s) {
+  if (s.status === "COMPLETED") return esc(size(s.totalBytes));
+  if (s.status === "PROVISION_FAILED" || !Number(s.totalBytes)) return "—";
+  return `<span class="muted">${esc(size(s.totalBytes))} when done</span>`;
 }
 
 /** Bytes as something a person reads, matching the app's own rounding. */
