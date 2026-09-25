@@ -6,8 +6,8 @@ Defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 to `main` run the full matrix. Feature-branch PRs run always-on gates plus
 path-filtered Tier 1 / Tier 4; expensive Tier 3 / Tier 5 run on push to `main`
 or when a PR carries an `e2e` / `release` / `full-ci` label.
-Macrobenchmarks run only with the `benchmark` label or
-`workflow_dispatch` → `run_benchmark`.
+Benchmarks (macro startup and the `HotPathMicroBenchmark` micro suite) run only
+with the `benchmark` label or `workflow_dispatch` → `run_benchmark`.
 
 There is **no weekly/scheduled full matrix** — use those labels or
 **Actions → CI → Run workflow** (`workflow_dispatch`, `full_ci` defaults to
@@ -41,7 +41,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
 | `tier4-backend` | ruff, shell-script parse, pip-audit, hashed-lock verification, pytest at `--cov-fail-under=75`, Firestore emulator suite | `backend` (PR); always on `main` push | ~5–10 min |
 | `tier5-signed-release` | R8 + signed `assembleRelease` arm64, `.so` presence, signature verify, R8 mapping artifact | main push / labels | ~15–40 / up to ~90 min |
-| `tier-benchmark` | Macrobenchmark cold/warm startup (`:benchmark`). Emulator **smoke**: `suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`; no numeric thresholds. API 34. | `benchmark` label / `run_benchmark` dispatch only | ~20–40 min |
+| `tier-benchmark` | One API 34 emulator, two suites: Macrobenchmark cold/warm startup (`:benchmark`, `suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED`), then `:app`'s `HotPathMicroBenchmark` on the debug build (`class=` filter, `suppressErrors` adds `DEBUGGABLE`). Emulator **smoke**: no numeric thresholds; both upload their `*-benchmarkData.json` (`macrobenchmark-results`, `microbenchmark-results`). `scripts/ci_test_report.py` prints failing tests and each metric's min / median / max (`BENCH …` lines) into the log, as Tier 3 does for its failures. | `benchmark` label / `run_benchmark` dispatch only | ~30–60 min |
 | `ci-ok` | Single required status check — every job above passed or was skipped | — | seconds |
 
 **There is no tier 2 here any more.** Host C++ builds, the DICe comparisons and
@@ -285,7 +285,7 @@ one job runs:
 | Action | Used by | What |
 |--------|---------|------|
 | `setup-android-build` | every app job | JDK 17 + Gradle; cache written from `main` only |
-| `setup-native-ci` | tier 3, tier 5, Release | `.cxx` / ccache restore, OpenCV sparse checkout, the `CCACHE_*` env |
+| `setup-native-ci` | tier 3, tier 5, Release, benchmark | `.cxx` / ccache restore, OpenCV sparse checkout, the `CCACHE_*` env |
 | `enable-kvm` | tier 3, benchmark | Emulator acceleration |
 | `check-arm64-so` | tier 5, Release | The release APK carries `libsemper_core.so` |
 | `backend-gate` | tier 4, Release, Deploy | Lock install, audit, ruff, pytest + floor |

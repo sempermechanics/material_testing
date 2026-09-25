@@ -201,6 +201,76 @@ class VisualizationEngineTest {
     }
 
     @Test
+    fun `quickSelect stays linear on a large field of one repeated value`() {
+        // A partition on strict `<` settled one copy of the pivot per pass: this took
+        // ~70 s on a desktop JVM. Three-way partitioning settles them all in one pass.
+        // (Robolectric does not enforce @Test(timeout), so the bound is asserted.)
+        val values = FloatArray(300_000) { 0f }.also { it[7] = -1f }
+        val t0 = System.nanoTime()
+        assertEquals(0f, VisualizationEngine.quickSelect(values.copyOf(), 294_000, 0, values.size), 0f)
+        assertEquals(-1f, VisualizationEngine.quickSelect(values.copyOf(), 0, 0, values.size), 0f)
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        assertTrue("took $ms ms", ms < 5_000)
+    }
+
+    @Test
+    fun `quickSelect stays near-linear on sorted and staircase fields`() {
+        // Median-of-three at the ends and middle touched ~370n elements for the p98
+        // pick of a sorted 1.2 M field, ~0.8 s each on a desktop JVM. The ninther stays
+        // near 4n. A V field in grid order is the staircase.
+        val n = 1_228_800
+        val low = (n * 0.02).toInt()
+        val high = (n * 0.98).toInt()
+        var ns = 0L
+        for (values in listOf(
+            FloatArray(n) { it * 0.031f },
+            FloatArray(n) { -it * 0.017f },
+            FloatArray(n) { (it / 160) * 0.02f },
+        )) {
+            val sorted = values.copyOf().also { it.sort() }
+            val t0 = System.nanoTime()
+            val p02 = VisualizationEngine.quickSelect(values, low, 0, n)
+            val p98 = VisualizationEngine.quickSelect(values, high, low, n)
+            ns += System.nanoTime() - t0
+            assertEquals(sorted[low], p02, 0f)
+            assertEquals(sorted[high], p98, 0f)
+        }
+        val ms = ns / 1_000_000
+        assertTrue("took $ms ms", ms < 1_500)
+    }
+
+    @Test
+    fun `quickSelect matches a full sort when it falls back to sorting`() {
+        // Organ-pipe fields (up, then down) defeat the ninther often enough to spend the
+        // pass budget, and the rest of the range is sorted instead (n = 112, k = 2 does).
+        for (n in 100..400) {
+            val values = FloatArray(n) { (if (it < n / 2) it else n - it).toFloat() }
+            val sorted = values.copyOf().also { it.sort() }
+            for (k in intArrayOf(2, n / 50, n / 2, n * 49 / 50)) {
+                assertEquals("n=$n k=$k", sorted[k], VisualizationEngine.quickSelect(values.copyOf(), k, 0, n), 0f)
+            }
+        }
+    }
+
+    @Test
+    fun `quickSelect matches a full sort on duplicate-heavy random fields`() {
+        val rng = kotlin.random.Random(3)
+        repeat(200) {
+            val n = rng.nextInt(1, 400)
+            val alphabet = rng.nextInt(1, 6)
+            val values = FloatArray(n) { rng.nextInt(alphabet) * 0.5f - 1f }
+            val sorted = values.copyOf().also { it.sort() }
+            // The two picks as computeSigmaClampedRange makes them, on one scratch
+            // array: the second searches only from the first pick's index on.
+            val low = rng.nextInt(n)
+            val high = rng.nextInt(low, n)
+            val scratch = values.copyOf()
+            assertEquals(sorted[low], VisualizationEngine.quickSelect(scratch, low, 0, n), 0f)
+            assertEquals(sorted[high], VisualizationEngine.quickSelect(scratch, high, low, n), 0f)
+        }
+    }
+
+    @Test
     fun `quickSelect-backed range matches the sort oracle on a single point`() {
         val data = singleFieldData(floatArrayOf(42f))
         val plane = VisualizationEngine.generateHeatmapIndices(data, 1, 1, DicResult.IDX_EXX, 1)

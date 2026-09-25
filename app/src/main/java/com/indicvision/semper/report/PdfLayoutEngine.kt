@@ -20,8 +20,8 @@ class PdfLayoutEngine(
     private val pdfDocument: PdfDocument,
     private val brandLogo: Bitmap? = null,
 ) {
-    val pageWidth = 2480f
-    val pageHeight = 3508f
+    val pageWidth = PdfA4.DESIGN_WIDTH
+    val pageHeight = PdfA4.DESIGN_HEIGHT
     val margin = 150f
     val contentWidth = pageWidth - (margin * 2)
 
@@ -90,8 +90,7 @@ class PdfLayoutEngine(
     fun newPage(): Canvas {
         currentPage?.let { pdfDocument.finishPage(it) }
         pageNumber++
-        val pageInfo = PdfDocument.PageInfo.Builder(pageWidth.toInt(), pageHeight.toInt(), pageNumber).create()
-        val page = pdfDocument.startPage(pageInfo)
+        val page = PdfA4.startPage(pdfDocument, pageNumber)
         currentPage = page
         canvas = page.canvas
         cursorY = margin
