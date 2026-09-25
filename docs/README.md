@@ -19,7 +19,7 @@ build it. This page routes you to the rest.
 | Know what the app may assume of the engine | [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md) |
 | Check the math, or write it up | [engine/MATHEMATICS.md](engine/MATHEMATICS.md) |
 | Add or run app tests | [app/TESTING.md](app/TESTING.md) |
-| Benchmark the app, or check a perf claim | [app/TESTING.md — Performance benchmarks](app/TESTING.md#performance-benchmarks), then [perf/on-device-characterization.md](perf/on-device-characterization.md), [perf/round2-main-vs-branch.md](perf/round2-main-vs-branch.md), [perf/backup-restore-split.md](perf/backup-restore-split.md), [perf/request-volume.md](perf/request-volume.md) |
+| Benchmark the app, or check a perf claim | [app/TESTING.md — Performance benchmarks](app/TESTING.md#performance-benchmarks), then [perf/on-device-characterization.md](perf/on-device-characterization.md), [perf/round2-main-vs-branch.md](perf/round2-main-vs-branch.md), [perf/backup-restore-split.md](perf/backup-restore-split.md), [perf/request-volume.md](perf/request-volume.md), [perf/startup.md](perf/startup.md) |
 | Add or run engine tests | [engine/TESTING.md](engine/TESTING.md) |
 | Build, test or bump the engine pin | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | Know why CI is red / how tiers work | [ops/CI.md](ops/CI.md) |

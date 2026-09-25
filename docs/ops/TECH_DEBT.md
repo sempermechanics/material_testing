@@ -205,7 +205,7 @@ by 0-delta parity tests. Measured before/after, including the drawbacks, is in
 
 | Item | Why |
 |---|---|
-| `StartupTimingMetric` benchmarks on an API 37 emulator | `startActivityAndWait` confirms launches via `dumpsys gfxinfo framestats`, which returns empty there for every activity. `StartupBenchmark`/`ScreenBenchmark` need a physical device or an older image; `ViewerScrubBenchmark` avoids the API and runs |
+| `StartupTimingMetric` benchmarks on an API 37 emulator | `startActivityAndWait` confirms launches via `dumpsys gfxinfo framestats`, which returns empty there for every activity. `StartupBenchmark`/`ScreenBenchmark` need a physical device or an older image (a Pixel 6 on API 37 works: [perf/startup.md](../perf/startup.md)); `ViewerScrubBenchmark` avoids the API and runs |
 | Float16 / ZNSSD quantisation for field data | Would change reported numbers; rejected under the bit-exactness requirement |
 | In-memory X/Y compaction (derive coords from the grid) | Loss-less and worth ~25 %, but a larger change that also touches the native writer |
 
