@@ -1977,7 +1977,9 @@ seat, reads that seat holder's user document, and sorts each into one of three
 buckets with a reason attached. An `active` seat with a reason occupies a seat
 without entitling anyone, and is counted in `notEntitled` (which replaced
 `neverClaimed`: a pending invitation has no seat, so the old reason could not
-occur, and the seats it did catch were idle for the four reasons below):
+occur, and the seats it did catch were idle for the four reasons below).
+`entitled` is the accounts the backend would answer licensed for: none once
+the licence is past its grace, though the stored modes still say `licensed`. `maxSeats` is `null` for an uncapped licence:
 
 | Bucket | Reason | Means |
 |---|---|---|

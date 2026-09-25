@@ -13,6 +13,7 @@ from ._base import (
     db,
 )
 from .user_config import (
+    _expiry_state,
     _stored_mode,
 )
 
@@ -130,7 +131,10 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
             bucket, reason = "revokedStillRunning", NO_CHECKIN_SINCE_REVOKE
 
         counts[bucket] += 1
-        if holds:
+        # A licence past its grace entitles nobody, whatever the stored mode
+        # says; counting it read as a roster still in use. A floating member
+        # between leases still counts: the pool is theirs to draw on.
+        if holds and not _expiry_state(user)[0]:
             entitled += 1
         seats.append({
             "uid": uid,
@@ -147,7 +151,8 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
     intended = int(lic.get("seatsUsed") or 0)
     return "", {
         "licenseId": license_id,
-        "maxSeats": int(lic.get("maxSeats") or 0),
+        # None when the licence has no cap. 0 read as "no seats at all".
+        "maxSeats": int(lic["maxSeats"]) if lic.get("maxSeats") else None,
         # What IT believes, straight off the counter their console reads...
         "intended": intended,
         # ...what the counter would say if recounted from the seats themselves.
@@ -156,7 +161,8 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
         "intendedRecounted": counts["active"],
         # Accounts the backend would answer "licensed" for under this licence
         # right now. Equals active - notEntitled + revokedStillRunning's
-        # still_licensed half, by construction.
+        # still_licensed half while the licence is in term, and 0 once it has
+        # lapsed past grace.
         "entitled": entitled,
         "counts": counts,
         "seats": seats,
@@ -167,7 +173,7 @@ def _idle_reason(seat: dict, user: dict | None, on_this_license: bool, holds: bo
     """Why an active seat entitles nobody, or "" when it does.
 
     An account that still holds the licence answers "" whatever the seat says,
-    so `entitled` stays `active - notEntitled` plus the unlanded revokes.
+    so `notEntitled` never counts a seat whose account still holds the licence.
     """
     if holds:
         return ""

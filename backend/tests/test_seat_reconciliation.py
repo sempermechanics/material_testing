@@ -321,3 +321,27 @@ def test_reconciling_an_unknown_licence_is_not_found(store):
     err, report = repo.reconcile_institution_seats("no-such-licence")
     assert err == "license_not_found"
     assert report is None
+
+
+def test_a_lapsed_licence_entitles_nobody_though_its_roster_is_intact(store):
+    """The stored mode stays `licensed` past expiry; the backend answers demo.
+
+    Counting the stored mode told the operator a lapsed roster was in use.
+    """
+    license_id = _roster(store, "u1", "u2")
+    for uid in ("u1", "u2"):
+        store._data["users"][uid].update({
+            "licenseExpiresAt": datetime.now(timezone.utc) - timedelta(days=30),
+            "licenseGraceDays": 7,
+        })
+
+    report = _report(license_id)
+    assert report["counts"]["active"] == 2
+    assert report["entitled"] == 0
+
+
+def test_an_uncapped_licence_reports_no_cap_rather_than_zero_seats(store):
+    store._data["users"] = {}
+    minted = _mint(max_seats=None)
+    assert _report(minted["license"]["id"])["maxSeats"] is None
+    assert _report(_roster(store, "u1"))["maxSeats"] == 4
