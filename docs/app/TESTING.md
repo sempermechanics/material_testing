@@ -88,6 +88,19 @@ fixed, so a change in allocations is caused by the code and nothing else.
   -P android.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED
 ```
 
+That list is CI's (API 34). An API 37 emulator also raises `ACTIVITY-MISSING` and
+`NOT-AOT-COMPILED`; add both, or every case fails at once. In PowerShell, quote the
+whole `-P…` argument: unquoted, the commas make an array and only `EMULATOR` arrives.
+Or skip Gradle once the APKs are installed:
+
+```bash
+adb shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark \
+  -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED \
+  com.indicvision.semper.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+Results land in logcat (`adb logcat -d -s Benchmark:I`).
+
 **Macro (`:benchmark`) — "what does the user feel?"**
 `ViewerScrubBenchmark` seeds a synthetic session via the benchmark-variant-only
 `BenchmarkSeedActivity` and scrubs frames, reporting frame timing, max heap and the
