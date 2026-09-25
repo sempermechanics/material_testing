@@ -92,7 +92,7 @@ Emulators on API 34 and 37 both raise `ACTIVITY-MISSING` and `NOT-AOT-COMPILED`
 besides `DEBUGGABLE`; leave one out and every case fails at once. Pass the list with
 `am instrument`, not `connectedDebugAndroidTest -P …suppressErrors=…`: through Gradle
 it arrives cut at its first comma, so only `EMULATOR` is suppressed (seen on Linux CI,
-TD-81). CI runs this command.
+TD-86). CI runs this command.
 
 Results land in logcat (`adb logcat -d -s Benchmark:I`).
 
