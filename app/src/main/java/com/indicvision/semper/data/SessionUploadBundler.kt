@@ -19,6 +19,7 @@ import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.FieldResult
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
+import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.RoiData
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.viewer.HeatmapFit
@@ -335,15 +336,17 @@ object SessionUploadBundler {
                 imgH = record.imgH,
                 step = frameStep,
                 sessionId = record.id,
-                specimenName = record.refName,
+                specimenName = ReportImageNames.specimen(record.refName),
                 analysisDate = ReportBuilder.currentAnalysisDate(),
                 subsetSize = frameSubset,
                 strainWindow = frameWindow,
                 strainMethod = record.strainMethod.ifBlank { "VSG" },
                 roiData = RoiData(record.roiX, record.roiY, record.roiW, record.roiH),
                 engineStats = EngineStats.fromArray(statsArray),
-                referenceImageName = "Baseline",
-                deformedImageName = frameName,
+                // The names the on-device report prints (ViewerReportFactory),
+                // not the bundle's folder names.
+                referenceImageName = ReportImageNames.reference(record.refName),
+                deformedImageName = ReportImageNames.deformed(record.frameNames, frameIndex),
                 drawMinMarker = false,
             ),
         )

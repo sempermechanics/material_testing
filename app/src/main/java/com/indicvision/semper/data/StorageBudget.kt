@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 
 /**
  * Opt-in ceiling on local analysis storage.
@@ -49,12 +50,16 @@ object StorageBudget {
     suspend fun freeAllBackedUpAsync(context: Context): Outcome =
         withContext(Dispatchers.IO) { freeAllBackedUp(context) }
 
-    /** Bytes that could be reclaimed right now without touching the cloud. */
+    /**
+     * Bytes that could be reclaimed right now without touching the cloud: only
+     * what [SessionStore.dropLocalArtifacts] deletes ([LocalArtifacts]), not the
+     * `reference.png` and small files it keeps.
+     */
     fun reclaimableBytes(context: Context): Long {
         if (!canRestore(context)) return 0L
         return SessionStore.list(context)
             .filter { it.canDropLocally() }
-            .sumOf { SessionStore.sizeOf(context, it.id) }
+            .sumOf { LocalArtifacts.droppedBytes(File(it.sessionDir)) }
     }
 
     /** Whether a dropped local copy could be pulled back: the licensed half of cloud. */
