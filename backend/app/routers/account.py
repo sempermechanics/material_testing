@@ -67,6 +67,7 @@ def me(user=Depends(current_user)):
             # asking "what am I?" should not have to fetch limits to find out.
             "seating": summary["seating"],
             "leaseExpiresAt": summary["leaseExpiresAt"],
+            "held": summary["held"],
         },
         "terms": _terms_block(user),
         "improvement_consent": _improvement_consent(user),

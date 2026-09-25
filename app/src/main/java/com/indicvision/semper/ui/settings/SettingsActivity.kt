@@ -205,10 +205,10 @@ class SettingsActivity : AppCompatActivity() {
         switchWifi.setOnCheckedChangeListener { _, checked -> DicSettings.setUploadWifiOnly(this, checked) }
 
         lifecycleScope.launch {
-            val pending = withContext(Dispatchers.IO) {
-                SessionStore.list(this@SettingsActivity).count { it.syncState == SessionRecord.SyncState.PENDING }
+            val states = withContext(Dispatchers.IO) {
+                SessionStore.list(this@SettingsActivity).map { it.syncState }
             }
-            status.setText(if (pending > 0) R.string.badge_pending else R.string.sync_status_up_to_date)
+            status.text = BackupStatus.text(resources, states)
         }
     }
 

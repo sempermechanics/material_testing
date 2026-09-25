@@ -609,7 +609,10 @@ identity first, on the sign-in screen itself — whichever way you normally sign
 in: password, Google, or an emailed link. Your address is filled in and cannot be
 changed; you are proving *this* account. Back out and nothing happens. Once
 confirmed it erases the cloud copy, this device, and the sign-in itself, and
-signs you out. If the cloud cannot be reached nothing is deleted at all.
+signs you out. If the cloud cannot be reached nothing is deleted at all. A
+licence goes back first: an institution seat is freed for someone else, and an
+individual licence is released and re-offered to the same address, so signing
+up again with it is licensed straight away.
 
 **Quota.** The Home chip reads `Using N of M analyses` and turns red at the cap.
 Not a paywall — email support from the limit screen, or delete something and
@@ -770,7 +773,7 @@ approves/revokes accounts):
 only — it never stops anyone using the product.
 
 **What grace means.** During grace the account keeps *everything*: cloud
-backup, share, the uncapped analysis count. The user sees a notice on Home
+backup, share, the licensed analysis ceiling. The user sees a notice on Home
 saying a renewal is overdue, and nothing else changes. It exists so a renewal
 being processed does not interrupt someone mid-project. Entitlement stops at
 `expiresAt + graceDays`, at which point the account drops to Demo — which, as
@@ -790,6 +793,19 @@ a new key or asking anyone to re-activate. Send only the fields that change;
 way. What you cannot change is who the key is *for*: `kind` and the
 email/device/domain locks are fixed at mint, and a key that needs different
 locks is a new key.
+
+**`maxAnalyses` is per person, not per licence**, and is normally left empty:
+empty gives every holder the licensed default (`LICENSED_MAX_SESSIONS_PER_USER`,
+999). On the operator desk it is "Cloud analyses per person", and the table's
+"Analyses / person" column shows it. A value below the demo allowance
+(`DEMO_MAX_ANALYSES`, 25) is refused, and the backend floors any older one at
+that allowance. To remove a cap, use the row's **Cap** button with an empty
+value, or:
+
+```
+PATCH /v1/admin/licenses/{licenseId}
+{"clearMaxAnalyses": true}
+```
 
 Renewing is also the fix when someone reports being dropped to Demo
 unexpectedly — check the key's `expiresAt` in `GET /v1/admin/licenses` first;
@@ -863,6 +879,15 @@ seat when they work.
 The refusals worth recognising are `409 invite_exists` (that address is
 already promised a place on a different licence — withdraw the other
 invitation first) and `409 license_seats_exhausted` on an assigned key.
+
+An invitation to a full assigned key is not lost. The person signs in to Demo,
+and within about 15 minutes of a seat freeing up their account claims it on
+its own. The console counts pending invitations beside the seats taken.
+
+**Hold and Resume** (`PATCH .../seats/{uid}` with `enabled`) work on a current
+member only. A held seat keeps its place against the cap but gives up a
+floating seat it was using. A removed member cannot be resumed (`409
+seat_revoked`); add their address again instead, which takes a free seat.
 
 **One address for everybody.** `sempermechanics.com/login` is the only web
 address anyone needs — a customer, an IT contact, or Semper staff (it forwards

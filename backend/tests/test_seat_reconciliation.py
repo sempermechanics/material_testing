@@ -48,7 +48,7 @@ def _seat(license_id, uid):
 
 
 def _add_unclaimed_seat(license_id, uid="ghost"):
-    """A roster place for an address that has never signed in."""
+    """A seat with no account behind it (the account was erased)."""
     repo._seat_ref(license_id, uid).set({
         "uid": uid, "email": f"{uid}@university.edu", "status": "active",
     })
@@ -64,7 +64,7 @@ def test_a_clean_roster_reconciles_with_nothing_outstanding(store):
     report = _report(license_id)
 
     assert report["counts"] == {
-        "active": 2, "neverClaimed": 0,
+        "active": 2, "notEntitled": 0,
         "revokedConfirmed": 0, "revokedStillRunning": 0,
     }
     # Intent and reality agree, and the counter agrees with a recount.
@@ -218,20 +218,38 @@ def test_a_revoked_seat_with_no_account_behind_it_is_settled(store):
     assert _bucket(report, "u1") == ("revokedConfirmed", repo.NO_ACCOUNT)
 
 
-def test_a_seat_nobody_claimed_counts_against_intent_but_entitles_nobody(store):
+def test_a_seat_with_no_account_counts_against_intent_but_entitles_nobody(store):
     """The drift in the other direction, and why `entitled` is not `intended`.
 
-    A roster place added for an address that has never signed in occupies a
-    seat as far as IT is concerned and entitles no one at all.
+    A roster place with no account behind it occupies a seat as far as IT is
+    concerned and entitles no one at all. It used to be reported as "invited
+    but never signed in", which a seat never is: invites are not seats.
     """
     license_id = _roster(store, "u1")
     _add_unclaimed_seat(license_id)
 
     report = _report(license_id)
     assert report["counts"]["active"] == 2
-    assert report["counts"]["neverClaimed"] == 1
-    assert _bucket(report, "ghost") == ("active", repo.NEVER_CLAIMED)
+    assert report["counts"]["notEntitled"] == 1
+    assert _bucket(report, "ghost") == ("active", repo.NO_ACCOUNT)
     assert report["entitled"] == 1
+
+
+def test_an_idle_active_seat_says_why(store):
+    """Each way an active seat can entitle nobody is named for what it is."""
+    license_id = _roster(store, "held", "moved", "demoted")
+    store._data[f"licenses/{license_id}/seats"]["held"]["status"] = "disabled"
+    store._data["users"]["held"].update(mode="demo", plan="demo")
+    store._data["users"]["moved"]["licenseId"] = "another-licence"
+    store._data["users"]["demoted"].update(mode="demo", plan="demo")
+
+    report = _report(license_id)
+
+    assert _bucket(report, "held") == ("active", repo.ON_HOLD)
+    assert _bucket(report, "moved") == ("active", repo.MOVED_ON)
+    assert _bucket(report, "demoted") == ("active", repo.DEMOTED)
+    assert report["counts"]["notEntitled"] == 3
+    assert report["entitled"] == 0
 
 
 def test_entitled_is_exactly_the_accounts_this_licence_still_answers_for(
@@ -255,7 +273,7 @@ def test_entitled_is_exactly_the_accounts_this_licence_still_answers_for(
         1 for s in report["seats"] if s["reason"] == repo.STILL_LICENSED
     )
     assert unlanded == 1
-    assert report["entitled"] == c["active"] - c["neverClaimed"] + unlanded
+    assert report["entitled"] == c["active"] - c["notEntitled"] + unlanded
 
 
 def test_a_floating_member_between_leases_is_not_mistaken_for_a_failed_revoke(
@@ -303,3 +321,27 @@ def test_reconciling_an_unknown_licence_is_not_found(store):
     err, report = repo.reconcile_institution_seats("no-such-licence")
     assert err == "license_not_found"
     assert report is None
+
+
+def test_a_lapsed_licence_entitles_nobody_though_its_roster_is_intact(store):
+    """The stored mode stays `licensed` past expiry; the backend answers demo.
+
+    Counting the stored mode told the operator a lapsed roster was in use.
+    """
+    license_id = _roster(store, "u1", "u2")
+    for uid in ("u1", "u2"):
+        store._data["users"][uid].update({
+            "licenseExpiresAt": datetime.now(timezone.utc) - timedelta(days=30),
+            "licenseGraceDays": 7,
+        })
+
+    report = _report(license_id)
+    assert report["counts"]["active"] == 2
+    assert report["entitled"] == 0
+
+
+def test_an_uncapped_licence_reports_no_cap_rather_than_zero_seats(store):
+    store._data["users"] = {}
+    minted = _mint(max_seats=None)
+    assert _report(minted["license"]["id"])["maxSeats"] is None
+    assert _report(_roster(store, "u1"))["maxSeats"] == 4

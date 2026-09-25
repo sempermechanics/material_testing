@@ -5,6 +5,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
+from .config import settings
 from .validation import DeviceId, DocumentId, SessionId
 
 # "bundle" = Session.zip, holding only what a restore needs to rebuild a working
@@ -21,6 +22,21 @@ Role = Literal["raw", "processed", "reports", "metadata", "csv", "dat", "bundle"
 
 _HEX = frozenset("0123456789abcdefABCDEF")
 DisplayString = Annotated[str, StringConstraints(max_length=128)]
+
+
+def _analysis_cap(value: Optional[int]) -> Optional[int]:
+    """A licence's per-user analysis cap may not undercut demo.
+
+    `resolve_user_config` floors the ceiling at `DEMO_MAX_ANALYSES` anyway;
+    refusing here tells the operator at mint rather than storing a number that
+    never takes effect.
+    """
+    if value is not None and value < settings.DEMO_MAX_ANALYSES:
+        raise ValueError(
+            f"maxAnalyses must be at least {settings.DEMO_MAX_ANALYSES} (the demo "
+            "allowance); leave it out for the licensed default"
+        )
+    return value
 
 
 class DeviceReg(BaseModel):
@@ -211,6 +227,11 @@ class AdminLicenseCreate(BaseModel):
             return value
         return value.replace(tzinfo=timezone.utc)
 
+    @field_validator("maxAnalyses")
+    @classmethod
+    def _max_analyses(cls, value: Optional[int]) -> Optional[int]:
+        return _analysis_cap(value)
+
     @field_validator("emailLock")
     @classmethod
     def _email_lock(cls, value: Optional[str]) -> Optional[str]:
@@ -346,6 +367,10 @@ class AdminLicenseUpdate(BaseModel):
     supportUntil: Optional[datetime] = None
     maxSeats: Optional[int] = Field(default=None, gt=0, le=100000)
     maxAnalyses: Optional[int] = Field(default=None, gt=0)
+    #: Drop the licence's analysis cap so holders get the licensed default.
+    #: A flag, not `maxAnalyses: null`, because a null here already means
+    #: "unchanged" for every other term.
+    clearMaxAnalyses: Optional[bool] = None
     note: Optional[DisplayString] = None
     clearDeviceLock: Optional[bool] = None
 
@@ -356,12 +381,19 @@ class AdminLicenseUpdate(BaseModel):
             return value
         return value.replace(tzinfo=timezone.utc)
 
+    @field_validator("maxAnalyses")
+    @classmethod
+    def _max_analyses(cls, value: Optional[int]) -> Optional[int]:
+        return _analysis_cap(value)
+
     @model_validator(mode="after")
     def _at_least_one_field(self) -> "AdminLicenseUpdate":
         if all(
             getattr(self, name) is None
             for name in ("expiresAt", "graceDays", "supportUntil", "maxSeats",
-                         "maxAnalyses", "note", "clearDeviceLock")
+                         "maxAnalyses", "clearMaxAnalyses", "note", "clearDeviceLock")
         ):
             raise ValueError("at least one field must be set")
+        if self.clearMaxAnalyses and self.maxAnalyses is not None:
+            raise ValueError("send maxAnalyses or clearMaxAnalyses, not both")
         return self

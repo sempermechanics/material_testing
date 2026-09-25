@@ -27,7 +27,8 @@ object TokenStore {
     private const val K_STATUS = "last_status" // last server-confirmed access_status
     private const val K_ROLE = "role" // "admin" | "user"
     private const val K_DEVICE_REGISTERED = "device_registered"
-    private const val K_QUOTA_USED = "quota_used"
+    private const val K_QUOTA_USED = "quota_used" // the server's count at the last reconcile
+    private const val K_LOCAL_COUNT = "quota_local_count"
     private const val K_LIMIT_FORCED = "session_limit_forced"
     private const val K_BETA_ACKED_PREFIX = "beta_notice_acked_"
     private const val K_TERMS_REQUIRED = "terms_required_version"
@@ -71,7 +72,15 @@ object TokenStore {
     // no cycle. The hard stop is computed live, so a changed ceiling takes effect
     // without any write-back from AppRemoteConfig.
 
-    fun quotaUsed(context: Context): Int = prefs(context).getInt(K_QUOTA_USED, 0)
+    /**
+     * Analyses counted against the cap: the server's count or the phone's,
+     * whichever is higher. Kept as two numbers so a delete on the phone can
+     * lower its half; one stored max never came down until a reconcile, so
+     * offline or with cloud off "25 / 25" and the hard stop outlived the delete.
+     */
+    fun quotaUsed(context: Context): Int = prefs(context).let {
+        maxOf(it.getInt(K_QUOTA_USED, 0), it.getInt(K_LOCAL_COUNT, 0))
+    }
 
     /** Session ceiling, owned by [AppRemoteConfig]; 0 until the backend reports it. */
     fun quotaMax(context: Context): Int = AppRemoteConfig.maxSessions(context)
@@ -92,16 +101,20 @@ object TokenStore {
      * [isSessionLimitReached] from used vs the [AppRemoteConfig] ceiling.
      */
     fun setQuota(context: Context, used: Int, localCount: Int = 0) {
-        val effectiveUsed = maxOf(used, localCount)
         prefs(context).edit {
-            putInt(K_QUOTA_USED, effectiveUsed)
+            putInt(K_QUOTA_USED, used)
+            putInt(K_LOCAL_COUNT, localCount)
             putBoolean(K_LIMIT_FORCED, false)
         }
     }
 
-    /** Refresh the cached USED count from the local session count (+ cached cloud used). */
-    fun refreshSessionLimit(context: Context, localCount: Int) =
-        setQuota(context, quotaUsed(context), localCount)
+    /** Refresh the phone's half of the USED count; the server's stays as last reported. */
+    fun refreshSessionLimit(context: Context, localCount: Int) {
+        prefs(context).edit {
+            putInt(K_LOCAL_COUNT, localCount)
+            putBoolean(K_LIMIT_FORCED, false)
+        }
+    }
 
     /** Force the hard stop (e.g. an upload rejected 409 without fresh numbers). */
     fun setSessionLimitReached(context: Context, v: Boolean) {
@@ -110,8 +123,8 @@ object TokenStore {
 
     /**
      * True when the account may not create another analysis (hard stop).
-     * Professional has no local analysis cap. Demo uses the 25-run ceiling
-     * even before [AppRemoteConfig] has been fetched.
+     * Both modes stop at the backend's ceiling once [AppRemoteConfig] has it.
+     * Before that, demo uses the 25-run ceiling and licensed has none.
      */
     @Suppress("ReturnCount")
     fun isSessionLimitReached(context: Context): Boolean {

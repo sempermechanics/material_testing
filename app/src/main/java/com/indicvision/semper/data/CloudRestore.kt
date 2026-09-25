@@ -5,6 +5,7 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
@@ -781,7 +782,8 @@ object CloudRestore {
         return dest
     }
 
-    private data class RestoreRecordTarget(
+    @VisibleForTesting
+    internal data class RestoreRecordTarget(
         val localId: String,
         val cloudSessionId: String,
         val sessionDir: File,
@@ -789,7 +791,8 @@ object CloudRestore {
         val existing: SessionRecord?,
     )
 
-    private fun recordFrom(meta: JSONObject, target: RestoreRecordTarget): SessionRecord {
+    @VisibleForTesting
+    internal fun recordFrom(meta: JSONObject, target: RestoreRecordTarget): SessionRecord {
         val engine = meta.optJSONObject("engine") ?: JSONObject()
         val roi = engine.optJSONObject("roi") ?: JSONObject()
         val metrics = meta.optJSONObject("metrics") ?: JSONObject()
@@ -827,6 +830,10 @@ object CloudRestore {
             pointsConverged = metrics.optInt("pointsConverged", 0),
             avgIterations = metrics.optDouble("avgIterations", 0.0).toFloat(),
             executionTimeMs = metrics.optInt("executionTimeMs", 0),
+            // Absent from backups made before they were written: read as a
+            // completed run, which is what those records said too.
+            stopCode = metrics.optInt("stopCode", 0),
+            plannedFrameCount = metrics.optInt("plannedFrameCount", 0),
             cloudSessionId = target.cloudSessionId,
             // It came from the cloud, so it is by definition backed up.
             syncState = SessionRecord.SyncState.SYNCED,
