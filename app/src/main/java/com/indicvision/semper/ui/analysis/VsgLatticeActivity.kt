@@ -232,7 +232,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         strainPlot.onScrub = { x, samples -> strainPlotReadout.text = scrubReadout(x, samples) }
         strainPlot.onScrubMove = { fraction ->
             syncingSlider = true
-            strainSlider.value = fraction.coerceIn(0f, 1f)
+            strainSlider.value = if (fraction.isNaN()) 0f else fraction.coerceIn(0f, 1f)
             syncingSlider = false
         }
         strainSlider.addOnChangeListener { _, value, fromUser ->

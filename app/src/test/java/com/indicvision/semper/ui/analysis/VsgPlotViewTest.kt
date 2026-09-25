@@ -170,6 +170,7 @@ class VsgPlotViewTest {
         assertTrue(fractions[0] < fractions[1])
         assertTrue("lifting reports NaN", scrubs.last().x.isNaN())
         assertTrue(scrubs.last().samples.isEmpty())
+        assertTrue("the slider is sent back to rest", fractions.last().isNaN())
     }
 
     @Test
@@ -290,6 +291,28 @@ class VsgPlotViewTest {
         view.onTouchEvent(event(MotionEvent.ACTION_UP, x, y, 5_160))
 
         assertEquals(0f to 20f, viewportX())
+    }
+
+    @Test
+    fun `a pinch sends the slider back to rest, even one the slider had set`() {
+        view.zoomEnabled = true
+        view.scrubToFraction(0.8f)
+        pinch(focusX = W / 2f, fromHalf = 100f, toHalf = 230f)
+
+        assertTrue("slider left at ${fractions.last()}", fractions.last().isNaN())
+        assertTrue(scrubs.last().x.isNaN())
+    }
+
+    @Test
+    fun `a double tap leaves the slider at rest`() {
+        view.zoomEnabled = true
+        val y = H / 2f
+        view.onTouchEvent(event(MotionEvent.ACTION_DOWN, W * 0.7f, y))
+        view.onTouchEvent(event(MotionEvent.ACTION_UP, W * 0.7f, y, 40))
+        view.onTouchEvent(event(MotionEvent.ACTION_DOWN, W * 0.7f, y, 120))
+        view.onTouchEvent(event(MotionEvent.ACTION_UP, W * 0.7f, y, 160))
+
+        assertTrue("slider left at ${fractions.last()}", fractions.last().isNaN())
     }
 
     @Test
