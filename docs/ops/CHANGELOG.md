@@ -12,6 +12,19 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-25 — material_testing: 2D DIC on the test-type sheet (#46)
+
+Merged as `82ae372e`. Home **+** → **Which test?** offers **2D DIC** next to
+Tensile and Bending: plain DIC with no load card and no specimen dimensions,
+strain window starting at 5 points. `TestType.DIC_2D` has `hasMachineLoad =
+false`, and `AnalysisViewModel.mechanicalInputs` returns
+`MechanicalTestInputs.NONE` for it, so the session is stored with a blank test
+type, the untyped plain-DIC session every reader already handles. The viewer
+opens on the summary, with no Results page, no lab report and no **Test type**
+row; `"dic2d"` never reaches `index.json`, `metadata.json` or the backend.
+Checked by hand on the API 36 emulator (steel_00 + 3 frames); `test-type.png`
+retaken. Ships with the next app release.
+
 ## 2026-09-25 — Backend deploy: a session-delete bucket (#226)
 
 Production `semper-api-36122511953-1` from `cb0e893` (staging first, run
