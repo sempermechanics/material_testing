@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Debug-only: exported seed so adb can open the result viewer on an emulator. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- HotPathMicroBenchmark runs in :app's androidTest, so the app under test is this
+         one, and BenchmarkRule grants it WRITE_EXTERNAL_STORAGE on every API level. The
+         main manifest requests it only up to API 32, so on the API 34 CI emulator the
+         grant threw a SecurityException before any benchmark ran. Debug builds only. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage"
+        tools:remove="android:maxSdkVersion" />
+
     <application>
         <activity
             android:name="com.indicvision.semper.debug.DebugViewerSeedActivity"
