@@ -92,7 +92,7 @@ Emulators on API 34 and 37 both raise `ACTIVITY-MISSING` and `NOT-AOT-COMPILED`
 besides `DEBUGGABLE`; leave one out and every case fails at once. Pass the list with
 `am instrument`, not `connectedDebugAndroidTest -P …suppressErrors=…`: through Gradle
 it arrives cut at its first comma, so only `EMULATOR` is suppressed (seen on Linux CI,
-TD-78). CI runs this command.
+TD-81). CI runs this command.
 
 Results land in logcat (`adb logcat -d -s Benchmark:I`).
 
@@ -138,9 +138,11 @@ Worth knowing before you assume something is protected:
   the bundler's reports, the viewer's PDF and ZIP exports) is checked only by
   the device tests above. JVM tests stop at the progress and error contract.
 
-- The sweep lattice's newer interactions — pinch-zoom, the scrub slider,
-  double-tap-to-copy and the composed **Save graph** PNG — have **no automated
-  coverage**. They are exercised only by the manual pass in
+- The strain plot's own gestures — scrub, pinch, pan, double-tap, and the
+  fraction it reports to the scrub slider (NaN once the scrub clears) — are
+  covered by `ui/analysis/VsgPlotViewTest`. The lattice screen around it — the
+  slider itself, double-tap-to-copy and the composed **Save graph** PNG — has
+  **no automated coverage**; it is exercised only by the manual pass in
   [WORKFLOWS.md](WORKFLOWS.md) §7.
 - The Storage section and the diagnostics consent toggle have no UI test;
   `settings/HelpSupportSectionTest` is the Robolectric pattern to copy if you add

@@ -15,4 +15,6 @@ def provision_session_task(body: ProvisionTask, caller=Depends(tasks.tasks_calle
     — not a user route. Cloud Tasks retries on a non-2xx, and provision_session
     is idempotent, so a retry resumes rather than duplicating work.
     """
-    return provision_session(body.sessionId)
+    result = provision_session(body.sessionId)
+    # Cloud Tasks only reads the status code; keep upload URLs out of the reply.
+    return {k: v for k, v in result.items() if k != "uploads"}

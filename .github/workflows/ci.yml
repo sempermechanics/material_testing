@@ -637,7 +637,7 @@ jobs:
       # DEBUGGABLE in its suppress list: its numbers are relative, not absolutes.
       # It goes through `am instrument`, not connectedDebugAndroidTest: an
       # instrumentation argument passed through Gradle arrives cut at its first
-      # comma (only EMULATOR was suppressed, TD-78), and API 34 raises
+      # comma (only EMULATOR was suppressed, TD-81), and API 34 raises
       # ACTIVITY-MISSING and NOT-AOT-COMPILED too. `am instrument` exits 0 on test
       # failures, so the grep on its summary line is the pass/fail.
       - name: Run startup Macrobenchmarks and hot-path Microbenchmarks

@@ -407,7 +407,7 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     # concurrent-create race is on a *soft* quota, not a security boundary, and is
     # accepted deliberately (a transactional cross-doc count is not modelled by
     # the Firestore client uniformly and adds no security value here).
-    repo.create_session(sid, user, device, body)
+    session = repo.create_session(sid, user, device, body)
 
     # Write the file docs (cheap, no Drive I/O) so the manifest is durable before
     # any upload target exists. Provisioning then only has to fill in uploadUrl,
@@ -446,15 +446,14 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     # inline. Same outcome from the client's point of view. Because
     # nothing will retry, a failure here rolls the whole session back rather
     # than leaving a shell against the user's quota.
-    provision_session(sid, purge_on_failure=True)
-    session = repo.get_session(sid) or {}
-    # One page is the whole manifest today (MAX_FILES_PER_SESSION is below the
-    # listing's page size), but the cursor is returned rather than dropped so a
-    # larger cap cannot silently truncate it; the app follows /uploads anyway.
-    uploads, next_token = repo.list_pending_uploads(sid)
+    # The session and its files were written by this request, so the targets
+    # just opened are the whole pending manifest: answer from them rather than
+    # reading the session and every file doc back (docs/perf/request-volume.md).
+    provisioned = provision_session(sid, purge_on_failure=True, session=session)
     return {
         "sessionId": sid,
-        "status": session.get("status"),
-        "uploads": uploads,
-        "nextPageToken": next_token,
+        "status": provisioned["status"],
+        "uploads": provisioned["uploads"],
+        # Every target is in this one response, so there is no next page.
+        "nextPageToken": None,
     }

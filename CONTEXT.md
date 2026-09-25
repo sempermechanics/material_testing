@@ -113,7 +113,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `VsgPlotView` y gutter, `TouchImageView` zoom across a resize, `AviReader` µs slack);
   #197, `settingsScroll` skips the licence-only settings headers and
   `scripts/ci_test_report.py` puts failing device tests and benchmark numbers in the CI log.
-- **This branch.** `HotPathMicroBenchmark` could not run in CI (TD-78): the debug manifest
+- **Request volume ([perf/request-volume.md](docs/perf/request-volume.md)).** #191 (merged,
+  awaiting release) runs `CloudSync.reconcile` one call at a time: 12 → 4 requests per app
+  open on the Pixel 6. Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs
+  6 + N Firestore reads instead of 8 + 2N ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
+- **This branch.** `HotPathMicroBenchmark` could not run in CI (TD-81): the debug manifest
   now requests `WRITE_EXTERNAL_STORAGE` on every API so `BenchmarkRule`'s grant succeeds,
   and CI runs it with `am instrument`, since Gradle cut its `suppressErrors` list at the first comma.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):

@@ -318,7 +318,7 @@ Lattice, Session limit, or back to Home.
 | [ ] 5.1.3 | Tap **Change** on the reference card | Source chooser reopens; the new image replaces the old |
 | [ ] 5.1.4 | Pick deformed frames from the sheet's grid (multi-select, then **Use N**) | Card shows "N frames" and the first…last filenames |
 | [ ] 5.1.5 | Pick more frames than *Max frames* | The first N are kept, with a "capped" toast |
-| [ ] 5.1.6 | Load a reference only | **Next** is disabled with "add at least one deformed frame to continue" |
+| [ ] 5.1.6 | Load a reference only | **Next** is disabled — a grey button with grey text, not sky blue — with "add at least one deformed frame to continue" |
 | [ ] 5.1.7 | Load deformed frames only | **Next** is disabled with the matching reference message |
 | [ ] 5.1.8 | Include one frame of a different pixel size | **Compute** stays disabled. On step 2 a warning chip says the image resolution isn't matching the reference (W×H) and lists the mismatched filename(s); its info icon asks first whether to leave the app, then opens the frame-size FAQ |
 | [ ] 5.1.9 | Load JPEGs | A non-blocking accuracy warning chip appears; its info icon asks first whether to leave the app, then opens the JPEG FAQ |
@@ -553,6 +553,8 @@ aiming at a small target.
 | [ ] 7.2.12 | Drag the slider instead | The guide, dot and readout follow it — the sync works both ways |
 | [ ] 7.2.13 | Read the readout | "x=…  y=…" for one unmuted series; when **All** shows several curves, "x=…" plus each `label=value` |
 | [ ] 7.2.14 | Step to another node with the plot scrubbed | The readout clears and the slider returns to 0 |
+| [ ] 7.2.15 | Drag one finger across the plot, then lift it | The guide, dot and readout clear and the slider returns to 0, so it never marks a line that is gone |
+| [ ] 7.2.16 | Drag the slider off 0, then pinch, or double-tap the plot | The slider returns to 0 once the gesture ends — it is not left where the first finger landed |
 
 ### 7.3 Copy, save and open
 

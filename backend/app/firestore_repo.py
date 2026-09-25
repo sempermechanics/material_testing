@@ -145,6 +145,7 @@ from .repo.sessions import (  # noqa: F401
     set_file_upload_url,
     set_session_folder,
     set_session_status,
+    upload_target,
 )
 
 from .repo import (
