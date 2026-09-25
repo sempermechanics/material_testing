@@ -107,9 +107,15 @@ health_bucket = TokenBucket(rate_per_sec=5.0, burst=20.0)
 # file query per session. One caller can otherwise burn the project's Firestore
 # read quota from a single endpoint. It is also absent from the gateway quotas.
 export_bucket = TokenBucket(rate_per_sec=0.05, burst=2.0)
-# Erasure walks a Drive subtree and batch-deletes Firestore. Not something a
-# legitimate client does in a loop.
+# Account erasure walks every session's Drive subtree and batch-deletes
+# Firestore. Not something a legitimate client does in a loop.
 erase_bucket = TokenBucket(rate_per_sec=0.2, burst=3.0)
+# One analysis's erasure: one Drive folder plus its Firestore docs, about 1.1 s
+# of server time (median of 10 in production, 2026-09-25). Home's multi-select
+# sends one per analysis, one at a time, so 1/s is roughly the pace a single
+# client can reach, and the burst lets a ten-row selection through without a
+# 429. On the account bucket above, ten deletes took 61 requests and 100 s.
+session_erase_bucket = TokenBucket(rate_per_sec=1.0, burst=10.0)
 # Admin routes are trusted but unmetered — this is flood protection only.
 admin_bucket = TokenBucket(rate_per_sec=5.0, burst=20.0)
 # License key guesses must not be brute-forced.

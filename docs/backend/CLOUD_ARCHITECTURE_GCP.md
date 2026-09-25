@@ -844,8 +844,9 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
   document ids in `validation.py` before they reach a Firestore query (§7).
 - **Rate limiting (implemented in-process; distributed layer still open):**
   `rate_limit.py` applies per-uid token buckets to challenge, session create,
-  download, export, erase, admin, listing, health, file-complete and
-  session-verify. Because the buckets live in the process, they bound one Cloud
+  download, export, erase (account: 0.2/s, burst 3), session erase (one
+  analysis: 1/s, burst 10, so a ten-row delete needs no retry), admin,
+  listing, health, file-complete and session-verify. Because the buckets live in the process, they bound one Cloud
   Run instance rather than the fleet — the cross-instance layer is API Gateway
   quotas in `openapi.yaml`, with Cloud Armor still to come when the service is
   public. [PRODUCTION_READINESS_GATE.md](../ops/PRODUCTION_READINESS_GATE.md)

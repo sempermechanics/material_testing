@@ -112,7 +112,7 @@ def list_sessions(
     }
 
 
-@router.delete("/v1/sessions/{sid}", dependencies=[rate_limited(rate_limit.erase_bucket)])
+@router.delete("/v1/sessions/{sid}", dependencies=[rate_limited(rate_limit.session_erase_bucket)])
 def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     """Erase one analysis from the cloud (GDPR right to erasure).
 
