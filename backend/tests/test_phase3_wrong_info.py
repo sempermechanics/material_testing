@@ -262,6 +262,8 @@ async def test_a_failed_upload_does_not_block_a_new_one_at_the_cap(
     uploads, client, monkeypatch,
 ):
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "maxSessions": 2})
+    # A licensed ceiling is floored at demo's, so demo's has to be 2 as well.
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 2)
     _seed(uploads, COMPLETED=1, PROVISION_FAILED=1)
 
     resp = await client.post("/v1/sessions", json={"specimen": "s", "files": [_file("a")]})

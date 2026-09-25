@@ -773,7 +773,7 @@ approves/revokes accounts):
 only — it never stops anyone using the product.
 
 **What grace means.** During grace the account keeps *everything*: cloud
-backup, share, the uncapped analysis count. The user sees a notice on Home
+backup, share, the licensed analysis ceiling. The user sees a notice on Home
 saying a renewal is overdue, and nothing else changes. It exists so a renewal
 being processed does not interrupt someone mid-project. Entitlement stops at
 `expiresAt + graceDays`, at which point the account drops to Demo — which, as
@@ -796,6 +796,26 @@ the count read "12 of 10"; remove members first. A floating licence's pool may
 be smaller than its roster. What you cannot change is who the key is *for*: `kind` and the
 email/device/domain locks are fixed at mint, and a key that needs different
 locks is a new key.
+
+A new `expiresAt` must be **later** than the one in force. The request is
+refused with `422` and nothing changes if the date has already passed
+(`expiry_in_past`), is earlier than the current expiry
+(`expiry_before_current`), or the key is perpetual (`license_perpetual` — it
+has no expiry to extend). To end a key early, revoke it. The operator desk
+reports the expiry the server stored.
+
+**`maxAnalyses` is per person, not per licence**, and is normally left empty:
+empty gives every holder the licensed default (`LICENSED_MAX_SESSIONS_PER_USER`,
+999). On the operator desk it is "Cloud analyses per person", and the table's
+"Analyses / person" column shows it. A value below the demo allowance
+(`DEMO_MAX_ANALYSES`, 25) is refused, and the backend floors any older one at
+that allowance. To remove a cap, use the row's **Cap** button with an empty
+value, or:
+
+```
+PATCH /v1/admin/licenses/{licenseId}
+{"clearMaxAnalyses": true}
+```
 
 Renewing is also the fix when someone reports being dropped to Demo
 unexpectedly — check the key's `expiresAt` in `GET /v1/admin/licenses` first;
@@ -869,6 +889,8 @@ seat when they work.
 The refusals worth recognising are `409 invite_exists` (that address is
 already promised a place on a different licence — withdraw the other
 invitation first) and `409 license_seats_exhausted` on an assigned key.
+`503 claim_contended` is not a refusal: another request was claiming on the
+same licence at that moment, and adding the member again succeeds.
 
 An invitation to a full assigned key is not lost. The person signs in to Demo,
 and within about 15 minutes of a seat freeing up their account claims it on

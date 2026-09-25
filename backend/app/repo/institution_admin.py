@@ -98,7 +98,7 @@ def add_institution_member(license_id: str, email: str,
     err = claim_seat(license_id, uid, user.get("email") or email, "",
                      _institution_member_patch(license_id, lic))
     if err:
-        return _public_claim_error(err, "license_seats_exhausted"), None, None
+        return _public_claim_error(err, "claim_contended"), None, None
     seats = list_institution_seats(license_id)
     return "", next((s for s in seats if s["uid"] == uid), None), None
 

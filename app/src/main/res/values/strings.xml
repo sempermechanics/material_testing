@@ -21,6 +21,17 @@
         <item quantity="one">Importing image %1$d of %2$d</item>
         <item quantity="other">Importing image %1$d of %2$d</item>
     </plurals>
+    <!-- Wizard status line after a run that finished. Frames whose field kept
+         no valid points get no .dat file, so "N of M" says how many made it. -->
+    <plurals name="analysis_computed_fmt">
+        <item quantity="one">✅ Computed %1$d frame</item>
+        <item quantity="other">✅ Computed %1$d frames</item>
+    </plurals>
+    <!-- %1$d kept, %2$d planned, %3$d dropped (the quantity). -->
+    <plurals name="analysis_computed_partial_fmt">
+        <item quantity="one">✅ Computed %1$d of %2$d frames — %3$d frame kept no valid points</item>
+        <item quantity="other">✅ Computed %1$d of %2$d frames — %3$d frames kept no valid points</item>
+    </plurals>
 
     <!-- Common actions -->
     <string name="cancel">Cancel</string>
@@ -670,8 +681,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="viewer_stats_fmt">max %1$s at (%2$d, %3$d)\nmin %4$s at (%5$d, %6$d)\nmean %7$s %8$s</string>
     <string name="viewer_stats_plain_fmt">max %1$s · min %2$s · mean %3$s %4$s</string>
     <!-- Summary colour bar is a whole-sequence scale; the ⓘ sheet must quote
-         those same ends, not the hidden first frame's extrema. -->
-    <string name="viewer_stats_sequence_fmt">max %1$s · min %2$s %3$s</string>
+         those same ends, not the hidden first frame's extrema. They are the
+         scale's ends (a percentile clamp, or the user's fixed scale), not the
+         data's max/min, so they carry the scale bar's ≥ / ≤ (scale_max_fmt /
+         scale_min_fmt). %1$s top end, %2$s bottom end, %3$s unit. -->
+    <string name="viewer_stats_sequence_fmt">colour scale ≥ %1$s · ≤ %2$s %3$s</string>
     <string name="viewer_histogram_title_fmt">%1$s distribution</string>
     <plurals name="viewer_histogram_bin_fmt">
         <item quantity="one">%1$d point · %2$s–%3$s %4$s</item>
@@ -878,6 +892,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Delete 1 analysis?</item>
         <item quantity="other">Delete %1$d analyses?</item>
     </plurals>
+    <!-- A mixed selection gets one Delete button, which erases every copy; it
+         used to describe "Delete cloud" / "Delete device" buttons it did not have. -->
+    <plurals name="delete_confirm_body_everywhere_multi">
+        <item quantity="one">%1$d of these is backed up. Delete removes every copy, on your phone and in the cloud. This can\'t be undone.</item>
+        <item quantity="other">%1$d of these are backed up. Delete removes every copy, on your phone and in the cloud. This can\'t be undone.</item>
+    </plurals>
     <plurals name="delete_multi_working">
         <item quantity="one">Deleting 1 analysis…</item>
         <item quantity="other">Deleting %1$d analyses…</item>
@@ -926,6 +946,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <plurals name="vsg_lattice_summary_fmt">
         <item quantity="one">1 combination · %2$d solved · %3$d skipped · step subset÷%4$d</item>
         <item quantity="other">%1$d combinations · %2$d solved · %3$d skipped · step subset÷%4$d</item>
+    </plurals>
+    <plurals name="vsg_lattice_unreached_fmt">
+        <item quantity="one">" · 1 not run"</item>
+        <item quantity="other">" · %1$d not run"</item>
     </plurals>
     <plurals name="vsg_lattice_summary_short_fmt">
         <item quantity="one">1 combination · %2$d solved · %3$d skipped</item>

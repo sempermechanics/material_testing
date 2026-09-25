@@ -30,6 +30,9 @@ def activate_license(
             errors.USER_NOT_FOUND: 404,
             errors.LICENSE_ALREADY_REDEEMED: 409,
             errors.LICENSE_SEATS_EXHAUSTED: 409,
+            # Lost the race for the seat; a retry succeeds. 503 like
+            # device_lock_contended, so it never reads as a full licence.
+            errors.CLAIM_CONTENDED: 503,
             # 403, not 410: the key is real and may be renewed in place, so
             # this is "you may not use it", not "it is gone".
             errors.LICENSE_EXPIRED: 403,

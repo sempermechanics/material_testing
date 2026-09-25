@@ -142,25 +142,20 @@ class SessionSelectionController(
         val allHaveLocal = withLocal.size == records.size
         val allHaveCloud = records.all { hasCloudCopy(it) }
         val anyCloud = records.any { hasCloudCopy(it) }
+        val title = activity.resources.getQuantityString(
+            R.plurals.delete_confirm_title_multi,
+            records.size,
+            records.size,
+        )
         val dialog = MaterialAlertDialogBuilder(activity)
-            .setTitle(
-                activity.resources.getQuantityString(
-                    R.plurals.delete_confirm_title_multi,
-                    records.size,
-                    records.size,
-                ),
-            )
+            .setTitle(title)
             .setNegativeButton(R.string.action_cancel, null)
 
         when {
             allHaveLocal && allHaveCloud -> {
                 DeleteChoiceDialog.show(
                     activity = activity,
-                    title = activity.resources.getQuantityString(
-                        R.plurals.delete_confirm_title_multi,
-                        records.size,
-                        records.size,
-                    ),
+                    title = title,
                     message = activity.getString(R.string.delete_confirm_body_cloud_multi, records.size),
                     leftLabel = activity.getString(R.string.delete_device_only),
                     midLabel = activity.getString(R.string.delete_cloud_backup),
@@ -178,19 +173,24 @@ class SessionSelectionController(
             }
             else -> {
                 // Only-cloud stubs and mixed selections: full erase covers every case.
-                dialog.setMessage(
-                    if (anyCloud) {
-                        activity.getString(R.string.delete_confirm_body_cloud_multi, records.count { hasCloudCopy(it) })
-                    } else {
-                        activity.getString(R.string.delete_confirm_body_local_multi)
-                    },
-                )
+                dialog.setMessage(eraseEverywhereMessage(records))
                     .setPositiveButton(R.string.action_delete) { _, _ ->
                         eraseSelected(records, cloudToo = true)
                     }
             }
         }
         dialog.show()
+    }
+
+    /** The prompt above a Delete that erases every copy, naming how many are backed up. */
+    private fun eraseEverywhereMessage(records: List<SessionRecord>): String {
+        val backedUp = records.count { hasCloudCopy(it) }
+        if (backedUp == 0) return activity.getString(R.string.delete_confirm_body_local_multi)
+        return activity.resources.getQuantityString(
+            R.plurals.delete_confirm_body_everywhere_multi,
+            backedUp,
+            backedUp,
+        )
     }
 
     fun promptRename(record: SessionRecord) {

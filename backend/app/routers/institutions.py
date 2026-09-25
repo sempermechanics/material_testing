@@ -170,6 +170,8 @@ def add_seat(
             errors.LICENSE_SEAT_DISABLED: 409,
             errors.INVITE_EXISTS: 409,
             errors.INVALID_EMAIL: 400,
+            # Lost the race for the seat, not out of seats: try again.
+            errors.CLAIM_CONTENDED: 503,
         }.get(code, 403)
         raise HTTPException(status, code)
     audit.record(

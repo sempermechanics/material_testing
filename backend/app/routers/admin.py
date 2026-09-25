@@ -176,6 +176,14 @@ def admin_update_license(
             raise HTTPException(422, errors.MAX_SEATS_BELOW_USED)
     patch = body.model_dump(exclude_none=True)
     clear_lock = patch.pop("clearDeviceLock", False)
+    if "expiresAt" in patch:
+        # Refused before the lock is touched, so a rejected date never
+        # leaves half the request applied. `update_license` checks again
+        # against what it reads, for an edit that lands in between.
+        current = repo.get_license(license_id)
+        err = repo.expiry_change_error(current, patch["expiresAt"]) if current else ""
+        if err:
+            raise HTTPException(422, err)
     cleared = {}
     if clear_lock:
         err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
@@ -188,7 +196,10 @@ def admin_update_license(
         )
     # An empty patch is a device change on its own; `update_license` answers
     # with the licence as it stands and writes nothing, which is what that is.
-    updated = repo.update_license(license_id, patch, admin["uid"])
+    try:
+        updated = repo.update_license(license_id, patch, admin["uid"])
+    except repo.LicenseTermsRejected as exc:
+        raise HTTPException(422, exc.code) from exc
     if updated is None:
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     if patch:

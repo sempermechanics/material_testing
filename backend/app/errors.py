@@ -81,6 +81,17 @@ LICENSE_DEVICE_MISMATCH = "license_device_mismatch"
 LICENSE_ALREADY_REDEEMED = "license_already_redeemed"
 LICENSE_SEAT_DISABLED = "license_seat_disabled"
 LICENSE_SEATS_EXHAUSTED = "license_seats_exhausted"
+# 503: the claim lost every transaction attempt to other requests on the same
+# licence. Nothing was granted and nothing is wrong with the licence — the
+# caller retries and, on a licence with room, wins. Never reported as
+# `license_seats_exhausted`, which told IT the licence was full when it wasn't.
+CLAIM_CONTENDED = "claim_contended"
+# 422 on a licence edit. Extend only moves an expiry later: a date already
+# past, or earlier than the one in force, would end or shorten the licence
+# for everyone on it, and a perpetual licence has no expiry to extend.
+EXPIRY_IN_PAST = "expiry_in_past"
+EXPIRY_BEFORE_CURRENT = "expiry_before_current"
+LICENSE_PERPETUAL = "license_perpetual"
 SEAT_NOT_FOUND = "seat_not_found"
 # Hold / resume on a seat that was removed. Resuming one used to reactivate it
 # without taking a slot back; the member is re-added instead.

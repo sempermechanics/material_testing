@@ -9,6 +9,9 @@ so nothing lingers against the user's quota.
 import pytest
 
 from app import audit, drive
+# Module level on purpose: test_config reloads app.config, and an import taken
+# after that is a different `settings` object from the one the repo reads.
+from app.config import settings
 
 DEV_UID = "dev-user"  # deps._DEV_USER in DEV_INSECURE_AUTH mode
 _SHA = "a" * 64
@@ -105,6 +108,8 @@ async def test_session_quota_exceeded_returns_409(store, monkeypatch, client):
     from app import deps, rate_limit
     monkeypatch.setattr(rate_limit.session_bucket, "allow", lambda uid: True)
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "maxSessions": 1})
+    # A licensed ceiling is floored at demo's, so demo's has to be 1 as well.
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 1)
     # One existing analysis already fills the quota.
     store._data["sessions"] = {
         "existing": {"uid": DEV_UID, "status": "COMPLETED", "fileCount": 1, "completedCount": 1},

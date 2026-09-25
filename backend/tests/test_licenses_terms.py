@@ -337,14 +337,19 @@ def test_extending_does_not_touch_someone_on_a_different_license(store):
     assert store._data["users"]["u1"].get("licenseExpiresAt") is None
 
 
-def test_extending_a_perpetual_license_makes_it_timed(store):
+def test_extending_a_perpetual_license_is_refused(store):
+    """An expiry on a perpetual licence is not an extension: it turned an
+    unending licence into a timed one, with no grace, for everyone on it."""
     minted = repo.create_individual_license(
         email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
     )
-    assert minted["license"]["id"] in store._data["licenses"]
+    license_id = minted["license"]["id"]
     far = datetime.now(timezone.utc) + timedelta(days=30)
-    repo.update_license(minted["license"]["id"], {"expiresAt": far}, "admin")
-    assert store._data["licenses"][minted["license"]["id"]]["duration"] == "timed"
+    with pytest.raises(repo.LicenseTermsRejected) as raised:
+        repo.update_license(license_id, {"expiresAt": far}, "admin")
+    assert raised.value.code == "license_perpetual"
+    assert store._data["licenses"][license_id]["duration"] == "perpetual"
+    assert store._data["licenses"][license_id].get("expiresAt") is None
 
 
 def test_update_unknown_license_is_none(store):
@@ -380,6 +385,86 @@ async def test_admin_extend_rejects_an_empty_patch(client, monkeypatch):
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     resp = await client.patch("/v1/admin/licenses/whatever", json={})
     assert resp.status_code == 422
+
+
+# ====================================================== analysis cap
+# A licence may not give fewer analyses than demo. The operator's cap box was
+# the only number on an individual licence, so "1" read as "one licence".
+
+def test_clearing_the_analysis_cap_reaches_the_holder(store, monkeypatch):
+    """A cap stored before the floor existed can be dropped, and the holder
+    goes back to the licensed default without re-activating."""
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    monkeypatch.setattr(settings, "LICENSED_MAX_SESSIONS_PER_USER", 999)
+    store._data["users"] = {
+        "u1": {"email": "a@b.com", "access_status": "APPROVED", "mode": "demo"},
+    }
+    # The repo mints what it is given; the 1 is the legacy data the API now refuses.
+    minted = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+        max_analyses=1,
+    )
+    license_id = minted["license"]["id"]
+    err, cfg = repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+    assert err == ""
+    assert store._data["users"]["u1"]["licenseMaxAnalyses"] == 1
+    assert cfg["maxSessions"] == 25  # floored, never "0 / 1"
+
+    updated = repo.update_license(license_id, {"clearMaxAnalyses": True}, "admin")
+    assert updated["maxAnalyses"] is None
+    assert "maxAnalyses" not in store._data["licenses"][license_id]
+    assert "licenseMaxAnalyses" not in store._data["users"]["u1"]
+    assert repo.resolve_user_config(store._data["users"]["u1"])["maxSessions"] == 999
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    {"emailLock": "a@b.com", "maxAnalyses": 1},
+    {"kind": "institution", "domainLock": "university.edu",
+     "adminEmails": ["it@university.edu"], "maxAnalyses": 24},
+])
+async def test_admin_mint_refuses_a_cap_below_demo(client, monkeypatch, body):
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    resp = await client.post("/v1/admin/licenses", json=body)
+    assert resp.status_code == 422, resp.text
+    assert "maxAnalyses" in resp.text
+    assert not store._data.get("licenses")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    {"maxAnalyses": 1},
+    {"maxAnalyses": 40, "clearMaxAnalyses": True},
+])
+async def test_admin_update_refuses_a_bad_cap(client, monkeypatch, body):
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    minted = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+    )
+    resp = await client.patch(f"/v1/admin/licenses/{minted['license']['id']}", json=body)
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_admin_clear_cap_over_http(client, monkeypatch):
+    monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 25)
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    minted = repo.create_individual_license(
+        email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
+        max_analyses=40,
+    )
+    license_id = minted["license"]["id"]
+    resp = await client.patch(
+        f"/v1/admin/licenses/{license_id}", json={"clearMaxAnalyses": True},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["maxAnalyses"] is None
+    assert "maxAnalyses" not in store._data["licenses"][license_id]
 
 
 @pytest.mark.asyncio

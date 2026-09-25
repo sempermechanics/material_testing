@@ -22,7 +22,9 @@ Candidate smoke passed on both; the gateway dry-run found the live config
 - #202: an inline `POST /v1/sessions` answers from the upload targets it opened
   instead of reading the session and file docs back: 8 + 2N → 6 + N Firestore
   reads (N = 3: 14 → 9). `backend/tests/test_read_budget.py` holds each route's
-  cost ([perf/request-volume.md](../perf/request-volume.md) Pass 4).
+  cost ([perf/request-volume.md](../perf/request-volume.md) Pass 4). Production
+  latency after the deploy: median 2487 ms over 10 uploads (was 3158 ms, n = 9), so
+  no rise.
 - TD-71: every deploy failed after the clean-up with `403 … storage.buckets.list`,
   because a source deploy lists the project's buckets to find `run-sources-*`.
   `indic-deployer` now also holds `roles/storage.bucketViewer` (buckets get/list,

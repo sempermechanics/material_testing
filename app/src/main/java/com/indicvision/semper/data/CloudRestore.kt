@@ -868,8 +868,10 @@ object CloudRestore {
     /**
      * The Home-list headline for a restored session: for a sweep, the specimen
      * plus solved/total and subset span; otherwise the converged percentage.
+     * Skips are counted from the parsed nodes: backups write a `nodes` array,
+     * and counting the legacy `subsets` list alone read 0 for every new one.
      */
-    private fun restoredHeadline(
+    internal fun restoredHeadline(
         meta: JSONObject,
         engine: JSONObject,
         defNames: List<String>,
@@ -878,7 +880,7 @@ object CloudRestore {
         val sweep = engine.optJSONObject("sweep")
             ?: return String.format(java.util.Locale.US, "%.1f%% converged", stats.getOrElse(15) { 0f })
         val solved = meta.optInt("frameCount", defNames.size)
-        val skipCount = sweep.optJSONObject("skipped")?.optJSONArray("subsets")?.length() ?: 0
+        val skipCount = SkippedNode.fromMetadata(sweep.optJSONObject("skipped")).size
         val image = defNames.firstOrNull().orEmpty().ifBlank { meta.optString("specimen", "frame") }
         val subsets = intList(sweep.optJSONArray("subsets"))
         val lo = subsets.minOrNull() ?: engine.optInt("subset", 0)

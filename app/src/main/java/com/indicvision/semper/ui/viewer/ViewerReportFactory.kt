@@ -10,6 +10,7 @@ import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
+import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.RoiData
 import com.indicvision.semper.report.VisualizationEngine
 
@@ -64,7 +65,10 @@ object ViewerReportFactory {
             EngineStats(0, 0, 0, 0, 0, 0, 0, 0, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
         }
 
-        val realDefImg = host.currentDefPath?.let {
+        // This frame's own image. It used to be the viewer's opening one for
+        // every page — the first frame after a run, the reference from Home —
+        // under each frame's own "Def:" name.
+        val realDefImg = host.deformedImagePathAt(frameIndex)?.let {
             BitmapDecode.decodeFileForView(
                 it,
                 capW,
@@ -115,16 +119,21 @@ object ViewerReportFactory {
                 imgH = host.imgH,
                 step = frameStep,
                 sessionId = host.args.sessionId ?: "Local_Offline_Mode",
-                specimenName = host.args.refName.substringBeforeLast(".").ifBlank { "Batch Analysis" },
+                specimenName = ReportImageNames.specimen(host.args.refName),
                 analysisDate = ReportBuilder.currentAnalysisDate(),
                 subsetSize = frameSubset,
                 strainWindow = frameStrainWin,
                 strainMethod = host.args.strainMethod,
                 roiData = RoiData(host.roiX, host.roiY, host.roiW, host.roiH),
                 engineStats = engineStats,
-                referenceImageName = host.args.refName.ifBlank { "reference.png" },
-                deformedImageName = host.originalDefNames.getOrNull(frameIndex)
-                    ?: "Frame_${frameIndex + 1}",
+                referenceImageName = ReportImageNames.reference(host.args.refName),
+                // Named from the same planned frame as the cover image, so the
+                // two agree past a frame the batch skipped. A sweep's names are
+                // its combination labels, one per node.
+                deformedImageName = ReportImageNames.deformed(
+                    host.originalDefNames,
+                    if (host.isSweep) frameIndex else host.plannedFrameIndex(frameIndex),
+                ),
             ),
         )
     }
