@@ -129,9 +129,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge`: `643462c` (here #22), `170ec6e`,
   `9288831` (#32), then `ecd1a8b` (parent #214). The last brought the shared
-  `/v1/config` fetch (#206), Compute after a failed run (#203, here TD-88) and
+  `/v1/config` fetch (#206), Compute after a failed run (#203, here TD-89) and
   `StartupHeadroomBenchmark`. General fixes made here go back (TD-76, TD-77,
-  TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-87 as parent #217, and the
+  TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-88 as parent #217, and the
   four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
@@ -148,9 +148,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Elastic toggle, lab-report PDF, viewer and tap-editor gestures);
   `WizardDraftRestoreTest` covers a load log across a process death;
   `LabResultsBenchmark` times the Results page.
-- **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). A session without
-  `field_ranges.bin` decodes once, into reused buffers, and saves it (#33, #34, TD-87);
-  `scrub150Frames` and `settingsScroll` pass on the API 37 emulator and a Pixel 6.
+- **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
+  has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
+  and saves it (#33, #34, TD-87/TD-88). `scrub150Frames` and `settingsScroll` pass on the
+  API 37 emulator and a Pixel 6. TD-86–TD-88 match the parent's numbers; its TD-81 is TD-89 here.
 - **Owed.** The lab end to end on a physical phone, and video import beyond emulators
   ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a). The parent owns deploys and releases; see its CONTEXT.md for
   production state.
