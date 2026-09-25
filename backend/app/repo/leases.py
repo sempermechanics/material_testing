@@ -6,6 +6,7 @@ from datetime import timedelta
 from ..config import settings
 from ..licenses import (
     SEATING_FLOATING,
+    as_utc,
     normalize_seating,
 )
 
@@ -48,6 +49,14 @@ def _sweep_expired_leases(lic_ref, now) -> int:
     Deliberately outside the claim transaction: a transaction may not run a
     query, and sweeping first is safe because releasing a genuinely expired
     lease is correct regardless of who wins the claim that follows.
+
+    Being outside a transaction makes the query's answer a list of
+    candidates, not a fact. Two checkouts arriving together both see the same
+    expired seats; when this was one batch that cleared them and subtracted
+    the count, both batches committed, each seat came off `leasesActive`
+    twice, and the pool admitted more than `maxSeats`. Each seat is now
+    reclaimed in its own transaction that re-reads it, so only the first
+    sweeper to reach a seat counts it.
     """
     expired = list(
         lic_ref.collection("seats")
@@ -55,18 +64,43 @@ def _sweep_expired_leases(lic_ref, now) -> int:
         .limit(_LEASE_SWEEP_LIMIT)
         .stream()
     )
-    if not expired:
-        return 0
-    batch = db().batch()
-    for doc in expired:
-        batch.update(doc.reference, {
+    reclaimed = sum(1 for doc in expired if _reclaim_expired_lease(lic_ref, doc.reference, now))
+    if reclaimed:
+        log.info("Reclaimed %d expired lease(s) on license %s", reclaimed, lic_ref.id)
+    return reclaimed
+
+
+def _reclaim_expired_lease(lic_ref, seat_ref, now) -> bool:
+    """Clear one lapsed lease and give its slot back, at most once.
+
+    Only a lease that is still present and still expired when the
+    transaction reads it is cleared: another sweep may have reclaimed it
+    already, or its holder may have renewed it since the query ran. The
+    decrement is skipped at zero, so a counter that has already drifted low
+    is never pushed negative.
+    """
+    @_base.firestore.transactional
+    def _reclaim(tx) -> bool:
+        lic_snap = lic_ref.get(transaction=tx)
+        seat_snap = seat_ref.get(transaction=tx)
+        if not seat_snap.exists:
+            return False
+        ends = as_utc((seat_snap.to_dict() or {}).get("leaseExpiresAt"))
+        if ends is None or ends > now:
+            return False
+        tx.update(seat_ref, {
             **_lease_clear_patch(),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
-    batch.update(lic_ref, {"leasesActive": _base.firestore.Increment(-len(expired))})
-    batch.commit()
-    log.info("Reclaimed %d expired lease(s) on license %s", len(expired), lic_ref.id)
-    return len(expired)
+        active = int((lic_snap.to_dict() or {}).get("leasesActive") or 0) if lic_snap.exists else 0
+        if active > 0:
+            tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(-1)})
+        return True
+
+    # Losing every attempt means other requests were writing this seat or the
+    # licence at the same moment — most likely another sweep reclaiming the
+    # same lease. Leave it: if it is still expired, the next checkout finds it.
+    return _run_tx(_reclaim, on_contended=lambda: False)
 
 
 def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:

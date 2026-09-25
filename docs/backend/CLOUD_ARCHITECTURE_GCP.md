@@ -1229,6 +1229,14 @@ retrieval with zero data loss. See
 `test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores`
 and `test_demo_after_downgrade_still_records_but_cannot_restore`.
 
+Because nothing is deleted, an account whose licence lapses can hold more
+analyses than the demo cap it drops to ("120/25"). The `409
+session_quota_exceeded` refusal keeps its code and counts but names the cause
+(`inactive_licence_reason`): a licence past its grace says it has ended, a
+floating member without a lease says no seat is free, and only a plain demo
+account is told to delete an older analysis. The account console shows such a
+count as stored and kept under the demo limit rather than as "120 of 25".
+
 Two consequences follow. An installed build that predates licensing keeps
 backing up after the backend deploys — its upload worker retries a 403 from
 session creation forever, which is why the gate is on retrieval and not on
@@ -1398,6 +1406,21 @@ every non-revoked institution seat.
   — the same guard `_drop_user_to_demo_if_licensed` uses.
 - The fan-out is bounded by `seatsUsed`, and renewal is rare. That is what
   makes it the right side of the trade against a per-request read.
+- **A claim writes the terms it read in its own transaction.** `claim_seat`
+  and `claim_individual_license` rebuild the mirror in the caller's patch from
+  the licence snapshot the transaction read (`_claim_terms`). The callers read
+  the licence earlier; an edit landing in that gap would otherwise be stamped
+  over on the newest holder after its fan-out had already passed them.
+
+**Extend only moves an expiry later.** `expiry_change_error` refuses, with
+`422`, an `expiresAt` that is already past (`expiry_in_past`), one earlier than
+the expiry in force (`expiry_before_current`), and any `expiresAt` on a
+perpetual licence (`license_perpetual`) — each of those ended, shortened, or
+turned timed (with no grace, since perpetual licences are minted without
+`graceDays`) the licence of everyone on it. The route checks before it touches
+the device lock, and `update_license` checks again against what it reads.
+Ending a licence early is revoke; the operator desk reports the expiry the
+server stored, not the date typed.
 
 Terms only: `kind`, the email/device/domain locks and the key itself are fixed
 at mint. Changing *who* a license is for under existing holders is a different
@@ -1547,11 +1570,14 @@ revocation records.
 
 **A lost race is not a full pool.** The claim transactions answer a private
 `_CONTENDED` when they only lost the race; `claim_pending_invite` logs it at
-`info` rather than `warning`, and every route-facing caller maps it back
-through `_public_claim_error` (to `license_seats_exhausted` or
-`claim_contended`), so no wire code changed and contention stops reading in
-the logs like a licence with no room left. A failed claim then answers with
-the account **as stored**, re-read, not the caller's pre-race copy: the
+`info` rather than `warning`, and every route-facing caller maps it through
+`_public_claim_error` to `claim_contended`. Activation and adding a member
+answer that with `503`, the same as `device_lock_contended`, and the consoles
+say "Busy just now — try again." It used to map to `license_seats_exhausted`,
+which told IT the licence was full when a retry would have succeeded.
+
+A failed claim then answers with the account **as stored**, re-read, not the
+caller's pre-race copy: the
 request that beat it has already granted the entitlement, and
 `ensure_demo_license`, which would otherwise rescue the stale copy by
 re-reading, returns early for a browser because consoles send no
@@ -1605,10 +1631,20 @@ committed is the one outcome that breaks the cap.
 `leasesActive` still drifts upward whenever an app is killed, uninstalled or
 goes offline mid-lease, so the counter alone cannot say whether the pool is
 full. `_sweep_expired_leases` reconciles it before a claim reads it: a
-single-field inequality on one subcollection, so no composite index. It runs
-outside the transaction because a transaction may not query, and that is safe —
-releasing a genuinely expired lease is correct regardless of who wins the claim
-that follows.
+single-field inequality on one subcollection, so no composite index. The query
+runs outside the transaction because a transaction may not query, and that is
+safe — releasing a genuinely expired lease is correct regardless of who wins
+the claim that follows.
+
+The query's answer is only a list of candidates, though: two checkouts
+arriving together both find the same expired seats. The sweep used to clear
+them in one batch and subtract the count, so both batches committed and each
+seat came off `leasesActive` twice, pushing it low or negative and letting the
+pool admit more than `maxSeats`. Each seat is now reclaimed in its own
+transaction (`_reclaim_expired_lease`) that re-reads it and clears it only if
+its lease is still present and still expired, decrementing by one in the same
+commit and never below zero. A reclaim that loses every attempt is skipped;
+the next checkout finds the seat if it is still expired.
 
 **A lease is counted until something uncounts it, expired or not.** Checkout
 adds one to `leasesActive`; only the sweep, a release, a hold or a revoke takes

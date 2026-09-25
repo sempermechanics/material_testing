@@ -14,6 +14,7 @@ const $ = (id) => document.getElementById(id);
 let licence = {};        // the `license` block of /v1/me
 let sessions = [];       // every page loaded so far
 let nextToken = "";
+let quota = null;        // the `quota` block of /v1/sessions
 
 requireSignIn(() => {
   $("signedOut").hidden = true;
@@ -82,6 +83,7 @@ function renderLicence() {
   // Nothing to move without a licence. A Demo key has a kind too, so this
   // used to offer to move one; the backend then moved nothing worth having.
   $("unbind").hidden = !held;
+  renderQuota();
 }
 
 /**
@@ -202,15 +204,36 @@ async function loadSessions({ reset }) {
     sessions = sessions.concat(data.sessions || []);
     nextToken = (data.page || {}).nextPageToken || "";
     $("more").hidden = !nextToken;
-    const q = data.quota || {};
-    $("quota").textContent = q.max == null
-      ? `${q.used ?? sessions.length} analyses stored.`
-      : `${q.used ?? sessions.length} of ${q.max} analyses stored.`;
+    quota = data.quota || {};
+    renderQuota();
     renderSessions();
     setStatus("");
   } catch (e) {
     setStatus(`Could not list your analyses: ${e.message}`, true);
   }
+}
+
+// Also called from renderLicence: the two loads race, and whether the
+// licence is lapsed changes what an over-cap count means.
+function renderQuota() {
+  if (!quota) return;
+  const used = quota.used ?? sessions.length;
+  // A licence past its grace, or a shared seat not held, drops the cap to
+  // the demo's and keeps everything stored — so "120 of 25" is not a count
+  // to delete down from, and must not read like one. Same reading as
+  // renderLicence: a held licence that is not in licensed mode is inactive.
+  // A backend without `held` is answered from the seating and the end date.
+  const lapsedByDate =
+    Date.parse(licence.graceEndsAt || licence.expiresAt || "") <= Date.now();
+  const held = licence.held ?? (licence.seating === "floating" || lapsedByDate);
+  const inactive = Boolean(held && licence.mode && licence.mode !== "licensed");
+  $("quota").textContent = quota.max == null
+    ? `${used} analyses stored.`
+    : used > quota.max && inactive
+      ? `${used} analyses stored, all kept. While your licence is inactive ` +
+        `the demo limit of ${quota.max} applies, so new analyses sync again ` +
+        "once it is active."
+      : `${used} of ${quota.max} analyses stored.`;
 }
 
 function renderSessions() {

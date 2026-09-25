@@ -515,6 +515,7 @@ paths:
         '404': { description: Unknown key }
         '409': { description: "Already redeemed by another account, or institution seats exhausted (license_already_redeemed, license_seats_exhausted)" }
         '429': { description: Rate limited }
+        '503': { description: "Lost the race for a seat, or for an empty device lock; retry (claim_contended, device_lock_contended)" }
   /v1/admin/licenses:
     get:
       operationId: adminListLicenses
@@ -564,7 +565,7 @@ paths:
         '401': { description: Missing or invalid device attestation }
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: License not found }
-        '422': { description: "No field set, or a value out of range" }
+        '422': { description: "No field set, a value out of range, or an expiresAt that is past, earlier than the current one, or on a perpetual licence (expiry_in_past, expiry_before_current, license_perpetual)" }
         '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/seats/{uid}/device:
     patch:
@@ -684,6 +685,7 @@ paths:
         '404': { description: license_not_found or user_not_found }
         '409': { description: license_seats_exhausted or license_seat_disabled }
         '429': { description: Rate limited }
+        '503': { description: "Lost the race for the seat; retry (claim_contended)" }
     get:
       operationId: campusListSeats
       description: Deprecated alias of GET /v1/institutions/licenses/{licenseId}/seats.
@@ -771,6 +773,7 @@ paths:
         '404': { description: license_not_found }
         '409': { description: "Roster full, seat on hold, or that address is already promised to a different licence (license_seats_exhausted, license_seat_disabled, invite_exists)" }
         '429': { description: Rate limited }
+        '503': { description: "Lost the race for the seat; retry (claim_contended)" }
     get:
       operationId: institutionListSeats
       description: >

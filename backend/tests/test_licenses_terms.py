@@ -337,14 +337,19 @@ def test_extending_does_not_touch_someone_on_a_different_license(store):
     assert store._data["users"]["u1"].get("licenseExpiresAt") is None
 
 
-def test_extending_a_perpetual_license_makes_it_timed(store):
+def test_extending_a_perpetual_license_is_refused(store):
+    """An expiry on a perpetual licence is not an extension: it turned an
+    unending licence into a timed one, with no grace, for everyone on it."""
     minted = repo.create_individual_license(
         email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
     )
-    assert minted["license"]["id"] in store._data["licenses"]
+    license_id = minted["license"]["id"]
     far = datetime.now(timezone.utc) + timedelta(days=30)
-    repo.update_license(minted["license"]["id"], {"expiresAt": far}, "admin")
-    assert store._data["licenses"][minted["license"]["id"]]["duration"] == "timed"
+    with pytest.raises(repo.LicenseTermsRejected) as raised:
+        repo.update_license(license_id, {"expiresAt": far}, "admin")
+    assert raised.value.code == "license_perpetual"
+    assert store._data["licenses"][license_id]["duration"] == "perpetual"
+    assert store._data["licenses"][license_id].get("expiresAt") is None
 
 
 def test_update_unknown_license_is_none(store):
