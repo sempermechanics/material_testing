@@ -659,6 +659,8 @@ jobs:
           python3 scripts/ci_test_report.py
           benchmark/build/outputs/androidTest-results
           benchmark/build/outputs/connected_android_test_additional_output
+          app/build/outputs/androidTest-results
+          app/build/outputs/connected_android_test_additional_output
 
       - name: Upload benchmark results
         if: always()

@@ -229,6 +229,25 @@ async def test_inline_path_still_returns_usable_targets(store, client, monkeypat
     assert body["nextPageToken"] is None
 
 
+async def test_inline_create_hands_back_what_the_uploads_listing_would(
+    store, client, monkeypatch,
+):
+    """The inline path builds its response from the targets it just opened
+    rather than reading them back, so it must match the stored state exactly:
+    same status, same targets, same order, same fields."""
+    monkeypatch.setattr(drive, "init_resumable", lambda _t, _f, name, _s: f"https://drive/{name}")
+
+    created = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file(n) for n in "cab"]},
+    )).json()
+
+    uploads, next_token = repo.list_pending_uploads(created["sessionId"])
+    assert created["uploads"] == uploads
+    assert created["nextPageToken"] == next_token
+    assert created["status"] == store._data["sessions"][created["sessionId"]]["status"]
+    assert [u["uploadUrl"] for u in uploads] == [f"https://drive/{n}" for n in "abc"]
+
+
 def test_one_listing_page_holds_a_whole_session():
     """create_session returns the first page of upload targets. That page is
     the whole manifest only while the file cap stays below the page size."""
