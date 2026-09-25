@@ -12,6 +12,22 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-25 — Backend deploy: inline create reads (#202), deployer IAM (TD-71)
+
+Production `semper-api-36096112375-1` from `300fb7f` (staging first, run
+36095277741 → `semper-api-staging-36095277741-1`; production run 36096112375).
+Candidate smoke passed on both; the gateway dry-run found the live config
+`v202609241122-44` already serves the spec.
+
+- #202: an inline `POST /v1/sessions` answers from the upload targets it opened
+  instead of reading the session and file docs back: 8 + 2N → 6 + N Firestore
+  reads (N = 3: 14 → 9). `backend/tests/test_read_budget.py` holds each route's
+  cost ([perf/request-volume.md](../perf/request-volume.md) Pass 4).
+- TD-71: every deploy failed after the clean-up with `403 … storage.buckets.list`,
+  because a source deploy lists the project's buckets to find `run-sources-*`.
+  `indic-deployer` now also holds `roles/storage.bucketViewer` (buckets get/list,
+  no object access); both deploys ran on the narrowed roles.
+
 ## 2026-09-24 — Deny-all Firestore rules deployed (#185)
 
 #185 (TD-70) replaced Hosting's undeployable `firestore` block with
