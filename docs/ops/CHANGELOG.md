@@ -12,6 +12,25 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-25 — Measured optimisation, all six passes
+
+Request volume ([perf/request-volume.md](../perf/request-volume.md)):
+- Pass 1 (#191) runs `CloudSync.reconcile` one call at a time.
+- Pass 2 (#206) shares the launch `/v1/config` fetch.
+- Together: 12 → 3 requests per app open on the Pixel 6. Both are merged and
+  ship with the next app build.
+
+Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs 6 + N
+Firestore reads instead of 8 + 2N, with no rise in latency (median 2487 ms, n = 10)
+(see the 2026-09-25 inline-create deploy below).
+
+Measured, no change:
+- Pass 3: one ~1.7 s App Check attestation per cold open, which only the Play
+  account can remove.
+- Pass 5: no cold-start gain from precompiling ([perf/startup.md](../perf/startup.md)).
+- Pass 6: no engine or viewer regression
+  ([perf/engine-viewer-check-2026-09.md](../perf/engine-viewer-check-2026-09.md)).
+
 ## 2026-09-25 — Backend deploy: a session-delete bucket (#226)
 
 Production `semper-api-36122511953-1` from `cb0e893` (staging first, run
