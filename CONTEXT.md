@@ -117,41 +117,24 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #203 (TD-81), Compute comes back after a single run fails outright, and a first frame
   that kept no points says why (the strain window with the run's VSG and step, nothing
   correlated, or an unreadable frame).
-- **Measured optimisation (2026-09-25, all six passes done).** Request volume
-  ([perf/request-volume.md](docs/perf/request-volume.md)):
-  - Pass 1 (#191) runs `CloudSync.reconcile` one call at a time.
-  - Pass 2 (#206) shares the launch `/v1/config` fetch.
-  - Together: 12 → 3 requests per app open on the Pixel 6. Both are merged and
-    ship with the next app build.
-
-  Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs 6 + N
-  Firestore reads instead of 8 + 2N, with no rise in latency (median 2487 ms, n = 10)
-  ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-25).
-
-  Measured, no change:
-  - Pass 3: one ~1.7 s App Check attestation per cold open, which only the Play
-    account can remove.
-  - Pass 5: no cold-start gain from precompiling ([perf/startup.md](docs/perf/startup.md)).
-  - Pass 6: no engine or viewer regression
-    ([perf/engine-viewer-check-2026-09.md](docs/perf/engine-viewer-check-2026-09.md)).
+- **Measured optimisation (2026-09-25, all six passes done).** Passes 1–2 (#191, #206) take
+  an app open from 12 to 3 requests on the Pixel 6 and ship with the next app build; Pass 4
+  (#202) is deployed; Passes 3, 5 and 6 measured nothing worth changing
+  ([perf/request-volume.md](docs/perf/request-volume.md), [CHANGELOG](docs/ops/CHANGELOG.md)).
 - **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#200, TD-86: debug-only permission,
   `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
-  161 → 21 MB). #214 has `globalRanges` reuse one frame buffer and set of columns; #217
-  (TD-88) saves the ranges sidecar after a full decode. A Pixel 6 run found a crash on open
-  in builds with no API URL and a signed-in session; `resolveStatus` and every `IndicApi` URL now treat that as offline (TD-90).
+  161 → 21 MB); #214 reuses one frame buffer, #217 (TD-88) saves the sidecar after a full
+  decode. #229/#230 (TD-90): no API URL now reads as offline instead of crashing on open.
 - **Wrong-information audit, app half (merged, awaiting release):** #211 (enforce a known
   licensed ceiling), #212 (PDF page cover image and name, mixed bulk-delete prompt, sweep
   export header, per-node sweep reasons, restored skip count), #218 (licence countdown, backup
   status, local quota count, restored stop reasons), #219 (PDF and share extremes), #220 (run
   counts, stale Home rows), #223 (counts, captions, report names, progress), #225 (frame names
   past a skipped frame, Home headline, partial-run dialog). No audit TECH_DEBT rows remain.
-- **Bulk delete.** Ten deletes from Home cost 61 DELETE requests over 100 s in production
-  (13 × 404, 38 × 429). Backend half deployed (#226, per-session erase bucket 1/s, burst 10);
-  app half merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere,
-  cloud link cleared).
-- **A cap on a demo key did nothing** (SEMP-8AKN set to 100 on 2026-09-25; the holder still
-  saw "of 25"). The admin PATCH now refuses it (`422 cap_on_demo_key`) and the desk disables
-  Cap on demo rows; in review, not deployed.
+- **Bulk delete.** Backend half deployed (#226, [CHANGELOG](docs/ops/CHANGELOG.md)); app half
+  merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere, cloud link cleared).
+- **Demo-key cap (#232, in review):** a `maxAnalyses` on a demo key did nothing (SEMP-8AKN, "of 25");
+  the admin PATCH now answers `422 cap_on_demo_key` and the desk disables Cap on demo rows.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever

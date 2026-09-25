@@ -116,7 +116,7 @@ matches CI. On the same emulator the job then runs the micro suite with the
 a regression gate; both suites' `*-benchmarkData.json` are uploaded, as
 `macrobenchmark-results` and `microbenchmark-results`.
 
-Two things that will otherwise cost you an afternoon:
+Three things that will otherwise cost you an afternoon:
 
 - **The shell cannot start a non-exported Activity** (API 34+). Macrobenchmark launches
   through the shell, so anything it drives must be exported — `app/src/benchmark/AndroidManifest.xml`
@@ -127,6 +127,13 @@ Two things that will otherwise cost you an afternoon:
   to confirm activity launch completion []". The Pixel_10_2 API 37 image runs them
   (2026-09-25); if yours does not, use a physical device or an older image.
   `ViewerScrubBenchmark` deliberately avoids that API.
+- **The connected task installs over whatever is on the phone, then uninstalls it.**
+  `:benchmark:connectedBenchmarkAndroidTest` installs the `benchmark` build over an
+  existing `com.indicvision.semper` (same debug key), keeping its data, and uninstalls
+  the app when it finishes, taking that data with it. Back up anything you need first.
+  A signed-in session left over from a debug install also changes the launch route
+  (Splash → Home rather than sign-in); before TD-90 that crashed both `StartupBenchmark`
+  cases on a build with no `INDIC_API_BASE_URL` (found on a Pixel 6 in material_testing).
 
 Results land as `*-benchmarkData.json` under the module's
 `build/outputs/connected_android_test_additional_output/`. A worked before/after
