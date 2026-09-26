@@ -166,11 +166,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   +30 % (`ci_test_report.py --gates`; CI stays report-only). TD-86–TD-88 and TD-90 match
   the parent's numbers; its TD-81 is TD-89 here.
 - **Owed.**
-  - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)); each has run only on an emulator.
-    Video import (§5.1a) and a real UTM clip: 5.1a.1–5.1a.9 pass on API 37 with synthetic clips.
-    2D DIC (#46) and the load card's ⓘ and **Beam height → Set** (#48), §3b.1, 3b.3, 3b.8–3b.9:
-    checked on API 36. The Galaxy S21+'s demo account is over its cap (45 / 25), so a new
-    analysis there needs a licensed key or deletes first.
+  - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): video import (§5.1a) and a real
+    UTM clip; 5.1a.1–5.1a.9 pass only on API 37 with synthetic clips. The Galaxy S21+'s demo
+    account is over its cap (45 / 25), so a new analysis there needs a licensed key or deletes first.
+    2D DIC (#46) and the load card's ⓘ and **Beam height → Set** (#48), §3b.1–3b.3, 3b.8–3b.9,
+    pass on a Pixel 6 (Android 17, 2026-09-26); **Set** before a thickness now fits its toast (TD-97).
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.
