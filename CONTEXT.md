@@ -141,7 +141,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),
-  with #251's step-up and #257's edit fixes. Owed: `find_duplicate_licences.py` against production.
+  with #251's step-up and #257's edit fixes. Production has no duplicate holders (checked 2026-09-26).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
   It also ships under Semper's app id (TD-133), so its lab build replaces Semper on a phone.
