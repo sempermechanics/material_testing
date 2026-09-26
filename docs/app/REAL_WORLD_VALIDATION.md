@@ -4,7 +4,9 @@
 **App:** `feat/bending-deflection`, debug build on the emulator (x86_64)  
 **Scope:** tensile Young's modulus E and peak stress on published data
 (case 1); bending deflection, E, displacement and strain against a published
-3-point bend's own DIC (case 2, 2026-09-24); bending end to end on a synthetic
+3-point bend's own DIC (case 2, 2026-09-24); both again on a Pixel 6, and a
+concrete set that is expected to fail (case 3), 2026-09-26
+([below](#on-a-pixel-6-2026-09-26)); bending end to end on a synthetic
 video ([below](#bending-end-to-end-on-a-synthetic-video)).
 
 Unit tests prove the math on numbers typed in by hand. This page runs the whole
@@ -379,6 +381,93 @@ python scripts/real_data_pmma_bending.py compare --data <zenodo folder> --dat <d
 It prints δ per frame against the authors', the deflection RMSE, both E
 values from both sides, the wrong-match count, the spike frames, and the
 displacement and strain RMSEs. `--windows` adds the plane-fit recompute.
+
+---
+
+## On a Pixel 6 (2026-09-26)
+
+Cases 1 and 2 run again on a phone, plus a third set that the app cannot
+analyse. Pixel 6 (`oriole`), Android 17, debug build (arm64) of `3f50d0e7`,
+the TD-92 fix merged in #51. Cases 1 and 2 use the `prep` output above. Each
+set ships with a README (outside the repo) that gives its settings, and each
+run used them.
+
+| Set | Settings | Frames | Solve, Pixel 6 | Solve, emulator | Result |
+|---|---|---|---:|---:|---|
+| Case 1, steel | Tensile; area 12.5 mm², load axis x; ROI 1960 × 297 at (20, 69); subset 19 (suggested); step 5; window 5 points | 40 of 40, 96.1% converged | **21.3 s** | about 25 s | E **149.6 GPa** over frames 1–26, R² 0.9955; peak **435.50 MPa** at frame 38 |
+| Case 2, PMMA | Bending; L 75, b 12, t 31 mm; taps 573 px (0.0541 mm/px); ROI 2260 × 510 at (60, 70); subset 27 (suggested); step 5; window 9 points | 33 of 33, 92.9% converged | **44.1 s** | about 137 s | E from the graph **2.01 GPa** (slope 6800.26 N/mm, R² 0.9993); average E **2.11 GPa** |
+| Case 3, concrete | Bending; L 700 (placeholder), b 150, t 150 mm; taps 1141 px (0.1314 mm/px); ROI 2250 × 1080 at (60, 70); subset 109 (suggested); step 5; window 9 points | **2 of 7**, stopped early | 102 s for 2 frames | — | 41% converged on frame 1; no usable E ([below](#case-3--reinforced-concrete-beam-in-3-point-bending-expected-to-fail)) |
+
+- **Steel** is identical to the emulator run: the same E, R² and peak.
+- **PMMA** is within 0.5% of the emulator's 2.00 / 2.10 GPa (slope 6777.7
+  N/mm). The taps were 573 px, 2 px wider than case 2's 570.8, and a pixel of
+  tap error moves E by about 100 / N % (see case 2).
+- The phone solves 1.2× (steel) to 3.1× (PMMA) faster than the emulator.
+
+## Case 3 — reinforced concrete beam in 3-point bending: expected to fail
+
+### The data
+
+A. Sjölander, V. Belloni, V. Peterson, J. Ledin, *Monitoring of structural
+performance of cracked reinforced concrete using DIC and CMfM*, Mendeley Data
+v3, [doi:10.17632/z3yc9z84tk.3](https://doi.org/10.17632/z3yc9z84tk.3),
+described in Data in Brief 51 (2023) 109703. Licence CC BY 4.0. Nothing from
+the dataset is committed here.
+
+A 150 × 150 × 800 mm beam, already cracked by an earlier test, loaded at
+mid-span by a piston. Beam 5, the fixed camera IB: `concrete_00` (0.1 kN) is
+the reference and `concrete_01`–`07` are the pauses at 10, 20, …, 60 kN, with
+the load at each in kN. The camera sees about 300 mm of the beam next to the
+piston, not the span. The span is not published, so L = 700 mm is a
+placeholder. The set is kept as an example of photos that don't work, not as a
+result to compare with.
+
+### What happens
+
+The run stops after frame 2 with **Stopped early**. Only 41% of the points
+converged in frame 1. Two frames in a row below 50% stop a batch
+(`ui/analysis/AnalysisViewModel.kt:84`, `:91`; `ConvergenceGate`, called at
+`ui/analysis/DicBatchRunner.kt:275`) with code −96
+(`ui/analysis/AnalysisRunCodes.kt:15`). The session list shows "2 of 7 frames"
+and "Convergence collapsed before this combination". The two frames it keeps
+give a line through two points, which says nothing about E.
+
+This is the gate working as designed. The concrete_00 session that #51 and
+#55 were checked on ([CHANGELOG](../ops/CHANGELOG.md), 2026-09-26) has two
+load steps, like this run, so its 2.48 / 1.90 GPa checks the drawing, not the
+beam.
+
+### Why it fails
+
+**The match bar.** A point is accepted at ZNSSD ≤ 0.15 (`DicResult.MAX_ZNSSD`,
+`DicResult.kt:32`). ZNSSD = 2(1 − ZNCC) (`native/docs/MATHEMATICS.md` §3), so
+the bar is a correlation of at least 0.925.
+
+**The texture.** The face is mostly smooth grey. Its pores are few and about
+24 px across, and the ink label and the open crack are in view. Camera noise
+and JPEG make up much of each patch. Two frames 2 minutes apart, under the
+same light and with about 7 px of movement, correlate at about 0.88. The
+wizard warns "Speckle contrast is low" (`subset_low_texture_fmt`,
+`app/src/main/res/values/strings.xml:609`).
+
+**The subset cap.** A larger subset averages the noise out, but not far
+enough. The share of points that pass on these photos, measured off the device
+without the sub-pixel step:
+
+| Subset | 109 px | 151 px | 201 px | 251 px |
+|---|---:|---:|---:|---:|
+| Points that pass | 30% | 37% | 49% | 58% |
+
+The gate needs half. The subset slider stops at 121 px
+(`SubsetRecommender.MAX_SUBSET`, `ui/analysis/SubsetRecommender.kt:81`), so no
+setting in the app gets this set through.
+
+**Seating.** Between the reference (0.1 kN) and frame 1 (9.8 kN) the piston
+moved 5.9 mm: the pad and the supports settling, not the beam bending. The
+rest of the test, 10 to 60 kN, moves it 4.2 mm. A set that did track would
+need its reference at frame 1.
+
+The set's own README says all of this and marks the set as expected to fail.
 
 ---
 
