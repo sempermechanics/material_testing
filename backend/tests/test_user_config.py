@@ -203,15 +203,35 @@ async def test_admin_patch_user_config(client, monkeypatch):
 
     resp = await client.patch(
         "/v1/admin/users/u1/config",
-        json={"plan": "professional", "maxSessions": 90},
+        json={"mode": "licensed", "maxSessions": 90},
     )
     assert resp.status_code == 200
     body = resp.json()
     assert body["uid"] == "u1"
+    assert body["config"]["mode"] == "licensed"
+    # The `plan` mirror is still written for installed builds (§20.5 shim 8).
     assert body["config"]["plan"] == "professional"
     assert body["config"]["maxSessions"] == 90
     assert store._data["users"]["u1"]["maxSessions"] == 90
+    assert store._data["users"]["u1"]["mode"] == "licensed"
     assert store._data["users"]["u1"]["plan"] == "professional"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    {"plan": "professional"},
+    {"plan": "professional", "maxSessions": 90},
+])
+async def test_admin_patch_refuses_the_retired_plan_key(client, monkeypatch, body):
+    """The pre-rename `plan` patch was retired (TD-45). It is a 422 — never a
+    200 that silently left the mode, or anything else sent with it, unchanged."""
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {"u1": {"email": "a@b.com", "access_status": "APPROVED"}}
+
+    resp = await client.patch("/v1/admin/users/u1/config", json=body)
+    assert resp.status_code == 422, resp.text
+    assert store._data["users"]["u1"] == {"email": "a@b.com", "access_status": "APPROVED"}
 
 
 @pytest.mark.asyncio

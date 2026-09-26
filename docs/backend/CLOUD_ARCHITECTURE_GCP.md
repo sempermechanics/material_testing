@@ -406,12 +406,10 @@ init requests `fields=id,md5Checksum,size` and completion re-fetches
 
 **Upload targets require attestation.**
 `GET /v1/sessions/{sid}/uploads` hands out Drive upload capability URLs, so it is
-gated by `deps.device_or_legacy_reader` rather than a plain ID-token dependency.
-While `REQUIRE_ATTESTED_UPLOADS` is unset it accepts either a full device
-signature *or* an ID token alone (startup warning). **Production keeps
-`REQUIRE_ATTESTED_UPLOADS=1`**; `deploy-backend.yml` pins that from the GitHub
-var of the same name — an empty var clears the flag on redeploy. Every other
-write and mint path already requires a device signature.
+gated by `deps.verified_device` rather than a plain ID-token dependency, like
+every other write and mint path. The ID-token-only migration window
+(`device_or_legacy_reader` behind `REQUIRE_ATTESTED_UPLOADS`) was retired on
+2026-09-26 (§20.5 shim 2); the backend no longer reads that variable.
 
 **A device signature is not a binary attestation.** It proves the caller holds
 the account's registered device key; it says nothing about which build is
@@ -667,9 +665,9 @@ the way it does.
 | Floating seats, leases, pool accounting | [`backend/app/repo/leases.py`](../../backend/app/repo/leases.py), `claim_seat` in [`repo/claims.py`](../../backend/app/repo/claims.py) | `checkout_lease`, `release_lease`, `claim_seat`, `_sweep_expired_leases` (§20.7) |
 | Duration, grace, renewal fan-out | [`backend/app/repo/user_config.py`](../../backend/app/repo/user_config.py), [`repo/claims.py`](../../backend/app/repo/claims.py), [`repo/license_admin.py`](../../backend/app/repo/license_admin.py) | `_expiry_state`, `_license_mirror_patch`, `update_license`, `license_summary` (§20.6) |
 | Individual + institution license logic | [`backend/app/repo/activation.py`](../../backend/app/repo/activation.py), [`repo/claims.py`](../../backend/app/repo/claims.py), [`repo/institution_admin.py`](../../backend/app/repo/institution_admin.py), [`repo/seats.py`](../../backend/app/repo/seats.py), [`repo/devlock.py`](../../backend/app/repo/devlock.py) | `activate_license`, seat lifecycle, `revalidate_device_lock` (§20) |
-| Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script. Also serves the `/v1/campus/*` aliases (§20.4, §20.5) |
+| Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script (§20.4). The `/v1/campus/*` aliases were retired (§20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
-| Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check, `device_or_legacy_reader` (§4) |
+| Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check (§4) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
 | Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
 | Async provisioning | [`backend/app/tasks.py`](../../backend/app/tasks.py) | Cloud Tasks enqueue + OIDC callback auth (§4.1) |
@@ -680,7 +678,7 @@ the way it does.
 | Outbound mail | [`backend/app/notify.py`](../../backend/app/notify.py) | Resend, fire-and-forget |
 | Pydantic models | [`backend/app/models.py`](../../backend/app/models.py) | |
 | Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) | |
-| Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `REQUIRE_ATTESTED_UPLOADS`, `APP_CHECK_MODE`, `TASKS_*` |
+| Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `APP_CHECK_MODE`, `TASKS_*` |
 | Schema migrations | [`backend/scripts/migrate_schema.py`](../../backend/scripts/migrate_schema.py) | Versioned steps in `backend/scripts/migrations/` — see [FIRESTORE_SCHEMA_RUNBOOK.md](FIRESTORE_SCHEMA_RUNBOOK.md) |
 | Container | [`backend/Dockerfile`](../../backend/Dockerfile) | Installs from `requirements.lock` with `--require-hashes`. `requirements.txt` is the pin list; lock versions of direct deps must match txt. |
 | API Gateway spec | [`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml) | Covers all current routes; `__CLOUD_RUN_URL__` is substituted at deploy |
@@ -898,8 +896,7 @@ HTTPS-only is the default; consider Cloud Armor / a WAF once public.
   `tests/test_rate_limit_before_nonce.py` fails if a signed route checks its
   bucket inside the handler again, or if an unsigned 429 has no `Retry-After`.
 - **Attested upload targets:** `/uploads` hands out capability URLs and is gated
-  by `device_or_legacy_reader`; production keeps `REQUIRE_ATTESTED_UPLOADS=1`
-  (§4).
+  by `verified_device` (§4).
 - **Audit everything security-relevant**, append-only, with retention.
 - **Privacy prerequisites for public launch:** privacy policy + account-deletion
   path (raw specimen images + email are personal data).
@@ -1027,8 +1024,7 @@ replace the serving revision and hope:
 
 On an update deploy, if the smoke fails there is nothing to roll back — the
 candidate never carried traffic. Rollback is only relevant if a later step fails
-after promotion. `REQUIRE_ATTESTED_UPLOADS` is passed from the GitHub var on
-every deploy — keep production at `1`.
+after promotion.
 
 The revision suffix carries the **run attempt** as well as the run id, so
 re-running a failed job cannot collide with the revision name the first attempt
@@ -1396,7 +1392,10 @@ action prefix) and `plan` with values `demo`/`professional`. It now says
 enforcement state; the entitlement *values* it resolves to are separate fields
 in the same response.
 
-Both spellings are live at once, in every direction a version skew can go:
+Both spellings are still read wherever an installed app or a stored document
+can carry the old one. The shims for ops and IT tooling (with the old env name
+and the unattested `/uploads` read) were retired on 2026-09-26 — shims 1–5
+below. The table covers every direction a version skew can go:
 
 | Skew | What holds it together |
 |---|---|
@@ -1404,23 +1403,25 @@ Both spellings are live at once, in every direction a version skew can go:
 | Pre-licensing app, new backend | Every pre-existing user document resolves to demo on the first request (`ensure_demo_license` stamps the system demo key). The old build never reads `mode`; it keeps recording because `POST /v1/sessions` is not gated (§20.3), and its restore fails **once** with a plain "rejected" message rather than looping — `DicRestoreWorker` gives up on 403. Its `maxSessions` comes from `DEMO_MAX_ANALYSES`, which must be set no lower than the largest live per-user count before the deploy. |
 | New app, old backend | `AppConfigDto.mode` defaults to empty rather than `demo`, and `AppRemoteConfig` resolves from the `plan` mirror when `mode` is missing. |
 | Upgrading the app | The `mode` pref does not exist on an install predating the rename, so `AppRemoteConfig.mode()` falls back to the old `plan` pref key rather than reading demo until the next config fetch. |
-| Old IT tooling | `/v1/campus/*` stays routed as a hidden alias of `/v1/institutions/*`, **declared in `gateway/openapi.yaml` as well as FastAPI** — ESPv2 rejects any path absent from the gateway spec, so an alias that exists only in the app is unreachable in production. |
-| Old ops tooling | `AdminLicenseCreate` accepts `kind="campus"`; `PATCH .../config` accepts a `plan` patch and folds it onto `mode`. |
+| Old IT tooling | Nothing any more. The `/v1/campus/*` seat aliases are gone from FastAPI **and** `gateway/openapi.yaml` (shim 5); an old script gets a 404 and must call `/v1/institutions/*`. |
+| Old ops tooling | Nothing any more. `AdminLicenseCreate` refuses `kind="campus"` with a 422 (shim 3); `PATCH /v1/admin/users/{uid}/config` refuses a `plan` key with a 422 — `UserConfigPatch` forbids unknown fields, so the old patch cannot return a 200 that changed nothing (shim 4). |
 | Unmigrated documents | `normalize_mode` / `normalize_kind` read either spelling, so a user or license document migration 002 has not reached still resolves and still activates. |
 
-**Retirement order.** Nine compatibility shims are live (TD-45). Retire them
-in this order; each is its own change, and each waits on the signal in its row,
-not on a date. The `/v1/campus/*` invite-revoke alias is already gone: it was
-added two days *after* the rename (`4100955` vs `90485b4`), so nothing
-pre-rename could call it.
+**Retirement order.** There were nine compatibility shims (TD-45). Shims 1–5
+were retired together on 2026-09-26, each on its own signal, checked live that
+day (below). Shims 6–9 are live and wait on the installed-app fleet, which
+cannot be measured yet; each still waits on the signal in its row, not on a
+date. The `/v1/campus/*` invite-revoke alias went earlier: it was added two
+days *after* the rename (`4100955` vs `90485b4`), so nothing pre-rename could
+call it.
 
 | # | Shim | Where | Retire when | Signal |
 |---|---|---|---|---|
-| 1 | `PRO_MAX_SESSIONS_PER_USER` read as the default for `LICENSED_MAX_SESSIONS_PER_USER` | `config.py` | No Cloud Run service carries the old name | The deploy workflow's warning stops firing on both environments |
-| 2 | ID-token-only `/uploads` read (`device_or_legacy_reader`) | `deps.py`, `routers/sessions.py` | `REQUIRE_ATTESTED_UPLOADS=1` everywhere for a release cycle | `legacy_unattested_uploads` log count is zero ([FUTURE_IMPROVEMENTS.md](../ops/FUTURE_IMPROVEMENTS.md) FI-7) |
-| 3 | `kind="campus"` on admin mint | `models.AdminLicenseCreate` | Ops scripts send `institution` | Search ops tooling; no server-side signal |
-| 4 | `plan` patch on `PATCH /v1/admin/users/{uid}/config`, folded onto `mode` | `firestore_repo._mode_patch` callers, `models.py` | Ops scripts send `mode` | Neither console nor app calls this route; only hand-run ops calls do, so check those |
-| 5 | `/v1/campus/*` seat routes (4) | `routers/institutions.py` **and** `gateway/openapi.yaml` | No request for a release cycle | Access-log `opClass="institution"` with a `routeTemplate` under `/v1/campus/` (TD-44 made these countable) |
+| 1 | ~~`PRO_MAX_SESSIONS_PER_USER` read as the default for `LICENSED_MAX_SESSIONS_PER_USER`~~ | `config.py` | **Retired 2026-09-26.** | `gcloud run services describe`: neither `semper-api` nor `semper-api-staging` carries it; both pin `LICENSED_MAX_SESSIONS_PER_USER=999` (the default, unchanged). Dropped from the deploy workflow's stale-variable warning too |
+| 2 | ~~ID-token-only `/uploads` read (`device_or_legacy_reader`)~~ | `deps.py`, `routers/sessions.py` | **Retired 2026-09-26.** `/uploads` is `verified_device`; `REQUIRE_ATTESTED_UPLOADS` is no longer read or pinned by `deploy-backend.yml` | Both services ran `REQUIRE_ATTESTED_UPLOADS=1`; Cloud Logging over the full 30-day retention (back to 2026-09-07, old `indic-api` services included): 0 `legacy_unattested_uploads` events, 73 `/uploads` reads, 0 refused (401/403) |
+| 3 | ~~`kind="campus"` on admin mint~~ | `models.AdminLicenseCreate` | **Retired 2026-09-26.** A 422 now | No script or runbook in the repo sends it; the operator console sends only `individual` / `institution` |
+| 4 | ~~`plan` patch on `PATCH /v1/admin/users/{uid}/config`, folded onto `mode`~~ | `models.UserConfigPatch`, `repo/user_config.set_user_config` | **Retired 2026-09-26.** A 422 now (`extra="forbid"`) | 0 calls to the route in 30 days of access logs; no tooling sends `plan` |
+| 5 | ~~`/v1/campus/*` seat routes (4)~~ | `routers/institutions.py` **and** `gateway/openapi.yaml` | **Retired 2026-09-26.** Removed from both; the access log no longer classes `/v1/campus/` as `institution` | 0 requests under `/v1/campus` in 30 days across all services |
 | 6 | App reads `config.plan` when `mode` is empty | `AppRemoteConfig.resolveMode`, `ApiDtos.AppConfigDto.plan` | Every backend the app can meet emits `mode` (true since the rename deployed) | None needed; ship with #7 |
 | 7 | App falls back to the old `plan` pref key | `AppRemoteConfig.mode()` | One release after the rename build, so every install has cached `mode` | Play Console version distribution |
 | 8 | `plan` mirror in `/v1/config`, licence summaries and user documents | `firestore_repo` (`_mode_patch`, `resolve_user_config`, `_license_public`), `licenses.legacy_plan` | A `mode`-reading build is the fleet (the same judgement `DAT_CODEC_ENCODING_ENABLED` needs) | Play Console version distribution; old builds fail closed to demo without it |

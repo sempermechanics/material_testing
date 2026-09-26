@@ -94,3 +94,12 @@ def test_console_origins_default_lists_both_hosts(monkeypatch):
         "https://app.sempermechanics.com",
         "https://indicvision-dic-app-auth.firebaseapp.com",
     ]
+
+
+def test_licensed_cap_ignores_the_retired_pre_rename_name(monkeypatch):
+    # PRO_MAX_SESSIONS_PER_USER used to seed LICENSED_MAX_SESSIONS_PER_USER's
+    # default; retired (TD-45) once no Cloud Run service carried it.
+    monkeypatch.delenv("LICENSED_MAX_SESSIONS_PER_USER", raising=False)
+    monkeypatch.setenv("PRO_MAX_SESSIONS_PER_USER", "5")
+    reloaded = importlib.reload(config_module)
+    assert reloaded.settings.LICENSED_MAX_SESSIONS_PER_USER == 999

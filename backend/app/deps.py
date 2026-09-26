@@ -507,29 +507,3 @@ async def _attested_or_mfa(
     except Exception:  # noqa: BLE001
         pass
     return {"user": user, "device": {}, "via": "mfa", "secondFactor": factor}
-
-
-async def device_or_legacy_reader(
-    request: Request,
-    user: dict = Depends(current_user),
-    x_device_id: str = Header(default=""),
-    x_nonce: str = Header(default=""),
-    x_signature: str = Header(default=""),
-) -> dict:
-    """`verified_device` with a temporary compatibility window for `/uploads`.
-
-    Testers still run a build that fetches the resume list (which carries Drive
-    upload capability URLs) with an ID token only — no device signature. Rejecting
-    them the moment the backend goes private would kill their resume path. Until
-    the fleet has moved, accept an unattested read here; every other route that
-    mints or consumes those URLs stays strictly device-attested.
-
-    This never opens a downgrade: a client that presents *any* device header, or
-    any deployment with REQUIRE_ATTESTED_UPLOADS=1, is held to the full
-    `verified_device` path. Flip the flag once `legacy_unattested_uploads` is
-    zero, then delete this wrapper.
-    """
-    if settings.REQUIRE_ATTESTED_UPLOADS or x_device_id or x_nonce or x_signature:
-        return await verified_device(request, user, x_device_id, x_nonce, x_signature)
-    obs.log_event(log, logging.WARNING, "legacy_unattested_uploads", uid=user["uid"])
-    return {"user": user, "device": {}}

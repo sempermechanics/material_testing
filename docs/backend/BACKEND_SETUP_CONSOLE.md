@@ -179,7 +179,6 @@ manual create or labs, not the pilot CD path:
      | `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling |
      | `ROOT_FOLDER_ID` | the Shared Drive | A folder inside the drive to root everything under |
      | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
-     | `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot is `1` — see step 8b |
 
    - **Container → Variables & Secrets → + Reference a secret** for the API key
      (it must not be a plain variable): name `RESEND_API_KEY`, secret
@@ -222,14 +221,13 @@ how local dev and the tests run, but a large analysis will time out.
 part of the public API, and the same string is the OIDC audience the service
 checks the token against.
 
-## 8b. Require attested uploads (production)
+## 8b. Upload targets are always attested
 
-`GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While
-`REQUIRE_ATTESTED_UPLOADS` is unset, that route accepts a bare Firebase ID token
-as well as a full device signature; the service logs a startup warning while the
-window is open. **Production keeps `REQUIRE_ATTESTED_UPLOADS=1`.** When using
-`deploy-backend.yml`, set the same GitHub var to `1` (repo-level is fine on Free
-orgs) — an empty var clears the Cloud Run flag on the next deploy.
+`GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs and always
+requires a device signature; there is nothing to set. The
+`REQUIRE_ATTESTED_UPLOADS` flag that used to open an ID-token-only window was
+retired on 2026-09-26 (TD-45) and is no longer read. If a service still carries
+it, remove it after the next promote (`--remove-env-vars REQUIRE_ATTESTED_UPLOADS`).
 
 ## 9. Verify in the browser
 1. Visit `https://<your-url>/healthz` → you should see

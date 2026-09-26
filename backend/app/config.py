@@ -45,15 +45,7 @@ class Settings:
     # reference + report + metadata ≈ 460, so 600 gives headroom);
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
     DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
-    # PRO_MAX_SESSIONS_PER_USER is the pre-rename name, still read as the
-    # default so the rename did not need a coordinated env change.
-    # deploy-backend.yml pins LICENSED_MAX_SESSIONS_PER_USER and warns while the
-    # old name is still set on the service; delete this fallback once no
-    # service carries it (TD-45).
-    LICENSED_MAX_SESSIONS_PER_USER = _env_int(
-        "LICENSED_MAX_SESSIONS_PER_USER",
-        os.environ.get("PRO_MAX_SESSIONS_PER_USER", "999"),
-    )
+    LICENSED_MAX_SESSIONS_PER_USER = _env_int("LICENSED_MAX_SESSIONS_PER_USER", "999")
 
     # Grace window stamped onto a newly minted timed license when the mint
     # request does not name one. It exists so a renewal in flight does not
@@ -289,12 +281,6 @@ class Settings:
     INSECURE_AUTH_ACK = os.environ.get("INSECURE_AUTH_I_ACCEPT_THE_RISK", "") == "1"
     # 1 = new users are created APPROVED instead of PENDING (smooth pilot).
     AUTO_APPROVE = os.environ.get("AUTO_APPROVE", "") == "1"
-
-    # Temporary: /uploads returns Drive upload capability URLs and should require
-    # device attestation. Testers hold builds that call it with an ID token only,
-    # so accept both until the fleet has moved, then set this to 1. Leaving it off
-    # never weakens a client that *does* attest — see deps.device_or_legacy_reader.
-    REQUIRE_ATTESTED_UPLOADS = os.environ.get("REQUIRE_ATTESTED_UPLOADS", "") == "1"
 
     # Env vars the service cannot function without: GCP_PROJECT is the token
     # audience for ID-token verification, SERVICE_ACCOUNT_EMAIL mints Drive

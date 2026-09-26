@@ -28,7 +28,6 @@ SIGNED = {
     "attested_or_mfa_user",
     "attested_or_mfa_admin",
     "attested_or_mfa_admin_fresh",
-    "device_or_legacy_reader",
     "institution_admin_stepup",
 }
 
