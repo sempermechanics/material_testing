@@ -255,7 +255,7 @@ short (523 px instead of 572; see below). That alone put δ 10% high: RMSE
 0.076 mm and E from the graph 1.81 GPa. A pixel of tap error changes E by
 about 100 / N %, where N is the thickness in pixels.
 
-**Tap order.** On a Pixel 6 (2026-09-26) this set, tapped bottom edge first,
+**Tap order.** On a Pixel 6 (2026-09-25) this set, tapped bottom edge first,
 read "E from the graph ≈ -2.02 GPa (slope -6835.96 N/mm, R² 0.9993)" and
 "Average E ≈ -2.12 GPa", with the graph running to −1.4 mm: the right
 magnitudes for its 579 px taps, the wrong sign. The probe read δ from the
