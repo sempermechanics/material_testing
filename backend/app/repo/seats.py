@@ -91,6 +91,12 @@ def _release_holder_device(license_id: str, lic: dict, scope: str, uid: str) -> 
     one, so its id stops counting against another account. Guarded like
     `_restore_holder_mode`: an account that has moved to a different licence
     keeps its binding.
+
+    The released id is stamped on the user (`releasedDeviceId`, `releasedAt`)
+    so registration can hold it off for `DEVICE_RELEASE_HOLD_HOURS`: the old
+    phone's upload worker re-registers as soon as it reads `device_not_active`,
+    and would otherwise take the account straight back
+    (`repo.devices.released_device_held`).
     """
     holder = uid if scope == "seat" else (lic.get("redeemedByUid") or "")
     if not holder:
@@ -104,7 +110,11 @@ def _release_holder_device(license_id: str, lic: dict, scope: str, uid: str) -> 
     if user.get("licenseId") != license_id or not active:
         return
     batch = db().batch()
-    batch.update(user_ref, {"activeDeviceId": _base.firestore.DELETE_FIELD})
+    batch.update(user_ref, {
+        "activeDeviceId": _base.firestore.DELETE_FIELD,
+        "releasedDeviceId": active,
+        "releasedAt": _now(),
+    })
     device_ref = db().collection("devices").document(active)
     if device_ref.get().exists:
         batch.update(device_ref, {

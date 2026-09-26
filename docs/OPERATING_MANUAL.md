@@ -1033,6 +1033,11 @@ the licence binds to whichever device signs in next. Nothing is re-issued, nothi
 holder who was demoted to Demo by trying the new phone first gets their mode
 back as part of the clear.
 
+The old phone is then refused for 24 hours (`DEVICE_RELEASE_HOLD_HOURS`): it shows
+"bound to a different device" and cannot take the account back before the new
+phone signs in. Signing in on the new phone ends that at once. If the holder
+cleared by mistake and never moves, the old phone works again after 24 hours.
+
 Only the holder's own change waits out a cooldown; a support request never
 does, so a lost phone is fixed the same day. `429 device_change_too_soon`
 means the holder has already moved device inside the window — the detail

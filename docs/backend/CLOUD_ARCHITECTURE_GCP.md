@@ -2034,6 +2034,19 @@ as `register_device` does for a replaced phone. It is guarded like
 binding. A demo account has no licence to clear, so it still cannot change
 phone (TD-126).
 
+**The released phone is held off.** Every signed call from the old phone now
+reads `409 device_not_active`, and the app's upload worker answers that by
+re-registering (`DicUploadWorker`). Registration would accept it (the account
+has no active device, and the old device document is its own), so the old phone
+took the account straight back and the new one met `device_conflict` again.
+The clear therefore stamps `releasedDeviceId` and `releasedAt` on the user, and
+`POST /v1/devices/register` refuses that id with `409 device_conflict` for
+`DEVICE_RELEASE_HOLD_HOURS` (default 24; `repo.devices.released_device_held`).
+Installed builds already read any 409 there as "bound to a different device".
+Registering any other device ends the hold at once. After the hold, the old
+phone may register again, so a mistaken clear strands nobody (decided
+2026-09-26).
+
 #### The half that is easy to miss
 
 A device change is normally *preceded* by the holder trying the new phone. That
