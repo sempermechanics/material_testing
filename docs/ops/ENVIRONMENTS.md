@@ -100,7 +100,8 @@ Artifact Registry `cloud-run-source-deploy` (asia-south1) and the bucket
 is about 80 MB. Both delete what is more than 15 days old; the registry never deletes an
 image tagged `latest` or any of a package's five newest versions. The policy files are in
 [`backend/deploy/`](../../backend/deploy/), and the one-time apply commands are in
-[BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene). The Firestore
+[BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene). Applied on
+`indicvision-dic-app` on 2026-09-26, with the registry policy enforcing. The Firestore
 backup bucket is not covered: it has its own retention.
 
 ### Firestore backup / restore drill

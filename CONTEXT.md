@@ -148,8 +148,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
   The backend floor for a licensed cap (#211) is deployed; the app half ships with that release.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
-  run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); the one-time storage cleanup
-  ([BACKEND_SETUP_GCP.md A7](docs/backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene)); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
+  run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps

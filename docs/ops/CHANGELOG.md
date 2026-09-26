@@ -28,8 +28,13 @@ unknown path 404. The console went out afterwards with `scripts/deploy-console.s
 
 - #240: Cloud Run scales to zero in both environments. `min instances` is unset on the live
   service, where production had `minScale=1`. `backend/deploy/` holds a 15-day cleanup
-  policy for the registry and the run-sources bucket; an owner applies it once
-  ([BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene)).
+  policy for the registry and the run-sources bucket, applied the same day by the owner
+  ([BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene)). The
+  registry policy is enforcing (dry run off). The serving digests of `semper-api` and
+  `semper-api-staging` equal their `latest` tags, so the keep rule covers them. The bucket
+  deletes at age 15; the Firestore backup bucket keeps its own 35-day rule. The registry
+  held 1.35 GB in 35 versions, the oldest from 2026-09-23, so nothing qualifies before
+  about 2026-10-08.
   Measurement: [perf/backend-cost.md](../perf/backend-cost.md).
 - The deploy also shipped the licence desk, backend and console ([ADR-007](../adr/ADR-007-licence-lifecycle.md)).
   - #236: a fast, filtered list. It hides Demo keys unless asked and searches by address,
