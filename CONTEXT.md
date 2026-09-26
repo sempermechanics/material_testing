@@ -149,6 +149,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Open: bending tap order (TD-92).** Bottom edge tapped first gave a negative δ and E
   (Pixel 6, 2026-09-26); δ is now signed by the load (`BeamDeflection.alongLoad`), saved
   sessions included.
+- **Open: compact plot ticks (TD-93).** The on-screen plots' y gutter was a fixed 34 dp, so a
+  bending load tick like 21686 read "1686" (Pixel 6, 2026-09-26); it is now sized to the widest
+  tick. Whether the slope line should stop dragging that axis below 0 N is TD-94, an owner call.
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**.
