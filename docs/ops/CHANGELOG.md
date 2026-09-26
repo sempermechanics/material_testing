@@ -12,6 +12,21 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — Console deploy: delete/revoke step-up fixes (#251)
+
+Hosting only, from `9b06aad8` with `scripts/deploy-console.sh` against `semper-gw`; the
+live release is 2026-09-26 06:54 UTC. Found testing the licence desk end to end on a
+throwaway licence (issue, duplicate refused, every edit path, delete, restore, delete).
+
+- A delete or revoke that went to Google for re-authentication was dropped silently when
+  the return leg failed (a wrong or cancelled authenticator code, or Back out of Google):
+  `requireSignIn` handed back no `resume`, and the desk's list load cleared the error. The
+  stash now comes back marked `reauthFailed` and the desk says the action was not sent.
+  The operator's retry skips the 120 s redirect-loop guard.
+- `stepUpForRevoke` asked every account for a password first; a Google-only operator who
+  typed one got `auth/invalid-credential`. Only an account with a password provider is
+  asked now (`reauthMethods`).
+
 ## 2026-09-26 — Backend deploys: a device change reaches the new phone (#248, #249)
 
 Two backend-only deploys, both staging then production with the gateway dry-run. #248, from
