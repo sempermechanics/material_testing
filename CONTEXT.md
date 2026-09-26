@@ -143,6 +143,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
+  It also ships under Semper's app id (TD-133), so its lab build replaces Semper on a phone.
+- **"Upload pending" with no upload coming (in review):** a build with no backend now saves
+  analyses as not backed up, and each reconcile queues rows still PENDING again (`CloudSync`).
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
   the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
   looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
