@@ -98,8 +98,10 @@ once pointed staging's tasks at the production service and queue.
 Artifact Registry `cloud-run-source-deploy` (asia-south1) and the bucket
 `run-sources-indicvision-dic-app-asia-south1` fill up with every source deploy. Each image
 is about 80 MB. Both delete what is more than 15 days old; the registry never deletes an
-image tagged `latest`, any with a tag starting `rollback` (hand-pinned rollback images,
-kept until the tag is removed), or any of a package's five newest versions. The policy files are in
+image tagged `serving` (moved to the serving image by each deploy) or `latest`, any with a
+tag starting `rollback` (`rollback-prev`, moved by each deploy to the image it replaced,
+and hand-pinned ones, kept until the tag is removed), or any of a package's five newest
+versions. The policy files are in
 [`backend/deploy/`](../../backend/deploy/), and the one-time apply commands are in
 [BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene). Applied on
 `indicvision-dic-app` on 2026-09-26, with the registry policy enforcing. The Firestore

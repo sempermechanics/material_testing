@@ -4,9 +4,10 @@ from datetime import datetime, timedelta, timezone
 
 from google.api_core.exceptions import AlreadyExists
 
-from .. import notify, statuses
+from .. import errors, notify, statuses
 from ..config import settings
 from ..licenses import (
+    MODE_LICENSED,
     as_utc,
 )
 
@@ -18,10 +19,15 @@ from ._base import (
     SCHEMA_VERSION,
 )
 from .devices import (
+    _release_patch,
+    _retire_device,
     get_device,
 )
 from .entitlement import (
     ensure_entitlement,
+)
+from .user_config import (
+    effective_mode,
 )
 
 
@@ -246,6 +252,44 @@ def list_users(
     return out, next_token
 
 
+def release_account_device(uid: str) -> tuple[str, str]:
+    """Free the account's registered phone so a new one can register. `(error, released id)`.
+
+    Staff only, on the holder's request (decided 2026-09-26, TD-126). A Demo
+    account has no licence lock to clear, so before this its first phone was its
+    only phone: registration refuses any device but `activeDeviceId`
+    (`device_conflict`), and only suspending the account emptied it. The release
+    is the one a lock clear makes (`repo.seats._settle_holder`): the old device
+    retired, its id held off for `DEVICE_RELEASE_HOLD_HOURS` so its upload worker
+    cannot take the account straight back.
+
+    An account on a live licence is refused with `license_device_clear_required`:
+    its licence lock would still name the old phone and demote the new one, and
+    **New device** on the licence moves both. Nothing registered is not an error;
+    the released id is then "".
+    """
+    user_ref = db().collection("users").document(uid)
+    snap = user_ref.get()
+    if not snap.exists:
+        return errors.USER_NOT_FOUND, ""
+    user = snap.to_dict() or {}
+    if user.get("licenseId") and effective_mode(user) == MODE_LICENSED:
+        return errors.LICENSE_DEVICE_CLEAR_REQUIRED, ""
+    released = user.get("activeDeviceId") or ""
+    if not released:
+        return "", ""
+    batch = db().batch()
+    batch.update(user_ref, {
+        **_release_patch(released),
+        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+    })
+    device_ref = db().collection("devices").document(released)
+    if device_ref.get().exists:
+        _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
+    batch.commit()
+    return "", released
+
+
 def set_user_status(uid: str, status: str) -> bool:
     """Set access_status, revoking the account's devices when suspending.
 
@@ -263,9 +307,6 @@ def set_user_status(uid: str, status: str) -> bool:
     if status != statuses.ACCESS_APPROVED:
         batch.update(ref, {"activeDeviceId": _base.firestore.DELETE_FIELD})
         for dev in db().collection("devices").where("uid", "==", uid).stream():
-            batch.update(dev.reference, {
-                "status": statuses.DEVICE_REVOKED,
-                "revokedAt": _base.firestore.SERVER_TIMESTAMP,
-            })
+            _retire_device(batch, dev.reference, statuses.DEVICE_REVOKED)
     batch.commit()
     return True

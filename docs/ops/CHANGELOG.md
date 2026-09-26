@@ -131,6 +131,68 @@ box uses an opaque `info_code_bg`, because the translucent `viewer_plot_grid`
 did not draw on the dark dialog. Checked by hand on the API 36 emulator, in
 light and dark themes. Ships with the next app release.
 
+## 2026-09-26 — Console deploy: licence edit fixes (#257); staging gateway in CI (#258)
+
+#257, hosting only, from `2db99e8c` with `scripts/deploy-console.sh` against `semper-gw`;
+the live release is 2026-09-26 07:41 UTC.
+
+- The Edit dialog refuses a new end that has already passed (`licenceEditPatch`, the
+  backend's `expiry_in_past` rule) before asking for the typed key; it used to ask first
+  and then show the server's 422.
+- Opening Edit clears the page status line, where a "… saved" from the last action read
+  as this edit's result beside the dialog's error.
+
+#258: `deploy-backend.yml`'s `gateway` job runs for staging too (`semper-gw-staging` on API
+`semper-api-staging`; [ADR-006](../adr/ADR-006-gateway-deploy-job.md) amendment). The
+first run, staging run 36227641846 from `cd7d5db6` with `gateway_mode: dry-run`, deployed
+`semper-api-staging-36227641846-1`, read the live config `v202609260428` and found it
+already serves the spec, so the gateway was not touched.
+
+#256 (docs) went in alongside: ADR-007's TTL item, and the licence scripts' usage lines
+name `--project indicvision-dic-app`.
+
+## 2026-09-26 — Backend and console deploy: device-clear follow-ups, pinned images (#261, #263)
+
+Both from `0f9244f1`, staging then production with the gateway dry-run. Staging run
+36232810308 → `semper-api-staging-36232810308-1`; production run 36233033808 →
+`semper-api-36233033808-1`. The candidate `/readyz` smoke passed on both, and both
+dry-runs found the live config already serving the spec (`v202609260428` on staging,
+`v202609260522-60` on production). The console went out afterwards with
+`scripts/deploy-console.sh` against `semper-gw`; the live `operator.js` has the new
+device-history line.
+
+- #261 closes TD-128 to TD-132. A device-lock clear reads the holder once and writes the
+  mode, the release and `updatedAt` in one batch (`_settle_holder`), and its audit detail
+  names `releasedDeviceId` (the registered phone signed out) beside `previousDeviceId`
+  (the lock's). The console's device history prints `signed out <id>` when they differ.
+  One `_retire_device` helper replaces three copies.
+- #263 closes TD-122 to TD-125. After the promote, `deploy-backend.yml` tags `serving` on
+  the promoted image and `rollback-prev` on the one it replaced, and `keep-serving` also
+  keeps `serving`. The updated cleanup policy was applied by hand beforehand
+  (`--no-dry-run`, still enforcing).
+- Production's run created both tags. Staging's failed: its hand-made `rollback-prev`
+  already existed, and moving a tag needs `artifactregistry.tags.delete`, which
+  `roles/artifactregistry.writer` lacks. `indic-deployer` now holds
+  `roles/artifactregistry.repoAdmin` on `cloud-run-source-deploy` only, and staging's
+  two tags were set by hand (`serving` → `099591f3…`, `rollback-prev` → `3ca0200a…`).
+- `semper-api:rollback-c0c0ce3` is deleted: `rollback-prev` (#255's image, `19d8dfed…`)
+  replaces it, and `c0c0ce3` predated ADR-007.
+
+## 2026-09-26 — Backend deploy: a lock clear frees the phone only where the mode is restored (#255)
+
+Backend only, staging then production with the gateway dry-run. Staging run 36226047617
+from `f04be71a` → `semper-api-staging-36226047617-1`; production run 36227358113 from
+`cd7d5db6` → `semper-api-36227358113-1` (#256 to #258 on top change no `backend/app` code).
+The candidate `/readyz` smoke passed on both, and the dry-run found that `v202609260522-60`
+already serves the spec, so the gateway was not touched.
+
+- Closes TD-127. `_release_holder_device` (#248) checked only that the holder was still on
+  the licence, so **New device** on a held or revoked seat, or a revoked licence, freed the
+  phone of a holder already on Demo, who could then register a different one. The release
+  and `_restore_holder_mode` now share one guard, `_live_holder`: nothing is released or
+  restored for a revoked licence, a seat that is not `active`, or an account that moved to
+  another licence. IT resumes a held seat before **New device** if the member is moving.
+
 ## 2026-09-26 — Console deploy: delete/revoke step-up fixes (#251)
 
 Hosting only, from `9b06aad8` with `scripts/deploy-console.sh` against `semper-gw`; the

@@ -50,6 +50,9 @@ RANGE_NOT_SATISFIABLE = "range_not_satisfiable"
 
 # --- admin -----------------------------------------------------------------
 USER_NOT_FOUND = "user_not_found"
+#: A staff phone release on an account whose live licence still holds the
+#: device lock: **New device** on the licence moves both bindings (TD-126).
+LICENSE_DEVICE_CLEAR_REQUIRED = "license_device_clear_required"
 EMPTY_PATCH = "empty_patch"
 
 # --- licensing, seats and leases -------------------------------------------

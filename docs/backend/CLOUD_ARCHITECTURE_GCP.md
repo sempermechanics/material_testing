@@ -799,6 +799,12 @@ for SA in $API_SA indic-gw@$PROJECT.iam.gserviceaccount.com \
 for R in storage.admin storage.objectAdmin; do
   gcloud storage buckets add-iam-policy-binding gs://run-sources-$PROJECT-asia-south1 \
     --member="serviceAccount:$DEPLOY_SA" --role="roles/$R"; done
+# The deploy moves the `serving` and `rollback-prev` image tags, and moving a tag
+# needs artifactregistry.tags.delete, which the writer role lacks. On this
+# repository alone (granted 2026-09-26).
+gcloud artifacts repositories add-iam-policy-binding cloud-run-source-deploy \
+  --location=asia-south1 --project=$PROJECT \
+  --member="serviceAccount:$DEPLOY_SA" --role="roles/artifactregistry.repoAdmin"
 ```
 
 `storage.bucketViewer` holds only `storage.buckets.get` / `.list`. It is needed at
@@ -948,7 +954,7 @@ client".
 | Drive storage | 5 TB already-paid Workspace pool | ~5 sessions/user × 1 GB | **$0 marginal** |
 | Egress | uploads go **device→Drive**, not via Cloud Run | ~0 GB through GCP | **$0** |
 | Cloud Logging | 50 GiB/mo free | structured logs | **$0** |
-| Artifact Registry | 0.5 GB free | ~80 MB per deploy; a 15-day cleanup policy keeps `latest`, `rollback…` tags and the 5 newest per package ([setup A7](BACKEND_SETUP_GCP.md#a7-storage-hygiene)) | **~$0** (1.24 GB before the policy, ≈ ₹6/mo) |
+| Artifact Registry | 0.5 GB free | ~80 MB per deploy; a 15-day cleanup policy keeps `serving`, `latest`, `rollback…` tags and the 5 newest per package ([setup A7](BACKEND_SETUP_GCP.md#a7-storage-hygiene)) | **~$0** (1.24 GB before the policy, ≈ ₹6/mo) |
 
 The killer design win: **bytes never transit Cloud Run**, so the usual
 egress/compute blowup for 1–5 GB uploads simply doesn't exist.
@@ -2024,8 +2030,9 @@ until now only one of them could do it. The table is the whole feature:
 | Semper staff, a seat | `PATCH /v1/admin/licenses/{id}/seats/{uid}/device` | `ADMIN_STEPUP` |
 | Semper staff, an individual licence | `PATCH /v1/admin/licenses/{id}` `{"clearDeviceLock": true}` | `ADMIN_STEPUP` |
 | The holder | `POST /v1/licenses/unbind` | `USER_STEPUP` |
+| Semper staff, a Demo account | `POST /v1/admin/device-releases` `{"email": …}` | `ADMIN_STEPUP` |
 
-All four reach one primitive, `firestore_repo.clear_device_lock`, which takes
+The first four reach one primitive, `firestore_repo.clear_device_lock`, which takes
 an `actor` — `ACTOR_STAFF`, `ACTOR_IT`, `ACTOR_SELF` — and selects the seat or
 the licence document by kind. The staff seat route exists because the operator
 console previously called the institution-tier one, which returns
@@ -2034,8 +2041,21 @@ console previously called the institution-tier one, which returns
 
 **Clearing the lock is the whole change.** Since binding happens on first use
 (§20.1), an empty lock is `_LOCK_UNBOUND` and `revalidate_device_lock` binds
-it to whichever device signs in next, first writer wins. Nothing is
+it to the next device that may take it, first writer wins. Nothing is
 re-activated, no key is re-issued, and nothing is typed on the new device.
+
+**Only the registered phone takes the lock** (`devlock._may_bind`): the
+account's `activeDeviceId`, or, while nothing is registered, any device but a
+released one still in its hold. Any device used to bind. A phone refused at
+registration still sends config and profile calls, and those took the lock,
+leaving the lock on one device and the registration on another; the registered
+phone then read as a mismatch and was demoted to Demo in place. Found
+2026-09-26: an emulator's refused sign-ins took a cleared lock, and the Pixel 6
+the account was registered on went to Demo. The same path let a released
+phone's upload worker retake the lock during its hold. A device that may not
+bind still gets its answer; the lock stays empty for the phone that may. A key
+typed on such a device (`_activate_individual`) is refused as
+`license_device_mismatch`.
 
 **Clearing is not revoking.** Entitlement, seat, lease, quota and every stored
 analysis are untouched; only the lock goes empty.
@@ -2044,14 +2064,18 @@ analysis are untouched; only the lock goes empty.
 `POST /v1/devices/register`, which refuses any device but the account's
 `users/{uid}.activeDeviceId` with `409 device_conflict`. That field is a second
 binding, and until 2026-09-26 a clear left it naming the old phone, so the new
-one was refused at sign-in and never reached the lock. `_release_holder_device`
-now deletes it and retires the old `devices/{id}` document as `SUPERSEDED`,
-as `register_device` does for a replaced phone. It shares `_live_holder` with
-`_restore_holder_mode`, so it acts only where the mode would be restored: a
-revoked licence, a seat that is revoked or on hold, and an account that has
-moved to another licence all keep their binding. Each of those leaves the
-holder on Demo, and a demo account has no licence to clear, so it still cannot
-change phone (TD-126). Until the guard was shared the release checked only the
+one was refused at sign-in and never reached the lock. `_settle_holder` now
+deletes it and retires the old `devices/{id}` document as `SUPERSEDED`
+(when that phone held the lock, or the lock held none: an account already split
+keeps its registered phone, which binds the empty lock next, and a second clear
+releases it if the holder really is moving)
+(`_retire_device`, shared with `register_device` and `set_user_status`). It
+writes the release and the restored mode (below) in one batch, after one read
+of the user, and only where `_live_holder` allows: a revoked licence, a seat
+that is revoked or on hold, and an account that has moved to another licence
+all keep their binding. Each of those leaves the
+holder on Demo, and a Demo account changes phone only through staff (below).
+Until the guard was shared the release checked only the
 last of the three, so **New device** on a held seat let its member change phone
 on Demo.
 
@@ -2068,6 +2092,18 @@ Registering any other device ends the hold at once. After the hold, the old
 phone may register again, so a mistaken clear strands nobody (decided
 2026-09-26).
 
+**A Demo account changes phone through staff.** It has no licence lock to
+clear, so until 2026-09-26 its first phone was its only phone: only suspending
+the account emptied `activeDeviceId`. The decision (TD-126) is that it may
+change phone like any other account, on request to operators, never
+self-service. The app already tells a refused phone to ask an admin.
+`POST /v1/admin/device-releases` takes the account's email and makes the same
+release a clear does (`repo.users.release_account_device`, sharing
+`_release_patch` and `_retire_device`): the old device retired, its id held off,
+audited as `ADMIN_DEVICE_RELEASE` with `releasedDeviceId`. An account on a live
+licence is refused with `409 license_device_clear_required`, since its lock
+would still name the old phone; **New device** moves both.
+
 #### The half that is easy to miss
 
 A device change is normally *preceded* by the holder trying the new phone. That
@@ -2076,7 +2112,7 @@ account in place — `mode: demo` written onto the user document. Clearing the
 lock afterwards would not undo that on its own: `revalidate_device_lock`
 returns early for an account that reads as demo, so it would never reach the
 bind branch and the holder would sit on Demo holding a live licence, with no
-route that fixes it. `_restore_holder_mode` re-stamps the mode as part of the
+route that fixes it. `_settle_holder` re-stamps the mode as part of the
 clear, guarded so that nothing is resurrected — skipped for a revoked licence,
 a revoked or disabled seat, and an account that has since moved to a different
 licence, with `effective_mode` still re-applying expiry, grace and the
@@ -2107,10 +2143,16 @@ authz matrix records it as its own tier, `USER_STEPUP`.
 
 #### Both ends are audited
 
-A clear writes the device that was given up (`previousDeviceId`) —
-`ADMIN_DEVICE_LOCK_CLEAR`, `INSTITUTION_SEAT_PATCH` or
-`LICENSE_DEVICE_UNBIND` by caller — and `revalidate_device_lock` writes
-`LICENSE_DEVICE_BIND` with the device that took its place. Neither half is the
+A clear writes the device that was given up — `ADMIN_DEVICE_LOCK_CLEAR`,
+`INSTITUTION_SEAT_PATCH` or `LICENSE_DEVICE_UNBIND` by caller — and
+`revalidate_device_lock` writes `LICENSE_DEVICE_BIND` with the device that took
+its place. The clear names two devices: `previousDeviceId`, the lock's, and
+`releasedDeviceId`, the registered device the account was signed out of. They
+differ only on an account split before the lock followed registration, and
+then `releasedDeviceId` is empty because that phone is kept; either is empty
+when there was nothing to give up. The `releasedDeviceId` stamp
+on the user lasts only until the next registration, so the audit row is the
+lasting record. Neither half is the
 change on its own; the pair is what an operator reads back.
 
 #### The order on the new device

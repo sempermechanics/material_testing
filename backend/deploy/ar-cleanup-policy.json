@@ -7,7 +7,7 @@
   {
     "name": "keep-serving",
     "action": {"type": "Keep"},
-    "condition": {"tagState": "tagged", "tagPrefixes": ["latest"]}
+    "condition": {"tagState": "tagged", "tagPrefixes": ["serving", "latest"]}
   },
   {
     "name": "keep-rollback-tags",

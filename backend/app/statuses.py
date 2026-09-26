@@ -39,6 +39,8 @@ FILE_COMPLETED = "COMPLETED"
 DEVICE_ACTIVE = "ACTIVE"
 #: Access was revoked; the key must not verify again.
 DEVICE_REVOKED = "REVOKED"
+#: Another device took the account's binding, by registering or by a lock clear.
+DEVICE_SUPERSEDED = "SUPERSEDED"
 
 # --- Account access (users/{uid}.access_status) -----------------------------
 #: Mirrors validation.AccessStatus, which is the request-side copy.

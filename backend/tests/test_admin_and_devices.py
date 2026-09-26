@@ -1,19 +1,9 @@
 """Admin approve/revoke, list_users limit clamp, and device registration conflicts."""
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-
 import pytest
 
 from app import audit, firestore_repo as repo
 from app import deps
-
-
-def _ec_pem() -> str:
-    priv = ec.generate_private_key(ec.SECP256R1())
-    return priv.public_key().public_bytes(
-        serialization.Encoding.PEM,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+from key_helpers import _ec_pem
 
 
 @pytest.fixture

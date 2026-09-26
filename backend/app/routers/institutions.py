@@ -250,7 +250,10 @@ def patch_seat(
                 # The device given up. Its replacement is recorded by
                 # LICENSE_DEVICE_BIND when the next device signs in, so the
                 # two together say what the change actually was.
-                "previousDeviceId": (cleared or {}).get("previousDeviceId") or ""},
+                "previousDeviceId": (cleared or {}).get("previousDeviceId") or "",
+                # The registered device the account was signed out of, which
+                # can differ from the lock's (repo.clear_device_lock).
+                "releasedDeviceId": (cleared or {}).get("releasedDeviceId") or ""},
     )
     seats = repo.list_institution_seats(license_id)
     seat = next((s for s in seats if s["uid"] == uid), None)
