@@ -1038,6 +1038,11 @@ The old phone is then refused for 24 hours (`DEVICE_RELEASE_HOLD_HOURS`): it sho
 phone signs in. Signing in on the new phone ends that at once. If the holder
 cleared by mistake and never moves, the old phone works again after 24 hours.
 
+**New device** on a seat that is on hold or revoked, or on a revoked licence,
+empties the lock but leaves the account's phone where it is: that holder is on
+Demo, and a Demo account cannot change phone. Resume the seat first if the
+member is really moving.
+
 Only the holder's own change waits out a cooldown; a support request never
 does, so a lost phone is fixed the same day. `429 device_change_too_soon`
 means the holder has already moved device inside the window — the detail

@@ -2029,10 +2029,14 @@ analysis are untouched; only the lock goes empty.
 binding, and until 2026-09-26 a clear left it naming the old phone, so the new
 one was refused at sign-in and never reached the lock. `_release_holder_device`
 now deletes it and retires the old `devices/{id}` document as `SUPERSEDED`,
-as `register_device` does for a replaced phone. It is guarded like
-`_restore_holder_mode`: an account that has moved to another licence keeps its
-binding. A demo account has no licence to clear, so it still cannot change
-phone (TD-126).
+as `register_device` does for a replaced phone. It shares `_live_holder` with
+`_restore_holder_mode`, so it acts only where the mode would be restored: a
+revoked licence, a seat that is revoked or on hold, and an account that has
+moved to another licence all keep their binding. Each of those leaves the
+holder on Demo, and a demo account has no licence to clear, so it still cannot
+change phone (TD-126). Until the guard was shared the release checked only the
+last of the three, so **New device** on a held seat let its member change phone
+on Demo.
 
 **The released phone is held off.** Every signed call from the old phone now
 reads `409 device_not_active`, and the app's upload worker answers that by

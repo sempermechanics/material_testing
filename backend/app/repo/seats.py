@@ -7,6 +7,8 @@ from ..config import settings
 from ..licenses import (
     KIND_INSTITUTION,
     MODE_LICENSED,
+    STATUS_ACTIVE,
+    STATUS_REVOKED,
     as_utc,
     normalize_kind,
 )
@@ -34,6 +36,37 @@ ACTOR_STAFF = "staff"
 ACTOR_IT = "it"
 
 
+def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
+    """The holder's `(user_ref, user)` if a device-lock clear may act on them, else None.
+
+    None for a revoked licence, for a seat that is revoked or on hold, and for an
+    account that has since moved to a different licence. Both halves of a clear
+    go through here, restoring the mode and releasing the phone, so neither can
+    act where the other would not. The release once checked only the last
+    condition: **New device** on a held seat let its member, by then on Demo,
+    register a different phone, a change Demo accounts do not otherwise get.
+    """
+    if (lic.get("status") or "") == STATUS_REVOKED:
+        return None
+    if scope == "seat":
+        seat = ref.get()
+        if not seat.exists or (seat.to_dict() or {}).get("status") != STATUS_ACTIVE:
+            return None
+        holder = uid
+    else:
+        holder = lic.get("redeemedByUid") or ""
+    if not holder:
+        return None
+    user_ref = db().collection("users").document(holder)
+    snap = user_ref.get()
+    if not snap.exists:
+        return None
+    user = snap.to_dict() or {}
+    if user.get("licenseId") != license_id:
+        return None
+    return user_ref, user
+
+
 def _restore_holder_mode(license_id: str, lic: dict, ref, scope: str, uid: str) -> None:
     """Give the holder their mode back now that the lock they missed is gone.
 
@@ -46,9 +79,9 @@ def _restore_holder_mode(license_id: str, lic: dict, ref, scope: str, uid: str) 
     Re-stamping the mode here is what makes clearing the lock the whole
     device change rather than half of one.
 
-    Nothing is resurrected. The write is skipped for a revoked licence, for a
-    seat that is revoked or on hold, and for an account that has since moved
-    to a different licence; and `effective_mode` still re-applies expiry,
+    Nothing is resurrected. The write is skipped wherever `_live_holder` says
+    so (a revoked licence, a seat that is revoked or on hold, an account that
+    has since moved to a different licence); and `effective_mode` still re-applies expiry,
     grace and the floating-lease check to whatever is written here, so a
     licence that has run out stays demo either way.
 
@@ -57,28 +90,17 @@ def _restore_holder_mode(license_id: str, lic: dict, ref, scope: str, uid: str) 
     starved out concurrent claims before `_drop_superseded_demo` moved the
     same guarded read out of `claim_seat`.
     """
-    if (lic.get("status") or "") == "revoked":
+    live = _live_holder(license_id, lic, ref, scope, uid)
+    if live is None:
         return
-    if scope == "seat":
-        seat = ref.get()
-        if not seat.exists or (seat.to_dict() or {}).get("status") != "active":
-            return
-        holder = uid
-    else:
-        holder = lic.get("redeemedByUid") or ""
-    if not holder:
-        return
-    user_ref = db().collection("users").document(holder)
-    snap = user_ref.get()
-    if not snap.exists or (snap.to_dict() or {}).get("licenseId") != license_id:
-        return
+    user_ref, _ = live
     user_ref.update({
         **_mode_patch(_license_mode(lic)),
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
     })
 
 
-def _release_holder_device(license_id: str, lic: dict, scope: str, uid: str) -> None:
+def _release_holder_device(license_id: str, lic: dict, ref, scope: str, uid: str) -> None:
     """Let the holder's next phone register, now that the lock has moved.
 
     The licence lock is not the only binding. `POST /v1/devices/register`
@@ -88,9 +110,10 @@ def _release_holder_device(license_id: str, lic: dict, scope: str, uid: str) -> 
     phone and refused at registration: the device change never happened.
 
     The old device is retired the way `register_device` retires a superseded
-    one, so its id stops counting against another account. Guarded like
-    `_restore_holder_mode`: an account that has moved to a different licence
-    keeps its binding.
+    one, so its id stops counting against another account. Guarded by the
+    same `_live_holder` as `_restore_holder_mode`: a revoked licence, a seat
+    that is revoked or on hold, and an account that has moved to a different
+    licence all keep their binding.
 
     The released id is stamped on the user (`releasedDeviceId`, `releasedAt`)
     so registration can hold it off for `DEVICE_RELEASE_HOLD_HOURS`: the old
@@ -98,16 +121,12 @@ def _release_holder_device(license_id: str, lic: dict, scope: str, uid: str) -> 
     and would otherwise take the account straight back
     (`repo.devices.released_device_held`).
     """
-    holder = uid if scope == "seat" else (lic.get("redeemedByUid") or "")
-    if not holder:
+    live = _live_holder(license_id, lic, ref, scope, uid)
+    if live is None:
         return
-    user_ref = db().collection("users").document(holder)
-    snap = user_ref.get()
-    if not snap.exists:
-        return
-    user = snap.to_dict() or {}
+    user_ref, user = live
     active = user.get("activeDeviceId") or ""
-    if user.get("licenseId") != license_id or not active:
+    if not active:
         return
     batch = db().batch()
     batch.update(user_ref, {
@@ -181,7 +200,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         previous = (snap.to_dict() or {}).get("deviceIdLock") or ""
         ref.update({"deviceIdLock": "", "updatedAt": _base.firestore.SERVER_TIMESTAMP})
         _restore_holder_mode(license_id, lic, ref, scope, uid)
-        _release_holder_device(license_id, lic, scope, uid)
+        _release_holder_device(license_id, lic, ref, scope, uid)
         return "", {**detail, "previousDeviceId": previous}
 
     now = _now()
@@ -221,7 +240,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     )
     if not err:
         _restore_holder_mode(license_id, lic, ref, scope, uid)
-        _release_holder_device(license_id, lic, scope, uid)
+        _release_holder_device(license_id, lic, ref, scope, uid)
     return err, cleared
 
 
