@@ -165,6 +165,16 @@ export function upsertLicence(list, lic) {
   return next;
 }
 
+/**
+ * Whole days until a deleted licence is purged, rounded up; 0 once due.
+ * The purge itself runs up to a day after this (Firestore TTL), but restore
+ * is refused from the date, so the date is what the desk counts to.
+ */
+export function daysLeft(purgeAt, now = Date.now()) {
+  const t = Date.parse(purgeAt ?? "");
+  return Number.isNaN(t) ? 0 : Math.max(0, Math.ceil((t - now) / 86400e3));
+}
+
 /** The UTC calendar day (YYYY-MM-DD) of a stored instant, or "". */
 export function isoDay(iso) {
   if (!iso) return "";

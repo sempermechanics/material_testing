@@ -1059,6 +1059,15 @@ drops to Demo. For a institution key, **every** activated seat drops to Demo at
 once — use this for "the institution's contract ended," not for offboarding
 one member (use the IT self-service `DELETE` above for that).
 
+**Deleting a key** (Semper staff): **Delete** on the desk, or
+`DELETE /v1/admin/licenses/{id}`, with the same typed key and step-up as a
+revoke. A live key is revoked first. The licence then leaves the list and is
+held under **Recently deleted** for 30 days, with **Restore**; after that it is
+purged for good (Firestore TTL — see BACKEND_SETUP_CONSOLE.md §3a). Use it for
+mistakes and for revoked keys nobody needs any more; the audit log keeps the
+record either way. A restore puts holders back unless they have taken another
+licence since. A system Demo key cannot be deleted.
+
 **Downgrading never deletes anything.** Whether a whole key is revoked, a
 single seat is revoked, or a seat is disabled, the affected account(s) simply
 stop being able to start *new* cloud analyses — everything already saved

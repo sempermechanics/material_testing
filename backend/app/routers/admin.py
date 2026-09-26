@@ -254,6 +254,72 @@ def admin_update_license(
     return updated
 
 
+@router.delete(
+    "/v1/admin/licenses/{license_id}",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
+def admin_delete_license(
+    license_id: DocumentId,
+    ctx=Depends(attested_or_mfa_admin_fresh),
+    admin=Depends(admin_user),
+):
+    """Delete a licence into a 30-day hold (`repo/deletion.py`). The same
+    fresh step-up as a whole-licence revoke, which this runs first: holders
+    drop to Demo and their data is untouched. The licence and its seats are
+    copied to `deleted_licenses` with `purgeAt`, which a TTL policy removes;
+    until then `POST /v1/admin/deleted-licenses/{id}/restore` brings it back.
+    A system Demo key is refused (409 `demo_key_not_deletable`).
+    """
+    code, row = repo.delete_license(license_id, admin["uid"])
+    if code:
+        raise HTTPException(404 if code == errors.LICENSE_NOT_FOUND else 409, code)
+    audit.record(
+        admin["uid"], action="ADMIN_LICENSE_DELETE",
+        target={"type": "license", "id": license_id},
+        detail={"priorStatus": row["priorStatus"], "kind": row["kind"],
+                "keyPrefix": row["keyPrefix"], "purgeAt": str(row["purgeAt"])},
+    )
+    return row
+
+
+@router.get("/v1/admin/deleted-licenses")
+def admin_list_deleted_licenses(
+    limit: int = 50,
+    admin=Depends(admin_user),
+):
+    """Licences deleted within the hold, most recent first, each with the
+    date it is purged."""
+    rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
+    return {"licenses": repo.list_deleted_licenses(limit=clamp_page_size(limit, 200))}
+
+
+@router.post(
+    "/v1/admin/deleted-licenses/{license_id}/restore",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
+def admin_restore_license(
+    license_id: DocumentId,
+    ctx=Depends(attested_or_mfa_admin),
+    admin=Depends(admin_user),
+):
+    """Bring a deleted licence back within its hold. Holders are re-attached
+    unless they have taken another licence since (one licence per person)."""
+    code, lic = repo.restore_license(license_id, admin["uid"])
+    if code:
+        status = {
+            errors.DELETED_LICENSE_NOT_FOUND: 404,
+            errors.DELETED_LICENSE_PURGED: 410,
+            errors.LICENSE_EXISTS: 409,
+        }.get(code, 409)
+        raise HTTPException(status, code)
+    audit.record(
+        admin["uid"], action="ADMIN_LICENSE_RESTORE",
+        target={"type": "license", "id": license_id},
+        detail={"status": lic["status"], "seatsUsed": lic.get("seatsUsed")},
+    )
+    return lic
+
+
 @router.post(
     "/v1/admin/licenses/{license_id}/convert",
     dependencies=[rate_limited(rate_limit.admin_bucket)],

@@ -133,6 +133,15 @@ FLOATING_NEEDS_MAX_SEATS = "floating_needs_max_seats"
 # holder whose address is not on the new licence's domain (422).
 LICENSE_NOT_CONVERTIBLE = "license_not_convertible"
 CONVERT_DOMAIN_MISMATCH = "convert_domain_mismatch"
+# Deleting a licence into the 30-day hold (repo/deletion.py). A system Demo
+# key is refused (409): the account would only be issued another. Restore
+# answers 404 for nothing held, 410 once the hold has ended (the TTL purge
+# runs up to a day late, so the date is checked), and 409 if a licence with
+# that id exists again.
+DEMO_KEY_NOT_DELETABLE = "demo_key_not_deletable"
+DELETED_LICENSE_NOT_FOUND = "deleted_license_not_found"
+DELETED_LICENSE_PURGED = "deleted_license_purged"
+LICENSE_EXISTS = "license_exists"
 
 # --- institution invites ---------------------------------------------------
 # An invite reserves a roster place for an address with no account yet. It is

@@ -557,6 +557,26 @@ paths:
         '200': { description: OK }
         '404': { description: License not found }
         '429': { description: Rate limited }
+    delete:
+      operationId: adminDeleteLicense
+      description: >
+        Device-attested, Semper-staff only, with the fresh step-up a revoke
+        needs. Revokes the licence (holders drop to demo; their data is
+        untouched), then moves it and its seats to deleted_licenses with
+        purgeAt 30 days on, which a TTL policy removes. Restore within the hold
+        with POST /v1/admin/deleted-licenses/{licenseId}/restore. A system demo
+        key is refused (409 demo_key_not_deletable).
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: License not found }
+        '409': { description: A system demo key (demo_key_not_deletable) }
     patch:
       operationId: adminUpdateLicense
       description: >
@@ -690,6 +710,39 @@ paths:
         '401': { description: Missing or invalid device attestation }
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: License not found }
+  /v1/admin/deleted-licenses:
+    get:
+      operationId: adminListDeletedLicenses
+      description: >
+        Semper staff. Licences deleted within the 30-day hold, most recently
+        deleted first, each with priorStatus, deletedAt and purgeAt.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          type: integer
+      responses:
+        '200': { description: OK }
+        '429': { description: Rate limited }
+  /v1/admin/deleted-licenses/{licenseId}/restore:
+    post:
+      operationId: adminRestoreLicense
+      description: >
+        Device-attested, Semper-staff only. Bring a deleted licence back within
+        its hold. Holders are re-attached unless they have taken another live
+        licence since; a licence that was revoked comes back revoked.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: Nothing deleted under that id (deleted_license_not_found) }
+        '409': { description: A licence with that id exists (license_exists) }
+        '410': { description: The hold has ended (deleted_license_purged) }
   /v1/admin/licenses/{licenseId}/convert:
     post:
       operationId: adminConvertLicense

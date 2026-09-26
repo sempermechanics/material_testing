@@ -582,6 +582,15 @@ licenses/{id}/seats/{uid}         (institution only — one doc per roster membe
   leaseDeviceId, lastHeartbeatAt
   createdAt, updatedAt
 
+deleted_licenses/{id}             (a deleted licence, held 30 days — §20.6)
+  …every field the licence had, as it stood before the delete's revoke
+  priorStatus                     (the status it comes back with on restore)
+  deletedAt, deletedByUid
+  purgeAt                         (Timestamp, deletedAt + 30 d; TTL field —
+                                   BACKEND_SETUP_CONSOLE.md §3a)
+deleted_licenses/{id}/deleted_seats/{uid}
+  …the seat as it stood, plus purgeAt (its own TTL policy)
+
 audit_logs/{autoId}               (append-only)
   ts (Timestamp), uid, deviceId, ip, ua
   action: "LOGIN" | "DEVICE_REGISTER" | "DEVICE_REBIND" |
@@ -1230,6 +1239,7 @@ guarantee as activation — never touches stored sessions/files. See
 |---|---|---|
 | Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff: device-attested, or from the operator desk with a second factor and a sign-in newer than `ADMIN_WEB_REVOKE_REAUTH_SECONDS`) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0; the response carries the reset counts. |
 | Single-seat revoke | `DELETE /v1/institutions/licenses/{id}/seats/{uid}` (institution IT) | Only that member drops to Demo; **frees the slot** for another domain member (including, after re-admission, the same member re-entering the key). |
+| Delete | `DELETE /v1/admin/licenses/{id}` (Semper staff, the same step-up as whole-key revoke) | A whole-key revoke, then the licence leaves `licenses` for a 30-day hold (§20.6). Holders' accounts stop pointing at it and get a Demo key of their own. |
 | Disable a seat | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores the licensed mode in place with no re-activation needed. |
 
 A downgrade to Demo — from any of the above, or a plan cap being exceeded —
@@ -1517,6 +1527,40 @@ as it was. Audited as `ADMIN_LICENSE_CONVERT`.
 
 Edits are audited as `ADMIN_LICENSE_EXTEND`. Declared in `gateway/openapi.yaml` as well
 as FastAPI — ESPv2 rejects any path absent from the gateway spec.
+
+#### Deleting a licence, and the 30-day hold
+
+Revoke keeps the licence as the record, so the desk fills with them.
+**`DELETE /v1/admin/licenses/{id}`** (`repo/deletion.py`; step-up as for
+revoke; audited `ADMIN_LICENSE_DELETE`) removes it:
+
+1. Copies the licence to `deleted_licenses/{id}` (with `priorStatus`,
+   `deletedAt`, `deletedByUid`, `purgeAt` = now + 30 days) and each seat to
+   `deleted_seats` under it. Nothing is removed until the copy is written.
+2. Revokes it (§20.3): holders drop to Demo; their sessions and files are
+   untouched. Pending invites go with the revoke.
+3. Clears `licenseId` and the mirrored terms from every holder, so the next
+   request issues each a Demo key of their own, as for a new account.
+4. Deletes the seats and the licence. The key now redeems as
+   `license_not_found`, and the address is free for a new licence (§20.1's
+   one-licence rule reads only `licenses`).
+
+A system Demo key is refused (`409 demo_key_not_deletable`): the account would
+only be issued another.
+
+Firestore TTL policies on `deleted_licenses.purgeAt` and
+`deleted_seats.purgeAt` remove the copy after the hold — no scheduler. TTL
+deletes within about a day of the date, not at it, so restore checks the date
+itself. `GET /v1/admin/deleted-licenses` lists the held licences, newest first.
+
+**`POST /v1/admin/deleted-licenses/{id}/restore`** (`ADMIN_LICENSE_RESTORE`)
+writes the licence back with `priorStatus`. A licence deleted after it was
+revoked comes back revoked. Otherwise each holder is re-attached unless they
+now hold another live licence: that seat comes back revoked, or an individual
+licence comes back `unused`. An unclaimed individual licence is promised to
+its address again. Leases and pending roster invites do not come back.
+Refused with `404 deleted_license_not_found`, `410 deleted_license_purged`
+(past `purgeAt`), or `409 license_exists`.
 
 #### Activating an expired key is refused
 

@@ -137,6 +137,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   **Restore (in review):** Home says Restore, restores a multi-selection, shares `RestoreStart`
   with Settings, and announces a failed restore once (`RestoreFailureLedger`). Pixel 6, 3 at
   once: 13 requests, 0 × 429, ~17 s, so restores stay parallel.
+- **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person) and #238
+  (edit/upgrade/convert) merged; #239 (delete with a 30-day restore) in review
+  ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)). Deploy owes three indexes and two TTL policies.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever

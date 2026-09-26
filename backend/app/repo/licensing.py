@@ -65,6 +65,11 @@ from .license_admin import (  # noqa: F401
 from .upgrade import (  # noqa: F401
     convert_to_institution,
 )
+from .deletion import (  # noqa: F401
+    delete_license,
+    list_deleted_licenses,
+    restore_license,
+)
 from .institution_admin import (  # noqa: F401
     add_institution_member,
     institution_license_summary,
