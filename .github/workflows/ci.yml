@@ -102,8 +102,9 @@ jobs:
     # placeholders still unsubstituted, rewrite targets that exist, and every
     # /v1 path declared on the gateway. Seconds to run, so it runs on every
     # event rather than behind a path filter. The node tests cover the
-    # DOM-free helpers in console/util.js (roster cells, escaping); sign-in
-    # and step-up still need Firebase fixtures and are hand-checked (TD-22).
+    # DOM-free helpers in console/util.js, and auth.js (sign-in, step-up,
+    # api, revoke gate) and router.js against a fake Firebase SDK
+    # (firebase-hosting/tests/harness.mjs); the page modules are TD-22.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

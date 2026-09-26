@@ -270,10 +270,33 @@ that reads them instead, and runs as the **Console pages** CI job:
 Run it directly with `python scripts/check_console.py`. Node is used for the
 syntax check when it is on `PATH` and skipped with a note when it is not.
 
-The same job runs `node --test "firebase-hosting/tests/*.test.mjs"`, which
-covers `util.js`: escaping, dates, and the roster cells (an expired floating
-lease reads "—", not "until <past time>"). Sign-in, step-up and revoke are not
-covered: they need Firebase fixtures, so they stay on the hand-check list below.
+The same job runs `node --test "firebase-hosting/tests/*.test.mjs"` (Node 22,
+no `npm install`). `util.test.mjs` covers `util.js`: escaping, dates, and the
+roster cells (an expired floating lease reads "—", not "until <past time>").
+`auth.test.mjs`, `signin.test.mjs` and `router.test.mjs` cover `auth.js` and
+`router.js` against a fake Firebase SDK:
+
+| File | Pins |
+|---|---|
+| `auth.test.mjs` | `api()` sends `Bearer <ID token>` to `API_BASE_URL + path` and throws the backend's code; `reauth_required` leaves for Google once and never retries with the stale token; a step-up that completes retries once with a force-refreshed token; `allowStepUp: false` and `mfa_required` are handed back untouched; a cancelled code is `ERR_CANCELLED`; the 120 s redirect-loop guard and `operatorAsked`; `apiBlob()`; a resolved challenge adopts the re-authenticated user; `sessionHasSecondFactor` reads the token claim; TOTP enrolment in the page; `stepUpForRevoke`'s 90 s window and password-versus-Google choice; `confirmByTyping` |
+| `signin.test.mjs` | `requireSignIn`: nothing reaches `onReady` signed out or without this session's second factor; one start per account; the return leg hands `resume` over once, or marks it `reauthFailed`; declining to enrol signs out; a redirect that keeps failing stops with a message |
+| `router.test.mjs` | `/login` forwards staff, IT contacts (deep-linked to one licence) and everyone else, and offers a switcher when it cannot or should not choose |
+
+How the fake gets in: `tests/harness.mjs` calls `module.register` with
+`tests/firebase-hooks.mjs`, whose `resolve` hook maps the two
+`www.gstatic.com/firebasejs/<ver>/` imports to `tests/fakes/` and refuses any
+other remote import. A test file therefore imports `auth.js` dynamically
+(`loadAuth()`), after the harness has run. The harness also puts a small
+`window` / `document` / `location` on `globalThis` (one element per `id` in
+the real `index.html`) and a `fetch` that answers only what a test queued, so
+nothing reaches the network. A new SDK function in `auth.js` needs a matching
+export in `tests/fakes/firebase-auth.mjs`.
+
+What the fakes cannot prove is that Firebase itself still behaves the way
+they model it — the redirect round trip, the handler on the page's own host,
+real TOTP codes, the `redirectUser` quirk described below. That stays on the
+hand-check (checklist step 7). The page modules (`operator.js`, `account.js`,
+`institution.js`) have no behavioural tests yet (TD-22).
 
 ## Downloading an analysis
 
