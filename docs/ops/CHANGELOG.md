@@ -12,6 +12,58 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — material_testing: the keyboard makes room on every text-field screen (#71)
+
+Merged as `e90b23ba`. Before Android 15, the wizard and the result viewer ran in
+pan mode, and the ROI editor in `adjustPan`. Their views got no keyboard inset,
+so the step-1 cross-section field, the ROI's Width, Height and Apply, and the
+viewer's frame field sat under the keyboard. From Android 15 the app is
+edge-to-edge, and nothing resized at all. There were two more faults. The ROI
+overlay lost up to a pixel per edge on each resize. The viewer's 2.5 s auto-hide
+took the frame field's focus mid-number, which committed the number and closed
+the keyboard.
+
+All three screens now declare `adjustResize`. The `Insets` helpers pad the
+wizard and the ROI dock by the keyboard, and lift the viewer's scrubber so the
+image does not refit. The overlay remaps in floats, and the auto-hide waits
+while the frame field has focus.
+
+Checked on API 34 and API 36 emulators, then on a Pixel 6 (Android 17) at
+`e90b23ba`. The ROI kept its image pixels through eight keyboard cycles, and a
+typed frame 20 opened 20/33 (TD-99). The same Pixel 6 session ran
+[WORKFLOWS.md](../app/WORKFLOWS.md) §5.1a with synthetic clips and found TD-134.
+
+## 2026-09-26 — material_testing: detail moved out of Current state
+
+Current state was trimmed to its guideline length (#72). These lines had
+no other home, as they stood in CONTEXT.md:
+
+- Sync: the last parent merge is `cd7d5db` (parent #251–#258: no "upload
+  pending" with no upload coming, TD-127 fixed, licence-desk and console fixes,
+  the gateway job for staging; #248–#250 device change, TD-122–TD-132). General
+  fixes made here that went back: TD-76, TD-77, TD-79, TD-80, TD-82–TD-85, the
+  ranges write-back TD-88 as parent #217, and the four in semperdic-app#189.
+- Phone checks: 2D DIC (#46) and the load card's ⓘ and **Beam height → Set**
+  (#48), [WORKFLOWS.md](../app/WORKFLOWS.md) §3b.1–3b.3 and 3b.8–3b.9, pass on a
+  Pixel 6 (Android 17, 2026-09-26); **Set** before a thickness now fits its
+  toast (TD-98).
+- Lab end to end: on the Galaxy S21+ (Android 15) the Tier 3 lab tests pass 9/9
+  at `db75267` (after #46–#50); `VideoFrameExtractionDeviceTest` passes 6/6
+  there (2026-09-25, and 2026-09-26 on a build another session installed).
+
+## 2026-09-26 — material_testing: merges no longer cancel `main`'s CI (#67)
+
+Merged as `3cb8ad3f`. CI's concurrency group had `cancel-in-progress: true` for
+every event, so each merge to `main` cancelled the run before it. Tier 3 and
+Tier 5 take about 12 minutes, and that morning 15 of 17 finished push runs on
+`main` were cancelled; none finished between `384d6933` (05:26 UTC) and the
+merges of #55, #58 and #60–#66. `cancel-in-progress` is now true only for
+`pull_request` events. GitHub still keeps one pending run per group, so a burst
+of merges runs the one in flight and the newest. Checked on `main` the same
+day: #67's own merge left #68's run (`4633332a`) to finish, and it and the runs
+for #67, #69 and #70 all passed, Tier 3 and Tier 5 included. [CI.md](CI.md)
+describes it (TD-97).
+
 ## 2026-09-26 — material_testing: CI path filters honour their excludes (#63)
 
 Merged as `6aa4bac0`. Tier 1 had been running on every PR, docs-only ones
