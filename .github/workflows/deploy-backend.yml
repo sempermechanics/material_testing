@@ -345,6 +345,51 @@ jobs:
             --format='value(status.imageDigest)')
           echo "Deployed revision=${REV} imageDigest=${IMG}"
 
+      # Pin the images by digest for the registry cleanup policy
+      # (backend/deploy/ar-cleanup-policy.json). A source deploy tags every image
+      # it builds `latest` before the smoke, so `latest` names the newest build,
+      # not the one serving: after a failed smoke, PREV served an image no tag
+      # kept. `serving` moves to the image now taking traffic and
+      # `rollback-prev` to the one it replaced; `tags add` moves a tag that
+      # exists. A failed smoke never gets here, so `serving` stays on PREV.
+      # Last in the job, rollback-prev first, so no failure after it can leave
+      # PREV unpinned. continue-on-error: re-pinning by hand
+      # (BACKEND_SETUP_GCP.md A7) beats rolling back a healthy revision.
+      # One-time IAM: moving a tag that exists needs artifactregistry.tags.delete,
+      # which roles/artifactregistry.writer lacks; the deploy SA holds
+      # roles/artifactregistry.repoAdmin on cloud-run-source-deploy only.
+      - name: Pin the serving and rollback images
+        continue-on-error: true
+        env:
+          PROJECT: ${{ github.event.inputs.project }}
+          REGION: ${{ github.event.inputs.region }}
+          REV: ${{ steps.meta.outputs.service }}-${{ github.run_id }}-${{ github.run_attempt }}
+          PREV: ${{ steps.previous.outputs.revision }}
+        run: |
+          set -Eeuo pipefail
+          trap 'echo "::error::Image pin failed; re-pin serving/rollback-prev by hand (BACKEND_SETUP_GCP.md A7)"' ERR
+          digest() {  # digest <revision>: image@sha256:…, or fail
+            local img
+            img=$(gcloud run revisions describe "$1" --project "$PROJECT" --region "$REGION" \
+              --format='value(status.imageDigest)')
+            [[ "$img" == *@sha256:* ]] || { echo "No image digest for $1" >&2; return 1; }
+            echo "$img"
+          }
+          pin() {  # pin <image@sha256:digest> <tag>
+            gcloud artifacts docker tags add "$1" "${1%@*}:$2" --quiet
+            echo "Pinned $2 -> $1"
+          }
+          # Both digests before any tag, so a failed lookup tags nothing.
+          OLD=""
+          if [ -n "$PREV" ] && [ "$PREV" != "$REV" ]; then
+            OLD=$(digest "$PREV")
+          fi
+          NEW=$(digest "$REV")
+          if [ -n "$OLD" ]; then
+            pin "$OLD" rollback-prev
+          fi
+          pin "$NEW" serving
+
       # Revert only if we already moved live traffic (promote succeeded) and a
       # later step failed. A failed smoke leaves PREV serving — nothing to undo.
       - name: Rollback traffic on post-promote failure

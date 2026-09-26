@@ -1,20 +1,13 @@
 import pytest
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import ValidationError
 
 from app.models import DeviceReg, FileComplete, FileSpec, SessionCreate
+from key_helpers import _ec_pem
 
 _SHA = "a" * 64
 _MD5 = "b" * 32
-
-
-def _ec_pem() -> str:
-    priv = ec.generate_private_key(ec.SECP256R1())
-    return priv.public_key().public_bytes(
-        serialization.Encoding.PEM,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
 
 
 def _rsa_pem() -> str:

@@ -149,6 +149,11 @@ class ProvisionTask(BaseModel):
     sessionId: SessionId
 
 
+class AdminDeviceRelease(BaseModel):
+    """The account whose phone staff release, by the address the request came from."""
+    email: str = Field(min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+$")
+
+
 class UserConfigPatch(BaseModel):
     """Admin overrides for per-user product limits. Omitted fields stay unchanged;
     send JSON null to clear an override and re-inherit the fleet default."""

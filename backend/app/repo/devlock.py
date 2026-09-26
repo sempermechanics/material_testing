@@ -3,9 +3,12 @@
 import logging
 import random
 import time
+from datetime import timedelta
 
 from .. import errors
+from ..config import settings
 from ..licenses import (
+    as_utc,
     KIND_INSTITUTION,
     MODE_DEMO,
     MODE_LICENSED,
@@ -16,6 +19,7 @@ from ..observability import DependencyError
 from . import _base
 from ._base import (
     db,
+    _now,
     _mode_patch,
     _run_tx,
     _seat_ref,
@@ -155,6 +159,43 @@ def check_device_lock(user: dict, device_id: str) -> bool:
     return _device_lock_state(user, device_id)[0] != _LOCK_VIOLATION
 
 
+
+def released_device_held(user: dict, device_id: str) -> bool:
+    """Whether `device_id` is a phone a device-lock clear released, still held off.
+
+    A device-lock clear (`repo.seats._settle_holder`) empties `activeDeviceId` so the new phone can
+    register, and stamps the old id. Without this check the old phone gets it
+    straight back: its next signed call reads `device_not_active`, the upload
+    worker re-registers, and the new phone meets `device_conflict` again.
+    Registering any other device clears the stamp (`register_device`), and after
+    `DEVICE_RELEASE_HOLD_HOURS` the old phone may return.
+    """
+    if not device_id or user.get("releasedDeviceId") != device_id:
+        return False
+    hold = timedelta(hours=max(0, settings.DEVICE_RELEASE_HOLD_HOURS))
+    released = as_utc(user.get("releasedAt"))
+    return bool(hold) and released is not None and _now() - released < hold
+
+
+def _may_bind(user: dict, device_id: str) -> bool:
+    """Whether `device_id` may take this account's empty lock: its registered
+    phone, or, while nothing is registered, any phone but one a clear released
+    and still holds off.
+
+    Any device used to bind. A phone refused at `POST /v1/devices/register`
+    (`device_conflict`) still sends its config and profile calls, and those
+    took the lock: the account then held a lock on one phone and a
+    registration on another, and the registered phone read as a mismatch and
+    was dropped to Demo (2026-09-26, a Pixel 6 after an emulator's refused
+    sign-in). The same path let a released phone's upload worker retake the
+    lock during its hold.
+    """
+    active = user.get("activeDeviceId") or ""
+    if active:
+        return device_id == active
+    return not released_device_held(user, device_id)
+
+
 def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
     """Re-check this account's entitlement against `device_id` on every authed
     call that carries X-Device-Id — activation is not "trust forever". A
@@ -166,9 +207,10 @@ def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
     Also the moment an unbound licence acquires its device. A licence minted
     against an email, or a seat added to a roster, carries no lock until
     someone actually signs in — so the first authed request that presents a
-    device id binds it here. That is what makes "we mint against your address
-    and you sign in" tie a licence to a device with no key and no activation
-    step; see _device_lock_state.
+    device id binds it here, if that device may take it (`_may_bind`). That
+    is what makes "we mint against your address and you sign in" tie a
+    licence to a device with no key and no activation step; see
+    _device_lock_state.
 
     This only ever *removes* entitlement in place — it never deletes or hides
     the account's sessions/files, and re-locking to a *different* device
@@ -180,6 +222,9 @@ def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
         return user
     verdict, ref = _device_lock_state(user, device_id)
     if verdict == _LOCK_UNBOUND:
+        if not _may_bind(user, device_id):
+            # Proceeds, but leaves the lock for the phone that may take it.
+            return user
         try:
             bound = bind_device_lock(ref, device_id)
         except DeviceLockContended:

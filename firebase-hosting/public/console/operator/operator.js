@@ -693,10 +693,13 @@ async function showDeviceHistory(id) {
     );
     const lines = (data.events || []).map((e) => {
       const prev = (e.detail && e.detail.previousDeviceId) || "";
+      // The registered phone the clear signed out, when it is not the lock's.
+      const released = (e.detail && e.detail.releasedDeviceId) || "";
       const next = (e.detail && e.detail.deviceId) || "";
       const who = e.uid || "—";
       return `${e.ts || "?"}  ${e.action}  by ${who}` +
         (prev ? `  left ${prev}` : "") +
+        (released && released !== prev ? `  signed out ${released}` : "") +
         (next ? `  → ${next}` : "");
     });
     window.alert(
@@ -1166,6 +1169,30 @@ async function loadUsers() {
       `<tr><td colspan="4" class="err">Could not load: ${esc(e.message)}</td></tr>`;
   }
 }
+
+$("releasePhone").addEventListener("click", async () => {
+  const email = $("releaseEmail").value.trim();
+  if (!email) return setStatus("Enter the account's email.", true);
+  const btn = $("releasePhone");
+  btn.disabled = true;
+  try {
+    const out = await api("/v1/admin/device-releases", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    setStatus(out.releasedDeviceId
+      ? `Released ${out.releasedDeviceId} for ${out.email || email}; the new phone can sign in.`
+      : `${out.email || email} had no phone registered; any phone can sign in.`);
+    $("releaseEmail").value = "";
+  } catch (e) {
+    const msg = /license_device_clear_required/.test(e.message)
+      ? "That account is licensed: use New device on its licence."
+      : e.message;
+    setStatus(`Could not release: ${msg}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 $("userRows").addEventListener("click", async (ev) => {
   const btn = ev.target.closest("button[data-approve]");

@@ -19,6 +19,7 @@ from ._base import (
 )
 from .devlock import (
     bind_device_lock,
+    _may_bind,
 )
 from .user_config import (
     resolve_user_config,
@@ -46,14 +47,16 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
     if not _emails_match(lic.get("emailLock"), email):
         return "license_email_mismatch", None
     locked = lic.get("deviceIdLock") or ""
-    if not locked and device_id:
+    if not locked and device_id and _may_bind(user, device_id):
         # Bind-on-first-use, the same rule the request path applies. A licence
         # minted against an address alone has no lock, so a key typed here for
         # support recovery has to be able to set one rather than demand it.
         # Re-read rather than assume: bind_device_lock is first-writer-wins,
         # and losing the race means some other device owns this licence. A
         # bind starved with the lock still empty raises DeviceLockContended
-        # (503) instead, so this never answers a mismatch nobody holds.
+        # (503) instead, so this never answers a mismatch nobody holds. A
+        # device that may not take the lock (`_may_bind`) is answered as a
+        # mismatch, as the request path leaves it unbound.
         bind_device_lock(ref, device_id)
         locked = (ref.get().to_dict() or {}).get("deviceIdLock") or ""
     if locked != device_id:
