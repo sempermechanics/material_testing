@@ -248,16 +248,32 @@ gcloud artifacts docker images list \
 ```
 
 Every version older than 15 days goes, unless it is tagged `latest`, has a tag starting
-`rollback`, or is one of its package's five newest. Then re-run the first command with `--no-dry-run` in place of
-`--dry-run`.
+`rollback`, or is one of its package's five newest. Then re-run the first command with
+`--no-dry-run` in place of `--dry-run`.
+
+**Changing the rules later.** `--dry-run` is a setting on the repository, not on the one
+call: re-running the first command as written switches an enforcing repository back to
+dry run, and cleanup stops without any error. Once the policy is enforcing, apply an edited
+`ar-cleanup-policy.json` with `--no-dry-run`:
+
+```bash
+gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy \
+  --location=$REGION --project=$PROJECT \
+  --policy=backend/deploy/ar-cleanup-policy.json --no-dry-run
+```
+
+`list-cleanup-policies` (see **Check**) should still print "Dry run is disabled".
 
 Artifact Registry does not record when an image was last pulled, so "unused" here means
 "uploaded more than 15 days ago". The keep rules are there because Cloud Run needs a
 revision's image each time it starts an instance, and at `--min-instances 0` that happens
 after every idle spell. A `rollback…` tag is a hand-pinned rollback image (the ones named
 in [CHANGELOG.md](../ops/CHANGELOG.md)); it is kept until someone removes the tag with
-`gcloud artifacts docker tags delete`. The Firestore backup bucket is not covered: it has its own
-retention ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
+`gcloud artifacts docker tags delete`. No other earlier revision is kept for rollback:
+once its image is more than 15 days old and outside its package's five newest, it is
+deleted, and routing traffic back to that revision gives it no image to start from. Tag an
+image `rollback-…` to keep it as a target. The Firestore backup bucket is not covered: it
+has its own retention ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
 
 **Check:** `gcloud artifacts repositories list-cleanup-policies cloud-run-source-deploy
 --location=$REGION` shows four policies. `gcloud storage buckets describe
