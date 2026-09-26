@@ -12,6 +12,21 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — material_testing: machine-load info with the CSV header and diagrams (#48)
+
+Merged as `7be477e2`. The ⓘ on the wizard's **Machine load** card opens
+`LoadInfoDialog`. It shows a sample of the CSV the machine must export
+(`Time (s),Load (kN)` for tensile, `Time (s),Load (N)` for bending), plus the
+header, unit and time-column rules, and a drawing from `LoadInfoDiagramView`.
+Tensile's shows the loading axis, the F arrows, the cross-section
+(A = π·d²/4) and the photo's X/Y axes. Bending's shows W, δ, span L, the b × t
+cross-section and the beam height to tap. `LoadInfoDialogTest` parses both
+samples with `MachineLoadCsv`, so the help cannot drift from the parser.
+Bending's **Load point → Mark** row is now **Beam height → Set**. The sample
+box uses an opaque `info_code_bg`, because the translucent `viewer_plot_grid`
+did not draw on the dark dialog. Checked by hand on the API 36 emulator, in
+light and dark themes. Ships with the next app release.
+
 ## 2026-09-25 — material_testing: 2D DIC on the test-type sheet (#46)
 
 Merged as `82ae372e`. Home **+** → **Which test?** offers **2D DIC** next to
