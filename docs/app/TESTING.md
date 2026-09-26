@@ -237,8 +237,11 @@ has the install and run steps for the macro suite.
 Charge explains the Settings gap but not the wizard's. Cold start comes closer
 too (+18 % to +14 %). The wizard stays at about +23 % on battery and at full
 charge, and uses about 75 % of its gate's headroom: a further 6 % fails it. It
-is under investigation; the next step is a build from before the reference, to
-see whether the wizard's startup got heavier. `benchmark/gates.json` is unchanged.
+is not the code: run back to back on the same phone the same day, the reference
+build (`05aac72`) was as slow, 439–623 ms, and failed its own gate in 2 of 4
+rounds as the phone warmed. The gate measures the phone's state (heat, charger,
+memory) as much as the app; see TD-135 for the protocol that would fix that.
+`benchmark/gates.json` is unchanged.
 
 ### Known coverage gaps
 
