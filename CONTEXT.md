@@ -126,7 +126,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-25)
+## Current state (2026-09-26)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge`: `643462c` (here #22), `170ec6e`,
@@ -147,8 +147,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   Past a frame the batch skipped, the curve, E and each frame's load come from the right
   frame (TD-91). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
-- **2D DIC (#46).** A third choice on **Which test?**: plain DIC, no load card; the
-  session records no test type. Checked on the API 36 emulator (2026-09-25).
+- **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
+  the session records no test type. The load card's ⓘ shows the CSV header and a
+  diagram of each test; bending's row reads **Beam height → Set**. Both were
+  checked on the API 36 emulator.
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   (Results, Elastic toggle, lab-report PDF, viewer and tap-editor gestures) run in Tier 3;
   on a Galaxy S21+ (Android 15, 2026-09-25) they pass 9/9 and `VideoFrameExtractionDeviceTest`
