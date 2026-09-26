@@ -711,8 +711,8 @@ empty the device lock:
 | Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}`, or **New device** on the seat in `/console/institution`. |
 | Semper staff | **New device** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
 
-Clearing the lock **is** the change: the licence binds to whichever device
-signs in next. Nothing is re-issued, nothing is typed, and nothing is revoked
+Clearing the lock **is** the change: it releases the account's old phone, and
+the licence binds to whichever device signs in next. Nothing is re-issued, nothing is typed, and nothing is revoked
 — entitlement, seat, lease and every stored analysis stay as they are. A
 holder who was demoted to Demo by trying the new phone first gets their mode
 back as part of the clear.

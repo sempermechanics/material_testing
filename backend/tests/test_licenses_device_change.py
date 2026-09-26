@@ -7,6 +7,7 @@ import fake_firestore
 
 from app import deps, firestore_repo as repo
 from app.config import settings
+from test_admin_and_devices import _ec_pem
 from license_helpers import (  # noqa: F401
     _mint_individual,
     _mint_institution,
@@ -196,6 +197,78 @@ def test_restore_on_a_new_device_waits_for_the_lock_to_move(store):
     rebound = repo.revalidate_device_lock(store._data["users"]["solo-1"], "new-phone")
     assert rebound["mode"] == "licensed"
     assert repo.cloud_backup_enabled(rebound) is True
+
+
+# A cleared lock has to let the new phone register, not only bind. Registration
+# checks `users/{uid}.activeDeviceId`, which the lock clear used to leave
+# naming the old phone: every new phone got 409 device_conflict at sign-in.
+
+
+def _registered_on(store, uid, device_id="old-phone"):
+    """`uid` signed in on `device_id` the way the app does: registered, active."""
+    store._data["users"][uid]["activeDeviceId"] = device_id
+    store._data.setdefault("devices", {})[device_id] = {"uid": uid, "status": "ACTIVE"}
+
+
+def test_staff_clear_releases_the_old_phone(store):
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+
+    assert "activeDeviceId" not in store._data["users"]["solo-1"]
+    assert store._data["devices"]["old-phone"]["status"] == "SUPERSEDED"
+
+
+def test_it_clear_releases_the_seat_holders_phone(store):
+    license_id = _bound_seat(store)
+    _registered_on(store, "u1")
+
+    assert repo.clear_device_lock(license_id, "u1", actor=repo.ACTOR_IT)[0] == ""
+
+    assert "activeDeviceId" not in store._data["users"]["u1"]
+
+
+def test_a_refused_self_change_keeps_the_phone(store):
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_SELF)[0] == ""
+    _registered_on(store, "solo-1", "second-phone")
+
+    err, _ = repo.clear_device_lock(license_id, actor=repo.ACTOR_SELF)
+
+    assert err == "device_change_too_soon"
+    assert store._data["users"]["solo-1"]["activeDeviceId"] == "second-phone"
+
+
+def test_an_account_on_another_licence_keeps_its_phone(store):
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+    store._data["users"]["solo-1"]["licenseId"] = "a-later-licence"
+
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+
+    assert store._data["users"]["solo-1"]["activeDeviceId"] == "old-phone"
+
+
+@pytest.mark.asyncio
+async def test_after_a_clear_the_new_phone_registers_over_http(client, monkeypatch):
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {}
+    _dev_user_holds(store, monkeypatch)
+    _registered_on(store, "dev-user")
+    monkeypatch.setattr(deps, "_DEV_USER", dict(store._data["users"]["dev-user"]))
+    new_phone = {"deviceId": "and-newphone1", "publicKeyPem": _ec_pem()}
+    refused = await client.post("/v1/devices/register", json=new_phone)
+    assert refused.status_code == 409, "the old phone still holds the account"
+
+    assert (await client.post("/v1/licenses/unbind")).status_code == 200
+    monkeypatch.setattr(deps, "_DEV_USER", dict(store._data["users"]["dev-user"]))
+    resp = await client.post("/v1/devices/register", json=new_phone)
+
+    assert resp.status_code == 201, resp.text
+    assert store._data["users"]["dev-user"]["activeDeviceId"] == "and-newphone1"
 
 
 def test_clearing_a_lock_on_a_licence_that_does_not_exist(store):
