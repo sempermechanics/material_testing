@@ -505,7 +505,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">Kept %1$d of %2$d frames — the ones solved before the images decorrelated. They are saved and open next.</item>
     </plurals>
     <string name="run_stopped_early_view">View results</string>
-    <string name="error_low_convergence">Analysis stopped: convergence fell below 50%% on 2 consecutive frames. The images may have decorrelated due to change in spackle pattern or moved out of view.</string>
+    <string name="error_low_convergence">Analysis stopped: convergence fell below 50%% on 2 consecutive frames. The images may have decorrelated due to change in speckle pattern or moved out of view.</string>
     <string name="vsg_lattice_all_failed">All combinations failed — tap a node for details.</string>
 
     <!-- One-line failure labels for lattice nodes, in measurement terms. -->
