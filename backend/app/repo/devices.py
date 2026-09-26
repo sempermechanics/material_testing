@@ -34,10 +34,24 @@ def user_has_active_device(uid: str) -> bool:
     return bool(u.exists and u.to_dict().get("activeDeviceId"))
 
 
+def _retire_device(batch, device_ref, status: str) -> None:
+    """Retire `device_ref` in `batch`, so its id stops counting against another account.
+
+    The one way a device leaves service: superseded by a registration
+    (`register_device`) or a lock clear (`repo.seats`), or revoked with its
+    account (`set_user_status`). The caller drops `users/{uid}.activeDeviceId`
+    in the same batch.
+    """
+    batch.update(device_ref, {
+        "status": status,
+        "revokedAt": _base.firestore.SERVER_TIMESTAMP,
+    })
+
+
 def released_device_held(user: dict, device_id: str) -> bool:
     """Whether `device_id` is a phone a device-lock clear released, still held off.
 
-    `_release_holder_device` empties `activeDeviceId` so the new phone can
+    A device-lock clear (`repo.seats._settle_holder`) empties `activeDeviceId` so the new phone can
     register, and stamps the old id. Without this check the old phone gets it
     straight back: its next signed call reads `device_not_active`, the upload
     worker re-registers, and the new phone meets `device_conflict` again.
@@ -71,10 +85,8 @@ def register_device(uid: str, body: DeviceReg) -> dict:
     previous = user_ref.get().to_dict().get("activeDeviceId") if user_ref.get().exists else None
     batch = db().batch()
     if previous and previous != body.deviceId:
-        batch.update(db().collection("devices").document(previous), {
-            "status": "SUPERSEDED",
-            "revokedAt": _base.firestore.SERVER_TIMESTAMP,
-        })
+        _retire_device(batch, db().collection("devices").document(previous),
+                       statuses.DEVICE_SUPERSEDED)
     batch.set(db().collection("devices").document(body.deviceId), dev)
     # A registration ends any release hold: either the new phone has arrived,
     # or the hold has run out and the old one is back.

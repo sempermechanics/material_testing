@@ -693,10 +693,13 @@ async function showDeviceHistory(id) {
     );
     const lines = (data.events || []).map((e) => {
       const prev = (e.detail && e.detail.previousDeviceId) || "";
+      // The registered phone the clear signed out, when it is not the lock's.
+      const released = (e.detail && e.detail.releasedDeviceId) || "";
       const next = (e.detail && e.detail.deviceId) || "";
       const who = e.uid || "—";
       return `${e.ts || "?"}  ${e.action}  by ${who}` +
         (prev ? `  left ${prev}` : "") +
+        (released && released !== prev ? `  signed out ${released}` : "") +
         (next ? `  → ${next}` : "");
     });
     window.alert(

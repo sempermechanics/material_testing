@@ -7,7 +7,7 @@ import fake_firestore
 
 from app import deps, firestore_repo as repo
 from app.config import settings
-from test_admin_and_devices import _ec_pem
+from key_helpers import _ec_pem
 from license_helpers import (  # noqa: F401
     _mint_individual,
     _mint_institution,
@@ -166,6 +166,7 @@ def test_a_device_change_is_audited_at_both_ends(store, audited):
     license_id = _bound_individual(store)
     err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
     assert (err, cleared["previousDeviceId"]) == ("", "old-phone")
+    assert cleared["releasedDeviceId"] == ""  # nothing was registered
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "new-phone")
 
     bound = [r for r in audited if r["action"] == "LICENSE_DEVICE_BIND"]
@@ -251,6 +252,60 @@ def test_an_account_on_another_licence_keeps_its_phone(store):
     assert store._data["users"]["solo-1"]["activeDeviceId"] == "old-phone"
 
 
+def test_the_clear_names_the_phone_it_signed_out(store):
+    """The lock's device and the registered one can differ; the audit needs both,
+    since the release stamp on the user is gone at the next registration."""
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1", "registered-phone")
+
+    err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
+
+    assert err == ""
+    assert cleared["previousDeviceId"] == "old-phone"
+    assert cleared["releasedDeviceId"] == "registered-phone"
+
+
+def test_a_self_change_names_the_phone_it_signed_out(store):
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+
+    err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_SELF)
+
+    assert err == ""
+    assert cleared["releasedDeviceId"] == "old-phone"
+    assert cleared["nextChangeAllowedAt"]
+
+
+def test_the_mode_and_the_release_land_together(store, monkeypatch):
+    """One batch: a failed commit leaves the holder as they were, not with their
+    mode back and the old phone still bound."""
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+    repo.revalidate_device_lock(store._data["users"]["solo-1"], "new-phone")
+    assert store._data["users"]["solo-1"]["mode"] == "demo"
+
+    def _fail(self):
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(fake_firestore._Batch, "commit", _fail)
+    with pytest.raises(RuntimeError):
+        repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
+
+    user = store._data["users"]["solo-1"]
+    assert user["mode"] == "demo"
+    assert user["activeDeviceId"] == "old-phone"
+
+
+def test_a_release_stamps_updated_at(store):
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+    store._data["users"]["solo-1"].pop("updatedAt", None)
+
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+
+    assert "updatedAt" in store._data["users"]["solo-1"]
+
+
 # A clear releases the phone only where it would also restore the mode. A held
 # or revoked seat, or a revoked licence, leaves its holder on Demo, and a Demo
 # account does not get to change phone (TD-126).
@@ -261,7 +316,9 @@ def test_new_device_on_a_held_seat_keeps_the_phone(store):
     _registered_on(store, "u1")
     assert repo.set_seat_enabled(license_id, "u1", False) == ""
 
-    assert repo.clear_device_lock(license_id, "u1", actor=repo.ACTOR_IT)[0] == ""
+    err, cleared = repo.clear_device_lock(license_id, "u1", actor=repo.ACTOR_IT)
+
+    assert (err, cleared["releasedDeviceId"]) == ("", "")
 
     assert store._data["users"]["u1"]["activeDeviceId"] == "old-phone"
     assert store._data["devices"]["old-phone"]["status"] == "ACTIVE"
