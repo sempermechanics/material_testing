@@ -9,6 +9,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import com.indicvision.semper.ui.viewer.ViewerArgs
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -21,6 +22,7 @@ import org.robolectric.annotation.Config
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.time.Duration
 
 /**
  * Typing a frame number is the only way to reach frame 118 of 150 without 117
@@ -131,6 +133,26 @@ class FrameNumberEntryTest {
 
         assertEquals(2, activity.currentFrameIndex)
         assertEquals("3", activity.field().text.toString())
+    }
+
+    @Test
+    fun `the scrubber stays up while a number is typed, then hides after the jump`() {
+        val activity = viewer()
+        val scrubber = activity.findViewById<View>(R.id.layoutScrubber)
+        activity.bumpChrome()
+        activity.field().requestFocus()
+
+        // Well past the 2.5 s auto-hide: hiding would take the field's focus
+        // and close the keyboard mid-number.
+        shadowOf(activity.mainLooper).idleFor(Duration.ofSeconds(10))
+        assertEquals(View.VISIBLE, scrubber.visibility)
+        assertTrue(activity.field().hasFocus())
+
+        activity.jumpTo("4")
+        shadowOf(activity.mainLooper).idleFor(Duration.ofSeconds(10))
+
+        assertEquals(3, activity.currentFrameIndex)
+        assertEquals(View.INVISIBLE, scrubber.visibility)
     }
 
     @Test

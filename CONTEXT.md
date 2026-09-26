@@ -150,7 +150,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   TD-93, TD-94). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
-  diagram of each test; bending's row reads **Beam height → Set**.
+  diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room
+  on every screen with a text field: wizard, ROI editor, viewer frame jump (TD-98).
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   (Results, Elastic toggle, lab-report PDF, viewer and tap-editor gestures) run in Tier 3;
   on a Galaxy S21+ (Android 15) they pass 9/9 at `db75267` (2026-09-26, after #46–#50), and on
@@ -171,6 +172,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     account is over its cap (45 / 25), so a new analysis there needs a licensed key or deletes first.
     2D DIC (#46) and the load card's ⓘ and **Beam height → Set** (#48), §3b.1–3b.3, 3b.8–3b.9,
     pass on a Pixel 6 (Android 17, 2026-09-26); **Set** before a thickness now fits its toast (TD-97).
+  - TD-98's keyboard fix is checked on API 34 and 36 emulators, not yet on a phone.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.
