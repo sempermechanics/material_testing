@@ -121,6 +121,9 @@ The session list and the only entry point to a new analysis.
    ├── Beta / data-use notice          (first run, non-dismissable, acked once)
    ├── Diagnostics opt-in prompt       (first run, after the notice; default off)
    ├── Coach mark on the FAB           (first run)
+   ├── Cloud backups card ............ backups this phone has no row for
+   │   ├── Restore ................... checklist (all ticked) → background restores
+   │   └── Hide ...................... until a new backup appears
    ├── Session list
    │   ├── open a session ............ → 8. Result viewer, or 7. Lattice for sweeps
    │   ├── sync badge tap ............ retry backup / open Settings
@@ -161,6 +164,10 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.7c | Watch a row during a restore or download | Same row progress. The bundle phase is deliberately **indeterminate** until the backend reports a percentage |
 | [ ] 3.7d | Let a restore fail terminally while on Home | A message pill names the reason here too, not only in Settings |
 | [ ] 3.7e | After 3.7d, reopen Home, then open Settings | The same failure is **not** announced again on either screen |
+| [ ] 3.7f | Sign in on a phone that has none of the account's backups (a new phone, or after a reinstall) | Once the cloud check finishes, a card above the list reads "4 analyses in your cloud backup aren't on this phone." with **Hide** and **Restore**. With no rows, the empty state's title reads **No analyses on this phone** instead of "No analyses yet". Demo accounts never see the card |
+| [ ] 3.7g | Tap **Restore** on that card | A **Restore to this phone** checklist, every backup ticked, each named with its size. Untick all and **Restore** greys out. Restore queues the ticked ones, toasts once, and each lands as a row with its own progress; the card counts down to what is left |
+| [ ] 3.7h | Tap **Hide** | The card goes, with a message saying Settings can still restore them. It stays gone across relaunches until the account gains a backup it has not seen, which brings the card back for that one only |
+| [ ] 3.7i | Delete a backup from Settings, or sign out and in as another account | The card stops offering the deleted backup at once; the other account starts with nothing hidden and nothing offered until its own cloud check |
 | [ ] 3.8 | Tap a "Pending" sync badge | Upload is retried / queued |
 | [ ] 3.8a | Tap a "Failed" sync badge | A dialog names *why* the last backup failed (device conflict, too large, render ran out of memory, result files no longer on the device) with a **Try again** action — not a silent re-queue |
 | [ ] 3.8b | Let a background backup fail terminally while on Home | A message pill surfaces the reason once (quota-full is excluded — it has its own screen) |

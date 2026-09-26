@@ -546,6 +546,14 @@ Long-press a row to select. Pencil renames (one row only), bin deletes. When
 every selected row is **Only in cloud**, a cloud-download button restores them
 all at once; each row shows its own progress.
 
+**Backups that are not on this phone.** On a new phone, or after a reinstall,
+Home shows a card above the list — "4 analyses in your cloud backup aren't on
+this phone." **Restore** lists them, all ticked; untick any you don't want and
+they restore in the background. **Hide** puts the card away until the account
+gets a backup this phone has not seen; hidden backups stay in the cloud and
+Settings → Analyses data management can still restore them. Demo accounts have
+no cloud backup, so they never see the card.
+
 <img src="images/home-selection.png" width="300" alt="Selection mode">
 
 **What delete does depends on whether there is a cloud copy.** With none, it

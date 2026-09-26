@@ -130,6 +130,9 @@ object CloudSync {
                     return@withContext Outcome.Offline
                 }
 
+                // Home offers the backups this phone has no row for from this.
+                CloudBackupListing.record(appContext, cloud.sessions)
+
                 // Only COMPLETED cloud sessions count as a real backup.
                 val backedUp = cloud.sessions
                     .filter { it.status == "COMPLETED" && it.localSessionId.isNotBlank() }
@@ -224,7 +227,10 @@ object CloudSync {
             ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         try {
             val cloudId = resolveCloudId(api, token, record)
-            if (cloudId != null) api.deleteSession(token, cloudId)
+            if (cloudId != null) {
+                api.deleteSession(token, cloudId)
+                CloudBackupListing.forget(appContext, cloudId)
+            }
             SessionStore.delete(appContext, localSessionId)
             Timber.i("Erased analysis %s locally and in the cloud", localSessionId)
             EraseResult.ERASED_EVERYWHERE
@@ -331,6 +337,7 @@ object CloudSync {
         val token = tokens.usableIdToken() ?: return@withContext EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         try {
             api.deleteSession(token, cloudSessionId)
+            CloudBackupListing.forget(appContext, cloudSessionId)
             forgetCloudCopy(appContext, localSessionId)
             Timber.i("Deleted cloud backup %s", cloudSessionId)
             EraseResult.ERASED_EVERYWHERE

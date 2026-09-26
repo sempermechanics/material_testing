@@ -134,11 +134,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Bulk delete.** Backend half deployed (#226, [CHANGELOG](docs/ops/CHANGELOG.md)); app half
   merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere, cloud link cleared).
   Pixel 6, 10 rows, Delete everywhere: 10 DELETEs, all 200, in ~17 s (was 61 in 100 s).
-  **Restore (in review):** Home says Restore, restores a multi-selection, shares `RestoreStart`
-  with Settings, and announces a failed restore once (`RestoreFailureLedger`). Pixel 6, 3 at
-  once: 13 requests, 0 × 429, ~17 s, so restores stay parallel.
-- **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person) and #238
-  (edit/upgrade/convert) merged; #239 (delete with a 30-day restore) in review
+  **Restore (#234, merged, awaiting release):** Home says Restore, restores a multi-selection,
+  shares `RestoreStart` with Settings, and announces a failed restore once (`RestoreFailureLedger`).
+  Pixel 6, 3 at once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud
+  backups (in review):** a card offers backups this phone has no row for (`CloudBackupListing`).
+- **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
+  (edit/upgrade/convert) and #239 (delete with a 30-day restore) merged
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)). Deploy owes three indexes and two TTL policies.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
