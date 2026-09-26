@@ -34,15 +34,12 @@ object ViewerBendingResults {
                 points = curve.plotPoints(),
             ),
         )
-        val summary = BeamDeflection.summarize(curve) ?: return@buildList
-        val line = summary.slope ?: return@buildList
-        val from = summary.steps.minOf { it.deflectionMm }.coerceAtMost(0f).toDouble()
-        val to = summary.steps.maxOf { it.deflectionMm }.toDouble()
+        val line = BeamDeflection.summarize(curve)?.slopeLine() ?: return@buildList
         add(
             VsgPlotView.Series(
                 label = context.getString(R.string.bending_slope_label),
                 color = VsgPlotView.paletteColor(context, 1),
-                points = listOf(from.toFloat() to line.at(from).toFloat(), to.toFloat() to line.at(to).toFloat()),
+                points = line,
                 markers = false,
                 muted = true,
             ),

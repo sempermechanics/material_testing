@@ -147,6 +147,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Past a frame the batch skipped, the curve, E and each frame's load come from the right
   frame (TD-91). δ is signed by the load, so the tap order cannot flip δ or E (#51,
   TD-92). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
+- **Open: bending graph axes (#55, TD-93, TD-94).** Five-digit load ticks read in full; the
+  slope line spans the measured δ, so the load axis stays at or above 0 N (viewer and PDF).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**.
