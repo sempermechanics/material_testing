@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -178,6 +179,65 @@ class BeamDeflectionTest {
         assertNotNull((model as StressStrain.Model.Flexural).probe)
         assertEquals(listOf(0.5f, 1f), curve.points.map { it.deflectionMm })
         assertEquals(listOf(0f to 0f, 0.5f to 10f, 1f to 20f), curve.plotPoints())
+    }
+
+    // The upright beam tapped bottom edge first: the probe's direction points up the image.
+    private val bottomFirst = BeamEdgeTaps(topX = 500f, topY = 200f, bottomX = 500f, bottomY = 100f)
+
+    /**
+     * The lab's six loads on a 5 mm beam at 0.05 mm/px, built from fields as
+     * the app does: an unloaded reference, then each frame's probe point
+     * dropping the lab's dial reading. [loadSign] −1 is a machine that logs
+     * the load as negative.
+     */
+    private fun builtCurve(taps: BeamEdgeTaps, loadSign: Float = 1f): StressStrain.Curve {
+        val model = StressStrain.Model.of("bending", 0f, true, SpecimenGeometry(935f, 150f, 5f, taps))
+        val loads = listOf(0f) + labKg.map { loadSign * it * 9.81f }
+        val dropsPx = listOf(0f) + labMm.map { it / 0.05f }
+        return StressStrain.build(loads, model, { f -> field(P(500f, 150f, 0f, dropsPx[f])) })
+    }
+
+    @Test
+    fun `taps in either order give the same positive deflection and E`() {
+        // One frame on its own reads the drop against the taps' direction...
+        val drop = field(P(500f, 150f, 0f, 10f))
+        assertEquals(-10f, BeamDeflection.deflectionPx(drop, BeamDeflection.Probe(bottomFirst, 5f))!!, 1e-5f)
+
+        // ...but a curve signs δ by its loads.
+        val inOrder = BeamDeflection.summarize(builtCurve(upright))!!
+        val swapped = BeamDeflection.summarize(builtCurve(bottomFirst))!!
+
+        assertEquals(inOrder.steps.size, swapped.steps.size)
+        inOrder.steps.zip(swapped.steps).forEach { (a, b) -> assertEquals(a.deflectionMm, b.deflectionMm, 0f) }
+        assertEquals(labMm.last(), swapped.loadSteps.last().deflectionMm, 1e-5f)
+        assertEquals(inOrder.slope!!.slope, swapped.slope!!.slope, 0.0)
+        assertTrue(swapped.slope!!.slope > 0.0)
+        assertTrue(swapped.slopeModulusGPa!! > 0f)
+        assertEquals(inOrder.slopeModulusGPa!!, swapped.slopeModulusGPa!!, 0f)
+        assertTrue(swapped.meanModulusGPa!! > 0f)
+        assertEquals(inOrder.meanModulusGPa!!, swapped.meanModulusGPa!!, 0f)
+        assertEquals(inOrder.loadSteps.map { it.modulusGPa }, swapped.loadSteps.map { it.modulusGPa })
+    }
+
+    @Test
+    fun `a load logged as negative still gives a positive E`() {
+        val positive = BeamDeflection.summarize(builtCurve(upright))!!
+        val negative = BeamDeflection.summarize(builtCurve(upright, loadSign = -1f))!!
+
+        assertTrue(negative.loadSteps.all { it.loadN < 0f && it.deflectionMm < 0f })
+        assertEquals(positive.slopeModulusGPa!!, negative.slopeModulusGPa!!, 1e-4f)
+        assertEquals(positive.meanModulusGPa!!, negative.meanModulusGPa!!, 1e-4f)
+    }
+
+    @Test
+    fun `points already along the load, or with no deflection, come back as they are`() {
+        val along = listOf(StressStrain.Point(0, 10f, 1f, 0f, 0.5f), StressStrain.Point(1, 20f, 2f, 0f, 1f))
+        val tensile = listOf(StressStrain.Point(0, 10f, 1f, 0.1f))
+        val against = along.map { it.copy(deflectionMm = -it.deflectionMm!!) }
+
+        assertSame(along, BeamDeflection.alongLoad(along))
+        assertSame(tensile, BeamDeflection.alongLoad(tensile))
+        assertEquals(listOf(0.5f, 1f), BeamDeflection.alongLoad(against).map { it.deflectionMm })
     }
 
     @Test

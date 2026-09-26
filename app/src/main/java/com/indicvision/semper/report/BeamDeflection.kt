@@ -10,8 +10,9 @@ import kotlin.math.max
  * gauge. The student taps the beam's top and bottom edges under the load
  * point on the reference photo ([BeamEdgeTaps]); the thickness they measured
  * over the tapped pixels is the photo's scale, and the DIC displacement
- * around the midpoint, along the top-to-bottom direction, is the deflection
- * δ — positive downward whichever way the phone was held.
+ * around the midpoint, along the line between the taps, is the deflection
+ * δ — positive the way the load pushes ([alongLoad]), whichever way the phone
+ * was held and whichever edge was tapped first.
  *
  * Per step: σb = M·y / I with M = W L / 4, y = t / 2, I = b t³ / 12 (the same
  * number as [StressStrain.Model.Flexural]'s 3 P L / (2 b h²)), and
@@ -50,9 +51,11 @@ object BeamDeflection {
 
     /**
      * The tapped load point, in a form the per-frame read needs: the scale,
-     * the unit direction from the top edge to the bottom one, and a radius
+     * the unit direction from the first tap to the second, and a radius
      * around the midpoint (half the thickness, at least
-     * [MIN_PROBE_RADIUS_PX]) inside which points are averaged.
+     * [MIN_PROBE_RADIUS_PX]) inside which points are averaged. The direction
+     * is only the tap order, so one frame's δ can come out with either sign;
+     * a curve's points take theirs from the load ([alongLoad]).
      */
     data class Probe(val taps: BeamEdgeTaps, val thicknessMm: Float) {
         val mmPerPx: Float = thicknessMm / taps.thicknessPx
@@ -92,6 +95,24 @@ object BeamDeflection {
 
     /** [deflectionPx] in millimetres. */
     fun deflectionMm(data: FloatArray, probe: Probe): Float? = deflectionPx(data, probe)?.let { it * probe.mmPerPx }
+
+    /**
+     * [points] with δ measured the way the load pushes: every δ negated when
+     * load and δ run opposite ways (Σ W·δ < 0, the sign of the slope through
+     * the origin). The probe's direction is the first tap to the second, so a
+     * student who taps the bottom edge first — or a camera mounted upside
+     * down — would otherwise flip δ, the slope and both E. A central load
+     * bends the beam its own way, so the sign comes from the test, not the
+     * taps, and a session saved with its taps reversed reads right. Points
+     * without a δ, and a curve with none (tensile), come back as they are.
+     */
+    fun alongLoad(points: List<StressStrain.Point>): List<StressStrain.Point> {
+        val work = points.sumOf { p ->
+            val d = p.deflectionMm
+            if (d == null || !p.loadN.isFinite()) 0.0 else p.loadN.toDouble() * d
+        }
+        return if (work < 0.0) points.map { p -> p.copy(deflectionMm = p.deflectionMm?.let { -it }) } else points
+    }
 
     /** I = b t³ / 12, mm⁴. */
     fun secondMomentMm4(widthMm: Float, thicknessMm: Float): Float =

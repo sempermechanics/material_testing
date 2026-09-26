@@ -46,6 +46,15 @@ class BeamTapPlacementTest {
     }
 
     @Test
+    fun bottomEdgeFirstGivesTheSameEdgesSwapped() {
+        // The report signs δ by the load (BeamDeflectionTest), so the order only swaps the names.
+        val inOrder = BeamTapPlacement.place(BeamTapPlacement.place(Marks(), 100f, 20f), 137f, 400f)
+        val bottomFirst = BeamTapPlacement.place(BeamTapPlacement.place(Marks(), 100f, 400f), 137f, 20f)
+        assertEquals(inOrder.top, bottomFirst.bottom)
+        assertEquals(inOrder.bottom, bottomFirst.top)
+    }
+
+    @Test
     fun aTopWithoutABottomStillAlignsALoneBottom() {
         val m = BeamTapPlacement.place(Marks(bottom = Mark(50f, 400f)), 100f, 20f)
         assertEquals(Mark(100f, 400f), m.bottom)

@@ -185,7 +185,8 @@ object StressStrain {
      * Builds the curve by asking [frameData] for each frame in turn; a null
      * field or one with no accepted point is skipped. [onProgress] gets the
      * 1-based count of frames visited. A tensile curve fixes its
-     * [Extensometer] gauge on the first solved frame.
+     * [Extensometer] gauge on the first solved frame; a bending curve's δ is
+     * signed by its loads ([BeamDeflection.alongLoad]).
      */
     fun build(
         loadsN: List<Float>,
@@ -207,7 +208,7 @@ object StressStrain {
             }
             onProgress(index + 1)
         }
-        return Curve(model, loadsN.size, points, gauge)
+        return Curve(model, loadsN.size, BeamDeflection.alongLoad(points), gauge)
     }
 
     private fun axisStrainMilli(data: FloatArray, axisX: Boolean): Float? =

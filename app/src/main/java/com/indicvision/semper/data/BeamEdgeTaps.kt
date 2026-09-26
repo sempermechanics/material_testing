@@ -10,6 +10,12 @@ import kotlin.math.hypot
  * the photo its mm-per-pixel scale; their midpoint is where the deflection is
  * read. Reference-image pixels, the same frame as the `.dat` x / y.
  *
+ * "Top" and "bottom" are the first tap and the second, as tapped: a student
+ * who taps the bottom edge first saves them swapped. Nothing depends on it —
+ * thickness and midpoint are the same either way, and the deflection's sign
+ * comes from the load (`BeamDeflection.alongLoad`) — so they are stored and
+ * read back as they are.
+ *
  * All zero means "not tapped" ([NONE]); a session from before the tap, and
  * every tensile session, carries that.
  */
