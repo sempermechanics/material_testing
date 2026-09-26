@@ -5,7 +5,7 @@ import {
 import {
   seatCells, inviteCells, day, licenceStatePill,
   licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
-  isoDay, emailList, licenceEditPatch, daysLeft,
+  isoDay, emailList, licenceEditPatch, daysLeft, unfinishedStepUpText,
 } from "../util.js";
 
 const $ = (id) => document.getElementById(id);
@@ -25,7 +25,13 @@ requireSignIn(async (user, resume) => {
   loadUsers();
   await loadLicences();
   // Back from the Google re-authentication a revoke asked for: finish it
-  // now, while the fresh sign-in is inside the backend's window.
+  // now, while the fresh sign-in is inside the backend's window. If the
+  // round trip failed, say so here — after the list load, whose own status
+  // line used to wipe the failure and leave a delete silently unsent.
+  if (resume && resume.reauthFailed) {
+    setStatus(unfinishedStepUpText(resume, labelOf(resume.id)), true);
+    return;
+  }
   if (resume && resume.action === "revoke") resumeRevoke(resume.id);
   if (resume && resume.action === "delete") resumeDelete(resume.id);
 });
