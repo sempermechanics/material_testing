@@ -1,7 +1,7 @@
 {
   "//": "Firestore index source of truth. Deploy with `firebase deploy --only firestore:indexes`. Single-field equality queries are automatic; composites are listed below.",
-  "//ttl": "Nonce cleanup is NOT expressed here \u2014 Firestore TTL is a field policy, not an index. `challenges.expireAt` must have a TTL policy enabled (see docs/backend/BACKEND_SETUP_GCP.md step A2a: `gcloud firestore fields ttls update expireAt --collection-group=challenges --enable-ttl`), otherwise consumed/expired challenge docs accumulate. consume_nonce deletes on use; TTL reclaims the ones never consumed.",
-  "//ttl-deleted": "Deleted licences are held 30 days: `deleted_licenses.purgeAt` and `deleted_seats.purgeAt` (the seats under each) need TTL policies too (docs/backend/BACKEND_SETUP_CONSOLE.md step 3a). Without them a deleted licence is never purged; restore still refuses one past purgeAt.",
+  "//ttl": "TTL policies are declared under fieldOverrides (\"ttl\": true), because the Firebase CLI lists every live TTL policy as a field override and, on `deploy --only firestore:indexes`, treats one missing from this file as a deletion (refused without --force; NEVER pass --force, it deletes the policy). Each override must also restate the field's live single-field indexes: an empty `indexes` there disables single-field indexing on the field. All three mirror the database default (ascending, descending, array-contains; `gcloud firestore indexes fields describe <field> --collection-group=<group>`), so a deploy against a project that already has them writes nothing. `challenges.expireAt`: consume_nonce deletes a nonce on use; TTL reclaims the ones never consumed.",
+  "//ttl-deleted": "Deleted licences are held 30 days: `deleted_licenses.purgeAt` and `deleted_seats.purgeAt` (the seats under each) are TTL fields, declared in fieldOverrides (docs/backend/BACKEND_SETUP_CONSOLE.md step 3a). Without the policies a deleted licence is never purged; restore still refuses one past purgeAt.",
   "//licenses": "The staff desk lists licences newest first (createdAt DESC), filtered by mode unless Demo keys are shown and by status (an `in` filter) when revoked ones are hidden: repo/license_admin.list_licenses. One index per filter combination.",
   "indexes": [
     {
@@ -69,5 +69,63 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "challenges",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "deleted_licenses",
+      "fieldPath": "purgeAt",
+      "ttl": true,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "deleted_seats",
+      "fieldPath": "purgeAt",
+      "ttl": true,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    }
+  ]
 }

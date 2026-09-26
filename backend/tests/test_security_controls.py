@@ -86,6 +86,36 @@ async def test_simple_request_from_console_origin_keeps_security_headers(
     assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
 
 
+def test_firestore_indexes_declare_ttl_policies():
+    # The Firebase CLI counts each live TTL policy as a field override; one the
+    # file omits makes a non-interactive `deploy --only firestore:indexes` stop,
+    # and `--force` would delete it. An empty `indexes` list would also switch
+    # the field's single-field indexing off, so each one mirrors the default.
+    spec = json.loads(
+        (ROOT / "backend" / "firestore.indexes.json").read_text(encoding="utf-8")
+    )
+    overrides = {
+        (field["collectionGroup"], field["fieldPath"]): field
+        for field in spec["fieldOverrides"]
+    }
+    assert set(overrides) == {
+        ("challenges", "expireAt"),
+        ("deleted_licenses", "purgeAt"),
+        ("deleted_seats", "purgeAt"),
+    }
+    for field in overrides.values():
+        assert field["ttl"] is True
+        modes = sorted(
+            (index.get("order") or index.get("arrayConfig"), index["queryScope"])
+            for index in field["indexes"]
+        )
+        assert modes == [
+            ("ASCENDING", "COLLECTION"),
+            ("CONTAINS", "COLLECTION"),
+            ("DESCENDING", "COLLECTION"),
+        ]
+
+
 def test_firestore_rules_are_deny_all_and_deployable():
     rules = (ROOT / "firestore.rules").read_text(encoding="utf-8")
     assert "allow read, write: if false;" in rules

@@ -52,6 +52,16 @@ deleted immediately; abandoned ones only disappear if Firestore is told to treat
    these two policies it is never purged. Restore still refuses one past
    `purgeAt`, so a missing policy only keeps data longer than promised.
 
+All three policies are also declared as `fieldOverrides` (`"ttl": true`) in
+[`backend/firestore.indexes.json`](../../backend/firestore.indexes.json), so
+`scripts/deploy-firestore.sh indexes` creates any that are missing and leaves
+live ones alone. The Firebase CLI treats a live TTL policy the file omits as
+an override to delete: without `--force` a non-interactive deploy stops, and
+with it the policy is gone. Never pass `--force`. Each override also restates
+the field's single-field indexes (ascending, descending, array-contains, the
+database default), because an override with empty `indexes` turns single-field
+indexing off. Add a new TTL policy to the file as well as here.
+
 ### 3b. Create the composite indexes
 Four composite indexes back the paginated session listing and the admin
 pending-user query. A missing one is not caught at deploy time — it fails at
