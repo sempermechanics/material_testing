@@ -622,8 +622,9 @@ the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
 
 #### Redeploying the gateway after a route change
 
-A production dispatch of `deploy-backend.yml` now runs a `gateway` job after
-the Cloud Run promote ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)). The
+Every dispatch of `deploy-backend.yml` runs a `gateway` job after the Cloud
+Run promote ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)): `semper-gw` for
+production, `semper-gw-staging` for staging. The
 order matters: a config that names a route the backend does not serve yet
 would 5xx, and the gateway 404s any route the config does not name.
 `test_gateway_parity.py` proves only that the committed spec matches the routers.
@@ -633,7 +634,8 @@ diff against the live config in the job summary. Re-dispatch with `apply` to
 create the config, switch, verify and roll back on failure. The deploy SA needs
 `roles/apigateway.admin` on the project and `roles/iam.serviceAccountUser` on
 `indic-gw@…`. Until those are granted, or when CI is unavailable, the block
-below is the manual fallback. It runs the same steps.
+below is the manual fallback. It runs the same steps; for staging, use
+`semper-api-staging` (both the service and the API) and `semper-gw-staging`.
 
 API configs are immutable: create a new one and point the gateway at it.
 

@@ -222,7 +222,8 @@ Environments. A **production** deploy runs only when dispatched from `main`
    `no_traffic` was used), with `--to-latest` after checking the latest ready
    revision is the candidate, and removes every `cand-*` tag in the same call.
 
-6. **Production only:** the `gateway` job then moves API Gateway onto a config
+6. The `gateway` job then moves that environment's API Gateway (`semper-gw`, or
+   `semper-gw-staging` for staging) onto a config
    rendered from `backend/gateway/openapi.yaml`
    ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)). Input `gateway_mode`
    defaults to `dry-run`, which prints the diff against the live config.

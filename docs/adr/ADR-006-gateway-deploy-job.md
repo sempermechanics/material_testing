@@ -86,8 +86,8 @@ the first run observational.
 
 - Easier: a route that passes the parity test is reachable after the deploy.
 - Harder: gateway permissions live on the deploy SA; review its bindings.
-- Revisit: when staging gets a gateway, drop the production-only guard; if TD-30
-  is taken on, this job is replaced.
+- Revisit: when staging gets a gateway, drop the production-only guard (done
+  2026-09-26, below); if TD-30 is taken on, this job is replaced.
 
 ## Action items
 
@@ -130,3 +130,21 @@ the first run observational.
   does hit the skip.
 - The stored document comes back as base64 that GNU `base64 -d` rejects; the
   diff step decodes it in Python (#183).
+
+## Amendment (2026-09-26): staging too
+
+Staging has its own gateway (`semper-gw-staging` on API
+`semper-api-staging`). With this job production-only, its config stayed on
+`v202609230845` until it was updated by hand on 2026-09-26
+(`v202609260428`), so routes added in between 404'd on staging. The `gateway` job now runs for both environments:
+
+- `if:` is the `deploy` job's rule — any ref for staging, `main` only for
+  production.
+- `environment:` follows the input, so a staging run needs no production
+  approval.
+- `GW_ID` / `GW_API` default to `semper-gw` / `semper-api` for production and
+  `semper-gw-staging` / `semper-api-staging` for staging; an environment-scoped `GATEWAY_ID` / `GATEWAY_API` var overrides.
+- No new IAM: both environments use the repo-level deploy SA, whose
+  `roles/apigateway.admin` is project-wide, and the same gateway SA.
+
+`gateway_mode` still defaults to `dry-run` in both.
