@@ -130,8 +130,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`); the last is `b5e9f77` (parent #241–#245: Firestore TTL policies as
-  field overrides, index tables fixed, rollback images kept; before it `141ddca`, #57). The
+  --grep=semperdic-app`); the last is `0b2d071` (parent #246, registry-cleanup docs; before
+  it `b5e9f77`, #61: Firestore TTL policies as field overrides, rollback images kept). The
   parent deploys. General fixes made here go back (TD-76, TD-77,
   TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-88 as parent #217, and the
   four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
