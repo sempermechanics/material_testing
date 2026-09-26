@@ -12,6 +12,31 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — Backend deploys: a device change reaches the new phone (#248, #249)
+
+Two backend-only deploys, both staging then production with the gateway dry-run. #248, from
+`5b7d0642`: staging run 36223348648 → `semper-api-staging-36223348648-1`, then production run
+36223604531 → `semper-api-36223604531-1`. #249, from `dea4fcc7` (#250 on top is docs only):
+staging run 36224232418 → `semper-api-staging-36224232418-1`, then production run
+36224429945 → `semper-api-36224429945-1`. The candidate `/readyz` smoke passed on all four
+(`firestore` and `drive` ok on #249's). Both dry-runs found that `v202609260522-60` already
+serves the spec, so the gateway was not touched. From outside with no token,
+`POST /v1/devices/register` answers 401 and an unknown path 404. `DEVICE_RELEASE_HOLD_HOURS`
+is not set on the service, so the 24-hour default applies.
+
+- #248: clearing a device lock (staff, institution IT, or the holder's own **Use Semper on a
+  different device**) also deletes the holder's `users/{uid}.activeDeviceId` and retires the
+  old `devices/{id}` as `SUPERSEDED` (`_release_holder_device`). Before it, registration
+  refused every new phone with `409 device_conflict`, so a cleared lock never reached the new
+  phone (found 2026-09-26 on an emulator). A demo account has no licence to clear, so it still
+  cannot change phone (TD-126).
+- #249: the released phone is held off for 24 hours. Every signed call from it reads
+  `device_not_active`, and the app's upload worker answers that by re-registering, which took
+  the account straight back. The clear stamps `releasedDeviceId` / `releasedAt`, and
+  registration refuses that id with `409 device_conflict` until another device registers or
+  the hold runs out. Installed builds read that 409 as "bound to a different device". Found
+  reviewing #248; its other findings are TD-127 to TD-132.
+
 ## 2026-09-26 — Firestore TTL policies declared as field overrides (#242)
 
 `scripts/deploy-firestore.sh indexes` had created the licence desk's composite indexes and

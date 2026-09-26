@@ -102,11 +102,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-26)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-36220429126-1`, from `141ddcae`, scales to
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36224429945-1`, from `dea4fcc7`, scales to
   zero) behind API Gateway `semper-gw` (config `v202609260522-60`, deployed by CI, ADR-006);
   staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
-  #240 (cost) and the licence desk (backend and console) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
+  #240 (cost), the licence desk (backend and console) and the device-change fix (#248, #249) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
@@ -138,10 +138,6 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   shares `RestoreStart` with Settings, and announces a failed restore once (`RestoreFailureLedger`).
   Pixel 6, 3 at once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud
   backups (#235, merged, awaiting release):** a card offers backups this phone has no row for (`CloudBackupListing`).
-- **Changing device (#248 merged; hold in review):** a cleared device lock left `users/{uid}.activeDeviceId` on the old
-  phone, so the new one got `409 device_conflict` at sign-in (found 2026-09-26 on an emulator). The
-  clear now releases it (#248), and the released phone is refused for 24 h so its upload worker
-  cannot re-register first (in review); demo accounts still cannot change phone (TD-126). Needs a backend deploy.
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)).
