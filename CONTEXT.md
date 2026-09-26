@@ -130,49 +130,32 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`); the last is `cd7d5db` (parent #251–#258: no "upload pending" with
-  no upload coming, TD-127 fixed, licence-desk and console fixes, the gateway job for
-  staging; #248–#250 device change, TD-122–TD-132). The parent deploys, and its TD
-  rows jump to TD-122. General fixes made here go back (TD-76, TD-77,
-  TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-88 as parent #217, and the
-  four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
+  --grep=semperdic-app`). The parent deploys, and its TD rows jump to TD-122. General
+  fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
-  Upstream's `VideoKeyframeHelper` is not taken; `VideoSamplingSheet` covers it.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain, E from the
   longest straight leading run, the elastic-region view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video. Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
-  Past a frame the batch skipped, the curve, E and each frame's load come from the right
-  frame (TD-91). δ is signed by the load, so the tap order cannot flip δ or E (#51,
-  TD-92). Load ticks read in full and the slope line spans only the measured δ (#55,
-  TD-93, TD-94). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
+  Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**.
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
-  (Results, Elastic toggle, lab-report PDF, viewer and tap-editor gestures) run in Tier 3;
-  on a Galaxy S21+ (Android 15) they pass 9/9 at `db75267` (2026-09-26, after #46–#50), and on
-  the API 37 emulator once the tap test waits for idle before clicking (TD-95);
-  `VideoFrameExtractionDeviceTest` passes 6/6 on the Galaxy (2026-09-25, and 2026-09-26 on a build
-  another session installed). `WizardDraftRestoreTest`: a load log survives process death.
-- **CI and benchmarks.** Path filters honour their `!` patterns, so a docs-only PR skips
-  Tier 1 (#63, TD-96); a merge no longer cancels `main`'s running CI (#67, TD-97).
-  `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
-  has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
-  and saves it (#33, #34, TD-87/TD-88). Both suites pass in full on a Pixel 6 (Android 17,
-  2026-09-25); the medians against CI's API 34 emulator are in
-  [TESTING.md](docs/app/TESTING.md), and `benchmark/gates.json` gates a Pixel 6 run at
-  +30 % (`ci_test_report.py --gates`; CI stays report-only). TD-86–TD-88 and TD-90 match
-  the parent's numbers; its TD-81 is TD-89 here.
+  run in Tier 3 and pass on a Galaxy S21+ and the API 37 emulator (TD-95).
+  `WizardDraftRestoreTest`: a load log survives process death.
+- **CI and benchmarks.** A docs-only PR skips Tier 1 (#63, TD-96); a merge no longer
+  cancels `main`'s running CI (#67, TD-97). `HotPathMicroBenchmark` runs in CI (#31); the
+  Pixel 6 medians and the report-only `benchmark/gates.json` are in
+  [TESTING.md](docs/app/TESTING.md). TD-86–TD-88 and TD-90 match the parent's numbers;
+  its TD-81 is TD-89 here.
 - **Owed.**
   - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): video import (§5.1a) and a real
     UTM clip; 5.1a.1–5.1a.9 pass only on API 37 with synthetic clips. The Galaxy S21+'s demo
     account is over its cap (45 / 25), so a new analysis there needs a licensed key or deletes first.
-    2D DIC (#46) and the load card's ⓘ and **Beam height → Set** (#48), §3b.1–3b.3, 3b.8–3b.9,
-    pass on a Pixel 6 (Android 17, 2026-09-26); **Set** before a thickness now fits its toast (TD-98).
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.

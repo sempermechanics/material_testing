@@ -12,6 +12,24 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — material_testing: detail moved out of Current state
+
+Current state was trimmed to its guideline length (#72). These lines had
+no other home, as they stood in CONTEXT.md:
+
+- Sync: the last parent merge is `cd7d5db` (parent #251–#258: no "upload
+  pending" with no upload coming, TD-127 fixed, licence-desk and console fixes,
+  the gateway job for staging; #248–#250 device change, TD-122–TD-132). General
+  fixes made here that went back: TD-76, TD-77, TD-79, TD-80, TD-82–TD-85, the
+  ranges write-back TD-88 as parent #217, and the four in semperdic-app#189.
+- Phone checks: 2D DIC (#46) and the load card's ⓘ and **Beam height → Set**
+  (#48), [WORKFLOWS.md](../app/WORKFLOWS.md) §3b.1–3b.3 and 3b.8–3b.9, pass on a
+  Pixel 6 (Android 17, 2026-09-26); **Set** before a thickness now fits its
+  toast (TD-98).
+- Lab end to end: on the Galaxy S21+ (Android 15) the Tier 3 lab tests pass 9/9
+  at `db75267` (after #46–#50); `VideoFrameExtractionDeviceTest` passes 6/6
+  there (2026-09-25, and 2026-09-26 on a build another session installed).
+
 ## 2026-09-26 — material_testing: merges no longer cancel `main`'s CI (#67)
 
 Merged as `3cb8ad3f`. CI's concurrency group had `cancel-in-progress: true` for
