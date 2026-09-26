@@ -145,10 +145,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   Past a frame the batch skipped, the curve, E and each frame's load come from the right
-  frame (TD-91). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
-- **Open: bending tap order (TD-92).** Bottom edge tapped first gave a negative δ and E
-  (Pixel 6, 2026-09-26); δ is now signed by the load (`BeamDeflection.alongLoad`), saved
-  sessions included.
+  frame (TD-91). δ is signed by the load, so the tap order cannot flip δ or E (#51,
+  TD-92). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**.
