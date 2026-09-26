@@ -130,8 +130,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`); the last is `9134739` (parent #249: after a device-lock clear the
-  old phone is refused for 24 h; #248, #247, TD-122–TD-126). The parent deploys, and its TD
+  --grep=semperdic-app`); the last is `dea4fcc` (parent #250: TD-127–TD-132 for the device
+  change; #249 holds the old phone off 24 h; #248, #247, TD-122–TD-126). The parent deploys, and its TD
   rows jump to TD-122. General fixes made here go back (TD-76, TD-77,
   TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-88 as parent #217, and the
   four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
