@@ -17,6 +17,13 @@ a listed device (the JSON's ``context.build.device``) against that device's
 reference times (1 + margin), and exits 1 if any is over. Results from a device
 the file does not list, CI's emulator included, are reported and never gated.
 
+A startup time moves 30-40 % with heat and the charger (TD-135), so a result is
+gated only in the state its reference was taken in. The benchmarks write that
+state (``*deviceState.json``, ``DeviceStateRule``) next to their results; a
+result whose test ran above the file's ``state.maxThermalStatus`` or off the
+charger (``state.requirePlugged``), at its start or end, is reported as not
+gated. A result with no recorded state is gated as before, with a note.
+
 Usage: python scripts/ci_test_report.py [--gates FILE] DIR [DIR ...]
 Without ``--gates`` the exit status is always 0: the Gradle step already
 failed or passed the job.
@@ -98,10 +105,48 @@ def report_benchmarks(root: Path, measured: dict[str, dict[str, float]]) -> int:
     return count
 
 
-def check_gates(gates: dict, measured: dict[str, dict[str, float]]) -> int:
-    """Compare each gated device's results with its references; return the breaches."""
+def read_device_states(root: Path, states: dict[str, dict[str, dict]]) -> None:
+    """Add each ``*deviceState.json`` under ``root`` to ``states[device][test]``."""
+    for state_file in sorted(root.rglob("*deviceState.json")):
+        try:
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            print(f"::warning::{state_file}: unreadable device state ({error})")
+            continue
+        states.setdefault(str(data.get("device", "?")), {}).update(data.get("tests", {}))
+
+
+def state_problems(test_state: dict, rules: dict) -> list[str]:
+    """Why a test's recorded state is not the one the references were taken in."""
+    max_thermal = int(rules.get("maxThermalStatus", 0))
+    problems = []
+    for phase in ("start", "end"):
+        snap = test_state.get(phase)
+        if not isinstance(snap, dict):
+            problems.append(f"no {phase} state")
+            continue
+        thermal = snap.get("thermalStatus")
+        if isinstance(thermal, int) and thermal > max_thermal:
+            problems.append(f"thermal status {thermal} at {phase}")
+        if rules.get("requirePlugged", False) and snap.get("plugged") == "none":
+            problems.append(f"on battery at {phase}")
+    return problems
+
+
+def check_gates(
+    gates: dict,
+    measured: dict[str, dict[str, float]],
+    states: dict[str, dict[str, dict]] | None = None,
+) -> tuple[int, int]:
+    """Compare each gated device's results with its references.
+
+    Returns (breaches, not gated because of the phone's state).
+    """
     margin = float(gates.get("margin", 0.0))
+    rules = gates.get("state", {})
+    states = states or {}
     breaches = 0
+    skipped = 0
     for device, values in sorted(measured.items()):
         spec = gates.get("devices", {}).get(device)
         if spec is None:
@@ -109,11 +154,20 @@ def check_gates(gates: dict, measured: dict[str, dict[str, float]]) -> int:
                 print(f"GATE {device}: no reference, report only")
             continue
         label = spec.get("label", device)
+        device_states = states.get(device, {})
         for key, reference in sorted(spec.get("reference", {}).items()):
             limit = float(reference) * (1 + margin)
             value = values.get(key)
+            test_state = device_states.get(key.split(" ", 1)[0])
+            problems = state_problems(test_state, rules) if test_state is not None else []
             if value is None:
                 print(f"GATE {label} {key}: not measured")
+            elif problems:
+                skipped += 1
+                print(
+                    f"GATE not gated {label} {key}: {_fmt(value)} (limit {_fmt(limit)}): "
+                    + "; ".join(problems)
+                )
             elif value > limit:
                 breaches += 1
                 print(
@@ -121,8 +175,9 @@ def check_gates(gates: dict, measured: dict[str, dict[str, float]]) -> int:
                     f"({_fmt(float(reference))} + {margin:.0%})"
                 )
             else:
-                print(f"GATE ok {label} {key}: {_fmt(value)} <= {_fmt(limit)}")
-    return breaches
+                note = "" if test_state is not None else " (device state not recorded)"
+                print(f"GATE ok {label} {key}: {_fmt(value)} <= {_fmt(limit)}{note}")
+    return breaches, skipped
 
 
 def main(argv: list[str]) -> int:
@@ -133,17 +188,19 @@ def main(argv: list[str]) -> int:
     failures = 0
     benchmarks = 0
     measured: dict[str, dict[str, float]] = {}
+    states: dict[str, dict[str, dict]] = {}
     for root in args.dirs:
         if not root.exists():
             print(f"{root}: not found")
             continue
         failures += report_failures(root)
         benchmarks += report_benchmarks(root, measured)
+        read_device_states(root, states)
     print(f"{failures} failing test case(s), {benchmarks} benchmark result(s)")
     if args.gates is None:
         return 0
-    breaches = check_gates(json.loads(args.gates.read_text(encoding="utf-8")), measured)
-    print(f"{breaches} benchmark gate(s) exceeded")
+    breaches, skipped = check_gates(json.loads(args.gates.read_text(encoding="utf-8")), measured, states)
+    print(f"{breaches} benchmark gate(s) exceeded, {skipped} not gated (phone state)")
     return 1 if breaches else 0
 
 

@@ -48,8 +48,9 @@ import org.junit.runner.RunWith
  *
  * Run: `./gradlew :benchmark:connectedBenchmarkAndroidTest`
  *
- * No thresholds are asserted yet — these need one calibration run on real
- * hardware before medians can be committed as a regression gate.
+ * No thresholds are asserted here: a phone run is checked against
+ * `benchmark/gates.json` by `scripts/ci_test_report.py --gates`, in the state
+ * [DeviceStateRule] records (docs/adr/ADR-008-startup-gates-phone-state.md).
  */
 @LargeTest
 @RunWith(AndroidJUnit4::class)
@@ -58,12 +59,16 @@ class ScreenBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
+    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    @get:Rule
+    val deviceState = DeviceStateRule()
+
     /** Cold start straight into the settings sheet. */
     @Test
     fun settingsColdStartup() = benchmarkRule.measureRepeated(
         packageName = PACKAGE,
         metrics = listOf(StartupTimingMetric()),
-        iterations = ITERATIONS,
+        iterations = StartupBenchmark.COLD_START_ITERATIONS,
         startupMode = StartupMode.COLD,
         compilationMode = CompilationMode.Partial(),
     ) {
@@ -99,7 +104,7 @@ class ScreenBenchmark {
     fun analysisWizardColdStartup() = benchmarkRule.measureRepeated(
         packageName = PACKAGE,
         metrics = listOf(StartupTimingMetric()),
-        iterations = ITERATIONS,
+        iterations = StartupBenchmark.COLD_START_ITERATIONS,
         startupMode = StartupMode.COLD,
         compilationMode = CompilationMode.Partial(),
     ) {

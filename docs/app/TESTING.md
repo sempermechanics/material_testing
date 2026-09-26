@@ -209,6 +209,37 @@ and never gated, and CI does not pass `--gates`. To gate another phone, add its
 codename with medians from a clean run of both suites. Microbenchmark times are not
 gated: debuggable and not AOT-compiled, they are relative numbers only.
 
+**The phone's state (TD-135, [ADR-008](../adr/ADR-008-startup-gates-phone-state.md)).**
+A startup time moves 30–40 % with heat and the charger, so a result is gated only
+in the state the references assume. `DeviceStateRule` (in every gated benchmark
+class) writes `com.indicvision.semper.benchmark-deviceState.json` next to the
+results: per test, the thermal status, battery temperature and level, charger,
+free memory and swap, at its start and end. A result whose test ran above
+`state.maxThermalStatus` (0) or off the charger (`state.requirePlugged`) prints
+`GATE not gated …` with the reason and does not count as a breach. A result with
+no state file (an APK from before the rule) is gated as before and says so. The
+three cold-start cases run 15 iterations, not 5: one run's starts spread
+404–478 ms, so a 5-start median moved with one or two slow ones.
+
+**When a startup gate trips**, compare with the reference build on the same
+phone before calling it a regression:
+
+```bash
+python scripts/startup_ab.py --a ref/app-benchmark.apk --b new/app-benchmark.apk   --bench benchmark/build/outputs/apk/benchmark/benchmark-benchmark.apk --out ab-run
+```
+
+It runs the three cold starts in A B B A A B B A order, pools each build's runs,
+and exits 1 if the candidate's median is more than `abMargin` (10 %) over the
+reference build's. It backs up the installed app first and reinstalls it at the
+end, uses `am instrument` (never the connected task), wakes the screen every 10 s,
+and stops without touching the phone if it is locked or another instrumentation
+is running. `--analyse ab-run` re-reads a finished run. On the 2026-09-26 wizard
+rounds (TD-135) it reads `1b4253db` at −6 % against `05aac72`. Checked end to end
+on the Pixel 6 the same day (warm start, one ABBA block): both snapshots
+recorded, the run reported `not gated` (thermal status 1, on battery), and the
+installed app came back byte-identical. That phone sat at thermal status 1 at
+37 °C on battery, so a gated run needs the charger and a cool-down first.
+
 ### Pixel 6 re-runs against the gates (2026-09-25/26)
 
 Same Pixel 6, over wireless adb. Run with `am instrument`, not the connected
@@ -240,8 +271,9 @@ charge, and uses about 75 % of its gate's headroom: a further 6 % fails it. It
 is not the code: run back to back on the same phone the same day, the reference
 build (`05aac72`) was as slow, 439–623 ms, and failed its own gate in 2 of 4
 rounds as the phone warmed. The gate measures the phone's state (heat, charger,
-memory) as much as the app; see TD-135 for the protocol that would fix that.
-`benchmark/gates.json` is unchanged.
+memory) as much as the app (TD-135); the state check and A/B run above are the
+answer. The references themselves were taken in an unrecorded state and are owed a
+re-take under that protocol.
 
 ### Known coverage gaps
 

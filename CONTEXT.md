@@ -154,7 +154,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Pixel 6 medians and the report-only `benchmark/gates.json` are in
   [TESTING.md](docs/app/TESTING.md). The 2026-09-25/26 re-runs pass every gate, but
   the wizard cold start sits at +23 %, 75 % of its headroom: the phone's state, not
-  the code (TD-135).
+  the code (TD-135). Gates now skip throttled or unplugged runs and a trip is settled
+  A/B (ADR-008); the Pixel 6 references are owed a re-take.
   TD-86–TD-88 and TD-90 match the parent's numbers; its TD-81 is TD-89 here.
 - **Owed.**
   - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a): a phone-recorded MP4

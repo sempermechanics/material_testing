@@ -38,6 +38,10 @@ class StartupHeadroomBenchmark(private val compilationMode: CompilationMode) {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
+    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    @get:Rule
+    val deviceState = DeviceStateRule()
+
     @Before
     fun onlyWhenAsked() {
         assumeTrue(InstrumentationRegistry.getArguments().getString(ARG) == "true")
