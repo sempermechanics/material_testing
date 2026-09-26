@@ -1,6 +1,7 @@
 {
   "//": "Firestore index source of truth. Deploy with `firebase deploy --only firestore:indexes`. Single-field equality queries are automatic; composites are listed below.",
   "//ttl": "Nonce cleanup is NOT expressed here \u2014 Firestore TTL is a field policy, not an index. `challenges.expireAt` must have a TTL policy enabled (see docs/backend/BACKEND_SETUP_GCP.md step A2a: `gcloud firestore fields ttls update expireAt --collection-group=challenges --enable-ttl`), otherwise consumed/expired challenge docs accumulate. consume_nonce deletes on use; TTL reclaims the ones never consumed.",
+  "//licenses": "The staff desk lists licences newest first (createdAt DESC), filtered by mode unless Demo keys are shown and by status (an `in` filter) when revoked ones are hidden: repo/license_admin.list_licenses. One index per filter combination.",
   "indexes": [
     {
       "collectionGroup": "sessions",
@@ -17,6 +18,52 @@
         {
           "fieldPath": "status",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "licenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "mode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "licenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "mode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "licenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     }

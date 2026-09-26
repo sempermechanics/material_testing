@@ -50,9 +50,11 @@ from .entitlement import (  # noqa: F401
 )
 from .license_admin import (  # noqa: F401
     _drop_user_to_demo_if_licensed,
+    _drop_users_to_demo_if_licensed,
+    get_license_public,
     _license_holder_uids,
     list_licenses,
-    _refresh_license_mirror,
+    _refresh_license_mirrors,
     revoke_license,
     update_license,
 )

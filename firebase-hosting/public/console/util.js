@@ -114,3 +114,43 @@ export function errorDetail(detail) {
     ? { code: text.trim(), rest: "" }
     : { code: text.slice(0, at).trim(), rest: text.slice(at + 1).trim() };
 }
+
+/**
+ * The staff desk's licence-list URL. Demo keys and revoked licences are
+ * left out by the backend unless asked for, so a page holds the licences
+ * anyone sold instead of one Demo key per account.
+ */
+export function licenceListPath({ limit, showDemo = false, showRevoked = false, pageToken = "", q = "" }) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (showDemo) params.set("include_demo", "true");
+  if (!showRevoked) params.set("include_revoked", "false");
+  if (q) params.set("q", q);
+  else if (pageToken) params.set("page_token", pageToken);
+  return `/v1/admin/licenses?${params}`;
+}
+
+/**
+ * Whether the filter text is something the backend can look up: an email
+ * address, a domain, or a key prefix. Those are exact matches on any page;
+ * anything else only filters the rows already loaded.
+ */
+export function searchableLicenceText(text) {
+  const t = String(text ?? "").trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return true;
+  if (/^semp-[a-z0-9]{4}/i.test(t)) return true;
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(t);
+}
+
+/**
+ * `list` with `lic` in place of the row with its id, or at the top when it
+ * is new. A change refreshes its own row this way; the desk used to reload
+ * the first page after every change and drop every page loaded after it.
+ */
+export function upsertLicence(list, lic) {
+  if (!lic || !lic.id) return list;
+  const at = list.findIndex((l) => l.id === lic.id);
+  if (at < 0) return [lic, ...list];
+  const next = list.slice();
+  next[at] = { ...list[at], ...lic };
+  return next;
+}

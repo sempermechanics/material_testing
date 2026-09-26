@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   esc, when, day, licenceState, licenceStatePill, leaseHeld, seatCells, inviteCells,
-  errorDetail,
+  errorDetail, licenceListPath, searchableLicenceText, upsertLicence,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -100,4 +100,36 @@ test("an error detail splits at its first colon only (TD-116)", () => {
     { code: "device_change_too_soon", rest: "2026-10-25T08:00:00+00:00" },
   );
   assert.deepEqual(errorDetail(undefined), { code: "", rest: "" });
+});
+
+test("the licence list asks the backend to leave Demo and revoked rows out", () => {
+  assert.equal(licenceListPath({ limit: 50 }), "/v1/admin/licenses?limit=50&include_revoked=false");
+  assert.equal(
+    licenceListPath({ limit: 50, showDemo: true, showRevoked: true, pageToken: "abc" }),
+    "/v1/admin/licenses?limit=50&include_demo=true&page_token=abc",
+  );
+  // A search is not a page: the token is dropped.
+  assert.equal(
+    licenceListPath({ limit: 50, showRevoked: true, pageToken: "abc", q: "a@b.com" }),
+    "/v1/admin/licenses?limit=50&q=a%40b.com",
+  );
+});
+
+test("only an address, a domain or a key prefix is sent as a search", () => {
+  assert.equal(searchableLicenceText("a@b.com"), true);
+  assert.equal(searchableLicenceText(" uni.edu "), true);
+  assert.equal(searchableLicenceText("SEMP-K7QX"), true);
+  assert.equal(searchableLicenceText("semp-k7qx-aaaa"), true);
+  assert.equal(searchableLicenceText("renewal"), false);
+  assert.equal(searchableLicenceText("a@b"), false);
+  assert.equal(searchableLicenceText(""), false);
+});
+
+test("a changed licence replaces its row and a new one goes on top", () => {
+  const list = [{ id: "a", note: "x", seatsUsed: 2 }, { id: "b" }];
+  const changed = upsertLicence(list, { id: "a", seatsUsed: 0 });
+  assert.deepEqual(changed, [{ id: "a", note: "x", seatsUsed: 0 }, { id: "b" }]);
+  assert.equal(list[0].seatsUsed, 2);
+  assert.deepEqual(upsertLicence(list, { id: "c" }).map((l) => l.id), ["c", "a", "b"]);
+  assert.equal(upsertLicence(list, null), list);
 });

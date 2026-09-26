@@ -235,6 +235,8 @@ def create_individual_license(
     device_id_lock: str = "",
     created_by_uid: str,
     expires_at=None,
+    grace_days: int | None = None,
+    support_until=None,
     max_analyses: int | None = None,
     note: str = "",
 ) -> dict:
@@ -259,6 +261,8 @@ def create_individual_license(
         status="unused",
         kind="individual",
         expires_at=expires_at,
+        grace_days=grace_days,
+        support_until=support_until,
         max_analyses=max_analyses,
         note=note,
     )
@@ -347,6 +351,8 @@ def create_institution_license(
     max_seats: int | None = None,
     seating: str = SEATING_ASSIGNED,
     expires_at=None,
+    grace_days: int | None = None,
+    support_until=None,
     max_analyses: int | None = None,
     note: str = "",
 ) -> dict:
@@ -365,6 +371,8 @@ def create_institution_license(
         max_seats=max_seats,
         seating=seating,
         expires_at=expires_at,
+        grace_days=grace_days,
+        support_until=support_until,
         max_analyses=max_analyses,
         note=note,
     )

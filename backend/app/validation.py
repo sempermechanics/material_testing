@@ -56,6 +56,9 @@ PageToken = Annotated[
 # admin filter to these keeps an unbounded caller-supplied string out of the
 # Firestore `where()` on every listing.
 AccessStatus = Literal["", "PENDING", "APPROVED", "SUSPENDED"]
+# The staff desk's licence search: an address (at most 320), a domain or a key
+# prefix. Only ever an equality value in a `where()`, never a path.
+LicenceSearch = Annotated[str, StringConstraints(max_length=320)]
 
 
 def require_header_identifier(

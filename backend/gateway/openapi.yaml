@@ -519,6 +519,11 @@ paths:
   /v1/admin/licenses:
     get:
       operationId: adminListLicenses
+      description: >
+        Semper staff. Licences newest first, cursor-paged (limit, page_token).
+        System Demo keys are left out unless include_demo=true; revoked
+        licences are left out when include_revoked=false. q searches by exact
+        email, domain or key prefix instead of paging.
       responses:
         '200': { description: OK }
     post:
@@ -538,6 +543,20 @@ paths:
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '422': { description: "kind=institution missing domainLock/adminEmails, or kind=individual missing emailLock" }
   /v1/admin/licenses/{licenseId}:
+    get:
+      operationId: adminGetLicense
+      description: >
+        Semper staff. One licence, shaped like a row of the list; the desk
+        refreshes the row a change touched instead of reloading the table.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '404': { description: License not found }
+        '429': { description: Rate limited }
     patch:
       operationId: adminUpdateLicense
       description: >

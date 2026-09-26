@@ -6,7 +6,7 @@ from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION, seat_cap_below_roster
 from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
-from ..validation import AccessStatus, DocumentId, PageToken, Uid
+from ..validation import AccessStatus, DocumentId, LicenceSearch, PageToken, Uid
 from ._shared import clamp_page_size, page_block
 
 router = APIRouter()
@@ -72,11 +72,21 @@ def admin_patch_user_config(uid: Uid, body: UserConfigPatch,
 def admin_list_licenses(
     limit: int = 50,
     page_token: PageToken = "",
+    include_demo: bool = False,
+    include_revoked: bool = True,
+    q: LicenceSearch = "",
     admin=Depends(admin_user),
 ):
+    """Licences, newest first. System Demo keys are left out unless
+    `include_demo`; revoked licences are left out when `include_revoked` is
+    false. `q` searches by exact address, domain or key prefix instead of
+    paging (see `repo.list_licenses`)."""
     rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
     limit = clamp_page_size(limit, 200)
-    licenses, next_token = repo.list_licenses(limit=limit, page_token=page_token or None)
+    licenses, next_token = repo.list_licenses(
+        limit=limit, page_token=page_token or None,
+        include_demo=include_demo, include_revoked=include_revoked, q=q.strip(),
+    )
     return {
         "licenses": licenses,
         # What every demo-mode key gives its holder, whatever the key stores.
@@ -116,6 +126,8 @@ def admin_create_license(
             max_seats=body.maxSeats,
             seating=body.seating,
             expires_at=body.expiresAt,
+            grace_days=body.graceDays,
+            support_until=body.supportUntil,
             max_analyses=body.maxAnalyses,
             note=body.note,
         )
@@ -132,6 +144,8 @@ def admin_create_license(
         device_id_lock=body.deviceIdLock,
         created_by_uid=admin["uid"],
         expires_at=body.expiresAt,
+        grace_days=body.graceDays,
+        support_until=body.supportUntil,
         max_analyses=body.maxAnalyses,
         note=body.note,
     )
@@ -147,6 +161,20 @@ def admin_create_license(
                 "claimError": minted.get("claimError") or ""},
     )
     return minted
+
+
+@router.get("/v1/admin/licenses/{license_id}")
+def admin_get_license(
+    license_id: DocumentId,
+    admin=Depends(admin_user),
+):
+    """One licence, as a row of the list. The desk refreshes the row a
+    change touched with this instead of reloading the whole table."""
+    rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
+    lic = repo.get_license_public(license_id)
+    if lic is None:
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
+    return lic
 
 
 @router.patch(
@@ -177,25 +205,21 @@ def admin_update_license(
     demo holder gets `DEMO_MAX_ANALYSES` whatever the key stores, so the edit
     would answer 200 and change nothing. `clearMaxAnalyses` is still allowed.
     """
-    if body.maxSeats is not None:
-        # Refused before the lock is touched, so nothing is half applied.
-        current = repo.get_license(license_id)
-        if current and seat_cap_below_roster(current, body.maxSeats):
-            raise HTTPException(422, errors.MAX_SEATS_BELOW_USED)
-    if body.maxAnalyses is not None:
-        # Same order: a cap on a demo key is refused before the lock moves.
-        current = repo.get_license(license_id)
-        err = repo.analysis_cap_error(current) if current else ""
-        if err:
-            raise HTTPException(422, err)
     patch = body.model_dump(exclude_none=True)
     clear_lock = patch.pop("clearDeviceLock", False)
-    if "expiresAt" in patch:
-        # Refused before the lock is touched, so a rejected date never
-        # leaves half the request applied. `update_license` checks again
-        # against what it reads, for an edit that lands in between.
-        current = repo.get_license(license_id)
-        err = repo.expiry_change_error(current, patch["expiresAt"]) if current else ""
+    # Every check below is made before the lock is touched, so a refused edit
+    # never leaves half the request applied. One read serves them all; each
+    # used to read the licence again. `update_license` checks again against
+    # what it reads, for an edit that lands in between.
+    checked = body.maxSeats is not None or body.maxAnalyses is not None or "expiresAt" in patch
+    current = repo.get_license(license_id) if checked else None
+    if current:
+        if body.maxSeats is not None and seat_cap_below_roster(current, body.maxSeats):
+            raise HTTPException(422, errors.MAX_SEATS_BELOW_USED)
+        # A cap on a demo key changes nothing the holder sees.
+        err = repo.analysis_cap_error(current) if body.maxAnalyses is not None else ""
+        if not err and "expiresAt" in patch:
+            err = repo.expiry_change_error(current, patch["expiresAt"])
         if err:
             raise HTTPException(422, err)
     cleared = {}
