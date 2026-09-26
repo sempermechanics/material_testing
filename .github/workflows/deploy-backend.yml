@@ -355,6 +355,9 @@ jobs:
       # Last in the job, rollback-prev first, so no failure after it can leave
       # PREV unpinned. continue-on-error: re-pinning by hand
       # (BACKEND_SETUP_GCP.md A7) beats rolling back a healthy revision.
+      # One-time IAM: moving a tag that exists needs artifactregistry.tags.delete,
+      # which roles/artifactregistry.writer lacks; the deploy SA holds
+      # roles/artifactregistry.repoAdmin on cloud-run-source-deploy only.
       - name: Pin the serving and rollback images
         continue-on-error: true
         env:

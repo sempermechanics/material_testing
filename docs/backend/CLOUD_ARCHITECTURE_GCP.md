@@ -793,6 +793,12 @@ for SA in $API_SA indic-gw@$PROJECT.iam.gserviceaccount.com \
 for R in storage.admin storage.objectAdmin; do
   gcloud storage buckets add-iam-policy-binding gs://run-sources-$PROJECT-asia-south1 \
     --member="serviceAccount:$DEPLOY_SA" --role="roles/$R"; done
+# The deploy moves the `serving` and `rollback-prev` image tags, and moving a tag
+# needs artifactregistry.tags.delete, which the writer role lacks. On this
+# repository alone (granted 2026-09-26).
+gcloud artifacts repositories add-iam-policy-binding cloud-run-source-deploy \
+  --location=asia-south1 --project=$PROJECT \
+  --member="serviceAccount:$DEPLOY_SA" --role="roles/artifactregistry.repoAdmin"
 ```
 
 `storage.bucketViewer` holds only `storage.buckets.get` / `.list`. It is needed at
