@@ -69,7 +69,8 @@ and the app's first calls already wait 1.3–1.8 s on App Check
 
 The registry and the `run-sources-…` bucket gain a copy of the service on every source
 deploy. Both now delete anything more than 15 days old. The registry keeps the image
-tagged `latest` (serving) and each package's five newest versions, so a serving revision
+tagged `latest` (serving), any image with a tag starting `rollback` (hand-pinned rollback
+images, added 2026-09-26), and each package's five newest versions. So a serving revision
 can always start a new instance and the rollbacks stay available. Artifact Registry records
 no last-pull time, so age is the only usable signal for "unused". The policy files are in
 [`backend/deploy/`](../../backend/deploy/) and the apply steps are in

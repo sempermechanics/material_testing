@@ -10,6 +10,11 @@
     "condition": {"tagState": "tagged", "tagPrefixes": ["latest"]}
   },
   {
+    "name": "keep-rollback-tags",
+    "action": {"type": "Keep"},
+    "condition": {"tagState": "tagged", "tagPrefixes": ["rollback"]}
+  },
+  {
     "name": "keep-recent-5",
     "action": {"type": "Keep"},
     "mostRecentVersions": {"keepCount": 5}

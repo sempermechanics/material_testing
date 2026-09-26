@@ -228,7 +228,7 @@ the two rules below. Run them as a project owner: the deploy SA cannot change a 
 
 ```bash
 # Registry: delete versions more than 15 days old, except the image tagged `latest`
-# (the one serving) and each package's five newest versions (rollback targets).
+# (the one serving), any tagged `rollback…` and each package's five newest versions.
 gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy \
   --location=$REGION --project=$PROJECT \
   --policy=backend/deploy/ar-cleanup-policy.json --dry-run
@@ -247,18 +247,20 @@ gcloud artifacts docker images list \
   --include-tags --sort-by=~CREATE_TIME
 ```
 
-Every version older than 15 days goes, unless it is tagged `latest` or is one of its
-package's five newest. Then re-run the first command with `--no-dry-run` in place of
+Every version older than 15 days goes, unless it is tagged `latest`, has a tag starting
+`rollback`, or is one of its package's five newest. Then re-run the first command with `--no-dry-run` in place of
 `--dry-run`.
 
 Artifact Registry does not record when an image was last pulled, so "unused" here means
 "uploaded more than 15 days ago". The keep rules are there because Cloud Run needs a
 revision's image each time it starts an instance, and at `--min-instances 0` that happens
-after every idle spell. The Firestore backup bucket is not covered: it has its own
+after every idle spell. A `rollback…` tag is a hand-pinned rollback image (the ones named
+in [CHANGELOG.md](../ops/CHANGELOG.md)); it is kept until someone removes the tag with
+`gcloud artifacts docker tags delete`. The Firestore backup bucket is not covered: it has its own
 retention ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
 
 **Check:** `gcloud artifacts repositories list-cleanup-policies cloud-run-source-deploy
---location=$REGION` shows three policies. `gcloud storage buckets describe
+--location=$REGION` shows four policies. `gcloud storage buckets describe
 gs://run-sources-$PROJECT-$REGION --format='value(lifecycle_config)'` shows the 15-day rule.
 
 ---
