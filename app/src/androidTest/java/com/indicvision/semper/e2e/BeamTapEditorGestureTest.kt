@@ -111,8 +111,16 @@ class BeamTapEditorGestureTest {
 
     private fun photoView(activity: Activity): TouchImageView = activity.findViewById(R.id.imgBeamPhoto)
 
-    /** Taps the screen where image pixel ([x], [y]) is drawn now, then waits out a double tap. */
+    /**
+     * Taps the screen where image pixel ([x], [y]) is drawn now, then waits out a double tap.
+     *
+     * Waits for the app to go idle first. On a cold API 37 emulator the main thread was
+     * still busy after the photo appeared, the first click's up landed ~500 ms after its
+     * down, and `GestureDetector` took it for a long press rather than a tap.
+     */
     private fun tapImage(scenario: ActivityScenario<BeamEdgeTapActivity>, x: Float, y: Float) {
+        instrumentation.waitForIdleSync()
+        device.waitForIdle()
         val onScreen = IntArray(2)
         val pts = floatArrayOf(x, y)
         scenario.onActivity {
