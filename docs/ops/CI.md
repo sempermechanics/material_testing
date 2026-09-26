@@ -245,12 +245,11 @@ Required secrets / vars (repo-level on Free private orgs is fine — Environment
 `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`; vars `FIREBASE_PROJECT_ID`,
 `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL`, `AUTO_APPROVE_HD`, `ADMIN_EMAILS`,
 `SUPPORT_EMAIL`, `NOTIFY_FROM`, async provisioning `TASKS_QUEUE`,
-`TASKS_LOCATION`, `TASKS_TARGET_BASE_URL`, `TASKS_INVOKER_SA`, and
-**`REQUIRE_ATTESTED_UPLOADS`**.
+`TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`.
 
-Production must keep **`REQUIRE_ATTESTED_UPLOADS=1`**. The deploy workflow pins
-the Cloud Run env var from that GitHub var. Leaving it empty clears the flag on
-the next deploy and re-opens ID-token-only upload targets. See
+`REQUIRE_ATTESTED_UPLOADS` is no longer passed (retired 2026-09-26, TD-45):
+`/uploads` is always device-attested. The "Describe live env" step warns while
+a service still carries it; remove it after promote. See
 [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md).
 
 API Gateway OpenAPI uses the placeholders `__CLOUD_RUN_URL__`,

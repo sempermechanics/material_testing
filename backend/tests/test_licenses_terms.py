@@ -1,4 +1,4 @@
-"""Licence terms: the campus->institution rename shims, duration and grace, renewal by PATCH."""
+"""Licence terms: the campus->institution rename (retired input, stored-document reads), duration and grace, renewal by PATCH."""
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -16,16 +16,14 @@ from license_helpers import (  # noqa: F401
 
 
 # ====================================================== rename compatibility
-# The campus→institution / plan→mode rename must not strand an installed app
-# or an institution IT script mid-deprecation. These pin both halves of that.
+# The campus→institution / plan→mode rename. The wire-level shims for ops and
+# IT tooling (the /v1/campus/* aliases, kind="campus" at mint) were retired on
+# 2026-09-26 (TD-45); these pin that the old input is now refused. Stored
+# documents still read either spelling — that shim waits on migration 002.
 
 @pytest.mark.asyncio
-async def test_pre_rename_campus_route_still_serves_the_same_handler(client, monkeypatch):
-    """Institution IT scripts and curl one-liners hold the old path.
-
-    /v1/campus/* is hidden from the OpenAPI schema but must keep routing, so
-    an unchanged script does not start 404ing the day this deploys.
-    """
+async def test_retired_campus_route_is_gone_and_the_current_one_serves(client, monkeypatch):
+    """/v1/campus/* no longer routes; /v1/institutions/* serves the same roster."""
     from app import deps
 
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "email": "it@university.edu"})
@@ -41,14 +39,15 @@ async def test_pre_rename_campus_route_still_serves_the_same_handler(client, mon
 
     legacy = await client.get(f"/v1/campus/licenses/{license_id}/seats")
     current = await client.get(f"/v1/institutions/licenses/{license_id}/seats")
-    assert legacy.status_code == 200, legacy.text
-    assert legacy.json() == current.json()
+    assert legacy.status_code == 404, legacy.text
+    assert current.status_code == 200, current.text
+    assert [s["uid"] for s in current.json()["seats"]] == ["student"]
 
 
 @pytest.mark.asyncio
-async def test_admin_mint_accepts_the_pre_rename_campus_kind(client, monkeypatch):
-    """Ops tooling that still sends kind="campus" mints an institution key."""
-    fake_firestore.install(monkeypatch)
+async def test_admin_mint_refuses_the_retired_campus_kind(client, monkeypatch):
+    """kind="campus" is a 422 now, and nothing is minted."""
+    store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     resp = await client.post(
         "/v1/admin/licenses",
@@ -58,8 +57,8 @@ async def test_admin_mint_accepts_the_pre_rename_campus_kind(client, monkeypatch
             "adminEmails": ["it@university.edu"],
         },
     )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["license"]["kind"] == "institution"
+    assert resp.status_code == 422, resp.text
+    assert not store._data.get("licenses")
 
 
 def test_activation_resolves_a_pre_migration_license_document(store):

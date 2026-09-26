@@ -87,9 +87,9 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       deliberate rollback drill when convenient.
 - [x] `INDIC_API_BASE_URL` available to release builds; signed release shipped
       with `-PrequireCloudApi=true` (e.g. `v0.1.0-beta.1`).
-- [x] Production `REQUIRE_ATTESTED_UPLOADS=1` pinned from the GitHub var on
-      deploy. Leaving the var empty on the next deploy **clears** the flag —
-      keep it set.
+- [x] `/uploads` always device-attested: the `REQUIRE_ATTESTED_UPLOADS`
+      window was retired 2026-09-26 (TD-45), so there is no flag left to
+      clear on deploy.
 
 ### Compliance
 
@@ -358,8 +358,12 @@ pre-licensing documents)
       integrity, and add the Play app-signing SHA-256 to the Firebase Android
       app ([AUTH_SETUP.md §3.2](../backend/AUTH_SETUP.md)). Until then no build
       can get a token and `monitor` would count 100 % missing.
-- [ ] §20.5 skew fallbacks (`plan` mirror, `/v1/campus/*` aliases) stay until
+- [ ] §20.5 skew fallbacks 6–9 (the app's `config.plan` / old `plan` pref
+      reads, the `plan` mirror in `/v1/config` and licence summaries, and
+      `normalize_mode` / `normalize_kind` reading old stored values) stay until
       adoption of a `mode`-reading build is high enough; retire in that order.
+      Shims 1–5 (ops/IT wire aliases, `PRO_MAX_SESSIONS_PER_USER`, the
+      unattested `/uploads` read) were retired 2026-09-26.
 - [x] Gateway deploy job (TD-27): `deploy-backend.yml`'s `gateway` job; first
       `apply` 2026-09-24 (run 35992296245, config `v202609241122-44`).
 - [ ] Per-user `maxSessions` override ignored in demo (TD-28): lifting one demo

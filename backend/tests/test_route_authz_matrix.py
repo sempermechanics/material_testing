@@ -30,7 +30,6 @@ from app.deps import (
     attested_or_mfa_admin_fresh,
     attested_or_mfa_user,
     current_user,
-    device_or_legacy_reader,
     verified_device,
 )
 from app.main import app
@@ -44,11 +43,6 @@ ANY_STATUS = "any-status"
 # Not a user tier: authenticated by the OIDC token Cloud Tasks attaches, and
 # reachable by nothing else — no ID token or device signature will open it.
 TASK = "cloud-task"
-# Temporary tier: device-attested when the caller attests or the flag is set,
-# but an unattested ID-token read is accepted meanwhile (the /uploads migration
-# window). Recorded explicitly so the compatibility gap is visible in the table
-# rather than masquerading as a plain USER or DEVICE route. Delete with the flag.
-DEVICE_MIGRATING = "device-migrating"
 # Institution IT self-service: membership in adminEmails plus dashboard MFA
 # (institution_admin_stepup). Membership is checked before MFA so a foreign
 # licence still 404s. Deliberately distinct from ADMIN/DEVICE_ADMIN.
@@ -89,7 +83,7 @@ EXPECTED = {
     ("GET", "/v1/sessions"): USER,
     ("POST", "/v1/sessions"): DEVICE,
     ("DELETE", "/v1/sessions/{sid}"): DEVICE,
-    ("GET", "/v1/sessions/{sid}/uploads"): DEVICE_MIGRATING,    # returns Drive upload URIs
+    ("GET", "/v1/sessions/{sid}/uploads"): DEVICE,              # returns Drive upload URIs
     ("GET", "/v1/sessions/{sid}/files"): USER,
     # The whole analysis out through a browser. USER_STEPUP because the
     # device-attested single-file route it stands in for is DEVICE, and the
@@ -147,13 +141,6 @@ EXPECTED = {
     # adminEmails check — the handler additionally refuses an invite whose
     # licenseId is not this one, so a guessed id reaches nothing.
     ("DELETE", "/v1/institutions/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_STEPUP,
-    # Pre-rename aliases of the routes above. Same handler, same tier —
-    # declared explicitly so a deprecation that drops them has to come through
-    # this table, and so an alias can never quietly gain a weaker tier.
-    ("POST", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
-    ("GET", "/v1/campus/licenses/{license_id}/seats"): INSTITUTION_STEPUP,
-    ("PATCH", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
-    ("DELETE", "/v1/campus/licenses/{license_id}/seats/{uid}"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
 }
 
@@ -169,10 +156,6 @@ def _tier(route) -> str:
     calls = set(_flatten(route.dependant))
     if tasks_caller in calls:
         return TASK
-    # The migration wrapper calls verified_device directly (not via Depends), so
-    # it never appears in the flattened deps — detect the wrapper itself.
-    if device_or_legacy_reader in calls:
-        return DEVICE_MIGRATING
     # Also calls verified_device directly rather than through Depends, so the
     # flattened dependency set shows only admin_user — without this branch the
     # route would silently read as plain ADMIN and the step-up would vanish
@@ -508,23 +491,23 @@ async def test_institution_route_rejects_a_bare_token_from_a_non_member(institut
 async def test_device_routes_reject_a_bare_id_token(attacker, client, method, path):
     """A stolen ID token, with no device key, must not reach these at all.
 
-    /uploads is intentionally absent: it is behind the migration wrapper and is
-    covered by the DEVICE_MIGRATING tests below, where a bare token is accepted
-    while REQUIRE_ATTESTED_UPLOADS is off and rejected once it is on.
+    /uploads is covered separately below, on a session the caller owns, so a
+    bare-token refusal cannot be mistaken for the ownership 404.
     """
     r = await client.request(method, path, headers=attacker.bearer)
     assert r.status_code in (400, 401), f"{method} {path} -> {r.status_code}"
     assert attacker._data["files"], "account data was touched without attestation"
 
 
-# ---------------------------------------------------- /uploads migration window
+# ----------------------------------------------------------- /uploads attested
 #
-# The resume list carries Drive capability URLs and should be device-attested,
-# but testers on an older build read it with an ID token only. These pin the
-# temporary compromise so the flip point is a deliberate change, not a surprise.
+# The resume list carries Drive capability URLs. An ID-token-only read was
+# accepted during the fleet migration (device_or_legacy_reader, behind
+# REQUIRE_ATTESTED_UPLOADS); retired 2026-09-26 (TD-45). These pin that the
+# route is now plainly device-attested, on a session the caller owns.
 
 def _owned_session(attacker):
-    """A session the attacker actually owns, so a lenient read reaches 200
+    """A session the attacker actually owns, so an attested read reaches 200
     (the cross-user fixture session is owned by the victim and 404s first)."""
     attacker._data["sessions"]["s-mine"] = {
         "uid": ATTACKER, "status": "UPLOADING", "localSessionId": "lm",
@@ -532,22 +515,16 @@ def _owned_session(attacker):
     }
 
 
-async def test_uploads_lenient_accepts_bare_token_and_logs(attacker, client, monkeypatch, caplog):
-    """Flag off + no device headers: the old fleet's bare-token read succeeds,
-    and every such call emits one observable legacy_unattested_uploads event."""
-    monkeypatch.setattr(settings, "REQUIRE_ATTESTED_UPLOADS", False)
+async def test_uploads_rejects_a_bare_token_even_for_the_owner(attacker, client, caplog):
+    """No device headers: refused, and no legacy event is logged any more."""
     _owned_session(attacker)
     with caplog.at_level("WARNING", logger="indic.auth"):
         r = await client.get("/v1/sessions/s-mine/uploads", headers=attacker.bearer)
-    assert r.status_code == 200, r.text
-    assert r.json()["sessionId"] == "s-mine"
-    assert "legacy_unattested_uploads" in caplog.text
+    assert r.status_code in (400, 401), r.text
+    assert "legacy_unattested_uploads" not in caplog.text
 
 
-async def test_uploads_lenient_still_enforces_strict_path_when_headers_present(attacker, client, monkeypatch):
-    """Flag off but the caller presents device headers: it cannot be downgraded
-    to the lenient path — a bad signature is still rejected."""
-    monkeypatch.setattr(settings, "REQUIRE_ATTESTED_UPLOADS", False)
+async def test_uploads_rejects_a_bad_signature(attacker, client):
     _owned_session(attacker)
     headers = {
         "Authorization": "Bearer ok",
@@ -559,17 +536,7 @@ async def test_uploads_lenient_still_enforces_strict_path_when_headers_present(a
     assert r.status_code == 401, r.text
 
 
-async def test_uploads_strict_when_flag_set_rejects_bare_token(attacker, client, monkeypatch):
-    """Flag on: the endpoint is fully device-attested — a bare token is refused."""
-    monkeypatch.setattr(settings, "REQUIRE_ATTESTED_UPLOADS", True)
-    _owned_session(attacker)
-    r = await client.get("/v1/sessions/s-mine/uploads", headers=attacker.bearer)
-    assert r.status_code in (400, 401), r.text
-
-
-async def test_uploads_strict_when_flag_set_accepts_attested_read(attacker, client, monkeypatch):
-    """Flag on: a properly device-signed read still works."""
-    monkeypatch.setattr(settings, "REQUIRE_ATTESTED_UPLOADS", True)
+async def test_uploads_accepts_an_attested_read(attacker, client):
     _owned_session(attacker)
     path = "/v1/sessions/s-mine/uploads"
     r = await client.get(path, headers=attacker.signed("GET", path))

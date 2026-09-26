@@ -17,7 +17,6 @@ from ..config import settings
 from ..deps import (
     attested_or_mfa_user,
     current_user,
-    device_or_legacy_reader,
     rate_limited,
     verified_device,
 )
@@ -141,7 +140,7 @@ def session_uploads(
     sid: SessionId,
     page_size: int = 1000,
     page_token: PageToken = "",
-    ctx=Depends(device_or_legacy_reader),
+    ctx=Depends(verified_device),
 ):
     """What still needs uploading for a session — the resume path.
 
@@ -153,12 +152,9 @@ def session_uploads(
     resumable upload URIs, which are bearer capabilities to write into the
     user's Drive folder. Every other endpoint that mints or consumes those URIs
     (POST /v1/sessions, POST /v1/files/{id}/complete) requires attestation, so a
-    stolen ID token alone must not be able to recover them here either.
-
-    Temporarily behind `device_or_legacy_reader`: testers on an older build still
-    read this with an ID token only, so an unattested read is accepted (and
-    logged as `legacy_unattested_uploads`) until REQUIRE_ATTESTED_UPLOADS is set.
-    A client that attests is always held to the strict path — see the wrapper.
+    stolen ID token alone must not be able to recover them here either. (An
+    ID-token-only read was accepted during the fleet migration; retired
+    2026-09-26 after 30 days of logs showed no such caller — TD-45.)
     """
     user = ctx["user"]
     session = _owned_session(sid, user)

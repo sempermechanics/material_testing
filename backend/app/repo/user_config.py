@@ -287,15 +287,6 @@ def set_user_config(uid: str, patch: dict) -> dict | None:
     snap = ref.get()
     if not snap.exists:
         return None
-    # An operator (or an un-updated console) may still send the pre-rename
-    # `plan`. Fold it onto `mode` before filtering, since `plan` is no longer
-    # an accepted key and would otherwise be dropped silently.
-    patch = dict(patch)
-    if "plan" in patch and "mode" not in patch:
-        raw = patch.pop("plan")
-        patch["mode"] = normalize_mode(raw) if raw is not None else None
-    patch.pop("plan", None)
-
     allowed = tuple(_CONFIG_CASTERS)
     update = {
         k: _CONFIG_CASTERS[k](patch[k]) for k in allowed if k in patch and patch[k] is not None
