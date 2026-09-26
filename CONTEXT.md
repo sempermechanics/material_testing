@@ -121,6 +121,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   an app open from 12 to 3 requests on the Pixel 6 and ship with the next app build; Pass 4
   (#202) is deployed; Passes 3, 5 and 6 measured nothing worth changing
   ([perf/request-volume.md](docs/perf/request-volume.md), [CHANGELOG](docs/ops/CHANGELOG.md)).
+- **Backend cost (2026-09-26).** Production Cloud Run defaults to scaling to zero, because the warm instance was the whole bill and over budget. There is a 15-day cleanup for registry images and source tarballs. Both take effect on the next backend deploy and the owner's one-time apply ([perf/backend-cost.md](docs/perf/backend-cost.md)).
 - **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#200, TD-86: debug-only permission,
   `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
   161 → 21 MB); #214 reuses one frame buffer, #217 (TD-88) saves the sidecar after a full
