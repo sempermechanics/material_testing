@@ -2038,12 +2038,13 @@ analysis are untouched; only the lock goes empty.
 `POST /v1/devices/register`, which refuses any device but the account's
 `users/{uid}.activeDeviceId` with `409 device_conflict`. That field is a second
 binding, and until 2026-09-26 a clear left it naming the old phone, so the new
-one was refused at sign-in and never reached the lock. `_release_holder_device`
-now deletes it and retires the old `devices/{id}` document as `SUPERSEDED`,
-as `register_device` does for a replaced phone. It shares `_live_holder` with
-`_restore_holder_mode`, so it acts only where the mode would be restored: a
-revoked licence, a seat that is revoked or on hold, and an account that has
-moved to another licence all keep their binding. Each of those leaves the
+one was refused at sign-in and never reached the lock. `_settle_holder` now
+deletes it and retires the old `devices/{id}` document as `SUPERSEDED`
+(`_retire_device`, shared with `register_device` and `set_user_status`). It
+writes the release and the restored mode (below) in one batch, after one read
+of the user, and only where `_live_holder` allows: a revoked licence, a seat
+that is revoked or on hold, and an account that has moved to another licence
+all keep their binding. Each of those leaves the
 holder on Demo, and a demo account has no licence to clear, so it still cannot
 change phone (TD-126). Until the guard was shared the release checked only the
 last of the three, so **New device** on a held seat let its member change phone
@@ -2070,7 +2071,7 @@ account in place — `mode: demo` written onto the user document. Clearing the
 lock afterwards would not undo that on its own: `revalidate_device_lock`
 returns early for an account that reads as demo, so it would never reach the
 bind branch and the holder would sit on Demo holding a live licence, with no
-route that fixes it. `_restore_holder_mode` re-stamps the mode as part of the
+route that fixes it. `_settle_holder` re-stamps the mode as part of the
 clear, guarded so that nothing is resurrected — skipped for a revoked licence,
 a revoked or disabled seat, and an account that has since moved to a different
 licence, with `effective_mode` still re-applying expiry, grace and the
@@ -2101,10 +2102,15 @@ authz matrix records it as its own tier, `USER_STEPUP`.
 
 #### Both ends are audited
 
-A clear writes the device that was given up (`previousDeviceId`) —
-`ADMIN_DEVICE_LOCK_CLEAR`, `INSTITUTION_SEAT_PATCH` or
-`LICENSE_DEVICE_UNBIND` by caller — and `revalidate_device_lock` writes
-`LICENSE_DEVICE_BIND` with the device that took its place. Neither half is the
+A clear writes the device that was given up — `ADMIN_DEVICE_LOCK_CLEAR`,
+`INSTITUTION_SEAT_PATCH` or `LICENSE_DEVICE_UNBIND` by caller — and
+`revalidate_device_lock` writes `LICENSE_DEVICE_BIND` with the device that took
+its place. The clear names two devices: `previousDeviceId`, the lock's, and
+`releasedDeviceId`, the registered device the account was signed out of. They
+can differ (the lock binds on licence checks, registration on sign-in), and
+either is empty when there was nothing to give up. The `releasedDeviceId` stamp
+on the user lasts only until the next registration, so the audit row is the
+lasting record. Neither half is the
 change on its own; the pair is what an operator reads back.
 
 #### The order on the new device

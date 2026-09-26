@@ -18,6 +18,7 @@ from ._base import (
     SCHEMA_VERSION,
 )
 from .devices import (
+    _retire_device,
     get_device,
 )
 from .entitlement import (
@@ -263,9 +264,6 @@ def set_user_status(uid: str, status: str) -> bool:
     if status != statuses.ACCESS_APPROVED:
         batch.update(ref, {"activeDeviceId": _base.firestore.DELETE_FIELD})
         for dev in db().collection("devices").where("uid", "==", uid).stream():
-            batch.update(dev.reference, {
-                "status": statuses.DEVICE_REVOKED,
-                "revokedAt": _base.firestore.SERVER_TIMESTAMP,
-            })
+            _retire_device(batch, dev.reference, statuses.DEVICE_REVOKED)
     batch.commit()
     return True

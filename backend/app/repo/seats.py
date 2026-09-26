@@ -2,7 +2,7 @@
 """
 from datetime import timedelta
 
-from .. import errors
+from .. import errors, statuses
 from ..config import settings
 from ..licenses import (
     KIND_INSTITUTION,
@@ -24,6 +24,9 @@ from ._base import (
     _seat_lease_counted,
     _seat_ref,
 )
+from .devices import (
+    _retire_device,
+)
 from .license_admin import (
     _drop_user_to_demo_if_licensed,
 )
@@ -40,11 +43,10 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     """The holder's `(user_ref, user)` if a device-lock clear may act on them, else None.
 
     None for a revoked licence, for a seat that is revoked or on hold, and for an
-    account that has since moved to a different licence. Both halves of a clear
-    go through here, restoring the mode and releasing the phone, so neither can
-    act where the other would not. The release once checked only the last
-    condition: **New device** on a held seat let its member, by then on Demo,
-    register a different phone, a change Demo accounts do not otherwise get.
+    account that has since moved to a different licence. The release once
+    checked only the last condition: **New device** on a held seat let its
+    member, by then on Demo, register a different phone, a change Demo accounts
+    do not otherwise get (TD-127).
     """
     if (lic.get("status") or "") == STATUS_REVOKED:
         return None
@@ -67,23 +69,34 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     return user_ref, user
 
 
-def _restore_holder_mode(license_id: str, lic: dict, ref, scope: str, uid: str) -> None:
-    """Give the holder their mode back now that the lock they missed is gone.
+def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str) -> str:
+    """Finish a device change on the holder's account. The released device id, or "".
 
-    A device change is usually preceded by the holder trying the new device:
-    `revalidate_device_lock` finds the mismatch and demotes the account in
-    place, writing `mode: demo` onto the user document. Clearing the lock
-    afterwards would not undo that on its own — `revalidate_device_lock`
-    returns early for an account that reads as demo, so it would never reach
-    the bind branch and the holder would sit on Demo holding a live licence.
-    Re-stamping the mode here is what makes clearing the lock the whole
-    device change rather than half of one.
+    Clearing the lock is only one of the three bindings a device change moves:
 
-    Nothing is resurrected. The write is skipped wherever `_live_holder` says
-    so (a revoked licence, a seat that is revoked or on hold, an account that
-    has since moved to a different licence); and `effective_mode` still re-applies expiry,
-    grace and the floating-lease check to whatever is written here, so a
-    licence that has run out stays demo either way.
+    - **Mode.** A device change is usually preceded by the holder trying the
+      new device: `revalidate_device_lock` finds the mismatch and demotes the
+      account in place, writing `mode: demo` onto the user document. It returns
+      early for an account that reads as demo, so it would never reach the bind
+      branch and the holder would sit on Demo holding a live licence. The mode
+      is re-stamped here. Nothing is resurrected: `effective_mode` still
+      re-applies expiry, grace and the floating-lease check, so a licence that
+      has run out stays demo either way.
+    - **Registered device.** `POST /v1/devices/register` refuses any device but
+      `users/{uid}.activeDeviceId` with `device_conflict`, and nothing else
+      empties that field short of suspending the account. It is dropped here
+      and the old device retired (`_retire_device`), so the new phone can
+      register.
+    - **Release hold.** The released id is stamped (`releasedDeviceId`,
+      `releasedAt`) so registration can hold it off for
+      `DEVICE_RELEASE_HOLD_HOURS`: the old phone's upload worker re-registers as
+      soon as it reads `device_not_active`, and would otherwise take the account
+      straight back (`repo.devices.released_device_held`).
+
+    One read of the user and one batch, so the mode and the release land
+    together. Nothing is written where `_live_holder` says no: a revoked
+    licence, a seat that is revoked or on hold, an account that has moved to a
+    different licence.
 
     Deliberately outside the caller's transaction: reading `users/{uid}` and
     then writing it inside one takes a lock on that document, which is what
@@ -92,55 +105,26 @@ def _restore_holder_mode(license_id: str, lic: dict, ref, scope: str, uid: str) 
     """
     live = _live_holder(license_id, lic, ref, scope, uid)
     if live is None:
-        return
-    user_ref, _ = live
-    user_ref.update({
+        return ""
+    user_ref, user = live
+    patch = {
         **_mode_patch(_license_mode(lic)),
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-    })
-
-
-def _release_holder_device(license_id: str, lic: dict, ref, scope: str, uid: str) -> None:
-    """Let the holder's next phone register, now that the lock has moved.
-
-    The licence lock is not the only binding. `POST /v1/devices/register`
-    refuses any device but `users/{uid}.activeDeviceId` with `device_conflict`,
-    and nothing else empties that field short of suspending the account. So a
-    cleared lock used to leave the holder signed in to Firebase on the new
-    phone and refused at registration: the device change never happened.
-
-    The old device is retired the way `register_device` retires a superseded
-    one, so its id stops counting against another account. Guarded by the
-    same `_live_holder` as `_restore_holder_mode`: a revoked licence, a seat
-    that is revoked or on hold, and an account that has moved to a different
-    licence all keep their binding.
-
-    The released id is stamped on the user (`releasedDeviceId`, `releasedAt`)
-    so registration can hold it off for `DEVICE_RELEASE_HOLD_HOURS`: the old
-    phone's upload worker re-registers as soon as it reads `device_not_active`,
-    and would otherwise take the account straight back
-    (`repo.devices.released_device_held`).
-    """
-    live = _live_holder(license_id, lic, ref, scope, uid)
-    if live is None:
-        return
-    user_ref, user = live
-    active = user.get("activeDeviceId") or ""
-    if not active:
-        return
+    }
+    released = user.get("activeDeviceId") or ""
     batch = db().batch()
-    batch.update(user_ref, {
-        "activeDeviceId": _base.firestore.DELETE_FIELD,
-        "releasedDeviceId": active,
-        "releasedAt": _now(),
-    })
-    device_ref = db().collection("devices").document(active)
-    if device_ref.get().exists:
-        batch.update(device_ref, {
-            "status": "SUPERSEDED",
-            "revokedAt": _base.firestore.SERVER_TIMESTAMP,
+    if released:
+        patch.update({
+            "activeDeviceId": _base.firestore.DELETE_FIELD,
+            "releasedDeviceId": released,
+            "releasedAt": _now(),
         })
+        device_ref = db().collection("devices").document(released)
+        if device_ref.get().exists:
+            _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
+    batch.update(user_ref, patch)
     batch.commit()
+    return released
 
 
 def clear_device_lock(license_id: str, uid: str = "", *,
@@ -154,11 +138,10 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     wins. Nothing is re-activated and nothing is typed.
 
     **Clearing is not revoking.** Entitlement, seat, lease and data are all
-    untouched; the lock goes empty and the holder's device binding is released
-    (`_release_holder_device`), so the new phone can register. A holder
-    demoted in place by the mismatch they hit on the new device gets their
-    mode back here — see `_restore_holder_mode`. Without either, clearing
-    would be half a device change.
+    untouched; the lock goes empty and the holder's device binding is released,
+    so the new phone can register. A holder demoted in place by the mismatch
+    they hit on the new device gets their mode back. Both are
+    `_settle_holder`; without it, clearing would be half a device change.
 
     `uid` selects the seat on an institution licence. An individual licence
     holds its lock on the licence document itself, so `uid` is ignored there.
@@ -172,7 +155,10 @@ def clear_device_lock(license_id: str, uid: str = "", *,
 
     On success the second element is the audit detail, including the device
     that was given up — the other half of the record `revalidate_device_lock`
-    writes when the replacement binds. On `device_change_too_soon` it is
+    writes when the replacement binds. `previousDeviceId` is the lock's device
+    and `releasedDeviceId` the registered one the account was signed out of;
+    they can differ, and either can be empty (a lock that never bound, an
+    account with nothing registered, or a holder `_settle_holder` skips). On `device_change_too_soon` it is
     `{"nextChangeAllowedAt": <ISO instant>}`, so the refusal can say when.
     """
     lic_snap = db().collection("licenses").document(license_id).get()
@@ -199,9 +185,8 @@ def clear_device_lock(license_id: str, uid: str = "", *,
             return not_found, None
         previous = (snap.to_dict() or {}).get("deviceIdLock") or ""
         ref.update({"deviceIdLock": "", "updatedAt": _base.firestore.SERVER_TIMESTAMP})
-        _restore_holder_mode(license_id, lic, ref, scope, uid)
-        _release_holder_device(license_id, lic, ref, scope, uid)
-        return "", {**detail, "previousDeviceId": previous}
+        released = _settle_holder(license_id, lic, ref, scope, uid)
+        return "", {**detail, "previousDeviceId": previous, "releasedDeviceId": released}
 
     now = _now()
     cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))
@@ -239,8 +224,8 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         }),
     )
     if not err:
-        _restore_holder_mode(license_id, lic, ref, scope, uid)
-        _release_holder_device(license_id, lic, ref, scope, uid)
+        cleared = {**(cleared or {}),
+                   "releasedDeviceId": _settle_holder(license_id, lic, ref, scope, uid)}
     return err, cleared
 
 
