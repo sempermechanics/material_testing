@@ -131,6 +131,7 @@ from .repo.devices import (  # noqa: F401
     get_device,
     issue_nonce,
     register_device,
+    released_device_held,
     user_has_active_device,
 )
 from .repo.account import (  # noqa: F401

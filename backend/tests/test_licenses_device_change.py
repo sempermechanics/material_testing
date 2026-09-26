@@ -271,6 +271,85 @@ async def test_after_a_clear_the_new_phone_registers_over_http(client, monkeypat
     assert store._data["users"]["dev-user"]["activeDeviceId"] == "and-newphone1"
 
 
+# The released phone must not take the account straight back. Its upload
+# worker re-registers as soon as a signed call reads `device_not_active`, which
+# the clear has just made every call from it read.
+
+
+def test_a_clear_holds_the_released_phone_off(store):
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+
+    user = store._data["users"]["solo-1"]
+    assert user["releasedDeviceId"] == "old-phone"
+    assert repo.released_device_held(user, "old-phone") is True
+    assert repo.released_device_held(user, "new-phone") is False
+
+
+def test_the_hold_runs_out(store, monkeypatch):
+    user = {"releasedDeviceId": "old-phone",
+            "releasedAt": datetime.now(timezone.utc)
+            - timedelta(hours=settings.DEVICE_RELEASE_HOLD_HOURS, minutes=1)}
+    assert repo.released_device_held(user, "old-phone") is False
+
+    user["releasedAt"] = datetime.now(timezone.utc)
+    monkeypatch.setattr(settings, "DEVICE_RELEASE_HOLD_HOURS", 0)
+    assert repo.released_device_held(user, "old-phone") is False
+
+
+def _as_dev_user(store, monkeypatch):
+    monkeypatch.setattr(deps, "_DEV_USER", dict(store._data["users"]["dev-user"]))
+
+
+@pytest.mark.asyncio
+async def test_the_old_phone_cannot_take_the_account_back(client, monkeypatch):
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {}
+    _dev_user_holds(store, monkeypatch)
+    _registered_on(store, "dev-user", "and-oldphone1")
+    _as_dev_user(store, monkeypatch)
+    assert (await client.post("/v1/licenses/unbind")).status_code == 200
+    _as_dev_user(store, monkeypatch)
+    old_phone = {"deviceId": "and-oldphone1", "publicKeyPem": _ec_pem()}
+
+    # What the old phone's upload worker does after `device_not_active`.
+    refused = await client.post("/v1/devices/register", json=old_phone)
+
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == "device_conflict"
+    assert "activeDeviceId" not in store._data["users"]["dev-user"]
+    new_phone = {"deviceId": "and-newphone1", "publicKeyPem": _ec_pem()}
+    assert (await client.post("/v1/devices/register", json=new_phone)).status_code == 201
+    user = store._data["users"]["dev-user"]
+    assert user["activeDeviceId"] == "and-newphone1"
+    assert "releasedDeviceId" not in user and "releasedAt" not in user
+
+
+@pytest.mark.asyncio
+async def test_the_old_phone_comes_back_once_the_hold_runs_out(client, monkeypatch):
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {}
+    _dev_user_holds(store, monkeypatch)
+    _registered_on(store, "dev-user", "and-oldphone1")
+    _as_dev_user(store, monkeypatch)
+    assert (await client.post("/v1/licenses/unbind")).status_code == 200
+    store._data["users"]["dev-user"]["releasedAt"] -= timedelta(
+        hours=settings.DEVICE_RELEASE_HOLD_HOURS, minutes=1)
+    _as_dev_user(store, monkeypatch)
+
+    old_phone = {"deviceId": "and-oldphone1", "publicKeyPem": _ec_pem()}
+    resp = await client.post("/v1/devices/register", json=old_phone)
+
+    assert resp.status_code == 201, resp.text
+    user = store._data["users"]["dev-user"]
+    assert user["activeDeviceId"] == "and-oldphone1"
+    assert "releasedDeviceId" not in user
+
+
 def test_clearing_a_lock_on_a_licence_that_does_not_exist(store):
     store._data["users"] = {}
     assert repo.clear_device_lock("no-such-licence")[0] == "license_not_found"
