@@ -754,7 +754,7 @@ approves/revokes accounts):
 - **One licence per person.** An address that already holds or is promised a
   live licence — its own, an institution seat, or a pending invite — is
   refused with `409 email_already_licensed: <licence id>`, and the desk shows
-  that licence. To renew, Extend it; to replace it, revoke it first, then
+  that licence. To renew, use Edit on it; to replace it, revoke it first, then
   mint. A revoked licence, one past its grace, and the Demo key do not count.
   The same rule refuses a key typed in the app (`409 already_licensed`) and an
   IT roster add (`409 member_already_licensed`). To change the person's
@@ -803,24 +803,37 @@ a new key or asking anyone to re-activate. Send only the fields that change;
 way. A `maxSeats` below the members already on an assigned institution roster
 is refused (`422 max_seats_below_used`) — it would remove nobody and only make
 the count read "12 of 10"; remove members first. A floating licence's pool may
-be smaller than its roster. What you cannot change is who the key is *for*: `kind` and the
-email/device/domain locks are fixed at mint, and a key that needs different
-locks is a new key.
+be smaller than its roster. On the desk every one of these is the row's
+**Edit** dialog, which sends only what changed.
 
-A new `expiresAt` must be **later** than the one in force. The request is
-refused with `422` and nothing changes if the date has already passed
-(`expiry_in_past`), is earlier than the current expiry
-(`expiry_before_current`), or the key is perpetual (`license_perpetual` — it
-has no expiry to extend). To end a key early, revoke it. The operator desk
-reports the expiry the server stored.
+**Upgrades and downgrades in place.** On an institution licence, `seating`
+switches between assigned and floating (floating needs `maxSeats`; assigned
+needs `maxSeats` to cover the roster, and clears every lease), and
+`adminEmails` replaces the IT contacts. `perpetual: true` removes the end
+date. What you cannot change is who the key is *for*: `kind` and the
+email/device/domain locks are fixed at mint — except **To institution**
+(`POST /v1/admin/licenses/{licenseId}/convert` with `domainLock`,
+`adminEmails`, `maxSeats`, `seating`): a new institution key carrying the
+individual licence's terms, the holder moved onto its roster on the same
+device, and the individual licence revoked and marked replaced. The holder's
+address must be on the domain. The new key is shown once.
+
+A new `expiresAt` must normally be **later** than the one in force. The
+request is refused with `422` and nothing changes if the date has already
+passed (`expiry_in_past`), is earlier than the current expiry
+(`expiry_before_current`), or the key is perpetual (`license_perpetual`). A
+**downgrade** agreed with the customer — an earlier end, or an end on a
+perpetual key — is sent with `"allowShorten": true`; the desk asks for the key
+to be typed first. A past date is refused even then: to end a key now, revoke
+it. The operator desk reports the expiry the server stored.
 
 **`maxAnalyses` is per person, not per licence**, and is normally left empty:
 empty gives every holder the licensed default (`LICENSED_MAX_SESSIONS_PER_USER`,
 999). On the operator desk it is "Cloud analyses per person", and the table's
 "Analyses / person" column shows it. A value below the demo allowance
 (`DEMO_MAX_ANALYSES`, 25) is refused, and the backend floors any older one at
-that allowance. To remove a cap, use the row's **Cap** button with an empty
-value, or:
+that allowance. To remove a cap, empty "Cloud analyses per person" in the
+row's **Edit** dialog, or:
 
 ```
 PATCH /v1/admin/licenses/{licenseId}
@@ -832,7 +845,7 @@ PATCH /v1/admin/licenses/{licenseId}
 allowance (`DEMO_MAX_ANALYSES`, 25) whatever the key stores
 (`resolve_user_config` reads a licence cap only for a licensed account). A
 `maxAnalyses` on a demo key is refused with `422 cap_on_demo_key` and nothing
-changes. On the desk a demo row's **Cap** button is disabled and its
+changes. On the desk a demo row's **Edit** dialog has the field disabled and its
 "Analyses / person" column reads "demo (25)". To give that person more
 analyses, issue them a licensed key. `clearMaxAnalyses` is still accepted on a
 demo key; use it to remove a cap stored before this refusal existed, which

@@ -4,8 +4,8 @@ from .. import audit, errors, firestore_repo as repo, statuses
 from .. import rate_limit
 from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
-from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION, seat_cap_below_roster
-from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
+from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
+from ..models import AdminLicenseConvert, AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
 from ..validation import AccessStatus, DocumentId, LicenceSearch, PageToken, Uid
 from ._shared import clamp_page_size, page_block
 
@@ -211,22 +211,20 @@ def admin_update_license(
     `maxAnalyses` on a demo-mode key is refused (422 `cap_on_demo_key`): a
     demo holder gets `DEMO_MAX_ANALYSES` whatever the key stores, so the edit
     would answer 200 and change nothing. `clearMaxAnalyses` is still allowed.
+
+    Upgrades and downgrades in place: `perpetual`, `allowShorten` with an
+    earlier `expiresAt`, and on an institution licence `seating`, `maxSeats`
+    and `adminEmails` (`license_edit_error` has every refusal). Unknown
+    fields are a 422, not silently dropped.
     """
     patch = body.model_dump(exclude_none=True)
     clear_lock = patch.pop("clearDeviceLock", False)
-    # Every check below is made before the lock is touched, so a refused edit
-    # never leaves half the request applied. One read serves them all; each
-    # used to read the licence again. `update_license` checks again against
+    # Every check is made before the lock is touched, so a refused edit never
+    # leaves half the request applied. `update_license` checks again against
     # what it reads, for an edit that lands in between.
-    checked = body.maxSeats is not None or body.maxAnalyses is not None or "expiresAt" in patch
-    current = repo.get_license(license_id) if checked else None
-    if current:
-        if body.maxSeats is not None and seat_cap_below_roster(current, body.maxSeats):
-            raise HTTPException(422, errors.MAX_SEATS_BELOW_USED)
-        # A cap on a demo key changes nothing the holder sees.
-        err = repo.analysis_cap_error(current) if body.maxAnalyses is not None else ""
-        if not err and "expiresAt" in patch:
-            err = repo.expiry_change_error(current, patch["expiresAt"])
+    if clear_lock and patch:
+        current = repo.get_license(license_id)
+        err = repo.license_edit_error(current, patch) if current else ""
         if err:
             raise HTTPException(422, err)
     cleared = {}
@@ -254,6 +252,51 @@ def admin_update_license(
             detail={k: str(v) for k, v in patch.items()},
         )
     return updated
+
+
+@router.post(
+    "/v1/admin/licenses/{license_id}/convert",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
+def admin_convert_license(
+    license_id: DocumentId,
+    body: AdminLicenseConvert,
+    ctx=Depends(attested_or_mfa_admin),
+    admin=Depends(admin_user),
+):
+    """Device-attested, Semper-staff only. Replace an individual licence with
+    an institution licence carrying its terms (`repo/upgrade.py`).
+
+    The holder is seated on the new licence with their device lock, so
+    nothing changes for them but the roster they are on; someone not signed
+    in yet has their invite moved. The individual licence is then revoked
+    with `supersededBy` set. The new key is returned once, as a mint does.
+    """
+    code, out = repo.convert_to_institution(
+        license_id,
+        domain_lock=body.domainLock,
+        admin_emails=body.adminEmails,
+        max_seats=body.maxSeats,
+        seating=body.seating,
+        admin_uid=admin["uid"],
+    )
+    if code:
+        status = {
+            errors.LICENSE_NOT_FOUND: 404,
+            errors.LICENSE_REVOKED: 409,
+            errors.LICENSE_NOT_CONVERTIBLE: 409,
+            errors.CONVERT_DOMAIN_MISMATCH: 422,
+            errors.CLAIM_CONTENDED: 503,
+        }.get(code, 409)
+        raise HTTPException(status, code)
+    audit.record(
+        admin["uid"], action="ADMIN_LICENSE_CONVERT",
+        target={"type": "license", "id": license_id},
+        detail={"to": out["license"]["id"], "domainLock": body.domainLock,
+                "adminEmails": body.adminEmails, "maxSeats": body.maxSeats,
+                "seating": body.seating, "claimedByUid": out["claimedByUid"]},
+    )
+    return out
 
 
 @router.patch(

@@ -1,16 +1,22 @@
 """Licence administration by Semper staff: listing, renewal fan-out, whole-key revoke.
 """
 from .. import errors
+from ..config import settings
 from ..licenses import (
+    DURATION_PERPETUAL,
+    DURATION_TIMED,
     KIND_INSTITUTION,
     LIVE_STATUSES,
     MODE_DEMO,
     MODE_LICENSED,
+    SEATING_FLOATING,
     STATUS_REVOKED,
     as_utc,
     key_prefix,
     normalize_email,
     normalize_kind,
+    normalize_seating,
+    seat_cap_below_roster,
 )
 
 from . import _base
@@ -22,6 +28,7 @@ from ._base import (
     _license_mode,
     _mode_patch,
     _now,
+    _seat_lease_counted,
     _update_refs,
 )
 from .claims import (
@@ -163,7 +170,7 @@ class LicenseTermsRejected(Exception):
         self.code = code
 
 
-def expiry_change_error(lic: dict, expires_at) -> str:
+def expiry_change_error(lic: dict, expires_at, *, allow_shorten: bool = False) -> str:
     """Why this new `expiresAt` may not be applied to `lic`, or "".
 
     The edit route is the desk's Extend button, and every holder follows the
@@ -172,14 +179,19 @@ def expiry_change_error(lic: dict, expires_at) -> str:
     on a perpetual licence it turned an unending licence into a timed one
     with no grace, because perpetual licences are minted without
     `graceDays`. Each of those was then reported on the desk as "extended".
-    Ending a licence early is `revoke`; converting a perpetual licence is a
-    new key.
+    Ending a licence now is `revoke`.
+
+    `allow_shorten` is the desk saying, with a typed confirmation, that the
+    shorter term or the end date on a perpetual licence is meant: a downgrade
+    agreed with the customer. A date already past is refused even then.
     """
     new = as_utc(expires_at)
     if new is None:
         return ""
     if new <= _now():
         return errors.EXPIRY_IN_PAST
+    if allow_shorten:
+        return ""
     current = as_utc(lic.get("expiresAt"))
     if current is None:
         return errors.LICENSE_PERPETUAL
@@ -203,6 +215,38 @@ def analysis_cap_error(lic: dict) -> str:
     return ""
 
 
+_ROSTER_FIELDS = ("maxSeats", "seating", "adminEmails")
+
+
+def license_edit_error(lic: dict, patch: dict) -> str:
+    """Why this edit may not be applied to `lic`, or "". Every refusal an
+    edit can meet, decided before anything is written.
+
+    `patch` is the request as sent: `allowShorten` rides along with the
+    fields it qualifies.
+    """
+    institution = normalize_kind(lic.get("kind")) == KIND_INSTITUTION
+    if not institution and any(patch.get(f) is not None for f in _ROSTER_FIELDS):
+        return errors.INSTITUTION_ONLY
+    if patch.get("maxAnalyses") is not None:
+        err = analysis_cap_error(lic)
+        if err:
+            return err
+    err = expiry_change_error(lic, patch.get("expiresAt"),
+                              allow_shorten=bool(patch.get("allowShorten")))
+    if err:
+        return err
+    if institution and (patch.get("maxSeats") is not None or patch.get("seating")):
+        after = {**lic, **{f: patch[f] for f in ("maxSeats", "seating") if patch.get(f) is not None}}
+        if normalize_seating(after.get("seating")) == SEATING_FLOATING and after.get("maxSeats") is None:
+            return errors.FLOATING_NEEDS_MAX_SEATS
+        # Switching to assigned makes `maxSeats` cap the roster, so it has to
+        # hold everyone already on it — the same rule as lowering it.
+        if seat_cap_below_roster(after, after.get("maxSeats")):
+            return errors.MAX_SEATS_BELOW_USED
+    return ""
+
+
 def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     """Change a license's terms and push them to everyone already holding it.
 
@@ -217,10 +261,15 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     seats are skipped: they hold no entitlement to refresh, and touching them
     would quietly resurrect a revoked member on the next resolve.
 
+    `perpetual` drops the expiry and grace. An expiry on a perpetual licence
+    (with `allowShorten`) makes it timed, with the fleet default grace unless
+    one is sent. A seating switch zeroes `leasesActive`; leaving floating also
+    clears every lease, on the seats and on the holders, since an assigned
+    seat needs none.
+
     Returns the updated public license, or None if there is no such license.
-    Raises `LicenseTermsRejected`, before writing anything, for an expiry
-    that `expiry_change_error` refuses or a cap that `analysis_cap_error`
-    refuses.
+    Raises `LicenseTermsRejected`, before writing anything, for anything
+    `license_edit_error` refuses.
     """
     ref = db().collection("licenses").document(license_id)
     snap = ref.get()
@@ -229,36 +278,64 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     lic = snap.to_dict() or {}
 
     update = {k: v for k, v in patch.items() if v is not None}
-    if "maxAnalyses" in update:
-        err = analysis_cap_error(lic)
-        if err:
-            raise LicenseTermsRejected(err)
+    err = license_edit_error(lic, update)
+    if err:
+        raise LicenseTermsRejected(err)
+    allow_shorten = update.pop("allowShorten", False)
     clear_cap = bool(update.pop("clearMaxAnalyses", False))
     if clear_cap:
         update["maxAnalyses"] = _base.firestore.DELETE_FIELD
+    if update.pop("perpetual", False):
+        update.update({
+            "expiresAt": _base.firestore.DELETE_FIELD,
+            "graceDays": _base.firestore.DELETE_FIELD,
+            "duration": DURATION_PERPETUAL,
+        })
+    elif "expiresAt" in update:
+        update["duration"] = DURATION_TIMED
+        if allow_shorten and lic.get("graceDays") is None and "graceDays" not in update:
+            # A perpetual licence was minted without a grace; one given an
+            # end date gets the fleet default, as a timed mint does.
+            update["graceDays"] = settings.LICENSE_GRACE_DAYS_DEFAULT
+    old_seating = normalize_seating(lic.get("seating"))
+    if "seating" in update:
+        update["seating"] = normalize_seating(update["seating"])
+        if update["seating"] == old_seating:
+            del update["seating"]
+        else:
+            update["leasesActive"] = 0
     if not update:
         return _license_public(license_id, lic)
-    err = expiry_change_error(lic, update.get("expiresAt"))
-    if err:
-        raise LicenseTermsRejected(err)
-    if "graceDays" in update:
+    if "graceDays" in update and update["graceDays"] is not _base.firestore.DELETE_FIELD:
         update["graceDays"] = max(0, int(update["graceDays"]))
     update["updatedAt"] = _base.firestore.SERVER_TIMESTAMP
     update["updatedByUid"] = admin_uid
     ref.update(update)
 
-    merged = {**lic, **update}
-    if clear_cap:
-        # The sentinel is for Firestore; the mirror and the response read the
-        # licence as it now stands, without a cap.
-        merged.pop("maxAnalyses", None)
+    # The sentinels are for Firestore; the mirror and the response read the
+    # licence as it now stands.
+    merged = {k: v for k, v in {**lic, **update}.items() if v is not _base.firestore.DELETE_FIELD}
+    left_floating = old_seating == SEATING_FLOATING and "seating" in update
+    if left_floating:
+        _clear_seat_leases(ref)
     mirror = _license_mirror_patch(merged)
     # Only the terms mirrored onto holders need to reach them. A note, a
     # support date or a seat cap changes nothing on any user document, and
     # used to rewrite every one of them anyway.
     if mirror != _license_mirror_patch(lic):
-        _refresh_license_mirrors(_license_holder_uids(ref, merged), license_id, mirror)
+        extra = {"leaseExpiresAt": _base.firestore.DELETE_FIELD} if left_floating else {}
+        _refresh_license_mirrors(_license_holder_uids(ref, merged), license_id,
+                                 {**mirror, **extra})
     return _license_public(license_id, merged)
+
+
+def _clear_seat_leases(ref) -> None:
+    """Drop every lease on a licence that no longer uses them."""
+    _update_refs([
+        (doc.reference, {**_lease_clear_patch(), "updatedAt": _base.firestore.SERVER_TIMESTAMP})
+        for doc in ref.collection("seats").stream()
+        if _seat_lease_counted(doc.to_dict() or {})
+    ])
 
 
 def _license_holder_uids(ref, lic: dict) -> list[str]:

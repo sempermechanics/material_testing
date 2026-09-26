@@ -122,6 +122,17 @@ MAX_SEATS_BELOW_USED = "max_seats_below_used"
 # so the edit was stored, mirrored and reported as done while the app kept
 # showing "N of 25". Raising a demo account's allowance is a licensed key.
 CAP_ON_DEMO_KEY = "cap_on_demo_key"
+# 422 on a staff licence edit: `maxSeats`, `seating` or `adminEmails` on an
+# individual licence, which has no roster. Converting one is its own route.
+INSTITUTION_ONLY = "institution_only"
+# 422: a floating licence with no `maxSeats`. Nobody would ever be refused a
+# lease, so it would be an assigned licence with extra steps.
+FLOATING_NEEDS_MAX_SEATS = "floating_needs_max_seats"
+# Converting an individual licence to an institution one. `not_convertible`
+# is an institution licence or a Demo key (409); `domain_mismatch` is a
+# holder whose address is not on the new licence's domain (422).
+LICENSE_NOT_CONVERTIBLE = "license_not_convertible"
+CONVERT_DOMAIN_MISMATCH = "convert_domain_mismatch"
 
 # --- institution invites ---------------------------------------------------
 # An invite reserves a roster place for an address with no account yet. It is

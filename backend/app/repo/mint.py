@@ -86,6 +86,9 @@ def _license_public(license_id: str, data: dict) -> dict:
         "supportUntil": data.get("supportUntil"),
         "maxAnalyses": data.get("maxAnalyses"),
         "note": data.get("note") or "",
+        # Set when an individual licence was converted to an institution one
+        # (repo/upgrade.py): the id of the licence that replaced it.
+        "supersededBy": data.get("supersededBy") or "",
     }
 
 

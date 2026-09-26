@@ -167,7 +167,7 @@ key prefix is also searched on the backend (`q=`), so a licence on a page
 nobody loaded is found. One licence per person: the backend refuses an
 individual mint for an address that already holds or is promised a live
 licence (`409 email_already_licensed: <id>`), and the desk puts that licence
-on screen with the address in the filter — renewal is Extend on it. The IT
+on screen with the address in the filter — renewal is Edit on it. The IT
 and operator rosters say the same for `member_already_licensed`. Every mint
 says whether the licence reached the person: attached, waiting for their
 first sign-in, or not delivered and why.
