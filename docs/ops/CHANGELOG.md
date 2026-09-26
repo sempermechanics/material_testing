@@ -26,10 +26,11 @@ measured δ to the last over the load steps it was fitted to, in the viewer and
 the lab-report PDF alike (TD-94). The graph no longer shows where the fit meets
 δ = 0. Checked on the Pixel 6 with a debug build of `9b326883`: `concrete_00`
 reads 21360 / 15625 / 9889 / 4153 / -1582 N in full, the slope line spans
-0.93 → 1.6 mm, and E is unchanged at 2.48 / 1.90 GPa. The -1582 N is the
-plot's 8 % head-room below the data's (0, 0) (`Y_MARGIN_FRACTION`), not the
-fit. The lab-report PDF was not checked on the phone; Tier 3 covered it on the
-emulator. Ships with the next app release.
+0.951 → 1.631 mm (the two load steps), and E is unchanged at 2.48 / 1.90 GPa.
+The -1582 N is the plot's 8 % head-room below the data's (0, 0)
+(`Y_MARGIN_FRACTION`), not the fit. The lab-report PDF from the same build matches: its graph reads the same
+ticks in full, its slope line spans the same load steps, and its Results give
+1.90 / 2.48 GPa. Ships with the next app release.
 
 ## 2026-09-26 — material_testing: bending δ signed by the load, not the tap order (#51)
 
