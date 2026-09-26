@@ -399,7 +399,9 @@ pre-licensing documents)
       `v202609230845`; `indic-api`, its revisions and the older gateway
       configs are deleted. Rollback: `gcloud run deploy semper-api --image
       …/cloud-run-source-deploy/semper-api:rollback-c0c0ce3` (the
-      `c0c0ce3` image, kept under the new package).
+      `c0c0ce3` image, kept under the new package). [Note 2026-09-26:
+      `c0c0ce3` predates ADR-007 and one licence per person; the rollback
+      target is now `semper-api:rollback-prev`, which each deploy moves.]
 - [ ] A signed call from a new build carries a `t1.` nonce and no
       `POST /v1/challenge` precedes it (next app release).
 - [x] A session over `INLINE_PROVISION_MAX_FILES` (8) files reaches

@@ -116,6 +116,33 @@ def test_firestore_indexes_declare_ttl_policies():
         ]
 
 
+def test_registry_cleanup_policy_keeps_serving_and_rollback_images():
+    # Applied to the live registry by hand (BACKEND_SETUP_GCP.md A7), so a dropped
+    # rule or a mistyped prefix would otherwise reach it unchecked. The keep rules
+    # are all that stop the 15-day delete: deploy-backend.yml moves `serving` and
+    # `rollback-prev`, and Cloud Run needs a revision's image at every cold start.
+    rules = {
+        rule["name"]: rule
+        for rule in json.loads(
+            (ROOT / "backend" / "deploy" / "ar-cleanup-policy.json").read_text(encoding="utf-8")
+        )
+    }
+    assert set(rules) == {
+        "delete-older-than-15d", "keep-serving", "keep-rollback-tags", "keep-recent-5",
+    }
+    assert rules["delete-older-than-15d"]["action"] == {"type": "Delete"}
+    assert rules["delete-older-than-15d"]["condition"] == {"tagState": "any", "olderThan": "15d"}
+    for name, prefixes in (("keep-serving", ["serving", "latest"]),
+                           ("keep-rollback-tags", ["rollback"])):
+        assert rules[name]["action"] == {"type": "Keep"}
+        assert rules[name]["condition"] == {"tagState": "tagged", "tagPrefixes": prefixes}
+    assert rules["keep-recent-5"]["action"] == {"type": "Keep"}
+    assert rules["keep-recent-5"]["mostRecentVersions"] == {"keepCount": 5}
+    workflow = (ROOT / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8")
+    assert 'pin "$NEW" serving' in workflow
+    assert 'pin "$OLD" rollback-prev' in workflow
+
+
 def test_firestore_rules_are_deny_all_and_deployable():
     rules = (ROOT / "firestore.rules").read_text(encoding="utf-8")
     assert "allow read, write: if false;" in rules

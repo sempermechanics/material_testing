@@ -227,8 +227,8 @@ billed, so the registry grows without bound. Once the first deploy has created b
 the two rules below. Run them as a project owner: the deploy SA cannot change a repository.
 
 ```bash
-# Registry: delete versions more than 15 days old, except the image tagged `latest`
-# (the one serving), any tagged `rollback…` and each package's five newest versions.
+# Registry: delete versions more than 15 days old, except images tagged `serving` or
+# `latest`, any tagged `rollback…` and each package's five newest versions.
 gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy \
   --location=$REGION --project=$PROJECT \
   --policy=backend/deploy/ar-cleanup-policy.json --dry-run
@@ -247,8 +247,8 @@ gcloud artifacts docker images list \
   --include-tags --sort-by=~CREATE_TIME
 ```
 
-Every version older than 15 days goes, unless it is tagged `latest`, has a tag starting
-`rollback`, or is one of its package's five newest. Then re-run the first command with
+Every version older than 15 days goes, unless it is tagged `serving` or `latest`, has a tag
+starting `rollback`, or is one of its package's five newest. Then re-run the first command with
 `--no-dry-run` in place of `--dry-run`.
 
 **Changing the rules later.** `--dry-run` is a setting on the repository, not on the one
@@ -267,12 +267,29 @@ gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy \
 Artifact Registry does not record when an image was last pulled, so "unused" here means
 "uploaded more than 15 days ago". The keep rules are there because Cloud Run needs a
 revision's image each time it starts an instance, and at `--min-instances 0` that happens
-after every idle spell. A `rollback…` tag is a hand-pinned rollback image (the ones named
-in [CHANGELOG.md](../ops/CHANGELOG.md)); it is kept until someone removes the tag with
-`gcloud artifacts docker tags delete`. No other earlier revision is kept for rollback:
-once its image is more than 15 days old and outside its package's five newest, it is
-deleted, and routing traffic back to that revision gives it no image to start from. Tag an
-image `rollback-…` to keep it as a target. The Firestore backup bucket is not covered: it
+after every idle spell.
+
+**Which tags the deploy moves.** A source deploy tags each image it builds `latest` before
+the smoke, so `latest` is the newest build, not necessarily the one serving. After the
+promote, `deploy-backend.yml` tags by digest: `serving` on the image now taking traffic,
+and `rollback-prev` on the image of the revision it replaced. So each package keeps the
+serving image and one rollback target, and a failed smoke leaves `serving` on the image
+still serving. If that step fails (an error annotation on the run; the deploy stands),
+re-pin by hand:
+
+```bash
+IMG=$(gcloud run revisions describe <revision> --region=$REGION --format='value(status.imageDigest)')
+gcloud artifacts docker tags add "$IMG" "${IMG%@*}:serving"   # or :rollback-prev
+```
+
+**Hand-pinned `rollback-<sha>` tags** keep one known-good release beyond `rollback-prev`.
+Each is kept until someone deletes it with `gcloud artifacts docker tags delete`, so
+whoever adds one owns it: name it after its commit, record it in
+[CHANGELOG.md](../ops/CHANGELOG.md), and delete it once a Firestore data change (a field
+that release would not write, or would misread) means it should no longer serve.
+`rollback-prev` needs none of this, since each deploy moves it. No other earlier revision
+is kept: once its image is more than 15 days old and outside its package's five newest, it
+is deleted, and routing traffic back to that revision gives it no image to start from. The Firestore backup bucket is not covered: it
 has its own retention ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
 
 **Check:** `gcloud artifacts repositories list-cleanup-policies cloud-run-source-deploy
