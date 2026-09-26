@@ -454,8 +454,8 @@ recording. Notes on individual rows:
   offers the readable 0:09, and extracts 1 + 18 frames.
 - 5.1a.10: a 20-frame 10 fps clip gives exactly 1 + 19.
 
-MP4 frames keep the clip's 16–235 luma, while MJPEG AVI frames are full range
-(TD-134).
+MP4 frames kept the clip's 16–235 luma, while MJPEG AVI frames are full range
+(TD-134; since fixed, MP4 and codec AVI frames are stretched to 0–255).
 
 **5.1a.16 on the Pixel 6 (`ddb5b0de`, 2026-09-26)** with the 29 s synthetic
 clip and its load log (*Log started after the first frame* = 2) passes. Key

@@ -160,8 +160,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Owed.**
   - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a): a phone-recorded MP4
     (5.1a.12) and a real UTM clip. The rest of §5.1a, including Key frames with loads
-    (5.1a.16), passes on a Pixel 6 with synthetic clips (2026-09-26); MP4 luma stays
-    16–235 (TD-134). The Galaxy S21+'s demo account is over its cap (45 / 25), so a new
+    (5.1a.16), passes on a Pixel 6 with synthetic clips (2026-09-26). MP4 and codec AVI
+    frames are now stretched to full range (TD-134), not yet re-measured on a phone. The Galaxy S21+'s demo account is over its cap (45 / 25), so a new
     analysis there needs a licensed key or deletes first.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
