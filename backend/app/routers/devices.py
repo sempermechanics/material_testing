@@ -18,6 +18,14 @@ def register_device(body: DeviceReg, user=Depends(current_user)):
     # fine — it just heals the stored public key.)
     if active and active != body.deviceId:
         raise HTTPException(409, errors.DEVICE_CONFLICT)
+    # A device-lock clear just released THIS phone for a new one. Its upload
+    # worker re-registers on `device_not_active`; letting it would hand the
+    # account back and refuse the new phone. Installed builds read any 409 here
+    # as "bound to a different device", which is what the old phone now is.
+    if not active and repo.released_device_held(user, body.deviceId):
+        audit.record(user["uid"], body.deviceId, action="DEVICE_REGISTER", outcome="DENIED",
+                     detail={"reason": "released"})
+        raise HTTPException(409, errors.DEVICE_CONFLICT)
     # This DEVICE is already bound to a different account. Enforces one-account-
     # per-device: a second person can't sign in on someone else's phone.
     existing = repo.get_device(body.deviceId)

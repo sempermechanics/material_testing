@@ -176,6 +176,14 @@ class Settings:
     # disable the wait entirely.
     SELF_DEVICE_CHANGE_COOLDOWN_DAYS = _env_int("SELF_DEVICE_CHANGE_COOLDOWN_DAYS", "30")
 
+    # How long a phone released by a device-lock clear is refused if it tries
+    # to register again. The old phone's upload worker re-registers whenever it
+    # reads `device_not_active`, so without a hold it takes the account back
+    # before the new phone signs in. Registering any other device ends the hold
+    # at once; after it, the old phone may come back (a mistaken clear strands
+    # nobody). Set to 0 to disable it.
+    DEVICE_RELEASE_HOLD_HOURS = _env_int("DEVICE_RELEASE_HOLD_HOURS", "24")
+
     # --- App Check (device callers only) ------------------------------------
     # The Firebase Web API key ships inside the APK (google-services.json) and
     # is an identifier, not a secret, so anyone can mint a genuine ID token from
