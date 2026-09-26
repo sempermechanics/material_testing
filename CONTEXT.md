@@ -102,11 +102,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-26)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-36227358113-1`, from `cd7d5db6`, scales to
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36233033808-1`, from `0f9244f1`, scales to
   zero) behind API Gateway `semper-gw` (config `v202609260522-60`, deployed by CI, ADR-006);
   staging `semper-api-staging` behind `semper-gw-staging` (CI since #258); project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
-  #240 (cost), the licence desk (backend and console) and the device-change fix (#248, #249) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
+  #240 (cost), the licence desk (backend and console), the device-change fixes (#248, #249,
+  #255, #261) and pinned serving/rollback images (#263) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
@@ -138,12 +139,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   shares `RestoreStart` with Settings, and announces a failed restore once (`RestoreFailureLedger`).
   Pixel 6, 3 at once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud
   backups (#235, merged, awaiting release):** a card offers backups this phone has no row for (`CloudBackupListing`).
-- **Device-clear follow-ups (#261, merged):** one write for the mode and the release, the
-  signed-out phone audited (TD-128 to TD-132). Needs a backend and console deploy.
-- **Only the registered phone takes the lock (in review):** a phone refused at registration
+- **Only the registered phone takes the lock (#264, merged, on staging):** a phone refused at registration
   took a cleared lock and demoted the registered one to Demo (Pixel 6, 2026-09-26). The lock
   now follows registration, a clear keeps a registered phone the lock did not name, and a
-  typed key follows the same rule. Needs a backend deploy, then one **New device** for that account.
+  typed key follows the same rule. Needs a production deploy, then one **New device** for that account.
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),

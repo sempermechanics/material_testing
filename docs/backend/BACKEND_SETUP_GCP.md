@@ -274,8 +274,11 @@ the smoke, so `latest` is the newest build, not necessarily the one serving. Aft
 promote, `deploy-backend.yml` tags by digest: `serving` on the image now taking traffic,
 and `rollback-prev` on the image of the revision it replaced. So each package keeps the
 serving image and one rollback target, and a failed smoke leaves `serving` on the image
-still serving. If that step fails (an error annotation on the run; the deploy stands),
-re-pin by hand:
+still serving. Moving a tag that already exists needs `artifactregistry.tags.delete`,
+which `roles/artifactregistry.writer` lacks, so the deploy SA also holds
+`roles/artifactregistry.repoAdmin` on this repository alone
+([CLOUD_ARCHITECTURE_GCP.md](CLOUD_ARCHITECTURE_GCP.md) has the grant). If the step fails
+(an error annotation on the run; the deploy stands), re-pin by hand:
 
 ```bash
 IMG=$(gcloud run revisions describe <revision> --region=$REGION --format='value(status.imageDigest)')
