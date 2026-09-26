@@ -12,6 +12,27 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — Firestore TTL policies declared as field overrides (#242)
+
+`scripts/deploy-firestore.sh indexes` had created the licence desk's composite indexes and
+then stopped: the Firebase CLI lists each live TTL policy as a field override, and in
+non-interactive mode it will not leave one that the indexes file omits ("Pass the --force
+flag"). `--force` would have deleted the three policies on the `(default)` database, which
+staging and production share. `backend/firestore.indexes.json` now declares
+`challenges.expireAt`, `deleted_licenses.purgeAt` and `deleted_seats.purgeAt` under
+`fieldOverrides` with `"ttl": true`. Each one restates the field's live single-field
+indexes (ascending, descending, array-contains), because an empty `indexes` list turns
+single-field indexing off. `test_firestore_indexes_declare_ttl_policies` checks the three.
+The script header notes a Firebase CLI on Node >= 20 (Git Bash, not WSL) and warns off
+`--force`. BACKEND_SETUP_CONSOLE.md §3a and §3b, BACKEND_SETUP_GCP.md A2b and
+CLOUD_ARCHITECTURE_GCP.md §5 were corrected to match the file.
+
+Deployed without `--force` from the PR head (`6a42c879`, whose indexes file and script
+match `main`): `firebase deploy --only firestore:indexes --non-interactive --debug` exited 0,
+skipped all four composite indexes and all three overrides, and sent Firestore no writes.
+Afterwards all three policies were still `ACTIVE` and still inherited the default index
+config, and all four composite indexes were `READY`.
+
 ## 2026-09-26 — Backend and console deploy: scale to zero (#240), licence desk (#236–#239)
 
 Production `semper-api-36220429126-1` from `141ddcae`. Staging went first: run 36219875207 →
