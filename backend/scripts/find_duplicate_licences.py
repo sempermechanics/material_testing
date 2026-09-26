@@ -14,7 +14,10 @@ not revoked, not past its grace, not a Demo key.
 
 Read-only. Reads every licence, seat, invite and user document once.
 
-    python scripts/find_duplicate_licences.py --project indic-prod
+    python scripts/find_duplicate_licences.py --project indicvision-dic-app
+
+Staging and production run in this one project against the same default
+database, so there is no separate staging run.
 """
 from __future__ import annotations
 

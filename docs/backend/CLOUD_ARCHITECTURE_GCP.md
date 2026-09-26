@@ -737,6 +737,17 @@ backoff, so an upload survives losing connectivity or the app being killed.
 Cloud sync stays off entirely unless `INDIC_API_BASE_URL` is set at build time
 — see [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md) step C1.
 
+**A row reads PENDING only while an upload is coming.** A build with no
+backend (no API URL, or the emulator sign-in bypass) saves analyses as
+LOCAL_ONLY (`CloudSync.uploadsEnabled`), and a row still PENDING from a build
+that had one goes back to LOCAL_ONLY at the next reconcile or upload attempt
+(`CloudSync.settleWithoutBackend`); the backup buttons say cloud backup isn't
+set up. With a backend, every reconcile that lists the cloud queues PENDING
+rows again (`ExistingWorkPolicy.KEEP` leaves a running upload alone), unless
+**Save to cloud** is off. Before this, both kinds sat on "upload pending" for
+good: the worker returned success without uploading, and an upload deferred
+while the quota was unknown had nothing to start it.
+
 **The PENDING stamp lands before the upload is queued.** Both manual backup
 sites (`HomeActivity`, `SettingsActivity`) write
 `SessionRecord.SyncState.PENDING` and only then call
@@ -2035,10 +2046,14 @@ analysis are untouched; only the lock goes empty.
 binding, and until 2026-09-26 a clear left it naming the old phone, so the new
 one was refused at sign-in and never reached the lock. `_release_holder_device`
 now deletes it and retires the old `devices/{id}` document as `SUPERSEDED`,
-as `register_device` does for a replaced phone. It is guarded like
-`_restore_holder_mode`: an account that has moved to another licence keeps its
-binding. A demo account has no licence to clear, so it still cannot change
-phone (TD-126).
+as `register_device` does for a replaced phone. It shares `_live_holder` with
+`_restore_holder_mode`, so it acts only where the mode would be restored: a
+revoked licence, a seat that is revoked or on hold, and an account that has
+moved to another licence all keep their binding. Each of those leaves the
+holder on Demo, and a demo account has no licence to clear, so it still cannot
+change phone (TD-126). Until the guard was shared the release checked only the
+last of the three, so **New device** on a held seat let its member change phone
+on Demo.
 
 **The released phone is held off.** Every signed call from the old phone now
 reads `409 device_not_active`, and the app's upload worker answers that by

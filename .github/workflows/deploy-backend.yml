@@ -38,9 +38,9 @@ on:
         default: ""
       gateway_mode:
         description: >
-          Production only. dry-run renders the gateway spec and prints its diff
-          against the live config; apply also creates the config and switches
-          the gateway (ADR-006).
+          dry-run renders the gateway spec and prints its diff against the
+          live config; apply also creates the config and switches the gateway
+          (ADR-006). Staging's gateway is semper-gw-staging.
         required: true
         type: choice
         options:
@@ -363,26 +363,30 @@ jobs:
 
   # API Gateway after the promote (ADR-006). A config that names a route the
   # backend does not serve yet would 5xx, so this runs only once `deploy` has
-  # promoted the revision that serves it. Production only: staging has no
-  # gateway. `dry-run` (the default) renders the spec and prints its diff
-  # against the live config; only `apply` creates a config and switches.
+  # promoted the revision that serves it. Both environments: staging has its
+  # own gateway (`semper-gw-staging` on API `semper-api-staging`), which went
+  # three days without new routes while this job was production-only.
+  # `dry-run` (the default) renders the spec and prints its diff against the
+  # live config; only `apply` creates a config and switches.
   #
   # One-time IAM for the deploy SA: roles/apigateway.admin on the project and
   # roles/iam.serviceAccountUser on the gateway SA (vars.GATEWAY_SA, default
-  # indic-gw@PROJECT).
+  # indic-gw@PROJECT). Both environments use the repo-level deploy SA.
   gateway:
     needs: deploy
-    if: github.event.inputs.environment == 'production' && github.ref == 'refs/heads/main'
+    # The same ref rule as `deploy`: production from main only.
+    if: github.event.inputs.environment != 'production' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    environment: production
+    environment: ${{ github.event.inputs.environment }}
     env:
       PROJECT: ${{ github.event.inputs.project }}
       REGION: ${{ github.event.inputs.region }}
       SERVICE: ${{ needs.deploy.outputs.service }}
       MODE: ${{ github.event.inputs.gateway_mode }}
-      GW_ID: ${{ vars.GATEWAY_ID || 'semper-gw' }}
-      GW_API: ${{ vars.GATEWAY_API || 'semper-api' }}
+      # An environment-scoped var overrides these; the defaults are the live names.
+      GW_ID: ${{ vars.GATEWAY_ID || (github.event.inputs.environment == 'production' && 'semper-gw' || 'semper-gw-staging') }}
+      GW_API: ${{ vars.GATEWAY_API || (github.event.inputs.environment == 'production' && 'semper-api' || 'semper-api-staging') }}
       GW_REGION: ${{ vars.GATEWAY_REGION || 'asia-northeast1' }}
       GW_SA_VAR: ${{ vars.GATEWAY_SA }}
       # The Firebase Auth project, which is not the GCP project. Empty would

@@ -44,6 +44,7 @@ import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.CloudSessionDto
+import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.CrispToast
@@ -215,6 +216,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun maybeOfferBackfill() {
+        if (!IndicApi.get(this).enabled) return
         lifecycleScope.launch {
             val localOnly = withContext(Dispatchers.IO) {
                 SessionStore.list(this@SettingsActivity)
@@ -618,6 +620,10 @@ class SettingsActivity : AppCompatActivity() {
     private fun startBackup(entry: AnalysisEntry) {
         val record = entry.record ?: return
         val label = backupLabel(entry) ?: return
+        if (!IndicApi.get(this).enabled) {
+            Toast.makeText(this, R.string.cloud_backup_no_backend, Toast.LENGTH_LONG).show()
+            return
+        }
         // Same ordering as Home's: the PENDING stamp before the worker, so a
         // fast upload cannot have its SYNCED stamp overwritten by this one.
         lifecycleScope.launch {

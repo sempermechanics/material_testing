@@ -34,6 +34,7 @@ import java.time.Instant
 class LicenseEntitlementsTest {
 
     private lateinit var ctx: Context
+    private val backend = FakeCloudApi()
 
     @Before
     fun setUp() {
@@ -441,24 +442,33 @@ class LicenseEntitlementsTest {
     fun `demo always records, even with the save-to-cloud toggle off`() {
         DicSettings.setSaveToCloud(ctx, false)
         assertFalse(LicenseEntitlements.cloudBackupEnabled(ctx))
-        assertTrue(CloudSync.uploadsEnabled(ctx))
+        assertTrue(CloudSync.uploadsEnabled(ctx, backend))
     }
 
     @Test
     fun `a licensed account records only when the toggle is on`() {
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
         DicSettings.setSaveToCloud(ctx, true)
-        assertTrue(CloudSync.uploadsEnabled(ctx))
+        assertTrue(CloudSync.uploadsEnabled(ctx, backend))
         DicSettings.setSaveToCloud(ctx, false)
-        assertFalse(CloudSync.uploadsEnabled(ctx))
+        assertFalse(CloudSync.uploadsEnabled(ctx, backend))
+    }
+
+    @Test
+    fun `a build with no backend records nothing, whatever the licence`() {
+        val none = FakeCloudApi(enabled = false)
+        assertFalse(CloudSync.uploadsEnabled(ctx, none))
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
+        DicSettings.setSaveToCloud(ctx, true)
+        assertFalse(CloudSync.uploadsEnabled(ctx, none))
     }
 
     @Test
     fun `a downgrade to demo resumes recording regardless of the old toggle`() {
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
         DicSettings.setSaveToCloud(ctx, false)
-        assertFalse(CloudSync.uploadsEnabled(ctx))
+        assertFalse(CloudSync.uploadsEnabled(ctx, backend))
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", cloudBackupEnabled = false))
-        assertTrue(CloudSync.uploadsEnabled(ctx))
+        assertTrue(CloudSync.uploadsEnabled(ctx, backend))
     }
 }

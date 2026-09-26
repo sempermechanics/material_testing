@@ -61,6 +61,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { API_BASE_URL } from "./config.js";
 import { qrSvg } from "./qr.js";
+import { reauthMethods } from "./util.js";
 
 // Hosting's /__/firebase/init.js is the classic-SDK script
 // (`firebase.initializeApp({...})`), not a module — there is nothing to
@@ -225,9 +226,12 @@ async function finishRedirect() {
  * what they were doing. Email/password accounts may pass `password`, which
  * re-authenticates in place. A redirect that came back without a fresh
  * session is not retried — `ERR_REAUTH_INCOMPLETE` instead of a tab that
- * bounces to Google until closed.
+ * bounces to Google until closed. `operatorAsked` lifts that guard for a
+ * step-up the operator started by hand (a click and a typed key): a bounce
+ * needs no one at the keyboard, and a retry after a failed round trip is the
+ * operator's own choice.
  */
-export async function stepUp({ password, note, resume } = {}) {
+export async function stepUp({ password, note, resume, operatorAsked = false } = {}) {
   const user = auth.currentUser;
   if (!user) throw new Error("not_signed_in");
   try {
@@ -239,7 +243,8 @@ export async function stepUp({ password, note, resume } = {}) {
       );
     } else {
       const started = Number(unstash(REAUTH_STARTED));
-      if (started && Date.now() - started < REAUTH_RETRY_SECONDS * 1000) {
+      if (!operatorAsked && started &&
+          Date.now() - started < REAUTH_RETRY_SECONDS * 1000) {
         throw new Error(ERR_REAUTH_INCOMPLETE);
       }
       await leaveForGoogle(
@@ -421,20 +426,28 @@ export function requireSignIn(onReady) {
   // user before the second-factor prompt is answered, and judging that stale
   // token would send the page back to Google (or trip the loop guard). A
   // cancelled TOTP prompt during sign-in simply leaves nobody signed in.
+  //
+  // A re-authentication that fails on the way back (a wrong or cancelled
+  // code, or Back out of Google) still leaves the old session signed in, so
+  // the page loads as usual and its own status line would hide the failure.
+  // The stashed `resume` is handed over anyway, marked `reauthFailed`, so the
+  // page can say the action it was in the middle of was not sent.
   const afterReauth = unstash(AFTER_REAUTH);
   const stashedResume = unstashResume();
+  const unfinished = (reason) =>
+    stashedResume ? { ...stashedResume, reauthFailed: reason } : null;
   const redirectDone = finishRedirect()
     .then((result) => {
       if (result && afterReauth) setStatus(afterReauth);
-      return result ? stashedResume : null;
+      return result ? stashedResume : unfinished("incomplete");
     })
     .catch((e) => {
       if (e.message === ERR_CANCELLED) {
         setStatus("Sign-in cancelled — the authenticator code was not entered.");
-        return null;
+        return unfinished("cancelled");
       }
       setStatus(`Sign-in failed: ${e.code || e.message}`, true);
-      return null;
+      return unfinished(e.code || e.message);
     });
 
   const signedOut = document.getElementById("signedOut");
@@ -647,21 +660,36 @@ export function confirmByTyping(label, what) {
  * page: `resume` is handed back to the desk on the return leg so it can
  * finish the revoke with one confirmation, inside the window, rather than
  * asking the operator to find the row and retype the key.
+ *
+ * Only an account with a password is asked for one. A Google-only operator
+ * (the consoles sign in with Google only) goes straight to Google: a password prompt
+ * they could not answer ended in `auth/invalid-credential`.
  */
 const REVOKE_FRESH_SECONDS = 90;
 
 export async function stepUpForRevoke(resume) {
   if ((await authAge()) < REVOKE_FRESH_SECONDS) return;
-  const password = ask(
-    `Re-enter your account password to ${resume && resume.action === "delete"
-      ? "delete" : "revoke"} this licence.\n\n` +
-      "Leave blank to re-authenticate with Google, then enter your " +
-      "authenticator code when asked.",
-  );
-  if (password === null) throw new Error(ERR_CANCELLED);
+  const verb = resume && resume.action === "delete" ? "delete" : "revoke";
+  const can = reauthMethods(auth.currentUser && auth.currentUser.providerData);
+  let password;
+  if (can.password) {
+    password = ask(
+      `Re-enter your account password to ${verb} this licence.\n\n` +
+      (can.google
+        ? "Leave blank to re-authenticate with Google, then enter your " +
+          "authenticator code when asked."
+        : "Then enter your authenticator code when asked."),
+    );
+    if (password === null || (!password && !can.google)) {
+      throw new Error(ERR_CANCELLED);
+    }
+  } else {
+    setStatus(`Re-authenticating with Google to ${verb} this licence…`);
+  }
   await stepUp({
     password: password || undefined,
     note: "Re-authenticated.",
     resume,
+    operatorAsked: true,
   });
 }
