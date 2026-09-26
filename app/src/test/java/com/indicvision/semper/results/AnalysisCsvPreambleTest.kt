@@ -243,12 +243,10 @@ class AnalysisCsvPreambleTest {
         assertTrue(text.indexOf("# mechanical_results") > text.lastIndexOf("frame_4.jpg,"))
     }
 
-    @Test
-    fun `a bending session with taps writes its scale and the lab's table and E values`() {
+    /** A bending file: 100 px over 5 mm, 0.05 mm/px; each frame drops 10·k px = 0.5·k mm under 100·k N. */
+    private fun bendingFile(taps: BeamEdgeTaps): String {
         val out = File.createTempFile("semper_csv_bending", ".csv")
         out.deleteOnExit()
-        // 100 px over 5 mm: 0.05 mm/px; each frame drops 10·k px = 0.5·k mm under 100·k N.
-        val taps = BeamEdgeTaps(topX = 100f, topY = 50f, bottomX = 100f, bottomY = 150f)
         val frames = (1..3).map { k ->
             val data = translatedGrid(u = 0f, v = 10f * k)
             AnalysisCsvWriter.Frame("frame_$k.jpg", 41, 5, 15, { data }, loadN = 100f * k)
@@ -266,7 +264,12 @@ class AnalysisCsvPreambleTest {
             geometry = SpecimenGeometry(spanMm = 200f, widthMm = 20f, thicknessMm = 5f, loadPoint = taps),
         )
         AnalysisCsvWriter.write(out, false, frames, metadata)
-        val text = out.readText()
+        return out.readText()
+    }
+
+    @Test
+    fun `a bending session with taps writes its scale and the lab's table and E values`() {
+        val text = bendingFile(BeamEdgeTaps(topX = 100f, topY = 50f, bottomX = 100f, bottomY = 150f))
 
         assertTrue(text.contains("# load_point_top_px,100.00,50.00\n"))
         assertTrue(text.contains("# load_point_bottom_px,100.00,150.00\n"))
@@ -278,6 +281,20 @@ class AnalysisCsvPreambleTest {
         assertEquals("# e_mean_gpa,160.0000", trailer[4])
         assertEquals("# load_deflection_slope_N_per_mm,200.0000", trailer[5])
         assertEquals("# e_slope_gpa,160.0000", trailer[7])
+    }
+
+    @Test
+    fun `a bending session tapped bottom edge first writes the same table and E values`() {
+        val inOrder = bendingFile(BeamEdgeTaps(topX = 100f, topY = 50f, bottomX = 100f, bottomY = 150f))
+        val bottomFirst = bendingFile(BeamEdgeTaps(topX = 100f, topY = 150f, bottomX = 100f, bottomY = 50f))
+
+        // The taps are written as tapped; the results do not depend on it.
+        assertTrue(bottomFirst.contains("# load_point_top_px,100.00,150.00\n"))
+        assertTrue(bottomFirst.contains("# bending_step,1,100.0000,0.50000,60.0000,160.0000\n"))
+        assertEquals(
+            inOrder.substringAfter("# mechanical_results\n"),
+            bottomFirst.substringAfter("# mechanical_results\n"),
+        )
     }
 
     @Test

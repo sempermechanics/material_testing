@@ -10,6 +10,10 @@ import kotlin.math.abs
  *
  * Once both are placed, a tap moves the mark nearer in height: the top moves
  * freely (and carries the bottom's x with it), the bottom only up or down.
+ *
+ * "Top" is the first tap, wherever it lands: tapping the bottom edge first
+ * gives the same thickness and midpoint with the two swapped, and the report
+ * signs δ by the load, not by this order.
  */
 internal object BeamTapPlacement {
 

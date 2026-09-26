@@ -313,7 +313,8 @@ object AnalysisCsvWriter {
                 startPointSection()
                 val points = mechanical
                 if (!points.isNullOrEmpty()) {
-                    writeMechanicalResults(writer, StressStrain.Curve(metadata.stressModel, frameIndex, points))
+                    val curve = StressStrain.Curve(metadata.stressModel, frameIndex, BeamDeflection.alongLoad(points))
+                    writeMechanicalResults(writer, curve)
                 }
             } finally {
                 staged?.close()

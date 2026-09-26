@@ -2,6 +2,7 @@
 
 package com.indicvision.semper.report
 
+import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.BeamEdgeTaps
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -56,6 +57,39 @@ class RealPmmaBendingTest {
         // Frame 2 moves under 1 px, so it has no E of its own: 31 steps average.
         assertEquals(31, summary.loadSteps.count { it.modulusGPa != null })
         assertEquals(2.104f, summary.meanModulusGPa!!, 0.002f)
+    }
+
+    /**
+     * The curve built from fields, as the app builds it: per frame, one
+     * accepted point at the taps' midpoint moving [loadToDeflectionPx] px down
+     * the image.
+     */
+    private fun built(taps: BeamEdgeTaps): StressStrain.Curve {
+        val model = StressStrain.Model.Flexural(75f, 12f, 31f, true, BeamDeflection.Probe(taps, 31f))
+        val field = { f: Int ->
+            FloatArray(DicResult.STRIDE).also { d ->
+                d[DicResult.IDX_X] = taps.midX
+                d[DicResult.IDX_Y] = taps.midY
+                d[DicResult.IDX_V] = loadToDeflectionPx[f].second
+                d[DicResult.IDX_ZNSSD] = 0.05f
+            }
+        }
+        return StressStrain.build(loadToDeflectionPx.map { it.first }, model, field)
+    }
+
+    @Test
+    fun `the bottom edge tapped first gives the same positive E`() {
+        // Pixel 6, 2026-09-26: this set with the bottom edge tapped first read
+        // E from the graph −2.02 GPa and an average of −2.12 GPa.
+        val bottomFirst = BeamEdgeTaps(taps.bottomX, taps.bottomY, taps.topX, taps.topY)
+
+        listOf(taps, bottomFirst).forEach { t ->
+            val summary = BeamDeflection.summarize(built(t))!!
+            assertTrue(summary.loadSteps.last().deflectionMm > 0f)
+            assertEquals(6777.7, summary.slope!!.slope, 0.5)
+            assertEquals(1.9996f, summary.slopeModulusGPa!!, 0.001f)
+            assertEquals(2.104f, summary.meanModulusGPa!!, 0.002f)
+        }
     }
 
     @Test

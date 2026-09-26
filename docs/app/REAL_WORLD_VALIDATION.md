@@ -214,7 +214,8 @@ points carried into image 32 (about 2,800 per frame).
 ### Deflection at the load point and E
 
 The probe is what the app reads δ from: the mean displacement of accepted
-points within t/2 of the taps' midpoint, along the top-to-bottom direction.
+points within t/2 of the taps' midpoint, along the line between the taps and
+signed the way the load pushes.
 The authors' δ is their world vertical displacement in mm, averaged over the
 same circle.
 
@@ -251,6 +252,13 @@ the authors' own deflection gives the same low value.
 short (523 px instead of 572; see below). That alone put δ 10% high: RMSE
 0.076 mm and E from the graph 1.81 GPa. A pixel of tap error changes E by
 about 100 / N %, where N is the thickness in pixels.
+
+**Tap order.** On a Pixel 6 (2026-09-26) this set, tapped bottom edge first,
+read "E from the graph ≈ -2.02 GPa (slope -6835.96 N/mm, R² 0.9993)" and
+"Average E ≈ -2.12 GPa", with the graph running to −1.4 mm: the right
+magnitudes for its 579 px taps, the wrong sign. The probe read δ from the
+first tap towards the second. δ is now signed by the load (TD-92), and
+`RealPmmaBendingTest` builds the curve with the taps in both orders.
 
 ### Displacement and strain, point by point
 
