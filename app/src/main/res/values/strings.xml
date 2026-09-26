@@ -365,6 +365,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="analysis_preferences">Analysis preferences</string>
     <string name="cloud_retry_backup">Retry backup</string>
     <string name="cloud_backup_now">Back up now</string>
+    <string name="cloud_backup_no_backend">Cloud backup isn\'t set up on this build, so this analysis stays on this phone.</string>
     <string name="cloud_backup_failed_fmt">Backup failed. %1$s</string>
     <string name="cloud_backup_retry_action">Try again</string>
     <string name="cloud_backup_failed_title">Backup failed</string>

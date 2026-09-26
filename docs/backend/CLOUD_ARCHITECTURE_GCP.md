@@ -731,6 +731,17 @@ backoff, so an upload survives losing connectivity or the app being killed.
 Cloud sync stays off entirely unless `INDIC_API_BASE_URL` is set at build time
 — see [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md) step C1.
 
+**A row reads PENDING only while an upload is coming.** A build with no
+backend (no API URL, or the emulator sign-in bypass) saves analyses as
+LOCAL_ONLY (`CloudSync.uploadsEnabled`), and a row still PENDING from a build
+that had one goes back to LOCAL_ONLY at the next reconcile or upload attempt
+(`CloudSync.settleWithoutBackend`); the backup buttons say cloud backup isn't
+set up. With a backend, every reconcile that lists the cloud queues PENDING
+rows again (`ExistingWorkPolicy.KEEP` leaves a running upload alone), unless
+**Save to cloud** is off. Before this, both kinds sat on "upload pending" for
+good: the worker returned success without uploading, and an upload deferred
+while the quota was unknown had nothing to start it.
+
 **The PENDING stamp lands before the upload is queued.** Both manual backup
 sites (`HomeActivity`, `SettingsActivity`) write
 `SessionRecord.SyncState.PENDING` and only then call
