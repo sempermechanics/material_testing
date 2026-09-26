@@ -154,8 +154,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   diagram of each test; bending's row reads **Beam height → Set**.
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   (Results, Elastic toggle, lab-report PDF, viewer and tap-editor gestures) run in Tier 3;
-  on a Galaxy S21+ (Android 15, 2026-09-25) they pass 9/9 and `VideoFrameExtractionDeviceTest`
-  6/6 (MP4 and AVI). `WizardDraftRestoreTest` covers a load log across a process death.
+  on a Galaxy S21+ (Android 15) they pass 9/9 at `db75267` (2026-09-26, after #46–#50), and
+  `VideoFrameExtractionDeviceTest` 6/6 (2026-09-25). `WizardDraftRestoreTest`: a load log survives process death.
 - **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
   has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
   and saves it (#33, #34, TD-87/TD-88). Both suites pass in full on a Pixel 6 (Android 17,
