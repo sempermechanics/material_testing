@@ -102,9 +102,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-26)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-36224429945-1`, from `dea4fcc7`, scales to
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36227358113-1`, from `cd7d5db6`, scales to
   zero) behind API Gateway `semper-gw` (config `v202609260522-60`, deployed by CI, ADR-006);
-  staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+  staging `semper-api-staging` behind `semper-gw-staging` (CI since #258); project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
   #240 (cost), the licence desk (backend and console) and the device-change fix (#248, #249) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
@@ -141,7 +141,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),
-  with #251's step-up fixes. Owed: `find_duplicate_licences.py` against production.
+  with #251's step-up and #257's edit fixes. Owed: `find_duplicate_licences.py` against production.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
   It also ships under Semper's app id (TD-133), so its lab build replaces Semper on a phone.

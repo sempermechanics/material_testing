@@ -12,6 +12,26 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — Console deploy: licence edit fixes (#257); staging gateway in CI (#258)
+
+#257, hosting only, from `2db99e8c` with `scripts/deploy-console.sh` against `semper-gw`;
+the live release is 2026-09-26 07:41 UTC.
+
+- The Edit dialog refuses a new end that has already passed (`licenceEditPatch`, the
+  backend's `expiry_in_past` rule) before asking for the typed key; it used to ask first
+  and then show the server's 422.
+- Opening Edit clears the page status line, where a "… saved" from the last action read
+  as this edit's result beside the dialog's error.
+
+#258: `deploy-backend.yml`'s `gateway` job runs for staging too (`semper-gw-staging` on API
+`semper-api-staging`; [ADR-006](../adr/ADR-006-gateway-deploy-job.md) amendment). The
+first run, staging run 36227641846 from `cd7d5db6` with `gateway_mode: dry-run`, deployed
+`semper-api-staging-36227641846-1`, read the live config `v202609260428` and found it
+already serves the spec, so the gateway was not touched.
+
+#256 (docs) went in alongside: ADR-007's TTL item, and the licence scripts' usage lines
+name `--project indicvision-dic-app`.
+
 ## 2026-09-26 — Backend deploy: a lock clear frees the phone only where the mode is restored (#255)
 
 Backend only, staging then production with the gateway dry-run. Staging run 36226047617
