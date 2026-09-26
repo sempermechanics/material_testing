@@ -85,6 +85,26 @@ class VsgPlotView @JvmOverloads constructor(
             return if (text.startsWith('-') && text.all { it == '-' || it == '0' || it == '.' }) text.drop(1) else text
         }
 
+        /** The i-th y tick value, 0 at the bottom gridline to [GRID_LINES] at the top. */
+        internal fun yTick(yMin: Float, yMax: Float, i: Int): Float = yMin + (yMax - yMin) * i / GRID_LINES
+
+        /** Width, by [measure], of the widest y tick label as [tickLabel] writes it. */
+        internal fun widestYTick(yMin: Float, yMax: Float, measure: (String) -> Float): Float =
+            (0..GRID_LINES).maxOf { measure(tickLabel(yTick(yMin, yMax, it))) }
+
+        /**
+         * The compact left gutter: the widest y tick with [gap] on either side,
+         * never narrower than [minPad]. A fixed gutter cut the leading digits
+         * off a bending load axis ("21686" read "1686").
+         */
+        internal fun compactLeftPad(
+            yMin: Float,
+            yMax: Float,
+            minPad: Float,
+            gap: Float,
+            measure: (String) -> Float,
+        ): Float = maxOf(minPad, widestYTick(yMin, yMax, measure) + gap * 2f)
+
         // Resource-backed, not literal ints: each slot needs an independent night
         // value (see values-night/colors.xml) since this view is shared with the
         // dark-glass viewer peek sheet. Under emphasis (dataviz skill: onDraw draws
@@ -499,7 +519,11 @@ class VsgPlotView @JvmOverloads constructor(
         val full = dataBounds() ?: return
         val b = viewport(full)
 
-        val left = if (compactAxes) dp(PAD_LEFT_COMPACT_DP) else fullLeftPad(b)
+        val left = if (compactAxes) {
+            compactLeftPad(b.yMin, b.yMax, dp(PAD_LEFT_COMPACT_DP), dp(TICK_GAP_DP), textPaint::measureText)
+        } else {
+            fullLeftPad(b)
+        }
         val right = width - dp(PAD_RIGHT_DP)
         val top = dp(PAD_TOP_DP)
         val bottom = height - dp(if (compactAxes) PAD_BOTTOM_COMPACT_DP else PAD_BOTTOM_FULL_DP)
@@ -738,9 +762,7 @@ class VsgPlotView @JvmOverloads constructor(
      * ("58.6", "435") run under the title.
      */
     private fun fullLeftPad(b: Bounds): Float {
-        val widestTick = (0..GRID_LINES).maxOf { i ->
-            textPaint.measureText(format(b.yMin + (b.yMax - b.yMin) * i / GRID_LINES))
-        }
+        val widestTick = widestYTick(b.yMin, b.yMax, textPaint::measureText)
         val titleBand = textPaint.textSize * TITLE_BAND
         return maxOf(dp(PAD_LEFT_FULL_DP), titleBand + widestTick + dp(TICK_GAP_DP) * 3f)
     }
@@ -750,13 +772,13 @@ class VsgPlotView @JvmOverloads constructor(
         textPaint.textAlign = Paint.Align.RIGHT
         for (i in 0..GRID_LINES) {
             val y = f.bottom - (f.bottom - f.top) * i / GRID_LINES
-            val value = b.yMin + (b.yMax - b.yMin) * i / GRID_LINES
+            val value = yTick(b.yMin, b.yMax, i)
             canvas.drawText(format(value), f.left - dp(TICK_GAP_DP), y + textPaint.textSize * TICK_BASELINE, textPaint)
         }
         if (compactAxes && yUnit.isNotEmpty()) {
-            // A number+unit tick right-aligned into PAD_LEFT_COMPACT_DP would run
-            // past the view's own left edge (there isn't room for both digits and
-            // a unit in that gutter) -- draw the unit on its own, left-aligned
+            // The compact gutter is sized to the numbers alone, so a number+unit
+            // tick right-aligned into it would run past the view's own left
+            // edge -- draw the unit on its own, left-aligned
             // into the data area's top-left corner instead, where there's slack.
             textPaint.textAlign = Paint.Align.LEFT
             canvas.drawText(yUnit, f.left + dp(TICK_GAP_DP), f.top + textPaint.textSize, textPaint)
