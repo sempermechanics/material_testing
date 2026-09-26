@@ -229,3 +229,16 @@ test("a failed re-authentication says the action was not sent", () => {
     unfinishedStepUpText({ action: "delete", id: "x", reauthFailed: "auth/network-request-failed" }, "K"),
     /re-authentication failed \(auth\/network-request-failed\)/);
 });
+
+test("a past end is refused before the typed key is asked for", () => {
+  const out = licenceEditPatch(timed, form({ expiry: "2026-09-22" }), NOW);
+  assert.match(out.error, /already passed/);
+  assert.equal(out.shortens, false);
+  // Today still has hours left: the end is the last second of the day.
+  assert.equal(licenceEditPatch(timed, form({ expiry: "2026-09-23" }), NOW).error, "");
+  // An expired licence can still take a note without moving its end.
+  const expired = { ...timed, expiresAt: "2026-09-01T23:59:59Z" };
+  assert.deepEqual(
+    licenceEditPatch(expired, form({ expiry: "2026-09-01", note: "renewal due" }), NOW).patch,
+    { note: "renewal due" });
+});

@@ -503,6 +503,9 @@ function openEdit(id) {
   syncEditTerm();
   $("editHint").textContent = "";
   $("editHint").className = "muted";
+  // The dialog reports its own outcome; a line left from the last action
+  // ("… saved") read as this edit's result beside the dialog's error.
+  setStatus("");
   $("editDialog").showModal();
 }
 

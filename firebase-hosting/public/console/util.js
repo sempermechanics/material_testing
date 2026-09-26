@@ -228,8 +228,11 @@ export function emailList(text) {
  * `shortens` is an earlier end, or an end put on a perpetual licence: a
  * downgrade. The desk confirms it by typing the key, and the backend takes
  * it only with `allowShorten`, which this sets.
+ *
+ * A new end already past is refused here, as the backend refuses it
+ * (`expiry_in_past`), so the desk does not ask for the typed key first.
  */
-export function licenceEditPatch(lic, form) {
+export function licenceEditPatch(lic, form, now = Date.now()) {
   const fail = (error) => ({ patch: {}, shortens: false, error });
   const patch = {};
   let shortens = false;
@@ -241,6 +244,9 @@ export function licenceEditPatch(lic, form) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(form.expiry)) return fail("Enter the expiry as a date.");
     if (!timed || form.expiry !== current) {
       patch.expiresAt = `${form.expiry}T23:59:59Z`;
+      if (Date.parse(patch.expiresAt) <= now) {
+        return fail("That date has already passed. Ending a licence now is Revoke.");
+      }
       shortens = !timed || form.expiry < current;
       if (shortens) patch.allowShorten = true;
     }
