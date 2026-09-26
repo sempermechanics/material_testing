@@ -209,6 +209,40 @@ and never gated, and CI does not pass `--gates`. To gate another phone, add its
 codename with medians from a clean run of both suites. Microbenchmark times are not
 gated: debuggable and not AOT-compiled, they are relative numbers only.
 
+### Pixel 6 re-runs against the gates (2026-09-25/26)
+
+Same Pixel 6, over wireless adb. Run with `am instrument`, not the connected
+task, which uninstalls the app and its data; [perf/startup.md](../perf/startup.md)
+has the install and run steps for the macro suite.
+
+- **Macro, 09-25, at `main` @ `1b4253db`, on battery (91 %):** 12 of 12 gates
+  OK. Scrub heap 23.3 / 19.7 MB and the Results curve 35 / 115 ms. The closest
+  non-startup gate is the 150-frame Results frame CPU P90: 8.7 ms against 7.3
+  (+20 %, gate 9.5). The four startup times are below.
+- **Micro, 09-26, debug build of `3f50d0e7` (#51):** `OK (10 tests)`.
+  `valueRanges_150frames` 1478 ms and `decodeDatFile_oneFrame` 0.50 ms are within
+  2 % of the reference. Allocations differ from the reference in two cases
+  (`buildReport_oneFrame` 1743 against 1714, `valueRanges_150frames` 4503 against
+  4625) on a later build; compare like for like before reading anything into them.
+- **Startup at full charge, 09-26:** the same `1b4253db` APKs, 100 % on AC,
+  battery at 37.3 °C. `OK (4 tests)`, all four gates pass.
+
+| Startup, time to initial display | Reference | 09-25, on battery | 09-26, full charge | Gate | Headroom used at full charge |
+|---|---:|---:|---:|---:|---:|
+| Cold start | 378 ms | 446.1 | 430.7 (+14 %) | 491.4 | 46 % |
+| Warm start | 81 ms | 50.1 | 70.8 (−13 %) | 105.3 | — |
+| Settings cold start | 334 ms | 414.7 | 346.8 (+4 %) | 434.2 | 13 % |
+| Wizard cold start | 369 ms | 452.0 | **452.5 (+23 %)** | 479.7 | **75 %** |
+
+Charge explains the Settings gap but not the wizard's. Cold start comes closer
+too (+18 % to +14 %). The wizard stays at about +23 % on battery and at full
+charge, and uses about 75 % of its gate's headroom: a further 6 % fails it. It
+is not the code: run back to back on the same phone the same day, the reference
+build (`05aac72`) was as slow, 439–623 ms, and failed its own gate in 2 of 4
+rounds as the phone warmed. The gate measures the phone's state (heat, charger,
+memory) as much as the app; see TD-135 for the protocol that would fix that.
+`benchmark/gates.json` is unchanged.
+
 ### Known coverage gaps
 
 Worth knowing before you assume something is protected:
@@ -248,11 +282,14 @@ starts no faster than `None` ([perf/startup.md](../perf/startup.md), which has t
 ## Real-data validation
 
 The unit tests type lab tables in by hand. The whole chain — images, solve,
-load CSV, curve, E — is checked against a published test with its own strain
-measurement in [REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md). It is a
-manual emulator run plus `scripts/real_data_steel_tensile.py`, not part of CI;
-the app's resulting curve is pinned in `report/RealSteelModulusTest`. Re-run it
-after a change to the solve, the strain window or `ElasticModulus`.
+load CSV, curve, E — is checked against two published tests with their own
+measurements in [REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md): a steel
+tensile test and a PMMA bend. They are manual runs (emulator, and a Pixel 6 on
+2026-09-26) plus `scripts/real_data_steel_tensile.py` and
+`scripts/real_data_pmma_bending.py`, not part of CI; the app's resulting curves
+are pinned in `report/RealSteelModulusTest` and `report/RealPmmaBendingTest`.
+Re-run them after a change to the solve, the strain window, `ElasticModulus` or
+`BeamDeflection`. A third set, a concrete beam, is expected to fail.
 
 ## What not to test here
 

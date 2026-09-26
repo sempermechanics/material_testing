@@ -139,7 +139,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video. Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
-  steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
+  steel and PMMA data, on a Pixel 6 too (2026-09-26); a concrete set fails as
+  expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
@@ -151,15 +152,16 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **CI and benchmarks.** A docs-only PR skips Tier 1 (#63, TD-96); a merge no longer
   cancels `main`'s running CI (#67, TD-97). `HotPathMicroBenchmark` runs in CI (#31); the
   Pixel 6 medians and the report-only `benchmark/gates.json` are in
-  [TESTING.md](docs/app/TESTING.md). TD-86–TD-88 and TD-90 match the parent's numbers;
-  its TD-81 is TD-89 here.
+  [TESTING.md](docs/app/TESTING.md). The 2026-09-25/26 re-runs pass every gate, but
+  the wizard cold start sits at +23 %, 75 % of its headroom: the phone's state, not
+  the code (TD-135).
+  TD-86–TD-88 and TD-90 match the parent's numbers; its TD-81 is TD-89 here.
 - **Owed.**
   - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a): a phone-recorded MP4
     (5.1a.12) and a real UTM clip. The rest of §5.1a, including Key frames with loads
     (5.1a.16), passes on a Pixel 6 with synthetic clips (2026-09-26); MP4 luma stays
-    16–235 (TD-134). The
-    Galaxy S21+'s demo account is over its cap (45 / 25), so a new analysis there needs a
-    licensed key or deletes first.
+    16–235 (TD-134). The Galaxy S21+'s demo account is over its cap (45 / 25), so a new
+    analysis there needs a licensed key or deletes first.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.
