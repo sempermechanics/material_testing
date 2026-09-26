@@ -464,7 +464,7 @@ load; the one inside the 2 s lag gets none. The Results card matches
 [REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)'s synthetic-video case: E
 from the graph ≈ 141.5 GPa (26.98 N/mm, R² 0.9981) and average E ≈ 173.1 GPa.
 Draw the ROI on the beam as that case says: a full-image ROI at subset 121
-subset stops early ("Convergence collapsed") after 2 of 28 frames on this clip.
+stops early ("Convergence collapsed") after 2 of 28 frames on this clip.
 
 Still owed: 5.1a.12 on a phone recording, plus a real UTM clip.
 
