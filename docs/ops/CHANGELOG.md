@@ -12,7 +12,7 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
-## 2026-09-26 — Backend deploy: scale to zero (#240), licence desk backend (#236–#239)
+## 2026-09-26 — Backend and console deploy: scale to zero (#240), licence desk (#236–#239)
 
 Production `semper-api-36220429126-1` from `141ddcae`. Staging went first: run 36219875207 →
 `semper-api-staging-36219875207-1`. Production run 36220059465 → `semper-api-36220059465-1`
@@ -21,15 +21,17 @@ passed on all three. `apply` switched `semper-gw` from `v202609251206-56` to
 `v202609260522-60`. The diff added the licence desk's new admin routes and changed
 descriptions. From outside with no token, `GET /v1/admin/deleted-licenses`, `POST
 …/deleted-licenses/{id}/restore` and `POST …/licenses/{id}/convert` answer 401 and an
-unknown path 404. The console was **not** deployed: `app.sempermechanics.com` still serves
-the `eb18ef8` pages.
+unknown path 404. The console went out afterwards with `scripts/deploy-console.sh` to
+`indicvision-dic-app-auth` (API base `semper-gw-86wx7pp1.an.gateway.dev`). The hosted
+`operator.js`, `operator/index.html`, `util.js`, `auth.js`, `institution.js` and
+`console.css` hash-match `main`, and the operator page loads with no console errors.
 
 - #240: Cloud Run scales to zero in both environments. `min instances` is unset on the live
   service, where production had `minScale=1`. `backend/deploy/` holds a 15-day cleanup
   policy for the registry and the run-sources bucket; an owner applies it once
   ([BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene)).
   Measurement: [perf/backend-cost.md](../perf/backend-cost.md).
-- The deploy also shipped the licence desk backend ([ADR-007](../adr/ADR-007-licence-lifecycle.md)).
+- The deploy also shipped the licence desk, backend and console ([ADR-007](../adr/ADR-007-licence-lifecycle.md)).
   - #236: a fast, filtered list. It hides Demo keys unless asked and searches by address,
     domain or key prefix.
   - #237: one licence per person. A mint for an address that already holds one is 409

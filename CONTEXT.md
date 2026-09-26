@@ -106,7 +106,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   zero) behind API Gateway `semper-gw` (config `v202609260522-60`, deployed by CI, ADR-006);
   staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
-  #240 (cost) and the licence desk backend went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
+  #240 (cost) and the licence desk (backend and console) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
@@ -139,10 +139,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Pixel 6, 3 at once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud
   backups (#235, merged, awaiting release):** a card offers backups this phone has no row for (`CloudBackupListing`).
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
-  (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes and
-  TTLs deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)). **The console is
-  not**: it still serves `eb18ef8`, so the desk lacks the new buttons and its list now omits Demo
-  keys (`scripts/deploy-console.sh`).
+  (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
+  TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
