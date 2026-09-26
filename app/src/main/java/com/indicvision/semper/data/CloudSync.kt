@@ -1,6 +1,8 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
+import androidx.annotation.WorkerThread
 import androidx.core.content.edit
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -81,6 +83,10 @@ object CloudSync {
      * backend's index — the only way to catch artifacts deleted straight in
      * Drive. It costs a Drive call per session, so it's reserved for an explicit
      * pull-to-refresh; screen resumes use the cheap index check.
+     *
+     * With [reupload], a row still waiting to upload is queued again: an upload
+     * deferred while the quota was unknown ([enqueueUpload]) has nothing else
+     * to start it, and used to read "upload pending" for good.
      */
     suspend fun reconcile(
         context: Context,
@@ -91,7 +97,10 @@ object CloudSync {
     ): Outcome {
         return withContext(Dispatchers.IO) {
             val appContext = context.applicationContext
-            if (!api.enabled) return@withContext Outcome.Disabled
+            if (!api.enabled) {
+                settleWithoutBackend(appContext)
+                return@withContext Outcome.Disabled
+            }
 
             // Home starts one reconcile per finished upload/restore job, all at once.
             // Run them one at a time so each later call sees the first one's
@@ -139,22 +148,41 @@ object CloudSync {
                     .map { it.localSessionId }
                     .toSet()
 
-                var repaired = 0
-                SessionStore.list(appContext).forEach { record ->
-                    val claimsSynced = record.syncState == SessionRecord.SyncState.SYNCED
-                    if (claimsSynced && record.id !in backedUp) {
-                        // The cloud copy is gone (deleted) or never completed.
-                        Timber.i("Session %s claims SYNCED but is not in the cloud — repairing", record.id)
-                        SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.PENDING)
-                        repaired++
-                        if (reupload) enqueueUpload(appContext, record.id)
-                    }
-                }
+                // Waiting rows respect the save-to-cloud toggle; a repair does not,
+                // because it restores a backup the user already had.
+                val repaired = repairRows(appContext, backedUp, reupload, reupload && uploadsEnabled(appContext, api))
                 prefs.edit { putLong(K_LAST_RECONCILE_AT, System.currentTimeMillis()) }
                 Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
             }
         }
     }
+
+    /**
+     * Mark SYNCED rows whose backup is not in [backedUp] PENDING, and queue them
+     * when [reupload]. With [requeue], queue the rows already PENDING too.
+     * Returns how many rows were repaired.
+     */
+    private fun repairRows(appContext: Context, backedUp: Set<String>, reupload: Boolean, requeue: Boolean): Int {
+        var repaired = 0
+        SessionStore.list(appContext).forEach { record ->
+            val claimsSynced = record.syncState == SessionRecord.SyncState.SYNCED
+            if (claimsSynced && record.id !in backedUp) {
+                // The cloud copy is gone (deleted) or never completed.
+                Timber.i("Session %s claims SYNCED but is not in the cloud — repairing", record.id)
+                SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.PENDING)
+                repaired++
+                if (reupload) queueUpload(appContext, record.id)
+            } else if (requeue && record.syncState == SessionRecord.SyncState.PENDING) {
+                // KEEP leaves an upload already queued or running alone.
+                queueUpload(appContext, record.id)
+            }
+        }
+        return repaired
+    }
+
+    /** How a reconcile queues an upload; tests swap it to see what was queued. */
+    @VisibleForTesting
+    internal var queueUpload: (Context, String) -> Unit = ::enqueueUpload
 
     /**
      * Fetch and cache product limits (quota ceiling, frame cap) from cloud config.
@@ -396,9 +424,30 @@ object CloudSync {
      * lacks is the licensed retrieval half (restore, bundle download). The
      * pref is ignored rather than read so a toggle turned off under an earlier
      * licence cannot silently stop demo recording.
+     *
+     * A build with no backend (a lab build, or the emulator sign-in bypass)
+     * records nothing: its analyses are saved as not backed up, rather than as
+     * waiting for an upload that can never run.
      */
-    fun uploadsEnabled(context: Context): Boolean =
-        !LicenseEntitlements.cloudBackupEnabled(context) || DicSettings.saveToCloud(context)
+    fun uploadsEnabled(context: Context, api: CloudApi = IndicApi.get(context)): Boolean =
+        api.enabled && (!LicenseEntitlements.cloudBackupEnabled(context) || DicSettings.saveToCloud(context))
+
+    /**
+     * This build has no backend, so a row waiting to upload never will. It goes
+     * back to LOCAL_ONLY, and Home says "Not backed up" instead of "upload
+     * pending" for good. Such rows come from a build that had a backend, one
+     * installed over the other under the same app id; a build with a backend
+     * backs them up again from Settings or the row.
+     */
+    @WorkerThread
+    fun settleWithoutBackend(context: Context) {
+        SessionStore.list(context)
+            .filter { it.syncState == SessionRecord.SyncState.PENDING }
+            .forEach {
+                Timber.i("No cloud backend in this build — %s is not backed up", it.id)
+                SessionStore.setSyncState(context, it.id, SessionRecord.SyncState.LOCAL_ONLY)
+            }
+    }
 
     /**
      * Queue the upload for one analysis. Everything the worker needs lives in
@@ -409,8 +458,8 @@ object CloudSync {
      *
      * No-op until the server quota is known ([TokenStore.isQuotaKnown]): the
      * analysis is already saved locally and its [SessionRecord] stays PENDING, so
-     * the next reconcile (which fetches config, then repairs unsynced sessions)
-     * enqueues it once the ceiling arrives. This is the single point that gates
+     * the next reconcile, which fetches config first, queues it again once the
+     * ceiling arrives. This is the single point that gates
      * upload on an unknown quota — analysis itself never blocks.
      */
     fun enqueueUpload(

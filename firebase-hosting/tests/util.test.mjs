@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   esc, when, day, licenceState, licenceStatePill, leaseHeld, seatCells, inviteCells,
   errorDetail, licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
-  isoDay, emailList, licenceEditPatch, daysLeft,
+  isoDay, emailList, licenceEditPatch, daysLeft, reauthMethods, unfinishedStepUpText,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -206,4 +206,39 @@ test("days left in the deleted hold", () => {
   assert.equal(daysLeft("2026-09-25T13:00:00Z", now), 1);
   assert.equal(daysLeft("2026-09-24T00:00:00Z", now), 0);
   assert.equal(daysLeft(null, now), 0);
+});
+
+test("only an account with a password is asked for one", () => {
+  assert.deepEqual(reauthMethods([{ providerId: "google.com" }]),
+    { password: false, google: true });
+  assert.deepEqual(reauthMethods([{ providerId: "password" }, { providerId: "google.com" }]),
+    { password: true, google: true });
+  assert.deepEqual(reauthMethods([{ providerId: "password" }]),
+    { password: true, google: false });
+  assert.deepEqual(reauthMethods(null), { password: false, google: false });
+});
+
+test("a failed re-authentication says the action was not sent", () => {
+  assert.equal(
+    unfinishedStepUpText({ action: "delete", id: "x", reauthFailed: "incomplete" }, "SEMP-2YCY"),
+    "SEMP-2YCY was not deleted: the Google sign-in did not finish. Delete it again to retry.");
+  assert.equal(
+    unfinishedStepUpText({ action: "revoke", id: "x", reauthFailed: "cancelled" }, "SEMP-2YCY"),
+    "SEMP-2YCY was not revoked: the authenticator code was not entered. Revoke it again to retry.");
+  assert.match(
+    unfinishedStepUpText({ action: "delete", id: "x", reauthFailed: "auth/network-request-failed" }, "K"),
+    /re-authentication failed \(auth\/network-request-failed\)/);
+});
+
+test("a past end is refused before the typed key is asked for", () => {
+  const out = licenceEditPatch(timed, form({ expiry: "2026-09-22" }), NOW);
+  assert.match(out.error, /already passed/);
+  assert.equal(out.shortens, false);
+  // Today still has hours left: the end is the last second of the day.
+  assert.equal(licenceEditPatch(timed, form({ expiry: "2026-09-23" }), NOW).error, "");
+  // An expired licence can still take a note without moving its end.
+  const expired = { ...timed, expiresAt: "2026-09-01T23:59:59Z" };
+  assert.deepEqual(
+    licenceEditPatch(expired, form({ expiry: "2026-09-01", note: "renewal due" }), NOW).patch,
+    { note: "renewal due" });
 });

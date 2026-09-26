@@ -732,6 +732,10 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun enqueueBackup(record: SessionRecord, toastRes: Int) {
+        if (!IndicApi.get(this).enabled) {
+            Toast.makeText(this, R.string.cloud_backup_no_backend, Toast.LENGTH_LONG).show()
+            return
+        }
         // The index write is a file read-modify-write, and this runs from a tap.
         // Order is preserved rather than made optimistic: the PENDING stamp has
         // to land before the worker is queued, or an upload that finishes first
