@@ -76,7 +76,7 @@ The lab report's table adds **Extension (px)**, measured between the two ends of
    put the gap in **Log started after the first frame**, in seconds (negative if the log started first).
    Hanger mass in kg × 9.81 = load in N.
 3. **Span, width and thickness** in mm.
-4. **Load point → Mark.** Double-tap to zoom, then tap the top edge and then the bottom edge right under the load.
+4. **Beam height → Set.** Double-tap to zoom, then tap the top edge and then the bottom edge right under the load.
    The readout gives mm/px. Under 40 px a 1 px slip moves E by several percent, so zoom in or film closer.
 5. ROI on the beam, then **Compute**.
 

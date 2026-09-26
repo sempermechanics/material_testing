@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The load card's ⓘ (LoadInfoDialog): the CSV header the machine's export
+     needs, a drawing of what the card's dimensions are, then how the loads
+     become stress and E. Texts are set per test type in code. -->
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            style="@style/TextAppearance.Semper.InfoHeading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/info_load_csv_heading" />
+
+        <TextView
+            android:id="@+id/tvLoadInfoCsvSample"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_code_sample"
+            android:fontFamily="monospace"
+            android:padding="10dp"
+            android:textColor="@color/viewer_chrome_text"
+            android:textIsSelectable="true"
+            android:textSize="13sp"
+            tools:text="@string/info_load_csv_sample_tensile" />
+
+        <TextView
+            android:id="@+id/tvLoadInfoCsvBody"
+            style="@style/TextAppearance.Semper.InfoBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            tools:text="@string/info_load_csv_body_tensile" />
+
+        <TextView
+            android:id="@+id/tvLoadInfoDiagramHeading"
+            style="@style/TextAppearance.Semper.InfoHeading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            tools:text="@string/info_load_diagram_heading_tensile" />
+
+        <com.indicvision.semper.ui.analysis.LoadInfoDiagramView
+            android:id="@+id/loadInfoDiagram"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp" />
+
+        <TextView
+            android:id="@+id/tvLoadInfoDiagramBody"
+            style="@style/TextAppearance.Semper.InfoBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            tools:text="@string/info_load_diagram_body_tensile" />
+
+        <TextView
+            android:id="@+id/tvLoadInfoResultsHeading"
+            style="@style/TextAppearance.Semper.InfoHeading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/info_load_results_heading" />
+
+        <TextView
+            android:id="@+id/tvLoadInfoResultsBody"
+            style="@style/TextAppearance.Semper.InfoBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            tools:text="@string/info_load_body" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

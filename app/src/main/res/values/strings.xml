@@ -620,7 +620,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="next_reason_load_unmatched">no frame is within 100 ms of a log row: check when the log started</string>
     <string name="next_reason_cross_section">enter the specimen cross-section to continue</string>
     <string name="next_reason_dimensions">enter the specimen dimensions to continue</string>
-    <string name="next_reason_load_point">mark the beam’s edges on the reference photo to continue</string>
+    <string name="next_reason_load_point">set the beam height on the reference photo to continue</string>
     <string name="run_analysis">Compute</string>
     <string name="new_analysis_title">New analysis</string>
 
@@ -663,16 +663,16 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_width">Width</string>
     <string name="load_thickness">Thickness</string>
     <string name="load_axis">Strain axis</string>
-    <string name="load_point">Load point</string>
-    <string name="load_point_mark">Mark</string>
-    <string name="load_point_remark">Re-mark</string>
+    <string name="load_point">Beam height</string>
+    <string name="load_point_mark">Set</string>
+    <string name="load_point_remark">Change</string>
     <string name="load_point_unset">Tap the beam’s top and bottom edges on the reference photo</string>
     <string name="load_point_need_thickness">Enter the thickness first — the taps turn it into the photo’s scale.</string>
     <!-- e.g. "128 px across · 0.0498 mm/px" -->
     <string name="load_point_meta_fmt">%1$d px across · %2$s mm/px</string>
 
     <!-- Bending edge taps (BeamEdgeTapActivity) -->
-    <string name="beam_tap_title">Beam thickness</string>
+    <string name="beam_tap_title">Beam height</string>
     <string name="beam_tap_save">Save</string>
     <string name="beam_tap_canvas">Reference photo of the beam</string>
     <string name="beam_tap_step_top">Tap the beam’s top edge, right under the load, so the crosshair’s horizontal line lies along the edge. Pinch or double-tap to zoom in first; drag to move around.</string>
@@ -684,8 +684,25 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="beam_tap_readout_fmt">%1$s mm over %2$d px · %3$s mm/px</string>
     <string name="beam_tap_precision_warn_fmt">Only %1$d px across: a 1 px slip changes E by about %2$d%%. Zoom in, or photograph the middle of the beam closer.</string>
     <string name="info_load_title">Machine load</string>
-    <string name="info_load_body">Import the loads as a CSV, in N or kN: the file the testing machine exported, or one you type yourself with one load per photo, in the same order as the photos. A longer machine log is matched by time for video frames, or spread evenly over the photos. Loads keep their sign.\n\nStress = load ÷ cross-section area. For a round bar the area is π × d² ÷ 4 (d = diameter in mm). Strain comes from the photos, so no extensometer is needed. The strain axis is the direction the bar is pulled in the image.\n\nYoung’s modulus E is the slope of the straight, early part of the curve, so take several photos before the bar starts to yield. E from a phone camera is approximate; compare it with the value your lab gives you.</string>
-    <string name="info_load_body_bending">Import the loads as a CSV in N or kN, one per photo in the same order as the photos. A hanger load in kg is kg × 9.81 N.\n\nPoint the phone at the side of the beam, at the middle where the load hangs, on a tripod. Take the reference photo with no load on the hanger — that is the dial gauge’s zero. Frame the middle of the beam rather than the whole span, so the thickness covers plenty of pixels.\n\nAfter the dimensions, tap the beam’s top and bottom edges under the load on the reference photo: the thickness you measured over those pixels is the photo’s scale, and the deflection δ is read there.\n\nBending stress σb = M·y ÷ I, with M = W·L ÷ 4, y = t ÷ 2 and I = b·t³ ÷ 12 (L span, b width, t thickness). E = W·L³ ÷ (48·δ·I) for each load, and also from the slope of the load–deflection graph. E from a phone camera is approximate.</string>
+    <string name="info_load_csv_heading">The machine’s CSV</string>
+    <string name="info_load_csv_sample_tensile" translatable="false">Time (s),Load (kN)\n0.0,0.00\n0.5,1.25\n1.0,2.51\n1.5,3.74</string>
+    <string name="info_load_csv_sample_bending" translatable="false">Time (s),Load (N)\n0,0\n10,4.9\n20,9.8\n30,14.7</string>
+    <string name="info_load_csv_body_tensile">The first line is the header. Name the load column <b>Load</b> or <b>Force</b> and put its unit in brackets: N, kN or lbf. A second line holding just the units also works; with no unit the loads are taken as N.\n\nAdd a <b>Time (s)</b> column when you filmed a video: each frame takes the row logged within 100 ms of it. With photos, one row per photo in the same order is enough; a longer log is spread evenly over the photos. Loads keep their sign. Commas, semicolons or tabs all work as separators.</string>
+    <string name="info_load_csv_body_bending">The first line is the header. Name the load column <b>Load</b> (or <b>Force</b>) and put its unit in brackets: N or kN; with no unit the loads are taken as N. A hanger load in kg is kg × 9.81 N.\n\nFor a video, add a <b>Time (s)</b> column, counted from when you started the log: each frame takes the row logged within 100 ms of it. With photos, write one row per photo in the same order as the photos.</string>
+    <string name="info_load_diagram_heading_tensile">Cross-section and loading axis</string>
+    <string name="info_load_diagram_heading_bending">What to measure</string>
+    <string name="info_load_diagram_body_tensile"><b>Cross-section area A</b> is the round face of the bar’s gauge length: A = π × d² ÷ 4, with d the diameter in mm. Measure d before the test and type A in mm².\n\nThe <b>loading axis</b> is the line the machine pulls along. For the <b>Strain axis</b>, pick <b>X</b> if the bar runs left to right in the photo, or <b>Y</b> if it runs top to bottom.</string>
+    <string name="info_load_diagram_body_bending"><b>L</b> is the support span, centre to centre of the supports. <b>b</b> is the beam’s width and <b>t</b> its thickness (its height as you look at the side). All in mm.\n\n<b>W</b> is the hanger load at mid-span and <b>δ</b> the deflection there. <b>Set beam height</b>: on the reference photo, tap the beam’s top and bottom edges right under the load (the two dots). t over those pixels is the photo’s scale, and δ is read at that spot.</string>
+    <string name="info_load_results_heading">From loads to results</string>
+    <string name="info_load_body">Stress = load ÷ A. Strain comes from the photos, so no extensometer is needed.\n\nYoung’s modulus E is the slope of the straight, early part of the curve, so take several photos before the bar starts to yield. E from a phone camera is approximate; compare it with the value your lab gives you.</string>
+    <string name="info_load_body_bending">Point the phone at the side of the beam, at the middle where the load hangs, on a tripod. Take the reference photo with no load on the hanger: that is the dial gauge’s zero. Frame the middle of the beam rather than the whole span, so the thickness covers plenty of pixels.\n\nBending stress σb = M·y ÷ I, with M = W·L ÷ 4, y = t ÷ 2 and I = b·t³ ÷ 12. E = W·L³ ÷ (48·δ·I) for each load, and also from the slope of the load–deflection graph. E from a phone camera is approximate.</string>
+    <string name="info_diagram_loading_axis">loading axis</string>
+    <string name="info_diagram_cross_section">cross-section</string>
+    <string name="info_diagram_photo">in the photo</string>
+    <string name="info_diagram_span">span</string>
+    <string name="info_diagram_beam_height">beam height</string>
+    <string name="info_diagram_desc_tensile">A round bar pulled at both ends along its loading axis, with its round cross-section of diameter d and area A = π·d²/4, and the photo’s X (across) and Y (down) directions.</string>
+    <string name="info_diagram_desc_bending">A beam on two supports a span L apart, a load W hanging at mid-span deflecting it by δ, its cross-section of width b and thickness t, and the beam height marked by two taps on its top and bottom edges under the load.</string>
     <plurals name="load_warn_resampled_fmt">
         <item quantity="one">%1$d row resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>
         <item quantity="other">%1$d rows resampled onto %2$d frames — the curve assumes frames were taken evenly through the log.</item>

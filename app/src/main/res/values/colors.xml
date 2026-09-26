@@ -100,6 +100,8 @@
          today's literal colours (sky_primary, text_secondary, etc.), so light
          mode is pixel-identical; only night is new. -->
     <color name="viewer_plot_grid">@color/surface_outline</color>
+    <!-- The sample-file box in an info dialog (bg_code_sample); opaque so it reads on both dialog surfaces. -->
+    <color name="info_code_bg">@color/surface_outline</color>
     <color name="viewer_plot_ink">@color/text_secondary</color>
     <color name="viewer_plot_ink_strong">@color/text_primary</color>
     <!-- Emphasis mode (dataviz skill): non-focused curves share one desaturated

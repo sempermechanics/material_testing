@@ -223,6 +223,20 @@
         <item name="android:textColor">@color/text_secondary</item>
     </style>
 
+    <!-- Section heading and body in an info dialog (LoadInfoDialog). The
+         viewer_chrome_* inks flip with the theme; text_* stay light-locked. -->
+    <style name="TextAppearance.Semper.InfoHeading" parent="">
+        <item name="android:textColor">@color/viewer_chrome_text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.Semper.InfoBody" parent="">
+        <item name="android:textColor">@color/viewer_chrome_muted</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineSpacingMultiplier">1.1</item>
+    </style>
+
     <!-- Numbered step badge (the "1", "2", "3" pills) -->
 
     <!-- ============================================================= -->

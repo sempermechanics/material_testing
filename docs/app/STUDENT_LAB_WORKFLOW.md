@@ -27,7 +27,7 @@ So the copy is plain, the formulas are spelled out, and every number shown is on
 | Photos / video | Reference before loading, then one photo per load step | Reference with no weights, then a photo per weight, or a video that holds each weight a few seconds; filmed from the **side face** |
 | Loads | CSV in N or kN: one row per photo, or the machine's log | CSV in N or kN; hanger kg × 9.81 (kg is not read) |
 | Dimensions | Area (mm²); for a round bar πd²/4 | Span L, width b, thickness t (mm) |
-| Scale | None: strain is a ratio | Top and bottom edges tapped on the reference (**Load point → Mark**) |
+| Scale | None: strain is a ratio | Top and bottom edges tapped on the reference (**Beam height → Set**) |
 
 **Rows meet photos** in one of two ways:
 - **Timed log with a video:** always matched by time, even when the counts agree. Time 0 is the reference frame.

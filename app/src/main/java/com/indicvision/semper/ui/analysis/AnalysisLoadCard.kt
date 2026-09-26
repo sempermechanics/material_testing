@@ -76,11 +76,7 @@ class AnalysisLoadCard(
             onChanged()
         }
         root.findViewById<ImageButton>(R.id.btnLoadInfo).setOnClickListener {
-            MaterialAlertDialogBuilder(activity)
-                .setTitle(R.string.info_load_title)
-                .setMessage(infoBodyRes(viewModel.testType))
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
+            LoadInfoDialog.show(activity, viewModel.testType)
         }
         // Tensile enters an area; bending its own dimensions.
         root.findViewById<View>(R.id.rowCrossSection).isVisible = viewModel.testType == TestType.TENSILE
@@ -235,12 +231,6 @@ class AnalysisLoadCard(
             )
         }
         LoadMapWarning.SIGN_UNEXPECTED -> activity.getString(R.string.load_warn_sign_tensile)
-    }
-
-    private fun infoBodyRes(testType: TestType): Int = when (testType) {
-        // Plain DIC has no load card; the branch only keeps the `when` exhaustive.
-        TestType.TENSILE, TestType.DIC_2D -> R.string.info_load_body
-        TestType.BENDING -> R.string.info_load_body_bending
     }
 
     private fun mappingRes(mapping: LoadMapping): Int = when (mapping) {

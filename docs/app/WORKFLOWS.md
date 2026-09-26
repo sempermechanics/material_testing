@@ -220,7 +220,7 @@ session is saved with no test type, like one made before test types existed.
 |---|---|---|
 | [ ] 3b.1 | Tap **+** on Home | **Which test?** with three rows — Tensile, Bending and 2D DIC — each with a caption: stress–strain curve and Young's modulus E for tensile; deflection, bending stress and E for bending; displacement and strain maps only for 2D DIC |
 | [ ] 3b.2 | Swipe the sheet down | Nothing opens; Home is unchanged |
-| [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard's load card asks for span, width and thickness and has a **Load point → Mark** row (§5.1b, §6a); the strain-axis toggle is hidden |
+| [ ] 3b.3 | Pick **Bending** | The **New analysis** sheet (§3a) opens; the wizard's load card asks for span, width and thickness and has a **Beam height → Set** row (§5.1b, §6a); the strain-axis toggle is hidden |
 | [ ] 3b.4 | Rotate the phone between picking a test and picking media | The test survives — the resulting session still carries it |
 | [ ] 3b.5 | Finish any run, open the viewer, tap ⓘ | **Test type** is the first row of Settings used, naming the test picked in 3b.1 |
 | [ ] 3b.6 | Reopen that session from Home; back it up, delete it locally, restore it | The ⓘ row still shows the test after each reopen |
@@ -386,9 +386,10 @@ tensile, **Support span** / **Width** / **Thickness** for bending.
 | [ ] 5.1b.16 | Rotate with a log imported | Card, cross-section and axis survive |
 | [ ] 5.1b.17 | Finish the run and reopen from Home | Session carries the loads (PR3 shows them) |
 | [ ] 5.1b.18 | Bending, log imported, one dimension left empty | **Next** disabled with "enter the specimen dimensions to continue"; it enables once span, width and thickness are all in |
-| [ ] 5.1b.19 | Tap ⓘ on the card, per test | The dialog gives that test's formula: load ÷ area, or 3 P L / (2 b h²) |
+| [ ] 5.1b.19 | Tap ⓘ on the card, per test | **Machine load** scrolls: a sample CSV header (`Time (s),Load (kN)` tensile, `Time (s),Load (N)` bending) and its rules; a drawing (tensile: the bar, its loading axis, the round cross-section with d and A = π·d²/4, the photo's X and Y; bending: the beam on its supports with L, W, δ, the b × t cross-section and the two beam-height taps); then the formulas (load ÷ A, or σb = M·y ÷ I and E = W·L³ ÷ (48·δ·I)) |
+| [ ] 5.1b.19a | Same, in dark theme | The drawing and the sample block stay readable: light ink on the dark dialog |
 | [ ] 5.1b.20 | Rotate with dimensions typed | The dimensions survive |
-| [ ] 5.1b.21 | Bending, log and dimensions in, no taps | **Next** disabled with "mark the beam's edges on the reference photo to continue"; **Mark** opens the tap editor (§6a) |
+| [ ] 5.1b.21 | Bending, log and dimensions in, no taps | **Next** disabled with "set the beam height on the reference photo to continue"; **Set** opens the tap editor (§6a) |
 | [ ] 5.1b.22 | Save taps in the editor | The row reads "N px across · 0.0xxx mm/px"; **Next** enables |
 | [ ] 5.1b.23 | Change the reference image | The taps clear; **Next** is disabled again until re-marked |
 | [ ] 5.1b.24 | Video + a timed log that starts after the recording (e.g. `scripts/synthetic_beam_video.py`, 2 s late) | Chip "matched by time" and a **Log started after the first frame** row (s). Typing 2 re-matches: the first loaded frame is the one filmed after the first weight went on |
@@ -569,10 +570,10 @@ ROI and mask, or with full-image defaults on cancel.
 
 ---
 
-### 6a. Beam thickness taps (bending)
+### 6a. Beam height taps (bending)
 
-`BeamEdgeTapActivity`, opened from **Load point → Mark**. Cancel / **Beam
-thickness** / Save across the top, the reference photo, the scale readout
+`BeamEdgeTapActivity`, opened from **Beam height → Set**. Cancel / **Beam
+height** / Save across the top, the reference photo, the scale readout
 over it, the instruction and **Reset** below.
 
 | # | Action | Expected |

@@ -12,7 +12,8 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Bending's load-point row on the load card: whether the beam's edges are
+ * Bending's load-point row on the load card, shown as **Beam height → Set**
+ * (the taps span the beam's height, t, under the load): whether the beam's edges are
  * tapped on the reference, the scale they give, and the button that opens
  * [BeamEdgeTapActivity] (launched by the Activity through [onMark]). The
  * taps replace the strain-axis toggle for bending: the beam runs across the
