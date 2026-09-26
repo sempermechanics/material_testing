@@ -12,14 +12,6 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
-## 2026-09-26 — Backend cost: scale to zero, clean up build storage
-
-Measured on the live project ([perf/backend-cost.md](../perf/backend-cost.md)): the warm production instance (`minScale=1`) was billed about 94 % of wall-clock, roughly ₹800–1,150 a month and over the ₹500 budget. Everything else sat in a free tier.
-
-- `deploy-backend.yml` defaults `--min-instances` to `0` in both environments; `MIN_INSTANCES=1` switches it back. Cold start is measured at p50 3.9 s and p95 6.0 s. The change takes effect on the next backend deploy.
-- `backend/deploy/ar-cleanup-policy.json` and `run-sources-lifecycle.json`: delete registry images and source tarballs more than 15 days old. The registry keeps `latest` and each package's five newest versions. An owner applies both once ([BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene)).
-- API Gateway kept (₹0 here); the latency options are recorded under TD-30.
-
 ## 2026-09-25 — Backend and console deploy: no analysis cap on a demo key (#232)
 
 Production `semper-api-36132773366-1` from `eb18ef8` (staging first, run
