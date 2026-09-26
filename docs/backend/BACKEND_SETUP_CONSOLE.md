@@ -63,26 +63,34 @@ database default), because an override with empty `indexes` turns single-field
 indexing off. Add a new TTL policy to the file as well as here.
 
 ### 3b. Create the composite indexes
-Four composite indexes back the paginated session listing and the admin
-pending-user query. A missing one is not caught at deploy time — it fails at
-runtime with `FAILED_PRECONDITION`, so create them before the first real client.
+Four composite indexes back the duplicate-session lookup
+(`repo/sessions.py`) and the staff licence list (`repo/license_admin.list_licenses`).
+A missing one is not caught at deploy time — it fails at runtime with
+`FAILED_PRECONDITION`, so create them before the first real client.
 
-The reliable route is one command, even in a console-first setup:
+The reliable route is one command, even in a console-first setup (Git Bash,
+Firebase CLI on Node >= 20; it stages the file beside a `firebase.json` of its
+own, because the CLI refuses files outside its project directory):
 
 ```bash
-firebase deploy --only firestore:indexes --project <project-id>
+PROJECT=<project-id> ./scripts/deploy-firestore.sh indexes
 ```
 
 To do it by hand instead, ☰ → **Firestore → Indexes → Composite → Create index**,
 and reproduce each entry from
 [`backend/firestore.indexes.json`](../../backend/firestore.indexes.json):
 
-| Collection | Fields (all ascending) |
+| Collection | Fields |
 |---|---|
-| `sessions` | `uid`, `localSessionId`, `status` |
-| `sessions` | `uid`, `__name__` |
-| `users` | `access_status`, `__name__` |
-| `files` | `sessionId`, `__name__` |
+| `sessions` | `uid` ↑, `localSessionId` ↑, `status` ↑ |
+| `licenses` | `mode` ↑, `createdAt` ↓ |
+| `licenses` | `mode` ↑, `status` ↑, `createdAt` ↓ |
+| `licenses` | `status` ↑, `createdAt` ↓ |
+
+↑ ascending, ↓ descending; all collection scope. Equality filters ordered by
+`__name__` (`sessions(uid)`, `users(access_status)`, `files(sessionId)`) need no
+composite: the automatic single-field indexes serve them, and the index API
+refuses a `field + __name__` entry as unnecessary.
 
 ## 4. Create the runtime service account
 1. ☰ → **IAM & Admin → Service Accounts**.

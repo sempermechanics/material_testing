@@ -96,9 +96,10 @@ shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
 
 ### A2b. Deploy the composite indexes
 
-`backend/firestore.indexes.json` declares the one composite index the
-duplicate-session lookup needs (`sessions`: `uid`, `localSessionId`, `status`).
-Every other query the backend and the consoles run is a single-field equality or
+`backend/firestore.indexes.json` declares four composite indexes: the
+duplicate-session lookup's (`sessions`: `uid`, `localSessionId`, `status`) and
+three for the staff licence list (`licenses`: `mode` + `createdAt` DESC,
+`mode` + `status` + `createdAt` DESC, `status` + `createdAt` DESC). Every other query the backend and the consoles run is a single-field equality or
 `array-contains`, optionally ordered by `__name__`, and Firestore serves those
 from its automatic single-field indexes — do not add `field + __name__` entries
 to the file; the index API refuses them ("this index is not necessary") and
@@ -115,7 +116,7 @@ PROJECT=$PROJECT ./scripts/deploy-firestore.sh indexes
 ```
 
 **Check:** `gcloud firestore indexes composite list --project $PROJECT` shows
-that one index in state `READY` (building can take a few minutes on a populated
+all four in state `READY` (building can take a few minutes on a populated
 database).
 
 ### A3. Create the runtime service account
