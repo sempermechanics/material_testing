@@ -28,10 +28,11 @@ the fit used, from the first measured δ to the last, in both the viewer and
 the lab-report PDF. As the owner decided, the graph no longer shows where the
 fit meets δ = 0. Checked on the Pixel 6 with a debug build of the PR head
 (`9b326883`): concrete_00 now reads `21360 / 15625 / 9889 / 4153 / -1582` in
-full. The slope line spans 0.93 → 1.6 mm, and E is unchanged at 2.48 / 1.90
-GPa. The -1582 is the plot's usual 8 % y margin below the lowest point
-(`Y_MARGIN_FRACTION`, `VsgPlotView.kt:421`), not the fit. The lab-report PDF
-was not re-checked on the phone. Ships with the next app release.
+full. The slope line spans the two load steps' δ (0.951 → 1.631 mm), and E is
+unchanged at 2.48 / 1.90 GPa. The lab-report PDF's page-3 graph matches the
+viewer, with the same ticks and line. The -1582 is the plot's usual 8 % y
+margin below the lowest point (`Y_MARGIN_FRACTION`, `VsgPlotView.kt:421`), not
+the fit. Ships with the next app release.
 
 ## 2026-09-26 — material_testing: bending δ signed by the load, not the tap order (#51)
 
