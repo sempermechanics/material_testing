@@ -66,6 +66,17 @@ SEATING_ASSIGNED = "assigned"
 SEATING_FLOATING = "floating"
 SEATINGS = frozenset({SEATING_ASSIGNED, SEATING_FLOATING})
 
+# A licence document's `status`. An individual key is `unused` until someone
+# redeems it; an institution key is `active` from mint. `revoked` is terminal.
+STATUS_UNUSED = "unused"
+STATUS_REDEEMED = "redeemed"
+STATUS_ACTIVE = "active"
+STATUS_REVOKED = "revoked"
+#: Every status the staff desk lists when revoked licences are hidden. A
+#: Firestore `in` filter, because `!=` cannot be combined with ordering on
+#: another field.
+LIVE_STATUSES = (STATUS_UNUSED, STATUS_REDEEMED, STATUS_ACTIVE)
+
 
 def legacy_plan(mode: str) -> str:
     """The `plan` value that denotes `mode`, for the dual-keyed wire response."""

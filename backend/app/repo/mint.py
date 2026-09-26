@@ -38,6 +38,9 @@ from .claims import (
     _individual_member_patch,
     _public_claim_error,
 )
+from .holders import (
+    licence_is_live,
+)
 from .invites import (
     find_user_by_email,
     _invite_ref,
@@ -83,6 +86,9 @@ def _license_public(license_id: str, data: dict) -> dict:
         "supportUntil": data.get("supportUntil"),
         "maxAnalyses": data.get("maxAnalyses"),
         "note": data.get("note") or "",
+        # Set when an individual licence was converted to an institution one
+        # (repo/upgrade.py): the id of the licence that replaced it.
+        "supersededBy": data.get("supersededBy") or "",
     }
 
 
@@ -235,6 +241,8 @@ def create_individual_license(
     device_id_lock: str = "",
     created_by_uid: str,
     expires_at=None,
+    grace_days: int | None = None,
+    support_until=None,
     max_analyses: int | None = None,
     note: str = "",
 ) -> dict:
@@ -259,6 +267,8 @@ def create_individual_license(
         status="unused",
         kind="individual",
         expires_at=expires_at,
+        grace_days=grace_days,
+        support_until=support_until,
         max_analyses=max_analyses,
         note=note,
     )
@@ -279,7 +289,8 @@ def create_individual_license(
 
 def _holds_only_a_demo_key(user: dict) -> bool:
     """True when this account can take a licence right now: it points at no
-    licence, at the auto-minted Demo key, or at one that is revoked or gone.
+    licence, at the auto-minted Demo key, or at one that is revoked, past its
+    grace, or gone — `licence_is_live`, the one-licence rule's own test.
 
     The discriminator is the licence document, as in `_drop_superseded_demo`:
     a revoked holder is left demoted in place and still pointing at the real
@@ -289,10 +300,7 @@ def _holds_only_a_demo_key(user: dict) -> bool:
     license_id = user.get("licenseId") or ""
     if not license_id:
         return True
-    lic = get_license(license_id)
-    if not lic or (lic.get("status") or "") == "revoked":
-        return True
-    return _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system"
+    return not licence_is_live(get_license(license_id))
 
 
 def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[str, str]:
@@ -347,6 +355,8 @@ def create_institution_license(
     max_seats: int | None = None,
     seating: str = SEATING_ASSIGNED,
     expires_at=None,
+    grace_days: int | None = None,
+    support_until=None,
     max_analyses: int | None = None,
     note: str = "",
 ) -> dict:
@@ -365,6 +375,8 @@ def create_institution_license(
         max_seats=max_seats,
         seating=seating,
         expires_at=expires_at,
+        grace_days=grace_days,
+        support_until=support_until,
         max_analyses=max_analyses,
         note=note,
     )

@@ -4,9 +4,9 @@ from .. import audit, errors, firestore_repo as repo, statuses
 from .. import rate_limit
 from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
-from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION, seat_cap_below_roster
-from ..models import AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
-from ..validation import AccessStatus, DocumentId, PageToken, Uid
+from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
+from ..models import AdminLicenseConvert, AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
+from ..validation import AccessStatus, DocumentId, LicenceSearch, PageToken, Uid
 from ._shared import clamp_page_size, page_block
 
 router = APIRouter()
@@ -72,11 +72,21 @@ def admin_patch_user_config(uid: Uid, body: UserConfigPatch,
 def admin_list_licenses(
     limit: int = 50,
     page_token: PageToken = "",
+    include_demo: bool = False,
+    include_revoked: bool = True,
+    q: LicenceSearch = "",
     admin=Depends(admin_user),
 ):
+    """Licences, newest first. System Demo keys are left out unless
+    `include_demo`; revoked licences are left out when `include_revoked` is
+    false. `q` searches by exact address, domain or key prefix instead of
+    paging (see `repo.list_licenses`)."""
     rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
     limit = clamp_page_size(limit, 200)
-    licenses, next_token = repo.list_licenses(limit=limit, page_token=page_token or None)
+    licenses, next_token = repo.list_licenses(
+        limit=limit, page_token=page_token or None,
+        include_demo=include_demo, include_revoked=include_revoked, q=q.strip(),
+    )
     return {
         "licenses": licenses,
         # What every demo-mode key gives its holder, whatever the key stores.
@@ -116,6 +126,8 @@ def admin_create_license(
             max_seats=body.maxSeats,
             seating=body.seating,
             expires_at=body.expiresAt,
+            grace_days=body.graceDays,
+            support_until=body.supportUntil,
             max_analyses=body.maxAnalyses,
             note=body.note,
         )
@@ -127,11 +139,20 @@ def admin_create_license(
                     "seating": body.seating},
         )
         return minted
+    # One licence per person. Refused before anything is written: the mint
+    # used to go ahead and only report that the licence had not reached them.
+    # The id is the licence they hold, for the desk to open — renewal is
+    # Extend on that one.
+    held = repo.licence_held_by(body.emailLock)
+    if held:
+        raise HTTPException(409, f"{errors.EMAIL_ALREADY_LICENSED}: {held}")
     minted = repo.create_individual_license(
         email_lock=body.emailLock,
         device_id_lock=body.deviceIdLock,
         created_by_uid=admin["uid"],
         expires_at=body.expiresAt,
+        grace_days=body.graceDays,
+        support_until=body.supportUntil,
         max_analyses=body.maxAnalyses,
         note=body.note,
     )
@@ -147,6 +168,20 @@ def admin_create_license(
                 "claimError": minted.get("claimError") or ""},
     )
     return minted
+
+
+@router.get("/v1/admin/licenses/{license_id}")
+def admin_get_license(
+    license_id: DocumentId,
+    admin=Depends(admin_user),
+):
+    """One licence, as a row of the list. The desk refreshes the row a
+    change touched with this instead of reloading the whole table."""
+    rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
+    lic = repo.get_license_public(license_id)
+    if lic is None:
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
+    return lic
 
 
 @router.patch(
@@ -176,26 +211,20 @@ def admin_update_license(
     `maxAnalyses` on a demo-mode key is refused (422 `cap_on_demo_key`): a
     demo holder gets `DEMO_MAX_ANALYSES` whatever the key stores, so the edit
     would answer 200 and change nothing. `clearMaxAnalyses` is still allowed.
+
+    Upgrades and downgrades in place: `perpetual`, `allowShorten` with an
+    earlier `expiresAt`, and on an institution licence `seating`, `maxSeats`
+    and `adminEmails` (`license_edit_error` has every refusal). Unknown
+    fields are a 422, not silently dropped.
     """
-    if body.maxSeats is not None:
-        # Refused before the lock is touched, so nothing is half applied.
-        current = repo.get_license(license_id)
-        if current and seat_cap_below_roster(current, body.maxSeats):
-            raise HTTPException(422, errors.MAX_SEATS_BELOW_USED)
-    if body.maxAnalyses is not None:
-        # Same order: a cap on a demo key is refused before the lock moves.
-        current = repo.get_license(license_id)
-        err = repo.analysis_cap_error(current) if current else ""
-        if err:
-            raise HTTPException(422, err)
     patch = body.model_dump(exclude_none=True)
     clear_lock = patch.pop("clearDeviceLock", False)
-    if "expiresAt" in patch:
-        # Refused before the lock is touched, so a rejected date never
-        # leaves half the request applied. `update_license` checks again
-        # against what it reads, for an edit that lands in between.
+    # Every check is made before the lock is touched, so a refused edit never
+    # leaves half the request applied. `update_license` checks again against
+    # what it reads, for an edit that lands in between.
+    if clear_lock and patch:
         current = repo.get_license(license_id)
-        err = repo.expiry_change_error(current, patch["expiresAt"]) if current else ""
+        err = repo.license_edit_error(current, patch) if current else ""
         if err:
             raise HTTPException(422, err)
     cleared = {}
@@ -223,6 +252,117 @@ def admin_update_license(
             detail={k: str(v) for k, v in patch.items()},
         )
     return updated
+
+
+@router.delete(
+    "/v1/admin/licenses/{license_id}",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
+def admin_delete_license(
+    license_id: DocumentId,
+    ctx=Depends(attested_or_mfa_admin_fresh),
+    admin=Depends(admin_user),
+):
+    """Delete a licence into a 30-day hold (`repo/deletion.py`). The same
+    fresh step-up as a whole-licence revoke, which this runs first: holders
+    drop to Demo and their data is untouched. The licence and its seats are
+    copied to `deleted_licenses` with `purgeAt`, which a TTL policy removes;
+    until then `POST /v1/admin/deleted-licenses/{id}/restore` brings it back.
+    A system Demo key is refused (409 `demo_key_not_deletable`).
+    """
+    code, row = repo.delete_license(license_id, admin["uid"])
+    if code:
+        raise HTTPException(404 if code == errors.LICENSE_NOT_FOUND else 409, code)
+    audit.record(
+        admin["uid"], action="ADMIN_LICENSE_DELETE",
+        target={"type": "license", "id": license_id},
+        detail={"priorStatus": row["priorStatus"], "kind": row["kind"],
+                "keyPrefix": row["keyPrefix"], "purgeAt": str(row["purgeAt"])},
+    )
+    return row
+
+
+@router.get("/v1/admin/deleted-licenses")
+def admin_list_deleted_licenses(
+    limit: int = 50,
+    admin=Depends(admin_user),
+):
+    """Licences deleted within the hold, most recent first, each with the
+    date it is purged."""
+    rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
+    return {"licenses": repo.list_deleted_licenses(limit=clamp_page_size(limit, 200))}
+
+
+@router.post(
+    "/v1/admin/deleted-licenses/{license_id}/restore",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
+def admin_restore_license(
+    license_id: DocumentId,
+    ctx=Depends(attested_or_mfa_admin),
+    admin=Depends(admin_user),
+):
+    """Bring a deleted licence back within its hold. Holders are re-attached
+    unless they have taken another licence since (one licence per person)."""
+    code, lic = repo.restore_license(license_id, admin["uid"])
+    if code:
+        status = {
+            errors.DELETED_LICENSE_NOT_FOUND: 404,
+            errors.DELETED_LICENSE_PURGED: 410,
+            errors.LICENSE_EXISTS: 409,
+        }.get(code, 409)
+        raise HTTPException(status, code)
+    audit.record(
+        admin["uid"], action="ADMIN_LICENSE_RESTORE",
+        target={"type": "license", "id": license_id},
+        detail={"status": lic["status"], "seatsUsed": lic.get("seatsUsed")},
+    )
+    return lic
+
+
+@router.post(
+    "/v1/admin/licenses/{license_id}/convert",
+    dependencies=[rate_limited(rate_limit.admin_bucket)],
+)
+def admin_convert_license(
+    license_id: DocumentId,
+    body: AdminLicenseConvert,
+    ctx=Depends(attested_or_mfa_admin),
+    admin=Depends(admin_user),
+):
+    """Device-attested, Semper-staff only. Replace an individual licence with
+    an institution licence carrying its terms (`repo/upgrade.py`).
+
+    The holder is seated on the new licence with their device lock, so
+    nothing changes for them but the roster they are on; someone not signed
+    in yet has their invite moved. The individual licence is then revoked
+    with `supersededBy` set. The new key is returned once, as a mint does.
+    """
+    code, out = repo.convert_to_institution(
+        license_id,
+        domain_lock=body.domainLock,
+        admin_emails=body.adminEmails,
+        max_seats=body.maxSeats,
+        seating=body.seating,
+        admin_uid=admin["uid"],
+    )
+    if code:
+        status = {
+            errors.LICENSE_NOT_FOUND: 404,
+            errors.LICENSE_REVOKED: 409,
+            errors.LICENSE_NOT_CONVERTIBLE: 409,
+            errors.CONVERT_DOMAIN_MISMATCH: 422,
+            errors.CLAIM_CONTENDED: 503,
+        }.get(code, 409)
+        raise HTTPException(status, code)
+    audit.record(
+        admin["uid"], action="ADMIN_LICENSE_CONVERT",
+        target={"type": "license", "id": license_id},
+        detail={"to": out["license"]["id"], "domainLock": body.domainLock,
+                "adminEmails": body.adminEmails, "maxSeats": body.maxSeats,
+                "seating": body.seating, "claimedByUid": out["claimedByUid"]},
+    )
+    return out
 
 
 @router.patch(

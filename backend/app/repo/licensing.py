@@ -15,6 +15,10 @@ from .claims import (  # noqa: F401
     _license_mirror_patch,
     _public_claim_error,
 )
+from .holders import (  # noqa: F401
+    licence_held_by,
+    licence_is_live,
+)
 from .invites import (  # noqa: F401
     _delete_license_invites,
     find_user_by_email,
@@ -50,11 +54,21 @@ from .entitlement import (  # noqa: F401
 )
 from .license_admin import (  # noqa: F401
     _drop_user_to_demo_if_licensed,
+    _drop_users_to_demo_if_licensed,
+    get_license_public,
     _license_holder_uids,
     list_licenses,
-    _refresh_license_mirror,
+    _refresh_license_mirrors,
     revoke_license,
     update_license,
+)
+from .upgrade import (  # noqa: F401
+    convert_to_institution,
+)
+from .deletion import (  # noqa: F401
+    delete_license,
+    list_deleted_licenses,
+    restore_license,
 )
 from .institution_admin import (  # noqa: F401
     add_institution_member,

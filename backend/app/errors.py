@@ -122,6 +122,26 @@ MAX_SEATS_BELOW_USED = "max_seats_below_used"
 # so the edit was stored, mirrored and reported as done while the app kept
 # showing "N of 25". Raising a demo account's allowance is a licensed key.
 CAP_ON_DEMO_KEY = "cap_on_demo_key"
+# 422 on a staff licence edit: `maxSeats`, `seating` or `adminEmails` on an
+# individual licence, which has no roster. Converting one is its own route.
+INSTITUTION_ONLY = "institution_only"
+# 422: a floating licence with no `maxSeats`. Nobody would ever be refused a
+# lease, so it would be an assigned licence with extra steps.
+FLOATING_NEEDS_MAX_SEATS = "floating_needs_max_seats"
+# Converting an individual licence to an institution one. `not_convertible`
+# is an institution licence or a Demo key (409); `domain_mismatch` is a
+# holder whose address is not on the new licence's domain (422).
+LICENSE_NOT_CONVERTIBLE = "license_not_convertible"
+CONVERT_DOMAIN_MISMATCH = "convert_domain_mismatch"
+# Deleting a licence into the 30-day hold (repo/deletion.py). A system Demo
+# key is refused (409): the account would only be issued another. Restore
+# answers 404 for nothing held, 410 once the hold has ended (the TTL purge
+# runs up to a day late, so the date is checked), and 409 if a licence with
+# that id exists again.
+DEMO_KEY_NOT_DELETABLE = "demo_key_not_deletable"
+DELETED_LICENSE_NOT_FOUND = "deleted_license_not_found"
+DELETED_LICENSE_PURGED = "deleted_license_purged"
+LICENSE_EXISTS = "license_exists"
 
 # --- institution invites ---------------------------------------------------
 # An invite reserves a roster place for an address with no account yet. It is
@@ -129,6 +149,20 @@ CAP_ON_DEMO_KEY = "cap_on_demo_key"
 # uid. `invite_exists` means the address is already promised to a DIFFERENT
 # licence — re-inviting to the same one is a no-op, not an error.
 INVITE_EXISTS = "invite_exists"
+
+# --- one licence per person ------------------------------------------------
+# 409 wherever a licence would be granted to someone who already holds or is
+# promised a different live one (repo/holders.py). Renewal is Extend on the
+# licence they have; a second one used to be granted and then either sat
+# unattached or silently moved them off the first.
+# `email_already_licensed: <licence id>` — staff mint; the id is the one they
+#   hold, so the desk can open it.
+# `already_licensed` — a key typed in the app.
+# `member_already_licensed` — institution IT adding someone to a roster. No
+#   id: IT has no business learning which other licence a person holds.
+EMAIL_ALREADY_LICENSED = "email_already_licensed"
+ALREADY_LICENSED = "already_licensed"
+MEMBER_ALREADY_LICENSED = "member_already_licensed"
 INVITE_NOT_FOUND = "invite_not_found"
 INVALID_EMAIL = "invalid_email"
 

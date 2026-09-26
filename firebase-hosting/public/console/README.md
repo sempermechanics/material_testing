@@ -18,7 +18,7 @@ so `node --test` can run them; `auth.js` re-exports `esc` and `when`.
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
 | `/account` (`/console/account`) | Anyone with an account | See the licence, its term, the seat and the saved analyses; give a floating seat back, move the licence to a new device, download an analysis. The last two need **2FA**. |
 | `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members, withdraw an unclaimed invitation, see who holds a seat, put a member on hold, clear a device lock. |
-| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, extend a term, revoke a key, drive any institution roster, approve accounts. |
+| `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, edit or upgrade one, revoke or delete a key (30-day restore), drive any institution roster, approve accounts. |
 
 ## The front door
 
@@ -93,6 +93,11 @@ also refuses a revoke on a session older than
 `ADMIN_WEB_REVOKE_REAUTH_SECONDS`. Nothing is deleted either way — revoking
 withdraws entitlement and leaves every saved analysis in place.
 
+**Delete** asks the same (it revokes first) and is offered on revoked rows
+too, but not on a system Demo key. The licence moves to **Recently deleted**,
+a card loaded only when opened (`GET /v1/admin/deleted-licenses`), which
+shows the days left and **Restore** until `purgeAt`.
+
 ## Deploying
 
 Use [`scripts/deploy-console.sh`](../../../scripts/deploy-console.sh) so the
@@ -128,7 +133,7 @@ reason: the SDK's auth iframe is now same-origin.
 
 A Google re-authentication unloads the page. The operator comes back signed
 in afresh with a one-line status saying what to repeat; the request that
-asked for the step-up was not sent. A revoke is the exception: the desk
+asked for the step-up was not sent. A revoke or delete is the exception: the desk
 stashes the licence id in sessionStorage before leaving (`resume` in
 `stepUp`), and on the return leg `requireSignIn` hands it back so the desk
 finishes the revoke after one plain confirmation — the who-is-affected
@@ -153,17 +158,24 @@ that one start. Without this the desk loaded twice on every return leg, both
 copies received the revoke, and the second load's status reset erased
 whatever the first reported.
 
-Results stay on screen. The reload that follows a change passes
-`keepStatus`, so "SEMP-4K2P revoked." or "Could not revoke: …" is not
-overwritten by "Loading…" half a second later, and the status line is pinned
-to the top of the viewport while it holds a message — it sits above the mint
-card, and the licence table is well below it. Revoked licences are hidden
-behind "Show revoked": a revoke that left its row in place with only the pill
-changed read as one that had not happened. Before an individual mint the desk
-checks the list for a live licence on the same address and asks first — the
-backend mints the second one anyway and only reports `invite_exists` — and
-every mint says whether the licence reached the person: attached, waiting
-for their first sign-in, or not delivered and why.
+Results stay on screen. A change refreshes only the row it touched — from
+the PATCH or revoke answer, or `GET /v1/admin/licenses/{id}` after a mint or a
+roster change — so "SEMP-4K2P revoked." or "Could not revoke: …" is never
+overwritten by a reload, and pages loaded with "Load more" stay loaded. The
+status line is pinned to the top of the viewport while it holds a message — it
+sits above the mint card, and the licence table is well below it. The list is
+newest first, 50 a page; Demo keys and revoked licences are left out by the
+backend unless "Show Demo keys" / "Show revoked" is ticked. A revoke that left
+its row in place with only the pill changed read as one that had not
+happened. The filter narrows the loaded rows at once, and an email, domain or
+key prefix is also searched on the backend (`q=`), so a licence on a page
+nobody loaded is found. One licence per person: the backend refuses an
+individual mint for an address that already holds or is promised a live
+licence (`409 email_already_licensed: <id>`), and the desk puts that licence
+on screen with the address in the filter — renewal is Edit on it. The IT
+and operator rosters say the same for `member_already_licensed`. Every mint
+says whether the licence reached the person: attached, waiting for their
+first sign-in, or not delivered and why.
 
 ### Go-live checklist (Identity Platform + consoles)
 

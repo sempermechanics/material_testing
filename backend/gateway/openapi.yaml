@@ -519,6 +519,11 @@ paths:
   /v1/admin/licenses:
     get:
       operationId: adminListLicenses
+      description: >
+        Semper staff. Licences newest first, cursor-paged (limit, page_token).
+        System Demo keys are left out unless include_demo=true; revoked
+        licences are left out when include_revoked=false. q searches by exact
+        email, domain or key prefix instead of paging.
       responses:
         '200': { description: OK }
     post:
@@ -538,6 +543,40 @@ paths:
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '422': { description: "kind=institution missing domainLock/adminEmails, or kind=individual missing emailLock" }
   /v1/admin/licenses/{licenseId}:
+    get:
+      operationId: adminGetLicense
+      description: >
+        Semper staff. One licence, shaped like a row of the list; the desk
+        refreshes the row a change touched instead of reloading the table.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '404': { description: License not found }
+        '429': { description: Rate limited }
+    delete:
+      operationId: adminDeleteLicense
+      description: >
+        Device-attested, Semper-staff only, with the fresh step-up a revoke
+        needs. Revokes the licence (holders drop to demo; their data is
+        untouched), then moves it and its seats to deleted_licenses with
+        purgeAt 30 days on, which a TTL policy removes. Restore within the hold
+        with POST /v1/admin/deleted-licenses/{licenseId}/restore. A system demo
+        key is refused (409 demo_key_not_deletable).
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: License not found }
+        '409': { description: A system demo key (demo_key_not_deletable) }
     patch:
       operationId: adminUpdateLicense
       description: >
@@ -558,7 +597,11 @@ paths:
         key (422 cap_on_demo_key) — a demo holder gets DEMO_MAX_ANALYSES
         whatever the key stores; issue a licensed key instead. A maxSeats below the members already on an
         assigned institution roster is refused with 422 max_seats_below_used;
-        remove members first.
+        remove members first. Upgrades and downgrades in place: perpetual=true
+        drops the expiry; allowShorten=true lets expiresAt move earlier or end
+        a perpetual licence; seating, maxSeats and adminEmails change how an
+        institution licence is run (422 institution_only on an individual
+        licence). Unknown fields are refused with 422.
       parameters:
         - name: licenseId
           in: path
@@ -569,7 +612,7 @@ paths:
         '401': { description: Missing or invalid device attestation }
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: License not found }
-        '422': { description: "No field set, a value out of range, or an expiresAt that is past, earlier than the current one, or on a perpetual licence (expiry_in_past, expiry_before_current, license_perpetual), a maxSeats below the seats in use (max_seats_below_used), or a maxAnalyses on a demo-mode key (cap_on_demo_key)" }
+        '422': { description: "No field set, a value out of range, or an expiresAt that is past, earlier than the current one, or on a perpetual licence (expiry_in_past, expiry_before_current, license_perpetual), a maxSeats below the seats in use (max_seats_below_used), a maxAnalyses on a demo-mode key (cap_on_demo_key), a roster field on an individual licence (institution_only), a floating licence with no maxSeats (floating_needs_max_seats), or an unknown field" }
         '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/seats/{uid}/device:
     patch:
@@ -667,6 +710,61 @@ paths:
         '401': { description: Missing or invalid device attestation }
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: License not found }
+  /v1/admin/deleted-licenses:
+    get:
+      operationId: adminListDeletedLicenses
+      description: >
+        Semper staff. Licences deleted within the 30-day hold, most recently
+        deleted first, each with priorStatus, deletedAt and purgeAt.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          type: integer
+      responses:
+        '200': { description: OK }
+        '429': { description: Rate limited }
+  /v1/admin/deleted-licenses/{licenseId}/restore:
+    post:
+      operationId: adminRestoreLicense
+      description: >
+        Device-attested, Semper-staff only. Bring a deleted licence back within
+        its hold. Holders are re-attached unless they have taken another live
+        licence since; a licence that was revoked comes back revoked.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: Nothing deleted under that id (deleted_license_not_found) }
+        '409': { description: A licence with that id exists (license_exists) }
+        '410': { description: The hold has ended (deleted_license_purged) }
+  /v1/admin/licenses/{licenseId}/convert:
+    post:
+      operationId: adminConvertLicense
+      description: >
+        Device-attested, Semper-staff only. Replace an individual licence with
+        an institution licence (domainLock, adminEmails, maxSeats, seating)
+        that carries its expiry, grace, support date, analysis cap and note.
+        The holder is seated on it with their device lock; the individual
+        licence is revoked with supersededBy set. Returns the new key once.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: License not found }
+        '409': { description: "Revoked, or not an individual licensed key (license_revoked, license_not_convertible)" }
+        '422': { description: "The holder's address is not on domainLock (convert_domain_mismatch), or an invalid body" }
+        '503': { description: Seating the holder lost a race; retry (claim_contended) }
   # ---------------------------------------------------------------------------
   # Pre-rename aliases of the three routes above. ESPv2 is the front door and
   # rejects any path absent from this spec, so the aliases FastAPI serves are

@@ -23,6 +23,9 @@ from .devlock import (
 from .user_config import (
     resolve_user_config,
 )
+from .holders import (
+    licence_held_by,
+)
 from .claims import (
     claim_seat,
     _emails_match,
@@ -145,6 +148,12 @@ def activate_license(uid: str, email: str, device_id: str, key: str) -> tuple[st
         # onto the user, effective_mode immediately resolves demo, and the
         # caller is handed err="" with a demo config and no explanation.
         return "license_expired", None
+    if licence_held_by(email, user=user, exclude_id=license_id):
+        # One licence per person. Before this the key simply won: an
+        # institution seat or an individual licence replaced whatever the
+        # account held, and the licence it left stayed `redeemed` in their
+        # name. Asked before the kind branch so both refuse alike.
+        return "already_licensed", None
     if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
         return _activate_institution(user, uid, email, device_id, lic, ref, key)
     return _activate_individual(user, uid, email, device_id, lic, ref, key)

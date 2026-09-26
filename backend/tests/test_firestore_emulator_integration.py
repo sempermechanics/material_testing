@@ -810,3 +810,37 @@ def test_reconcile_matches_each_seat_to_its_own_holder(emulator_repo):
     assert by_uid[revoked["uid"]]["bucket"] in {"revokedConfirmed", "revokedStillRunning"}
     assert by_uid[revoked["uid"]]["reason"] != emulator_repo.NO_ACCOUNT
     assert report["entitled"] == 1
+
+
+def test_the_staff_list_pages_newest_first_through_the_real_query(emulator_repo):
+    """`list_licenses` combines an equality filter, an `in` filter, a
+    descending order on another field and a snapshot cursor. The store double
+    only imitates that; this walks every page against Firestore itself and
+    checks the licences made here come back newest first, each once, with the
+    revoked one and the Demo key left out."""
+    tag = uuid.uuid4().hex[:8]
+    made = [
+        emulator_repo.create_individual_license(
+            email_lock=f"page{i}-{tag}@lab.org", created_by_uid="emu-admin",
+        )["license"]["id"]
+        for i in range(3)
+    ]
+    gone = emulator_repo.create_individual_license(
+        email_lock=f"gone-{tag}@lab.org", created_by_uid="emu-admin",
+    )["license"]["id"]
+    emulator_repo.revoke_license(gone, "emu-admin")
+
+    seen, token = [], None
+    while True:
+        rows, token = emulator_repo.list_licenses(
+            limit=2, page_token=token, include_revoked=False,
+        )
+        seen.extend(row["id"] for row in rows)
+        if not token:
+            break
+
+    assert len(seen) == len(set(seen)), "a licence was listed on two pages"
+    assert [i for i in seen if i in made] == list(reversed(made))
+    assert gone not in seen
+    found = emulator_repo.list_licenses(q=f"page1-{tag}@lab.org")[0]
+    assert [row["id"] for row in found] == [made[1]]

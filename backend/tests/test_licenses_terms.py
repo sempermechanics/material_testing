@@ -323,7 +323,10 @@ def test_extending_does_not_touch_someone_on_a_different_license(store):
         expires_at=datetime.now(timezone.utc) + timedelta(days=1),
     )
     repo.activate_license("u1", "a@b.com", "dev-1", first["key"])
-    # u1 moves to a second key; the first license no longer speaks for them.
+    # The first lapses and u1 moves to a second key (one licence per person:
+    # only a lapsed one lets them); the first no longer speaks for them.
+    store._data["licenses"][first["license"]["id"]].update(
+        {"expiresAt": datetime.now(timezone.utc) - timedelta(days=1), "graceDays": 0})
     second = repo.create_individual_license(
         email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
     )

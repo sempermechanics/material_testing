@@ -169,6 +169,7 @@ def add_seat(
             errors.LICENSE_SEATS_EXHAUSTED: 409,
             errors.LICENSE_SEAT_DISABLED: 409,
             errors.INVITE_EXISTS: 409,
+            errors.MEMBER_ALREADY_LICENSED: 409,
             errors.INVALID_EMAIL: 400,
             # Lost the race for the seat, not out of seats: try again.
             errors.CLAIM_CONTENDED: 503,
