@@ -666,7 +666,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="load_point_mark">Set</string>
     <string name="load_point_remark">Change</string>
     <string name="load_point_unset">Tap the beam’s top and bottom edges on the reference photo</string>
-    <string name="load_point_need_thickness">Enter the thickness first — the taps turn it into the photo’s scale.</string>
+    <string name="load_point_need_thickness">Enter the beam’s thickness first.</string>
     <!-- e.g. "128 px across · 0.0498 mm/px" -->
     <string name="load_point_meta_fmt">%1$d px across · %2$s mm/px</string>
 

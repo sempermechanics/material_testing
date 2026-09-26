@@ -587,6 +587,7 @@ over it, the instruction and **Reset** below.
 
 | # | Action | Expected |
 |---|---|---|
+| [ ] 6a.0 | Tap **Set** with the thickness still empty | The editor does not open; the message "Enter the beam’s thickness first." shows in full, not cut off |
 | [ ] 6a.1 | Open it with the thickness typed | Readout "Thickness t mm — tap both edges"; the instruction asks for the top edge and says pinch or double-tap zooms, drag pans; Save disabled (grey, not sky blue) |
 | [ ] 6a.2 | Double-tap the beam, then pinch | Zooms in about the finger; drag pans; double-tap again returns to fit |
 | [ ] 6a.3 | While zoomed, tap the top edge, then tap below it and a little to one side | Each mark gets crosshair lines across the whole photo, with a ring on the mark; the second mark lands **on the first mark's vertical line**, at the height tapped, so thickness is measured straight down; a dashed probe circle sits between them; **the zoom does not change between taps**; readout "t mm over N px · mm/px" |
