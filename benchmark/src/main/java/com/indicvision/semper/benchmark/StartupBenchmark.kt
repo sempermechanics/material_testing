@@ -24,11 +24,15 @@ class StartupBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
+    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    @get:Rule
+    val deviceState = DeviceStateRule()
+
     @Test
     fun coldStartup() = benchmarkRule.measureRepeated(
         packageName = PACKAGE,
         metrics = listOf(StartupTimingMetric()),
-        iterations = 5,
+        iterations = COLD_START_ITERATIONS,
         startupMode = StartupMode.COLD,
         compilationMode = CompilationMode.Partial(),
     ) {
@@ -48,5 +52,11 @@ class StartupBenchmark {
 
     companion object {
         private const val PACKAGE = "com.indicvision.semper"
+
+        /**
+         * 15, not 5: a Pixel 6's cold starts spread 404–478 ms within one run, so a
+         * 5-start median moved with one or two slow starts (TD-135).
+         */
+        const val COLD_START_ITERATIONS = 15
     }
 }

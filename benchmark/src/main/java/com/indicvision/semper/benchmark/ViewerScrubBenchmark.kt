@@ -44,6 +44,10 @@ class ViewerScrubBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
+    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    @get:Rule
+    val deviceState = DeviceStateRule()
+
     @Test
     fun scrub150Frames() = scrub(frameCount = 150)
 
