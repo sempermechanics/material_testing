@@ -556,7 +556,6 @@ paths:
         adminEmails — see the /v1/institutions/licenses/{licenseId}/seats
         routes below; Semper staff never touch individual seats on an
         institution key. The plaintext key is returned once, either way.
-        "campus" is accepted as the pre-rename spelling of "institution".
       responses:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
@@ -785,79 +784,6 @@ paths:
         '409': { description: "Revoked, or not an individual licensed key (license_revoked, license_not_convertible)" }
         '422': { description: "The holder's address is not on domainLock (convert_domain_mismatch), or an invalid body" }
         '503': { description: Seating the holder lost a race; retry (claim_contended) }
-  # ---------------------------------------------------------------------------
-  # Pre-rename aliases of the three routes above. ESPv2 is the front door and
-  # rejects any path absent from this spec, so the aliases FastAPI serves are
-  # unreachable in production unless they are declared here too — leaving them
-  # out would make the deprecation window exist only against a directly-hit
-  # Cloud Run URL, which nothing can reach. Same backend, same auth, same
-  # handler. Delete this block and the FastAPI aliases together.
-  /v1/campus/licenses/{licenseId}/seats:
-    post:
-      operationId: campusAddSeat
-      description: Deprecated alias of POST /v1/institutions/licenses/{licenseId}/seats.
-      parameters:
-        - name: licenseId
-          in: path
-          required: true
-          type: string
-      responses:
-        '200': { description: OK }
-        '403': { description: email_not_verified }
-        '404': { description: license_not_found or user_not_found }
-        '409': { description: license_seats_exhausted or license_seat_disabled }
-        '429': { description: Rate limited }
-        '503': { description: "Lost the race for the seat; retry (claim_contended)" }
-    get:
-      operationId: campusListSeats
-      description: Deprecated alias of GET /v1/institutions/licenses/{licenseId}/seats.
-      parameters:
-        - name: licenseId
-          in: path
-          required: true
-          type: string
-      responses:
-        '200': { description: OK }
-        '403': { description: email_not_verified }
-        '404': { description: license_not_found }
-        '429': { description: Rate limited }
-  /v1/campus/licenses/{licenseId}/seats/{uid}:
-    patch:
-      operationId: campusPatchSeat
-      description: Deprecated alias of PATCH /v1/institutions/licenses/{licenseId}/seats/{uid}.
-      parameters:
-        - name: licenseId
-          in: path
-          required: true
-          type: string
-        - name: uid
-          in: path
-          required: true
-          type: string
-      responses:
-        '200': { description: OK }
-        '400': { description: empty_patch }
-        '403': { description: email_not_verified }
-        '404': { description: license_not_found or seat_not_found }
-        '409': { description: "Hold or resume on a removed seat or a revoked licence, or lost a race with another change to it (seat_revoked, license_revoked, seat_busy)" }
-        '429': { description: Rate limited }
-    delete:
-      operationId: campusRevokeSeat
-      description: Deprecated alias of DELETE /v1/institutions/licenses/{licenseId}/seats/{uid}.
-      parameters:
-        - name: licenseId
-          in: path
-          required: true
-          type: string
-        - name: uid
-          in: path
-          required: true
-          type: string
-      responses:
-        '200': { description: OK }
-        '403': { description: email_not_verified }
-        '404': { description: license_not_found or seat_not_found }
-        '429': { description: Rate limited }
   /v1/institutions/licenses:
     get:
       operationId: institutionMyLicenses
@@ -865,8 +791,7 @@ paths:
         Which institution licences the caller administers, found from their
         verified email rather than from a licence id they already hold. This
         is what lets one sign-in page route somebody to their own roster.
-        An empty list is the ordinary answer and is not an error. No
-        /v1/campus alias: the route is new, so nothing pre-rename calls it.
+        An empty list is the ordinary answer and is not an error.
       responses:
         '200': { description: OK }
         '403': { description: email_not_verified }

@@ -35,7 +35,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
-| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test` on the DOM-free `console/util.js` | No — always runs | seconds |
+| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, `auth.js` (sign-in, second factor, step-up, `api`, revoke gate), `router.js`, and the operator, account and institution pages, against a fake Firebase SDK loaded through a `module.register` hook and a DOM parsed from the real pages (`firebase-hosting/tests/harness.mjs`) | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log + `koverVerify` floor | `app` (PR); always on `main` push | ~5–8 / ~10 min |
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
@@ -251,12 +251,11 @@ Required secrets / vars (repo-level on Free private orgs is fine — Environment
 `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`; vars `FIREBASE_PROJECT_ID`,
 `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL`, `AUTO_APPROVE_HD`, `ADMIN_EMAILS`,
 `SUPPORT_EMAIL`, `NOTIFY_FROM`, async provisioning `TASKS_QUEUE`,
-`TASKS_LOCATION`, `TASKS_TARGET_BASE_URL`, `TASKS_INVOKER_SA`, and
-**`REQUIRE_ATTESTED_UPLOADS`**.
+`TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`.
 
-Production must keep **`REQUIRE_ATTESTED_UPLOADS=1`**. The deploy workflow pins
-the Cloud Run env var from that GitHub var. Leaving it empty clears the flag on
-the next deploy and re-opens ID-token-only upload targets. See
+`REQUIRE_ATTESTED_UPLOADS` is no longer passed (retired 2026-09-26, TD-45):
+`/uploads` is always device-attested. The "Describe live env" step warns while
+a service still carries it; remove it after promote. See
 [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md).
 
 API Gateway OpenAPI uses the placeholders `__CLOUD_RUN_URL__`,

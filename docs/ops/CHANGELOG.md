@@ -130,6 +130,57 @@ Bending's **Load point → Mark** row is now **Beam height → Set**. The sample
 box uses an opaque `info_code_bg`, because the translucent `viewer_plot_grid`
 did not draw on the dark dialog. Checked by hand on the API 36 emulator, in
 light and dark themes. Ships with the next app release.
+## 2026-09-26 — Backend, gateway and console deploy: compat shims 1–5 retired (#267), account status line (#271)
+
+Staging first (run 36237349656 → `semper-api-staging-36237349656-1`, staging
+gateway updated in the same run), then production run 36237598434 (gateway
+`dry-run`) and run 36237900008 (`apply`) from `10809473`. The dry-run diff was the
+four `/v1/campus/*` alias paths and the "campus is accepted" note removed (76
+lines) plus one description line. `apply` switched `semper-gw` from
+`v202609261040-72` to `v202609261112-75`; its outside check answered 401 on
+`GET /v1/config` and 200 on the preflight, and the live gateway now answers 404
+on `/v1/campus/licenses/x/seats` and 401 on `/v1/institutions/licenses/x/seats`.
+`REQUIRE_ATTESTED_UPLOADS` was then removed from both services by hand
+(`gcloud run services update … --remove-env-vars`), giving `semper-api-00029-z72`
+and `semper-api-staging-00028-ndp`; the GitHub variable stays until no pre-#267
+commit can be redeployed. The console went out with `scripts/deploy-console.sh`.
+
+- #267 (TD-45, shims 1–5 of CLOUD_ARCHITECTURE_GCP §20.5): `PRO_MAX_SESSIONS_PER_USER`
+  is no longer read; `GET /v1/sessions/{sid}/uploads` always requires an attested
+  device; admin mint refuses `kind="campus"` and the user-config patch refuses
+  `plan` (422); the `/v1/campus/*` seat aliases are gone from FastAPI and the
+  gateway. Evidence, checked live before the change: neither service carried the
+  old variable; 30 days of logs (back to 2026-09-07, old `indic-api` included)
+  had no `legacy_unattested_uploads`, 73 `/uploads` reads with none refused, no
+  `/v1/campus` request and no user-config PATCH. Shims 6–9 wait on the app fleet.
+- #268 and #270 (TD-22): 156 behavioural tests for `auth.js`, `router.js` and the
+  operator, account and institution pages, run by `node --test` against a fake
+  Firebase and a parsed DOM; no deploy needed.
+- #271 (TD-136 here; the parent recorded it as TD-134, which is a lab row in this repo; found by #270): the account page keeps "Could not read your
+  account" when the analyses answer second instead of clearing it.
+
+## 2026-09-26 — Backend, gateway and console deploy: Demo phone change through staff (#266, with #264)
+
+From `f95dc558`, run by hand, staging then production, both with `gateway_mode: apply`
+because #266 adds a route. Staging run 36235540338 → `semper-api-staging-36235540338-1`,
+`semper-gw-staging` on `v202609261024-71`; production run 36236313898 →
+`semper-api-36236313898-1`, `semper-gw` on `v202609261040-72`. The candidate `/readyz`
+smoke passed on both. Each gateway diff added only `/v1/admin/device-releases`. From
+outside with no token, that route answers 401 on both gateways. The console went out
+afterwards with `scripts/deploy-console.sh` against `semper-gw`.
+
+- #266 closes TD-126, on the decision that a Demo account may change phone like any other
+  account, on request to operators, never self-service. `POST /v1/admin/device-releases`
+  `{"email": …}` (`ADMIN_STEPUP`) makes the release a lock clear makes: the old device
+  `SUPERSEDED`, its id held off for `DEVICE_RELEASE_HOLD_HOURS`, audited as
+  `ADMIN_DEVICE_RELEASE`. An account on a live licence is `409
+  license_device_clear_required`; **New device** moves both bindings. The operator console
+  has a **Release a Demo account's phone** card, by email.
+- #264 (only the registered phone takes the device lock) was on staging since run
+  36233420945 and reached production with this deploy.
+- Both runs moved `serving` and `rollback-prev` by digest, the first moves since
+  `indic-deployer` got `roles/artifactregistry.repoAdmin` on the repository: production's
+  `rollback-prev` is #261/#263's image (`7e8fcd0c…`).
 
 ## 2026-09-26 — Console deploy: licence edit fixes (#257); staging gateway in CI (#258)
 

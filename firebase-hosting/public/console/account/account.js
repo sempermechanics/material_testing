@@ -38,13 +38,20 @@ function showFactorPill() {
 
 /* ------------------------------------------------------------ licence */
 
+// A failed /v1/me, kept so the analyses load (which runs alongside and
+// clears the status line when it succeeds) puts it back rather than
+// wiping it when it answers second.
+let accountError = "";
+
 async function loadAccount() {
   try {
     const me = await api("/v1/me");
     licence = me.license || {};
+    accountError = "";
     renderLicence();
   } catch (e) {
-    setStatus(`Could not read your account: ${e.message}`, true);
+    accountError = `Could not read your account: ${e.message}`;
+    setStatus(accountError, true);
   }
 }
 
@@ -213,7 +220,7 @@ async function loadSessions({ reset }) {
     quota = data.quota || {};
     renderQuota();
     renderSessions();
-    setStatus("");
+    setStatus(accountError, Boolean(accountError));
   } catch (e) {
     setStatus(`Could not list your analyses: ${e.message}`, true);
   }
