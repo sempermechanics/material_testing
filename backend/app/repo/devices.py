@@ -32,6 +32,17 @@ def user_has_active_device(uid: str) -> bool:
     return bool(u.exists and u.to_dict().get("activeDeviceId"))
 
 
+def _release_patch(device_id: str) -> dict:
+    """The `users/{uid}` fields that release `device_id`: the binding dropped and
+    the id stamped, so `repo.devlock.released_device_held` holds it off while the
+    new phone registers. Shared by a lock clear and a staff phone release."""
+    return {
+        "activeDeviceId": _base.firestore.DELETE_FIELD,
+        "releasedDeviceId": device_id,
+        "releasedAt": _now(),
+    }
+
+
 def _retire_device(batch, device_ref, status: str) -> None:
     """Retire `device_ref` in `batch`, so its id stops counting against another account.
 

@@ -143,6 +143,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   took a cleared lock and demoted the registered one to Demo (Pixel 6, 2026-09-26). The lock
   now follows registration, a clear keeps a registered phone the lock did not name, and a
   typed key follows the same rule. Needs a production deploy, then one **New device** for that account.
+- **Demo phone change (in review):** staff release a Demo account's phone on request
+  (`POST /v1/admin/device-releases`, console card), closing TD-126. Needs backend, gateway
+  apply and console deploys.
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),

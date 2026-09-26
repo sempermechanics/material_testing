@@ -2024,8 +2024,9 @@ until now only one of them could do it. The table is the whole feature:
 | Semper staff, a seat | `PATCH /v1/admin/licenses/{id}/seats/{uid}/device` | `ADMIN_STEPUP` |
 | Semper staff, an individual licence | `PATCH /v1/admin/licenses/{id}` `{"clearDeviceLock": true}` | `ADMIN_STEPUP` |
 | The holder | `POST /v1/licenses/unbind` | `USER_STEPUP` |
+| Semper staff, a Demo account | `POST /v1/admin/device-releases` `{"email": …}` | `ADMIN_STEPUP` |
 
-All four reach one primitive, `firestore_repo.clear_device_lock`, which takes
+The first four reach one primitive, `firestore_repo.clear_device_lock`, which takes
 an `actor` — `ACTOR_STAFF`, `ACTOR_IT`, `ACTOR_SELF` — and selects the seat or
 the licence document by kind. The staff seat route exists because the operator
 console previously called the institution-tier one, which returns
@@ -2067,8 +2068,8 @@ writes the release and the restored mode (below) in one batch, after one read
 of the user, and only where `_live_holder` allows: a revoked licence, a seat
 that is revoked or on hold, and an account that has moved to another licence
 all keep their binding. Each of those leaves the
-holder on Demo, and a demo account has no licence to clear, so it still cannot
-change phone (TD-126). Until the guard was shared the release checked only the
+holder on Demo, and a Demo account changes phone only through staff (below).
+Until the guard was shared the release checked only the
 last of the three, so **New device** on a held seat let its member change phone
 on Demo.
 
@@ -2084,6 +2085,18 @@ Installed builds already read any 409 there as "bound to a different device".
 Registering any other device ends the hold at once. After the hold, the old
 phone may register again, so a mistaken clear strands nobody (decided
 2026-09-26).
+
+**A Demo account changes phone through staff.** It has no licence lock to
+clear, so until 2026-09-26 its first phone was its only phone: only suspending
+the account emptied `activeDeviceId`. The decision (TD-126) is that it may
+change phone like any other account, on request to operators, never
+self-service. The app already tells a refused phone to ask an admin.
+`POST /v1/admin/device-releases` takes the account's email and makes the same
+release a clear does (`repo.users.release_account_device`, sharing
+`_release_patch` and `_retire_device`): the old device retired, its id held off,
+audited as `ADMIN_DEVICE_RELEASE` with `releasedDeviceId`. An account on a live
+licence is refused with `409 license_device_clear_required`, since its lock
+would still name the old phone; **New device** moves both.
 
 #### The half that is easy to miss
 

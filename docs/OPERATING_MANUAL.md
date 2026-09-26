@@ -1047,8 +1047,17 @@ cleared by mistake and never moves, the old phone works again after 24 hours.
 
 **New device** on a seat that is on hold or revoked, or on a revoked licence,
 empties the lock but leaves the account's phone where it is: that holder is on
-Demo, and a Demo account cannot change phone. Resume the seat first if the
+Demo, and a Demo account changes phone only as below. Resume the seat first if the
 member is really moving.
+
+**A Demo account changing phone.** It has no licence to clear, so the holder
+asks (usually by email: the app tells a refused phone to ask an admin), and
+staff release the old phone under **Release a Demo account's phone** in
+`/console/operator`, by the account's email (`POST /v1/admin/device-releases`).
+The old phone is signed out and held off for 24 hours, the same as after
+**New device**, and the new one can sign in. There is no self-service path for
+Demo (decided 2026-09-26). A licensed account is refused there: use
+**New device** on its licence.
 
 Only the holder's own change waits out a cooldown; a support request never
 does, so a lost phone is fixed the same day. `429 device_change_too_soon`

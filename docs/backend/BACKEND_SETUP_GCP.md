@@ -774,6 +774,7 @@ signature — works from an in-app admin screen, or from curl while
 GET  /v1/admin/users?status=PENDING     # who's waiting
 POST /v1/admin/users/{uid}/approve      # → APPROVED
 POST /v1/admin/users/{uid}/revoke       # → SUSPENDED
+POST /v1/admin/device-releases          # {"email": …}: free a Demo account's phone
 ```
 Or, without the API, set `access_status: "APPROVED"` on the `users/{uid}` doc in
 Firestore directly.
