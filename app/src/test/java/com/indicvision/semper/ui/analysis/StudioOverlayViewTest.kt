@@ -216,6 +216,38 @@ class StudioOverlayViewTest {
     }
 
     @Test
+    fun `keyboard open and close cycles leave the ROI and holes where they were`() {
+        overlay.applyImageRoi(101, 203, 499, 297)
+        overlay.applyImageHole(301, 401, 199, 97)
+
+        // The ROI dock grows by the keyboard height and shrinks back, each time
+        // refitting the image; odd heights give scales that are not whole numbers.
+        repeat(5) {
+            layout(image, 400, 237)
+            overlay.updateImageBounds()
+            layout(image, 400, 400)
+            overlay.updateImageBounds()
+        }
+
+        assertRect(RectF(101f, 203f, 600f, 500f), overlay.getRelativeRoi())
+        assertRect(RectF(301f, 401f, 500f, 498f), overlay.lastHoleRelative())
+    }
+
+    @Test
+    fun `a canvas squeezed to nothing keeps the ROI for when it regrows`() {
+        overlay.applyImageRoi(100, 200, 500, 300)
+        overlay.applyImageHole(300, 400, 200, 100)
+
+        layout(image, 400, 0) // keyboard plus dock taller than the screen
+        overlay.updateImageBounds()
+        layout(image, 400, 300)
+        overlay.updateImageBounds()
+
+        assertRect(RectF(100f, 200f, 600f, 500f), overlay.getRelativeRoi())
+        assertRect(RectF(300f, 400f, 500f, 500f), overlay.lastHoleRelative())
+    }
+
+    @Test
     fun `a saved ROI restored before layout is applied once the image is ready`() {
         val restored = StudioOverlayView(context).apply {
             realImageWidth = 2000
