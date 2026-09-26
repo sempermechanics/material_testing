@@ -99,7 +99,12 @@ class ResultViewerActivity : AppCompatActivity() {
     /** Max / min (with coordinates) / mean for the info peek sheet. */
     private var detailStats: String = ""
 
-    private val hideChromeRunnable = Runnable { fadeChrome(visible = false) }
+    // Not while a frame number is being typed: hiding the scrubber takes the
+    // field's focus, which commits it and closes the keyboard mid-number. The
+    // commit on focus loss bumps the chrome, so the hide is rescheduled then.
+    private val hideChromeRunnable = Runnable {
+        if (!etFrameNumber.hasFocus()) fadeChrome(visible = false)
+    }
 
     internal lateinit var shareBanner: com.indicvision.semper.ui.common.TransferBannerController
     private val chromeHideDelayMs = 2_500L
@@ -287,7 +292,9 @@ class ResultViewerActivity : AppCompatActivity() {
         )
 
         Insets.padTop(findViewById(R.id.viewerTopStack))
-        Insets.padBottom(layoutScrubber)
+        // Lifted, not padded, above the keyboard: the image is fitted to the
+        // scrubber's height (wireContentInsets), so growing it would refit the frame.
+        Insets.padBottomLiftAboveIme(layoutScrubber)
         wireContentInsets()
 
         tvProbeReadout = findViewById(R.id.tvProbeReadout)

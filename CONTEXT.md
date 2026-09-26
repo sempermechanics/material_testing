@@ -143,7 +143,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
-  diagram of each test; bending's row reads **Beam height → Set**.
+  diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room
+  on every screen with a text field: wizard, ROI editor, viewer frame jump (TD-99).
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   run in Tier 3 and pass on a Galaxy S21+ and the API 37 emulator (TD-95).
   `WizardDraftRestoreTest`: a load log survives process death.
@@ -156,6 +157,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): video import (§5.1a) and a real
     UTM clip; 5.1a.1–5.1a.9 pass only on API 37 with synthetic clips. The Galaxy S21+'s demo
     account is over its cap (45 / 25), so a new analysis there needs a licensed key or deletes first.
+  - TD-99's keyboard fix is checked on API 34 and 36 emulators, not yet on a phone.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.

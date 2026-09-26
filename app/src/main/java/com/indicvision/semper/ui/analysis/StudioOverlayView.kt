@@ -66,7 +66,9 @@ class StudioOverlayView @JvmOverloads constructor(
         val imageHeight = drawable.intrinsicHeight.toFloat()
         val viewWidth = iv.width.toFloat()
         val viewHeight = iv.height.toFloat()
-        if (imageWidth == 0f || imageHeight == 0f) return
+        // A canvas squeezed to nothing (keyboard + dock taller than the screen)
+        // keeps the last bounds, so the ROI still maps back when it regrows.
+        if (imageWidth == 0f || imageHeight == 0f || viewWidth <= 0f || viewHeight <= 0f) return
 
         val scale = min(viewWidth / imageWidth, viewHeight / imageHeight)
         val scaledWidth = imageWidth * scale
@@ -94,17 +96,11 @@ class StudioOverlayView @JvmOverloads constructor(
         applyPendingRestore()
 
         if (liveHoles.isNotEmpty()) {
+            // Float remap, as for the ROI: rounding to whole pixels here lost up
+            // to a pixel per edge on every keyboard open/close.
             holes.clear()
             for ((mode, img) in liveHoles) {
-                val mapped = mapImageRectToView(
-                    img.left.toInt(),
-                    img.top.toInt(),
-                    img.width().toInt().coerceAtLeast(1),
-                    img.height().toInt().coerceAtLeast(1),
-                )
-                if (mapped != null) {
-                    holes.add(Hole(mode, mapped))
-                }
+                holes.add(Hole(mode, imageRectToView(img)))
             }
             invalidate()
         }
@@ -190,21 +186,25 @@ class StudioOverlayView @JvmOverloads constructor(
         )
     }
 
+    /** Inverse of [viewRectToImage]: image pixels (fractional) to view coordinates. */
+    private fun imageRectToView(img: RectF): RectF {
+        val scale = if (realImageWidth > 0) {
+            realImageWidth.toFloat() / imageBounds.width()
+        } else {
+            (imageView?.drawable?.intrinsicWidth?.toFloat() ?: 1f) / imageBounds.width()
+        }
+        return RectF(
+            imageBounds.left + img.left / scale,
+            imageBounds.top + img.top / scale,
+            imageBounds.left + img.right / scale,
+            imageBounds.top + img.bottom / scale,
+        )
+    }
+
     private fun applyPendingRestore() {
         pendingRestoreRoi?.let { saved ->
             // Map the physical image coordinates back to the scaled screen view
-            val scale = if (realImageWidth > 0) {
-                realImageWidth.toFloat() / imageBounds.width()
-            } else {
-                (imageView?.drawable?.intrinsicWidth?.toFloat() ?: 1f) / imageBounds.width()
-            }
-
-            val left = imageBounds.left + (saved.left / scale)
-            val top = imageBounds.top + (saved.top / scale)
-            val right = imageBounds.left + (saved.right / scale)
-            val bottom = imageBounds.top + (saved.bottom / scale)
-
-            roiRect.set(left, top, right, bottom)
+            roiRect.set(imageRectToView(saved))
             hasValidRoi = true
             invalidate()
         }

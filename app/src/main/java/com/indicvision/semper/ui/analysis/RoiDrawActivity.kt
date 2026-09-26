@@ -89,7 +89,10 @@ class RoiDrawActivity : AppCompatActivity() {
         etRoiH = findViewById(R.id.etRoiH)
 
         Insets.padTop(findViewById(R.id.headerChrome))
-        Insets.padBottom(findViewById(R.id.bottomToolbar))
+        // The dock rises above the keyboard so the typed X/Y/W/H and Apply stay
+        // reachable; the canvas shrinks and the overlay remaps the crop onto the
+        // smaller image (StudioOverlayView.updateImageBounds).
+        Insets.padBottomAboveIme(findViewById(R.id.bottomToolbar))
 
         val imageFilePath = intent.getStringExtra(DicKeys.IMAGE_FILE_PATH)
         realImageWidth = intent.getIntExtra(DicKeys.IMAGE_WIDTH, 0)

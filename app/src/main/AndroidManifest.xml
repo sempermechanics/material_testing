@@ -131,7 +131,15 @@
             android:name=".ui.limit.SeatRequiredActivity"
             android:exported="false"
             android:launchMode="singleTop" />
-        <activity android:name=".ui.viewer.ResultViewerActivity" />
+        <!-- Screens with text fields say adjustResize (here, the wizard and the ROI
+             editor). Before Android 15 the window then shrinks above the keyboard;
+             from 15 the app is edge-to-edge and nothing resizes, so the Insets IME
+             helpers pad or lift the views instead. Left to the default, these
+             windows ran in pan mode: views got no keyboard inset, and a field low
+             on the screen could not be scrolled above the keyboard. -->
+        <activity
+            android:name=".ui.viewer.ResultViewerActivity"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ui.viewer.SaveExportActivity"
@@ -146,11 +154,12 @@
         <activity
             android:name=".ui.analysis.StaticAnalysisActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|fontScale|density|locale|layoutDirection" />
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|fontScale|density|locale|layoutDirection"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ui.analysis.RoiDrawActivity"
-            android:windowSoftInputMode="adjustPan" />
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ui.analysis.BeamEdgeTapActivity"

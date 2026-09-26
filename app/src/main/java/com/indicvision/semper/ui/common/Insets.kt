@@ -44,10 +44,9 @@ object Insets {
             val bars = windowInsets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
             )
-            val ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom
             v.updatePadding(
                 top = startTop + bars.top,
-                bottom = startBottom + maxOf(bars.bottom, ime),
+                bottom = startBottom + barsOrImeBottom(windowInsets),
             )
             windowInsets
         }
@@ -70,6 +69,49 @@ object Insets {
             windowInsets
         }
         if (view.isAttachedToWindow) ViewCompat.requestApplyInsets(view)
+    }
+
+    /**
+     * For a bottom-anchored dock that holds text fields and sits under a
+     * resizable canvas: pad the bottom by the navigation bar or, while the
+     * keyboard is open, by the IME. The dock grows by the keyboard height so
+     * its fields and buttons stay above it, and whatever is constrained to the
+     * dock's top shrinks to fit.
+     */
+    fun padBottomAboveIme(view: View) {
+        val startBottom = view.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
+            v.updatePadding(bottom = startBottom + barsOrImeBottom(windowInsets))
+            windowInsets
+        }
+        if (view.isAttachedToWindow) ViewCompat.requestApplyInsets(view)
+    }
+
+    /**
+     * For a bottom bar floating over content whose layout must not change while
+     * typing (e.g. a zoomable image fitted to the bars' heights): pad the bottom
+     * by the navigation bar as [padBottom] does, and translate the bar up by the
+     * part of the keyboard that reaches above the navigation bar. Its height
+     * stays put, so nothing measured from it refits.
+     */
+    fun padBottomLiftAboveIme(view: View) {
+        val startBottom = view.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
+            val bars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            ).bottom
+            v.updatePadding(bottom = startBottom + bars)
+            v.translationY = -(barsOrImeBottom(windowInsets) - bars).toFloat()
+            windowInsets
+        }
+        if (view.isAttachedToWindow) ViewCompat.requestApplyInsets(view)
+    }
+
+    private fun barsOrImeBottom(windowInsets: WindowInsetsCompat): Int {
+        val bars = windowInsets.getInsets(
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+        ).bottom
+        return maxOf(bars, windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom)
     }
 
     private fun applyInsets(view: View, top: Boolean = false, bottom: Boolean = false) {
