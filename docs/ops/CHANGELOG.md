@@ -12,6 +12,26 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — material_testing: bending graph axes, full tick labels and the slope line over measured δ (#55)
+
+Merged as `9ea9a6f8`. On a Pixel 6 the Results graph for `concrete_00` read
+its load ticks as "1686 / 4771 / 7855 / 940 / 5975": the compact plots' left
+gutter was a fixed 34 dp, so any tick wider than about four characters lost
+its leading digits and sign off the view's edge (TD-93). `VsgPlotView.compactLeftPad`
+now sizes it to the widest formatted tick, 34 dp at least; every compact plot
+(Results, the viewer settings sheet, the VSG lattice) gets it. The muted slope
+line was drawn from δ = 0, so its free intercept pulled the load axis down to
+about -3.7 kN. `BeamDeflection.Summary.slopeLine` now runs it from the first
+measured δ to the last over the load steps it was fitted to, in the viewer and
+the lab-report PDF alike (TD-94). The graph no longer shows where the fit meets
+δ = 0. Checked on the Pixel 6 with a debug build of `9b326883`: `concrete_00`
+reads 21360 / 15625 / 9889 / 4153 / -1582 N in full, the slope line spans
+0.951 → 1.631 mm (the two load steps), and E is unchanged at 2.48 / 1.90 GPa.
+The -1582 N is the plot's 8 % head-room below the data's (0, 0)
+(`Y_MARGIN_FRACTION`), not the fit. The lab-report PDF from the same build matches: its graph reads the same
+ticks in full, its slope line spans the same load steps, and its Results give
+1.90 / 2.48 GPa. Ships with the next app release.
+
 ## 2026-09-26 — material_testing: bending δ signed by the load, not the tap order (#51)
 
 Merged as `e6d4addb`. The tap editor names the first tap "top" wherever it
