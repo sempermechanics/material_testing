@@ -138,9 +138,16 @@ stashes the licence id in sessionStorage before leaving (`resume` in
 `stepUp`), and on the return leg `requireSignIn` hands it back so the desk
 finishes the revoke after one plain confirmation — the who-is-affected
 dialog and the typed key already happened on the way out, and the backend's
-120 s revoke window is too short for finding the row and typing it again. A
-mint form left for more than `ADMIN_WEB_REAUTH_SECONDS` is re-entered.
-Email/password accounts step up in place with their password.
+120 s revoke window is too short for finding the row and typing it again. If
+the return leg fails — a wrong or cancelled authenticator code, or Back out of
+Google — the stash comes back marked `reauthFailed` and the desk says the
+revoke or delete was not sent (the list load used to wipe that line, so a
+delete could vanish silently). A retry is the operator's own click, so it is
+not held by the 120 s redirect-loop guard. A mint form left for more than
+`ADMIN_WEB_REAUTH_SECONDS` is re-entered.
+An account with a password provider is asked for it and steps up in place; a
+Google-only account (the consoles sign in with Google only) goes straight to Google
+without a password prompt it could not answer.
 
 One SDK detail makes the redirect re-auth work at all. When the return leg
 raises the TOTP challenge, firebase-auth resolves it against the user it

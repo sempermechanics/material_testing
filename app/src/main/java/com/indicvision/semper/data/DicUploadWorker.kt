@@ -389,7 +389,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
         val api = IndicApi.get(applicationContext)
         if (!api.enabled) {
-            Timber.d("Cloud backend not configured — skipping upload")
+            // Succeeding quietly left the row "upload pending" for good.
+            CloudSync.settleWithoutBackend(applicationContext)
             return@withContext Result.success()
         }
         val idToken = TokenProvider.usableIdToken()

@@ -130,8 +130,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`); the last is `dea4fcc` (parent #250: TD-127–TD-132 for the device
-  change; #249 holds the old phone off 24 h; #248, #247, TD-122–TD-126). The parent deploys, and its TD
+  --grep=semperdic-app`); the last is `cd7d5db` (parent #251–#258: no "upload pending" with
+  no upload coming, TD-127 fixed, licence-desk and console fixes, the gateway job for
+  staging; #248–#250 device change, TD-122–TD-132). The parent deploys, and its TD
   rows jump to TD-122. General fixes made here go back (TD-76, TD-77,
   TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-88 as parent #217, and the
   four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
@@ -170,7 +171,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     UTM clip; 5.1a.1–5.1a.9 pass only on API 37 with synthetic clips. The Galaxy S21+'s demo
     account is over its cap (45 / 25), so a new analysis there needs a licensed key or deletes first.
     2D DIC (#46) and the load card's ⓘ and **Beam height → Set** (#48), §3b.1–3b.3, 3b.8–3b.9,
-    pass on a Pixel 6 (Android 17, 2026-09-26); **Set** before a thickness now fits its toast (TD-97).
+    pass on a Pixel 6 (Android 17, 2026-09-26); **Set** before a thickness now fits its toast (TD-98).
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - The parent owns deploys and releases; see its CONTEXT.md for production state.
