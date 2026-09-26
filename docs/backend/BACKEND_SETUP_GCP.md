@@ -218,6 +218,48 @@ client's first poll cost more than the work.
 `gcloud tasks queues describe semper-provision --location=$REGION` should show no
 backlog.
 
+### A7. Storage hygiene
+
+Every source deploy pushes an image of about 80 MB to Artifact Registry and a source
+tarball to a bucket. Nothing removes them by default. Registry storage above 0.5 GB is
+billed, so the registry grows without bound. Once the first deploy has created both, add
+the two rules below. Run them as a project owner: the deploy SA cannot change a repository.
+
+```bash
+# Registry: delete versions more than 15 days old, except the image tagged `latest`
+# (the one serving) and each package's five newest versions (rollback targets).
+gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy \
+  --location=$REGION --project=$PROJECT \
+  --policy=backend/deploy/ar-cleanup-policy.json --dry-run
+
+# Source tarballs: only Cloud Build reads them, during the build.
+gcloud storage buckets update gs://run-sources-$PROJECT-$REGION \
+  --lifecycle-file=backend/deploy/run-sources-lifecycle.json
+```
+
+`--dry-run` stores the policy but deletes nothing. Before switching it on, list what it
+would remove:
+
+```bash
+gcloud artifacts docker images list \
+  $REGION-docker.pkg.dev/$PROJECT/cloud-run-source-deploy \
+  --include-tags --sort-by=~CREATE_TIME
+```
+
+Every version older than 15 days goes, unless it is tagged `latest` or is one of its
+package's five newest. Then re-run the first command with `--no-dry-run` in place of
+`--dry-run`.
+
+Artifact Registry does not record when an image was last pulled, so "unused" here means
+"uploaded more than 15 days ago". The keep rules are there because Cloud Run needs a
+revision's image each time it starts an instance, and at `--min-instances 0` that happens
+after every idle spell. The Firestore backup bucket is not covered: it has its own
+retention ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
+
+**Check:** `gcloud artifacts repositories list-cleanup-policies cloud-run-source-deploy
+--location=$REGION` shows three policies. `gcloud storage buckets describe
+gs://run-sources-$PROJECT-$REGION --format='value(lifecycle_config)'` shows the 15-day rule.
+
 ---
 
 ## Part B — Deploy & smoke-test the backend
@@ -229,7 +271,7 @@ gcloud run deploy semper-api \
   --region $REGION \
   --service-account "$API_SA" \
   --no-allow-unauthenticated \
-  --min-instances 1 --max-instances 10 \
+  --min-instances 0 --max-instances 10 \
   --concurrency 40 --cpu 1 --memory 512Mi --timeout 300 \
   --set-env-vars "SERVICE_ACCOUNT_EMAIL=$API_SA,SHARED_DRIVE_ID=$SHARED_DRIVE_ID,GOOGLE_CLOUD_PROJECT=$PROJECT,FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID,AUTO_APPROVE_HD=yourdomain.com,ADMIN_EMAILS=you@yourdomain.com" \
   --set-env-vars "SUPPORT_EMAIL=support@sempermechanics.com,NOTIFY_FROM=Semper <noreply@yourdomain.com>" \
@@ -342,8 +384,11 @@ carry no `access-request mail` warning.
 > still enforced in the app layer** (Firebase ID token + device signature).
 > Never deploy with `--allow-unauthenticated` — it binds `allUsers`.
 >
-> `--min-instances 1` keeps one instance warm: a cold start costs ~6 s on the
-> first sign-in or upload after idle. Use `0` for staging.
+> `--min-instances 0` scales to zero, so the service costs nothing while idle. The first
+> sign-in or upload after about 15 minutes idle waits for a cold start (measured
+> p50 3.9 s, p95 6.0 s). `1` keeps one instance warm for roughly ₹800–1,150 a month, more
+> than the whole pilot budget; set the `MIN_INSTANCES` variable only if that latency becomes
+> a complaint ([perf/backend-cost.md](../perf/backend-cost.md)).
 
 Grab the URL:
 ```bash

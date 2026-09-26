@@ -1,0 +1,17 @@
+[
+  {
+    "name": "delete-older-than-15d",
+    "action": {"type": "Delete"},
+    "condition": {"tagState": "any", "olderThan": "15d"}
+  },
+  {
+    "name": "keep-serving",
+    "action": {"type": "Keep"},
+    "condition": {"tagState": "tagged", "tagPrefixes": ["latest"]}
+  },
+  {
+    "name": "keep-recent-5",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {"keepCount": 5}
+  }
+]

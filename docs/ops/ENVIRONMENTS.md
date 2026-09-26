@@ -90,8 +90,18 @@ once pointed staging's tasks at the production service and queue.
 | **`REQUIRE_ATTESTED_UPLOADS`** | var | Production **must** be `1`. Empty string on deploy clears the Cloud Run flag |
 | `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER` | vars | Cloud caps by `mode`. Unset → `25` / `999` (expression defaults in the workflow). Set `DEMO_MAX_ANALYSES` from the pre-deploy Firestore survey — every pre-licensing account is demo |
 | `ADMIN_WEB_MFA_ENABLED`, `APP_CHECK_MODE`, `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | vars | Unset → `1` / `off` / `30`. `APP_CHECK_MODE` must stay `off` while a build without App Check is installed; `enforce` 403s it |
-| `MIN_INSTANCES` | var | Warm Cloud Run instances. Unset → `1` for production, `0` for staging. A cold start is ~6 s on the first call after idle; one warm instance is roughly $10–15/month. Tagged `cand-*` revisions do not carry traffic, but prune them so an old tag cannot hold an instance |
+| `MIN_INSTANCES` | var | Warm Cloud Run instances. Unset → `0` in both environments (since 2026-09-26: one idle warm instance was the whole bill and over the ₹500/month budget, [perf/backend-cost.md](../perf/backend-cost.md)). The first call after about 15 minutes idle waits for a cold start, measured at p50 3.9 s and p95 6.0 s. Set `1` to keep one instance warm, at roughly ₹800–1,150 ($10–14) a month. Tagged `cand-*` revisions do not carry traffic, but prune them so an old tag cannot hold an instance |
 | `CONSOLE_ORIGINS` | var | Browser origins the API answers CORS for. Unset → `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com`. Space-separated, never commas (the deploy action splits `env_vars` on them). Add a Hosting preview channel here while testing a console change |
+
+### Storage hygiene
+
+Artifact Registry `cloud-run-source-deploy` (asia-south1) and the bucket
+`run-sources-indicvision-dic-app-asia-south1` fill up with every source deploy. Each image
+is about 80 MB. Both delete what is more than 15 days old; the registry never deletes an
+image tagged `latest` or any of a package's five newest versions. The policy files are in
+[`backend/deploy/`](../../backend/deploy/), and the one-time apply commands are in
+[BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene). The Firestore
+backup bucket is not covered: it has its own retention.
 
 ### Firestore backup / restore drill
 
