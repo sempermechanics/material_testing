@@ -355,7 +355,7 @@ async def test_institution_seat_patch_clear_device_lock_over_http(client, monkey
     minted = _mint_institution()
     license_id = minted["license"]["id"]
     repo.activate_license("student", "a@university.edu", "old-dev", minted["key"])
-    store._data["users"]["student"]["activeDeviceId"] = "registered-dev"
+    store._data["users"]["student"]["activeDeviceId"] = "old-dev"
 
     resp = await client.patch(
         f"/v1/institutions/licenses/{license_id}/seats/student",
@@ -365,7 +365,7 @@ async def test_institution_seat_patch_clear_device_lock_over_http(client, monkey
     assert resp.json()["seat"]["deviceIdLock"] == ""
     patched = [r for r in audited if r["action"] == "INSTITUTION_SEAT_PATCH"]
     assert patched[0]["detail"]["previousDeviceId"] == "old-dev"
-    assert patched[0]["detail"]["releasedDeviceId"] == "registered-dev"
+    assert patched[0]["detail"]["releasedDeviceId"] == "old-dev"
 
 
 @pytest.mark.asyncio

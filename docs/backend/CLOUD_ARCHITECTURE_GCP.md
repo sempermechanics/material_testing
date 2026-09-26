@@ -2028,8 +2028,21 @@ console previously called the institution-tier one, which returns
 
 **Clearing the lock is the whole change.** Since binding happens on first use
 (§20.1), an empty lock is `_LOCK_UNBOUND` and `revalidate_device_lock` binds
-it to whichever device signs in next, first writer wins. Nothing is
+it to the next device that may take it, first writer wins. Nothing is
 re-activated, no key is re-issued, and nothing is typed on the new device.
+
+**Only the registered phone takes the lock** (`devlock._may_bind`): the
+account's `activeDeviceId`, or, while nothing is registered, any device but a
+released one still in its hold. Any device used to bind. A phone refused at
+registration still sends config and profile calls, and those took the lock,
+leaving the lock on one device and the registration on another; the registered
+phone then read as a mismatch and was demoted to Demo in place. Found
+2026-09-26: an emulator's refused sign-ins took a cleared lock, and the Pixel 6
+the account was registered on went to Demo. The same path let a released
+phone's upload worker retake the lock during its hold. A device that may not
+bind still gets its answer; the lock stays empty for the phone that may. A key
+typed on such a device (`_activate_individual`) is refused as
+`license_device_mismatch`.
 
 **Clearing is not revoking.** Entitlement, seat, lease, quota and every stored
 analysis are untouched; only the lock goes empty.
@@ -2040,6 +2053,9 @@ analysis are untouched; only the lock goes empty.
 binding, and until 2026-09-26 a clear left it naming the old phone, so the new
 one was refused at sign-in and never reached the lock. `_settle_holder` now
 deletes it and retires the old `devices/{id}` document as `SUPERSEDED`
+(when that phone held the lock, or the lock held none: an account already split
+keeps its registered phone, which binds the empty lock next, and a second clear
+releases it if the holder really is moving)
 (`_retire_device`, shared with `register_device` and `set_user_status`). It
 writes the release and the restored mode (below) in one batch, after one read
 of the user, and only where `_live_holder` allows: a revoked licence, a seat
@@ -2107,8 +2123,9 @@ A clear writes the device that was given up — `ADMIN_DEVICE_LOCK_CLEAR`,
 `revalidate_device_lock` writes `LICENSE_DEVICE_BIND` with the device that took
 its place. The clear names two devices: `previousDeviceId`, the lock's, and
 `releasedDeviceId`, the registered device the account was signed out of. They
-can differ (the lock binds on licence checks, registration on sign-in), and
-either is empty when there was nothing to give up. The `releasedDeviceId` stamp
+differ only on an account split before the lock followed registration, and
+then `releasedDeviceId` is empty because that phone is kept; either is empty
+when there was nothing to give up. The `releasedDeviceId` stamp
 on the user lasts only until the next registration, so the audit row is the
 lasting record. Neither half is the
 change on its own; the pair is what an operator reads back.

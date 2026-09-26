@@ -138,8 +138,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   shares `RestoreStart` with Settings, and announces a failed restore once (`RestoreFailureLedger`).
   Pixel 6, 3 at once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud
   backups (#235, merged, awaiting release):** a card offers backups this phone has no row for (`CloudBackupListing`).
-- **Device-clear follow-ups (in review):** one write for the mode and the release, the
+- **Device-clear follow-ups (#261, merged):** one write for the mode and the release, the
   signed-out phone audited (TD-128 to TD-132). Needs a backend and console deploy.
+- **Only the registered phone takes the lock (in review):** a phone refused at registration
+  took a cleared lock and demoted the registered one to Demo (Pixel 6, 2026-09-26). The lock
+  now follows registration, a clear keeps a registered phone the lock did not name, and a
+  typed key follows the same rule. Needs a backend deploy, then one **New device** for that account.
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),
@@ -147,8 +151,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
   It also ships under Semper's app id (TD-133), so its lab build replaces Semper on a phone.
-- **"Upload pending" with no upload coming (in review):** a build with no backend now saves
-  analyses as not backed up, and each reconcile queues rows still PENDING again (`CloudSync`).
+- **"Upload pending" with no upload coming (#254, merged, awaiting release):** a build with no
+  backend saves analyses as not backed up, and each reconcile queues rows still PENDING again.
+  Pixel 6, 2026-09-26: its 8 waiting analyses backed up on their own after sign-in.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
   the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
   looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.

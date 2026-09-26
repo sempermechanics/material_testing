@@ -253,16 +253,135 @@ def test_an_account_on_another_licence_keeps_its_phone(store):
 
 
 def test_the_clear_names_the_phone_it_signed_out(store):
-    """The lock's device and the registered one can differ; the audit needs both,
-    since the release stamp on the user is gone at the next registration."""
+    """The audit needs the lock's device and the registered one, since the
+    release stamp on the user is gone at the next registration."""
     license_id = _bound_individual(store)
-    _registered_on(store, "solo-1", "registered-phone")
+    _registered_on(store, "solo-1")
 
     err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
 
     assert err == ""
     assert cleared["previousDeviceId"] == "old-phone"
-    assert cleared["releasedDeviceId"] == "registered-phone"
+    assert cleared["releasedDeviceId"] == "old-phone"
+
+
+def _split(store, lock="emulator", registered="pixel"):
+    """solo-1's licence locked to one device and the account registered on
+    another: what a refused sign-in left behind while any device could bind."""
+    license_id = _bound_individual(store, lock)
+    _registered_on(store, "solo-1", registered)
+    repo.revalidate_device_lock(store._data["users"]["solo-1"], registered)
+    assert store._data["users"]["solo-1"]["mode"] == "demo"
+    return license_id
+
+
+def test_a_clear_keeps_the_registered_phone_the_lock_did_not_name(store):
+    license_id = _split(store)
+
+    err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
+
+    assert err == ""
+    assert cleared["previousDeviceId"] == "emulator"
+    assert cleared["releasedDeviceId"] == ""
+    user = store._data["users"]["solo-1"]
+    assert user["activeDeviceId"] == "pixel"
+    assert user["mode"] == "licensed"
+    assert "releasedDeviceId" not in user
+    assert store._data["devices"]["pixel"]["status"] == "ACTIVE"
+
+
+def test_after_that_clear_the_registered_phone_takes_the_lock(store):
+    license_id = _split(store)
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+
+    assert repo.revalidate_device_lock(store._data["users"]["solo-1"], "emulator")["mode"] == "licensed"
+    assert store._data["licenses"][license_id]["deviceIdLock"] == ""
+    rebound = repo.revalidate_device_lock(store._data["users"]["solo-1"], "pixel")
+
+    assert rebound["mode"] == "licensed"
+    assert store._data["licenses"][license_id]["deviceIdLock"] == "pixel"
+
+
+def test_a_second_clear_then_releases_the_registered_phone(store):
+    """A holder who did want a new phone is one more clear away from it."""
+    license_id = _split(store)
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+    repo.revalidate_device_lock(store._data["users"]["solo-1"], "pixel")
+
+    err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
+
+    assert err == ""
+    assert cleared["releasedDeviceId"] == "pixel"
+    assert "activeDeviceId" not in store._data["users"]["solo-1"]
+
+
+def test_a_self_change_on_a_split_account_keeps_the_registered_phone(store):
+    license_id = _split(store)
+
+    err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_SELF)
+
+    assert err == ""
+    assert cleared["releasedDeviceId"] == ""
+    assert store._data["users"]["solo-1"]["activeDeviceId"] == "pixel"
+    assert store._data["users"]["solo-1"]["mode"] == "licensed"
+
+
+# Only the registered phone takes an empty lock. A phone refused at
+# registration still makes config and profile calls, and those used to bind it.
+
+
+def test_a_phone_the_account_has_not_registered_cannot_take_the_lock(store):
+    license_id = _bound_individual(store)
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+    _registered_on(store, "solo-1", "pixel")
+
+    seen = repo.revalidate_device_lock(store._data["users"]["solo-1"], "emulator")
+
+    assert seen["mode"] == "licensed"
+    assert store._data["licenses"][license_id]["deviceIdLock"] == ""
+    repo.revalidate_device_lock(store._data["users"]["solo-1"], "pixel")
+    assert store._data["licenses"][license_id]["deviceIdLock"] == "pixel"
+    assert store._data["users"]["solo-1"]["mode"] == "licensed"
+
+
+def test_a_released_phone_cannot_retake_the_lock_during_its_hold(store):
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+
+    repo.revalidate_device_lock(store._data["users"]["solo-1"], "old-phone")
+
+    assert store._data["licenses"][license_id]["deviceIdLock"] == ""
+    repo.revalidate_device_lock(store._data["users"]["solo-1"], "new-phone")
+    assert store._data["licenses"][license_id]["deviceIdLock"] == "new-phone"
+
+
+def test_a_key_typed_on_a_phone_the_account_has_not_registered_does_not_bind(store):
+    store._data["users"] = {}
+    minted = _mint_individual()
+    license_id = minted["license"]["id"]
+    _signed_in(store, "solo-1", "solo@lab.org")
+    _registered_on(store, "solo-1", "pixel")
+
+    err, _ = repo.activate_license("solo-1", "solo@lab.org", "emulator", minted["key"])
+
+    assert err == "license_device_mismatch"
+    assert store._data["licenses"][license_id].get("deviceIdLock", "") == ""
+    err, _ = repo.activate_license("solo-1", "solo@lab.org", "pixel", minted["key"])
+    assert err == ""
+    assert store._data["licenses"][license_id]["deviceIdLock"] == "pixel"
+
+
+def test_a_seat_binds_only_its_members_registered_phone(store):
+    license_id = _bound_seat(store)
+    assert repo.clear_device_lock(license_id, "u1", actor=repo.ACTOR_IT)[0] == ""
+    _registered_on(store, "u1", "pixel")
+
+    repo.revalidate_device_lock(store._data["users"]["u1"], "emulator")
+    seats = store._data[f"licenses/{license_id}/seats"]
+    assert seats["u1"]["deviceIdLock"] == ""
+    repo.revalidate_device_lock(store._data["users"]["u1"], "pixel")
+    assert seats["u1"]["deviceIdLock"] == "pixel"
 
 
 def test_a_self_change_names_the_phone_it_signed_out(store):
@@ -404,7 +523,7 @@ async def test_the_old_phone_cannot_take_the_account_back(client, monkeypatch):
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {}
-    _dev_user_holds(store, monkeypatch)
+    _dev_user_holds(store, monkeypatch, device_id="and-oldphone1")
     _registered_on(store, "dev-user", "and-oldphone1")
     _as_dev_user(store, monkeypatch)
     assert (await client.post("/v1/licenses/unbind")).status_code == 200
@@ -429,7 +548,7 @@ async def test_the_old_phone_comes_back_once_the_hold_runs_out(client, monkeypat
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {}
-    _dev_user_holds(store, monkeypatch)
+    _dev_user_holds(store, monkeypatch, device_id="and-oldphone1")
     _registered_on(store, "dev-user", "and-oldphone1")
     _as_dev_user(store, monkeypatch)
     assert (await client.post("/v1/licenses/unbind")).status_code == 200
@@ -459,7 +578,7 @@ def test_clearing_a_seat_that_does_not_exist(store):
     assert repo.clear_device_lock(license_id)[0] == "seat_not_found"
 
 
-def _dev_user_holds(store, monkeypatch, email="dev@local"):
+def _dev_user_holds(store, monkeypatch, email="dev@local", device_id="old-phone"):
     """Sign the DEV_INSECURE_AUTH caller in against an individual licence.
 
     `current_user` returns the literal `deps._DEV_USER` in dev mode rather
@@ -468,7 +587,7 @@ def _dev_user_holds(store, monkeypatch, email="dev@local"):
     """
     license_id = _mint_individual(email)["license"]["id"]
     user = repo.ensure_entitlement(_signed_in(store, "dev-user", email), None)
-    repo.revalidate_device_lock(user, "old-phone")
+    repo.revalidate_device_lock(user, device_id)
     monkeypatch.setattr(deps, "_DEV_USER", dict(store._data["users"]["dev-user"]))
     return license_id
 

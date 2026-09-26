@@ -69,7 +69,7 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     return user_ref, user
 
 
-def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str) -> str:
+def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str, lock: str) -> str:
     """Finish a device change on the holder's account. The released device id, or "".
 
     Clearing the lock is only one of the three bindings a device change moves:
@@ -86,7 +86,12 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str) -> str
       `users/{uid}.activeDeviceId` with `device_conflict`, and nothing else
       empties that field short of suspending the account. It is dropped here
       and the old device retired (`_retire_device`), so the new phone can
-      register.
+      register. Only when it is the phone the cleared `lock` named, or the
+      lock named none: a lock on some other device (bound before
+      `revalidate_device_lock` bound only the registered phone) leaves the
+      account split, and the registered phone is the one still working. It
+      is kept and binds the empty lock on its next request; a holder who did
+      want a new phone gets it from a second clear, which then releases it.
     - **Release hold.** The released id is stamped (`releasedDeviceId`,
       `releasedAt`) so registration can hold it off for
       `DEVICE_RELEASE_HOLD_HOURS`: the old phone's upload worker re-registers as
@@ -111,7 +116,8 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str) -> str
         **_mode_patch(_license_mode(lic)),
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
     }
-    released = user.get("activeDeviceId") or ""
+    active = user.get("activeDeviceId") or ""
+    released = active if not lock or lock == active else ""
     batch = db().batch()
     if released:
         patch.update({
@@ -157,7 +163,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     that was given up — the other half of the record `revalidate_device_lock`
     writes when the replacement binds. `previousDeviceId` is the lock's device
     and `releasedDeviceId` the registered one the account was signed out of;
-    they can differ, and either can be empty (a lock that never bound, an
+    a registered phone the lock did not name is kept (`_settle_holder`), and either can be empty (a lock that never bound, an
     account with nothing registered, or a holder `_settle_holder` skips). On `device_change_too_soon` it is
     `{"nextChangeAllowedAt": <ISO instant>}`, so the refusal can say when.
     """
@@ -185,7 +191,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
             return not_found, None
         previous = (snap.to_dict() or {}).get("deviceIdLock") or ""
         ref.update({"deviceIdLock": "", "updatedAt": _base.firestore.SERVER_TIMESTAMP})
-        released = _settle_holder(license_id, lic, ref, scope, uid)
+        released = _settle_holder(license_id, lic, ref, scope, uid, previous)
         return "", {**detail, "previousDeviceId": previous, "releasedDeviceId": released}
 
     now = _now()
@@ -225,7 +231,8 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     )
     if not err:
         cleared = {**(cleared or {}),
-                   "releasedDeviceId": _settle_holder(license_id, lic, ref, scope, uid)}
+                   "releasedDeviceId": _settle_holder(license_id, lic, ref, scope, uid,
+                                                      cleared.get("previousDeviceId") or "")}
     return err, cleared
 
 
