@@ -78,6 +78,42 @@ def _restore_holder_mode(license_id: str, lic: dict, ref, scope: str, uid: str) 
     })
 
 
+def _release_holder_device(license_id: str, lic: dict, scope: str, uid: str) -> None:
+    """Let the holder's next phone register, now that the lock has moved.
+
+    The licence lock is not the only binding. `POST /v1/devices/register`
+    refuses any device but `users/{uid}.activeDeviceId` with `device_conflict`,
+    and nothing else empties that field short of suspending the account. So a
+    cleared lock used to leave the holder signed in to Firebase on the new
+    phone and refused at registration: the device change never happened.
+
+    The old device is retired the way `register_device` retires a superseded
+    one, so its id stops counting against another account. Guarded like
+    `_restore_holder_mode`: an account that has moved to a different licence
+    keeps its binding.
+    """
+    holder = uid if scope == "seat" else (lic.get("redeemedByUid") or "")
+    if not holder:
+        return
+    user_ref = db().collection("users").document(holder)
+    snap = user_ref.get()
+    if not snap.exists:
+        return
+    user = snap.to_dict() or {}
+    active = user.get("activeDeviceId") or ""
+    if user.get("licenseId") != license_id or not active:
+        return
+    batch = db().batch()
+    batch.update(user_ref, {"activeDeviceId": _base.firestore.DELETE_FIELD})
+    device_ref = db().collection("devices").document(active)
+    if device_ref.get().exists:
+        batch.update(device_ref, {
+            "status": "SUPERSEDED",
+            "revokedAt": _base.firestore.SERVER_TIMESTAMP,
+        })
+    batch.commit()
+
+
 def clear_device_lock(license_id: str, uid: str = "", *,
                       actor: str = ACTOR_STAFF) -> tuple[str, dict | None]:
     """Unbind a licence or a seat from the device it is on. Error code, or "".
@@ -89,10 +125,11 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     wins. Nothing is re-activated and nothing is typed.
 
     **Clearing is not revoking.** Entitlement, seat, lease and data are all
-    untouched; only the lock goes empty. A holder demoted in place by the
-    mismatch they hit on the new device gets their mode back here — see
-    `_restore_holder_mode`, without which clearing would be half a device
-    change.
+    untouched; the lock goes empty and the holder's device binding is released
+    (`_release_holder_device`), so the new phone can register. A holder
+    demoted in place by the mismatch they hit on the new device gets their
+    mode back here — see `_restore_holder_mode`. Without either, clearing
+    would be half a device change.
 
     `uid` selects the seat on an institution licence. An individual licence
     holds its lock on the licence document itself, so `uid` is ignored there.
@@ -134,6 +171,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         previous = (snap.to_dict() or {}).get("deviceIdLock") or ""
         ref.update({"deviceIdLock": "", "updatedAt": _base.firestore.SERVER_TIMESTAMP})
         _restore_holder_mode(license_id, lic, ref, scope, uid)
+        _release_holder_device(license_id, lic, scope, uid)
         return "", {**detail, "previousDeviceId": previous}
 
     now = _now()
@@ -173,6 +211,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     )
     if not err:
         _restore_holder_mode(license_id, lic, ref, scope, uid)
+        _release_holder_device(license_id, lic, scope, uid)
     return err, cleared
 
 
