@@ -542,7 +542,9 @@ fields and parameters in one archive is what makes the result reproducible.
 
 ## 10. Managing analyses
 
-Long-press a row to select. Pencil renames (one row only), bin deletes.
+Long-press a row to select. Pencil renames (one row only), bin deletes. When
+every selected row is **Only in cloud**, a cloud-download button restores them
+all at once; each row shows its own progress.
 
 <img src="images/home-selection.png" width="300" alt="Selection mode">
 
@@ -551,13 +553,13 @@ goes from the phone and that is that:
 
 <img src="images/delete-dialog.png" width="300" alt="Delete confirmation">
 
-With a backup you are asked *where* instead — **Delete device**, keeping the
-backup, or **Delete cloud**, keeping the phone's copy. Read that dialog before
-tapping.
+With a backup you are asked *where* instead — **Delete from this phone**,
+keeping the backup, **Delete the cloud backup**, keeping the phone's copy, or
+**Delete everywhere**. Read that dialog before tapping.
 
 **Deleting on this device only is not losing it.** The row stays on Home, badged
-**Only in cloud**, and tapping it offers to download the analysis back before
-opening it. That is the point of the badge: a cloud-backed analysis is one tap
+**Only in cloud**, and tapping it offers to **Restore** the analysis to the phone.
+It restores in the background, and you stay on Home. That is the point of the badge: a cloud-backed analysis is one tap
 from being local again, so freeing space is a reversible decision.
 
 <img src="images/settings.png" width="300" alt="Settings sections">
@@ -591,8 +593,8 @@ row itself, for downloads as well as uploads. Success is quiet: the badge or lis
 just updates. A backup that *fails for good* (another device holds the account,
 the analysis is too large, or a render ran out of memory) raises a dialog on the
 Home badge explaining why, with **Try again**. A restore that fails (the backup
-was deleted, or is not this account's) says so on Home *and* in Settings. You are
-no longer left guessing.
+was deleted, or is not this account's) says so once, on whichever of Home or
+Settings you are on. You are no longer left guessing.
 
 **Your data** also holds **Send crash reports**. That one switch governs both
 crash diagnostics and anonymous product analytics — which screens and actions get
@@ -655,7 +657,7 @@ Write above that block; leave it in place.
 | Badge stuck on Pending | Offline, Wi-Fi-only, or backup off |
 | Badge shows Failed | Tap it — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |
 | Restore never arrived | If it failed for good, Home and Settings both show a message saying so; otherwise it retries on a flaky network |
-| Row says "Only in cloud" | Its local frames were freed (by you, or by the auto-free budget). Tap it to download them back |
+| Row says "Only in cloud" | Its local frames were freed (by you, or by the auto-free budget). Tap it and choose **Restore** |
 | Phone out of space | **Settings → Storage → Free up space**, and consider setting an auto-free budget |
 | Still pending approval | Tap **Check status** — it never polls |
 | Sign-in refused after signing up | Open the verification link in your email, then try again |

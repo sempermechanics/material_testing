@@ -133,9 +133,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   past a skipped frame, Home headline, partial-run dialog). No audit TECH_DEBT rows remain.
 - **Bulk delete.** Backend half deployed (#226, [CHANGELOG](docs/ops/CHANGELOG.md)); app half
   merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere, cloud link cleared).
-- **Licence desk (open PRs, stacked #236 → #237 → #238 → PR 4):** fast list and one-row
-  refresh, one licence per person, edit/upgrade/convert, delete with a 30-day restore
-  ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)). Deploy owes indexes and two TTL policies.
+  Pixel 6, 10 rows, Delete everywhere: 10 DELETEs, all 200, in ~17 s (was 61 in 100 s).
+  **Restore (in review):** Home says Restore, restores a multi-selection, shares `RestoreStart`
+  with Settings, and announces a failed restore once (`RestoreFailureLedger`). Pixel 6, 3 at
+  once: 13 requests, 0 × 429, ~17 s, so restores stay parallel.
+- **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person) and #238
+  (edit/upgrade/convert) merged; #239 (delete with a 30-day restore) in review
+  ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)). Deploy owes three indexes and two TTL policies.
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever

@@ -132,6 +132,17 @@
                     android:src="@drawable/ic_edit"
                     app:tint="@color/text_primary" />
 
+                <!-- Shown only when every selected row is cloud-only. -->
+                <ImageButton
+                    android:id="@+id/btnSelectionRestore"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/restore_action"
+                    android:src="@drawable/ic_cloud_download"
+                    android:visibility="gone"
+                    app:tint="@color/text_primary" />
+
                 <ImageButton
                     android:id="@+id/btnSelectionDelete"
                     android:layout_width="48dp"
