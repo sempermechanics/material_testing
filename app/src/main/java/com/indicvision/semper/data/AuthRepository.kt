@@ -344,6 +344,8 @@ class AuthRepository(
         LicenseConfigWorker.cancel(appContext)
         auth.signOut()
         TokenStore.clear(appContext)
+        // The next account's backups are not these.
+        CloudBackupListing.clear(appContext)
     }
 
     // ------------------------------------------------------------ legal / consent

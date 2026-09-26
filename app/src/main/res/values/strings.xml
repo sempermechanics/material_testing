@@ -250,12 +250,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="delete_confirm_body_local">Permanently removes this analysis from your phone. This can\'t be undone.</string>
     <string name="delete_confirm_body_cloud">This analysis is on your phone and in the cloud. Choose what to remove. A deleted cloud backup can\'t be recovered.</string>
     <string name="delete_confirm_body_cloud_only">Permanently erases this analysis from cloud storage and removes it from this list. This can\'t be undone.</string>
-    <string name="delete_device_only_done">Removed from this phone. Tap the row to download from the cloud.</string>
+    <string name="delete_device_only_done">Removed from this phone. Tap the row to restore it from the cloud.</string>
     <string name="download_analysis_title">Restore this analysis?</string>
     <string name="download_analysis_body">This analysis is only in the cloud on this phone. Restore it to open the results.</string>
     <string name="download_analysis_save_body">Choose where to save the Session.zip. The analysis already on this phone is left unchanged.</string>
     <string name="download_analysis_save_title">Download to files?</string>
-    <string name="download_analysis_confirm">Download</string>
     <string name="download_local_action">Download</string>
     <string name="download_analysis_working">Downloading…</string>
     <string name="download_analysis_already">This analysis is already downloading.</string>
@@ -1047,6 +1046,30 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">%1$s · 1 of %3$d solved · subset %4$d–%5$d</item>
         <item quantity="other">%1$s · %2$d of %3$d solved · subset %4$d–%5$d</item>
     </plurals>
+    <plurals name="restore_multi_started">
+        <item quantity="one">Restoring %1$d analysis. This continues if you leave the app.</item>
+        <item quantity="other">Restoring %1$d analyses. This continues if you leave the app.</item>
+    </plurals>
+    <plurals name="restore_multi_failed">
+        <item quantity="one">%1$d analysis couldn\'t be restored. Check your connection and try again.</item>
+        <item quantity="other">%1$d analyses couldn\'t be restored. Check your connection and try again.</item>
+    </plurals>
+    <!-- %1$d restoring; %2$d (the quantity) could not be started. -->
+    <plurals name="restore_multi_partial">
+        <item quantity="one">Restoring %1$d. %2$d analysis couldn\'t be restored. Check your connection and try again.</item>
+        <item quantity="other">Restoring %1$d. %2$d analyses couldn\'t be restored. Check your connection and try again.</item>
+    </plurals>
+    <!-- Home: backups this phone has no row for (another phone, a reinstall). -->
+    <plurals name="cloud_backups_banner">
+        <item quantity="one">%1$d analysis in your cloud backup isn\'t on this phone.</item>
+        <item quantity="other">%1$d analyses in your cloud backup aren\'t on this phone.</item>
+    </plurals>
+    <string name="cloud_backups_hide">Hide</string>
+    <string name="cloud_backups_pick_title">Restore to this phone</string>
+    <string name="cloud_backups_item_fmt">%1$s · %2$s</string>
+    <string name="cloud_backups_unnamed">Analysis from your cloud backup</string>
+    <string name="cloud_backups_hidden">Hidden. They stay in your cloud backup, and Settings → Analyses data management can still restore them.</string>
+    <string name="home_empty_title_cloud">No analyses on this phone</string>
     <plurals name="selection_count_fmt">
         <item quantity="one">1 selected</item>
         <item quantity="other">%1$d selected</item>

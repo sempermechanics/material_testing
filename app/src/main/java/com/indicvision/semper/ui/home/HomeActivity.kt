@@ -26,11 +26,13 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.Diagnostics
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CloudRestore
+import com.indicvision.semper.data.CloudBackupListing
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.CoachPrefs
 import com.indicvision.semper.data.DicSettings
 import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.RestoreFailureLedger
+import com.indicvision.semper.data.RestoreStart
 import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
@@ -70,6 +72,8 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var fab: ImageButton
     private lateinit var tvHomeQuota: TextView
     private lateinit var tvHomeLicense: TextView
+    private lateinit var tvEmptyTitle: TextView
+    private lateinit var cloudBackups: CloudBackupsCard
 
     /** Upload WorkInfo ids already surfaced, so one failure isn't snackbar-spammed. */
     private val shownUploadFailures = mutableSetOf<java.util.UUID>()
@@ -77,6 +81,7 @@ class HomeActivity : AppCompatActivity() {
     /** Upload WorkInfo ids already refreshed on success, so we refresh once each. */
     private val shownSucceededUploads = mutableSetOf<java.util.UUID>()
 
+    /** Restore WorkInfo ids already refreshed for, so each refreshes the list once. */
     private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
 
     private lateinit var deleteFeedback: DeleteFeedback
@@ -165,6 +170,15 @@ class HomeActivity : AppCompatActivity() {
         swipeRefresh = findViewById(R.id.swipeRefresh)
         tvHomeQuota = findViewById(R.id.tvHomeQuota)
         tvHomeLicense = findViewById(R.id.tvHomeLicense)
+        tvEmptyTitle = findViewById(R.id.tvEmptyTitle)
+        cloudBackups = CloudBackupsCard(
+            card = findViewById(R.id.homeCloudBackups),
+            text = findViewById(R.id.tvCloudBackups),
+            restoreButton = findViewById(R.id.btnCloudBackupsRestore),
+            hideButton = findViewById(R.id.btnCloudBackupsHide),
+            onRestore = { targets -> queueRestores { targets } },
+            onHide = { backups -> hideCloudBackups(backups) },
+        )
         swipeRefresh.setColorSchemeResources(R.color.sky_primary)
         // Pull down = deep re-check: verify the blobs really exist in Drive,
         // not just that the backend's index says so.
@@ -246,11 +260,14 @@ class HomeActivity : AppCompatActivity() {
             selectionBar = findViewById(R.id.homeSelectionBar),
             selectionCount = findViewById(R.id.tvSelectionCount),
             btnSelectionRename = findViewById(R.id.btnSelectionRename),
+            btnSelectionRestore = findViewById(R.id.btnSelectionRestore),
             selectAllBox = findViewById(R.id.cbSelectionAll),
             fab = fab,
             backCallback = backCallback,
             onRefresh = { refresh() },
             onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
+            restoreEnabled = { showsCloudState() },
+            onRestore = { records -> startRestore(records) },
             onDeleteQueued = { workId, items ->
                 justQueuedDeletes += items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId }
                 deleteFeedback.queued(workId, items.size)
@@ -351,7 +368,9 @@ class HomeActivity : AppCompatActivity() {
                             if (shownRestoreOutcomes.add(info.id)) refresh()
                         }
                         WorkInfo.State.FAILED -> {
-                            if (!shownRestoreOutcomes.add(info.id)) return@forEach
+                            if (shownRestoreOutcomes.add(info.id)) refresh()
+                            // Once per failure across Home and Settings, not once per screen open.
+                            if (!RestoreFailureLedger.claim(this@HomeActivity, info.id)) return@forEach
                             val reason = info.outputData.getString(DicKeys.DOWNLOAD_ERROR)
                                 ?: getString(R.string.restore_failed_generic)
                             CrispToast.show(
@@ -359,7 +378,6 @@ class HomeActivity : AppCompatActivity() {
                                 reason,
                                 long = true,
                             )
-                            refresh()
                         }
                         WorkInfo.State.CANCELLED -> {
                             if (shownRestoreOutcomes.add(info.id)) refresh()
@@ -474,6 +492,7 @@ class HomeActivity : AppCompatActivity() {
             // the list carries no sync badge, bar or "only in cloud" state.
             adapter.setSyncVisible(showsCloudState())
             emptyState.isVisible = sessions.isEmpty()
+            updateCloudBackups()
             updateQuotaIndicator(sessions.size)
             updateLicenseNotice()
             // A refresh can drop rows out from under a selection.
@@ -585,6 +604,8 @@ class HomeActivity : AppCompatActivity() {
                 if (!wasLimited && TokenStore.isSessionLimitReached(this)) {
                     openSessionLimitScreen()
                 }
+                // This check saved a fresh listing of the account's backups.
+                updateCloudBackups()
                 if (outcome.repaired > 0) {
                     // The rows changed underneath us — show the corrected state.
                     adapter.submit(visibleSessions())
@@ -634,29 +655,63 @@ class HomeActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.download_analysis_title)
             .setMessage(R.string.download_analysis_body)
-            .setPositiveButton(R.string.download_analysis_confirm) { _, _ ->
-                enqueueDownload(record)
+            .setPositiveButton(R.string.restore_action) { _, _ ->
+                startRestore(listOf(record))
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     /**
-     * Queue a background restore and stay on Home. Row progress comes from
+     * Queue background restores and stay on Home. Row progress comes from
      * [observeRestoreProgress] (same badge/bar as uploads) so the list stays
-     * interactive — no blocking "Downloading…" dialog.
+     * interactive — no blocking "Downloading…" dialog. Rows go through
+     * [RestoreStart], the same path Settings uses.
      */
-    private fun enqueueDownload(record: SessionRecord) {
+    private fun startRestore(records: List<SessionRecord>) {
+        if (records.isEmpty()) return
         selection.clearSelection()
-        lifecycleScope.launch {
-            val cloudId = CloudSync.resolveCloudIdFor(this@HomeActivity, record)
-            if (cloudId.isNullOrBlank()) {
-                Toast.makeText(this@HomeActivity, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
-                return@launch
+        queueRestores {
+            records.map { record ->
+                val cloudId = CloudSync.resolveCloudIdFor(this@HomeActivity, record).orEmpty()
+                RestoreStart.Target(cloudId, record.id, record.name)
             }
-            CloudRestore.enqueueRestore(this@HomeActivity, cloudId, record.id)
-            Toast.makeText(this@HomeActivity, R.string.restore_background_note, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** Queue [targets] (rows, or backups from [cloudBackups]) and say what happened in one toast. */
+    private fun queueRestores(targets: suspend () -> List<RestoreStart.Target>) {
+        lifecycleScope.launch {
+            val batch = targets()
+            if (batch.isEmpty()) return@launch
+            val counts = withContext(Dispatchers.IO) { RestoreStart.startAll(this@HomeActivity, batch) }
+            refresh(reconcile = false)
+            val summary = RestoreSummary.of(resources, batch.size, counts.started, counts.alreadyRunning)
+            val length = if (summary.failed) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+            Toast.makeText(this@HomeActivity, summary.text, length).show()
+        }
+    }
+
+    /**
+     * Offer the backups this phone has no row for, from the listing the last
+     * reconcile saved. Demo accounts have no restore, so they are offered nothing.
+     */
+    private fun updateCloudBackups() {
+        lifecycleScope.launch {
+            val offered = if (showsCloudState()) {
+                withContext(Dispatchers.IO) { CloudBackupListing.offered(this@HomeActivity) }
+            } else {
+                emptyList()
+            }
+            cloudBackups.show(offered)
+            tvEmptyTitle.setText(if (offered.isEmpty()) R.string.home_empty_title else R.string.home_empty_title_cloud)
+        }
+    }
+
+    private fun hideCloudBackups(backups: List<CloudBackupListing.Backup>) {
+        CloudBackupListing.hide(this, backups.map { it.cloudId })
+        updateCloudBackups()
+        Toast.makeText(this, R.string.cloud_backups_hidden, Toast.LENGTH_LONG).show()
     }
 
     /** Retry a failed/pending upload, or back up a local-only session when cloud is on. */

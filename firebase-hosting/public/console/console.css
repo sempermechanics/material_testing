@@ -140,6 +140,15 @@ td.actions { text-align: right; white-space: nowrap; }
 .grid label, .row label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .grid label.wide { grid-column: 1 / -1; }
 .row label { flex-direction: row; align-items: center; gap: .35rem; }
+.grid label.check { flex-direction: row; align-items: center; gap: .35rem; align-self: end; }
+
+/* The licence Edit and Convert dialogs: a card over a dimmed desk. */
+dialog {
+  width: min(40rem, calc(100% - 2rem)); max-height: calc(100vh - 2rem); overflow: auto;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 1.5rem;
+}
+dialog::backdrop { background: rgba(0, 0, 0, .55); }
 
 /* The TOTP QR code. White behind it whatever the theme: a scanner wants
    dark modules on a light ground, and 11rem is large enough for a phone

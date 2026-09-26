@@ -130,10 +130,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge`: `643462c` (here #22), `170ec6e`,
-  `9288831` (#32), `ecd1a8b` (#36), then `a7b932d` (parent #230). The last brought
-  the parent's wrong-information audit app fixes (#211's licensed ceiling, #212,
-  #218–#220, #223, #225), bulk delete's one paced queue (#227) and its TD-90 PRs,
-  which match #38 here. General fixes made here go back (TD-76, TD-77,
+  `9288831` (#32), `ecd1a8b` (#36), `a7b932d` (parent #230; its audit fixes, bulk
+  delete #227, TD-90), then `14fcf1c` (parent #235): Restore on Home and multi-select
+  restore (#234), a Home card for cloud backups not on this phone (#235), and the licence
+  desk's one licence per person, edit/upgrade and 30-day delete hold (#236–#239, ADR-007;
+  deployed by the parent). General fixes made here go back (TD-76, TD-77,
   TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-88 as parent #217, and the
   four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
@@ -160,9 +161,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   and saves it (#33, #34, TD-87/TD-88). Both suites pass in full on a Pixel 6 (Android 17,
   2026-09-25); the medians against CI's API 34 emulator are in
   [TESTING.md](docs/app/TESTING.md), and `benchmark/gates.json` gates a Pixel 6 run at
-  +30 % (`ci_test_report.py --gates`; CI stays report-only). TD-86–TD-88 match the parent's numbers; its TD-81 is TD-89 here.
-  The Pixel 6 run found a crash on open with no API URL and a signed-in session; the status
-  check and every `IndicApi` URL now treat that as offline (TD-90, as in the parent).
+  +30 % (`ci_test_report.py --gates`; CI stays report-only). TD-86–TD-88 and TD-90 match
+  the parent's numbers; its TD-81 is TD-89 here.
 - **Owed.**
   - Video import by hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a) and with a
     real UTM clip. On the API 37 emulator (2026-09-25) 5.1a.1–5.1a.9 pass with synthetic clips.
@@ -175,6 +175,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 ## Traps
 
 - An undeclared route 404s in production with nothing in the logs: ESPv2 is an allowlist. `test_gateway_parity.py` checks the spec — [§20.9](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- A query that needs a composite index fails `FAILED_PRECONDITION` at runtime, not deploy: run `scripts/deploy-firestore.sh indexes` and wait for the build before the backend that queries it (the staff licence list needs three) — [§5](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `MAX_SESSIONS_PER_USER` is deleted; a deployment still setting it silently gets `DEMO_MAX_ANALYSES` (25) — [§7](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - List env vars (`CONSOLE_ORIGINS`, `ADMIN_EMAILS`) are space-separated; the deploy action splits on commas — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).

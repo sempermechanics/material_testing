@@ -101,18 +101,21 @@ def test_only_base_binds_the_firestore_module():
 
 
 #: What each licensing module may import from the package (TD-64). Claims and
-#: invites are leaves; everything else builds on them, and `licensing` only
-#: re-exports.
+#: invites are leaves; `holders` (the one-licence rule) reads through invites;
+#: everything else builds on them, and `licensing` only re-exports.
 LICENSING_IMPORTS = {
     "claims": {"_base"},
     "invites": {"_base"},
-    "mint": {"_base", "claims", "invites"},
-    "activation": {"_base", "claims", "devlock", "user_config"},
+    "holders": {"_base", "invites"},
+    "mint": {"_base", "claims", "holders", "invites"},
+    "activation": {"_base", "claims", "devlock", "holders", "user_config"},
     "entitlement": {"_base", "claims", "invites", "mint"},
     "license_admin": {"_base", "claims", "invites", "mint"},
-    "institution_admin": {"_base", "claims", "invites", "mint"},
-    "licensing": {"claims", "invites", "mint", "activation", "entitlement",
-                  "license_admin", "institution_admin"},
+    "upgrade": {"_base", "claims", "invites", "mint", "license_admin"},
+    "deletion": {"_base", "claims", "holders", "invites", "mint", "license_admin"},
+    "institution_admin": {"_base", "claims", "holders", "invites", "mint"},
+    "licensing": {"claims", "invites", "holders", "mint", "activation", "entitlement",
+                  "license_admin", "upgrade", "deletion", "institution_admin"},
 }
 
 

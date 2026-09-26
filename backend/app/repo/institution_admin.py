@@ -14,6 +14,9 @@ from .claims import (
     _institution_member_patch,
     _public_claim_error,
 )
+from .holders import (
+    licence_held_by,
+)
 from .invites import (
     find_user_by_email,
     invite_institution_member,
@@ -88,6 +91,11 @@ def add_institution_member(license_id: str, email: str,
     if not lic:
         return "license_not_found", None, None
     user = find_user_by_email(email)
+    # One licence per person: someone who holds, or is promised, a different
+    # live licence is refused rather than moved onto this roster. Their own
+    # seat on this licence is excluded, so re-adding a member stays a no-op.
+    if licence_held_by(email, user=user or {}, exclude_id=license_id):
+        return "member_already_licensed", None, None
     if not user:
         err, invite = invite_institution_member(license_id, email, invited_by_uid)
         return err, None, invite

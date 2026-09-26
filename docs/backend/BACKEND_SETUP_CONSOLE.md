@@ -46,6 +46,11 @@ deleted immediately; abandoned ones only disappear if Firestore is told to treat
 2. **Create policy** → collection group `challenges`, timestamp field
    `expireAt` → **Create**.
 3. Wait until the policy shows **Active** (a few minutes).
+4. Repeat for the licence hold: collection group `deleted_licenses`, field
+   `purgeAt`; and collection group `deleted_seats`, field `purgeAt`. A deleted
+   licence (and its seats) waits there 30 days for a possible restore; without
+   these two policies it is never purged. Restore still refuses one past
+   `purgeAt`, so a missing policy only keeps data longer than promised.
 
 ### 3b. Create the composite indexes
 Four composite indexes back the paginated session listing and the admin

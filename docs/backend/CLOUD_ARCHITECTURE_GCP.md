@@ -569,7 +569,9 @@ licenses/{id}                     (id = sha256(key) — the key hash IS the doc 
                                    expiresAt; 0 is a hard cliff. §20.6)
   supportUntil                    (Timestamp, optional; informational — never gates)
   maxAnalyses                      (optional, either kind; per holder, not per licence.
-                                   Mint/PATCH refuse < DEMO_MAX_ANALYSES, and
+                                   Mint/PATCH refuse < DEMO_MAX_ANALYSES; PATCH
+                                   refuses any value on a demo-mode key
+                                   (cap_on_demo_key), and
                                    PATCH {"clearMaxAnalyses": true} removes it)
   createdByUid, createdAt, updatedAt
   updatedByUid, updatedAt         (set by the renewal route)
@@ -586,6 +588,15 @@ licenses/{id}/seats/{uid}         (institution only — one doc per roster membe
   leaseDeviceId, lastHeartbeatAt
   createdAt, updatedAt
 
+deleted_licenses/{id}             (a deleted licence, held 30 days — §20.6)
+  …every field the licence had, as it stood before the delete's revoke
+  priorStatus                     (the status it comes back with on restore)
+  deletedAt, deletedByUid
+  purgeAt                         (Timestamp, deletedAt + 30 d; TTL field —
+                                   BACKEND_SETUP_CONSOLE.md §3a)
+deleted_licenses/{id}/deleted_seats/{uid}
+  …the seat as it stood, plus purgeAt (its own TTL policy)
+
 audit_logs/{autoId}               (append-only)
   ts (Timestamp), uid, deviceId, ip, ua
   action: "LOGIN" | "DEVICE_REGISTER" | "DEVICE_REBIND" |
@@ -597,11 +608,12 @@ audit_logs/{autoId}               (append-only)
 ```
 
 **Indexing.**
-- `backend/firestore.indexes.json` is the source of truth and defines **four
-  composite indexes**: `sessions(uid, localSessionId, status)`,
-  `sessions(uid, __name__)`, `users(access_status, __name__)` and
-  `files(sessionId, __name__)`. The paginated listing and the admin pending-user
-  query both need one. Deploy them with
+- `backend/firestore.indexes.json` is the source of truth. It declares
+  `sessions(uid, localSessionId, status)` and three for the staff licence list
+  (§20.6): `licenses(mode, createdAt DESC)`, `licenses(mode, status, createdAt
+  DESC)` and `licenses(status, createdAt DESC)`. Equality filters ordered by
+  `__name__` (`sessions(uid)`, `users(access_status)`, `files(sessionId)`) are
+  served by the automatic single-field indexes. Deploy with
   `firebase deploy --only firestore:indexes` — a missing index shows up as a
   `FAILED_PRECONDITION` at runtime, not at deploy time.
 - **Exempt** large/opaque fields from indexing (`publicKeyPem`, `uploadUrl`,
@@ -1233,6 +1245,7 @@ guarantee as activation — never touches stored sessions/files. See
 |---|---|---|
 | Whole-key revoke | `POST /v1/admin/licenses/{id}/revoke` (Semper staff: device-attested, or from the operator desk with a second factor and a sign-in newer than `ADMIN_WEB_REVOKE_REAUTH_SECONDS`) | Individual: the redeemer drops to Demo. Institution: **every** seat drops to Demo and `seatsUsed` resets to 0; the response carries the reset counts. |
 | Single-seat revoke | `DELETE /v1/institutions/licenses/{id}/seats/{uid}` (institution IT) | Only that member drops to Demo; **frees the slot** for another domain member (including, after re-admission, the same member re-entering the key). |
+| Delete | `DELETE /v1/admin/licenses/{id}` (Semper staff, the same step-up as whole-key revoke) | A whole-key revoke, then the licence leaves `licenses` for a 30-day hold (§20.6). Holders' accounts stop pointing at it and get a Demo key of their own. |
 | Disable a seat | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"enabled": false}` (institution IT) | Drops that member to Demo but **does not free the slot** — still counts against `maxSeats`. `{"enabled": true}` restores the licensed mode in place with no re-activation needed. |
 
 A downgrade to Demo — from any of the above, or a plan cap being exceeded —
@@ -1270,21 +1283,47 @@ Minting an individual licence for an address that already has an approved,
 verified account attaches it at once (`create_individual_license` →
 `_attach_to_existing_holder`), dropping the system demo key the first
 post-deploy request stamped. The invite is still written for the case where no
-such account exists yet, and a holder of a *live* non-demo licence is left
-untouched (`claimError: holder_already_licensed`).
+such account exists yet.
+
+**One licence per person.** A person is an address; the device is a lock on
+the licence they hold, changed in place (staff "New device", IT unlock, or
+self-service with its cooldown), never by issuing a second licence. Every
+grant path asks `repo/holders.licence_held_by` first and refuses before
+writing anything:
+
+| Path | Refusal |
+|------|---------|
+| Staff mint (`POST /v1/admin/licenses`, individual) | `409 email_already_licensed: <licence id>` |
+| Key typed in the app (`POST /v1/licenses/activate`) | `409 already_licensed` |
+| IT adds a roster member or invite (`POST /v1/institutions/licenses/{id}/seats`) | `409 member_already_licensed` |
+
+An address holds a licence four ways, and all four count: its account points
+at it, an individual licence is locked to it (`emailLock`), it has a roster
+seat, or a pending invite promises it one. Only a *live* licence counts
+(`licence_is_live`): a revoked one, one past its grace, and the system Demo
+key do not, since replacing those is what a new licence is for. The licence
+being granted is excluded, so re-entering a key or re-adding a member is still
+a no-op. IT is not told which licence the person holds; the operator is, so
+the desk can show it. `_holds_only_a_demo_key`, which decides whether a mint
+may attach to an existing account, uses the same test.
+
+Before this, each path granted anyway: the mint only reported
+`inviteError: invite_exists` or `claimError: holder_already_licensed`, and a
+typed key or a roster add moved the account off its licence and left that one
+`redeemed` in their name. `backend/scripts/find_duplicate_licences.py` lists
+the addresses that hold two live licences from that time (read-only).
 
 **A mint is licence-first, delivery second, and delivery can fail without
 failing the mint.** The licence document is written, then the invite, then
-the attach. An address already promised to another live licence refuses the
-invite (`inviteError: invite_exists`), and the new licence exists undelivered —
-its key still redeems it through the support route. That is deliberate: a
-licence that has been paid for should never be lost to a delivery conflict,
-and the conflict is for a person to resolve, not the backend. The cost showed
-the first time a mint answered 500 after succeeding (#131): the retry minted a
-second licence for the same address, which could not attach. The operator
-desk now checks its own list for a live licence on the address before minting,
-and says for every mint whether the licence attached, is waiting for a first
-sign-in, or was not delivered and why. Renewal is Extend (§20.6), never a
+the attach. With the one-licence check in front, a conflict with another live
+licence is refused before the write; what is left is the rare delivery failure
+(`inviteError`, `claimError`), where the new licence exists undelivered and
+its key still redeems it through the support route. The cost of not checking
+first showed the first time a mint answered 500 after succeeding (#131): the
+retry minted a second licence for the same address, which could not attach —
+that retry is now a `409` naming the first. The operator desk says for every
+mint whether the licence attached, is waiting for a first sign-in, or was not
+delivered and why. Renewal is an edit of the expiry (§20.6), never a
 second mint. A claim that loses every retry under contention is the one
 delivery failure nobody is told about —
 [TD-33](../ops/TECH_DEBT.md).
@@ -1424,28 +1463,110 @@ every non-revoked institution seat.
   — the same guard `_drop_user_to_demo_if_licensed` uses.
 - The fan-out is bounded by `seatsUsed`, and renewal is rare. That is what
   makes it the right side of the trade against a per-request read.
+- **It runs only when a mirrored term changes.** The mirror carries the expiry,
+  grace, duration, seating and analysis cap; an edit to the note, the support
+  date or `maxSeats` changes no user document and writes none. When it runs,
+  the holders are read with one `get_all` and written in batches of
+  `_BATCH_LIMIT` (`_update_refs`), not one read and one write each.
+- **Whole-licence revoke is batched the same way, and repeatable.** A seat or
+  licence already revoked keeps its `revokedAt` (reconciliation dates a seat
+  revoke from it), and every seat's holder is re-checked, so running revoke
+  again repairs a seat revoke whose demotion never landed.
 - **A claim writes the terms it read in its own transaction.** `claim_seat`
   and `claim_individual_license` rebuild the mirror in the caller's patch from
   the licence snapshot the transaction read (`_claim_terms`). The callers read
   the licence earlier; an edit landing in that gap would otherwise be stamped
   over on the newest holder after its fan-out had already passed them.
 
-**Extend only moves an expiry later.** `expiry_change_error` refuses, with
-`422`, an `expiresAt` that is already past (`expiry_in_past`), one earlier than
-the expiry in force (`expiry_before_current`), and any `expiresAt` on a
-perpetual licence (`license_perpetual`) — each of those ended, shortened, or
-turned timed (with no grace, since perpetual licences are minted without
-`graceDays`) the licence of everyone on it. The route checks before it touches
-the device lock, and `update_license` checks again against what it reads.
-Ending a licence early is revoke; the operator desk reports the expiry the
-server stored, not the date typed.
+**An expiry moves later unless a downgrade is asked for.** `expiry_change_error`
+refuses, with `422`, an `expiresAt` that is already past (`expiry_in_past`),
+one earlier than the expiry in force (`expiry_before_current`), and any
+`expiresAt` on a perpetual licence (`license_perpetual`) — each of those
+shortened, or turned timed, the licence of everyone on it, and used to be
+reported as "extended". A downgrade agreed with the customer sends
+`allowShorten: true` with the date, which the desk sends only after the key is
+typed; a perpetual licence given an end that way gets the fleet default grace,
+as a timed mint does. A past date is refused even then: ending a licence now
+is revoke. `perpetual: true` goes the other way and drops the expiry and
+grace. The operator desk reports the expiry the server stored, not the date
+typed.
 
-Terms only: `kind`, the email/device/domain locks and the key itself are fixed
-at mint. Changing *who* a license is for under existing holders is a different
-operation with different consequences.
+**How an institution licence is run is edited in place too.** `seating`,
+`maxSeats` and `adminEmails` (institution only; `422 institution_only` on an
+individual licence). Switching to floating needs a `maxSeats`
+(`floating_needs_max_seats`) and zeroes `leasesActive`; the new
+`licenseSeating` fans out, so every member checks out a lease from their next
+request. Switching to assigned makes `maxSeats` cap the roster, so it must
+hold everyone already on it (`max_seats_below_used`), and every lease is
+cleared, on the seats and on the holders. `license_edit_error` makes every one
+of these decisions before anything is written; the route calls it before it
+touches the device lock, and `update_license` calls it again against what it
+reads. `AdminLicenseUpdate` refuses unknown fields (`extra="forbid"`): a field
+it did not know used to be dropped and the edit answered 200.
 
-Audited as `ADMIN_LICENSE_EXTEND`. Declared in `gateway/openapi.yaml` as well
+**A demo key takes no analysis cap.** `analysis_cap_error` refuses, with `422
+cap_on_demo_key`, any `maxAnalyses` on a demo-mode licence. `resolve_user_config`
+gives every non-licensed account `DEMO_MAX_ANALYSES` and never reads
+`licenseMaxAnalyses` for it, so the edit used to be stored, fanned out and
+answered 200 while the holder's app kept showing "N of 25". The route checks
+before the device lock, and `update_license` checks again. `clearMaxAnalyses`
+stays allowed on a demo key, to remove a cap stored before the refusal.
+`GET /v1/admin/licenses` returns `demoMaxAnalyses`, and the desk shows it on
+demo rows with the Cap button disabled.
+
+`kind`, the email/device/domain locks and the key itself are fixed at mint.
+Changing *who* a license is for under existing holders is a different
+operation with different consequences — the one supported is individual to
+institution:
+
+**`POST /v1/admin/licenses/{id}/convert`** (`repo/upgrade.py`) mints an
+institution licence (`domainLock`, `adminEmails`, `maxSeats`, `seating`) that
+carries the individual licence's expiry, grace, support date, analysis cap and
+note. The holder must have an address on the domain
+(`422 convert_domain_mismatch`); they are seated on it with the old licence's
+device lock through `claim_seat`, which moves their account in the same
+transaction, so their phone keeps working without a new sign-in. A holder who
+has not signed in yet has the invite moved instead. Only then is the
+individual licence revoked, with `supersededBy` naming its replacement (shown
+on the desk). A failed claim deletes the new licence and leaves the old one
+as it was. Audited as `ADMIN_LICENSE_CONVERT`.
+
+Edits are audited as `ADMIN_LICENSE_EXTEND`. Declared in `gateway/openapi.yaml` as well
 as FastAPI — ESPv2 rejects any path absent from the gateway spec.
+
+#### Deleting a licence, and the 30-day hold
+
+Revoke keeps the licence as the record, so the desk fills with them.
+**`DELETE /v1/admin/licenses/{id}`** (`repo/deletion.py`; step-up as for
+revoke; audited `ADMIN_LICENSE_DELETE`) removes it:
+
+1. Copies the licence to `deleted_licenses/{id}` (with `priorStatus`,
+   `deletedAt`, `deletedByUid`, `purgeAt` = now + 30 days) and each seat to
+   `deleted_seats` under it. Nothing is removed until the copy is written.
+2. Revokes it (§20.3): holders drop to Demo; their sessions and files are
+   untouched. Pending invites go with the revoke.
+3. Clears `licenseId` and the mirrored terms from every holder, so the next
+   request issues each a Demo key of their own, as for a new account.
+4. Deletes the seats and the licence. The key now redeems as
+   `license_not_found`, and the address is free for a new licence (§20.1's
+   one-licence rule reads only `licenses`).
+
+A system Demo key is refused (`409 demo_key_not_deletable`): the account would
+only be issued another.
+
+Firestore TTL policies on `deleted_licenses.purgeAt` and
+`deleted_seats.purgeAt` remove the copy after the hold — no scheduler. TTL
+deletes within about a day of the date, not at it, so restore checks the date
+itself. `GET /v1/admin/deleted-licenses` lists the held licences, newest first.
+
+**`POST /v1/admin/deleted-licenses/{id}/restore`** (`ADMIN_LICENSE_RESTORE`)
+writes the licence back with `priorStatus`. A licence deleted after it was
+revoked comes back revoked. Otherwise each holder is re-attached unless they
+now hold another live licence: that seat comes back revoked, or an individual
+licence comes back `unused`. An unclaimed individual licence is promised to
+its address again. Leases and pending roster invites do not come back.
+Refused with `404 deleted_license_not_found`, `410 deleted_license_purged`
+(past `purgeAt`), or `409 license_exists`.
 
 #### Activating an expired key is refused
 
@@ -1613,7 +1734,7 @@ clears the stamp. The bound is what keeps this off the per-request path: an
 unstamped account never reads the invite collection again. A licence past
 `expiresAt + graceDays` is one of those reasons: the claim refuses it as
 activation does (`_license_past_grace`), keeps the invite, and stamps the
-account, so an Extend delivers it on the next retry.
+account, so extending the expiry delivers it on the next retry.
 
 #### Checkout, and why there is no heartbeat route
 
@@ -1778,10 +1899,18 @@ it holds a message and is not cleared by the list reload that follows. A
 revoked licence leaves the table at once — behind "Show revoked", since the
 record is the audit trail. Demo keys sit behind "Show Demo keys" the same way:
 one is minted for every account, so they outnumbered the licences anyone sold.
-The table has a Mode column, its status pill reads "in grace" or "expired" from
-the term rather than the stored `status`, and "Load more" pages past the first
-200. Silence after a click is always a defect here: it is indistinguishable
-from a revoke that did not happen.
+Both are left out by the query (`GET /v1/admin/licenses?include_demo=…
+&include_revoked=…`), not by the browser, and the list is newest first
+(`createdAt` descending) in pages of 50; it used to be the whole collection in
+key-hash order, so the licences anyone sold were scattered among one Demo key
+per account. A change refreshes only its own row, from the answer or from
+`GET /v1/admin/licenses/{id}`, instead of reloading the first page and
+dropping every page loaded after it. The filter box also searches the backend
+(`q=`) by exact email, domain or key prefix, so a licence on an unloaded page
+is found. The table has a Mode column, its status pill reads "in grace" or
+"expired" from the term rather than the stored `status`, and "Load more"
+pages past the first 50. Silence after a click is always a defect here: it is
+indistinguishable from a revoke that did not happen.
 
 Destructive actions confirm twice — a dialog naming who is affected, then
 typing the key prefix. Revoking withdraws entitlement; it deletes nothing.
@@ -1976,8 +2105,8 @@ and it is a route rather than a field on `/v1/me` for a stated reason: `/v1/me`
 promises to cost no extra Firestore read, and the Android app calls it on every
 launch. Underneath, `list_licenses_administered_by` runs a single
 `array_contains` on `licenses.adminEmails` and filters kind and status in
-Python, so no composite index is needed; the index is declared in
-`firestore.indexes.json` anyway, per that file's own convention. It is
+Python, so the automatic single-field index serves it and nothing is
+declared in `firestore.indexes.json`. It is
 `USER`-tier and requires a verified email — the same bar
 `institution_admin_context` sets, since an unverified address cannot be named
 as an administrator in the first place. Administering nothing is an empty list,

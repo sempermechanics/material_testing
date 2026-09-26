@@ -121,9 +121,9 @@
         <div class="row">
           <h2 style="margin:0">Licences</h2>
           <span class="spacer"></span>
-          <input id="filter" placeholder="Filter by key, domain or email" size="28" />
-          <label class="muted"><input type="checkbox" id="showRevoked" /> Show revoked<span id="revokedCount"></span></label>
-          <label class="muted"><input type="checkbox" id="showDemo" /> Show Demo keys<span id="demoCount"></span></label>
+          <input id="filter" placeholder="Filter, or search by email, domain or key" size="32" />
+          <label class="muted"><input type="checkbox" id="showRevoked" /> Show revoked</label>
+          <label class="muted"><input type="checkbox" id="showDemo" /> Show Demo keys</label>
           <button id="reload" class="secondary">Refresh</button>
         </div>
         <div class="wrap">
@@ -142,6 +142,120 @@
           <button id="loadMore" class="secondary" hidden>Load more</button></p>
       </section>
 
+      <!-- ----------------------------------------------------- deleted -->
+      <!-- Loaded on demand: most visits never look here, and it is a query. -->
+      <section class="card" id="deletedCard">
+        <div class="row">
+          <h2 style="margin:0">Recently deleted</h2>
+          <span class="spacer"></span>
+          <button id="loadDeleted" class="secondary">Show</button>
+        </div>
+        <p class="muted">
+          A deleted licence is held for 30 days, then purged for good. Restore
+          puts it and its holders back — except anyone who has taken another
+          licence since.
+        </p>
+        <div class="wrap" id="deletedWrap" hidden>
+          <table>
+            <thead>
+              <tr><th>Key</th><th>Kind</th><th>Locked to</th><th>Was</th>
+                <th>Deleted</th><th>Purged in</th><th></th></tr>
+            </thead>
+            <tbody id="deletedRows"></tbody>
+          </table>
+        </div>
+      </section>
+      <!-- -------------------------------------------------------- edit -->
+      <!-- One dialog for every change to a licence's terms. It replaced three
+           window.prompt()s (Extend, Cap) that could each change one thing, and
+           could not shorten, make perpetual, or touch an institution's seats. -->
+      <dialog id="editDialog" aria-labelledby="editTitle">
+        <form id="editForm" novalidate>
+          <h2 id="editTitle">Edit <span id="editName" class="mono"></span></h2>
+          <p class="muted">
+            Everyone on this licence gets the change at once. Nothing is
+            re-issued and nobody re-activates.
+          </p>
+          <div class="grid">
+            <label>Expires
+              <input id="editExpiry" type="date" />
+            </label>
+            <label class="check"><input id="editPerpetual" type="checkbox" /> Never expires</label>
+            <label>Grace days <span class="muted">(after expiry)</span>
+              <input id="editGrace" type="number" min="0" max="365" />
+            </label>
+            <label>Support until
+              <input id="editSupport" type="date" />
+            </label>
+            <label>Cloud analyses per person
+              <input id="editCap" type="number" min="1" placeholder="licensed default" />
+            </label>
+          </div>
+          <div id="editInstitution" class="grid" hidden>
+            <label>Seats
+              <input id="editSeats" type="number" min="1" placeholder="unlimited" />
+            </label>
+            <label>Seating
+              <select id="editSeating">
+                <option value="assigned">Assigned — everyone on the roster</option>
+                <option value="floating">Floating — shared pool of seats</option>
+              </select>
+            </label>
+            <label class="wide">IT contacts <span class="muted">(comma separated)</span>
+              <input id="editAdmins" />
+            </label>
+          </div>
+          <div class="grid">
+            <label class="wide">Note
+              <input id="editNote" />
+            </label>
+          </div>
+          <p id="editHint" class="muted"></p>
+          <div class="row">
+            <button id="editSave" type="submit">Save</button>
+            <button id="editCancel" type="button" class="secondary">Cancel</button>
+          </div>
+        </form>
+      </dialog>
+      <!-- ----------------------------------------------------- convert -->
+      <dialog id="convertDialog" aria-labelledby="convertTitle">
+        <form id="convertForm" novalidate>
+          <h2 id="convertTitle">Make <span id="convertName" class="mono"></span> an institution licence</h2>
+          <p class="muted">
+            Issues an institution key with this licence's term, grace, support
+            date and analyses limit. The holder moves onto its roster on the
+            same device; this licence is then revoked. One licence per person
+            holds throughout.
+          </p>
+          <div id="convertFields" class="grid">
+            <label>Domain lock
+              <input id="convertDomain" placeholder="university.edu" />
+            </label>
+            <label>IT contacts <span class="muted">(comma separated)</span>
+              <input id="convertAdmins" placeholder="it@university.edu" />
+            </label>
+            <label>Seats
+              <input id="convertSeats" type="number" min="1" placeholder="unlimited" />
+            </label>
+            <label>Seating
+              <select id="convertSeating">
+                <option value="assigned">Assigned — everyone on the roster</option>
+                <option value="floating">Floating — shared pool of seats</option>
+              </select>
+            </label>
+          </div>
+          <div id="convertedBox" class="note" hidden>
+            <strong>Copy this key now.</strong> It is shown once. Members on the
+            domain can redeem it, or IT adds them from the roster.
+            <p class="mono key" id="convertedKey"></p>
+          </div>
+          <p id="convertHint" class="muted"></p>
+          <div class="row">
+            <button id="convertSave" type="submit">Convert</button>
+            <button id="convertCancel" type="button" class="secondary">Cancel</button>
+          </div>
+        </form>
+      </dialog>
       <!-- ------------------------------------------------------ roster -->
       <section class="card" id="rosterCard" hidden>
         <div class="row">

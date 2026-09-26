@@ -53,6 +53,7 @@ class SessionSelectionControllerTest {
     private lateinit var selectionBar: View
     private lateinit var count: TextView
     private lateinit var rename: ImageButton
+    private lateinit var restore: ImageButton
     private lateinit var selectAll: MaterialCheckBox
     private lateinit var fab: ImageButton
     private lateinit var close: ImageButton
@@ -64,6 +65,8 @@ class SessionSelectionControllerTest {
     private var deviceOnlyDeletes = 0
     private val queuedDeletes = mutableListOf<List<SessionDeletes.Item>>()
     private val announced = mutableListOf<Pair<UUID, Int>>()
+    private val restored = mutableListOf<List<String>>()
+    private var restoreAllowed = true
 
     @Before
     fun setUp() {
@@ -75,6 +78,7 @@ class SessionSelectionControllerTest {
         selectionBar = View(activity).apply { visibility = View.GONE }
         count = TextView(activity)
         rename = ImageButton(activity)
+        restore = ImageButton(activity).apply { visibility = View.GONE }
         selectAll = MaterialCheckBox(activity)
         fab = ImageButton(activity)
         close = ImageButton(activity)
@@ -86,11 +90,14 @@ class SessionSelectionControllerTest {
             selectionBar = selectionBar,
             selectionCount = count,
             btnSelectionRename = rename,
+            btnSelectionRestore = restore,
             selectAllBox = selectAll,
             fab = fab,
             backCallback = back,
             onRefresh = { refreshes++ },
             onDeviceOnlyDeleted = { deviceOnlyDeletes++ },
+            restoreEnabled = { restoreAllowed },
+            onRestore = { records -> restored += records.map { it.id } },
             onDeleteQueued = { id, items -> announced += id to items.size },
             enqueueDelete = { items ->
                 queuedDeletes += items
@@ -393,6 +400,58 @@ class SessionSelectionControllerTest {
         assertEquals(1, deviceOnlyDeletes)
         assertTrue(queuedDeletes.isEmpty())
         assertFalse(controller.inSelectionMode)
+    }
+
+    // ── Restore ──────────────────────────────────────────────────────────────
+
+    private val cloudOnly1 by lazy { record("r1", local = false, cloud = true) }
+    private val cloudOnly2 by lazy { record("r2", local = false, cloud = true) }
+
+    @Test
+    fun `a selection of cloud-only rows offers Restore, and it restores every row once`() {
+        list(cloudOnly1, cloudOnly2, a)
+        controller.startSelection(cloudOnly1)
+        controller.toggleSelection(cloudOnly2)
+
+        assertEquals(View.VISIBLE, restore.visibility)
+        restore.performClick()
+
+        assertEquals(listOf(listOf("r1", "r2")), restored)
+        assertFalse("selection ends", controller.inSelectionMode)
+    }
+
+    @Test
+    fun `a row already on the phone hides Restore`() {
+        list(cloudOnly1, a)
+        controller.startSelection(cloudOnly1)
+        assertEquals(View.VISIBLE, restore.visibility)
+
+        controller.toggleSelection(a)
+
+        assertEquals(View.GONE, restore.visibility)
+        controller.restoreSelected()
+        assertTrue("nothing restored for a mixed selection", restored.isEmpty())
+    }
+
+    @Test
+    fun `a backed-up row with its frames on the phone has nothing to restore`() {
+        val both = record("both", local = true, cloud = true)
+        list(both)
+        controller.startSelection(both)
+
+        assertEquals(View.GONE, restore.visibility)
+    }
+
+    @Test
+    fun `an account without restore never sees the action`() {
+        restoreAllowed = false
+        list(cloudOnly1, cloudOnly2)
+        controller.startSelection(cloudOnly1)
+        controller.toggleSelection(cloudOnly2)
+
+        assertEquals(View.GONE, restore.visibility)
+        controller.restoreSelected()
+        assertTrue(restored.isEmpty())
     }
 
     // ── Rename ───────────────────────────────────────────────────────────────

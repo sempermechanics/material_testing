@@ -1,0 +1,186 @@
+"""Deleting a licence into the 30-day hold, and restoring it (repo/deletion.py)."""
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from app import firestore_repo as repo
+from license_helpers import _mint_individual, _mint_institution, _signed_in
+
+
+def _claimed(store, uid):
+    return repo.ensure_entitlement({**store._data["users"][uid], "uid": uid}, "and-1")
+
+
+def _held(store, email="solo@lab.org", uid="solo-1", **kw):
+    store._data["users"] = {}
+    minted = _mint_individual(email=email, **kw)
+    _signed_in(store, uid, email)
+    _claimed(store, uid)
+    return minted["license"]["id"]
+
+
+def _seats(store, lid, bucket="licenses"):
+    """The seat documents under a licence or a tombstone, by uid."""
+    sub = "seats" if bucket == "licenses" else "deleted_seats"
+    return store._data.get(f"{bucket}/{lid}/{sub}", {})
+
+
+def test_a_deleted_licence_is_held_for_thirty_days(store):
+    lid = _held(store, expires_at=datetime.now(timezone.utc) + timedelta(days=90))
+
+    err, row = repo.delete_license(lid, "admin")
+
+    assert err == ""
+    assert lid not in store._data["licenses"]
+    tomb = store._data["deleted_licenses"][lid]
+    assert tomb["priorStatus"] == "redeemed" and tomb["deletedByUid"] == "admin"
+    held = tomb["purgeAt"] - datetime.now(timezone.utc)
+    assert timedelta(days=29, hours=23) < held <= timedelta(days=30)
+    assert row["id"] == lid and row["purgeAt"] == tomb["purgeAt"]
+
+
+def test_the_holder_drops_to_demo_and_points_at_nothing(store):
+    lid = _held(store)
+
+    repo.delete_license(lid, "admin")
+
+    user = store._data["users"]["solo-1"]
+    assert user["mode"] == "demo"
+    assert "licenseId" not in user and "licenseExpiresAt" not in user
+    # Their next request gives them a Demo key of their own.
+    after = _claimed(store, "solo-1")
+    assert after["licenseId"] and after["licenseId"] != lid
+    assert repo.licence_held_by("solo@lab.org") == ""
+
+
+def test_an_institution_is_deleted_with_its_roster(store):
+    store._data["users"] = {}
+    lid = _mint_institution()["license"]["id"]
+    for i in range(3):
+        _signed_in(store, f"m-{i}", f"m{i}@university.edu")
+        assert repo.add_institution_member(lid, f"m{i}@university.edu")[0] == ""
+
+    repo.delete_license(lid, "admin")
+
+    assert _seats(store, lid) == {}
+    assert set(_seats(store, lid, "deleted_licenses")) == {"m-0", "m-1", "m-2"}
+    assert all(s["status"] == "active" for s in _seats(store, lid, "deleted_licenses").values())
+    assert all("licenseId" not in store._data["users"][f"m-{i}"] for i in range(3))
+
+
+def test_a_system_demo_key_is_not_deleted(store):
+    store._data["users"] = {}
+    user = _signed_in(store, "u-1", "u@lab.org")
+    demo = repo.ensure_entitlement(user, "and-1")["licenseId"]
+    assert repo.delete_license(demo, "admin") == ("demo_key_not_deletable", None)
+    assert demo in store._data["licenses"]
+
+
+def test_restoring_puts_the_holder_back(store):
+    lid = _held(store)
+    repo.delete_license(lid, "admin")
+    demo = _claimed(store, "solo-1")["licenseId"]
+
+    err, lic = repo.restore_license(lid, "admin")
+
+    assert err == "" and lic["status"] == "redeemed"
+    user = store._data["users"]["solo-1"]
+    assert (user["licenseId"], user["mode"]) == (lid, "licensed")
+    assert lid not in store._data.get("deleted_licenses", {})
+    # The stand-in Demo key is gone, as after any claim.
+    assert demo not in store._data["licenses"]
+
+
+def test_restoring_leaves_someone_who_has_moved_on(store):
+    lid = _held(store)
+    repo.delete_license(lid, "admin")
+    store._data["users"]["solo-1"].pop("licenseId", None)
+    other = _mint_individual()["license"]["id"]
+    assert _claimed(store, "solo-1")["licenseId"] == other
+
+    err, lic = repo.restore_license(lid, "admin")
+
+    assert err == ""
+    assert lic["status"] == "unused" and lic["redeemedByUid"] == ""
+    assert store._data["users"]["solo-1"]["licenseId"] == other
+
+
+def test_restoring_an_institution_reseats_its_roster(store):
+    store._data["users"] = {}
+    lid = _mint_institution(max_seats=5)["license"]["id"]
+    for i in range(2):
+        _signed_in(store, f"m-{i}", f"m{i}@university.edu")
+        repo.add_institution_member(lid, f"m{i}@university.edu")
+    repo.delete_license(lid, "admin")
+
+    err, lic = repo.restore_license(lid, "admin")
+
+    assert err == "" and lic["seatsUsed"] == 2 and lic["status"] == "active"
+    assert {s["status"] for s in _seats(store, lid).values()} == {"active"}
+    assert all(store._data["users"][f"m-{i}"]["licenseId"] == lid for i in range(2))
+    assert _seats(store, lid, "deleted_licenses") == {}
+
+
+def test_a_revoked_licence_comes_back_revoked(store):
+    lid = _held(store)
+    repo.revoke_license(lid, "admin")
+    repo.delete_license(lid, "admin")
+    _claimed(store, "solo-1")
+
+    err, lic = repo.restore_license(lid, "admin")
+
+    assert (err, lic["status"]) == ("", "revoked")
+    assert store._data["users"]["solo-1"]["licenseId"] != lid
+
+
+def test_an_unclaimed_licence_is_promised_to_its_address_again(store):
+    store._data["users"] = {}
+    lid = _mint_individual(email="new@lab.org")["license"]["id"]
+    repo.delete_license(lid, "admin")
+    assert store._data["licenseInvites"] == {}
+
+    repo.restore_license(lid, "admin")
+
+    (invite,) = store._data["licenseInvites"].values()
+    assert invite["licenseId"] == lid
+
+
+def test_nothing_is_restored_after_the_hold(store):
+    lid = _held(store)
+    repo.delete_license(lid, "admin")
+    store._data["deleted_licenses"][lid]["purgeAt"] = datetime.now(timezone.utc) - timedelta(minutes=1)
+    assert repo.restore_license(lid, "admin") == ("deleted_license_purged", None)
+    assert repo.restore_license("nope", "admin") == ("deleted_license_not_found", None)
+
+
+def test_the_deleted_list_is_newest_first(store):
+    store._data["users"] = {}
+    ids = [_mint_individual(email=f"p{i}@lab.org")["license"]["id"] for i in range(3)]
+    for i, lid in enumerate(ids):
+        repo.delete_license(lid, "admin")
+        store._data["deleted_licenses"][lid]["deletedAt"] = datetime(2026, 9, 1 + i, tzinfo=timezone.utc)
+
+    rows = repo.list_deleted_licenses()
+
+    assert [r["id"] for r in rows] == ids[::-1]
+    assert rows[0]["priorStatus"] == "unused"
+
+
+@pytest.mark.asyncio
+async def test_the_routes(store, client, audited):
+    lid = _held(store)
+
+    resp = await client.delete(f"/v1/admin/licenses/{lid}")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == lid
+    listed = await client.get("/v1/admin/deleted-licenses")
+    assert [r["id"] for r in listed.json()["licenses"]] == [lid]
+    restored = await client.post(f"/v1/admin/deleted-licenses/{lid}/restore")
+    assert restored.status_code == 200, restored.text
+    assert (await client.get(f"/v1/admin/licenses/{lid}")).status_code == 200
+    again = await client.post(f"/v1/admin/deleted-licenses/{lid}/restore")
+    assert again.status_code == 404
+    missing = await client.delete("/v1/admin/licenses/nope")
+    assert missing.status_code == 404
+    actions = [r["action"] for r in audited]
+    assert "ADMIN_LICENSE_DELETE" in actions and "ADMIN_LICENSE_RESTORE" in actions

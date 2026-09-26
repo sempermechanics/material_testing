@@ -3,7 +3,9 @@ from typing import Annotated, List, Literal, Optional
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
-from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
+from pydantic import (
+    BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator,
+)
 
 from .config import settings
 from .validation import DeviceId, DocumentId, SessionId
@@ -165,6 +167,28 @@ class LicenseActivate(BaseModel):
     key: str = Field(min_length=8, max_length=64)
 
 
+def _admin_email_list(value: List[str]) -> List[str]:
+    """IT contacts for an institution licence, normalised as they are stored."""
+    out = []
+    for raw in value:
+        email = (raw or "").strip().lower()
+        if "@" not in email or email.startswith("@") or email.endswith("@"):
+            raise ValueError("adminEmails entries must be email addresses")
+        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in email):
+            raise ValueError("adminEmails must not contain control characters")
+        out.append(email)
+    return list(dict.fromkeys(out))
+
+
+def _bare_domain(value: str) -> str:
+    domain = value.strip().lower()
+    if "@" in domain or domain.startswith(".") or domain.endswith(".") or "." not in domain:
+        raise ValueError("domainLock must be a bare domain, e.g. university.edu")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in domain):
+        raise ValueError("domainLock must not contain control characters")
+    return domain
+
+
 class AdminLicenseCreate(BaseModel):
     """Ops mint for a licensed key.
 
@@ -247,27 +271,12 @@ class AdminLicenseCreate(BaseModel):
     @field_validator("domainLock")
     @classmethod
     def _domain_lock(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return value
-        domain = value.strip().lower()
-        if "@" in domain or domain.startswith(".") or domain.endswith(".") or "." not in domain:
-            raise ValueError("domainLock must be a bare domain, e.g. university.edu")
-        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in domain):
-            raise ValueError("domainLock must not contain control characters")
-        return domain
+        return None if value is None else _bare_domain(value)
 
     @field_validator("adminEmails")
     @classmethod
     def _admin_emails(cls, value: List[str]) -> List[str]:
-        out = []
-        for raw in value:
-            email = (raw or "").strip().lower()
-            if "@" not in email or email.startswith("@") or email.endswith("@"):
-                raise ValueError("adminEmails entries must be email addresses")
-            if any(ord(char) < 0x20 or ord(char) == 0x7F for char in email):
-                raise ValueError("adminEmails must not contain control characters")
-            out.append(email)
-        return out
+        return _admin_email_list(value)
 
     @model_validator(mode="after")
     def _duration_requires_matching_expiry(self) -> "AdminLicenseCreate":
@@ -345,14 +354,28 @@ class InstitutionSeatAdd(BaseModel):
 class AdminLicenseUpdate(BaseModel):
     """Ops edit of an already-minted license — renewal, mostly.
 
+    Unknown fields are refused (422) rather than dropped: a desk that sends a
+    field this model does not know was being told "saved" for a change that
+    never happened.
+
     Before this existed a timed license could only be replaced, which meant
     issuing a new key and re-activating every holder. Extending `expiresAt`
     here re-entitles everyone already on the license in place.
 
-    Terms only. It cannot change `kind`, the domain or email locks, or the
-    key — those decide *who* the license is for, and changing them under
-    existing holders is a different operation with different consequences.
-    Send only what changes; at least one field is required.
+    Terms, and how an institution licence is run. It cannot change `kind`,
+    the domain or email locks, or the key — those decide *who* the license is
+    for, and changing them under existing holders is a different operation
+    (individual to institution is `POST .../convert`). Send only what
+    changes; at least one field is required.
+
+    - `perpetual=true` drops the expiry and grace: the licence never ends.
+    - `allowShorten=true` lets `expiresAt` move earlier, or give a perpetual
+      licence an end date. A date already past is still refused — ending a
+      licence now is revoke.
+    - `seating`, `maxSeats` and `adminEmails` are for institution licences.
+      Switching to `assigned` needs `maxSeats` at least the roster; switching
+      to `floating` needs a `maxSeats`, and every member then checks out a
+      lease to work.
 
     `clearDeviceLock=true` is the exception that proves the rule: the device
     lock says *where* the licence may be used, not who for, and staff have to
@@ -373,6 +396,12 @@ class AdminLicenseUpdate(BaseModel):
     clearMaxAnalyses: Optional[bool] = None
     note: Optional[DisplayString] = None
     clearDeviceLock: Optional[bool] = None
+    adminEmails: Optional[List[str]] = Field(default=None, min_length=1, max_length=20)
+    seating: Optional[Literal["assigned", "floating"]] = None
+    perpetual: Optional[Literal[True]] = None
+    allowShorten: Optional[Literal[True]] = None
+
+    model_config = ConfigDict(extra="forbid")
 
     @field_validator("expiresAt", "supportUntil")
     @classmethod
@@ -386,14 +415,55 @@ class AdminLicenseUpdate(BaseModel):
     def _max_analyses(cls, value: Optional[int]) -> Optional[int]:
         return _analysis_cap(value)
 
+    @field_validator("adminEmails")
+    @classmethod
+    def _admin_emails(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        return None if value is None else _admin_email_list(value)
+
     @model_validator(mode="after")
     def _at_least_one_field(self) -> "AdminLicenseUpdate":
         if all(
             getattr(self, name) is None
             for name in ("expiresAt", "graceDays", "supportUntil", "maxSeats",
-                         "maxAnalyses", "clearMaxAnalyses", "note", "clearDeviceLock")
+                         "maxAnalyses", "clearMaxAnalyses", "note", "clearDeviceLock",
+                         "adminEmails", "seating", "perpetual")
         ):
             raise ValueError("at least one field must be set")
         if self.clearMaxAnalyses and self.maxAnalyses is not None:
             raise ValueError("send maxAnalyses or clearMaxAnalyses, not both")
+        if self.perpetual and (self.expiresAt is not None or self.graceDays is not None):
+            raise ValueError("a perpetual licence has no expiresAt or graceDays")
+        if self.allowShorten and self.expiresAt is None:
+            raise ValueError("allowShorten goes with an expiresAt")
+        return self
+
+
+class AdminLicenseConvert(BaseModel):
+    """Turn an individual licence into an institution licence.
+
+    The individual licence's terms carry over; these are the fields an
+    institution licence has and an individual one does not. The holder must
+    have an address on `domainLock`.
+    """
+    domainLock: str = Field(min_length=1, max_length=253)
+    adminEmails: List[str] = Field(min_length=1, max_length=20)
+    maxSeats: Optional[int] = Field(default=None, gt=0, le=100000)
+    seating: Literal["assigned", "floating"] = "assigned"
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("domainLock")
+    @classmethod
+    def _domain_lock(cls, value: str) -> str:
+        return _bare_domain(value)
+
+    @field_validator("adminEmails")
+    @classmethod
+    def _admin_emails(cls, value: List[str]) -> List[str]:
+        return _admin_email_list(value)
+
+    @model_validator(mode="after")
+    def _floating_needs_seats(self) -> "AdminLicenseConvert":
+        if self.seating == "floating" and self.maxSeats is None:
+            raise ValueError("floating licenses require maxSeats")
         return self
