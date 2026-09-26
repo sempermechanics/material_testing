@@ -221,8 +221,12 @@ Environments. A **production** deploy runs only when dispatched from `main`
 5. Promotes the candidate to 100% traffic once the smoke passes (when
    `no_traffic` was used), with `--to-latest` after checking the latest ready
    revision is the candidate, and removes every `cand-*` tag in the same call.
+6. Tags images by digest for the registry cleanup policy: `serving` on the
+   promoted revision's image, `rollback-prev` on the image of the revision it
+   replaced. A failure here is an error annotation, not a rollback; re-pin by
+   hand ([BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene)).
 
-6. The `gateway` job then moves that environment's API Gateway (`semper-gw`, or
+7. The `gateway` job then moves that environment's API Gateway (`semper-gw`, or
    `semper-gw-staging` for staging) onto a config
    rendered from `backend/gateway/openapi.yaml`
    ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)). Input `gateway_mode`

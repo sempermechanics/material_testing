@@ -68,12 +68,13 @@ and the app's first calls already wait 1.3–1.8 s on App Check
 ## Change 2: build storage cleanup
 
 The registry and the `run-sources-…` bucket gain a copy of the service on every source
-deploy. Both now delete anything more than 15 days old. The registry keeps the image
-tagged `latest` (serving), any image with a tag starting `rollback` (hand-pinned rollback
-images, added 2026-09-26), and each package's five newest versions. Only those are rollback
+deploy. Both now delete anything more than 15 days old. The registry keeps the images
+tagged `serving` and `latest`, any image with a tag starting `rollback` (`rollback-prev`,
+which each deploy moves, and hand-pinned ones), and each package's five newest versions. Only those are rollback
 targets: any other earlier revision loses its image once it is more than 15 days old and
 outside the five newest, and `update-traffic --to-revisions` to it would route traffic to a
-revision that cannot start an instance. Tag an image `rollback-…` to keep it. Artifact Registry records
+revision that cannot start an instance. Tag an image `rollback-…` to keep it
+([A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene) has the rule for hand-pinned tags). Artifact Registry records
 no last-pull time, so age is the only usable signal for "unused". The policy files are in
 [`backend/deploy/`](../../backend/deploy/) and the apply steps are in
 [BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene). Both were

@@ -942,7 +942,7 @@ client".
 | Drive storage | 5 TB already-paid Workspace pool | ~5 sessions/user × 1 GB | **$0 marginal** |
 | Egress | uploads go **device→Drive**, not via Cloud Run | ~0 GB through GCP | **$0** |
 | Cloud Logging | 50 GiB/mo free | structured logs | **$0** |
-| Artifact Registry | 0.5 GB free | ~80 MB per deploy; a 15-day cleanup policy keeps `latest`, `rollback…` tags and the 5 newest per package ([setup A7](BACKEND_SETUP_GCP.md#a7-storage-hygiene)) | **~$0** (1.24 GB before the policy, ≈ ₹6/mo) |
+| Artifact Registry | 0.5 GB free | ~80 MB per deploy; a 15-day cleanup policy keeps `serving`, `latest`, `rollback…` tags and the 5 newest per package ([setup A7](BACKEND_SETUP_GCP.md#a7-storage-hygiene)) | **~$0** (1.24 GB before the policy, ≈ ₹6/mo) |
 
 The killer design win: **bytes never transit Cloud Run**, so the usual
 egress/compute blowup for 1–5 GB uploads simply doesn't exist.
