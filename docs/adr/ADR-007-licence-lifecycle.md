@@ -89,8 +89,9 @@ member or IT).
 
 - [x] `repo/holders.py`, `repo/upgrade.py`, `repo/deletion.py`, routes and
       gateway spec.
-- [ ] Create the TTL policies on `deleted_licenses.purgeAt` and
-      `deleted_seats.purgeAt` in staging and production
-      (BACKEND_SETUP_CONSOLE.md §3a).
+- [x] Create the TTL policies on `deleted_licenses.purgeAt` and
+      `deleted_seats.purgeAt` (BACKEND_SETUP_CONSOLE.md §3a). Staging and
+      production share `indicvision-dic-app`'s default database, so one pair
+      serves both; both `ACTIVE` on 2026-09-26.
 - [ ] Run `backend/scripts/find_duplicate_licences.py` against production and
       resolve anyone holding two live licences from before the rule.

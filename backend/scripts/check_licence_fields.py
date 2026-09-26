@@ -10,7 +10,10 @@ this should report nothing; run it once before deploying the query.
 
 Read-only. Costs one read per licence document.
 
-    python scripts/check_licence_fields.py --project indic-prod
+    python scripts/check_licence_fields.py --project indicvision-dic-app
+
+Staging and production run in this one project against the same default
+database, so there is no separate staging run.
 """
 from __future__ import annotations
 
