@@ -145,21 +145,18 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   Past a frame the batch skipped, the curve, E and each frame's load come from the right
-  frame (TD-91). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
-- **Open: bending tap order (TD-92).** Bottom edge tapped first gave a negative δ and E
-  (Pixel 6, 2026-09-26); δ is now signed by the load (`BeamDeflection.alongLoad`), saved
-  sessions included.
-- **Open: bending graph axes (TD-93, TD-94).** The on-screen plots' y gutter was a fixed 34 dp, so a
-  bending load tick like 21686 read "1686" (Pixel 6, 2026-09-26); it is now sized to the widest
-  tick. The slope line now runs over the measured δ only, not from δ = 0, so a negative
-  intercept no longer drags the load axis below 0 N (TD-94); the lab-report PDF matches.
+  frame (TD-91). δ is signed by the load, so the tap order cannot flip δ or E (#51,
+  TD-92). History: [CHANGELOG.md](docs/ops/CHANGELOG.md).
+- **Open: bending graph axes (#55, TD-93, TD-94).** Five-digit load ticks read in full; the
+  slope line spans the measured δ, so the load axis stays at or above 0 N (viewer and PDF).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**.
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   (Results, Elastic toggle, lab-report PDF, viewer and tap-editor gestures) run in Tier 3;
-  on a Galaxy S21+ (Android 15, 2026-09-25) they pass 9/9 and `VideoFrameExtractionDeviceTest`
-  6/6 (MP4 and AVI). `WizardDraftRestoreTest` covers a load log across a process death.
+  on a Galaxy S21+ (Android 15) they pass 9/9 at `db75267` (2026-09-26, after #46–#50);
+  `VideoFrameExtractionDeviceTest` passes 6/6 there (2026-09-25, and 2026-09-26 on a build
+  another session installed). `WizardDraftRestoreTest`: a load log survives process death.
 - **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
   has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
   and saves it (#33, #34, TD-87/TD-88). Both suites pass in full on a Pixel 6 (Android 17,
@@ -185,6 +182,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - A query that needs a composite index fails `FAILED_PRECONDITION` at runtime, not deploy: run `scripts/deploy-firestore.sh indexes` and wait for the build before the backend that queries it (the staff licence list needs three) — [§5](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `MAX_SESSIONS_PER_USER` is deleted; a deployment still setting it silently gets `DEMO_MAX_ANALYSES` (25) — [§7](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - List env vars (`CONSOLE_ORIGINS`, `ADMIN_EMAILS`) are space-separated; the deploy action splits on commas — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- Test phones are shared between sessions: before `adb install -r`, check `ps -A | grep instrument` and the app's `lastUpdateTime` — an install kills a running `am instrument`, and another session's install can replace the build under test. Never the connected task on a phone — [TESTING.md](docs/app/TESTING.md).
 - Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Demo uploads silently; only retrieval is gated. Gating `POST /v1/sessions` would loop old builds on 403 — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md).

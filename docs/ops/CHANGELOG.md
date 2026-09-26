@@ -12,6 +12,23 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — material_testing: bending δ signed by the load, not the tap order (#51)
+
+Merged as `e6d4addb`. The tap editor names the first tap "top" wherever it
+lands, and the probe read δ from the first tap towards the second. So a
+student who tapped the beam's bottom edge first got a negative δ, slope and E.
+On a Pixel 6, the PMMA set (REAL_WORLD_VALIDATION case 2) read "E from the
+graph ≈ -2.02 GPa (slope -6835.96 N/mm)" and "Average E ≈ -2.12 GPa". Now
+`BeamDeflection.alongLoad` negates a curve's δ when Σ W·δ < 0. It runs where
+both curves are built (`StressStrain.build` and the CSV appender). Curves are
+rebuilt from `.dat` and the saved taps on every open, so saved sessions read
+right with no migration. The taps stay stored as tapped, so the CSV's
+`# load_point_top_px` can name the lower edge; nothing computes from it
+(TD-92). Checked on the Pixel 6 with the fixed debug build: `pmma_00`
+(reversed taps) now reads +2.02 / +2.12 GPa, graph 0 → +1.4 mm, and
+`concrete_00` (taps in order) is unchanged at 2.48 / 1.90 GPa. Ships with the
+next app release.
+
 ## 2026-09-26 — material_testing: machine-load info with the CSV header and diagrams (#48)
 
 Merged as `7be477e2`. The ⓘ on the wizard's **Machine load** card opens
