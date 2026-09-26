@@ -97,6 +97,7 @@ from .repo.institution_admin import (  # noqa: F401
 )
 from .repo.devlock import (  # noqa: F401
     bind_device_lock,
+    released_device_held,
     _BIND_ROUNDS,
     check_device_lock,
     _device_lock_state,
@@ -131,7 +132,6 @@ from .repo.devices import (  # noqa: F401
     get_device,
     issue_nonce,
     register_device,
-    released_device_held,
     user_has_active_device,
 )
 from .repo.account import (  # noqa: F401

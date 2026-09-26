@@ -1028,7 +1028,14 @@ empty the device lock:
 | Semper staff | **New device** on the licence row (individual) or on the seat in the roster (institution) in `/console/operator`. |
 
 Clearing the lock **is** the change: it releases the account's old phone, and
-the licence binds to whichever device signs in next. Nothing is re-issued, nothing is typed, and nothing is revoked
+the licence binds to the phone that registers next. Only the account's
+registered phone can take the lock, so a phone refused at sign-in cannot.
+
+**Demo on the phone they use.** An account whose lock was taken by another
+device before 2026-09-27 reads Demo on the phone it is registered on. One
+**New device** gives the licence back to that phone and does not sign it out
+(the clear's detail names no released device). If they really are moving, a
+second **New device** then releases it. Nothing is re-issued, nothing is typed, and nothing is revoked
 — entitlement, seat, lease and every stored analysis stay as they are. A
 holder who was demoted to Demo by trying the new phone first gets their mode
 back as part of the clear.
