@@ -251,6 +251,45 @@ def test_an_account_on_another_licence_keeps_its_phone(store):
     assert store._data["users"]["solo-1"]["activeDeviceId"] == "old-phone"
 
 
+# A clear releases the phone only where it would also restore the mode. A held
+# or revoked seat, or a revoked licence, leaves its holder on Demo, and a Demo
+# account does not get to change phone (TD-126).
+
+
+def test_new_device_on_a_held_seat_keeps_the_phone(store):
+    license_id = _bound_seat(store)
+    _registered_on(store, "u1")
+    assert repo.set_seat_enabled(license_id, "u1", False) == ""
+
+    assert repo.clear_device_lock(license_id, "u1", actor=repo.ACTOR_IT)[0] == ""
+
+    assert store._data["users"]["u1"]["activeDeviceId"] == "old-phone"
+    assert store._data["devices"]["old-phone"]["status"] == "ACTIVE"
+
+
+def test_new_device_on_a_revoked_seat_keeps_the_phone(store):
+    license_id = _bound_seat(store)
+    _registered_on(store, "u1")
+    assert repo.revoke_institution_seat(license_id, "u1") is True
+    assert store._data["users"]["u1"]["licenseId"] == license_id  # a revoke keeps it
+
+    assert repo.clear_device_lock(license_id, "u1", actor=repo.ACTOR_STAFF)[0] == ""
+
+    assert store._data["users"]["u1"]["activeDeviceId"] == "old-phone"
+
+
+def test_new_device_on_a_revoked_licence_keeps_the_phone(store):
+    license_id = _bound_individual(store)
+    _registered_on(store, "solo-1")
+    assert repo.revoke_license(license_id, "staff-1") is not None
+    assert store._data["users"]["solo-1"]["licenseId"] == license_id  # a revoke keeps it
+
+    assert repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)[0] == ""
+
+    assert store._data["users"]["solo-1"]["activeDeviceId"] == "old-phone"
+    assert "releasedDeviceId" not in store._data["users"]["solo-1"]
+
+
 @pytest.mark.asyncio
 async def test_after_a_clear_the_new_phone_registers_over_http(client, monkeypatch):
     store = fake_firestore.install(monkeypatch)
