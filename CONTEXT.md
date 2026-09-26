@@ -157,7 +157,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   the API 37 emulator once the tap test waits for idle before clicking (TD-95);
   `VideoFrameExtractionDeviceTest` passes 6/6 on the Galaxy (2026-09-25, and 2026-09-26 on a build
   another session installed). `WizardDraftRestoreTest`: a load log survives process death.
-- **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
+- **CI and benchmarks.** Path filters honour their `!` patterns, so a docs-only PR skips
+  Tier 1 (#63, TD-96). `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
   has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
   and saves it (#33, #34, TD-87/TD-88). Both suites pass in full on a Pixel 6 (Android 17,
   2026-09-25); the medians against CI's API 34 emulator are in
