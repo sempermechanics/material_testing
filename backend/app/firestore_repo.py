@@ -48,6 +48,10 @@ from .repo.claims import (  # noqa: F401
     _individual_member_patch,
     _public_claim_error,
 )
+from .repo.holders import (  # noqa: F401
+    licence_held_by,
+    licence_is_live,
+)
 from .repo.invites import (  # noqa: F401
     find_user_by_email,
     invite_institution_member,
@@ -164,6 +168,7 @@ from .repo import (
     devices,
     devlock,
     entitlement,
+    holders,
     institution_admin,
     invites,
     leases,
@@ -178,7 +183,7 @@ from .repo import (
 )
 
 #: Every module of the package, each after everything it imports.
-PACKAGE = (_base, user_config, devlock, claims, invites, mint, activation, entitlement,
+PACKAGE = (_base, user_config, devlock, claims, invites, holders, mint, activation, entitlement,
            license_admin, institution_admin, licensing, devices, users, leases, seats,
            reconcile, account, sessions)
 _MISSING = object()

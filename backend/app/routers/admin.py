@@ -139,6 +139,13 @@ def admin_create_license(
                     "seating": body.seating},
         )
         return minted
+    # One licence per person. Refused before anything is written: the mint
+    # used to go ahead and only report that the licence had not reached them.
+    # The id is the licence they hold, for the desk to open — renewal is
+    # Extend on that one.
+    held = repo.licence_held_by(body.emailLock)
+    if held:
+        raise HTTPException(409, f"{errors.EMAIL_ALREADY_LICENSED}: {held}")
     minted = repo.create_individual_license(
         email_lock=body.emailLock,
         device_id_lock=body.deviceIdLock,

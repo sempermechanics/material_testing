@@ -164,11 +164,13 @@ backend unless "Show Demo keys" / "Show revoked" is ticked. A revoke that left
 its row in place with only the pill changed read as one that had not
 happened. The filter narrows the loaded rows at once, and an email, domain or
 key prefix is also searched on the backend (`q=`), so a licence on a page
-nobody loaded is found. Before an individual mint the desk asks the backend
-for a live licence on the same address and asks first — the backend mints the
-second one anyway and only reports `invite_exists` — and every mint says
-whether the licence reached the person: attached, waiting for their first
-sign-in, or not delivered and why.
+nobody loaded is found. One licence per person: the backend refuses an
+individual mint for an address that already holds or is promised a live
+licence (`409 email_already_licensed: <id>`), and the desk puts that licence
+on screen with the address in the filter — renewal is Extend on it. The IT
+and operator rosters say the same for `member_already_licensed`. Every mint
+says whether the licence reached the person: attached, waiting for their
+first sign-in, or not delivered and why.
 
 ### Go-live checklist (Identity Platform + consoles)
 

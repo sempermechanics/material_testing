@@ -38,6 +38,9 @@ from .claims import (
     _individual_member_patch,
     _public_claim_error,
 )
+from .holders import (
+    licence_is_live,
+)
 from .invites import (
     find_user_by_email,
     _invite_ref,
@@ -283,7 +286,8 @@ def create_individual_license(
 
 def _holds_only_a_demo_key(user: dict) -> bool:
     """True when this account can take a licence right now: it points at no
-    licence, at the auto-minted Demo key, or at one that is revoked or gone.
+    licence, at the auto-minted Demo key, or at one that is revoked, past its
+    grace, or gone — `licence_is_live`, the one-licence rule's own test.
 
     The discriminator is the licence document, as in `_drop_superseded_demo`:
     a revoked holder is left demoted in place and still pointing at the real
@@ -293,10 +297,7 @@ def _holds_only_a_demo_key(user: dict) -> bool:
     license_id = user.get("licenseId") or ""
     if not license_id:
         return True
-    lic = get_license(license_id)
-    if not lic or (lic.get("status") or "") == "revoked":
-        return True
-    return _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system"
+    return not licence_is_live(get_license(license_id))
 
 
 def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[str, str]:

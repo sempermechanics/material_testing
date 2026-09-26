@@ -257,12 +257,13 @@ def test_an_unverified_address_never_redeems_an_invite(store):
 
 
 def test_an_invite_to_a_second_licence_is_refused(store):
+    """An invite is a promise of a licence, so the one-licence rule counts it."""
     store._data["users"] = {}
     first = _mint_floating()["license"]["id"]
     second = _mint_floating()["license"]["id"]
     repo.add_institution_member(first, "shared@university.edu")
     err, seat, invite = repo.add_institution_member(second, "shared@university.edu")
-    assert err == "invite_exists"
+    assert err == "member_already_licensed"
     assert seat is None and invite is None
 
 
