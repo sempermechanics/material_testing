@@ -150,6 +150,10 @@ jobs:
           # ignores `base` and falls back to the Files API (and warns).
           token: ''
           base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          # A file matches a filter on any of its patterns unless a '!' pattern
+          # excludes it. The default ('some') made app's '!app/src/main/cpp/**'
+          # match every file outside cpp/, so a docs-only PR ran Tier 1 (TD-96).
+          predicate-quantifier: 'some-with-excludes'
           filters: |
             app:
               - 'app/**'
