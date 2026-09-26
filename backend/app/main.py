@@ -56,16 +56,6 @@ def _startup_checks():
                 "otherwise remove DEV_INSECURE_AUTH."
             )
         log.warning("=== DEV_INSECURE_AUTH=1 : auth is BYPASSED. Never use in production. ===")
-    if settings.ON_CLOUD_RUN and not settings.REQUIRE_ATTESTED_UPLOADS:
-        # Deliberately temporary, but must never be silent: while this is off,
-        # GET /v1/sessions/{sid}/uploads hands Drive capability URLs to any
-        # ID-token caller with no device signature (see deps.device_or_legacy_reader).
-        # Flip REQUIRE_ATTESTED_UPLOADS=1 once legacy_unattested_uploads is zero.
-        log.warning(
-            "=== REQUIRE_ATTESTED_UPLOADS unset: /uploads accepts unattested "
-            "legacy callers. Temporary migration window — set it to 1 once the "
-            "fleet has moved. ==="
-        )
     if settings.APP_CHECK_MODE not in ("off", "monitor", "enforce"):
         # A misspelt mode must not read as "off". Silently ignoring it would
         # leave an operator believing enforcement is on when nothing is checked,

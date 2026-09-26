@@ -161,10 +161,12 @@ class UserConfigPatch(BaseModel):
     maxFilesPerSession: Optional[int] = Field(default=None, gt=0)
     maxFrames: Optional[int] = Field(default=None, gt=0)
     datCodecEncodingEnabled: Optional[bool] = None
-    #: `plan` is the pre-rename spelling; both are accepted and fold onto
-    #: `mode` in firestore_repo.set_user_config. Send one, not both.
     mode: Optional[Literal["demo", "licensed"]] = None
-    plan: Optional[Literal["demo", "professional"]] = None
+
+    #: An unknown key is a 422, not silently dropped: the pre-rename `plan`
+    #: patch was retired (TD-45), and an operator who still sends it must hear
+    #: that the mode did not change rather than get a 200 that changed nothing.
+    model_config = ConfigDict(extra="forbid")
 
 
 class LicenseActivate(BaseModel):
@@ -209,8 +211,7 @@ class AdminLicenseCreate(BaseModel):
     (list/clear-device/enable-disable/revoke). `maxSeats` is an optional hard
     cap; omitted means unlimited.
 
-    `"campus"` is the pre-rename spelling and is still accepted on the wire;
-    it is normalised to `"institution"` before validation.
+    The pre-rename `"campus"` spelling is refused (422) since TD-45 retired it.
     """
     kind: Literal["individual", "institution"] = "individual"
     #: Orthogonal to `kind`. `timed` requires a future `expiresAt`; `perpetual`
@@ -236,12 +237,6 @@ class AdminLicenseCreate(BaseModel):
     supportUntil: Optional[datetime] = None
     maxAnalyses: Optional[int] = Field(default=None, gt=0)
     note: DisplayString = ""
-
-    @field_validator("kind", mode="before")
-    @classmethod
-    def _kind_alias(cls, value):
-        """Accept the pre-rename `campus` spelling from older ops tooling."""
-        return "institution" if value == "campus" else value
 
     @field_validator("expiresAt", "supportUntil")
     @classmethod

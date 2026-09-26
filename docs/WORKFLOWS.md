@@ -429,7 +429,7 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade
 | C19 | Access-request mail 🔒 | `notify.access_request` | On first PENDING user, mails support via Resend on a daemon worker with retry + per-uid idempotency. Off (silently) without `RESEND_API_KEY` |
 | C20 | Rate limits | `rate_limit.py` | Per-instance token buckets per uid (`export`, `erase` (account), `session_erase` (one analysis), `download`, `session`, `session_verify`, `challenge`, `device_register`, `file_complete`, `listing`, `admin`, `health`). The durable cross-instance limits are the gateway quotas in `backend/gateway/openapi.yaml` |
 | C20a | Security headers | `main.py` `security_headers` | nosniff, `frame-ancestors 'none'`, no-referrer, Permissions-Policy, HSTS behind HTTPS |
-| C20b | Startup checks | `main.py` `_startup_checks` | Refuses to start on Cloud Run without the required env; refuses `DEV_INSECURE_AUTH` unless explicitly acknowledged; warns while `REQUIRE_ATTESTED_UPLOADS` is unset. Interactive docs are served locally only |
+| C20b | Startup checks | `main.py` `_startup_checks` | Refuses to start on Cloud Run without the required env; refuses `DEV_INSECURE_AUTH` unless explicitly acknowledged. Interactive docs are served locally only |
 
 ### Authentication pipeline 🔒
 
@@ -439,7 +439,6 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade
 | C2 | Register a device | `POST /v1/devices/register` (`routers/devices.py`) | One account per device and one device per account: a different bound device is `device_conflict`, a device owned by another uid is `device_in_use` (audited). Re-registering the same id heals the stored public key |
 | C3 | Mint a nonce | `POST /v1/challenge` | `firestore_repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
 | C4 | Verify a device-signed call | `deps.verified_device` | ACTIVE device → `consume_nonce` (replay = 401) → ECDSA P-256 over `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → `bad_signature` audited on failure |
-| C4a | Legacy `/uploads` reader | `deps.device_or_legacy_reader` | Temporary window: an *unattested* read of the resume list is accepted while `REQUIRE_ATTESTED_UPLOADS` is unset, logged as `legacy_unattested_uploads`. Any device header, or the flag, forces the strict path. Retire per [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md) |
 | C14 | Admin | `routers/admin.py` | Listing and **device-history** need only an admin ID token; **approve / revoke / config-patch / mint additionally require a step-up** — a device attestation, or a second factor plus a recent sign-in for the staff console — so a stolen ID token alone cannot change access. Whole-licence revoke uses a tighter freshness window. All audited |
 
 ### Account and identity routes
@@ -458,7 +457,7 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade
 | C5 | `POST /v1/sessions` | C4 | Idempotent on `localSessionId` while in flight. Quota + file-count check → **reserve the session doc before any Drive I/O** → batch-write file docs → enqueue provisioning (C15) or provision inline with rollback |
 | C15 | Provisioning | `session_provision.provision_session` | Opens one Drive resumable URI per unprovisioned file, bounded fan-out. Idempotent: only files with no `uploadUrl` are touched. Inline failure → `purge_session` (Drive **and** Firestore); queued failure → `PROVISION_FAILED` so a poller stops waiting |
 | C16 | `POST /v1/tasks/provision-session` | `tasks.tasks_caller` | Cloud Tasks callback, authenticated by the OIDC token's audience **and** invoker service-account email. Not reachable with a user token |
-| C6 | `GET /v1/sessions/{sid}/uploads` | C4a | The resume list. Carries Drive capability URIs, which is why it is attested. `status` PROVISIONING means "poll", not "nothing to do" |
+| C6 | `GET /v1/sessions/{sid}/uploads` | C4 | The resume list. Carries Drive capability URIs, which is why it is attested (the ID-token-only migration window was retired 2026-09-26, FI-7). `status` PROVISIONING means "poll", not "nothing to do" |
 | C7 | `POST /v1/files/{id}/complete` | C4 | Verifies against Drive's own metadata: size, md5 (skipped only when Drive has none), and that the object's `parents` contains this session's folder — the confused-deputy guard. Advances the session the **file** belongs to, never the one the client named |
 | C8 | `GET /v1/sessions` | C1 | Cursor-paginated; `?verify=true` probes this page's folders in Drive. Purges metadata **only** on a confirmed `MISSING`; an `UNKNOWN` is counted and reported so the client knows the check was incomplete |
 | C9 | `GET /v1/sessions/{sid}/files` | C1 | The restore manifest, cursor-paginated (it used to truncate at 2000) |

@@ -89,17 +89,17 @@ went in and what stayed out: [ADR-004 As built](../adr/ADR-004-runspec.md#as-bui
 
 ## FI-7 Retire the unattested `/uploads` reader
 
-**Affects** C4a, C6 · *security*
+**Affects** C6 · *security*
 
-`deps.device_or_legacy_reader` accepts an ID-token-only read of the resume list —
-which carries Drive upload capability URIs — for testers on an older build. It is
-deliberately temporary: any device header, or `REQUIRE_ATTESTED_UPLOADS=1`, still
-forces full attestation, and the startup check warns while the flag is unset.
+`deps.device_or_legacy_reader` accepted an ID-token-only read of the resume list —
+which carries Drive upload capability URIs — for testers on an older build,
+unless the caller sent a device header or `REQUIRE_ATTESTED_UPLOADS=1` was set.
 
-**Fix.** When `legacy_unattested_uploads` has been zero for a full release cycle,
-set `REQUIRE_ATTESTED_UPLOADS=1`, then delete the wrapper and its branch in
-`routers/sessions.py`. Ship the flag flip and the deletion separately so the flip
-can be rolled back without a deploy of code.
+**Done** (2026-09-26, TD-45 shim 2): the flag had been `1` on both services, and
+Cloud Logging over the full 30-day retention showed 0 `legacy_unattested_uploads`
+events and 73 `/uploads` reads with none refused. The wrapper, the flag and its
+startup warning are gone; `/uploads` is plain `verified_device`, and
+`deploy-backend.yml` no longer pins the variable.
 
 ## FI-9 Make the error-code contract one edit
 

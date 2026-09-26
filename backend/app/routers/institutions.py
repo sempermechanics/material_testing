@@ -5,10 +5,9 @@ Deliberately separate from `routers/admin.py`: Semper-staff mint and
 whole-key revoke stay on the staff step-up path; institution IT gets a
 narrower surface scoped to exactly the license(s) that name them.
 
-Routes are served under both `/v1/institutions/*` (current) and the
-pre-rename `/v1/campus/*`. The aliases exist because institution IT scripts
-and curl one-liners are out of our control; drop them only after a
-deprecation window (see docs/backend/CLOUD_ARCHITECTURE_GCP.md §20).
+Routes are served under `/v1/institutions/*` only. The pre-rename
+`/v1/campus/*` aliases were retired on 2026-09-26 after 30 days with no
+request to them (TD-45; docs/backend/CLOUD_ARCHITECTURE_GCP.md §20.5).
 
 Auth is `current_user` (ID token, APPROVED) plus a *verified* email present
 in that specific license's `adminEmails`, **plus** the same browser step-up
@@ -87,9 +86,6 @@ def list_my_licenses(user=Depends(current_user)):
     for one. This is the read that lets a single sign-in page decide where to
     send somebody.
 
-    No `/v1/campus/*` alias: the route is new, so nothing pre-rename can be
-    calling it, and an alias nobody uses is an alias to deprecate later.
-
     Verified email, same as `institution_admin_context` — `adminEmails` names
     addresses, and an address nobody has proved they own must not be able to
     read a customer's roster. An empty list is the ordinary answer for the
@@ -106,11 +102,6 @@ def list_my_licenses(user=Depends(current_user)):
     "/v1/institutions/licenses/{license_id}/seats",
     dependencies=[rate_limited(rate_limit.institution_bucket)],
 )
-@router.get(
-    "/v1/campus/licenses/{license_id}/seats",
-    include_in_schema=False,
-    dependencies=[rate_limited(rate_limit.institution_bucket)],
-)  # pre-rename alias
 def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_stepup)):
     """Every seat on this license: uid, email, device lock, status. No key
     plaintext — only the license's keyPrefix, same redaction as the
@@ -132,11 +123,6 @@ def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_stepup)):
     "/v1/institutions/licenses/{license_id}/seats",
     dependencies=[rate_limited(rate_limit.institution_bucket)],
 )
-@router.post(
-    "/v1/campus/licenses/{license_id}/seats",
-    include_in_schema=False,
-    dependencies=[rate_limited(rate_limit.institution_bucket)],
-)  # pre-rename alias
 def add_seat(
     license_id: DocumentId,
     body: InstitutionSeatAdd,
@@ -215,11 +201,6 @@ def revoke_invite(
     "/v1/institutions/licenses/{license_id}/seats/{uid}",
     dependencies=[rate_limited(rate_limit.institution_bucket)],
 )
-@router.patch(
-    "/v1/campus/licenses/{license_id}/seats/{uid}",
-    include_in_schema=False,
-    dependencies=[rate_limited(rate_limit.institution_bucket)],
-)  # pre-rename alias
 def patch_seat(
     license_id: DocumentId,
     uid: Uid,
@@ -266,11 +247,6 @@ def patch_seat(
     "/v1/institutions/licenses/{license_id}/seats/{uid}",
     dependencies=[rate_limited(rate_limit.institution_bucket)],
 )
-@router.delete(
-    "/v1/campus/licenses/{license_id}/seats/{uid}",
-    include_in_schema=False,
-    dependencies=[rate_limited(rate_limit.institution_bucket)],
-)  # pre-rename alias
 def revoke_seat(license_id: DocumentId, uid: Uid, ctx=Depends(institution_admin_stepup)):
     """Single-seat revoke: drops the holder to Demo (in place, no data loss)
     and frees the slot so another domain member can activate. Whole-key revoke

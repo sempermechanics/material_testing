@@ -177,10 +177,11 @@ jobs:
 
       # deploy-cloudrun *merges* env_vars into the live revision's env, so a
       # variable this workflow stopped setting stays on the service forever.
-      # MAX_SESSIONS_PER_USER / PRO_MAX_SESSIONS_PER_USER were retired by the
-      # licensing rollout (DEMO_MAX_ANALYSES / LICENSED_MAX_SESSIONS_PER_USER
-      # replace them); the code ignores them, but a stale value misleads anyone
-      # reading the console. Print the live env and warn — removal is a manual
+      # MAX_SESSIONS_PER_USER was retired by the licensing rollout
+      # (DEMO_MAX_ANALYSES / LICENSED_MAX_SESSIONS_PER_USER replace it), and
+      # REQUIRE_ATTESTED_UPLOADS by TD-45 (/uploads is always device-attested
+      # now). The code ignores both, but a stale value misleads anyone reading
+      # the console. Print the live env and warn — removal is a manual
       # `gcloud run services update --remove-env-vars` after promote, so the
       # previous revision keeps its env for rollback.
       - name: Describe live env
@@ -196,9 +197,9 @@ jobs:
             --format='value(spec.template.spec.containers[0].env)' \
             | tr ';' '\n' | sed -E "s/'value': '[^']*'/'value': <redacted>/" \
             | tee /tmp/live-env.txt
-          for stale in MAX_SESSIONS_PER_USER PRO_MAX_SESSIONS_PER_USER; do
+          for stale in MAX_SESSIONS_PER_USER REQUIRE_ATTESTED_UPLOADS; do
             if grep -q "'name': '$stale'" /tmp/live-env.txt; then
-              echo "::warning::$stale is still set on $SERVICE. It is ignored since the licensing rollout; remove it after promote with: gcloud run services update $SERVICE --project $PROJECT --region $REGION --remove-env-vars $stale"
+              echo "::warning::$stale is still set on $SERVICE. The backend no longer reads it; remove it after promote with: gcloud run services update $SERVICE --project $PROJECT --region $REGION --remove-env-vars $stale"
             fi
           done
 
@@ -238,7 +239,6 @@ jobs:
             TASKS_LOCATION=${{ vars.TASKS_LOCATION }}
             TASKS_TARGET_BASE_URL=${{ vars.TASKS_TARGET_BASE_URL }}
             TASKS_INVOKER_SA=${{ vars.TASKS_INVOKER_SA }}
-            REQUIRE_ATTESTED_UPLOADS=${{ vars.REQUIRE_ATTESTED_UPLOADS }}
             DEMO_MAX_ANALYSES=${{ vars.DEMO_MAX_ANALYSES || '25' }}
             LICENSED_MAX_SESSIONS_PER_USER=${{ vars.LICENSED_MAX_SESSIONS_PER_USER || '999' }}
             ADMIN_WEB_MFA_ENABLED=${{ vars.ADMIN_WEB_MFA_ENABLED || '1' }}

@@ -195,8 +195,7 @@ gcloud iam service-accounts add-iam-policy-binding $API_SA \
 
 Then set these on the service (GitHub Environment or **repo-level** `vars` for
 the deploy workflow — Free private orgs often use repo-level — or
-`--set-env-vars` by hand). Also set `REQUIRE_ATTESTED_UPLOADS=1` for production
-deploys (see table below):
+`--set-env-vars` by hand):
 
 | Variable | Value |
 |---|---|
@@ -331,7 +330,7 @@ Everything above is required (or near enough). These are the rest of what
 | Variable | Default | What it does |
 |---|---|---|
 | `DEMO_MAX_ANALYSES` | `25` | How many analyses an **unlicensed** user may keep in the cloud. **Not** overridable per user: `resolve_user_config` applies it to every demo account and ignores a `maxSessions` override (`backend/app/repo/user_config.py`, the `else` branch of `resolve_user_config`). Lifting one demo account's cap means attaching a licence (decided 2026-09-23, TD-28) |
-| `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. The first positive value wins, in this order: the per-user `maxSessions` override, then the licence's `maxAnalyses` (mirrored onto the user as `licenseMaxAnalyses`), then this variable — so an override of 999 beats a key's cap of 100, and a key's cap of 2000 beats this default. It is **not** "whichever is tighter". Whatever wins is then floored at `DEMO_MAX_ANALYSES` (`repo/user_config.py`, `resolve_user_config`): a licence never gives fewer analyses than demo, and a licence `maxAnalyses` below it is refused at mint and PATCH (`models.py`, `_analysis_cap`). Falls back to the retired `PRO_MAX_SESSIONS_PER_USER` when unset (`config.py`) |
+| `LICENSED_MAX_SESSIONS_PER_USER` | `999` | The same ceiling for a **licensed** user. The first positive value wins, in this order: the per-user `maxSessions` override, then the licence's `maxAnalyses` (mirrored onto the user as `licenseMaxAnalyses`), then this variable — so an override of 999 beats a key's cap of 100, and a key's cap of 2000 beats this default. It is **not** "whichever is tighter". Whatever wins is then floored at `DEMO_MAX_ANALYSES` (`repo/user_config.py`, `resolve_user_config`): a licence never gives fewer analyses than demo, and a licence `maxAnalyses` below it is refused at mint and PATCH (`models.py`, `_analysis_cap`) |
 | `ADMIN_WEB_MFA_ENABLED` | `1` | Whether browser dashboards may act via MFA at all. `0` restores attestation-only admin — every state change then needs the phone |
 | `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise an ordinary state change. Sudo mode, not a session length |
 | `ADMIN_WEB_REVOKE_REAUTH_SECONDS` | `120` | Tighter window for whole-licence revoke; the operator page forces password/Google re-auth plus TOTP before that call |
@@ -342,7 +341,6 @@ Everything above is required (or near enough). These are the rest of what
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
 | `INLINE_PROVISION_MAX_FILES` | `8` | Manifests this small provision inside `POST /v1/sessions` instead of through the queue. `0` sends everything through Cloud Tasks |
 | `CLIENT_NONCE_WINDOW_SECONDS` | `120` | How far a device-minted `t1.` nonce's timestamp may be from server time ([CLOUD_ARCHITECTURE_GCP.md §3](CLOUD_ARCHITECTURE_GCP.md)). `0` refuses client nonces, so every signed call fetches a challenge |
-| `REQUIRE_ATTESTED_UPLOADS` | off locally / **`1` in production** | Production pilot keeps this at `1`. See the hardening note below |
 | `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
 | `LICENSE_GRACE_DAYS_DEFAULT` | `14` | Grace applied at mint time when the request names none. A licence already stored without `graceDays` reads as zero, so changing this never reinstates an expired account |
 | `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
@@ -353,8 +351,8 @@ Everything above is required (or near enough). These are the rest of what
 > **`MAX_SESSIONS_PER_USER` and `PRO_MAX_SESSIONS_PER_USER` are no longer
 > read.** The first was the single cloud cap for every user, defaulting to 4;
 > `mode` now selects between `DEMO_MAX_ANALYSES` and
-> `LICENSED_MAX_SESSIONS_PER_USER` instead (the second is honoured only as a
-> fallback default for the licensed value). An unlicensed user gets
+> `LICENSED_MAX_SESSIONS_PER_USER` instead (the second, its pre-rename name,
+> stopped seeding the licensed default on 2026-09-26, TD-45). An unlicensed user gets
 > `DEMO_MAX_ANALYSES` — six times the old ceiling at the default — so **set that
 > variable deliberately before deploying** rather than inheriting it.
 >
@@ -364,12 +362,13 @@ Everything above is required (or near enough). These are the rest of what
 > variables of the same name, with the defaults above when a variable is unset.
 > `deploy-cloudrun` *merges* env into the live revision, so a retired variable
 > stays on the service until removed by hand; the workflow's "Describe live
-> env" step warns when either stale name is still present. Remove them **after**
-> promote (the previous revision keeps its env for rollback):
+> env" step warns while `MAX_SESSIONS_PER_USER` or `REQUIRE_ATTESTED_UPLOADS`
+> (retired 2026-09-26, below) is still present. Remove them **after** promote
+> (the previous revision keeps its env for rollback):
 >
 > ```bash
 > gcloud run services update semper-api --region $REGION \
->   --remove-env-vars MAX_SESSIONS_PER_USER,PRO_MAX_SESSIONS_PER_USER
+>   --remove-env-vars MAX_SESSIONS_PER_USER,REQUIRE_ATTESTED_UPLOADS
 > ```
 >
 > The deploy workflow promotes with `--to-latest`, so the revision this
@@ -380,14 +379,14 @@ Everything above is required (or near enough). These are the rest of what
 > update-traffic semper-api --region $REGION --to-latest`. The promote also
 > removes every `cand-*` traffic tag, so none accumulate.
 
-**Production hardening: `REQUIRE_ATTESTED_UPLOADS=1` (live on pilot).**
-`GET /v1/sessions/{sid}/uploads` returns Drive upload capability URLs. While this
-flag is off, the route accepts a bare Firebase ID token as well as a full device
-signature. Production must keep the flag on. [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml)
-pins Cloud Run from the GitHub var `REQUIRE_ATTESTED_UPLOADS` — **leave that var
-empty and the next deploy clears the flag**, re-opening ID-token-only uploads.
-Repo-level vars are fine on Free private orgs; see
-[ENVIRONMENTS.md](../ops/ENVIRONMENTS.md).
+**Upload targets are always attested.** `GET /v1/sessions/{sid}/uploads` returns
+Drive upload capability URLs and requires a device signature unconditionally.
+The `REQUIRE_ATTESTED_UPLOADS` flag that held an ID-token-only window open was
+retired on 2026-09-26 (TD-45; CLOUD_ARCHITECTURE_GCP.md §20.5 shim 2): the
+backend no longer reads it and [`deploy-backend.yml`](../../.github/workflows/deploy-backend.yml)
+no longer pins it. Keep the GitHub var at `1` until no redeploy of a commit
+older than the retirement is plausible — that older workflow still passes it,
+and an empty value there would re-open the window on the old code.
 
 > `NOTIFY_FROM` / `RESEND_API_KEY` drive the "a new user is waiting for
 > approval" mail to `SUPPORT_EMAIL` (see B1a). Leave both unset and the backend

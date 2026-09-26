@@ -106,15 +106,13 @@ def test_every_gateway_path_has_a_handler():
     )
 
 
-def test_the_deprecated_aliases_are_published_too():
-    """The aliases exist for institution IT's own scripts, which are out of our
-    control. An alias that is not at the gateway is not an alias at all — it is
-    a 404 with a comment claiming otherwise, which is the exact bug this file
-    was written after."""
-    gateway = _gateway_surface()
-    for method, path in sorted(_app_surface()):
-        if "/v1/campus/" in path:
-            assert (method, path) in gateway, f"unpublished alias: {method} {path}"
+def test_the_retired_campus_aliases_are_gone_from_both_halves():
+    """The pre-rename `/v1/campus/*` seat aliases were retired (TD-45) after
+    30 days with no request. They have to leave the app and the gateway
+    together: left in the spec alone, ESPv2 forwards a call to a 404; left in
+    the app alone, the parity tests above fail."""
+    for method, path in sorted(_app_surface() | _gateway_surface()):
+        assert not path.startswith("/v1/campus/"), f"retired alias still declared: {method} {path}"
 
 
 # --- spec validity ---------------------------------------------------------
