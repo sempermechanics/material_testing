@@ -9,9 +9,18 @@
 # Optional: PROJECT=<id> (default indicvision-dic-app, the backend project that
 # holds Firestore; not firebase-hosting/'s default, the Auth project).
 #
+# Needs a Firebase CLI running on Node >= 20. From PowerShell, `bash` may
+# resolve to WSL (Node 12 there); run this from Git Bash instead.
+#
 # The Firebase CLI refuses any file outside the directory holding its
 # firebase.json, and neither file lives under one, so both are staged in a
 # scratch directory with a firebase.json of their own.
+#
+# The indexes file also declares the TTL policies (challenges.expireAt,
+# deleted_licenses.purgeAt, deleted_seats.purgeAt) as fieldOverrides: the CLI
+# counts each live TTL policy as a field override and refuses, in
+# non-interactive mode, to leave one that the file omits. Never add --force
+# here; it deletes every live override the file does not declare, TTL included.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
