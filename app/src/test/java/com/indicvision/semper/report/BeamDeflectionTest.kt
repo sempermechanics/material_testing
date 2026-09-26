@@ -146,6 +146,25 @@ class BeamDeflectionTest {
     }
 
     @Test
+    fun `the slope line spans the measured load steps, not from zero deflection`() {
+        // W = 25 δ - 15: from δ = 0 the line would start at -15 N and pull the load axis below zero (TD-94).
+        val taps = BeamEdgeTaps(0f, 0f, 0f, 127.6f)
+        val model = StressStrain.Model.Flexural(935f, 150f, 6.38f, true, BeamDeflection.Probe(taps, 6.38f))
+        val unloaded = (0 until 2).map { StressStrain.Point(it, 0f, 0f, 0f, 0f) }
+        val loaded = listOf(10f to 1.0f, 20f to 1.4f, 30f to 1.8f).mapIndexed { i, (w, d) ->
+            StressStrain.Point(i + unloaded.size, w, model.stressMPa(w), 0f, d)
+        }
+        val summary = BeamDeflection.summarize(StressStrain.Curve(model, 5, unloaded + loaded))!!
+
+        assertEquals(-15.0, summary.slope!!.intercept, 1e-3)
+        val (first, last) = summary.slopeLine()!!
+        assertEquals(1.0f, first.first, 1e-4f)
+        assertEquals(10f, first.second, 1e-3f)
+        assertEquals(1.8f, last.first, 1e-4f)
+        assertEquals(30f, last.second, 1e-3f)
+    }
+
+    @Test
     fun `a step under a pixel of deflection has no E and is left out of the mean`() {
         val taps = BeamEdgeTaps(0f, 0f, 0f, 127.6f)
         val model = StressStrain.Model.Flexural(935f, 150f, 6.38f, true, BeamDeflection.Probe(taps, 6.38f))

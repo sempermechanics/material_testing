@@ -97,5 +97,9 @@ class LabReportBendingTest {
         val graph = doc.blocks.filterIsInstance<LabReport.Block.Graph>().single()
         assertEquals("Slope = 27.06 N/mm · E = 142.0 GPa", graph.annotation)
         assertEquals(2, graph.series.size)
+        // The fit runs over the lab's readings, 1.14 to 3.88 mm, not from δ = 0.
+        val fit = graph.series.single { it.isFit }.points
+        assertEquals(1.14f, fit.first().first, 1e-4f)
+        assertEquals(3.88f, fit.last().first, 1e-4f)
     }
 }

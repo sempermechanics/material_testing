@@ -94,11 +94,7 @@ internal object LabReportBending {
         val steps = summary.loadSteps
         val points = listOf(0f to 0f) + steps.map { it.deflectionMm to it.loadN }
         val line = summary.slope
-        val fit = line?.let {
-            val from = steps.minOf { s -> s.deflectionMm }.coerceAtMost(0f).toDouble()
-            val to = steps.maxOf { s -> s.deflectionMm }.toDouble()
-            Series(listOf(from.toFloat() to it.at(from).toFloat(), to.toFloat() to it.at(to).toFloat()), isFit = true)
-        }
+        val fit = summary.slopeLine()?.let { Series(it, isFit = true) }
         val annotation = if (line != null && summary.slopeModulusGPa != null) {
             "Slope = ${num(line.slope.toFloat(), 2)} N/mm · E = ${gpa(summary.slopeModulusGPa)} GPa"
         } else {
