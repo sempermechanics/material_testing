@@ -212,14 +212,51 @@ def _delete_refs(refs: list) -> None:
         batch.commit()
 
 
-def _cursor_page(col, query, limit: int, page_token: str | None):
-    """One page of [query] in document-id order. Returns (docs, next_token).
+def _update_refs(updates: list) -> None:
+    """Applies every `(reference, patch)`, chunked to the per-batch write cap.
 
-    Reads one document past [limit] so the token is only issued when there
-    really is a next page. A token naming a document that has since been
-    deleted restarts from the beginning rather than failing.
+    For fan-outs that used to write one document per round trip. A batch is
+    atomic per chunk, not across chunks; callers only use it for writes that
+    are safe to repeat, so a failure part-way is repaired by running it again.
     """
-    query = query.order_by("__name__").limit(limit + 1)
+    for start in range(0, len(updates), _BATCH_LIMIT):
+        batch = db().batch()
+        for ref, patch in updates[start:start + _BATCH_LIMIT]:
+            batch.update(ref, patch)
+        batch.commit()
+
+
+def _get_all(refs: list) -> list:
+    """Snapshots for every reference, in `_BATCH_LIMIT` chunks, one call each.
+
+    `get_all` answers in no particular order, so callers key the result by
+    `snap.id` or `snap.reference`, never by position.
+    """
+    out = []
+    for start in range(0, len(refs), _BATCH_LIMIT):
+        out.extend(db().get_all(refs[start:start + _BATCH_LIMIT]))
+    return out
+
+
+def _cursor_page(col, query, limit: int, page_token: str | None,
+                 order_field: str = "__name__", descending: bool = False):
+    """One page of [query]. Returns (docs, next_token).
+
+    Ordered by document id unless `order_field` is given; the token is always
+    the last document's id, and the cursor is that document's snapshot, which
+    carries the order field's value. Reads one document past [limit] so the
+    token is only issued when there really is a next page. A token naming a
+    document that has since been deleted restarts from the beginning rather
+    than failing.
+    """
+    if order_field == "__name__":
+        query = query.order_by("__name__")
+    else:
+        query = query.order_by(
+            order_field,
+            direction=firestore.Query.DESCENDING if descending else firestore.Query.ASCENDING,
+        )
+    query = query.limit(limit + 1)
     if page_token:
         cursor = col.document(page_token).get()
         if cursor.exists:

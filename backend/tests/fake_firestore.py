@@ -1,7 +1,8 @@
 """A small in-memory Firestore double.
 
 Enough of the client surface for the repo package (`app/repo/`) to run in
-tests without a live backend: documents, `.set/.update/.get/.delete`, `==` queries, `.count()`,
+tests without a live backend: documents, `.set/.update/.get/.delete`, filtered and
+one-field ordered queries, `.count()`,
 batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
 """
 import operator
@@ -26,6 +27,9 @@ class _Sentinel:
 
 SERVER_TIMESTAMP = _Sentinel("SERVER_TIMESTAMP")
 DELETE_FIELD = _Sentinel("DELETE_FIELD")
+# The real client's `Query.ASCENDING` / `Query.DESCENDING` are these strings.
+ASCENDING = "ASCENDING"
+DESCENDING = "DESCENDING"
 
 
 class Increment:
@@ -142,6 +146,8 @@ class _Query:
         "array_contains": lambda stored, wanted: (
             isinstance(stored, (list, tuple)) and wanted in stored
         ),
+        # The stored value is one of the wanted list.
+        "in": lambda stored, wanted: stored in wanted,
     }
 
     def where(self, field, op, value):
@@ -158,10 +164,13 @@ class _Query:
             self._order_by, self._start_after,
         )
 
-    def order_by(self, field):
+    def order_by(self, field, direction=None):
+        """One sort field, as the repo uses. Ties break on the document id in
+        the same direction, which is what Firestore's implicit `__name__`
+        ordering does."""
         return _Query(
             self._store, self._collection, self._filters, self._limit,
-            field, self._start_after,
+            (field, direction == DESCENDING), self._start_after,
         )
 
     def start_after(self, snapshot_or_doc):
@@ -192,12 +201,19 @@ class _Query:
         stored, present = cls._field_value(data, field)
         if not present:
             return op == "!=" if "!" in op else False
-        if op == "array_contains":
+        if op in ("array_contains", "in"):
             return cls._OPS[op](stored, value)
         try:
             return cls._OPS[op](stored, value)
         except TypeError:
             return False  # mismatched types are never comparable in Firestore
+
+    def _sort_key(self, doc_id, data):
+        field, _desc = self._order_by or ("__name__", False)
+        if field == "__name__":
+            return (False, "", doc_id)
+        value, present = self._field_value(data or {}, field)
+        return (not present or value is None, value if present else None, doc_id)
 
     def _matching(self):
         bucket = self._store._data.get(self._collection, {})
@@ -205,16 +221,19 @@ class _Query:
         for doc_id, data in bucket.items():
             if all(self._passes(data, f, op, v) for f, op, v in self._filters):
                 rows.append(_Snapshot(doc_id, data, _DocRef(self._store, self._collection, doc_id)))
-        if self._order_by == "__name__" or self._order_by is None:
-            rows.sort(key=lambda snap: snap.id)
-        elif self._order_by:
-            field = self._order_by
-            rows.sort(key=lambda snap: ((snap.to_dict() or {}).get(field) is None,
-                                        (snap.to_dict() or {}).get(field)))
+        field, desc = self._order_by or ("__name__", False)
+        if field != "__name__":
+            # Firestore leaves out documents that lack the order field.
+            rows = [snap for snap in rows if self._field_value(snap.to_dict() or {}, field)[1]]
+        rows.sort(key=lambda snap: self._sort_key(snap.id, snap.to_dict()), reverse=desc)
         if self._start_after is not None:
             after_id = getattr(self._start_after, "id", None)
             if after_id is not None:
-                rows = [snap for snap in rows if snap.id > after_id]
+                after_data = self._start_after.to_dict() if hasattr(self._start_after, "to_dict") else None
+                after = self._sort_key(after_id, after_data)
+                rows = [snap for snap in rows
+                        if (self._sort_key(snap.id, snap.to_dict()) < after if desc
+                            else self._sort_key(snap.id, snap.to_dict()) > after)]
         if self._limit is not None:
             rows = rows[: self._limit]
         return rows
@@ -319,6 +338,10 @@ def install(monkeypatch):
         DELETE_FIELD = DELETE_FIELD
         Increment = Increment
         transactional = staticmethod(transactional)
+
+        class Query:
+            ASCENDING = ASCENDING
+            DESCENDING = DESCENDING
 
     monkeypatch.setattr(repo, "firestore", _FakeFirestore)
     return client

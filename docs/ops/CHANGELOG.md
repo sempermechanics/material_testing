@@ -40,6 +40,45 @@ row; `"dic2d"` never reaches `index.json`, `metadata.json` or the backend.
 Checked by hand on the API 36 emulator (steel_00 + 3 frames); `test-type.png`
 retaken. Ships with the next app release.
 
+## 2026-09-25 — Backend and console deploy: no analysis cap on a demo key (#232)
+
+Production `semper-api-36132773366-1` from `eb18ef8` (staging first, run
+36132056688 → `semper-api-staging-36132056688-1`; production run 36132401032 →
+`semper-api-36132401032-1` with the gateway dry-run, then run 36132773366 with
+`apply`). Candidate smoke passed on all three. The gateway diff was descriptions
+only; `apply` switched `semper-gw` from `v202609250953-51` to `v202609251206-56`,
+and the outside check answered 401 on `GET /v1/config` and 200 on the preflight.
+The console went out with `scripts/deploy-console.sh` to `indicvision-dic-app-auth`
+(only `operator/operator.js` changed).
+
+- #232: `PATCH /v1/admin/licenses/{id}` refuses `maxAnalyses` on a demo-mode key
+  with `422 cap_on_demo_key`. A demo holder gets `DEMO_MAX_ANALYSES` whatever the
+  key stores, so the edit had answered 200 and changed nothing. `clearMaxAnalyses`
+  is still accepted. `GET /v1/admin/licenses` returns `demoMaxAnalyses`; the
+  operator desk shows "demo (25)" on demo rows and disables their Cap button.
+- The case that found it: the system demo key SEMP-8AKN was given a cap of 100 at
+  11:17 UTC and its holder still saw "of 25". The stored cap was cleared from the
+  desk at 11:53 UTC (audited `clearMaxAnalyses`), before the new console shipped.
+
+## 2026-09-25 — Measured optimisation, all six passes
+
+Request volume ([perf/request-volume.md](../perf/request-volume.md)):
+- Pass 1 (#191) runs `CloudSync.reconcile` one call at a time.
+- Pass 2 (#206) shares the launch `/v1/config` fetch.
+- Together: 12 → 3 requests per app open on the Pixel 6. Both are merged and
+  ship with the next app build.
+
+Pass 4 (#202) is deployed: an inline `POST /v1/sessions` costs 6 + N
+Firestore reads instead of 8 + 2N, with no rise in latency (median 2487 ms, n = 10)
+(see the 2026-09-25 inline-create deploy below).
+
+Measured, no change:
+- Pass 3: one ~1.7 s App Check attestation per cold open, which only the Play
+  account can remove.
+- Pass 5: no cold-start gain from precompiling ([perf/startup.md](../perf/startup.md)).
+- Pass 6: no engine or viewer regression
+  ([perf/engine-viewer-check-2026-09.md](../perf/engine-viewer-check-2026-09.md)).
+
 ## 2026-09-25 — Backend deploy: a session-delete bucket (#226)
 
 Production `semper-api-36122511953-1` from `cb0e893` (staging first, run

@@ -20,11 +20,12 @@ from google.cloud import firestore
 
 COLLECTIONS = (
     "users", "devices", "sessions", "files", "audit_logs",
-    "licenses", "licenseInvites", "auth_links",
+    "licenses", "licenseInvites", "auth_links", "deleted_licenses",
 )
 # Subcollections, counted across every parent as a collection group. Seats live
-# under licenses/{id}/seats, so a top-level count would always read zero.
-GROUPS = ("seats",)
+# under licenses/{id}/seats, so a top-level count would always read zero; a
+# deleted licence's seats under deleted_licenses/{id}/deleted_seats.
+GROUPS = ("seats", "deleted_seats")
 # Challenges are single-use nonces with a 120s TTL: they legitimately differ
 # between export and restore, so they are counted but never compared.
 VOLATILE = ("challenges",)

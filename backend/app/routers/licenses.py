@@ -29,6 +29,7 @@ def activate_license(
             errors.LICENSE_NOT_FOUND: 404,
             errors.USER_NOT_FOUND: 404,
             errors.LICENSE_ALREADY_REDEEMED: 409,
+            errors.ALREADY_LICENSED: 409,
             errors.LICENSE_SEATS_EXHAUSTED: 409,
             # Lost the race for the seat; a retry succeeds. 503 like
             # device_lock_contended, so it never reads as a full licence.

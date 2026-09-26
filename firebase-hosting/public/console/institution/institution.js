@@ -194,6 +194,10 @@ async function addMember() {
     setStatus(
       {
         invite_exists: `${email} is already promised a place on a different licence.`,
+        // One licence per person. Which licence is not IT's to know; Semper
+        // support can move them.
+        member_already_licensed: `${email} already has a Semper licence of their own. ` +
+          "Ask Semper support to move them onto this one.",
         license_seats_exhausted: "This licence has no seats left.",
         // Another request was claiming on this licence at the same moment.
         // Nothing is wrong with it, and adding again succeeds.

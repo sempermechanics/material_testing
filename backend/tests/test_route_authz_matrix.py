@@ -103,9 +103,14 @@ EXPECTED = {
     ("POST", "/v1/admin/users/{uid}/revoke"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/users/{uid}/config"): ADMIN_STEPUP,
     ("GET", "/v1/admin/licenses"): ADMIN,
+    ("GET", "/v1/admin/licenses/{license_id}"): ADMIN,             # one row of the list
     ("POST", "/v1/admin/licenses"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
     ("POST", "/v1/admin/licenses/{license_id}/revoke"): ADMIN_STEPUP_FRESH,
+    ("POST", "/v1/admin/licenses/{license_id}/convert"): ADMIN_STEPUP,
+    ("DELETE", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP_FRESH,
+    ("GET", "/v1/admin/deleted-licenses"): ADMIN,
+    ("POST", "/v1/admin/deleted-licenses/{license_id}/restore"): ADMIN_STEPUP,
     # A read, so plain ADMIN like GET /v1/admin/licenses: it changes
     # nothing and the second factor gates state changes.
     ("GET", "/v1/admin/licenses/{license_id}/reconcile"): ADMIN,
@@ -353,8 +358,13 @@ async def test_attested_user_cannot_complete_another_users_file(attacker, client
     ("POST", "/v1/admin/users/victim-uid/revoke"),
     ("PATCH", "/v1/admin/users/victim-uid/config"),
     ("GET", "/v1/admin/licenses"),
+    ("GET", "/v1/admin/licenses/abc"),
     ("POST", "/v1/admin/licenses"),
     ("POST", "/v1/admin/licenses/abc/revoke"),
+    ("POST", "/v1/admin/licenses/abc/convert"),
+    ("DELETE", "/v1/admin/licenses/abc"),
+    ("GET", "/v1/admin/deleted-licenses"),
+    ("POST", "/v1/admin/deleted-licenses/abc/restore"),
     ("GET", "/v1/admin/licenses/abc/reconcile"),
 ])
 async def test_non_admin_is_refused_every_admin_route(attacker, client, method, path):

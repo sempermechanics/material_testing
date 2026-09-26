@@ -48,6 +48,10 @@ from .repo.claims import (  # noqa: F401
     _individual_member_patch,
     _public_claim_error,
 )
+from .repo.holders import (  # noqa: F401
+    licence_held_by,
+    licence_is_live,
+)
 from .repo.invites import (  # noqa: F401
     find_user_by_email,
     invite_institution_member,
@@ -67,11 +71,22 @@ from .repo.entitlement import (  # noqa: F401
     ensure_entitlement,
 )
 from .repo.license_admin import (  # noqa: F401
+    analysis_cap_error,
     expiry_change_error,
+    get_license_public,
+    license_edit_error,
     LicenseTermsRejected,
     list_licenses,
     revoke_license,
     update_license,
+)
+from .repo.upgrade import (  # noqa: F401
+    convert_to_institution,
+)
+from .repo.deletion import (  # noqa: F401
+    delete_license,
+    list_deleted_licenses,
+    restore_license,
 )
 from .repo.institution_admin import (  # noqa: F401
     add_institution_member,
@@ -159,9 +174,11 @@ from .repo import (
     account,
     activation,
     claims,
+    deletion,
     devices,
     devlock,
     entitlement,
+    holders,
     institution_admin,
     invites,
     leases,
@@ -171,13 +188,14 @@ from .repo import (
     reconcile,
     seats,
     sessions,
+    upgrade,
     user_config,
     users,
 )
 
 #: Every module of the package, each after everything it imports.
-PACKAGE = (_base, user_config, devlock, claims, invites, mint, activation, entitlement,
-           license_admin, institution_admin, licensing, devices, users, leases, seats,
+PACKAGE = (_base, user_config, devlock, claims, invites, holders, mint, activation, entitlement,
+           license_admin, upgrade, deletion, institution_admin, licensing, devices, users, leases, seats,
            reconcile, account, sessions)
 _MISSING = object()
 

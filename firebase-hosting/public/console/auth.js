@@ -638,7 +638,8 @@ export function confirmByTyping(label, what) {
 }
 
 /**
- * Fresh password (or Google re-auth) plus TOTP before whole-licence revoke.
+ * Fresh password (or Google re-auth) plus TOTP before whole-licence revoke,
+ * and before a delete, which revokes first (`resume.action` says which).
  *
  * The backend refuses a revoke on a stale MFA session
  * (ADMIN_WEB_REVOKE_REAUTH_SECONDS, 120 s). Step up here so the token's
@@ -652,7 +653,8 @@ const REVOKE_FRESH_SECONDS = 90;
 export async function stepUpForRevoke(resume) {
   if ((await authAge()) < REVOKE_FRESH_SECONDS) return;
   const password = ask(
-    "Re-enter your account password to revoke this licence.\n\n" +
+    `Re-enter your account password to ${resume && resume.action === "delete"
+      ? "delete" : "revoke"} this licence.\n\n` +
       "Leave blank to re-authenticate with Google, then enter your " +
       "authenticator code when asked.",
   );
