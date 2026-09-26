@@ -102,12 +102,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-26)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-36233033808-1`, from `0f9244f1`, scales to
-  zero) behind API Gateway `semper-gw` (config `v202609260522-60`, deployed by CI, ADR-006);
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36236313898-1`, from `f95dc558`, scales to
+  zero) behind API Gateway `semper-gw` (config `v202609261040-72`, deployed by CI, ADR-006);
   staging `semper-api-staging` behind `semper-gw-staging` (CI since #258); project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
   #240 (cost), the licence desk (backend and console), the device-change fixes (#248, #249,
-  #255, #261) and pinned serving/rollback images (#263) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
+  #255, #261, #264), pinned serving/rollback images (#263) and the staff phone release for
+  Demo accounts (#266) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
@@ -139,13 +140,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   shares `RestoreStart` with Settings, and announces a failed restore once (`RestoreFailureLedger`).
   Pixel 6, 3 at once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud
   backups (#235, merged, awaiting release):** a card offers backups this phone has no row for (`CloudBackupListing`).
-- **Only the registered phone takes the lock (#264, merged, on staging):** a phone refused at registration
-  took a cleared lock and demoted the registered one to Demo (Pixel 6, 2026-09-26). The lock
-  now follows registration, a clear keeps a registered phone the lock did not name, and a
-  typed key follows the same rule. Needs a production deploy, then one **New device** for that account.
-- **Demo phone change (in review):** staff release a Demo account's phone on request
-  (`POST /v1/admin/device-releases`, console card), closing TD-126. Needs backend, gateway
-  apply and console deploys.
+- **Lock taken by a refused phone (#264, deployed):** the Pixel 6 account demoted on
+  2026-09-26 still needs one **New device** to get its licence back (not verified here).
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),

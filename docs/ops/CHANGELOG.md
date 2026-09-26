@@ -12,6 +12,29 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — Backend, gateway and console deploy: Demo phone change through staff (#266, with #264)
+
+From `f95dc558`, run by hand, staging then production, both with `gateway_mode: apply`
+because #266 adds a route. Staging run 36235540338 → `semper-api-staging-36235540338-1`,
+`semper-gw-staging` on `v202609261024-71`; production run 36236313898 →
+`semper-api-36236313898-1`, `semper-gw` on `v202609261040-72`. The candidate `/readyz`
+smoke passed on both. Each gateway diff added only `/v1/admin/device-releases`. From
+outside with no token, that route answers 401 on both gateways. The console went out
+afterwards with `scripts/deploy-console.sh` against `semper-gw`.
+
+- #266 closes TD-126, on the decision that a Demo account may change phone like any other
+  account, on request to operators, never self-service. `POST /v1/admin/device-releases`
+  `{"email": …}` (`ADMIN_STEPUP`) makes the release a lock clear makes: the old device
+  `SUPERSEDED`, its id held off for `DEVICE_RELEASE_HOLD_HOURS`, audited as
+  `ADMIN_DEVICE_RELEASE`. An account on a live licence is `409
+  license_device_clear_required`; **New device** moves both bindings. The operator console
+  has a **Release a Demo account's phone** card, by email.
+- #264 (only the registered phone takes the device lock) was on staging since run
+  36233420945 and reached production with this deploy.
+- Both runs moved `serving` and `rollback-prev` by digest, the first moves since
+  `indic-deployer` got `roles/artifactregistry.repoAdmin` on the repository: production's
+  `rollback-prev` is #261/#263's image (`7e8fcd0c…`).
+
 ## 2026-09-26 — Console deploy: licence edit fixes (#257); staging gateway in CI (#258)
 
 #257, hosting only, from `2db99e8c` with `scripts/deploy-console.sh` against `semper-gw`;
