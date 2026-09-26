@@ -390,9 +390,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             resources.getQuantityString(R.plurals.def_formats_hint_fmt, maxFrames, maxFrames)
         Insets.padBottom(findViewById(R.id.bottomNav))
 
-        // Keyboard: the settings/sweep pages hold number fields; pad their scroll
-        // viewports by the IME inset so a focused field scrolls clear of the
-        // keyboard instead of hiding behind it.
+        // Keyboard: every page holds number fields (step 1 has the load card and
+        // specimen dimensions); pad their scroll viewports by the IME inset so a
+        // focused field scrolls clear of the keyboard instead of hiding behind it.
+        Insets.padImeBottom(scrollStepImages)
         Insets.padImeBottom(findViewById(R.id.scrollStepSettings))
         Insets.padImeBottom(findViewById(R.id.scrollStepSweep))
 
