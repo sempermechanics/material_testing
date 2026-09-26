@@ -69,13 +69,16 @@ and the app's first calls already wait 1.3–1.8 s on App Check
 
 The registry and the `run-sources-…` bucket gain a copy of the service on every source
 deploy. Both now delete anything more than 15 days old. The registry keeps the image
-tagged `latest` (serving) and each package's five newest versions, so a serving revision
+tagged `latest` (serving), any image with a tag starting `rollback` (hand-pinned rollback
+images, added 2026-09-26), and each package's five newest versions. So a serving revision
 can always start a new instance and the rollbacks stay available. Artifact Registry records
 no last-pull time, so age is the only usable signal for "unused". The policy files are in
 [`backend/deploy/`](../../backend/deploy/) and the apply steps are in
-[BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene). On
-2026-09-26 no image was old enough to qualify, so the first deletions fall on 2026-10-08
-at the earliest.
+[BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene). Both were
+applied on 2026-09-26, with the registry policy enforcing. On that day no image was old
+enough to qualify (1.35 GB, 35 versions, oldest 2026-09-23), so the first deletions fall
+on about 2026-10-08. After that, check that the registry size has levelled off and that
+both services still cold-start.
 
 ## Deferred: latency
 

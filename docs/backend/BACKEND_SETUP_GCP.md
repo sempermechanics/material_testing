@@ -96,9 +96,10 @@ shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
 
 ### A2b. Deploy the composite indexes
 
-`backend/firestore.indexes.json` declares the one composite index the
-duplicate-session lookup needs (`sessions`: `uid`, `localSessionId`, `status`).
-Every other query the backend and the consoles run is a single-field equality or
+`backend/firestore.indexes.json` declares four composite indexes: the
+duplicate-session lookup's (`sessions`: `uid`, `localSessionId`, `status`) and
+three for the staff licence list (`licenses`: `mode` + `createdAt` DESC,
+`mode` + `status` + `createdAt` DESC, `status` + `createdAt` DESC). Every other query the backend and the consoles run is a single-field equality or
 `array-contains`, optionally ordered by `__name__`, and Firestore serves those
 from its automatic single-field indexes — do not add `field + __name__` entries
 to the file; the index API refuses them ("this index is not necessary") and
@@ -115,7 +116,7 @@ PROJECT=$PROJECT ./scripts/deploy-firestore.sh indexes
 ```
 
 **Check:** `gcloud firestore indexes composite list --project $PROJECT` shows
-that one index in state `READY` (building can take a few minutes on a populated
+all four in state `READY` (building can take a few minutes on a populated
 database).
 
 ### A3. Create the runtime service account
@@ -227,7 +228,7 @@ the two rules below. Run them as a project owner: the deploy SA cannot change a 
 
 ```bash
 # Registry: delete versions more than 15 days old, except the image tagged `latest`
-# (the one serving) and each package's five newest versions (rollback targets).
+# (the one serving), any tagged `rollback…` and each package's five newest versions.
 gcloud artifacts repositories set-cleanup-policies cloud-run-source-deploy \
   --location=$REGION --project=$PROJECT \
   --policy=backend/deploy/ar-cleanup-policy.json --dry-run
@@ -246,18 +247,20 @@ gcloud artifacts docker images list \
   --include-tags --sort-by=~CREATE_TIME
 ```
 
-Every version older than 15 days goes, unless it is tagged `latest` or is one of its
-package's five newest. Then re-run the first command with `--no-dry-run` in place of
+Every version older than 15 days goes, unless it is tagged `latest`, has a tag starting
+`rollback`, or is one of its package's five newest. Then re-run the first command with `--no-dry-run` in place of
 `--dry-run`.
 
 Artifact Registry does not record when an image was last pulled, so "unused" here means
 "uploaded more than 15 days ago". The keep rules are there because Cloud Run needs a
 revision's image each time it starts an instance, and at `--min-instances 0` that happens
-after every idle spell. The Firestore backup bucket is not covered: it has its own
+after every idle spell. A `rollback…` tag is a hand-pinned rollback image (the ones named
+in [CHANGELOG.md](../ops/CHANGELOG.md)); it is kept until someone removes the tag with
+`gcloud artifacts docker tags delete`. The Firestore backup bucket is not covered: it has its own
 retention ([FIRESTORE_DATA_PROTECTION.md](FIRESTORE_DATA_PROTECTION.md)).
 
 **Check:** `gcloud artifacts repositories list-cleanup-policies cloud-run-source-deploy
---location=$REGION` shows three policies. `gcloud storage buckets describe
+--location=$REGION` shows four policies. `gcloud storage buckets describe
 gs://run-sources-$PROJECT-$REGION --format='value(lifecycle_config)'` shows the 15-day rule.
 
 ---

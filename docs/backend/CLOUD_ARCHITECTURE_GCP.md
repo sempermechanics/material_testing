@@ -618,8 +618,11 @@ audit_logs/{autoId}               (append-only)
   `FAILED_PRECONDITION` at runtime, not at deploy time.
 - **Exempt** large/opaque fields from indexing (`publicKeyPem`, `uploadUrl`,
   `sha256`) to cut index cost and stay off the 40 KB/1500-field limits.
-- **TTL policy** on `challenges.expireAt` is a *field* policy, not an index, so it
-  cannot live in that file. Enable it as part of operator setup — step A2a of
+- **TTL policy** on `challenges.expireAt` is a *field* policy, not an index. It
+  is declared in that file's `fieldOverrides` (with `deleted_licenses.purgeAt`
+  and `deleted_seats.purgeAt`), because the Firebase CLI otherwise treats each
+  live policy as an override to delete; never deploy indexes with `--force`.
+  Operator setup can also enable it by hand — step A2a of
   [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md). `consume_nonce` deletes a nonce on
   use; TTL reclaims the ones that are never consumed. An optional retention TTL on
   `audit_logs.ts` (e.g. 400 days) is still just a suggestion.
@@ -934,7 +937,7 @@ client".
 | Drive storage | 5 TB already-paid Workspace pool | ~5 sessions/user × 1 GB | **$0 marginal** |
 | Egress | uploads go **device→Drive**, not via Cloud Run | ~0 GB through GCP | **$0** |
 | Cloud Logging | 50 GiB/mo free | structured logs | **$0** |
-| Artifact Registry | 0.5 GB free | ~80 MB per deploy; a 15-day cleanup policy keeps `latest` + the 5 newest per package ([setup A7](BACKEND_SETUP_GCP.md#a7-storage-hygiene)) | **~$0** (1.24 GB before the policy, ≈ ₹6/mo) |
+| Artifact Registry | 0.5 GB free | ~80 MB per deploy; a 15-day cleanup policy keeps `latest`, `rollback…` tags and the 5 newest per package ([setup A7](BACKEND_SETUP_GCP.md#a7-storage-hygiene)) | **~$0** (1.24 GB before the policy, ≈ ₹6/mo) |
 
 The killer design win: **bytes never transit Cloud Run**, so the usual
 egress/compute blowup for 1–5 GB uploads simply doesn't exist.

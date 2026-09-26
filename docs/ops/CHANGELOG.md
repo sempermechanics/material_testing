@@ -64,6 +64,62 @@ box uses an opaque `info_code_bg`, because the translucent `viewer_plot_grid`
 did not draw on the dark dialog. Checked by hand on the API 36 emulator, in
 light and dark themes. Ships with the next app release.
 
+## 2026-09-26 — Firestore TTL policies declared as field overrides (#242)
+
+`scripts/deploy-firestore.sh indexes` had created the licence desk's composite indexes and
+then stopped: the Firebase CLI lists each live TTL policy as a field override, and in
+non-interactive mode it will not leave one that the indexes file omits ("Pass the --force
+flag"). `--force` would have deleted the three policies on the `(default)` database, which
+staging and production share. `backend/firestore.indexes.json` now declares
+`challenges.expireAt`, `deleted_licenses.purgeAt` and `deleted_seats.purgeAt` under
+`fieldOverrides` with `"ttl": true`. Each one restates the field's live single-field
+indexes (ascending, descending, array-contains), because an empty `indexes` list turns
+single-field indexing off. `test_firestore_indexes_declare_ttl_policies` checks the three.
+The script header notes a Firebase CLI on Node >= 20 (Git Bash, not WSL) and warns off
+`--force`. BACKEND_SETUP_CONSOLE.md §3a and §3b, BACKEND_SETUP_GCP.md A2b and
+CLOUD_ARCHITECTURE_GCP.md §5 were corrected to match the file.
+
+Deployed without `--force` from the PR head (`6a42c879`, whose indexes file and script
+match `main`): `firebase deploy --only firestore:indexes --non-interactive --debug` exited 0,
+skipped all four composite indexes and all three overrides, and sent Firestore no writes.
+Afterwards all three policies were still `ACTIVE` and still inherited the default index
+config, and all four composite indexes were `READY`.
+
+## 2026-09-26 — Backend and console deploy: scale to zero (#240), licence desk (#236–#239)
+
+Production `semper-api-36220429126-1` from `141ddcae`. Staging went first: run 36219875207 →
+`semper-api-staging-36219875207-1`. Production run 36220059465 → `semper-api-36220059465-1`
+with the gateway dry-run, then run 36220429126 with `apply`. The candidate `/readyz` smoke
+passed on all three. `apply` switched `semper-gw` from `v202609251206-56` to
+`v202609260522-60`. The diff added the licence desk's new admin routes and changed
+descriptions. From outside with no token, `GET /v1/admin/deleted-licenses`, `POST
+…/deleted-licenses/{id}/restore` and `POST …/licenses/{id}/convert` answer 401 and an
+unknown path 404. The console went out afterwards with `scripts/deploy-console.sh` to
+`indicvision-dic-app-auth` (API base `semper-gw-86wx7pp1.an.gateway.dev`). The hosted
+`operator.js`, `operator/index.html`, `util.js`, `auth.js`, `institution.js` and
+`console.css` hash-match `main`, and the operator page loads with no console errors.
+
+- #240: Cloud Run scales to zero in both environments. `min instances` is unset on the live
+  service, where production had `minScale=1`. `backend/deploy/` holds a 15-day cleanup
+  policy for the registry and the run-sources bucket, applied the same day by the owner
+  ([BACKEND_SETUP_GCP.md A7](../backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene)). The
+  registry policy is enforcing (dry run off). The serving digests of `semper-api` and
+  `semper-api-staging` equal their `latest` tags, so the keep rule covers them. The bucket
+  deletes at age 15; the Firestore backup bucket keeps its own 35-day rule. The registry
+  held 1.35 GB in 35 versions, the oldest from 2026-09-23, so nothing qualifies before
+  about 2026-10-08.
+  Measurement: [perf/backend-cost.md](../perf/backend-cost.md).
+- The deploy also shipped the licence desk, backend and console ([ADR-007](../adr/ADR-007-licence-lifecycle.md)).
+  - #236: a fast, filtered list. It hides Demo keys unless asked and searches by address,
+    domain or key prefix.
+  - #237: one licence per person. A mint for an address that already holds one is 409
+    `email_already_licensed`.
+  - #238: edit, upgrade and convert in place.
+  - #239: delete into a 30-day hold, with restore.
+  - What they need was in place by the deploy: the three `licenses` composite indexes are READY
+    and the TTL policies on `deleted_licenses.purgeAt` and `deleted_seats.purgeAt` are ACTIVE
+    (checked 2026-09-26).
+
 ## 2026-09-25 — material_testing: 2D DIC on the test-type sheet (#46)
 
 Merged as `82ae372e`. Home **+** → **Which test?** offers **2D DIC** next to
