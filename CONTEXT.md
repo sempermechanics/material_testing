@@ -100,13 +100,13 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-25)
+## Current state (2026-09-26)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-36132773366-1`, from `eb18ef8`)
-  behind API Gateway `semper-gw` (config `v202609251206-56`, deployed by CI, ADR-006);
+- **Deployed.** Cloud Run `semper-api` (`semper-api-36220429126-1`, from `141ddcae`, scales to
+  zero) behind API Gateway `semper-gw` (config `v202609260522-60`, deployed by CI, ADR-006);
   staging `semper-api-staging`; project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
-  the wrong-information audit's fixes and #232 (no cap on a demo key) went out 2026-09-25 ([CHANGELOG](docs/ops/CHANGELOG.md)).
+  #240 (cost) and the licence desk (backend and console) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
@@ -121,7 +121,6 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   an app open from 12 to 3 requests on the Pixel 6 and ship with the next app build; Pass 4
   (#202) is deployed; Passes 3, 5 and 6 measured nothing worth changing
   ([perf/request-volume.md](docs/perf/request-volume.md), [CHANGELOG](docs/ops/CHANGELOG.md)).
-- **Backend cost (2026-09-26).** Production Cloud Run defaults to scaling to zero, because the warm instance was the whole bill and over budget. There is a 15-day cleanup for registry images and source tarballs. Both take effect on the next backend deploy and the owner's one-time apply ([perf/backend-cost.md](docs/perf/backend-cost.md)).
 - **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#200, TD-86: debug-only permission,
   `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
   161 → 21 MB); #214 reuses one frame buffer, #217 (TD-88) saves the sidecar after a full
@@ -138,10 +137,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   **Restore (#234, merged, awaiting release):** Home says Restore, restores a multi-selection,
   shares `RestoreStart` with Settings, and announces a failed restore once (`RestoreFailureLedger`).
   Pixel 6, 3 at once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud
-  backups (in review):** a card offers backups this phone has no row for (`CloudBackupListing`).
+  backups (#235, merged, awaiting release):** a card offers backups this phone has no row for (`CloudBackupListing`).
 - **Licence desk:** #236 (fast list, one-row refresh), #237 (one licence per person), #238
-  (edit/upgrade/convert) and #239 (delete with a 30-day restore) merged
-  ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)). Its three indexes and two TTL policies are live (checked 2026-09-26).
+  (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
+  TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)).
 - **material_testing shares this history** (it merged `643462c`, material_testing#22):
   sync with a plain `git merge`. Lab features stay there; only general fixes come here.
 - **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
@@ -149,7 +148,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
   The backend floor for a licensed cap (#211) is deployed; the app half ships with that release.
 - **Owed.** A device smoke of `v1.2-beta.2` and its public release (website / Play); AVI import has
-  run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
+  run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); the one-time storage cleanup
+  ([BACKEND_SETUP_GCP.md A7](docs/backend/BACKEND_SETUP_GCP.md#a7-storage-hygiene)); unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps
