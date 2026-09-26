@@ -29,6 +29,7 @@ from .repo.users import (  # noqa: F401
     get_or_create_user,
     _is_admin_email,
     list_users,
+    release_account_device,
     set_user_status,
 )
 from .repo.user_config import (  # noqa: F401

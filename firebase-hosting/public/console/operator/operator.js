@@ -1170,6 +1170,30 @@ async function loadUsers() {
   }
 }
 
+$("releasePhone").addEventListener("click", async () => {
+  const email = $("releaseEmail").value.trim();
+  if (!email) return setStatus("Enter the account's email.", true);
+  const btn = $("releasePhone");
+  btn.disabled = true;
+  try {
+    const out = await api("/v1/admin/device-releases", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    setStatus(out.releasedDeviceId
+      ? `Released ${out.releasedDeviceId} for ${out.email || email}; the new phone can sign in.`
+      : `${out.email || email} had no phone registered; any phone can sign in.`);
+    $("releaseEmail").value = "";
+  } catch (e) {
+    const msg = /license_device_clear_required/.test(e.message)
+      ? "That account is licensed: use New device on its licence."
+      : e.message;
+    setStatus(`Could not release: ${msg}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 $("userRows").addEventListener("click", async (ev) => {
   const btn = ev.target.closest("button[data-approve]");
   if (!btn) return;

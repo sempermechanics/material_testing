@@ -101,6 +101,7 @@ EXPECTED = {
     ("GET", "/v1/admin/users"): ADMIN,                          # read-only: no device needed
     ("POST", "/v1/admin/users/{uid}/approve"): ADMIN_STEPUP,
     ("POST", "/v1/admin/users/{uid}/revoke"): ADMIN_STEPUP,
+    ("POST", "/v1/admin/device-releases"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/users/{uid}/config"): ADMIN_STEPUP,
     ("GET", "/v1/admin/licenses"): ADMIN,
     ("GET", "/v1/admin/licenses/{license_id}"): ADMIN,             # one row of the list

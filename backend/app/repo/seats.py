@@ -25,6 +25,7 @@ from ._base import (
     _seat_ref,
 )
 from .devices import (
+    _release_patch,
     _retire_device,
 )
 from .license_admin import (
@@ -120,11 +121,7 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str, lock: 
     released = active if not lock or lock == active else ""
     batch = db().batch()
     if released:
-        patch.update({
-            "activeDeviceId": _base.firestore.DELETE_FIELD,
-            "releasedDeviceId": released,
-            "releasedAt": _now(),
-        })
+        patch.update(_release_patch(released))
         device_ref = db().collection("devices").document(released)
         if device_ref.get().exists:
             _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)

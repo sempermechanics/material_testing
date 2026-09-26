@@ -5,7 +5,13 @@ from .. import rate_limit
 from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
 from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
-from ..models import AdminLicenseConvert, AdminLicenseCreate, AdminLicenseUpdate, UserConfigPatch
+from ..models import (
+    AdminDeviceRelease,
+    AdminLicenseConvert,
+    AdminLicenseCreate,
+    AdminLicenseUpdate,
+    UserConfigPatch,
+)
 from ..validation import AccessStatus, DocumentId, LicenceSearch, PageToken, Uid
 from ._shared import clamp_page_size, page_block
 
@@ -49,6 +55,31 @@ def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depend
         raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
     return {"uid": uid, "access_status": statuses.ACCESS_SUSPENDED}
+
+
+@router.post("/v1/admin/device-releases", dependencies=[rate_limited(rate_limit.admin_bucket)])
+def admin_release_account_device(body: AdminDeviceRelease,
+                                 ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
+    """Free an account's registered phone so a new one can register (TD-126).
+
+    For a Demo account, on request: it has no licence lock to clear, and the app
+    tells a phone refused at registration to ask an admin. By email, since that
+    is what the request arrives with. An account on a live licence is 409
+    `license_device_clear_required`: **New device** on its licence moves both
+    bindings. `releasedDeviceId` is "" when nothing was registered.
+    """
+    user = repo.find_user_by_email(body.email)
+    if user is None:
+        raise HTTPException(404, errors.USER_NOT_FOUND)
+    err, released = repo.release_account_device(user["uid"])
+    if err:
+        raise HTTPException(404 if err == errors.USER_NOT_FOUND else 409, err)
+    audit.record(
+        admin["uid"], action="ADMIN_DEVICE_RELEASE",
+        target={"type": "user", "id": user["uid"]},
+        detail={"releasedDeviceId": released},
+    )
+    return {"uid": user["uid"], "email": user.get("email") or "", "releasedDeviceId": released}
 
 
 @router.patch("/v1/admin/users/{uid}/config", dependencies=[rate_limited(rate_limit.admin_bucket)])
