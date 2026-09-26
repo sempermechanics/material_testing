@@ -6,14 +6,14 @@
 //     fakes under fakes/ (a test file must therefore import auth.js
 //     dynamically, after this module has run — see loadAuth);
 //  2. installs a small browser on globalThis: `window` (location,
-//     sessionStorage, prompt), `document` with an element for every id in the
-//     real console page, and `location`;
+//     sessionStorage, prompt, confirm, alert), `document` (fake-dom.mjs: the
+//     real console page's markup, parsed), and `location`;
 //  3. replaces `fetch` with a scripted one that refuses anything a test did
 //     not queue, so no test reaches the network.
 import { register } from "node:module";
-import { readFileSync } from "node:fs";
 import { test as nodeTest } from "node:test";
 import { fake } from "./fakes/firebase-auth.mjs";
+import { document as fakeDocument, mountPage } from "./fake-dom.mjs";
 
 register("./firebase-hooks.mjs", import.meta.url);
 
@@ -29,105 +29,9 @@ export const FakeUser = fake.FakeUser;
 
 /* ------------------------------------------------------------------- DOM */
 
-/**
- * Just enough of an element for auth.js and router.js. `querySelector` on an
- * element whose innerHTML was set returns one stable child per selector, and
- * throws when the markup does not contain that class or tag — a renamed class
- * in auth.js's enrolment card fails the test instead of passing on a phantom.
- */
-export class FakeElement {
-  constructor(tag, { id = null, hidden = false } = {}) {
-    this.tagName = tag.toUpperCase();
-    this.id = id;
-    this.hidden = hidden;
-    this.textContent = "";
-    this.className = "";
-    this.value = "";
-    this.disabled = false;
-    this.focused = false;
-    this.removed = false;
-    this.html = "";
-    this.parts = new Map();
-    this.listeners = {};
-  }
-
-  set innerHTML(html) {
-    this.html = String(html);
-    this.parts.clear();
-  }
-
-  get innerHTML() {
-    return this.html;
-  }
-
-  querySelector(selector) {
-    const present = selector.startsWith(".")
-      ? new RegExp(`class="[^"]*\\b${selector.slice(1)}\\b`).test(this.html)
-      : new RegExp(`<${selector}\\b`).test(this.html);
-    if (!present) throw new Error(`fake DOM: ${selector} is not in this element's markup`);
-    if (!this.parts.has(selector)) this.parts.set(selector, new FakeElement("part"));
-    return this.parts.get(selector);
-  }
-
-  addEventListener(type, listener) {
-    (this.listeners[type] ||= []).push(listener);
-  }
-
-  dispatch(type, event = {}) {
-    for (const listener of this.listeners[type] || []) listener(event);
-  }
-
-  click() {
-    if (!this.disabled) this.dispatch("click");
-  }
-
-  focus() {
-    this.focused = true;
-  }
-
-  insertAdjacentElement(position, element) {
-    element.anchor = this;
-    element.position = position;
-    page.inserted.push(element);
-    return element;
-  }
-
-  remove() {
-    this.removed = true;
-    page.inserted = page.inserted.filter((e) => e !== this);
-  }
-}
-
-const CONSOLE = new URL("../public/console/", import.meta.url);
-
-export let page = null;
-
-/**
- * Mount a fresh copy of a real console page: one element per `id=` in its
- * markup, `hidden` as the markup has it, plus `<main>`. Built from the file so
- * the ids a test relies on are the ids the page really has.
- */
-export function mountPage(file = "index.html") {
-  const html = readFileSync(new URL(file, CONSOLE), "utf8");
-  const byId = new Map();
-  for (const m of html.matchAll(/<(\w+)\b([^>]*)>/g)) {
-    const id = /\bid="([^"]+)"/.exec(m[2]);
-    if (id) byId.set(id[1], new FakeElement(m[1], { id: id[1], hidden: /\shidden(?=\s|\/|$)/.test(m[2]) }));
-  }
-  page = { byId, main: new FakeElement("main"), inserted: [] };
-  return page;
-}
-
-export const $ = (id) => page.byId.get(id);
-
-globalThis.document = {
-  getElementById: (id) => page.byId.get(id) || null,
-  querySelector: (selector) => {
-    if (selector === "main") return page.main;
-    throw new Error(`fake DOM: document.querySelector(${selector}) not modelled`);
-  },
-  createElement: (tag) => new FakeElement(tag),
-};
+// The DOM itself is fake-dom.mjs: the real page markup, parsed.
+export { FakeElement, mountPage, page, $ } from "./fake-dom.mjs";
+globalThis.document = fakeDocument;
 
 /* ------------------------------------------------------ window, storage */
 
@@ -165,6 +69,16 @@ export const location = {
   },
 };
 
+/** Scripted answers for window.confirm, in order; `alerts` records window.alert. */
+export const confirms = {
+  asked: [],
+  answers: [],
+  answer(...values) {
+    this.answers.push(...values);
+  },
+};
+export const alerts = [];
+
 globalThis.window = {
   location,
   sessionStorage: storage,
@@ -173,7 +87,17 @@ globalThis.window = {
     if (!prompts.answers.length) throw new Error(`unscripted prompt: ${message}`);
     return prompts.answers.shift();
   },
+  confirm(message) {
+    confirms.asked.push(message);
+    if (!confirms.answers.length) throw new Error(`unscripted confirm: ${message}`);
+    return confirms.answers.shift();
+  },
+  alert(message) {
+    alerts.push(message);
+  },
 };
+// The pages call confirm() bare as well as window.confirm().
+globalThis.confirm = (message) => window.confirm(message);
 globalThis.location = location;
 
 /* ---------------------------------------------------------------- fetch */
@@ -188,18 +112,37 @@ export const net = {
   reply(...responses) {
     this.queue.push(...responses);
   },
-  /** Answer by path instead of order, for calls made in parallel: { "/v1/me": () => Response }. */
+  /**
+   * Answer by path instead of order, for calls made in parallel. Keys are
+   * "METHOD /v1/path?query", "/v1/path?query", "METHOD /v1/path" or
+   * "/v1/path", most specific first; values are functions of the request
+   * (a Response body can be read only once).
+   */
   routes: null,
+  /** Requests nothing was scripted for. A page test asserts this stays empty. */
+  unexpected: [],
 };
+
+function routeFor(request) {
+  if (!net.routes) return null;
+  const path = request.url.slice(request.url.indexOf("/v1/"));
+  const bare = path.split("?")[0];
+  for (const key of [`${request.method} ${path}`, path, `${request.method} ${bare}`, bare]) {
+    if (key in net.routes) return net.routes[key];
+  }
+  return null;
+}
 
 globalThis.fetch = async (url, init = {}) => {
   url = String(url);
   if (url === "/__/firebase/init.json") return Response.json(INIT_JSON);
   const request = { url, method: init.method || "GET", headers: { ...(init.headers || {}) }, body: init.body };
   net.requests.push(request);
-  const route = net.routes && Object.keys(net.routes).find((path) => url.endsWith(path));
-  const next = route ? net.routes[route] : net.queue.shift();
-  if (!next) throw new Error(`unexpected request: ${request.method} ${url}`);
+  const next = routeFor(request) || net.queue.shift();
+  if (!next) {
+    net.unexpected.push(`${request.method} ${url}`);
+    throw new Error(`unexpected request: ${request.method} ${url}`);
+  }
   return typeof next === "function" ? next(request) : next;
 };
 
@@ -249,7 +192,11 @@ export function reset() {
   storage.clear();
   prompts.asked = [];
   prompts.answers = [];
+  confirms.asked = [];
+  confirms.answers = [];
+  alerts.length = 0;
   net.requests = [];
+  net.unexpected = [];
   net.queue = [];
   net.routes = null;
   location.search = "";
@@ -267,4 +214,37 @@ export function loadAuth() {
 /** An enrolled, second-factor session: the state every dashboard needs. */
 export function readyUser(options = {}) {
   return new FakeUser({ factors: [{}], secondFactor: true, ...options });
+}
+
+let pageLoads = 0;
+
+/**
+ * Open a console page as a signed-in browser would: mount its markup, sign
+ * `user` in, script the API by `routes`, and import a fresh copy of its module
+ * (`?load=N`, so its module state starts empty; auth.js stays shared). With
+ * `resume`, this load is the return leg of a Google re-authentication that
+ * stashed it; `redirect` is what that leg's getRedirectResult yields
+ * (default: the signed-in user; null for a leg that came back without one).
+ * Resolves once the page has settled.
+ */
+export async function openPage(dir, { user = readyUser(), routes = {}, search = "", resume = null, redirect } = {}) {
+  mountPage(`${dir}/index.html`);
+  location.search = search;
+  net.routes = routes;
+  fake.auth.currentUser = user;
+  if (resume) {
+    storage.setItem("semper.afterReauth", "Re-authenticated.");
+    storage.setItem("semper.resume", JSON.stringify(resume));
+    fake.redirectResult = redirect === undefined ? { user } : redirect;
+  }
+  pageLoads += 1;
+  await import(`../public/console/${dir}/${dir}.js?load=${pageLoads}`);
+  await settle();
+}
+
+/** The requests made, as "METHOD /v1/path" lines, optionally only those matching `pattern`. */
+export function sent(pattern = /./) {
+  return net.requests
+    .map((r) => `${r.method} ${r.url.slice(r.url.indexOf("/v1/"))}`)
+    .filter((line) => pattern.test(line));
 }

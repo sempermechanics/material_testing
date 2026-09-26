@@ -35,7 +35,7 @@ changes ──┬──> tier1-app-fast ───────────┤
 |-----|--------|---|-----------------------|
 | `secret-scan` | gitleaks (see below) | No — always runs | ~1–2 min |
 | `legal-pages` | `scripts/render_legal_pages.py --check`: the published pages still match `docs/legal/` | No — always runs | seconds |
-| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, and `auth.js` (sign-in, second factor, step-up, `api`, revoke gate) and `router.js` against a fake Firebase SDK loaded through a `module.register` hook (`firebase-hosting/tests/harness.mjs`) | No — always runs | seconds |
+| `console-pages` | `scripts/check_console.py`: the consoles' wiring, CSP, deploy placeholders and gateway paths — their only gate, since they have no compiler — plus `node --test`: the DOM-free `console/util.js`, `auth.js` (sign-in, second factor, step-up, `api`, revoke gate), `router.js`, and the operator, account and institution pages, against a fake Firebase SDK loaded through a `module.register` hook and a DOM parsed from the real pages (`firebase-hosting/tests/harness.mjs`) | No — always runs | seconds |
 | `changes` | Resolves path filters + PR/main/Dependabot mode into tier flags | — | seconds |
 | `tier1-app-fast` | spotless, detekt, lint, JVM unit tests, `compileReleaseKotlin`, Kover coverage log + `koverVerify` floor | `app` (PR); always on `main` push | ~5–8 / ~10 min |
 | `tier3-emulator-e2e` | x86_64 emulator: JNI smoke + `AnalysisWizardSmokeTest`. Excludes `com.indicvision.semper.benchmark` on debug (those need the `benchmark` job). | main push / labels | ~20–40 / ~60–90 min |
