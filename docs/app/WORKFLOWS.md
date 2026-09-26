@@ -439,6 +439,24 @@ Y-plane path rather than the retriever fallback, and that the frame times load
 mapping uses are the sampled times. The rows above remain for the sheet itself
 and for real vendor decoders and camera files.
 
+**Pixel 6 (Android 17, `e90b23ba`, 2026-09-26), synthetic clips** from
+`scripts/synthetic_beam_video.py` (MP4, and AVIs made from it): 5.1a.1–5.1a.7,
+5.1a.9, 5.1a.10 and 5.1a.13–5.1a.15 pass. Every extracted frame was compared
+with the source by normalised correlation, and each one was the frame asked for,
+with no repeats. That covers 5.1a.2a for a synthetic MP4, not for a phone
+recording. Notes on individual rows:
+
+- 5.1a.5: extracting 29 frames took under 1.5 s, too quick to see the overlay.
+- 5.1a.8/5.1a.11: the Pixel decodes Xvid (`c2.exynos.mpeg4.decoder`), so there
+  was no codec snackbar to read.
+- 5.1a.9: a file that is not a video gives "Could not read this video.". An AVI
+  cut to its first third opens, with no index and so no Key frames toggle. It
+  offers the readable 0:09, and extracts 1 + 18 frames.
+- 5.1a.10: a 20-frame 10 fps clip gives exactly 1 + 19.
+
+MP4 frames keep the clip's 16–235 luma, while MJPEG AVI frames are full range
+(TD-134). Still owed: 5.1a.12 and 5.1a.16 on a phone, plus a real UTM clip.
+
 ### 5.2 Step 2 — Confirm settings
 
 | # | Action | Expected |

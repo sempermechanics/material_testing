@@ -12,6 +12,27 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — material_testing: the keyboard makes room on every text-field screen (#71)
+
+Merged as `e90b23ba`. Before Android 15, the wizard and the result viewer ran in
+pan mode, and the ROI editor in `adjustPan`. Their views got no keyboard inset,
+so the step-1 cross-section field, the ROI's Width, Height and Apply, and the
+viewer's frame field sat under the keyboard. From Android 15 the app is
+edge-to-edge, and nothing resized at all. There were two more faults. The ROI
+overlay lost up to a pixel per edge on each resize. The viewer's 2.5 s auto-hide
+took the frame field's focus mid-number, which committed the number and closed
+the keyboard.
+
+All three screens now declare `adjustResize`. The `Insets` helpers pad the
+wizard and the ROI dock by the keyboard, and lift the viewer's scrubber so the
+image does not refit. The overlay remaps in floats, and the auto-hide waits
+while the frame field has focus.
+
+Checked on API 34 and API 36 emulators, then on a Pixel 6 (Android 17) at
+`e90b23ba`. The ROI kept its image pixels through eight keyboard cycles, and a
+typed frame 20 opened 20/33 (TD-99). The same Pixel 6 session ran
+[WORKFLOWS.md](../app/WORKFLOWS.md) §5.1a with synthetic clips and found TD-134.
+
 ## 2026-09-26 — material_testing: detail moved out of Current state
 
 Current state was trimmed to its guideline length (#72). These lines had
