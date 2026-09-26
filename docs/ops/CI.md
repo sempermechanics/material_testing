@@ -94,6 +94,12 @@ Because the engine is a submodule, `native_core` and `native_jni` match the
 **gitlink** `native` rather than a source tree — bumping the pinned engine
 commit is what triggers them. `native_core` no longer has a job of its own.
 
+The filter step runs with `predicate-quantifier: 'some-with-excludes'`: a file
+matches a filter if any of its patterns includes it and no `!` pattern excludes
+it. That is what makes `app`'s "except `app/src/main/cpp/**`" hold. Under the
+default (`some`), the negated pattern matched every file outside `cpp/`, so
+`app` was true on every PR and a docs-only PR ran Tier 1 (TD-96).
+
 Two further filters widen `app` rather than gating a job directly:
 `app/src/androidTest/**` and the packaging files (`app/build.gradle.kts`,
 `app/proguard-rules.pro`, `gradle/libs.versions.toml`).
