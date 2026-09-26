@@ -2032,7 +2032,7 @@ now deletes it and retires the old `devices/{id}` document as `SUPERSEDED`,
 as `register_device` does for a replaced phone. It is guarded like
 `_restore_holder_mode`: an account that has moved to another licence keeps its
 binding. A demo account has no licence to clear, so it still cannot change
-phone (TD-122).
+phone (TD-126).
 
 #### The half that is easy to miss
 
