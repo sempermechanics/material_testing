@@ -273,30 +273,38 @@ syntax check when it is on `PATH` and skipped with a note when it is not.
 The same job runs `node --test "firebase-hosting/tests/*.test.mjs"` (Node 22,
 no `npm install`). `util.test.mjs` covers `util.js`: escaping, dates, and the
 roster cells (an expired floating lease reads "—", not "until <past time>").
-`auth.test.mjs`, `signin.test.mjs` and `router.test.mjs` cover `auth.js` and
-`router.js` against a fake Firebase SDK:
+The other files cover `auth.js`, `router.js` and the three pages against a
+fake Firebase SDK:
 
 | File | Pins |
 |---|---|
 | `auth.test.mjs` | `api()` sends `Bearer <ID token>` to `API_BASE_URL + path` and throws the backend's code; `reauth_required` leaves for Google once and never retries with the stale token; a step-up that completes retries once with a force-refreshed token; `allowStepUp: false` and `mfa_required` are handed back untouched; a cancelled code is `ERR_CANCELLED`; the 120 s redirect-loop guard and `operatorAsked`; `apiBlob()`; a resolved challenge adopts the re-authenticated user; `sessionHasSecondFactor` reads the token claim; TOTP enrolment in the page; `stepUpForRevoke`'s 90 s window and password-versus-Google choice; `confirmByTyping` |
 | `signin.test.mjs` | `requireSignIn`: nothing reaches `onReady` signed out or without this session's second factor; one start per account; the return leg hands `resume` over once, or marks it `reauthFailed`; declining to enrol signs out; a redirect that keeps failing stops with a message |
 | `router.test.mjs` | `/login` forwards staff, IT contacts (deep-linked to one licence) and everyone else, and offers a switcher when it cannot or should not choose |
+| `operator.test.mjs` | The desk only for `role=admin`; licence rows (seats, term, cap, state, which actions apply — no Delete on a system Demo key, only Delete on a revoked row); Show revoked / Show Demo refetch; Load more without duplicates; the filter, and the backend search after a 300 ms pause; revoke and delete: who-is-affected confirmation, typed key, `stepUpForRevoke` (a stale session goes to Google carrying the licence, nothing sent), the sent request and its message, each refusal's wording; the return leg finishes a revoke or delete after one plain confirmation, once, reads a licence past the first page first, refuses a gone or already-revoked one, and says a failed leg sent nothing; Edit prefill, a later end without a typed key, an earlier one only with it, clearing the cap, a Demo key's cap locked, each `editError` code in the dialog; New device |
+| `account.test.mjs` | Licence pills and explanation (licensed, Demo, perpetual, expired past grace, ended in grace, shared seat held or not, a backend without `held`); Move licence hidden without a held licence; "N of M", "N analyses stored", and the inactive-licence wording, also when the analyses answer first; each analysis row's state, file count and stored size ("—" for failed or nothing, "… when done" while uploading), Download disabled until something finished, a specimen name never markup; Show more; give a seat back and move the licence (confirmation, request, the cooldown instant from `device_change_too_soon: <ISO>`, each refusal); Download saves `semper-analysis-<id>.zip`, and its refusals |
+| `institution.test.mjs` | Nothing of the roster for an address no licence names (or an unverified one); a failed check leaves the page usable; the deep link; "N of M seats taken" / "in use right now" with invites counted apart; member rows (New device, Hold / Resume, Remove; nothing for a removed member; invites with Withdraw); not-found wording; Hold / Resume / New device bodies and reload; Remove and Withdraw confirm first; `ACT_ERRORS`; adding a member (on now vs invited, each refusal, `claim_contended`) |
 
 How the fake gets in: `tests/harness.mjs` calls `module.register` with
 `tests/firebase-hooks.mjs`, whose `resolve` hook maps the two
 `www.gstatic.com/firebasejs/<ver>/` imports to `tests/fakes/` and refuses any
 other remote import. A test file therefore imports `auth.js` dynamically
 (`loadAuth()`), after the harness has run. The harness also puts a small
-`window` / `document` / `location` on `globalThis` (one element per `id` in
-the real `index.html`) and a `fetch` that answers only what a test queued, so
-nothing reaches the network. A new SDK function in `auth.js` needs a matching
+`window` / `document` / `location` on `globalThis` and a `fetch` that answers
+only what a test scripted (by order, or by method and path), so nothing
+reaches the network. `document` is `tests/fake-dom.mjs`: the page's real
+markup parsed into a tree, and whatever a module writes into `innerHTML`
+parsed the same way, so rows can be clicked, delegated handlers see
+`closest(...)`, and an unmodelled selector throws instead of matching
+nothing. `openPage("operator", {...})` mounts a page and imports a fresh copy
+of its module (`?load=N`); a `resume` makes that load the return leg of a
+Google re-authentication. A new SDK function in `auth.js` needs a matching
 export in `tests/fakes/firebase-auth.mjs`.
 
 What the fakes cannot prove is that Firebase itself still behaves the way
 they model it — the redirect round trip, the handler on the page's own host,
 real TOTP codes, the `redirectUser` quirk described below. That stays on the
-hand-check (checklist step 7). The page modules (`operator.js`, `account.js`,
-`institution.js`) have no behavioural tests yet (TD-22).
+hand-check (checklist step 7).
 
 ## Downloading an analysis
 
