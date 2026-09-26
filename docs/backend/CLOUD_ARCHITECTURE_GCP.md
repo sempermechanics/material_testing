@@ -2029,6 +2029,17 @@ re-activated, no key is re-issued, and nothing is typed on the new device.
 **Clearing is not revoking.** Entitlement, seat, lease, quota and every stored
 analysis are untouched; only the lock goes empty.
 
+**It also lets the new phone register.** Signing in on a phone calls
+`POST /v1/devices/register`, which refuses any device but the account's
+`users/{uid}.activeDeviceId` with `409 device_conflict`. That field is a second
+binding, and until 2026-09-26 a clear left it naming the old phone, so the new
+one was refused at sign-in and never reached the lock. `_release_holder_device`
+now deletes it and retires the old `devices/{id}` document as `SUPERSEDED`,
+as `register_device` does for a replaced phone. It is guarded like
+`_restore_holder_mode`: an account that has moved to another licence keeps its
+binding. A demo account has no licence to clear, so it still cannot change
+phone (TD-126).
+
 #### The half that is easy to miss
 
 A device change is normally *preceded* by the holder trying the new phone. That
