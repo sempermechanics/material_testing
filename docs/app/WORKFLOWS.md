@@ -455,7 +455,18 @@ recording. Notes on individual rows:
 - 5.1a.10: a 20-frame 10 fps clip gives exactly 1 + 19.
 
 MP4 frames keep the clip's 16–235 luma, while MJPEG AVI frames are full range
-(TD-134). Still owed: 5.1a.12 and 5.1a.16 on a phone, plus a real UTM clip.
+(TD-134).
+
+**5.1a.16 on the Pixel 6 (`ddb5b0de`, 2026-09-26)** with the 29 s synthetic
+clip and its load log (*Log started after the first frame* = 2) passes. Key
+frames extracts 1 + 28 frames, all 28 deformed different, and 27 of 28 get a
+load; the one inside the 2 s lag gets none. The Results card matches
+[REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)'s synthetic-video case: E
+from the graph ≈ 141.5 GPa (26.98 N/mm, R² 0.9981) and average E ≈ 173.1 GPa.
+Draw the ROI on the beam as that case says: a full-image ROI at subset 121
+subset stops early ("Convergence collapsed") after 2 of 28 frames on this clip.
+
+Still owed: 5.1a.12 on a phone recording, plus a real UTM clip.
 
 ### 5.2 Step 2 — Confirm settings
 
