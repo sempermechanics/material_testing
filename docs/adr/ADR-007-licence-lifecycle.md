@@ -93,5 +93,8 @@ member or IT).
       `deleted_seats.purgeAt` (BACKEND_SETUP_CONSOLE.md §3a). Staging and
       production share `indicvision-dic-app`'s default database, so one pair
       serves both; both `ACTIVE` on 2026-09-26.
-- [ ] Run `backend/scripts/find_duplicate_licences.py` against production and
-      resolve anyone holding two live licences from before the rule.
+- [x] Run `backend/scripts/find_duplicate_licences.py` against production and
+      resolve anyone holding two live licences from before the rule. Run
+      2026-09-26: 1 live licence, nobody holds more than one; the same day
+      `check_licence_fields.py` found all 13 licence documents carry `mode`,
+      `status` and `createdAt`.
