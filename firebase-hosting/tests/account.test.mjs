@@ -113,12 +113,27 @@ test("a backend without `held` counts a licensed account as holding its licence"
 });
 
 test("a failed account read is reported", async () => {
-  // Answered after the analyses: in the other order the analyses load clears
-  // the line (TD-134).
+  // Answered after the analyses.
   let answerMe;
   const me = new Promise((resolve) => { answerMe = resolve; });
   await open({ routes: { "GET /v1/me": async () => { await me; return json(500, { detail: "boom" }); } } });
   answerMe();
+  await settle();
+  assert.deepEqual(status(), ["Could not read your account: boom", "muted err"]);
+});
+
+test("a failed account read survives the analyses answering second", async () => {
+  // The analyses load clears the status line when it succeeds; it must put
+  // the account failure back rather than wipe it.
+  let answerSessions;
+  const later = new Promise((resolve) => { answerSessions = resolve; });
+  await open({
+    routes: {
+      "GET /v1/me": () => json(500, { detail: "boom" }),
+      "GET /v1/sessions": async () => { await later; return json(200, { sessions: [], quota: { used: 0, max: 25 } }); },
+    },
+  });
+  answerSessions();
   await settle();
   assert.deepEqual(status(), ["Could not read your account: boom", "muted err"]);
 });
