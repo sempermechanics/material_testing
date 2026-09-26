@@ -154,8 +154,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   diagram of each test; bending's row reads **Beam height → Set**.
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   (Results, Elastic toggle, lab-report PDF, viewer and tap-editor gestures) run in Tier 3;
-  on a Galaxy S21+ (Android 15) they pass 9/9 at `db75267` (2026-09-26, after #46–#50), and
-  `VideoFrameExtractionDeviceTest` 6/6 (2026-09-25). `WizardDraftRestoreTest`: a load log survives process death.
+  on a Galaxy S21+ (Android 15) they pass 9/9 at `db75267` (2026-09-26, after #46–#50);
+  `VideoFrameExtractionDeviceTest` passes 6/6 there (2026-09-25, and 2026-09-26 on a build
+  another session installed). `WizardDraftRestoreTest`: a load log survives process death.
 - **Benchmarks.** `HotPathMicroBenchmark` runs in CI (#31, TD-86). The seeded scrub session
   has its ranges sidecar (TD-87); a session without one decodes once, into a reused buffer,
   and saves it (#33, #34, TD-87/TD-88). Both suites pass in full on a Pixel 6 (Android 17,
@@ -181,6 +182,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - A query that needs a composite index fails `FAILED_PRECONDITION` at runtime, not deploy: run `scripts/deploy-firestore.sh indexes` and wait for the build before the backend that queries it (the staff licence list needs three) — [§5](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `MAX_SESSIONS_PER_USER` is deleted; a deployment still setting it silently gets `DEMO_MAX_ANALYSES` (25) — [§7](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - List env vars (`CONSOLE_ORIGINS`, `ADMIN_EMAILS`) are space-separated; the deploy action splits on commas — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- Test phones are shared between sessions: before `adb install -r`, check `ps -A | grep instrument` and the app's `lastUpdateTime` — an install kills a running `am instrument`, and another session's install can replace the build under test. Never the connected task on a phone — [TESTING.md](docs/app/TESTING.md).
 - Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Demo uploads silently; only retrieval is gated. Gating `POST /v1/sessions` would loop old builds on 403 — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
