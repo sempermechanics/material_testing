@@ -32,6 +32,21 @@ already serves the spec, so the gateway was not touched.
 #256 (docs) went in alongside: ADR-007's TTL item, and the licence scripts' usage lines
 name `--project indicvision-dic-app`.
 
+## 2026-09-26 — Backend deploy: a lock clear frees the phone only where the mode is restored (#255)
+
+Backend only, staging then production with the gateway dry-run. Staging run 36226047617
+from `f04be71a` → `semper-api-staging-36226047617-1`; production run 36227358113 from
+`cd7d5db6` → `semper-api-36227358113-1` (#256 to #258 on top change no `backend/app` code).
+The candidate `/readyz` smoke passed on both, and the dry-run found that `v202609260522-60`
+already serves the spec, so the gateway was not touched.
+
+- Closes TD-127. `_release_holder_device` (#248) checked only that the holder was still on
+  the licence, so **New device** on a held or revoked seat, or a revoked licence, freed the
+  phone of a holder already on Demo, who could then register a different one. The release
+  and `_restore_holder_mode` now share one guard, `_live_holder`: nothing is released or
+  restored for a revoked licence, a seat that is not `active`, or an account that moved to
+  another licence. IT resumes a held seat before **New device** if the member is moving.
+
 ## 2026-09-26 — Console deploy: delete/revoke step-up fixes (#251)
 
 Hosting only, from `9b06aad8` with `scripts/deploy-console.sh` against `semper-gw`; the
