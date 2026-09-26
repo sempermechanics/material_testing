@@ -12,6 +12,21 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — material_testing: CI path filters honour their excludes (#63)
+
+Merged as `6aa4bac0`. Tier 1 had been running on every PR, docs-only ones
+included. The `changes` job's `dorny/paths-filter` step ran with the default
+`predicate-quantifier: some`, under which a file matches a filter on any one
+pattern, so `app`'s `'!app/src/main/cpp/**'` matched every file outside
+`cpp/`. On docs-only #58 the log read `Filter app = true` for its three `.md`
+files. The step now sets `predicate-quantifier: 'some-with-excludes'`, which
+the pinned action supports: a file matches if a pattern includes it and no `!`
+pattern excludes it. The other six filters have no `!` pattern and match as
+before, and "CI OK" already takes a skipped Tier 1. On #63's own run the log
+read `Filter app = false` (Tier 1 still ran there, as any edit to `ci.yml`
+turns on the app and backend tiers). [CI.md](CI.md) describes the filters
+(TD-96).
+
 ## 2026-09-26 — material_testing: bending graph axes, full tick labels and the slope line over measured δ (#55)
 
 Merged as `9ea9a6f8`. On a Pixel 6 the Results graph for `concrete_00` read
