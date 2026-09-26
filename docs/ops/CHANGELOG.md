@@ -12,6 +12,19 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-26 — material_testing: merges no longer cancel `main`'s CI (#67)
+
+Merged as `3cb8ad3f`. CI's concurrency group had `cancel-in-progress: true` for
+every event, so each merge to `main` cancelled the run before it. Tier 3 and
+Tier 5 take about 12 minutes, and that morning 15 of 17 finished push runs on
+`main` were cancelled; none finished between `384d6933` (05:26 UTC) and the
+merges of #55, #58 and #60–#66. `cancel-in-progress` is now true only for
+`pull_request` events. GitHub still keeps one pending run per group, so a burst
+of merges runs the one in flight and the newest. Checked on `main` the same
+day: #67's own merge left #68's run (`4633332a`) to finish, and it and the runs
+for #67, #69 and #70 all passed, Tier 3 and Tier 5 included. [CI.md](CI.md)
+describes it (TD-97).
+
 ## 2026-09-26 — material_testing: CI path filters honour their excludes (#63)
 
 Merged as `6aa4bac0`. Tier 1 had been running on every PR, docs-only ones
