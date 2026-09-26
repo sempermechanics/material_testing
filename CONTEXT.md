@@ -130,9 +130,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`); the last is `14fcf1c` (#50: Restore on Home, a card for cloud
-  backups not on this phone, the licence desk #236–#239 and ADR-007, which the parent
-  deploys). General fixes made here go back (TD-76, TD-77,
+  --grep=semperdic-app`); the last is `141ddca` (parent #240: production scales to zero,
+  15-day build-storage cleanup; before it `14fcf1c`, #50). The parent deploys. General
+  fixes made here go back (TD-76, TD-77,
   TD-79, TD-80, TD-82–TD-85, the ranges write-back TD-88 as parent #217, and the
   four in semperdic-app#189); TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
