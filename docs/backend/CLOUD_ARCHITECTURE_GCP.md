@@ -814,7 +814,7 @@ The shape it deploys into, and why:
 
 | Setting | Value | Reason |
 |---|---|---|
-| Min instances | 1 in production, 0 in staging | A cold start cost ~6 s, paid by the first sign-in or upload after any idle spell. One warm instance is roughly $10–15/month. Override with the `MIN_INSTANCES` repository variable |
+| Min instances | 0 in both environments (since 2026-09-26) | One idle warm instance was billed about 94 % of wall-clock. That is roughly ₹800–1,150 ($10–14) a month, over the ₹500 pilot budget, while everything else sat in a free tier. The first call after about 15 minutes idle pays a cold start, measured at p50 3.9 s and p95 6.0 s. Set the `MIN_INSTANCES` repository variable to `1` when that latency matters more than the cost ([perf/backend-cost.md](../perf/backend-cost.md)) |
 | Max instances | 10 | Pilot-sized ceiling |
 | CPU / memory | 1 / 512Mi | Upload bytes bypass Cloud Run (device→Drive); restore still proxies Session.zip through `/content` |
 | Timeout | 300 s | Matches the `/v1/files/{id}/content` API Gateway deadline (300 s) so Session.zip restore can finish; other JSON routes keep a 60 s gateway deadline. Session provisioning still runs as a Cloud Task. |
@@ -934,10 +934,16 @@ client".
 | Drive storage | 5 TB already-paid Workspace pool | ~5 sessions/user × 1 GB | **$0 marginal** |
 | Egress | uploads go **device→Drive**, not via Cloud Run | ~0 GB through GCP | **$0** |
 | Cloud Logging | 50 GiB/mo free | structured logs | **$0** |
-| Artifact Registry | 0.5 GB free | one image | **~$0** |
+| Artifact Registry | 0.5 GB free | ~80 MB per deploy; a 15-day cleanup policy keeps `latest` + the 5 newest per package ([setup A7](BACKEND_SETUP_GCP.md#a7-storage-hygiene)) | **~$0** (1.24 GB before the policy, ≈ ₹6/mo) |
 
 The killer design win: **bytes never transit Cloud Run**, so the usual
 egress/compute blowup for 1–5 GB uploads simply doesn't exist.
+
+**Measured, 30 days to 2026-09-26** ([perf/backend-cost.md](../perf/backend-cost.md)):
+about 1,170 Cloud Run requests, 1,492 production gateway calls, 20.4k Firestore reads and
+2.9k writes, 150 MB Cloud Run egress, 13.5 MB of logs, 36 builds. Every one is inside a
+free tier. The one line that was not is a warm minimum instance (`minScale=1`, billed
+around the clock); production scales to zero again since then.
 
 **As users scale (hundreds→thousands):**
 - *Cloud Run:* still cents/month — requests are small and infrequent (one burst
