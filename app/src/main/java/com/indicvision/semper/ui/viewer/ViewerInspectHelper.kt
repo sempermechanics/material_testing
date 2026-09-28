@@ -74,10 +74,18 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
         tvProbeReadout.visibility = View.GONE
     }
 
+    /**
+     * Nearest point to a tap at image pixel ([physX], [physY]). On the frame's
+     * own photo the points are where they moved to, so the lookup is over
+     * (x + u, y + v); the returned index reads the same frame data either way.
+     */
     fun findNearestDataPoint(physX: Float, physY: Float) {
         val data = host.rawData ?: return
         val searchRadius = host.step * 1.5f
-        val index = spatialIndex ?: PointSpatialIndex.build(data, host.step).also { spatialIndex = it }
+        val index = spatialIndex ?: PointSpatialIndex.build(
+            if (host.onFramePhoto) displacedPositions(data) else data,
+            host.step,
+        ).also { spatialIndex = it }
         lastClosestIdx = index.nearest(physX, physY, searchRadius)
         probeVisible = true
         glassShield.visibility = View.VISIBLE
@@ -115,12 +123,35 @@ class ViewerInspectHelper(private val host: ResultViewerActivity) {
                 actualY,
             )
 
-            val pts = floatArrayOf(actualX.toFloat(), actualY.toFloat())
+            val pts = if (host.onFramePhoto) {
+                floatArrayOf(
+                    data[lastClosestIdx] + data[lastClosestIdx + DicResult.IDX_U],
+                    data[lastClosestIdx + 1] + data[lastClosestIdx + DicResult.IDX_V],
+                )
+            } else {
+                floatArrayOf(actualX.toFloat(), actualY.toFloat())
+            }
             imgMain.getZoomMatrix().mapPoints(pts)
             glassShield.updatePosition(pts[0], pts[1])
         } else {
             glassShield.hide()
             tvProbeReadout.text = host.getString(R.string.probe_no_data)
+        }
+    }
+
+    internal companion object {
+        /**
+         * A copy of [data] with each point's x, y moved by its u, v — the
+         * layout [PointSpatialIndex] reads, so the same index finds points on
+         * the deformed frame. Built only on the first tap of a frame.
+         */
+        fun displacedPositions(data: FloatArray): FloatArray {
+            val out = data.copyOf()
+            for (i in out.indices step DicResult.STRIDE) {
+                out[i + DicResult.IDX_X] += out[i + DicResult.IDX_U]
+                out[i + DicResult.IDX_Y] += out[i + DicResult.IDX_V]
+            }
+            return out
         }
     }
 }
