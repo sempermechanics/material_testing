@@ -419,6 +419,7 @@ offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
 | [ ] 5.1b.36 | Re-sort the frames (Name ↓, or drag) after typing | Each mass stays with its photo: reopen the sheet and check |
 | [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.indicvision.semper.materialtesting` while backgrounded), return | The typed loads come back |
 | [ ] 5.1b.38 | Tap ✕ on the typed loads; import a CSV; tap ✕ on it | ✕ clears the typed loads and brings back the button and dropzone; with the CSV in, the typing sheet is never offered (no button, the summary does not open it); its ✕ brings the button back. Tensile never shows the button |
+| [ ] 5.1b.39 | With 0.5, 1, 1.5, 0 typed, pick **Incremental (added per photo)** under **Loads typed as** | The boxes become 0.5, 0.5, 0.5, -1.5, each with "Total n kg" under it (0.5, 1, 1.5, 0); the keypad now has a minus key and the subtitle explains increments. Change the last to -2, **Done**: refused, "This takes the hanger below 0 kg". Back to **Absolute**: the totals return unchanged; 1,5 typed with the keypad comma still reads 1.5. **Done** in Incremental, reopen: still Incremental; the loads are the same 4.90, 9.81, 14.71, 0 N |
 
 **5.1b.32–38 on the Pixel 6 (`f4209a7f`, 2026-09-28)** pass on an offline lab
 build with `semper_test_data/2_bending_pmma_real` (pmma_00 as the reference,

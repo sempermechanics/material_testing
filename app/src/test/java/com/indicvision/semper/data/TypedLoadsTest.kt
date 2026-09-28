@@ -64,6 +64,64 @@ class TypedLoadsTest {
     }
 
     @Test
+    fun `only an incremental box may be negative`() {
+        assertEquals(TypedLoads.Parsed.Invalid, TypedLoads.parseKg("-0.5", TypedLoads.Entry.ABSOLUTE))
+        assertEquals(TypedLoads.Parsed.Kg(-0.5f), TypedLoads.parseKg("-0,5", TypedLoads.Entry.INCREMENTAL))
+        assertEquals(TypedLoads.Parsed.Invalid, TypedLoads.parseKg("abc", TypedLoads.Entry.INCREMENTAL))
+    }
+
+    @Test
+    fun `increments add up to the hanger totals`() {
+        val boxes = listOf("0.5", "0.5", "1", "-0.5").map { TypedLoads.parseKg(it, TypedLoads.Entry.INCREMENTAL) }
+
+        val totals = TypedLoads.totals(boxes, TypedLoads.Entry.INCREMENTAL)
+
+        assertEquals(listOf(0.5f, 1f, 2f, 1.5f), totals)
+    }
+
+    @Test
+    fun `absolute boxes are their own totals`() {
+        val boxes = listOf("0.5", "", "2").map { TypedLoads.parseKg(it) }
+
+        assertEquals(listOf(0.5f, null, 2f), TypedLoads.totals(boxes, TypedLoads.Entry.ABSOLUTE))
+    }
+
+    @Test
+    fun `a blank increment has no total and adds nothing to the next`() {
+        val boxes = listOf("1", "", "0.5").map { TypedLoads.parseKg(it, TypedLoads.Entry.INCREMENTAL) }
+
+        assertEquals(listOf(1f, null, 1.5f), TypedLoads.totals(boxes, TypedLoads.Entry.INCREMENTAL))
+    }
+
+    @Test
+    fun `an increment that takes the hanger below zero has no total`() {
+        val boxes = listOf("0.5", "-1", "1").map { TypedLoads.parseKg(it, TypedLoads.Entry.INCREMENTAL) }
+
+        assertEquals(listOf(0.5f, null, 1.5f), TypedLoads.totals(boxes, TypedLoads.Entry.INCREMENTAL))
+    }
+
+    @Test
+    fun `a bad box takes its fallback, and the next adds to that`() {
+        val boxes = listOf("0.5", "x", "", "1").map { TypedLoads.parseKg(it, TypedLoads.Entry.INCREMENTAL) }
+        val old = listOf(0.5f, 2f, 3f, 4f)
+
+        // The blank never takes its fallback; "x" keeps 2 kg, and 1 more is 3.
+        assertEquals(listOf(0.5f, 2f, null, 3f), TypedLoads.totals(boxes, TypedLoads.Entry.INCREMENTAL, old))
+    }
+
+    @Test
+    fun `totals become increments and back`() {
+        val totals = listOf(0.5f, 1.5f, null, 1f, 3f)
+
+        val steps = TypedLoads.increments(totals)
+
+        assertEquals(listOf(0.5f, 1f, null, -0.5f, 2f), steps)
+        assertEquals(totals, TypedLoads.runningTotals(steps))
+        // Increments that take the hanger below 0 still convert: the absolute box flags it.
+        assertEquals(listOf(1f, -0.5f), TypedLoads.runningTotals(listOf(1f, -1.5f)))
+    }
+
+    @Test
     fun `a negative, non-numeric or infinite box is invalid`() {
         assertEquals(TypedLoads.Parsed.Invalid, TypedLoads.parseKg("-1"))
         assertEquals(TypedLoads.Parsed.Invalid, TypedLoads.parseKg("1.2.3"))

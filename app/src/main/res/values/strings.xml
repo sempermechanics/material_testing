@@ -666,6 +666,17 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">%1$d photos have no load yet. Tap to type them: 0 if there is no weight.</item>
     </plurals>
     <string name="load_typed_box_desc">Hanger load for %1$s, in kg</string>
+    <string name="load_typed_entry_label">Loads typed as</string>
+    <string name="load_typed_entry_absolute">Absolute (total on hanger)</string>
+    <string name="load_typed_entry_incremental">Incremental (added per photo)</string>
+    <string name="load_typed_subtitle_incremental">The mass added to the hanger since the previous photo, in kg: negative for a weight taken off. For photo 1, what went on the empty hanger. W = m × 9.80665 N. Every photo needs a number: type 0 if nothing changed.</string>
+    <string name="load_typed_hint_incremental">added</string>
+    <string name="load_typed_invalid_incremental">Enter the change in kg, e.g. 0.5, or −0.5 for a weight taken off</string>
+    <string name="load_typed_blank_incremental">Type the mass added in kg: 0 if nothing changed</string>
+    <string name="load_typed_below_zero">This takes the hanger below 0 kg</string>
+    <string name="load_typed_total_fmt">Total %1$s kg</string>
+    <string name="load_typed_total_none">Total —</string>
+    <string name="load_typed_box_desc_incremental">Mass added for %1$s since the previous photo, in kg</string>
     <string name="load_typed_name">Typed loads</string>
     <plurals name="load_meta_typed_fmt">
         <item quantity="one">%1$d of %2$d photo · kg × 9.80665 = N · tap to edit</item>

@@ -10,6 +10,7 @@ import com.indicvision.semper.data.LoadMapping
 import com.indicvision.semper.data.MachineLoadCsv
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
+import com.indicvision.semper.data.TypedLoads
 import com.indicvision.semper.data.WizardDraft
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.AnalysisViewModel.DraftRestore
@@ -193,6 +194,7 @@ class WizardStateTest {
             defFrameTimesMs = listOf(500L, 1_000L)
             setLoadLog((MachineLoadCsv.parse(LOAD_LOG) as LoadCsvParse.Ok).csv, "run1.csv", LOAD_LOG)
             loadLogStartS = 0.5f
+            typedLoadsEntry = TypedLoads.Entry.INCREMENTAL
         }
         draft.writeLoadLog(LOAD_LOG)
         val after = afterProcessDeath(before)
@@ -203,6 +205,7 @@ class WizardStateTest {
         assertEquals(geometry, after.geometry)
         assertEquals("run1.csv", after.loadCsvName)
         assertEquals(0.5f, after.loadLogStartS, 0f)
+        assertEquals(TypedLoads.Entry.INCREMENTAL, after.typedLoadsEntry)
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(listOf(500L, 1_000L), after.defFrameTimesMs)

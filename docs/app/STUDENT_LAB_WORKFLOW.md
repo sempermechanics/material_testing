@@ -38,7 +38,7 @@ So the copy is plain, the formulas are spelled out, and every number shown is on
   A photo's time is its EXIF `DateTimeOriginal` (+ `SubSecTimeOriginal`); the reference and every photo need one.
   Phone cameras write it; screenshots and photos sent through a messenger usually lose it.
 
-**Bending loads are typed** (**Type loads (kg)** on the load card): one box per deformed photo, the mass on the hanger when it was taken, with the reference at 0 kg.
+**Bending loads are typed** (**Type loads (kg)** on the load card): one box per deformed photo, the mass on the hanger when it was taken, with the reference at 0 kg. **Loads typed as** switches the boxes between **Absolute** (the total on the hanger) and **Incremental** (what was added since the photo before; negative for a weight taken off), with each row's running total shown. Switching converts what is typed; the app stores totals either way.
 The app stores W = m × 9.80665 N. Every photo needs a number: 0 for no weight. The sheet will not close with **Done** while a box is empty, and **Next** waits until every photo has its load.
 Typed loads and a CSV are never combined; ✕ on one brings back the choice. Tensile loads stay CSV-only.
 

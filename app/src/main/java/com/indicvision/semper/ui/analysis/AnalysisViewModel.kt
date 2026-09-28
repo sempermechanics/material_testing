@@ -225,6 +225,12 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     var typedLoadsKg: List<Float?> = emptyList()
 
     /**
+     * How the sheet reads its boxes: each photo's total, or what changed since
+     * the photo before. Only how they are typed; [typedLoadsKg] is always totals.
+     */
+    var typedLoadsEntry: TypedLoads.Entry = TypedLoads.Entry.ABSOLUTE
+
+    /**
      * Re-matches the load log to the frames as they are now; with no log,
      * bending's typed loads. Cheap; call after either changes.
      */

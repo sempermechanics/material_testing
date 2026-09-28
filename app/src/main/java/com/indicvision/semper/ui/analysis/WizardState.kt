@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
+import com.indicvision.semper.data.TypedLoads
 import com.indicvision.semper.data.WizardDraft
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -56,6 +57,7 @@ internal object WizardState {
     private const val HAS_LOAD_LOG = "hasLoadLog"
     private const val LOAD_CSV_NAME = "loadCsvName"
     private const val LOAD_LOG_START_S = "loadLogStartS"
+    private const val TYPED_LOADS_ENTRY = "typedLoadsEntry"
 
     /**
      * Index-aligned lists behind the deformed-frames card; `-1` = size not
@@ -121,6 +123,7 @@ internal object WizardState {
         putBoolean(HAS_LOAD_LOG, vm.parsedLoadCsv != null)
         putString(LOAD_CSV_NAME, vm.loadCsvName)
         putFloat(LOAD_LOG_START_S, vm.loadLogStartS)
+        putString(TYPED_LOADS_ENTRY, vm.typedLoadsEntry.name)
     }
 
     /** The scalars of a [save]d Bundle; the draft's parts follow through [readInputs]. */
@@ -166,6 +169,8 @@ internal object WizardState {
         vm.geometry = SpecimenGeometry.fromArray(b.getFloatArray(GEOMETRY))
         vm.loadCsvName = b.getString(LOAD_CSV_NAME).orEmpty()
         vm.loadLogStartS = b.getFloat(LOAD_LOG_START_S)
+        b.getString(TYPED_LOADS_ENTRY)?.let { name -> TypedLoads.Entry.entries.find { it.name == name } }
+            ?.let { vm.typedLoadsEntry = it }
     }
 
     fun frames(vm: AnalysisViewModel): Frames = Frames(
