@@ -1,6 +1,6 @@
 # ADR-009: Material Testing is its own Android app on Semper's backend
 
-**Status:** Accepted, built (App Check owed; one phone per app waits on semperdic-app's ADR-010)
+**Status:** Accepted, built (App Check owed)
 **Date:** 2026-09-28
 **Deciders:** app owner
 
@@ -52,13 +52,12 @@ change under `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`, or an IT/staff unbind.
 locked to one device. The account's registered device does too, and that is
 what sign-in hit.]
 
-semperdic-app's [ADR-010](https://github.com/sempermechanics/semperdic-app/blob/main/docs/adr/ADR-010-device-binding-per-app.md)
-(semperdic-app #279, #280) binds one phone per app. Each app sends `X-App-Id`
-(its `applicationId`), and has its own registered device, release hold, lock
-and self-service cooldown; a staff or IT clear moves both. That ADR-010 is the
-parent's; this repo's ADR-010 is the viewer's deformed frame. It reaches this
-app through a `sync/` merge that brings in `AppIdHeader`. Until then this app
-sends no header and the backend reads it as Semper.
+[ADR-010](ADR-010-device-binding-per-app.md) (semperdic-app #279, #280,
+deployed 2026-09-28) binds one phone per app. Each app sends `X-App-Id` (its
+`applicationId`, `data/net/AppIdHeader.kt`), and has its own registered device,
+release hold, lock and self-service cooldown; a staff or IT clear moves both.
+It came here in the 2026-09-28 sync. A Material Testing build from before it
+sends no header, so the backend still reads it as Semper.
 
 When both apps are installed and signed in, the sign-in and reset email links match two
 verified apps, and Android asks which one opens the link; the other app cannot
@@ -86,8 +85,8 @@ finish that link, because the pending email lives in the app that sent it.
 - [x] Release SHA-256 in `assetlinks.json` here and in `semperdic-app`
       (semperdic-app #278); Hosting deployed (2026-09-28). Released as
       `v1.2-beta.1` from `2d28c3fc` (#82).
-- [ ] One phone per app: after semperdic-app #279 and #280 merge and the
-      backend deploys, sync its `main` here (keep `applicationId` and
-      `google-services.json`) and cut a build.
+- [x] One phone per app: semperdic-app #279 and #280 merged and deployed,
+      and synced here (2026-09-28).
+- [ ] Cut a build with `AppIdHeader` and sign in on a phone that has Semper.
 - [ ] App Check: register the app with Play Integrity before
       `APP_CHECK_MODE=enforce`.
