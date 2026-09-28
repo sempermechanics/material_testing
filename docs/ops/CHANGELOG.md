@@ -12,7 +12,7 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
-## 2026-09-29 — material_testing: a ROI-editor pan stops where the fingers lift (TD-141)
+## 2026-09-29 — material_testing: a ROI-editor pan stops where the fingers lift (TD-142)
 
 Tier 3 had been red on `main` since #86 added `e2e/RoiEditorGestureTest`: on the
 CI emulator a 200 px two-finger pan moved the photo 204 px. The overlay moved
