@@ -391,9 +391,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         Insets.padBottom(findViewById(R.id.bottomNav))
 
         // Keyboard: every page holds number fields (step 1 has the load card and
-        // specimen dimensions); pad their scroll viewports by the IME inset so a
-        // focused field scrolls clear of the keyboard instead of hiding behind it.
-        Insets.padImeBottom(scrollStepImages)
+        // specimen dimensions); pad their scroll viewports by the part of the IME
+        // above the nav bar, and scroll the focused field clear of the keyboard.
+        Insets.padImeBottom(findViewById(R.id.scrollStepImages))
         Insets.padImeBottom(findViewById(R.id.scrollStepSettings))
         Insets.padImeBottom(findViewById(R.id.scrollStepSweep))
 
