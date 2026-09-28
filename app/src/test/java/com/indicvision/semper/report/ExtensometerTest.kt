@@ -9,8 +9,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The tensile table's Extension column: ΔL in pixels between two end bands of
- * the analysed region, fixed on the first solved frame.
+ * The virtual extensometer: ΔL in pixels between two end bands of the analysed
+ * region, fixed on the first solved frame. It is the tensile table's
+ * Extension column, and ΔL / L₀ is the tensile strain (ADR-012).
  */
 class ExtensometerTest {
 
@@ -72,12 +73,14 @@ class ExtensometerTest {
         )
 
         assertEquals(90f, curve.gauge!!.lengthPx, 1e-4f)
-        assertEquals(listOf(0.09f, 0.18f), curve.points.take(2).map { it.extensionPx!! })
-        assertNull(curve.points[2].extensionPx)
+        assertEquals(listOf(0.09f, 0.18f), curve.points.map { it.extensionPx!! })
+        // The strain is ΔL / L₀; the frame whose far band left the view has none, so no point.
+        assertEquals(listOf(1f, 2f), curve.points.map { it.strainMilli })
+        assertEquals(listOf(0, 1), curve.points.map { it.frame })
 
         val doc = LabReport.of(curve, null)!!
         val table = doc.blocks.filterIsInstance<LabReport.Block.Table>().single()
-        assertEquals(listOf("0.09", "0.18", LabReport.BLANK_CELL), table.rows.map { it[3] })
+        assertEquals(listOf("0.09", "0.18"), table.rows.map { it[3] })
         val fields = doc.blocks.filterIsInstance<LabReport.Block.Field>().associate { it.label to it.value }
         assertEquals("90 — between the ends of the analysed region", fields["DIC gauge length along x (px)"])
         val calc = doc.blocks.filterIsInstance<LabReport.Block.Calculation>().single()

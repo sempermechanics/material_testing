@@ -336,7 +336,8 @@ class LabWorkflowDeviceTest {
                 val point = p / DicResult.STRIDE
                 floats[p + DicResult.IDX_X] = (ROI_X + point % COLS * STEP).toFloat()
                 floats[p + DicResult.IDX_Y] = (ROI_Y + point / COLS * STEP).toFloat()
-                floats[p + DicResult.IDX_U] = 0f
+                // An even stretch along x, so the extensometer's ΔL / L₀ is Exx too.
+                floats[p + DicResult.IDX_U] = exxMilli[frame] / DicResult.STRAIN_TO_MILLISTRAIN * (point % COLS * STEP)
                 floats[p + DicResult.IDX_V] = vPx[frame]
                 floats[p + DicResult.IDX_EXX] = exxMilli[frame] / DicResult.STRAIN_TO_MILLISTRAIN
                 floats[p + DicResult.IDX_EYY] = 0f

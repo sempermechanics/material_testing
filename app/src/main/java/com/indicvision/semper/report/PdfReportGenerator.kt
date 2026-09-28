@@ -259,7 +259,7 @@ object PdfReportGenerator {
         layout.newPage()
         layout.drawTitle(curve.model.curveTitle)
         layout.drawDimensions(curve.model)
-        layout.drawKeyValue("Strain:", "${curve.model.strainName} over accepted points")
+        layout.drawKeyValue("Strain:", "${curve.model.strainName} ${curve.model.strainBasis}")
         curve.peak?.let {
             layout.drawKeyValue("Peak Stress:", "%.3f MPa at frame %d".format(Locale.US, it.stressMPa, it.frame + 1))
         }

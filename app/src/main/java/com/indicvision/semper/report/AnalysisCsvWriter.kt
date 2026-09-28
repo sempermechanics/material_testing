@@ -248,8 +248,8 @@ object AnalysisCsvWriter {
         private var frameIndex = 0
 
         /** The curve's points, collected as frames stream past; null when there is no trailer. */
-        private val mechanical: MutableList<StressStrain.Point>? =
-            if (!sweep && metadata.testType.isNotBlank()) mutableListOf() else null
+        private val mechanical: StressStrain.Collector? =
+            if (!sweep && metadata.testType.isNotBlank()) StressStrain.Collector(metadata.stressModel) else null
 
         fun appendFieldStats(frame: Frame, data: FloatArray) {
             check(!pointSectionStarted) { "field stats after the point section started" }
@@ -298,11 +298,8 @@ object AnalysisCsvWriter {
         }
 
         private fun collect(index: Int, loadN: Float?, data: FloatArray) {
-            val points = mechanical ?: return
             if (loadN == null) return
-            val model = metadata.stressModel
-            val strain = model.strainMilli(data) ?: return
-            points += StressStrain.Point(index, loadN, model.stressMPa(loadN), strain, model.deflectionMm(data))
+            mechanical?.add(index, loadN, data)
         }
 
         private fun stagedWriter(): Writer =
@@ -311,11 +308,7 @@ object AnalysisCsvWriter {
         override fun close() {
             try {
                 startPointSection()
-                val points = mechanical
-                if (!points.isNullOrEmpty()) {
-                    val curve = StressStrain.Curve(metadata.stressModel, frameIndex, BeamDeflection.alongLoad(points))
-                    writeMechanicalResults(writer, curve)
-                }
+                mechanical?.takeUnless { it.isEmpty }?.let { writeMechanicalResults(writer, it.curve(frameIndex)) }
             } finally {
                 staged?.close()
                 stagingFile.delete()

@@ -184,6 +184,36 @@ class MachineLoadCsvTest {
     }
 
     @Test
+    fun `a UTM export with a preamble and quoted spacer lines reads from the row before the numbers`() {
+        val csv = ok(
+            """
+            " "
+            "File Name : SUBHRAJYOTI_IITGOA_BM"
+            "Record No.   1"
+            "Date :24-06-2023"
+            " "
+            "Load Vs Displacement Test Data"
+            " "
+            "Disp. mm","Load kN","Time Sec."
+            " "
+            0,.005,"0.000"
+            0,0,"0.000"
+            .01,.005,"10.563"
+            .02,.025,"17.730"
+            .03,.05,"21.344"
+            """.trimIndent(),
+        )
+
+        listOf(5f, 0f, 5f, 25f, 50f).zip(csv.loadsN).forEach { (n, loadN) -> assertEquals(n, loadN, 1e-3f) }
+        assertEquals(listOf(0f, 0f, 10.563f, 17.73f, 21.344f), csv.timesS)
+        assertEquals(LoadUnit.KN, csv.unit)
+        assertEquals(1, csv.loadColumn)
+        assertEquals(2, csv.timeColumn)
+        assertEquals("Load kN", csv.loadHeader)
+        assertTrue(csv.warnings.isEmpty())
+    }
+
+    @Test
     fun `windows line endings and quoted cells parse the same`() {
         val csv = ok("\"Time (s)\",\"Load (N)\"\r\n\"0\",\"0\"\r\n\"1\",\"9.5\"\r\n")
 

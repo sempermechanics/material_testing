@@ -56,7 +56,7 @@ sealed interface LoadCsvParse {
 /**
  * Reads a universal-testing-machine export without asking the user anything:
  * the delimiter, decimal mark, header, units row, and the load and time
- * columns are all inferred from the first few lines. Every guess is reported
+ * columns are all inferred, and a preamble above the header is skipped. Every guess is reported
  * as a [LoadCsvWarning]; only a row whose load cell is not a number fails.
  *
  * Pure Kotlin — no Android imports — so the fixtures in the unit tests are
@@ -67,7 +67,6 @@ object MachineLoadCsv {
     const val MAX_ROWS = 200_000
 
     private const val SNIFF_LINES = 10
-    private const val HEADER_SEARCH_LINES = 3
 
     private val LOAD_HEADER = Regex("""load|force|\bkn\b|\bn\b|newton|lbf""", RegexOption.IGNORE_CASE)
     private val TIME_HEADER = Regex("""time|\bs\b|sec|elapsed""", RegexOption.IGNORE_CASE)
@@ -76,6 +75,10 @@ object MachineLoadCsv {
     private val UNIT_N = Regex("""\bn\b|newton""", RegexOption.IGNORE_CASE)
     private val DECIMAL_COMMA = Regex("""^[+-]?\d+,\d+$""")
     private val THOUSANDS = Regex("""^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$""")
+    private val UNIT_CELL = Regex(
+        """^[(\[]?\s*(s|sec|ms|min|h|mm|cm|m|µm|um|in|n|kn|lbf|lb|kgf|%|mm/mm|-)\s*[)\]]?$""",
+        RegexOption.IGNORE_CASE,
+    )
 
     private data class Line(val number: Int, val cells: List<String>)
 
@@ -88,7 +91,10 @@ object MachineLoadCsv {
         if (lines.isEmpty()) return LoadCsvParse.Failed(LoadCsvError.Empty)
 
         val delimiter = sniffDelimiter(lines.take(SNIFF_LINES).map { it.second })
+        // A line of empty cells (a `" "` spacer, or bare delimiters) is blank.
         val table = lines.map { (number, line) -> Line(number, splitCells(line, delimiter)) }
+            .filter { line -> line.cells.any { it.isNotEmpty() } }
+        if (table.isEmpty()) return LoadCsvParse.Failed(LoadCsvError.Empty)
         val decimalComma = delimiter != ',' &&
             table.take(SNIFF_LINES).any { line -> line.cells.any { DECIMAL_COMMA.matches(it) } }
         val numberOf: (String) -> Float? = { cell -> parseNumber(cell, decimalComma) }
@@ -168,16 +174,24 @@ object MachineLoadCsv {
     private data class Layout(val header: List<String>?, val units: List<String>?, val dataStart: Int)
 
     /**
-     * The header is the first of the leading lines where fewer than half the
-     * cells are numbers; a second such line straight after it is a units row.
+     * The data starts at the first numeric line and the header is the line
+     * just before it; when that line holds only units it is the units row and
+     * the header is the line above. Anything earlier is a preamble (file name,
+     * record number, date) and is ignored. A file with no numeric line keeps
+     * its first line as the header, so it reads as empty or as having no load.
      */
     private fun findHeader(table: List<Line>, numberOf: (String) -> Float?): Layout {
-        val headerIndex = table.take(HEADER_SEARCH_LINES).indexOfFirst { !isNumericRow(it, numberOf) }
-        if (headerIndex < 0) return Layout(null, null, 0)
-        val header = table[headerIndex].cells
-        val next = table.getOrNull(headerIndex + 1)
-        val units = next?.takeIf { !isNumericRow(it, numberOf) }?.cells
-        return Layout(header, units, headerIndex + 1 + (if (units == null) 0 else 1))
+        val dataStart = table.indexOfFirst { isNumericRow(it, numberOf) }
+        if (dataStart == 0) return Layout(null, null, 0)
+        if (dataStart < 0) return Layout(table.first().cells, null, 1)
+        val before = table[dataStart - 1].cells
+        val above = table.getOrNull(dataStart - 2)?.cells
+        val unitsOnly = before.filter { it.isNotEmpty() }.all { UNIT_CELL.matches(it) }
+        return if (above != null && unitsOnly) {
+            Layout(above, before, dataStart)
+        } else {
+            Layout(before, null, dataStart)
+        }
     }
 
     private fun isNumericRow(line: Line, numberOf: (String) -> Float?): Boolean {

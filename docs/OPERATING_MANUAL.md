@@ -61,7 +61,7 @@ Formulas, accuracy and worked numbers: [app/STUDENT_LAB_WORKFLOW.md](app/STUDENT
 - **E** from the straight part (the frames used and R²);
 - the peak stress.
 
-The lab report's table adds **Extension (px)**, measured between the two ends of the analysed region. A "—" means one end has left the view.
+The strain is **ΔL / L₀** from a virtual extensometer between the two ends of the analysed region, so draw the ROI over the gauge length you want. The lab report's table adds that **Extension (px)**. A photo where one end has left the view has no strain and is not on the curve.
 
 ### Bending: load–deflection and E
 

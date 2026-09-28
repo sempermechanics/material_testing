@@ -12,18 +12,33 @@ import org.junit.Test
 
 class StressStrainTest {
 
-    /** A field of [n] accepted points with uniform Exx / Eyy (in strain, not mε). */
+    /**
+     * A field of [n] × [n] accepted points 10 px apart, stretched evenly: Exx /
+     * Eyy (in strain, not mε) and the displacements that give them, so the mean
+     * strain and the extensometer's ΔL / L₀ agree.
+     */
     private fun field(exx: Float, eyy: Float, n: Int = 4, accepted: Boolean = true): FloatArray {
-        val data = FloatArray(n * DicResult.STRIDE)
+        val data = FloatArray(n * n * DicResult.STRIDE)
         var i = 0
-        repeat(n) {
-            data[i + DicResult.IDX_EXX] = exx
-            data[i + DicResult.IDX_EYY] = eyy
-            data[i + DicResult.IDX_ZNSSD] = if (accepted) 0.05f else -1f
-            i += DicResult.STRIDE
+        for (row in 0 until n) {
+            for (col in 0 until n) {
+                val x = col * 10f
+                val y = row * 10f
+                data[i + DicResult.IDX_X] = x
+                data[i + DicResult.IDX_Y] = y
+                data[i + DicResult.IDX_U] = exx * x
+                data[i + DicResult.IDX_V] = eyy * y
+                data[i + DicResult.IDX_EXX] = exx
+                data[i + DicResult.IDX_EYY] = eyy
+                data[i + DicResult.IDX_ZNSSD] = if (accepted) 0.05f else -1f
+                i += DicResult.STRIDE
+            }
         }
         return data
     }
+
+    private fun axialStrain(axisX: Boolean, gaugeOn: FloatArray, data: FloatArray): Float? =
+        StressStrain.Model.Axial(1f, axisX).strainMilli(data, Extensometer.gauge(gaugeOn, axisX))
 
     @Test
     fun `axial stress is load over area in megapascals and NaN without an area`() {
@@ -35,12 +50,34 @@ class StressStrainTest {
     }
 
     @Test
-    fun `axial strain is the mean of the load-axis component in millistrain`() {
+    fun `axial strain is the extensometer's delta L over L0 along the load axis in millistrain`() {
+        val unloaded = field(0f, 0f)
         val data = field(exx = 0.002f, eyy = -0.0006f)
 
-        assertEquals(2f, StressStrain.Model.Axial(1f, axisX = true).strainMilli(data)!!, 1e-3f)
-        assertEquals(-0.6f, StressStrain.Model.Axial(1f, axisX = false).strainMilli(data)!!, 1e-3f)
-        assertNull(StressStrain.Model.Axial(1f, axisX = true).strainMilli(field(0.1f, 0.1f, accepted = false)))
+        assertEquals(2f, axialStrain(axisX = true, unloaded, data)!!, 1e-3f)
+        assertEquals(-0.6f, axialStrain(axisX = false, unloaded, data)!!, 1e-3f)
+        assertNull(axialStrain(axisX = true, unloaded, field(0.1f, 0.1f, accepted = false)))
+        assertNull(StressStrain.Model.Axial(1f, axisX = true).strainMilli(data, gauge = null))
+    }
+
+    @Test
+    fun `axial strain follows the end bands, not the mean of the field`() {
+        // Necking: the middle strains ten times the ends, so the mean over the
+        // region and the gauge's ΔL / L₀ part.
+        val unloaded = field(0f, 0f, n = 11)
+        val necked = unloaded.copyOf()
+        var i = 0
+        while (i < necked.size) {
+            val x = necked[i + DicResult.IDX_X]
+            // u(x): 1 mε up to x = 40, 10 mε from 40 to 60, 1 mε beyond.
+            necked[i + DicResult.IDX_U] = 0.001f * minOf(x, 40f) +
+                0.01f * (x.coerceIn(40f, 60f) - 40f) + 0.001f * (maxOf(x, 60f) - 60f)
+            i += DicResult.STRIDE
+        }
+
+        // Bands 0–10 and 90–100 px: mean positions 5 and 95 → L₀ = 90 px.
+        // ΔL = u(95) − u(5) = (0.04 + 0.2 + 0.035) − 0.005 = 0.27 px → 3 mε.
+        assertEquals(3f, axialStrain(axisX = true, unloaded, necked)!!, 1e-3f)
     }
 
     @Test
@@ -102,7 +139,7 @@ class StressStrainTest {
         assertTrue(model.isComplete)
         assertEquals(150f, model.stressMPa(200f), 1e-3f)
         assertEquals(-150f, model.stressMPa(-200f), 1e-3f)
-        assertEquals(2f, model.strainMilli(field(exx = 0.002f, eyy = -0.0006f))!!, 1e-3f)
+        assertEquals(2f, model.strainMilli(field(exx = 0.002f, eyy = -0.0006f), gauge = null)!!, 1e-3f)
         assertEquals(listOf(80f, 10f, 4f), model.dimensions.map { it.second })
     }
 
