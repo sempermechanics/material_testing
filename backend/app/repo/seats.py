@@ -75,12 +75,14 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str, lock: 
 
     Clearing the lock is only one of the three bindings a device change moves:
 
-    - **Mode.** A device change is usually preceded by the holder trying the
-      new device: `revalidate_device_lock` finds the mismatch and demotes the
-      account in place, writing `mode: demo` onto the user document. It returns
-      early for an account that reads as demo, so it would never reach the bind
-      branch and the holder would sit on Demo holding a live licence. The mode
-      is re-stamped here. Nothing is resurrected: `effective_mode` still
+    - **Mode.** Until 2026-09-28 a device change was usually preceded by the
+      holder trying the new device, and `revalidate_device_lock` stored that
+      mismatch as `mode: demo` on the user document. It now serves Demo to the
+      mismatching device's requests only, but accounts demoted before then
+      still carry it, and `revalidate_device_lock` returns early for an
+      account that reads as demo, so it would never reach the bind branch and
+      the holder would sit on Demo holding a live licence. The mode is
+      re-stamped here. Nothing is resurrected: `effective_mode` still
       re-applies expiry, grace and the floating-lease check, so a licence that
       has run out stays demo either way.
     - **Registered device.** `POST /v1/devices/register` refuses any device but

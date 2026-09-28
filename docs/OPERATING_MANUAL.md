@@ -1036,9 +1036,9 @@ device before 2026-09-27 reads Demo on the phone it is registered on. One
 **New device** gives the licence back to that phone and does not sign it out
 (the clear's detail names no released device). If they really are moving, a
 second **New device** then releases it. Nothing is re-issued, nothing is typed, and nothing is revoked
-— entitlement, seat, lease and every stored analysis stay as they are. A
-holder who was demoted to Demo by trying the new phone first gets their mode
-back as part of the clear.
+— entitlement, seat, lease and every stored analysis stay as they are. Trying
+the new phone first no longer demotes the account; a holder demoted that way
+before 2026-09-28 gets their mode back as part of the clear.
 
 The old phone is then refused for 24 hours (`DEVICE_RELEASE_HOLD_HOURS`): it shows
 "bound to a different device" and cannot take the account back before the new

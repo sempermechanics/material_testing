@@ -1250,10 +1250,15 @@ Every authed request that carries `X-Device-Id` re-validates the license/seat
 device lock, not just the one that activated it —
 `deps.current_user`/`deps.verified_device` both call
 `firestore_repo.revalidate_device_lock` on every such request. If the key was
-revoked, the seat was disabled/revoked, or the device no longer matches the
-lock, the account drops to Demo **immediately**, fails closed, and — same
-guarantee as activation — never touches stored sessions/files. See
+revoked or the seat was disabled/revoked, the account drops to Demo
+**immediately** and stored, fails closed, and — same guarantee as activation —
+never touches stored sessions/files. See
 `test_device_lock_is_revalidated_on_every_authed_call_not_just_at_activation`.
+A device that does not match the lock is served Demo for its own requests
+only; nothing is written, and the device holding the lock stays licensed.
+Storing the mismatch (until 2026-09-28) let any other device, including a
+second app on the licensed phone, demote the account for good
+([ADR-010](../adr/ADR-010-device-binding-per-app.md)).
 
 ### 20.3 Revoke semantics differ by scope
 
@@ -2101,9 +2106,11 @@ would still name the old phone; **New device** moves both.
 
 #### The half that is easy to miss
 
-A device change is normally *preceded* by the holder trying the new phone. That
-request hits `revalidate_device_lock`, finds a mismatch, and demotes the
-account in place — `mode: demo` written onto the user document. Clearing the
+A device change is normally *preceded* by the holder trying the new phone. Until
+2026-09-28 that request hit `revalidate_device_lock`, found a mismatch, and
+demoted the account in place — `mode: demo` written onto the user document.
+It now serves the new phone Demo without writing, but accounts demoted before
+then still carry it. Clearing the
 lock afterwards would not undo that on its own: `revalidate_device_lock`
 returns early for an account that reads as demo, so it would never reach the
 bind branch and the holder would sit on Demo holding a live licence, with no
