@@ -110,7 +110,8 @@ class BenchmarkSeedActivity : Activity() {
             for (c in 0 until COLS) {
                 floats[p + DicResult.IDX_X] = (c * STEP).toFloat()
                 floats[p + DicResult.IDX_Y] = (r * STEP).toFloat()
-                floats[p + DicResult.IDX_U] = (k - COLS * ROWS / 2) * 0.031f + seed
+                // The last term stretches x by exxOffset, which the tensile curve's ΔL / L₀ reads.
+                floats[p + DicResult.IDX_U] = (k - COLS * ROWS / 2) * 0.031f + seed + exxOffset * c * STEP
                 floats[p + DicResult.IDX_V] = (COLS * ROWS / 2 - k) * 0.017f
                 floats[p + DicResult.IDX_EXX] = (k % 9 - 4) * 0.00042f + exxOffset
                 floats[p + DicResult.IDX_EYY] = (k % 6 - 3) * 0.00071f

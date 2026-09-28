@@ -34,6 +34,17 @@ class AnalysisCsvPreambleTest {
         return data
     }
 
+    /** [translatedGrid] with u growing by [exx] per px of x: an even stretch along x. */
+    private fun stretchedGrid(exx: Float): FloatArray {
+        val data = translatedGrid(exx = exx)
+        var i = 0
+        while (i < data.size) {
+            data[i + DicResult.IDX_U] += exx * data[i + DicResult.IDX_X]
+            i += DicResult.STRIDE
+        }
+        return data
+    }
+
     @Test
     fun `import csv opens with metadata field stats and base point header`() {
         val out = File.createTempFile("semper_csv", ".csv")
@@ -200,9 +211,10 @@ class AnalysisCsvPreambleTest {
     private fun tensileFile(sweep: Boolean, testType: String): String {
         val out = File.createTempFile("semper_csv_results", ".csv")
         out.deleteOnExit()
-        // E = 200 GPa: stress 100 MPa per 0.5 mε.
+        // E = 200 GPa: stress 100 MPa per 0.5 mε, stretched along x so the
+        // extensometer's ΔL / L₀ reads it too.
         val frames = (1..4).map { k ->
-            val data = translatedGrid(exx = 0.0005f * k)
+            val data = stretchedGrid(exx = 0.0005f * k)
             AnalysisCsvWriter.Frame(
                 image = "frame_$k.jpg",
                 subset = 41,

@@ -9,9 +9,10 @@ import kotlin.math.abs
  * Stress–strain from a machine load per frame and the DIC field. Which
  * stress a load becomes, and which strain component pairs with it, is the
  * test's [Model]: load over cross-section for tensile, three-point flexural
- * stress for bending. Strain is always the mean over the frame's accepted
- * points, in millistrain. Pure — the viewer, the CSV and the PDF all read one
- * [Curve].
+ * stress for bending. Tensile strain is the virtual extensometer's ΔL / L₀
+ * ([Extensometer], ADR-012); bending's is the mean over the frame's accepted
+ * points. Both in millistrain. Pure — the viewer, the CSV and the PDF all
+ * read one [Curve].
  *
  * Loads keep the sign they were logged with, so a test logged negative plots
  * in the third quadrant. Nothing here takes an absolute value.
@@ -44,7 +45,15 @@ object StressStrain {
     ) {
         abstract val isComplete: Boolean
         abstract fun stressMPa(loadN: Float): Float
-        abstract fun strainMilli(data: FloatArray): Float?
+
+        /**
+         * The frame's strain in millistrain, or null when it has none. [gauge]
+         * is the curve's [Extensometer] gauge; only [Axial] reads it.
+         */
+        abstract fun strainMilli(data: FloatArray, gauge: Extensometer.Gauge?): Float?
+
+        /** Report wording for where the strain is read, after [strainName]. */
+        open val strainBasis: String get() = "over accepted points"
 
         /** The dimensions this model was built from, entered or not, in display order. */
         abstract val dimensions: List<Pair<Dimension, Float>>
@@ -64,16 +73,24 @@ object StressStrain {
         /** Deflection at the load point in mm, or null when this model reads none. */
         open fun deflectionMm(data: FloatArray): Float? = null
 
-        /** Tensile: σ = P / A, strain along the load axis. */
+        /**
+         * Tensile: σ = P / A, and engineering strain ΔL / L₀ along the load
+         * axis from the virtual extensometer, as a clip-on extensometer reads
+         * it (ADR-012). No gauge, or a band with no point, is no strain.
+         */
         data class Axial(val areaMm2: Float, val axisX: Boolean) :
             Model(
                 wireName = "axial",
                 stressName = "Engineering stress",
-                strainName = axisStrainName(axisX),
+                strainName = "ΔL/L₀ along ${if (axisX) "x" else "y"}",
             ) {
             override val isComplete: Boolean get() = areaMm2 > 0f
             override fun stressMPa(loadN: Float): Float = if (isComplete) loadN / areaMm2 else Float.NaN
-            override fun strainMilli(data: FloatArray): Float? = axisStrainMilli(data, axisX)
+            override fun strainMilli(data: FloatArray, gauge: Extensometer.Gauge?): Float? {
+                val extension = gauge?.extensionPx(data) ?: return null
+                return extension / gauge.lengthPx * DicResult.STRAIN_TO_MILLISTRAIN
+            }
+            override val strainBasis: String get() = "between the end bands of the analysed region"
             override val dimensions get() = listOf(Dimension.CROSS_SECTION to areaMm2)
         }
 
@@ -96,7 +113,8 @@ object StressStrain {
             override val isComplete: Boolean get() = spanMm > 0f && widthMm > 0f && thicknessMm > 0f
             override fun stressMPa(loadN: Float): Float =
                 if (isComplete) THREE * loadN * spanMm / (2f * widthMm * thicknessMm * thicknessMm) else Float.NaN
-            override fun strainMilli(data: FloatArray): Float? = axisStrainMilli(data, axisX)
+            override fun strainMilli(data: FloatArray, gauge: Extensometer.Gauge?): Float? =
+                axisStrainMilli(data, axisX)
             override val dimensions get() = listOf(
                 Dimension.SPAN to spanMm,
                 Dimension.WIDTH to widthMm,
@@ -182,11 +200,32 @@ object StressStrain {
     }
 
     /**
+     * Collects a curve's points one frame at a time, in frame order, for
+     * [build] and the streaming CSV writer alike. A tensile curve fixes its
+     * [Extensometer] gauge on the first frame that can set one, and a frame
+     * with no strain is left off.
+     */
+    class Collector(private val model: Model) {
+        private val points = ArrayList<Point>()
+        private var gauge: Extensometer.Gauge? = null
+
+        fun add(frame: Int, loadN: Float, data: FloatArray) {
+            if (gauge == null && model is Model.Axial) gauge = Extensometer.gauge(data, model.axisX)
+            val strain = model.strainMilli(data, gauge) ?: return
+            val extension = if (model is Model.Axial) gauge?.extensionPx(data) else null
+            points += Point(frame, loadN, model.stressMPa(loadN), strain, model.deflectionMm(data), extension)
+        }
+
+        val isEmpty: Boolean get() = points.isEmpty()
+
+        /** The curve so far; a bending curve's δ is signed by its loads ([BeamDeflection.alongLoad]). */
+        fun curve(frameCount: Int): Curve = Curve(model, frameCount, BeamDeflection.alongLoad(points), gauge)
+    }
+
+    /**
      * Builds the curve by asking [frameData] for each frame in turn; a null
-     * field or one with no accepted point is skipped. [onProgress] gets the
-     * 1-based count of frames visited. A tensile curve fixes its
-     * [Extensometer] gauge on the first solved frame; a bending curve's δ is
-     * signed by its loads ([BeamDeflection.alongLoad]).
+     * field or one with no strain is skipped. [onProgress] gets the 1-based
+     * count of frames visited.
      */
     fun build(
         loadsN: List<Float>,
@@ -194,21 +233,15 @@ object StressStrain {
         frameData: (Int) -> FloatArray?,
         onProgress: (Int) -> Unit = {},
     ): Curve {
-        val points = ArrayList<Point>(loadsN.size)
-        var gauge: Extensometer.Gauge? = null
+        val collector = Collector(model)
         loadsN.forEachIndexed { index, loadN ->
             // NaN: the time match found no log row for this frame, so it has
             // no load and no point on the curve.
             val data = if (loadN.isFinite()) frameData(index) else null
-            val strain = data?.let { model.strainMilli(it) }
-            if (strain != null) {
-                if (gauge == null && model is Model.Axial) gauge = Extensometer.gauge(data, model.axisX)
-                val extension = gauge?.extensionPx(data)
-                points += Point(index, loadN, model.stressMPa(loadN), strain, model.deflectionMm(data), extension)
-            }
+            if (data != null) collector.add(index, loadN, data)
             onProgress(index + 1)
         }
-        return Curve(model, loadsN.size, BeamDeflection.alongLoad(points), gauge)
+        return collector.curve(loadsN.size)
     }
 
     private fun axisStrainMilli(data: FloatArray, axisX: Boolean): Float? =

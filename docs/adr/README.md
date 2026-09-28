@@ -18,6 +18,7 @@ record that replaced it.
 | [009](ADR-009-material-testing-app-identity.md) | Material Testing is its own Android app on Semper's backend | Accepted, built (App Check owed) | TD-133 |
 | [010](ADR-010-device-binding-per-app.md) | Device binding per app: one phone per app, not per account | Accepted, built | TD-137, TD-138 |
 | [011](ADR-011-viewer-deformed-frame.md) | The viewer draws each frame on its own photo, at the displaced positions | Accepted, built | TD-139 |
+| [012](ADR-012-tensile-strain-virtual-extensometer.md) | Tensile strain is the virtual extensometer's ΔL / L₀ | Accepted, built (validation re-run owed) | TD-142 |
 
-Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md). ADR-008, ADR-009 and
-ADR-011 are material_testing's; the numbers are shared so they do not collide.
+Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md). ADR-008, ADR-009,
+ADR-011 and ADR-012 are material_testing's; the numbers are shared so they do not collide.

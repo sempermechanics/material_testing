@@ -54,7 +54,8 @@ object LabReportText {
         const val DIAMETER = "Diameter of specimen (mm)"
         const val AREA = "Cross-sectional area A (mm²)"
         const val STRAIN_BY = "Strain measured by"
-        fun strainBy(strainName: String) = "2D DIC, $strainName over the analysed region"
+        fun strainBy(strainName: String) =
+            "2D DIC virtual extensometer, $strainName between the ends of the analysed region"
         fun dicGauge(axis: String) = "DIC gauge length along $axis (px)"
         fun dicGaugeValue(lengthPx: String) = "$lengthPx — between the ends of the analysed region"
         const val FINAL_DIAMETER = "Final diameter (mm)"

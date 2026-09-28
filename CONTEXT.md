@@ -134,8 +134,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
-  ADR and TD numbers are shared: ADR-008, 009 and 011 and TD-133–135, TD-139 and TD-140 are ours.
-- **Lab outputs, all merged (#1–#21).** Tensile: stress–strain, E from the
+  ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135 and TD-139–142 are ours.
+- **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
+  extensometer's ΔL / L₀ since ADR-012; steel re-validation owed, TD-142), E from the
   longest straight leading run, the elastic-region view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video; bending's are
