@@ -126,7 +126,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-26)
+## Current state (2026-09-28)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
@@ -165,7 +165,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     analysis there needs a licensed key or deletes first.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
-  - The parent owns deploys and releases; see its CONTEXT.md for production state.
+  - **Own app (ADR-009, TD-133).** Installs as `com.indicvision.semper.materialtesting`
+    beside Semper, on Semper's Firebase project and backend. Owed before the first
+    release: the Firebase Android app and its `google-services.json`, the release key
+    and signing secrets, `INDIC_API_BASE_URL`, and the SHA-256 in `assetlinks.json`
+    (deployed from the parent). A `sync/` merge keeps this repo's `applicationId`
+    and `google-services.json`.
+  - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
