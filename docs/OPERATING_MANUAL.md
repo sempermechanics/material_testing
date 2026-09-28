@@ -1031,6 +1031,15 @@ Clearing the lock **is** the change: it releases the account's old phone, and
 the licence binds to the phone that registers next. Only the account's
 registered phone can take the lock, so a phone refused at sign-in cannot.
 
+**Semper and Material Testing each hold their own phone** (ADR-010). One
+person can use both apps on one phone, or each on a different phone, on one
+licence. Staff and IT **New device**, and the staff phone release below,
+move both apps at once. The holder moves one app at a time: **Use Semper on
+a different device** or **Use Material Testing on a different device** on
+`/account`, or the same from inside that app, each with its own 30-day
+cooldown. Seats and the operator's user list show a Material Testing device
+as "Material Testing …" beside Semper's.
+
 **Demo on the phone they use.** An account whose lock was taken by another
 device before 2026-09-27 reads Demo on the phone it is registered on. One
 **New device** gives the licence back to that phone and does not sign it out
