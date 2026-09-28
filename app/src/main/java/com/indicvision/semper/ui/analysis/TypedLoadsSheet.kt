@@ -7,6 +7,7 @@ import android.text.method.DigitsKeyListener
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -262,7 +263,7 @@ internal object TypedLoadsSheet {
                 val holder = list.findViewHolderForAdapterPosition(row) as? Holder ?: return@post
                 holder.box.requestFocus()
                 holder.box.setSelection(holder.box.text.length)
-                keyboard?.showSoftInput(holder.box, 0)
+                showKeyboard(holder.box)
             }
         }
 
@@ -354,6 +355,28 @@ internal object TypedLoadsSheet {
                 }
             }
         }
+    }
+
+    /**
+     * Opens the keyboard on [box], now or once its window has focus again. Right
+     * after the entry dropdown closes, its popup still holds window focus, and the
+     * keyboard ignores a request from a window without it (TD-141).
+     */
+    private fun showKeyboard(box: EditText) {
+        val keyboard = box.context.getSystemService(InputMethodManager::class.java) ?: return
+        if (box.hasWindowFocus()) {
+            keyboard.showSoftInput(box, 0)
+            return
+        }
+        box.viewTreeObserver.addOnWindowFocusChangeListener(
+            object : ViewTreeObserver.OnWindowFocusChangeListener {
+                override fun onWindowFocusChanged(hasFocus: Boolean) {
+                    if (!hasFocus) return
+                    box.viewTreeObserver.removeOnWindowFocusChangeListener(this)
+                    if (box.isFocused) keyboard.showSoftInput(box, 0)
+                }
+            },
+        )
     }
 
     /** A small bitmap of the frame; null for a file that is gone or not an image. */
