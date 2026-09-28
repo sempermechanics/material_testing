@@ -111,6 +111,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   #255, #261, #264), pinned serving/rollback images (#263), the staff phone release for
   Demo accounts (#266), compat shims 1–5 retired (#267, TD-45) and the account page's kept
   load error (#271, TD-136) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
+- **Open: device binding per app** ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md), 2026-09-28).
+  #279 stops a device-lock mismatch demoting the whole account (TD-137); #280, stacked on
+  it, binds one phone per app via `X-App-Id` so Material Testing signs in beside Semper
+  (TD-138). Merge in that order, deploy the backend, then merge this `main` into
+  material_testing so its builds send the header.
 - **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
   burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
 - **Merged, awaiting release:** #189, four fixes ported from material_testing
