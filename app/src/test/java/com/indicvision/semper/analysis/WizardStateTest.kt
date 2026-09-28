@@ -6,9 +6,11 @@ import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.BeamEdgeTaps
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.LoadCsvParse
+import com.indicvision.semper.data.LoadMapping
 import com.indicvision.semper.data.MachineLoadCsv
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
+import com.indicvision.semper.data.TypedLoads
 import com.indicvision.semper.data.WizardDraft
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.AnalysisViewModel.DraftRestore
@@ -17,6 +19,7 @@ import com.indicvision.semper.ui.analysis.FrameOrderDirection
 import com.indicvision.semper.ui.analysis.FrameOrderMode
 import com.indicvision.semper.ui.analysis.WizardState
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -65,6 +68,7 @@ class WizardStateTest {
         realRefWidth = 400
         realRefHeight = 300
         refName = "ref.png"
+        refCaptureTimeMs = 1_790_433_000_000L
         hasCustomRoi = true
         roiX = 10
         roiY = 20
@@ -74,6 +78,7 @@ class WizardStateTest {
         defFilePaths = paths
         defOriginalNames = listOf("IMG_1.png", "IMG_2.png")
         defFrameDates = listOf(100L, Long.MAX_VALUE)
+        defCaptureTimesMs = listOf(1_790_433_001_250L, null)
         defFrameSizes = mapOf(paths[0] to (400 to 300))
         defOrderMode = FrameOrderMode.DATE
         defOrderDirection = FrameOrderDirection.DESCENDING
@@ -114,6 +119,7 @@ class WizardStateTest {
         assertTrue(after.hasCustomRoi)
         assertEquals(400, after.realRefWidth)
         assertEquals("ref.png", after.refName)
+        assertEquals(1_790_433_000_000L, after.refCaptureTimeMs)
         assertEquals(FrameOrderMode.DATE, after.defOrderMode)
         assertEquals(FrameOrderDirection.DESCENDING, after.defOrderDirection)
         assertTrue(after.sweepMode && after.settingsReviewed && after.subsetUserModified)
@@ -145,6 +151,7 @@ class WizardStateTest {
         assertEquals(before.defFilePaths, after.defFilePaths)
         assertEquals(before.defOriginalNames, after.defOriginalNames)
         assertEquals(before.defFrameDates, after.defFrameDates)
+        assertEquals(before.defCaptureTimesMs, after.defCaptureTimesMs)
         assertEquals(before.defFrameSizes, after.defFrameSizes)
         assertEquals(3, after.wizardStep)
         // Once only.
@@ -164,6 +171,8 @@ class WizardStateTest {
         assertTrue(after.defFilePaths.isEmpty())
         assertEquals(0, after.realRefWidth)
         assertEquals(AnalysisViewModel.NO_REFERENCE_NAME, after.refName)
+        assertNull(after.refCaptureTimeMs)
+        assertTrue(after.defCaptureTimesMs.isEmpty())
         assertNull(after.workingLocalId)
         // The sweep ranges are choices, not inputs; they stay.
         assertEquals(21, after.subsetMin)
@@ -185,6 +194,7 @@ class WizardStateTest {
             defFrameTimesMs = listOf(500L, 1_000L)
             setLoadLog((MachineLoadCsv.parse(LOAD_LOG) as LoadCsvParse.Ok).csv, "run1.csv", LOAD_LOG)
             loadLogStartS = 0.5f
+            typedLoadsEntry = TypedLoads.Entry.INCREMENTAL
         }
         draft.writeLoadLog(LOAD_LOG)
         val after = afterProcessDeath(before)
@@ -195,11 +205,35 @@ class WizardStateTest {
         assertEquals(geometry, after.geometry)
         assertEquals("run1.csv", after.loadCsvName)
         assertEquals(0.5f, after.loadLogStartS, 0f)
+        assertEquals(TypedLoads.Entry.INCREMENTAL, after.typedLoadsEntry)
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(listOf(500L, 1_000L), after.defFrameTimesMs)
         assertEquals(before.parsedLoadCsv, after.parsedLoadCsv)
         assertEquals(2, after.machineLoads?.matchedFrames)
+    }
+
+    @Test
+    fun `typed hanger loads survive a process death`() {
+        val before = editedWizard().apply {
+            testType = TestType.BENDING
+            typedLoadsKg = listOf(0.5f, null)
+        }
+        val after = afterProcessDeath(before)
+
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(listOf(0.5f, null), after.typedLoadsKg)
+        assertEquals(LoadMapping.TYPED_KG, after.machineLoads?.mapping)
+        assertEquals(1, after.machineLoads?.matchedFrames)
+    }
+
+    @Test
+    fun `a frame list saved before typed loads existed still restores`() {
+        val old = """{"paths":["a.png"],"names":["A.png"],"dates":[1],"widths":[4],"heights":[3]}"""
+        val frames = Json { ignoreUnknownKeys = true }.decodeFromString(WizardState.Frames.serializer(), old)
+
+        assertTrue(frames.typedLoadsKg.isEmpty())
+        assertEquals(listOf("a.png"), frames.paths)
     }
 
     @Test

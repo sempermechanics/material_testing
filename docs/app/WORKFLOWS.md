@@ -371,15 +371,17 @@ Lattice, Session limit, or back to Home.
 
 #### 5.1b Machine load card
 
-Below the deformed frames, on every test. The log and its chips are the same
+Below the deformed frames, on tensile and bending. The log and its chips are the same
 throughout; the dimension rows under it follow the test — cross-section for
-tensile, **Support span** / **Width** / **Thickness** for bending.
+tensile, **Support span** / **Width** / **Thickness** for bending. Bending also
+offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
+(5.1b.32–38); the CSV is then optional.
 
 | # | Action | Expected |
 |---|---|---|
 | [ ] 5.1b.1 | Start a **Tensile** analysis | A **Machine load** card with an **Import load log** dropzone, a **Cross-section** field (mm²) and an X / Y **Strain axis** toggle |
-| [ ] 5.1b.2 | Start a **Bending** analysis | Same card, with **Support span**, **Width** and **Thickness** (mm) in place of the cross-section |
-| [ ] 5.1b.3 | Load reference + frames, no log | **Next** is disabled with "import the machine load log to continue" |
+| [ ] 5.1b.2 | Start a **Bending** analysis | Same card, with a **Type loads (kg)** button above the dropzone (disabled, "Add the deformed photos first", until frames are in), the dropzone hint "Optional: a CSV with the load in newtons", and **Support span**, **Width** and **Thickness** (mm) in place of the cross-section |
+| [ ] 5.1b.3 | Load reference + frames, no log | **Next** is disabled with "import the machine load log to continue" (bending: "type the hanger load of each photo (kg) to continue") |
 | [ ] 5.1b.4 | Import a comma CSV with a `Load (N)` header and one row per frame | Card shows the filename, "N rows · N · one row per frame", no chip; **Next** now says "enter the specimen cross-section to continue" |
 | [ ] 5.1b.5 | Type a cross-section | **Next** enables |
 | [ ] 5.1b.6 | Import a semicolon CSV with decimal commas and a `kN` header | Rows read; unit shows **kN**; loads stored in N |
@@ -401,11 +403,56 @@ tensile, **Support span** / **Width** / **Thickness** for bending.
 | [ ] 5.1b.21 | Bending, log and dimensions in, no taps | **Next** disabled with "set the beam height on the reference photo to continue"; **Set** opens the tap editor (§6a) |
 | [ ] 5.1b.22 | Save taps in the editor | The row reads "N px across · 0.0xxx mm/px"; **Next** enables |
 | [ ] 5.1b.23 | Change the reference image | The taps clear; **Next** is disabled again until re-marked |
-| [ ] 5.1b.24 | Video + a timed log that starts after the recording (e.g. `scripts/synthetic_beam_video.py`, 2 s late) | Chip "matched by time" and a **Log started after the first frame** row (s). Typing 2 re-matches: the first loaded frame is the one filmed after the first weight went on |
+| [ ] 5.1b.24 | Video + a timed log that starts after the recording (e.g. `scripts/synthetic_beam_video.py`, 2 s late) | Chip "matched by time" and a **Log started after the reference** row (s). Typing 2 re-matches: the first loaded frame is the one filmed after the first weight went on |
 | [ ] 5.1b.25 | Video + a timed log with exactly one row per frame | Still **matched by time**, not paired in order; the offset row shows |
 | [ ] 5.1b.26 | Video + a timed log whose rows are sparser than the frames (e.g. every 2 s at 1 fps) | Chip "N of M frames have no log row within 100 ms"; those frames are missing from Results, the table and the CSV load column |
-| [ ] 5.1b.27 | Set **Log started after the first frame** far off (e.g. 60 s on a 29 s clip) | No frame matches: **Next** disabled with "no frame is within 100 ms of a log row" until the gap is corrected |
-| [ ] 5.1b.28 | Photos + a timed log with one row per photo | Paired in order (photos carry no times) |
+| [ ] 5.1b.27 | Set **Log started after the reference** far off (e.g. 60 s on a 29 s clip) | No frame matches: **Next** disabled with "no frame is within 100 ms of a log row" until the gap is corrected |
+| [ ] 5.1b.28 | Photos without EXIF capture times (screenshots, or sent through a messenger) + a timed log with one row per photo | Paired in order |
+| [ ] 5.1b.29 | Phone photos (reference too) + the machine's timed log | Chip "matched by time" and the **Log started after the reference** row; each photo takes the row logged within 100 ms of when it was taken, counting from the reference photo |
+| [ ] 5.1b.30 | Same, then re-sort the frames (Name ↓, or drag) | The loads move with their photos: Results show the same load against the same image |
+| [ ] 5.1b.31 | Same photos, but a reference picked from a screenshot (no EXIF time) | Back to paired in order / resampled; no offset row |
+| [ ] 5.1b.32 | Bending, reference + 4 photos, tap **Type loads (kg)** | A full-height **Hanger load per photo** sheet: "Reference photo: no weights, 0 kg", then one row per photo (thumbnail, "Photo n", its file name, a kg box). The decimal keypad opens on the first box; the list ends just above the keyboard (no blank gap under the last row), and a swipe scrolls it rather than closing the sheet |
+| [ ] 5.1b.33 | Type 0.5, **Next**, 1, **Next**, 1,5 (the keypad's comma), **Next**, leave the last empty, tap **Done** | The comma stays in the box (reopened, it reads 1.5; never 15). The sheet stays open, the cursor on the empty box: "Type the mass in kg: 0 if there is no weight". Type 0, **Done**: the card reads "Typed loads · 4 of 4 photos · kg × 9.80665 = N · tap to edit"; no dropzone |
+| [ ] 5.1b.33a | Reopen, clear one box, press back | Kept, but the card warns "1 photo has no load yet" and **Next** is disabled with "1 photo has no load: type it (0 if no weight) to continue" |
+| [ ] 5.1b.34 | Reopen by tapping the summary; type `1.2.3` in a box; **Done** | The box shows "Enter the mass in kg, e.g. 0.5" and the sheet stays open. Fix it or press back: back keeps every valid box and the bad box's old value |
+| [ ] 5.1b.35 | Compute; open Results and the lab report | Loads 4.90, 9.81, 14.71, 0 N on the Results graph. The lab report's table lists the loaded steps only (4.90, 9.81, 14.71 N): unloaded frames are left out of it by design. Scrubbing the graph shows the point as "(δ mm, W N)" beside the dot, clear of the scrub line; near the right edge it flips to the line's left |
+| [ ] 5.1b.36 | Re-sort the frames (Name ↓, or drag) after typing | Each mass stays with its photo: reopen the sheet and check |
+| [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.indicvision.semper.materialtesting` while backgrounded), return | The typed loads come back |
+| [ ] 5.1b.38 | Tap ✕ on the typed loads; import a CSV; tap ✕ on it | ✕ clears the typed loads and brings back the button and dropzone; with the CSV in, the typing sheet is never offered (no button, the summary does not open it); its ✕ brings the button back. Tensile never shows the button |
+| [ ] 5.1b.39 | With 0.5, 1, 1.5, 0 typed, pick **Incremental (added per photo)** under **Loads typed as** | The boxes become 0.5, 0.5, 0.5, -1.5, each with "Total n kg" under it (0.5, 1, 1.5, 0); the keypad now has a minus key and the subtitle explains increments. Change the last to -2, **Done**: refused, "This takes the hanger below 0 kg". Back to **Absolute**: the totals return unchanged; 1,5 typed with the keypad comma still reads 1.5. **Done** in Incremental, reopen: still Incremental; the loads are the same 4.90, 9.81, 14.71, 0 N |
+
+**5.1b.32–38 on the Pixel 6 (`f4209a7f`, 2026-09-28)** pass on an offline lab
+build with `semper_test_data/2_bending_pmma_real` (pmma_00 as the reference,
+pmma_01–04 as the photos). The keypad's comma stays ("1,5" reopens as 1.5), and
+the sheet leaves no gap above the keyboard. Results show 4.90, 9.81, 14.71 and
+0 N on all 4 of 4 frames. Mid-curve the scrub label reads "(0.035 mm, 11.2 N)";
+at the right edge it flips to the left of the line. After Name ↓ and after
+`am kill` each mass stays with its photo. For tensile (`1_tensile_steel_real`,
+3 frames) the card offers only **Import load log**.
+
+The 5.1b.35 lab report was checked on an API 36 emulator instead (`91640d47`,
+debug build, so sign-in is bypassed and Share is on), with the same photos,
+loads, dimensions and ROI. Its table lists 4.90, 9.81 and 14.71 N, with
+σb 0.048, 0.096 and 0.144 MPa. The 0 kg photo is not a row, because
+`BeamDeflection.loadSteps` drops unloaded frames. The graph page shows
+slope 148.20 N/mm and E ≈ 0.04 GPa, the same as the viewer.
+
+**5.1b.39 on the Pixel 6 (`7f32583a`, 2026-09-29)** passes on a debug build of
+#93 with the same PMMA photos (pmma_00 as the reference, pmma_01–04 as the
+photos). In **Absolute**, Photo 3 was retyped as "1,5" with the keypad's comma.
+Switching to **Incremental** turned 0.5, 1, 1,5, 0 into 0.5, 0.5, 0.5, -1.5, with
+"Total 0.5 kg", "Total 1 kg", "Total 1.5 kg" and "Total 0 kg" under them, and
+the subtitle changed to increments. The keypad had a minus key and kept the
+comma. With the last box at -2, **Done** stayed open on "This takes the hanger
+below 0 kg". Set back to -1.5, **Absolute** read 0.5, 1, 1.5, 0 again. After
+**Done** in Incremental, reopening from the card showed Incremental; so did the
+sheet after the app restarted overnight. Computed with L 75, b 12, t 31 mm,
+edge taps at 39 and 612 px (573 px, 0.0541 mm/px) and ROI 2180 × 520 at
+(100, 60): Results show 4 of 4 photos (slope 148.96 N/mm), and the session
+stores 4.903, 9.807, 14.710 and 0 N (`loadsN`, read with `run-as`, since the
+scrub label reads the line under the finger, not the dot). One gap: after a
+switch the cursor goes to the first box, but the keyboard stays down until a
+box is tapped (TD-141).
 
 #### 5.1a Video source
 
@@ -605,6 +652,11 @@ ROI and mask, or with full-image defaults on cancel.
 | [ ] 6.18 | Tap **Cancel** | Returns with the ROI reset to full image |
 | [ ] 6.19 | Rotate the device mid-edit | The ROI, holes and both toggles survive |
 | [ ] 6.20 | Save an ROI with holes, then run | The masked regions are absent from the result heatmap |
+| [ ] 6.21 | Pinch the photo with an ROI drawn | Zooms about the fingers (up to 10×); the ROI stays on the same specimen pixels and the HUD shows the zoom |
+| [ ] 6.22 | Move two fingers together while zoomed | Pans; the photo never leaves the screen |
+| [ ] 6.23 | Double-tap, then double-tap again | 2× about the tap, then back to fit; the ROI is untouched |
+| [ ] 6.24 | Zoomed in, draw or resize with one finger, then Save | Edges land finer than at fit; X / Y / W / H match what was drawn |
+| [ ] 6.25 | Tap once outside the ROI, or start a pinch with one finger outside it | The ROI and holes stay; only a kept drag replaces them |
 
 ---
 
@@ -709,7 +761,9 @@ node. **Exit:** Home, or back to the Lattice.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.1.1 | Open a result | The U field is shown as a jet heatmap over the reference |
+| [ ] 8.1.1 | Open a result | The U field is shown as a jet heatmap over that frame's own photo, drawn where the points moved to |
+| [ ] 8.1.1a | Step through the frames of a tensile or bending run | The photo under the map changes with each frame (the bar stretches, the beam bends) and the map stays on the specimen. A sweep shows its one deformed photo under every node |
+| [ ] 8.1.1b | Open a session whose deformed photos are not on the phone | Each frame falls back to the reference photo, with the map at the reference positions, still lined up |
 | [ ] 8.1.2 | Tap the field FAB, then pick V / Exx / Eyy / Exy | Heatmap and colour scale follow; edge title updates; the live field stays checked in the popup |
 | [ ] 8.1.2a | Open the field popup | All five fields are listed; the one on screen is highlighted |
 | [ ] 8.1.2b | Check fit at rest | Heatmap (ROI or accepted points) is contained between the top bar and scrub bar; the colour scale may overlay the right edge and stays put while the figure pans |
@@ -717,7 +771,7 @@ node. **Exit:** Home, or back to the Lattice.
 | [ ] 8.1.3 | Check the scale units | `px` for U and V, `mε` for the strain fields |
 | [ ] 8.1.3b | Compare the scale labels with the ⓘ sheet's max/min | On a frame, scale labels read "≤ x" / "≥ y" and may be narrower than the ⓘ sheet (display clamp vs true extrema). On the summary, the colour bar and ⓘ both quote the lowest scale-min and highest scale-max across frames (those two ends may come from different frames) |
 | [ ] 8.1.4 | Pinch to zoom | Zooms smoothly up to about 10×; panning is clamped to the image |
-| [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the reference — no drift |
+| [ ] 8.1.5 | Zoom in and pan | The heatmap stays registered to the photo under it — no drift |
 | [ ] 8.1.6 | Zoom, then switch field | Zoom and pan are preserved |
 | [ ] 8.1.7 | Tap the colour scale bar | Custom scale dialog, prefilled with the bounds the bar shows (the auto ones until a custom scale is set); **Apply** without edits leaves the scale as it is |
 | [ ] 8.1.8 | Enter min ≥ max and apply | Rejected with a snackbar and a **Why?** that opens the custom-scale FAQ |

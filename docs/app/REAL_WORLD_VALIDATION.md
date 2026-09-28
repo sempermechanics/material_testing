@@ -155,11 +155,11 @@ This writes `steel_00.png` (the reference) through `steel_40.png`, plus
 5. Pull the session's results:
 
 ```bash
-adb shell run-as com.indicvision.semper ls files/sessions
+adb shell run-as com.indicvision.semper.materialtesting ls files/sessions
 ```
 
 Copy each `files/sessions/<session>/frame_NNNN.dat` out with
-`adb exec-out run-as com.indicvision.semper cat …`, then:
+`adb exec-out run-as com.indicvision.semper.materialtesting cat …`, then:
 
 ```bash
 python scripts/real_data_steel_tensile.py compare --data <zenodo folder> --dat <dat folder>

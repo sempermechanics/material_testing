@@ -85,6 +85,44 @@ class VsgPlotView @JvmOverloads constructor(
             return if (text.startsWith('-') && text.all { it == '-' || it == '0' || it == '.' }) text.drop(1) else text
         }
 
+        /**
+         * A value read off the curve under the finger: three significant
+         * figures, finer than a tick, since it is read, not just placed. A
+         * deflection of 0.052 mm must not show as a tick's "0.05".
+         */
+        internal fun readoutValue(value: Float): String {
+            val magnitude = abs(value)
+            val decimals = when {
+                magnitude >= LARGE_VALUE -> 0
+                magnitude >= READOUT_TENS -> 1
+                magnitude >= SMALL_VALUE -> 2
+                else -> 3
+            }
+            val text = String.format(Locale.US, "%.${decimals}f", value)
+            return if (text.startsWith('-') && text.all { it == '-' || it == '0' || it == '.' }) text.drop(1) else text
+        }
+
+        /**
+         * The scrub point as the plot draws it beside its dot: both
+         * coordinates, each with its unit when the plot has one —
+         * "(0.520 mm, 9.81 N)" on a load–deflection curve.
+         */
+        internal fun scrubLabel(x: Float, y: Float, xUnit: String, yUnit: String): String {
+            fun part(value: Float, unit: String) =
+                if (unit.isEmpty()) readoutValue(value) else "${readoutValue(value)} $unit"
+            return "(${part(x, xUnit)}, ${part(y, yUnit)})"
+        }
+
+        /**
+         * Where the scrub label starts: right of the line at [px], [clearance]
+         * clear of the dot, or flipped to its left where it would run past
+         * [right] — never across the line it labels. Held inside [left].
+         */
+        internal fun scrubLabelX(px: Float, width: Float, clearance: Float, left: Float, right: Float): Float {
+            val x = if (px + clearance + width <= right) px + clearance else px - clearance - width
+            return x.coerceAtLeast(left)
+        }
+
         /** The i-th y tick value, 0 at the bottom gridline to [GRID_LINES] at the top. */
         internal fun yTick(yMin: Float, yMax: Float, i: Int): Float = yMin + (yMax - yMin) * i / GRID_LINES
 
@@ -566,7 +604,7 @@ class VsgPlotView @JvmOverloads constructor(
             }
         }
 
-        // The selected curve's y at the scrub line: a dot plus a value label on the plot.
+        // The selected curve's point at the scrub line: a dot plus its (x, y) on the plot.
         scrubX?.let { scrub ->
             val target = series.firstOrNull { !it.muted && it.points.isNotEmpty() }
             val yVal = target?.let { interpolateY(it.points, scrub) }
@@ -575,11 +613,17 @@ class VsgPlotView @JvmOverloads constructor(
                 val py = sy(yVal).coerceIn(top, bottom)
                 valueDotPaint.color = target.color
                 canvas.drawCircle(px, py, dp(MARKER_RADIUS_DP), valueDotPaint)
-                val label = format(yVal)
+                val label = scrubLabel(scrub, yVal, xUnit, yUnit)
                 valuePaint.textAlign = Paint.Align.LEFT
                 canvas.drawText(
                     label,
-                    (px + dp(TICK_GAP_DP)).coerceAtMost(right - valuePaint.measureText(label)),
+                    scrubLabelX(
+                        px,
+                        valuePaint.measureText(label),
+                        dp(MARKER_RADIUS_DP) + dp(TICK_GAP_DP),
+                        left,
+                        right,
+                    ),
                     (py - dp(TICK_GAP_DP)).coerceAtLeast(top + valuePaint.textSize),
                     valuePaint,
                 )
@@ -824,3 +868,4 @@ private const val QUARTER_TURN = 90f
 private const val TITLE_BAND = 1.25f
 private const val LARGE_VALUE = 100f
 private const val SMALL_VALUE = 1f
+private const val READOUT_TENS = 10f

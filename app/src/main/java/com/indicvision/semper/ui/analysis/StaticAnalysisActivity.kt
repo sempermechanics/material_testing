@@ -391,9 +391,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         Insets.padBottom(findViewById(R.id.bottomNav))
 
         // Keyboard: every page holds number fields (step 1 has the load card and
-        // specimen dimensions); pad their scroll viewports by the IME inset so a
-        // focused field scrolls clear of the keyboard instead of hiding behind it.
-        Insets.padImeBottom(scrollStepImages)
+        // specimen dimensions); pad their scroll viewports by the part of the IME
+        // above the nav bar, and scroll the focused field clear of the keyboard.
+        Insets.padImeBottom(findViewById(R.id.scrollStepImages))
         Insets.padImeBottom(findViewById(R.id.scrollStepSettings))
         Insets.padImeBottom(findViewById(R.id.scrollStepSweep))
 
@@ -618,6 +618,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 val loaded = contentResolver.openInputStream(uri)?.use { stream ->
                     loadReferenceFromStream(stream, isRaw)
                 }
+                // A second open: RAW decodes to RGBA, which keeps no EXIF.
+                val captured = runCatching {
+                    contentResolver.openInputStream(uri)?.use { PhotoCaptureTime.read(it) }
+                }.getOrNull()
                 if (loaded == null) {
                     withContext(Dispatchers.Main) {
                         FaqRedirect.snackbar(
@@ -634,6 +638,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     viewModel.realRefHeight = loaded.height
                     viewModel.refName = name
                     viewModel.refBytes = loaded.bytes
+                    viewModel.refCaptureTimeMs = captured
                     viewModel.onReferenceReplaced()
                     loadCard?.refresh()
                     refPreviewBmp = loaded.preview
@@ -770,6 +775,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val namesSnapshot = viewModel.defOriginalNames.toList()
         val datesSnapshot = viewModel.defFrameDates.toList()
         val sizesSnapshot = viewModel.defFrameSizes.toMap()
+        val capturedSnapshot = viewModel.defCaptureTimesMs.toList()
+        val typedSnapshot = viewModel.typedLoadsKg.toList()
         lifecycleScope.launch {
             val dates = withContext(Dispatchers.IO) {
                 if (mode == FrameOrderMode.DATE &&
@@ -791,6 +798,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     sizes = sizesSnapshot,
                     mode = mode,
                     direction = direction,
+                    captureTimes = capturedSnapshot,
+                    typedLoadsKg = typedSnapshot,
                 )
             }
             val (paths, sizes) = withContext(Dispatchers.IO) {
@@ -804,8 +813,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
             viewModel.defOriginalNames = ordered.names
             viewModel.defFrameDates = ordered.dates
             viewModel.defFrameSizes = sizes
+            viewModel.defCaptureTimesMs = ordered.captureTimes
+            viewModel.typedLoadsKg = ordered.typedLoadsKg
             wizardSlots.refreshDefSlot()
             validateFrameSizes()
+            // A time-matched or typed load follows its photo to its new place.
+            loadCard?.refresh()
         }
     }
 
@@ -821,14 +834,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
             sizes = viewModel.defFrameSizes,
             mode = FrameOrderMode.MANUAL,
             manualOrder = order,
+            captureTimes = viewModel.defCaptureTimesMs,
+            typedLoadsKg = viewModel.typedLoadsKg,
         )
         // Keep file names as-is during drag; analysis uses list order, not path sort.
         viewModel.defFilePaths = ordered.paths
         viewModel.defOriginalNames = ordered.names
         viewModel.defFrameDates = ordered.dates
         viewModel.defFrameSizes = ordered.sizes
+        viewModel.defCaptureTimesMs = ordered.captureTimes
+        viewModel.typedLoadsKg = ordered.typedLoadsKg
         viewModel.defOrderMode = FrameOrderMode.MANUAL
         validateFrameSizes()
+        loadCard?.refresh()
     }
 
     // ------------------------------------------------------------------

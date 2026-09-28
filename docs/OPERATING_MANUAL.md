@@ -52,7 +52,7 @@ Formulas, accuracy and worked numbers: [app/STUDENT_LAB_WORKFLOW.md](app/STUDENT
 
 1. **Photos.** Pick the reference (no load), then the loaded photos, or a video.
 2. **Load log.** The machine's CSV with one load per row, in N or kN. With photos, a log that matches the frame count is paired in order.
-   With a video, a timed log is matched by time: a frame takes a row within 100 ms, or has no load.
+   With a video, or photos that carry an EXIF capture time (reference too), a timed log is matched by time: a frame takes a row within 100 ms, or has no load.
 3. **Cross-section** in mm², and the **strain axis** (the pulling direction in the photo).
 4. Set the ROI on the gauge section and tap **Compute** (§5).
 
@@ -73,7 +73,7 @@ The lab report's table adds **Extension (px)**, measured between the two ends of
 
 1. **Video** of the beam's side face at mid-span, filmed from a tripod. Extract at **1 fps**, or take its **Key frames** (§4).
 2. **Timed load log** (`time, load`). Frames are matched to it by time. If the log started later than the video,
-   put the gap in **Log started after the first frame**, in seconds (negative if the log started first).
+   put the gap in **Log started after the reference**, in seconds (negative if the log started first).
    Hanger mass in kg × 9.81 = load in N.
 3. **Span, width and thickness** in mm.
 4. **Beam height → Set.** Double-tap to zoom, then tap the top edge and then the bottom edge right under the load.
@@ -236,6 +236,7 @@ VSG = (strain window − 1) × step + 1     [px]
 | Control | Does |
 |---|---|
 | **Draw** (Rect / Square) | Drag to draw. Drag inside to move, drag a corner to resize |
+| Pinch / two fingers / double-tap | Zoom (up to 10×), pan, and 2× ↔ fit. One finger always draws |
 | **Manual** | Type X, Y, W and H, then tap **Apply** |
 | **Crop / Erase** | Crop sets the area to solve. Erase cuts holes (grips, marks) |
 | **Save ROI** / **Use full image** / **Reset** / **Cancel** | Keep it / whole frame / clear / discard |
@@ -354,7 +355,7 @@ Long exports carry on in the background.
 | **Next** off on step 1 | The line above **Next** says what's missing (frames, load log, area, dimensions, load point) |
 | No E, or E ≤ 0 | Wrong strain axis, or no straight early part. Check the axis and the load units |
 | Bending E far off | Too few pixels across the thickness, taps not on the edges, or the log offset is wrong |
-| Load rows don't match frames | Time match: set **Log started after the first frame**; log at ≥ 10 rows/s so each frame has a row within 100 ms. Photos: one row per frame |
+| Load rows don't match frames | Time match: set **Log started after the reference**; log at ≥ 10 rows/s so each frame has a row within 100 ms. Photos without EXIF capture times: one row per frame |
 | Extension "—" in the report | One end of the region left the view on that frame |
 | Size error | A frame differs in pixel size from the reference |
 | "ROI too small" | The ROI is smaller than the subset |
@@ -715,14 +716,23 @@ Clearing the lock **is** the change: it releases the account's old phone, and
 the licence binds to the phone that registers next. Only the account's
 registered phone can take the lock, so a phone refused at sign-in cannot.
 
+**Semper and Material Testing each hold their own phone** (ADR-010). One
+person can use both apps on one phone, or each on a different phone, on one
+licence. Staff and IT **New device**, and the staff phone release below,
+move both apps at once. The holder moves one app at a time: **Use Semper on
+a different device** or **Use Material Testing on a different device** on
+`/account`, or the same from inside that app, each with its own 30-day
+cooldown. Seats and the operator's user list show a Material Testing device
+as "Material Testing …" beside Semper's.
+
 **Demo on the phone they use.** An account whose lock was taken by another
 device before 2026-09-27 reads Demo on the phone it is registered on. One
 **New device** gives the licence back to that phone and does not sign it out
 (the clear's detail names no released device). If they really are moving, a
 second **New device** then releases it. Nothing is re-issued, nothing is typed, and nothing is revoked
-— entitlement, seat, lease and every stored analysis stay as they are. A
-holder who was demoted to Demo by trying the new phone first gets their mode
-back as part of the clear.
+— entitlement, seat, lease and every stored analysis stay as they are. Trying
+the new phone first no longer demotes the account; a holder demoted that way
+before 2026-09-28 gets their mode back as part of the clear.
 
 The old phone is then refused for 24 hours (`DEVICE_RELEASE_HOLD_HOURS`): it shows
 "bound to a different device" and cannot take the account back before the new

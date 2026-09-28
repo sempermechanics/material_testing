@@ -8,10 +8,11 @@ import com.indicvision.semper.R
 import java.util.Locale
 
 /**
- * The load card's time-offset row, shown only when a video's frames were
- * matched to the load log by time: how many seconds after the reference
- * frame the machine started logging. A student who pressed record before
- * starting the machine enters the gap here instead of trimming the video.
+ * The load card's time-offset row, shown only when the frames (a video's, or
+ * photos with EXIF capture times) were matched to the load log by time: how
+ * many seconds after the reference the machine started logging. A student who
+ * pressed record before starting the machine enters the gap here instead of
+ * trimming the video.
  */
 class LoadSyncRow(
     root: View,

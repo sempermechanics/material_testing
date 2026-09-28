@@ -59,7 +59,7 @@ class StartupHeadroomBenchmark(private val compilationMode: CompilationMode) {
     }
 
     companion object {
-        private const val PACKAGE = "com.indicvision.semper"
+        private const val PACKAGE = "com.indicvision.semper.materialtesting"
         private const val ITERATIONS = 10
         private const val ARG = "startupHeadroom"
 

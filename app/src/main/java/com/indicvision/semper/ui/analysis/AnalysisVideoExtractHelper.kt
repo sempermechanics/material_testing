@@ -72,6 +72,7 @@ object AnalysisVideoExtractHelper {
                     viewModel.realRefWidth = result.refWidth
                     viewModel.realRefHeight = result.refHeight
                     viewModel.refBytes = result.refPng
+                    viewModel.refCaptureTimeMs = null
                     viewModel.onReferenceReplaced()
                     viewModel.refName = result.refName
                     if (!viewModel.hasCustomRoi) {
@@ -88,6 +89,8 @@ object AnalysisVideoExtractHelper {
                     viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
                     viewModel.defFromVideo = result.batch.fromVideo
                     viewModel.defFrameTimesMs = result.defTimesMs
+                    viewModel.defCaptureTimesMs = emptyList()
+                    viewModel.typedLoadsKg = emptyList()
 
                     onApplied(
                         AppliedResult(

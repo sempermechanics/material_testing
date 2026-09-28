@@ -126,7 +126,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-26)
+## Current state (2026-09-28)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
@@ -134,10 +134,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
+  ADR and TD numbers are shared: ADR-008, 009 and 011 and TD-133–135, TD-139 and TD-140 are ours.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain, E from the
   longest straight leading run, the elastic-region view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
-  from a machine CSV, matched by time within 100 ms for video. Strain window in
+  from a machine CSV, matched by time within 100 ms for video; bending's are
+  typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
+  2026-09-28), as totals or as increments per photo (stored as totals). Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data, on a Pixel 6 too (2026-09-26); a concrete set fails as
   expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
@@ -146,6 +149,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room
   on every screen with a text field: wizard, ROI editor, viewer frame jump (#71, TD-99).
+  The ROI editor zooms (pinch to 10×, double-tap 2× / fit) and pans with two fingers
+  (#84); `e2e/RoiEditorGestureTest` passes on the API 37 emulator (2026-09-28).
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   run in Tier 3 and pass on a Galaxy S21+ and the API 37 emulator (TD-95).
   `WizardDraftRestoreTest`: a load log survives process death.
@@ -158,14 +163,23 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   A/B (ADR-008); the Pixel 6 references are owed a re-take.
   TD-86–TD-88 and TD-90 match the parent's numbers; its TD-81 is TD-89 here.
 - **Owed.**
-  - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a): a phone-recorded MP4
+  - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): how ROI zoom and pan feel
+    on a real screen (§6.21–6.25; the gestures themselves pass in e2e on the emulator).
+    From §5.1a: a phone-recorded MP4
     (5.1a.12) and a real UTM clip. The rest of §5.1a, including Key frames with loads
     (5.1a.16), passes on a Pixel 6 with synthetic clips (2026-09-26). MP4 and codec AVI
     frames are now stretched to full range (TD-134), not yet re-measured on a phone. The Galaxy S21+'s demo account is over its cap (45 / 25), so a new
     analysis there needs a licensed key or deletes first.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
-  - The parent owns deploys and releases; see its CONTEXT.md for production state.
+  - **Own app (ADR-009, TD-133).** Installs as `com.indicvision.semper.materialtesting`
+    beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
+    (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
+    TD-138) is deployed and synced here (2026-09-28): builds send `X-App-Id`, so this
+    app signs in beside Semper. `v1.2-beta.1` predates the header and still gets
+    "already linked" there; the next build is owed, and App Check for this app. A
+    `sync/` merge keeps this repo's `applicationId` and `google-services.json`.
+  - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

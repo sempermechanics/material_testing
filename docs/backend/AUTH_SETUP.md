@@ -33,8 +33,11 @@ email so the screen can't be used to probe which addresses are registered.
 2. **Authentication → Sign-in method**: enable **Google**, **Email/Password**,
    and **Email link (passwordless sign-in)**.
 3. **Project settings → Your apps → Android app** with package
-   `com.indicvision.semper`. Add the **SHA-1** of every signing key you use —
-   debug and release. Google sign-in fails without it.
+   `com.indicvision.semper` (Semper) and a second one,
+   `com.indicvision.semper.materialtesting` (Material Testing, own release key —
+   [ADR-009](../adr/ADR-009-material-testing-app-identity.md)). Add the **SHA-1**
+   of every signing key you use — debug and release — under the app it signs.
+   Google sign-in fails without it.
 
    ```bash
    keytool -list -v -keystore ~/.android/debug.keystore \

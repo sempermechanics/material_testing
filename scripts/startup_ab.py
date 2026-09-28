@@ -36,7 +36,7 @@ import sys
 import threading
 from pathlib import Path
 
-APP = "com.indicvision.semper"
+APP = "com.indicvision.semper.materialtesting"
 BENCH = "com.indicvision.semper.benchmark"
 RUNNER = f"{BENCH}/androidx.test.runner.AndroidJUnitRunner"
 MEDIA = f"/sdcard/Android/media/{BENCH}"

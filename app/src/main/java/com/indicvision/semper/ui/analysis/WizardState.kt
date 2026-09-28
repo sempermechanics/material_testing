@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
+import com.indicvision.semper.data.TypedLoads
 import com.indicvision.semper.data.WizardDraft
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -33,6 +34,7 @@ internal object WizardState {
     private const val REF_W = "refW"
     private const val REF_H = "refH"
     private const val REF_NAME = "refName"
+    private const val REF_CAPTURE_MS = "refCaptureMs"
     private const val HAS_REFERENCE = "hasReference"
     private const val HAS_MASK = "hasMask"
     private const val HAS_CUSTOM_ROI = "hasCustomRoi"
@@ -55,10 +57,13 @@ internal object WizardState {
     private const val HAS_LOAD_LOG = "hasLoadLog"
     private const val LOAD_CSV_NAME = "loadCsvName"
     private const val LOAD_LOG_START_S = "loadLogStartS"
+    private const val TYPED_LOADS_ENTRY = "typedLoadsEntry"
 
     /**
      * Index-aligned lists behind the deformed-frames card; `-1` = size not
-     * measured. [timesMs] is empty unless the frames came from a video.
+     * measured. [timesMs] is empty unless the frames came from a video;
+     * [captureTimesMs] is empty unless they are photos (null: no EXIF time).
+     * [typedLoadsKg] is bending's typed hanger mass per frame (null: blank).
      */
     @Serializable
     data class Frames(
@@ -68,6 +73,8 @@ internal object WizardState {
         val widths: List<Int> = emptyList(),
         val heights: List<Int> = emptyList(),
         val timesMs: List<Long> = emptyList(),
+        val captureTimesMs: List<Long?> = emptyList(),
+        val typedLoadsKg: List<Float?> = emptyList(),
     )
 
     /** What [readInputs] read back from the draft. */
@@ -82,6 +89,7 @@ internal object WizardState {
         putInt(REF_W, vm.realRefWidth)
         putInt(REF_H, vm.realRefHeight)
         putString(REF_NAME, vm.refName)
+        vm.refCaptureTimeMs?.let { putLong(REF_CAPTURE_MS, it) }
         putBoolean(HAS_REFERENCE, vm.refBytes != null)
         putBoolean(HAS_MASK, vm.roiMaskBytes != null)
         putBoolean(HAS_CUSTOM_ROI, vm.hasCustomRoi)
@@ -115,6 +123,7 @@ internal object WizardState {
         putBoolean(HAS_LOAD_LOG, vm.parsedLoadCsv != null)
         putString(LOAD_CSV_NAME, vm.loadCsvName)
         putFloat(LOAD_LOG_START_S, vm.loadLogStartS)
+        putString(TYPED_LOADS_ENTRY, vm.typedLoadsEntry.name)
     }
 
     /** The scalars of a [save]d Bundle; the draft's parts follow through [readInputs]. */
@@ -126,6 +135,7 @@ internal object WizardState {
         vm.realRefWidth = b.getInt(REF_W)
         vm.realRefHeight = b.getInt(REF_H)
         b.getString(REF_NAME)?.let { vm.refName = it }
+        vm.refCaptureTimeMs = if (b.containsKey(REF_CAPTURE_MS)) b.getLong(REF_CAPTURE_MS) else null
         vm.hasCustomRoi = b.getBoolean(HAS_CUSTOM_ROI)
         b.getIntArray(ROI)?.takeIf { it.size == 4 }?.let {
             vm.roiX = it[0]
@@ -159,6 +169,8 @@ internal object WizardState {
         vm.geometry = SpecimenGeometry.fromArray(b.getFloatArray(GEOMETRY))
         vm.loadCsvName = b.getString(LOAD_CSV_NAME).orEmpty()
         vm.loadLogStartS = b.getFloat(LOAD_LOG_START_S)
+        b.getString(TYPED_LOADS_ENTRY)?.let { name -> TypedLoads.Entry.entries.find { it.name == name } }
+            ?.let { vm.typedLoadsEntry = it }
     }
 
     fun frames(vm: AnalysisViewModel): Frames = Frames(
@@ -168,6 +180,8 @@ internal object WizardState {
         widths = vm.defFilePaths.map { vm.defFrameSizes[it]?.first ?: -1 },
         heights = vm.defFilePaths.map { vm.defFrameSizes[it]?.second ?: -1 },
         timesMs = vm.defFrameTimesMs,
+        captureTimesMs = vm.defCaptureTimesMs,
+        typedLoadsKg = vm.typedLoadsKg,
     )
 
     fun encodeFrames(frames: Frames): String = json.encodeToString(Frames.serializer(), frames)
@@ -177,6 +191,8 @@ internal object WizardState {
         vm.defOriginalNames = frames.names
         vm.defFrameDates = frames.dates
         vm.defFrameTimesMs = frames.timesMs
+        vm.defCaptureTimesMs = frames.captureTimesMs
+        vm.typedLoadsKg = frames.typedLoadsKg
         vm.defFrameSizes = frames.paths.indices
             .filter { frames.widths.getOrElse(it) { -1 } > 0 && frames.heights.getOrElse(it) { -1 } > 0 }
             .associate { frames.paths[it] to (frames.widths[it] to frames.heights[it]) }
