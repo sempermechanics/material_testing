@@ -1,6 +1,7 @@
 package com.indicvision.semper.ui.common
 
 import android.view.View
+import android.widget.ScrollView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
@@ -54,19 +55,36 @@ object Insets {
     }
 
     /**
-     * Pad the bottom of a scroll container by the IME (keyboard) inset only, on
-     * top of any padding already declared. Use for a scroll view that sits above
-     * its own bottom chrome (e.g. a wizard nav bar that already handles the
-     * navigation-bar inset): when the keyboard opens, the added padding shrinks
-     * the scroll viewport so a focused field can scroll clear of the keyboard;
-     * when it closes, the inset returns to zero and the padding with it.
+     * Pad the bottom of a scroll view that sits above its own bottom chrome (e.g.
+     * a wizard nav bar that already takes the navigation-bar inset) by the part
+     * of the keyboard that covers it, on top of any padding declared in XML. The
+     * IME inset is measured from the window's bottom edge, so padding by all of
+     * it would count the chrome under the view too, leaving a blank band above
+     * the keyboard and hiding that much more of the page.
+     *
+     * Edge-to-edge (Android 15+) the window no longer resizes for the keyboard,
+     * so ScrollView's own resize handling never brings the focused field back
+     * into view, and its focus scrolling ignores padding. Once the keyboard is
+     * up, the focused field (on opening, or after the IME's Next) is scrolled
+     * clear of it here.
      */
-    fun padImeBottom(view: View) {
+    fun padImeBottom(view: ScrollView) {
         val startBottom = view.paddingBottom
+        val location = IntArray(2)
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, windowInsets ->
             val ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            v.updatePadding(bottom = startBottom + ime)
+            v.getLocationInWindow(location)
+            val overlap = ImeReveal.overlap(ime, v.rootView.height - (location[1] + v.height))
+            if (v.paddingBottom != startBottom + overlap) {
+                v.updatePadding(bottom = startBottom + overlap)
+                if (overlap > 0) v.post { ImeReveal.revealFocused(view) }
+            }
             windowInsets
+        }
+        view.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+            if (view.paddingBottom > startBottom && newFocus != null && ImeReveal.isInside(newFocus, view)) {
+                view.post { ImeReveal.revealFocused(view) }
+            }
         }
         if (view.isAttachedToWindow) ViewCompat.requestApplyInsets(view)
     }
