@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- One deformed frame in the typed-loads sheet: thumbnail, which photo, and
-     its hanger mass in kg. -->
+     its hanger mass in kg (the total, or what changed since the photo before). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -43,6 +43,18 @@
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
             tools:text="IMG_20260928_101502.jpg" />
+
+        <!-- Incremental entry only: the total on the hanger this box makes. -->
+        <TextView
+            android:id="@+id/tvTypedTotal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:text="Total 1.5 kg"
+            tools:visibility="visible" />
     </LinearLayout>
 
     <EditText
