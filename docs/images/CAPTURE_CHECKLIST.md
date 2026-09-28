@@ -24,7 +24,7 @@ The results match [app/REAL_WORLD_VALIDATION.md](../app/REAL_WORLD_VALIDATION.md
 | `media-picker-files-saf.png` | Files tab: the system browser in Downloads | Manual §5 |
 | `video-extract.png` | Video sampling in **Key frames** mode: 29 key frames | Manual §4 |
 | `step1-tensile.png` | Reference, 40 frames, `steel_loads.csv` (kN), 12.5 mm², axis X, speckle chip | Manual §2, lab workflow, README |
-| `step1-bending.png` | Timed log, time-match chip, **Log started after the first frame** = 2, L / b / t, load point 170 px | Manual §2, lab workflow, README |
+| `step1-bending.png` | Timed log, time-match chip, **Log started after the reference** = 2 (renamed from *…after the first frame*; recapture), L / b / t, load point 170 px | Manual §2, lab workflow, README |
 | `beam-taps.png` | The tap editor zoomed, both marks and the probe circle, 0.0375 mm/px | Manual §2, lab workflow, README |
 | `frame-order-menu.png` | The sort menu over the 40-frame strip | Manual §5 |
 | `roi-editor.png` | Manual entry, ROI 1960 × 298 at (20, 70) | Manual §7, README |

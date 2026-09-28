@@ -30,7 +30,8 @@ import java.io.IOException
 import java.util.Locale
 
 /**
- * The machine-load card on wizard step 1: import / clear the load log, the
+ * The machine-load card on wizard step 1: import / clear the load log (or,
+ * for bending, type each photo's hanger mass in [TypedLoadsSheet]), the
  * specimen dimensions the test's stress needs (cross-section, or the bending
  * rows of [SpecimenGeometryFields] and [LoadPointRow]), strain axis, and the chips explaining
  * how the log's rows were matched to the frames. Owns
@@ -52,11 +53,14 @@ class AnalysisLoadCard(
     class Pickers(val loadCsv: () -> Unit, val loadPoint: () -> Unit = {})
 
     private val dropzone: View = root.findViewById(R.id.loadDropzone)
+    private val btnTypeLoads: View = root.findViewById(R.id.btnTypeLoads)
+    private val tvTypeLoadsHint: View = root.findViewById(R.id.tvTypeLoadsHint)
     private val summary: View = root.findViewById(R.id.loadSummary)
     private val tvName: TextView = root.findViewById(R.id.tvLoadName)
     private val tvMeta: TextView = root.findViewById(R.id.tvLoadMeta)
     private val warnRow: View = root.findViewById(R.id.loadWarnRow)
     private val tvWarn: TextView = warnRow.findViewById(R.id.tvWarnText)
+    private val btnWarnFaq: View = warnRow.findViewById(R.id.btnWarnFaq)
     private val etCrossSection: EditText = root.findViewById(R.id.etCrossSection)
     private val toggleAxis: MaterialButtonToggleGroup = root.findViewById(R.id.toggleLoadAxis)
 
@@ -70,10 +74,15 @@ class AnalysisLoadCard(
 
     init {
         dropzone.setOnClickListener { if (!reading) pickers.loadCsv() }
+        btnTypeLoads.setOnClickListener { openTypedLoads() }
+        summary.setOnClickListener { if (viewModel.hasTypedLoads()) openTypedLoads() }
         root.findViewById<ImageButton>(R.id.btnLoadClear).setOnClickListener {
-            viewModel.clearMachineLoads()
+            if (viewModel.hasTypedLoads()) viewModel.clearTypedLoads() else viewModel.clearMachineLoads()
             refresh()
             onChanged()
+        }
+        if (viewModel.testType == TestType.BENDING) {
+            root.findViewById<TextView>(R.id.tvLoadImportHint).setText(R.string.load_import_hint_bending)
         }
         root.findViewById<ImageButton>(R.id.btnLoadInfo).setOnClickListener {
             LoadInfoDialog.show(activity, viewModel.testType)
@@ -127,10 +136,28 @@ class AnalysisLoadCard(
         loadPoint.refresh()
         viewModel.refreshMachineLoads()
         val parsed = viewModel.parsedLoadCsv
-        val hasLog = parsed != null
-        dropzone.isVisible = !hasLog
-        summary.isVisible = hasLog
+        val typed = viewModel.hasTypedLoads()
+        val hasSource = parsed != null || typed
+        val offerTyping = viewModel.testType == TestType.BENDING && !hasSource
+        btnTypeLoads.isVisible = offerTyping
+        btnTypeLoads.isEnabled = viewModel.defFilePaths.isNotEmpty()
+        tvTypeLoadsHint.isVisible = offerTyping && viewModel.defFilePaths.isEmpty()
+        dropzone.isVisible = !hasSource
+        summary.isVisible = hasSource
+        summary.isClickable = typed
         loadSync.refresh(viewModel.machineLoads?.mapping == LoadMapping.TIME_NEAREST)
+        if (typed) {
+            val missing = viewModel.typedLoadsMissing()
+            warnRow.isVisible = missing > 0
+            btnWarnFaq.isVisible = false
+            tvWarn.text = activity.resources.getQuantityString(R.plurals.load_typed_missing_fmt, missing, missing)
+            tvName.setText(R.string.load_typed_name)
+            val frames = viewModel.defFilePaths.size
+            val filled = viewModel.machineLoads?.matchedFrames ?: 0
+            tvMeta.text = activity.resources.getQuantityString(R.plurals.load_meta_typed_fmt, frames, filled, frames)
+            return
+        }
+        btnWarnFaq.isVisible = true
         if (parsed == null) {
             warnRow.isVisible = false
             return
@@ -159,6 +186,11 @@ class AnalysisLoadCard(
         }
         warnRow.isVisible = warnings.isNotEmpty()
         tvWarn.text = warnings.joinToString("\n")
+    }
+
+    private fun openTypedLoads() = TypedLoadsSheet.showFor(activity, viewModel) {
+        refresh()
+        onChanged()
     }
 
     private sealed interface ReadOutcome {
@@ -238,6 +270,7 @@ class AnalysisLoadCard(
         LoadMapping.ONE_TO_ONE_DROP_FIRST -> R.string.load_mapping_drop_first
         LoadMapping.TIME_NEAREST -> R.string.load_mapping_time
         LoadMapping.RESAMPLED -> R.string.load_mapping_resampled
+        LoadMapping.TYPED_KG -> R.string.load_mapping_typed
     }
 
     private fun formatArea(area: Float): String =

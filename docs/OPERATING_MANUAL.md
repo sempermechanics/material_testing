@@ -52,7 +52,7 @@ Formulas, accuracy and worked numbers: [app/STUDENT_LAB_WORKFLOW.md](app/STUDENT
 
 1. **Photos.** Pick the reference (no load), then the loaded photos, or a video.
 2. **Load log.** The machine's CSV with one load per row, in N or kN. With photos, a log that matches the frame count is paired in order.
-   With a video, a timed log is matched by time: a frame takes a row within 100 ms, or has no load.
+   With a video, or photos that carry an EXIF capture time (reference too), a timed log is matched by time: a frame takes a row within 100 ms, or has no load.
 3. **Cross-section** in mm², and the **strain axis** (the pulling direction in the photo).
 4. Set the ROI on the gauge section and tap **Compute** (§5).
 
@@ -73,7 +73,7 @@ The lab report's table adds **Extension (px)**, measured between the two ends of
 
 1. **Video** of the beam's side face at mid-span, filmed from a tripod. Extract at **1 fps**, or take its **Key frames** (§4).
 2. **Timed load log** (`time, load`). Frames are matched to it by time. If the log started later than the video,
-   put the gap in **Log started after the first frame**, in seconds (negative if the log started first).
+   put the gap in **Log started after the reference**, in seconds (negative if the log started first).
    Hanger mass in kg × 9.81 = load in N.
 3. **Span, width and thickness** in mm.
 4. **Beam height → Set.** Double-tap to zoom, then tap the top edge and then the bottom edge right under the load.
@@ -354,7 +354,7 @@ Long exports carry on in the background.
 | **Next** off on step 1 | The line above **Next** says what's missing (frames, load log, area, dimensions, load point) |
 | No E, or E ≤ 0 | Wrong strain axis, or no straight early part. Check the axis and the load units |
 | Bending E far off | Too few pixels across the thickness, taps not on the edges, or the log offset is wrong |
-| Load rows don't match frames | Time match: set **Log started after the first frame**; log at ≥ 10 rows/s so each frame has a row within 100 ms. Photos: one row per frame |
+| Load rows don't match frames | Time match: set **Log started after the reference**; log at ≥ 10 rows/s so each frame has a row within 100 ms. Photos without EXIF capture times: one row per frame |
 | Extension "—" in the report | One end of the region left the view on that frame |
 | Size error | A frame differs in pixel size from the reference |
 | "ROI too small" | The ROI is smaller than the subset |

@@ -21,6 +21,8 @@ data class ImportedBatch(
     val originalNames: List<String>,
     val frameSizes: Map<String, Pair<Int, Int>>,
     val fromVideo: Boolean = false,
+    /** [PhotoCaptureTime] per frame, index-aligned with [filePaths]; null when a photo has none. */
+    val captureTimesMs: List<Long?> = emptyList(),
 )
 
 /**
@@ -49,6 +51,8 @@ object FrameImportHelper {
         val originalByPath = mutableMapOf<String, String>()
         // Temp path → pixel size, so the reference-match check is free later.
         val sizeByPath = mutableMapOf<String, Pair<Int, Int>>()
+        // Temp path → EXIF capture time, for matching a timed load log.
+        val capturedByPath = mutableMapOf<String, Long?>()
 
         try {
             onProgress(0, uris.size)
@@ -77,6 +81,12 @@ object FrameImportHelper {
                 filePaths.add(file.absolutePath)
                 originalByPath[file.absolutePath] = originalName
                 frameSize?.let { sizeByPath[file.absolutePath] = it }
+                capturedByPath[file.absolutePath] = if (isRaw) {
+                    runCatching { context.contentResolver.openInputStream(uri)?.use { PhotoCaptureTime.read(it) } }
+                        .getOrNull()
+                } else {
+                    PhotoCaptureTime.read(file)
+                }
             }
 
             val stagedPaths = filePaths.sorted()
@@ -88,6 +98,7 @@ object FrameImportHelper {
                     originalNames = stagedPaths.map { originalByPath[it] ?: File(it).name },
                     frameSizes = sizeByPath,
                     fromVideo = false,
+                    captureTimesMs = stagedPaths.map { capturedByPath[it] },
                 )
             }
             currentCoroutineContext().ensureActive()

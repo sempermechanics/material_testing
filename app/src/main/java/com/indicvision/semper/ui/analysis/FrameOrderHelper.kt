@@ -38,12 +38,18 @@ object FrameOrderHelper {
         val names: List<String>,
         val dates: List<Long>,
         val sizes: Map<String, Pair<Int, Int>>,
+        /** [PhotoCaptureTime] per frame; empty when none was given. */
+        val captureTimes: List<Long?> = emptyList(),
+        /** Bending's typed load per frame, kg; empty when none was given. */
+        val typedLoadsKg: List<Float?> = emptyList(),
     )
 
     /**
      * Reorder parallel lists by [mode]. For MANUAL, [manualOrder] is the desired
      * permutation of indices into the current lists; ignored otherwise.
-     * [direction] applies to NAME and DATE only.
+     * [direction] applies to NAME and DATE only. [captureTimes] and
+     * [typedLoadsKg] ride along when they have one entry per frame and are
+     * dropped otherwise.
      */
     @Suppress("LongParameterList") // the parallel frame lists plus the order they are put in
     fun reorder(
@@ -54,6 +60,8 @@ object FrameOrderHelper {
         mode: FrameOrderMode,
         direction: FrameOrderDirection = FrameOrderDirection.ASCENDING,
         manualOrder: List<Int>? = null,
+        captureTimes: List<Long?> = emptyList(),
+        typedLoadsKg: List<Float?> = emptyList(),
     ): OrderedBatch {
         val n = paths.size
         if (n == 0) {
@@ -85,6 +93,8 @@ object FrameOrderHelper {
             names = indices.map { names.getOrElse(it) { paths[it].substringAfterLast('/') } },
             dates = indices.map { dates.getOrElse(it) { Long.MAX_VALUE } },
             sizes = sizes.filterKeys { it in newPaths.toSet() },
+            captureTimes = if (captureTimes.size == n) indices.map { captureTimes[it] } else emptyList(),
+            typedLoadsKg = if (typedLoadsKg.size == n) indices.map { typedLoadsKg[it] } else emptyList(),
         )
     }
 

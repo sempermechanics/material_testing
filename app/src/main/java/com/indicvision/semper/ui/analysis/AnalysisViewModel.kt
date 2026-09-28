@@ -26,6 +26,7 @@ import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.BeamEdgeTaps
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.LoadCsvParse
+import com.indicvision.semper.data.LoadMapping
 import com.indicvision.semper.data.MachineLoadCsv
 import com.indicvision.semper.data.MachineLoadMapper
 import com.indicvision.semper.data.MachineLoadTable
@@ -38,6 +39,7 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
+import com.indicvision.semper.data.TypedLoads
 import com.indicvision.semper.data.WizardDraft
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.report.EngineStats
@@ -192,10 +194,20 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
 
     /**
      * Time of each deformed frame after the reference, index-aligned with
-     * [defFilePaths]. Only video extraction knows these; image batches leave
-     * it empty and the load log is resampled instead of time-matched.
+     * [defFilePaths], as video extraction knows it. Image batches leave it
+     * empty; their times come from [defCaptureTimesMs] and [refCaptureTimeMs].
      */
     var defFrameTimesMs: List<Long> = emptyList()
+
+    /**
+     * EXIF capture time of each picked photo ([PhotoCaptureTime]), index-aligned
+     * with [defFilePaths] and reordered with it; null for a photo without one.
+     * Empty for video frames.
+     */
+    var defCaptureTimesMs: List<Long?> = emptyList()
+
+    /** EXIF capture time of the picked reference photo; null for a video frame or a photo without one. */
+    var refCaptureTimeMs: Long? = null
 
     /**
      * Seconds after the reference frame at which the load log's first row was
@@ -204,18 +216,55 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      */
     var loadLogStartS: Float = 0f
 
-    /** Re-matches the load log to the frames as they are now. Cheap; call after either changes. */
+    /**
+     * Bending's hanger mass per deformed frame, in kg, typed on the phone;
+     * index-aligned with [defFilePaths] and reordered with it. Null is a box
+     * left blank. Empty when nothing is typed. Used only while no load log is
+     * imported: the two are never combined.
+     */
+    var typedLoadsKg: List<Float?> = emptyList()
+
+    /**
+     * Re-matches the load log to the frames as they are now; with no log,
+     * bending's typed loads. Cheap; call after either changes.
+     */
     fun refreshMachineLoads() {
         val parsed = parsedLoadCsv
-        machineLoads = if (parsed == null) {
-            null
-        } else {
-            MachineLoadMapper.map(parsed, defFilePaths.size, defFrameTimesMs, testType, loadLogStartS)
+        machineLoads = when {
+            parsed != null ->
+                MachineLoadMapper.map(parsed, defFilePaths.size, frameTimesForLoads(), testType, loadLogStartS)
+            testType == TestType.BENDING -> TypedLoads.toTable(typedLoadsKg, defFilePaths.size)
+            else -> null
         }
     }
 
+    /** Typed loads replace an imported log: one source at a time. */
+    fun setTypedLoads(kg: List<Float?>) {
+        if (parsedLoadCsv != null) clearMachineLoads()
+        typedLoadsKg = kg
+        refreshMachineLoads()
+    }
+
+    /** Bending's typed loads are the source: something is typed and no log is imported. */
+    fun hasTypedLoads(): Boolean =
+        testType == TestType.BENDING && parsedLoadCsv == null && typedLoadsKg.any { it != null }
+
+    fun clearTypedLoads() {
+        typedLoadsKg = emptyList()
+        refreshMachineLoads()
+    }
+
+    /**
+     * Each deformed frame's time after the reference: a video's own, else
+     * the photos' capture times when the reference and every frame have one.
+     * Empty when neither is known, which matches the log by row order.
+     */
+    private fun frameTimesForLoads(): List<Long> =
+        defFrameTimesMs.ifEmpty { PhotoCaptureTime.relativeTimesMs(refCaptureTimeMs, defCaptureTimesMs) }
+
     /** An imported load log. Its [text] goes to the draft so a process death can parse it again. */
     fun setLoadLog(csv: ParsedLoadCsv, name: String, text: String) {
+        typedLoadsKg = emptyList()
         parsedLoadCsv = csv
         loadCsvName = name
         stage { it.writeLoadLog(text) }
@@ -235,7 +284,22 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      */
     fun mechanicalInputsReady(): Boolean =
         !testType.hasMachineLoad ||
-            (machineLoads.let { it != null && it.matchedFrames > 0 } && stressModel().isComplete && !loadPointMissing())
+            (
+                machineLoads.let { it != null && it.matchedFrames > 0 } &&
+                    typedLoadsMissing() == 0 &&
+                    stressModel().isComplete &&
+                    !loadPointMissing()
+                )
+
+    /**
+     * Photos with typed loads still waiting for theirs. Every photo needs a
+     * mass, 0 for no weight: an empty box is a load not yet typed, never "no
+     * load". Zero while the loads come from a CSV.
+     */
+    fun typedLoadsMissing(): Int {
+        val table = machineLoads?.takeIf { it.mapping == LoadMapping.TYPED_KG } ?: return 0
+        return defFilePaths.size - table.matchedFrames
+    }
 
     /**
      * Bending reads its scale and its deflection from the beam's edges tapped
@@ -269,7 +333,11 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
             loadAxisX = loadAxisX,
             geometry = geometry,
             loadsN = if (forSweep) emptyList() else machineLoads?.loadsN.orEmpty(),
-            loadSource = if (forSweep) "" else loadCsvName,
+            loadSource = when {
+                forSweep -> ""
+                machineLoads?.mapping == LoadMapping.TYPED_KG -> TypedLoads.SOURCE
+                else -> loadCsvName
+            },
             loadMapping = if (forSweep) "" else machineLoads?.mapping?.name.orEmpty(),
         )
     }
@@ -992,6 +1060,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         realRefWidth = 0
         realRefHeight = 0
         refName = NO_REFERENCE_NAME
+        refCaptureTimeMs = null
         hasCustomRoi = false
         roiX = 0
         roiY = 0
