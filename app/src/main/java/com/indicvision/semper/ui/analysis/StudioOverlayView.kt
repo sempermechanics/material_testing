@@ -349,9 +349,14 @@ class StudioOverlayView @JvmOverloads constructor(
                 }
                 trackPinch(event)
             }
-            MotionEvent.ACTION_POINTER_UP -> if (viewportGesture) trackPinch(event)
+            MotionEvent.ACTION_POINTER_UP -> if (viewportGesture) settleThenTrack(event)
             MotionEvent.ACTION_MOVE -> if (viewportGesture) pinchMove(event)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (viewportGesture) {
+            MotionEvent.ACTION_UP -> if (viewportGesture) {
+                pinchMove(event, lifting = NO_POINTER)
+                viewportGesture = false
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> if (viewportGesture) {
                 viewportGesture = false
                 return true
             }
@@ -359,11 +364,23 @@ class StudioOverlayView @JvmOverloads constructor(
         return viewportGesture
     }
 
-    private fun pinchMove(event: MotionEvent) {
+    /**
+     * A finger lifting: first follow every finger to where it really is, then
+     * re-anchor on the ones still down. The last MOVE can be resampled a few px
+     * past the fingers (Choreographer input resampling, worst on a slow
+     * device); the lift carries the true positions, so the photo stops where
+     * the fingers left it.
+     */
+    private fun settleThenTrack(event: MotionEvent) {
+        pinchMove(event, lifting = NO_POINTER)
+        trackPinch(event)
+    }
+
+    private fun pinchMove(event: MotionEvent, lifting: Int = liftingIndex(event)) {
         val prevX = pinchFocusX
         val prevY = pinchFocusY
         val prevSpan = pinchSpan
-        trackPinch(event)
+        trackPinch(event, lifting)
         viewport.panBy(pinchFocusX - prevX, pinchFocusY - prevY)
         if (prevSpan > MIN_PINCH_SPAN && pinchSpan > MIN_PINCH_SPAN) {
             viewport.zoomBy(pinchSpan / prevSpan, pinchFocusX, pinchFocusY)
@@ -371,9 +388,11 @@ class StudioOverlayView @JvmOverloads constructor(
         applyViewport()
     }
 
+    private fun liftingIndex(event: MotionEvent): Int =
+        if (event.actionMasked == MotionEvent.ACTION_POINTER_UP) event.actionIndex else NO_POINTER
+
     /** Focus and mean spread of the fingers still down (a lifting one is left out). */
-    private fun trackPinch(event: MotionEvent) {
-        val lifting = if (event.actionMasked == MotionEvent.ACTION_POINTER_UP) event.actionIndex else -1
+    private fun trackPinch(event: MotionEvent, lifting: Int = liftingIndex(event)) {
         var sumX = 0f
         var sumY = 0f
         var count = 0
@@ -691,5 +710,6 @@ class StudioOverlayView @JvmOverloads constructor(
     private companion object {
         /** Below this finger spread (view px) a pinch only pans. */
         const val MIN_PINCH_SPAN = 10f
+        const val NO_POINTER = -1
     }
 }
