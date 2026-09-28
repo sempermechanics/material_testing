@@ -26,8 +26,13 @@ change. `/readyz` passed on the candidate before the promote.
   lock and cooldown. A request without the header is Semper, so builds in the
   field are unchanged.
 
-Not yet out: the console half of #280 (Hosting), and Material Testing builds
-that send the header (material_testing#90).
+The console half of #280 went out the same day (`scripts/deploy-console.sh`
+from `0c3946f7`): seats and the pending-users list show each app's device, and
+the account page offers "Use Material Testing on a different device".
+material_testing#90 brought the header to Material Testing; a debug build of it
+signed in on a Pixel 6 (Semper not installed there). It read as licensed once
+the account's stored `mode: demo`, left by the old mismatch bug, was set back
+by hand: #279 stops new demotions but does not undo old ones.
 
 ## 2026-09-26 — Backend, gateway and console deploy: compat shims 1–5 retired (#267), account status line (#271)
 
