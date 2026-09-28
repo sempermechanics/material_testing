@@ -12,6 +12,21 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-28 — material_testing: its own app, released as v1.2-beta.1 (#82)
+
+Material Testing installs as `com.indicvision.semper.materialtesting` beside
+Semper instead of replacing it (TD-133,
+[ADR-009](../adr/ADR-009-material-testing-app-identity.md)). It has its own
+release key and Firebase Android app, and uses Semper's Firebase project,
+accounts and backend. `v1.2-beta.1` is a public pre-release from `2d28c3fc`.
+Asset Links for the new package are on Hosting (semperdic-app #278).
+
+On a phone already registered to Semper, sign-in fails with "already linked".
+Each app has its own `ANDROID_ID`, and the backend allowed one device per
+account. ADR-009's trade-off section first blamed only the licence lock and has
+been corrected. The fix is the parent's one phone per app (its ADR-010,
+semperdic-app #279 and #280). It reaches this app through a `sync/` merge.
+
 ## 2026-09-28 — material_testing: the viewer draws each frame on its own photo (#83)
 
 After compute, the result viewer drew every frame's heatmap on the reference

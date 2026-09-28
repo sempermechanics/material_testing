@@ -15,7 +15,7 @@ record that replaced it.
 | [006](ADR-006-gateway-deploy-job.md) | CI deploys the API Gateway after the Cloud Run promote | Accepted, built (not yet dispatched) | TD-27 |
 | [007](ADR-007-licence-lifecycle.md) | Licence lifecycle: one per person, replace by revoke, delete into a 30-day hold | Accepted, built (TTL policies owed) | — |
 | [008](ADR-008-startup-gates-phone-state.md) | Real-device startup gates check the phone's state; a trip is settled A/B | Accepted, built (references owed) | TD-135 |
-| [009](ADR-009-material-testing-app-identity.md) | Material Testing is its own Android app on Semper's backend | Accepted, built (Firebase + key owed) | TD-133 |
+| [009](ADR-009-material-testing-app-identity.md) | Material Testing is its own Android app on Semper's backend | Accepted, built (App Check owed) | TD-133 |
 | [010](ADR-010-viewer-deformed-frame.md) | The viewer draws each frame on its own photo, at the displaced positions | Accepted, built | TD-137 |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md).

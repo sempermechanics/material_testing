@@ -171,11 +171,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - **Own app (ADR-009, TD-133).** Installs as `com.indicvision.semper.materialtesting`
-    beside Semper, on Semper's Firebase project and backend. Owed before the first
-    release: the Firebase Android app and its `google-services.json`, the release key
-    and signing secrets, `INDIC_API_BASE_URL`, and the SHA-256 in `assetlinks.json`
-    (deployed from the parent). A `sync/` merge keeps this repo's `applicationId`
-    and `google-services.json`.
+    beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
+    (#82), with Asset Links on Hosting. On a phone already registered to Semper,
+    sign-in is refused ("already linked") until the parent binds one phone per app
+    (its ADR-010, semperdic-app #279 → #280, then a backend deploy) and a `sync/` merge
+    brings in `AppIdHeader`. That merge keeps this repo's `applicationId` and
+    `google-services.json`, and the parent's ADR-010 and TD-137/138 need new numbers
+    here (ours are the viewer's). App Check for this app is owed.
   - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
