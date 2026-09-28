@@ -2,6 +2,7 @@ package com.indicvision.semper.ui.analysis
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.os.SystemClock
@@ -71,6 +72,47 @@ class StudioOverlayViewTest {
         touch(MotionEvent.ACTION_MOVE, (x0 + x1) / 2f, (y0 + y1) / 2f)
         touch(MotionEvent.ACTION_MOVE, x1, y1)
         touch(MotionEvent.ACTION_UP, x1, y1)
+    }
+
+    /** One event with a finger at each of [points]; pointer ids are their indices. */
+    private fun fingers(action: Int, vararg points: Pair<Float, Float>, at: Long = clock) {
+        val props = Array(points.size) { i ->
+            MotionEvent.PointerProperties().apply {
+                id = i
+                toolType = MotionEvent.TOOL_TYPE_FINGER
+            }
+        }
+        val coords = Array(points.size) { i ->
+            MotionEvent.PointerCoords().apply {
+                x = points[i].first
+                y = points[i].second
+                pressure = 1f
+                size = 1f
+            }
+        }
+        overlay.onTouchEvent(
+            MotionEvent.obtain(clock, at, action, points.size, props, coords, 0, 0, 1f, 1f, 0, 0, 0, 0),
+        )
+    }
+
+    private val secondDown = MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+    private val secondUp = MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+
+    /** Two fingers from [a0], [b0] to [a1], [b1], then both lift. */
+    private fun pinch(a0: Pair<Float, Float>, b0: Pair<Float, Float>, a1: Pair<Float, Float>, b1: Pair<Float, Float>) {
+        fingers(MotionEvent.ACTION_DOWN, a0)
+        fingers(secondDown, a0, b0)
+        fingers(MotionEvent.ACTION_MOVE, a1, b1)
+        fingers(secondUp, a1, b1)
+        fingers(MotionEvent.ACTION_UP, a1)
+    }
+
+    /** Spreads two fingers about the view centre from 50 to 100 px apart: 2x about (200, 200). */
+    private fun zoomTwiceAtCentre() = pinch(150f to 200f, 250f to 200f, 100f to 200f, 300f to 200f)
+
+    private fun tap(x: Float, y: Float, at: Long) {
+        fingers(MotionEvent.ACTION_DOWN, x to y, at = at)
+        fingers(MotionEvent.ACTION_UP, x to y, at = at + 30)
     }
 
     private fun assertRect(expected: RectF, actual: RectF) {
@@ -261,6 +303,107 @@ class StudioOverlayViewTest {
 
         assertTrue(restored.hasValidRoi)
         assertRect(RectF(100f, 200f, 600f, 500f), restored.getRelativeRoi())
+    }
+
+    // ── Zoom and pan ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `a pinch zooms about the fingers and the ROI stays on its image pixels`() {
+        overlay.applyImageRoi(100, 200, 500, 300)
+        zoomTwiceAtCentre()
+
+        assertEquals(2f, overlay.zoom, EPS)
+        assertTrue(overlay.hasValidRoi)
+        assertRect(RectF(100f, 200f, 600f, 500f), overlay.getRelativeRoi())
+    }
+
+    @Test
+    fun `the photo is drawn through the same rect as the overlay`() {
+        zoomTwiceAtCentre() // image now (-200, 0)-(600, 400)
+
+        val drawn = RectF(0f, 0f, 200f, 100f)
+        Matrix(image.imageMatrix).mapRect(drawn)
+        assertRect(RectF(-200f, 0f, 600f, 400f), drawn)
+    }
+
+    @Test
+    fun `zoomed in, a drawn ROI is finer in image pixels`() {
+        zoomTwiceAtCentre() // 2.5 image px per view px, image left edge at view x -200
+        drag(0f, 0f, 200f, 200f)
+        assertRect(RectF(500f, 0f, 1000f, 500f), overlay.getRelativeRoi())
+    }
+
+    @Test
+    fun `the first finger of a pinch does not wipe the ROI or its holes`() {
+        overlay.applyImageRoi(100, 200, 500, 300)
+        overlay.applyImageHole(150, 250, 100, 100)
+        // Lands outside the ROI, where one finger alone would start a new crop.
+        pinch(300f to 250f, 350f to 250f, 280f to 250f, 370f to 250f)
+
+        assertTrue(overlay.hasValidRoi)
+        assertEquals(1, overlay.holes.size)
+        assertRect(RectF(100f, 200f, 600f, 500f), overlay.getRelativeRoi())
+    }
+
+    @Test
+    fun `a grab that turns into a pinch puts the ROI back`() {
+        overlay.applyImageRoi(100, 200, 500, 300) // view (20, 140)-(120, 200)
+        fingers(MotionEvent.ACTION_DOWN, 70f to 170f)
+        fingers(MotionEvent.ACTION_MOVE, 90f to 170f)
+        fingers(secondDown, 90f to 170f, 200f to 250f)
+
+        assertRect(RectF(100f, 200f, 600f, 500f), overlay.getRelativeRoi())
+        assertRect(RectF(100f, 200f, 600f, 500f), reported.last())
+    }
+
+    @Test
+    fun `a stray tap outside the ROI keeps it`() {
+        overlay.applyImageRoi(100, 200, 500, 300)
+        tap(300f, 250f, clock)
+
+        assertTrue(overlay.hasValidRoi)
+        assertRect(RectF(100f, 200f, 600f, 500f), overlay.getRelativeRoi())
+    }
+
+    @Test
+    fun `double-tap zooms to 2x and double-tap again fits, keeping the ROI`() {
+        overlay.applyImageRoi(100, 200, 500, 300)
+        tap(200f, 200f, clock)
+        tap(200f, 200f, clock + 150)
+        assertEquals(RoiViewport.DOUBLE_TAP_ZOOM, overlay.zoom, EPS)
+
+        tap(200f, 200f, clock + 1_000)
+        tap(200f, 200f, clock + 1_150)
+        assertEquals(1f, overlay.zoom, EPS)
+
+        assertTrue(overlay.hasValidRoi)
+        assertRect(RectF(100f, 200f, 600f, 500f), overlay.getRelativeRoi())
+    }
+
+    @Test
+    fun `a zoomed canvas keeps its zoom through a keyboard resize`() {
+        overlay.applyImageRoi(101, 203, 499, 297)
+        zoomTwiceAtCentre()
+
+        repeat(3) {
+            layout(image, 400, 237)
+            overlay.updateImageBounds()
+            layout(image, 400, 400)
+            overlay.updateImageBounds()
+        }
+
+        assertEquals(2f, overlay.zoom, EPS)
+        assertRect(RectF(101f, 203f, 600f, 500f), overlay.getRelativeRoi())
+    }
+
+    @Test
+    fun `resetZoom goes back to the fit view`() {
+        zoomTwiceAtCentre()
+        overlay.resetZoom()
+
+        assertEquals(1f, overlay.zoom, EPS)
+        drag(50f, 150f, 250f, 250f)
+        assertRect(RectF(250f, 250f, 1250f, 750f), overlay.getRelativeRoi())
     }
 
     // ── Mask ─────────────────────────────────────────────────────────────────
