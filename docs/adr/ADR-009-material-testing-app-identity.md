@@ -1,6 +1,6 @@
 # ADR-009: Material Testing is its own Android app on Semper's backend
 
-**Status:** Accepted, built (Hosting deploy of the Asset Links entry owed)
+**Status:** Accepted, built (App Check owed; one phone per app waits on semperdic-app's ADR-010)
 **Date:** 2026-09-28
 **Deciders:** app owner
 
@@ -41,12 +41,26 @@ number (the `versionCode`) is far below Semper's, which makes it a downgrade.
 
 ## Trade-off analysis
 
-A phone can hold both apps, but each has its own device key
-(`DeviceKeyManager`), so the backend sees two devices. A licence or seat locks
-to one device (`POST /v1/licenses/unbind`, `routers/licenses.py`): whichever
-app signs in first holds it, and moving it to the other app is a device change
-under `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`, or an IT/staff unbind. When both apps
-are installed and signed in, the sign-in and reset email links match two
+A phone can hold both apps, but Android scopes `ANDROID_ID` to the signing
+key, so each app has its own device id (`and-{ANDROID_ID}`, `DeviceKeyManager`)
+and the backend sees two devices. Until the backend binds per app, the whole
+account has one registered device and one licence or seat lock: whichever app
+signs in first takes the phone, and the other is refused at sign-in with
+`device_conflict` ("already linked"). Moving to the other app is a device
+change under `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`, or an IT/staff unbind.
+[Corrected 2026-09-28: this section first said only the licence or seat
+locked to one device. The account's registered device does too, and that is
+what sign-in hit.]
+
+semperdic-app's [ADR-010](https://github.com/sempermechanics/semperdic-app/blob/main/docs/adr/ADR-010-device-binding-per-app.md)
+(semperdic-app #279, #280) binds one phone per app. Each app sends `X-App-Id`
+(its `applicationId`), and has its own registered device, release hold, lock
+and self-service cooldown; a staff or IT clear moves both. That ADR-010 is the
+parent's; this repo's ADR-010 is the viewer's deformed frame. It reaches this
+app through a `sync/` merge that brings in `AppIdHeader`. Until then this app
+sends no header and the backend reads it as Semper.
+
+When both apps are installed and signed in, the sign-in and reset email links match two
 verified apps, and Android asks which one opens the link; the other app cannot
 finish that link, because the pending email lives in the app that sent it.
 
@@ -69,7 +83,11 @@ finish that link, because the pending email lives in the app that sent it.
       SHA-1s Semper already lists; its `google-services.json` (2026-09-28).
 - [x] Release key (alias `materialtesting`, SHA-256 `F5:DC:B8:…:46:37`) and
       `INDIC_API_BASE_URL`.
-- [ ] Release SHA-256 in `assetlinks.json` here (done) and in `semperdic-app`;
-      deploy Hosting from `semperdic-app`.
+- [x] Release SHA-256 in `assetlinks.json` here and in `semperdic-app`
+      (semperdic-app #278); Hosting deployed (2026-09-28). Released as
+      `v1.2-beta.1` from `2d28c3fc` (#82).
+- [ ] One phone per app: after semperdic-app #279 and #280 merge and the
+      backend deploys, sync its `main` here (keep `applicationId` and
+      `google-services.json`) and cut a build.
 - [ ] App Check: register the app with Play Integrity before
       `APP_CHECK_MODE=enforce`.
