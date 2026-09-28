@@ -1,4 +1,4 @@
-# ADR-010: The viewer draws each frame on its own photo
+# ADR-011: The viewer draws each frame on its own photo
 
 **Status:** Accepted, built
 **Date:** 2026-09-28
@@ -62,7 +62,7 @@ wrong, and it looks more wrong than A.
 |-----------|------------|
 | Complexity | Medium: a second rasterizer, a per-frame photo decode, a displaced probe lookup |
 | Cost | One display-size decode per settled frame, off the main thread |
-| Risk | The GIF and report still draw on the reference (TD-137) |
+| Risk | The GIF and report still draw on the reference (TD-139) |
 
 ### D: A viewer toggle, reference by default
 
@@ -80,7 +80,7 @@ Rejected by the app owner.
 ## Consequences
 
 - The summary GIF, the PNG export (`ShareCenter.kt:388`) and the report
-  heatmap (`ReportBuilder.kt:278`) still draw on the reference. TD-137.
+  heatmap (`ReportBuilder.kt:278`) still draw on the reference. TD-139.
 - Restored sessions need the deformed originals to show their frames this
   way. They already restore them (`docs/perf/backup-restore-split.md`).
 
@@ -88,4 +88,4 @@ Rejected by the app owner.
 
 - [x] Deformed render, per-frame photo, displaced probe, fit box, tests
       (`DeformedHeatmapTest`).
-- [ ] TD-137: decide whether the GIF and exports follow.
+- [ ] TD-139: decide whether the GIF and exports follow.
