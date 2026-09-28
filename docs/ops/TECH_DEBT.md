@@ -37,8 +37,8 @@ This file stays the record of what is *owed* and what is deliberately deferred.
 
 Priority = (Impact + Risk) × (6 − Effort).
 
-TD numbers are shared with material_testing: TD-134, TD-135 and TD-139–TD-142 are
-its rows and are not listed here. The next row here is TD-143.
+TD numbers are shared with material_testing: TD-134, TD-135 and TD-139–TD-144 are
+its rows and are not listed here. The next row here is TD-145.
 
 **Re-verified against the code on 2026-09-23.** Every row below was checked at
 `main` @ `4d04c28`, not copied from the previous register; several of the old
