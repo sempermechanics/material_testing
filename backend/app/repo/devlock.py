@@ -34,10 +34,14 @@ log = logging.getLogger("indic.firestore")
 
 # Verdicts from _device_lock_state. "Unbound" is deliberately distinct from
 # "matches": both let the request through, but only one of them is a
-# instruction to write.
+# instruction to write. The two refusals differ in what they say about the
+# account: "revoked" is the entitlement itself ending, "mismatch" is only this
+# device not being the one the lock names.
 _LOCK_OK = "ok"
 _LOCK_UNBOUND = "unbound"
-_LOCK_VIOLATION = "violation"
+_LOCK_REVOKED = "revoked"
+_LOCK_MISMATCH = "mismatch"
+_LOCK_REFUSED = (_LOCK_REVOKED, _LOCK_MISMATCH)
 
 
 def _device_lock_state(user: dict, device_id: str) -> tuple[str, object | None]:
@@ -66,7 +70,7 @@ def _device_lock_state(user: dict, device_id: str) -> tuple[str, object | None]:
         return _LOCK_OK, None
     lic = snap.to_dict() or {}
     if (lic.get("status") or "") == "revoked":
-        return _LOCK_VIOLATION, None
+        return _LOCK_REVOKED, None
     if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
         return _lock_verdict(lic.get("deviceIdLock"), device_id, ref)
     seat_ref = _seat_ref(license_id, user.get("uid") or "")
@@ -75,7 +79,7 @@ def _device_lock_state(user: dict, device_id: str) -> tuple[str, object | None]:
         return _LOCK_OK, None
     seat = seat_snap.to_dict() or {}
     if seat.get("status") in ("revoked", "disabled"):
-        return _LOCK_VIOLATION, None
+        return _LOCK_REVOKED, None
     return _lock_verdict(seat.get("deviceIdLock"), device_id, seat_ref)
 
 
@@ -85,7 +89,7 @@ def _lock_verdict(locked, device_id: str, ref) -> tuple[str, object | None]:
     locked = locked or ""
     if not locked:
         return _LOCK_UNBOUND, ref
-    return (_LOCK_OK, None) if locked == device_id else (_LOCK_VIOLATION, None)
+    return (_LOCK_OK, None) if locked == device_id else (_LOCK_MISMATCH, None)
 
 
 #: Whole bind transactions tried before giving up, each with the client's own
@@ -156,7 +160,7 @@ def check_device_lock(user: dict, device_id: str) -> bool:
     not met a device yet. Binding is revalidate_device_lock's job, because
     only it knows the caller is a real authed request rather than a check.
     """
-    return _device_lock_state(user, device_id)[0] != _LOCK_VIOLATION
+    return _device_lock_state(user, device_id)[0] not in _LOCK_REFUSED
 
 
 
@@ -199,10 +203,21 @@ def _may_bind(user: dict, device_id: str) -> bool:
 def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
     """Re-check this account's entitlement against `device_id` on every authed
     call that carries X-Device-Id — activation is not "trust forever". A
-    revoked license/seat, or a device that no longer matches the lock, drops
-    the account to Demo immediately rather than waiting for the next explicit
-    revoke/activate to notice. No-op (and no write) for Demo accounts, accounts
-    with no license on file, or a call with no device id to check.
+    revoked license/seat drops the account to Demo immediately, and stored,
+    rather than waiting for the next explicit revoke/activate to notice. No-op
+    (and no write) for Demo accounts, accounts with no license on file, or a
+    call with no device id to check.
+
+    A device that does not match the lock gets Demo for *its own requests*,
+    and nothing is written. The mismatch says this device is not the
+    licensed one, not that the licence ended, and the device holding the lock
+    must stay licensed. Storing it let any other device demote the account for
+    good: a phone refused at `POST /v1/devices/register` still sends its
+    profile and config calls, and so does a second app on the same phone,
+    whose ANDROID_ID (and so device id) differs because it is signed with
+    another key (material_testing ADR-009, 2026-09-28). `effective_mode` then
+    read Demo everywhere, and this function's early return for Demo meant the
+    licensed phone never undid it; only a device-lock clear did.
 
     Also the moment an unbound licence acquires its device. A licence minted
     against an email, or a seat added to a roster, carries no lock until
@@ -252,6 +267,10 @@ def revalidate_device_lock(user: dict, device_id: str | None) -> dict:
         return user
     if verdict == _LOCK_OK:
         return user
+    if verdict == _LOCK_MISMATCH:
+        log.info("device lock mismatch uid=%s license=%s: demo for this request",
+                 user.get("uid"), user.get("licenseId"))
+        return {**user, **_mode_patch(MODE_DEMO)}
     uid = user.get("uid")
     if uid:
         db().collection("users").document(uid).update({
