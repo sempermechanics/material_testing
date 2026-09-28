@@ -103,7 +103,10 @@ class RoiEditorGestureTest {
             val inset = canvas.width() * EDGE_INSET
             val from = canvas.left + inset
             val to = canvas.right - inset
-            repeat(SWEEPS) {
+            // As many sweeps as the photo has left to travel, plus two to push past the edge:
+            // the pinch's zoom, and so the distance, depends on the screen.
+            val sweeps = ((canvas.left - photoOnScreen(scenario).left) / (to - from)).toInt() + EXTRA_SWEEPS
+            repeat(sweeps) {
                 twoFingers(
                     PointF(from, c.y - 50f),
                     PointF(from, c.y + 50f),
@@ -355,8 +358,8 @@ class RoiEditorGestureTest {
         /** Share of the canvas width kept clear at each end of the far pan's sweep. */
         const val EDGE_INSET = 0.15f
 
-        /** Sweeps of 70 % of the canvas each: well past what a 4x photo can travel. */
-        const val SWEEPS = 6
+        /** Sweeps past the ones the photo needs to reach the canvas edge. */
+        const val EXTRA_SWEEPS = 2
         const val IMG_W = 800
         const val IMG_H = 600
         const val ROI_X = 40
