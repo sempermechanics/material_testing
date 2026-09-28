@@ -31,6 +31,8 @@ import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -105,11 +107,15 @@ class RoiDrawActivity : AppCompatActivity() {
             val file = File(imageFilePath)
             if (file.exists()) {
                 val bytes = file.readBytes()
-                val screenWidth = resources.displayMetrics.widthPixels
+                // Twice the screen, as the beam-edge editor, so a zoomed-in
+                // crop edge still lands on visible speckle.
+                val screen = resources.displayMetrics
+                val maxEdge = PREVIEW_OVERSAMPLE * max(screen.widthPixels, screen.heightPixels)
+                val longEdge = max(realImageWidth, realImageHeight).takeIf { it > 0 } ?: maxEdge
 
                 lifecycleScope.launch {
                     val loaded = ReferencePreviewLoader.load(
-                        ReferencePreviewLoader.Request(bytes, realImageWidth, realImageHeight, screenWidth),
+                        ReferencePreviewLoader.Request(bytes, realImageWidth, realImageHeight, min(longEdge, maxEdge)),
                     )
                     realImageWidth = loaded.width
                     realImageHeight = loaded.height
@@ -179,6 +185,15 @@ class RoiDrawActivity : AppCompatActivity() {
             setEditMode(editManual)
         } else {
             setEditMode(false)
+            tvHud.text = getString(R.string.roi_hud_zoom_hint)
+        }
+
+        overlayRoi.onZoomChangedListener = { zoom ->
+            tvHud.text = if (zoom > 1f) {
+                getString(R.string.roi_hud_zoom, zoom)
+            } else {
+                getString(R.string.roi_hud_zoom_fit)
+            }
         }
 
         btnCancelRoi.setOnClickListener { finish() }
@@ -389,6 +404,7 @@ class RoiDrawActivity : AppCompatActivity() {
     private companion object {
         const val STATE_MANUAL = "roi_edit_manual"
         const val STATE_ERASE = "roi_edit_erase"
+        const val PREVIEW_OVERSAMPLE = 2
     }
 }
 

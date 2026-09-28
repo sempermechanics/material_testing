@@ -236,6 +236,7 @@ VSG = (strain window − 1) × step + 1     [px]
 | Control | Does |
 |---|---|
 | **Draw** (Rect / Square) | Drag to draw. Drag inside to move, drag a corner to resize |
+| Pinch / two fingers / double-tap | Zoom (up to 10×), pan, and 2× ↔ fit. One finger always draws |
 | **Manual** | Type X, Y, W and H, then tap **Apply** |
 | **Crop / Erase** | Crop sets the area to solve. Erase cuts holes (grips, marks) |
 | **Save ROI** / **Use full image** / **Reset** / **Cancel** | Keep it / whole frame / clear / discard |
