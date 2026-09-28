@@ -63,6 +63,9 @@
     <string name="roi_hud_mode_crop">Mode: Crop</string>
     <string name="roi_hud_mode_manual">Mode: Manual entry</string>
     <string name="roi_hud_canvas_cleared">Canvas cleared</string>
+    <string name="roi_hud_zoom_hint">Mode: Crop · pinch or double-tap to zoom</string>
+    <string name="roi_hud_zoom">Zoom %1$.1f× · two fingers pan · double-tap to fit</string>
+    <string name="roi_hud_zoom_fit">Zoom: fit</string>
     <string name="roi_hud_dimensions">ROI: %1$d × %2$d px  |  Pos: (%3$d, %4$d)</string>
     <string name="roi_full_image_selected">Full image selected</string>
     <string name="roi_invalid_size">Invalid ROI size</string>
