@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import com.indicvision.semper.R
+import com.indicvision.semper.data.TestType
 import com.indicvision.semper.report.StressStrain
 
 /**
@@ -36,7 +37,18 @@ object AnalysisReadyGate {
             viewModel.refBytes == null -> activity.getString(R.string.next_reason_ref)
             viewModel.defFilePaths.isEmpty() -> activity.getString(R.string.next_reason_def)
             viewModel.testType.hasMachineLoad && viewModel.machineLoads == null ->
-                activity.getString(R.string.next_reason_load)
+                activity.getString(
+                    if (viewModel.testType == TestType.BENDING) {
+                        R.string.next_reason_load_typed
+                    } else {
+                        R.string.next_reason_load
+                    },
+                )
+            viewModel.typedLoadsMissing() > 0 -> activity.resources.getQuantityString(
+                R.plurals.next_reason_load_typed_missing_fmt,
+                viewModel.typedLoadsMissing(),
+                viewModel.typedLoadsMissing(),
+            )
             viewModel.testType.hasMachineLoad && viewModel.machineLoads?.matchedFrames == 0 ->
                 activity.getString(R.string.next_reason_load_unmatched)
             viewModel.testType.hasMachineLoad && !viewModel.stressModel().isComplete ->

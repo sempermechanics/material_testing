@@ -25,17 +25,22 @@ So the copy is plain, the formulas are spelled out, and every number shown is on
 | | Tensile | Bending |
 |---|---|---|
 | Photos / video | Reference before loading, then one photo per load step | Reference with no weights, then a photo per weight, or a video that holds each weight a few seconds; filmed from the **side face** |
-| Loads | CSV in N or kN: one row per photo, or the machine's log | CSV in N or kN; hanger kg × 9.81 (kg is not read) |
+| Loads | CSV in N or kN: one row per photo, or the machine's log | Typed on the phone: the hanger mass of each photo in kg, W = m × 9.80665 N. Or, optionally, a CSV in N or kN |
 | Dimensions | Area (mm²); for a round bar πd²/4 | Span L, width b, thickness t (mm) |
 | Scale | None: strain is a ratio | Top and bottom edges tapped on the reference (**Beam height → Set**) |
 
 **Rows meet photos** in one of two ways:
-- **Timed log with a video:** always matched by time, even when the counts agree. Time 0 is the reference frame.
+- **Timed log with a video, or with photos that carry a capture time:** always matched by time, even when the counts agree.
+  Time 0 is the reference: the video's first frame, or when the reference photo was taken.
   A frame takes a row only within **100 ms** of it; a frame with none has no load and is left off the curve.
-  If the machine started logging later, enter the gap in **Log started after the first frame** (s; negative if the log started first).
-- **Photos:** paired in order when the counts agree (they have no times).
+  If the machine started logging later, enter the gap in **Log started after the reference** (s; negative if the log started first).
+- **Photos without capture times, or a log without a time column:** paired in order when the counts agree.
+  A photo's time is its EXIF `DateTimeOriginal` (+ `SubSecTimeOriginal`); the reference and every photo need one.
+  Phone cameras write it; screenshots and photos sent through a messenger usually lose it.
 
-Loads are CSV-only for now. Typing loads in the app is still an open decision.
+**Bending loads are typed** (**Type loads (kg)** on the load card): one box per deformed photo, the mass on the hanger when it was taken, with the reference at 0 kg.
+The app stores W = m × 9.80665 N. Every photo needs a number: 0 for no weight. The sheet will not close with **Done** while a box is empty, and **Next** waits until every photo has its load.
+Typed loads and a CSV are never combined; ✕ on one brings back the choice. Tensile loads stay CSV-only.
 
 ## Tensile (Exp. 2)
 
@@ -130,7 +135,7 @@ It's offered once the thickness is tapped.
 2. Put the phone on a tripod or clamp. It must not move.
 3. Take the reference before any load, or before the first weight.
 4. Get at least three photos in the elastic part before yield. More is better.
-5. Loads: one CSV row per photo in order, or the machine's timed log for a video.
+5. Loads: one CSV row per photo in order (no time column), or the machine's timed log for a video or for photos straight off the phone.
 6. Bending: frame the **middle** of the beam, not the whole span. Aim for 100+ px across the thickness.
 
 ## Worked numbers
@@ -157,7 +162,7 @@ It's offered once the thickness is tapped.
 
 ## Deferred
 
-- Typing loads in the app, and syncing photos to loads.
+- Typing tensile loads (a dial-read UTM) in the app.
 - Comparing against a textbook or lab E.
 - Extensometer strain over a chosen gauge length, in mm.
 - Snapping the thickness taps to the edge automatically.

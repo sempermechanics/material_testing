@@ -119,6 +119,7 @@ object AnalysisDeformedBatchHelper {
                             sizes = batch.frameSizes,
                             mode = FrameOrderMode.NAME,
                             direction = FrameOrderDirection.ASCENDING,
+                            captureTimes = batch.captureTimesMs,
                         )
                         val (paths, sizes) = withContext(Dispatchers.IO) {
                             FrameOrderHelper.reprefixTempFiles(
@@ -133,6 +134,8 @@ object AnalysisDeformedBatchHelper {
                         viewModel.defFrameSizes = sizes
                         viewModel.defFromVideo = batch.fromVideo
                         viewModel.defFrameTimesMs = emptyList()
+                        viewModel.defCaptureTimesMs = ordered.captureTimes
+                        viewModel.typedLoadsKg = emptyList()
                         viewModel.defOrderMode = FrameOrderMode.NAME
                     } else {
                         viewModel.defOrderMode = FrameOrderMode.NAME
@@ -142,6 +145,8 @@ object AnalysisDeformedBatchHelper {
                         viewModel.defFrameDates = emptyList()
                         viewModel.defFromVideo = false
                         viewModel.defFrameTimesMs = emptyList()
+                        viewModel.defCaptureTimesMs = emptyList()
+                        viewModel.typedLoadsKg = emptyList()
                     }
                     tvResult.text = ""
                     onApplied()

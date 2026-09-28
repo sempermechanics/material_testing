@@ -13,13 +13,20 @@ enum class LoadMapping {
     ONE_TO_ONE_DROP_FIRST,
 
     /**
-     * Video frames matched by time to a logged row no more than
-     * [MachineLoadMapper.MATCH_TOLERANCE_MS] away; a frame with none has no load.
+     * Frames (video, or photos with EXIF capture times) matched by time to a
+     * logged row no more than [MachineLoadMapper.MATCH_TOLERANCE_MS] away; a
+     * frame with none has no load.
      */
     TIME_NEAREST,
 
     /** Rows linearly resampled onto the frames; reference ↔ first row, last frame ↔ last row. */
     RESAMPLED,
+
+    /**
+     * No log: the hanger mass of each frame typed in the app, in kg, times
+     * [TypedLoads.G]. A frame left blank has no load.
+     */
+    TYPED_KG,
 }
 
 /** Something to tell the user about the match; informational, never blocking. */
@@ -80,14 +87,15 @@ object MachineLoadMapper {
     private const val FLOAT_SLACK_MS = 0.5
 
     /**
-     * Whenever both sides carry times (a timed log and video frames) the
+     * Whenever both sides carry times (a timed log and timed frames) the
      * match is by time alone, even when the row count equals the frame count:
      * equal counts say nothing about which row was logged when a frame was
-     * taken. Only an untimed log or a photo batch falls back to row order.
+     * taken. Only an untimed log or untimed frames fall back to row order.
      *
      * @param frameTimesMs time of each deformed frame relative to the
-     *   reference, index-aligned with the frames, or empty when unknown
-     *   (image batches). Only video extraction knows these.
+     *   reference, index-aligned with the frames, or empty when unknown.
+     *   Video extraction knows these; a photo batch has them when the
+     *   reference and every photo carry an EXIF capture time.
      * @param logStartS when the log's first row was taken, in seconds after
      *   the reference frame; negative when the log started first. Used only
      *   by the time match.

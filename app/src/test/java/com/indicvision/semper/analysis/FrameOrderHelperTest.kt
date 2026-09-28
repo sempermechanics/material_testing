@@ -141,4 +141,74 @@ class FrameOrderHelperTest {
         assertEquals(20 to 20, out.sizes["/f/0.png"])
         assertEquals(10 to 10, out.sizes["/f/2.png"])
     }
+
+    @Test
+    fun `capture times move with their frames`() {
+        // A time-matched load goes wherever its photo's time goes.
+        val out = FrameOrderHelper.reorder(
+            paths = paths,
+            names = names,
+            dates = dates,
+            sizes = sizes,
+            mode = FrameOrderMode.NAME,
+            captureTimes = listOf(3_000L, 1_000L, null),
+        )
+        assertEquals(listOf("/f/0.png", "/f/1.png", "/f/2.png"), out.paths)
+        assertEquals(listOf(1_000L, null, 3_000L), out.captureTimes)
+    }
+
+    @Test
+    fun `capture times of the wrong length are dropped, not misaligned`() {
+        val out = FrameOrderHelper.reorder(
+            paths = paths,
+            names = names,
+            dates = dates,
+            sizes = sizes,
+            mode = FrameOrderMode.NAME,
+            captureTimes = listOf(1_000L),
+        )
+        assertTrue(out.captureTimes.isEmpty())
+    }
+
+    @Test
+    fun `typed loads move with their frames`() {
+        // A hanger mass typed for a photo stays with that photo when the list is re-sorted.
+        val out = FrameOrderHelper.reorder(
+            paths = paths,
+            names = names,
+            dates = dates,
+            sizes = sizes,
+            mode = FrameOrderMode.NAME,
+            typedLoadsKg = listOf(1.5f, 0.5f, null),
+        )
+        assertEquals(listOf("/f/0.png", "/f/1.png", "/f/2.png"), out.paths)
+        assertEquals(listOf(0.5f, null, 1.5f), out.typedLoadsKg)
+    }
+
+    @Test
+    fun `typed loads follow a manual drag`() {
+        val out = FrameOrderHelper.reorder(
+            paths = paths,
+            names = names,
+            dates = dates,
+            sizes = sizes,
+            mode = FrameOrderMode.MANUAL,
+            manualOrder = listOf(2, 0, 1),
+            typedLoadsKg = listOf(1f, 2f, 3f),
+        )
+        assertEquals(listOf(3f, 1f, 2f), out.typedLoadsKg)
+    }
+
+    @Test
+    fun `typed loads of the wrong length are dropped, not misaligned`() {
+        val out = FrameOrderHelper.reorder(
+            paths = paths,
+            names = names,
+            dates = dates,
+            sizes = sizes,
+            mode = FrameOrderMode.NAME,
+            typedLoadsKg = listOf(1f),
+        )
+        assertTrue(out.typedLoadsKg.isEmpty())
+    }
 }

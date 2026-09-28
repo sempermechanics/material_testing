@@ -33,6 +33,7 @@ internal object WizardState {
     private const val REF_W = "refW"
     private const val REF_H = "refH"
     private const val REF_NAME = "refName"
+    private const val REF_CAPTURE_MS = "refCaptureMs"
     private const val HAS_REFERENCE = "hasReference"
     private const val HAS_MASK = "hasMask"
     private const val HAS_CUSTOM_ROI = "hasCustomRoi"
@@ -58,7 +59,9 @@ internal object WizardState {
 
     /**
      * Index-aligned lists behind the deformed-frames card; `-1` = size not
-     * measured. [timesMs] is empty unless the frames came from a video.
+     * measured. [timesMs] is empty unless the frames came from a video;
+     * [captureTimesMs] is empty unless they are photos (null: no EXIF time).
+     * [typedLoadsKg] is bending's typed hanger mass per frame (null: blank).
      */
     @Serializable
     data class Frames(
@@ -68,6 +71,8 @@ internal object WizardState {
         val widths: List<Int> = emptyList(),
         val heights: List<Int> = emptyList(),
         val timesMs: List<Long> = emptyList(),
+        val captureTimesMs: List<Long?> = emptyList(),
+        val typedLoadsKg: List<Float?> = emptyList(),
     )
 
     /** What [readInputs] read back from the draft. */
@@ -82,6 +87,7 @@ internal object WizardState {
         putInt(REF_W, vm.realRefWidth)
         putInt(REF_H, vm.realRefHeight)
         putString(REF_NAME, vm.refName)
+        vm.refCaptureTimeMs?.let { putLong(REF_CAPTURE_MS, it) }
         putBoolean(HAS_REFERENCE, vm.refBytes != null)
         putBoolean(HAS_MASK, vm.roiMaskBytes != null)
         putBoolean(HAS_CUSTOM_ROI, vm.hasCustomRoi)
@@ -126,6 +132,7 @@ internal object WizardState {
         vm.realRefWidth = b.getInt(REF_W)
         vm.realRefHeight = b.getInt(REF_H)
         b.getString(REF_NAME)?.let { vm.refName = it }
+        vm.refCaptureTimeMs = if (b.containsKey(REF_CAPTURE_MS)) b.getLong(REF_CAPTURE_MS) else null
         vm.hasCustomRoi = b.getBoolean(HAS_CUSTOM_ROI)
         b.getIntArray(ROI)?.takeIf { it.size == 4 }?.let {
             vm.roiX = it[0]
@@ -168,6 +175,8 @@ internal object WizardState {
         widths = vm.defFilePaths.map { vm.defFrameSizes[it]?.first ?: -1 },
         heights = vm.defFilePaths.map { vm.defFrameSizes[it]?.second ?: -1 },
         timesMs = vm.defFrameTimesMs,
+        captureTimesMs = vm.defCaptureTimesMs,
+        typedLoadsKg = vm.typedLoadsKg,
     )
 
     fun encodeFrames(frames: Frames): String = json.encodeToString(Frames.serializer(), frames)
@@ -177,6 +186,8 @@ internal object WizardState {
         vm.defOriginalNames = frames.names
         vm.defFrameDates = frames.dates
         vm.defFrameTimesMs = frames.timesMs
+        vm.defCaptureTimesMs = frames.captureTimesMs
+        vm.typedLoadsKg = frames.typedLoadsKg
         vm.defFrameSizes = frames.paths.indices
             .filter { frames.widths.getOrElse(it) { -1 } > 0 && frames.heights.getOrElse(it) { -1 } > 0 }
             .associate { frames.paths[it] to (frames.widths[it] to frames.heights[it]) }

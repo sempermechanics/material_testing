@@ -349,6 +349,47 @@ class VsgPlotViewTest {
         assertEquals("1962", VsgPlotView.tickLabel(1962f))
     }
 
+    // ── Scrub label ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `the scrub label reads both coordinates with their units`() {
+        assertEquals("(0.520 mm, 9.81 N)", VsgPlotView.scrubLabel(0.52f, 9.80665f, "mm", "N"))
+        assertEquals("(1.94 mε, 263 MPa)", VsgPlotView.scrubLabel(1.94f, 263.2f, "mε", "MPa"))
+        // The lattice and line-cut plots pass no units.
+        assertEquals("(41.0, 0.012)", VsgPlotView.scrubLabel(41f, 0.0123f, "", ""))
+    }
+
+    @Test
+    fun `a read value keeps three significant figures and never reads -0`() {
+        assertEquals("0.052", VsgPlotView.readoutValue(0.052f))
+        assertEquals("4.90", VsgPlotView.readoutValue(4.903325f))
+        assertEquals("14.7", VsgPlotView.readoutValue(14.709975f))
+        assertEquals("1962", VsgPlotView.readoutValue(1962.4f))
+        assertEquals("0.000", VsgPlotView.readoutValue(-0.0001f))
+        assertEquals("-0.260", VsgPlotView.readoutValue(-0.26f))
+    }
+
+    @Test
+    fun `the scrub label sits clear of its line, flipping left near the edge`() {
+        // Plot 100..900, label 200 wide, 10 clear of the dot.
+        assertEquals(410f, VsgPlotView.scrubLabelX(400f, 200f, 10f, 100f, 900f), EPS)
+        assertEquals(700f, VsgPlotView.scrubLabelX(690f, 200f, 10f, 100f, 900f), EPS) // just fits
+        assertEquals(640f, VsgPlotView.scrubLabelX(850f, 200f, 10f, 100f, 900f), EPS)
+        // Too wide for either side: held at the left edge.
+        assertEquals(100f, VsgPlotView.scrubLabelX(150f, 900f, 10f, 100f, 900f), EPS)
+    }
+
+    @Test
+    fun `scrubbing draws the point's x and y beside the dot`() {
+        view.setData(listOf(rising), "deflection", "load", xUnit = "mm", yUnit = "N")
+        redraw()
+        view.scrubToFraction(0.5f)
+
+        redraw() // the label is drawn in onDraw; this must not throw on the wider text
+        assertEquals(10f, scrubs.last().x, EPS)
+        assertEquals(10f, scrubs.last().samples.single().value, EPS)
+    }
+
     /** Pixel 6 (2.625 dp/px): 11 sp monospace, whose glyphs advance 0.6 em. */
     private val pixel6Px = 2.625f
     private val monoChar = VsgPlotView.AXIS_LABEL_SP * pixel6Px * MONO_ADVANCE_EM
