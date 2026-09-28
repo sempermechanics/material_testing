@@ -417,8 +417,20 @@ offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
 | [ ] 5.1b.34 | Reopen by tapping the summary; type `1.2.3` in a box; **Done** | The box shows "Enter the mass in kg, e.g. 0.5" and the sheet stays open. Fix it or press back: back keeps every valid box and the bad box's old value |
 | [ ] 5.1b.35 | Compute; open Results and the lab report | Loads 4.90, 9.81, 14.71, 0 N. Scrubbing the graph shows the point as "(δ mm, W N)" beside the dot, clear of the scrub line; near the right edge it flips to the line's left |
 | [ ] 5.1b.36 | Re-sort the frames (Name ↓, or drag) after typing | Each mass stays with its photo: reopen the sheet and check |
-| [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.indicvision.semper` while backgrounded), return | The typed loads come back |
+| [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.indicvision.semper.materialtesting` while backgrounded), return | The typed loads come back |
 | [ ] 5.1b.38 | Tap ✕ on the typed loads; import a CSV; tap ✕ on it | ✕ clears the typed loads and brings back the button and dropzone; with the CSV in, the typing sheet is never offered (no button, the summary does not open it); its ✕ brings the button back. Tensile never shows the button |
+
+**5.1b.32–38 on the Pixel 6 (`f4209a7f`, 2026-09-28)** pass on an offline lab
+build with `semper_test_data/2_bending_pmma_real` (pmma_00 as the reference,
+pmma_01–04 as the photos). The keypad's comma stays ("1,5" reopens as 1.5), and
+the sheet leaves no gap above the keyboard. Results show 4.90, 9.81, 14.71 and
+0 N on all 4 of 4 frames. Mid-curve the scrub label reads "(0.035 mm, 11.2 N)";
+at the right edge it flips to the left of the line. After Name ↓ and after
+`am kill` each mass stays with its photo. For tensile (`1_tensile_steel_real`,
+3 frames) the card offers only **Import load log**.
+
+The 5.1b.35 lab report is not checked yet: an unlicensed lab build disables
+Share, so the report cannot be opened.
 
 #### 5.1a Video source
 

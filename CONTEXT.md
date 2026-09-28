@@ -138,7 +138,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   longest straight leading run, the elastic-region view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video; bending's are
-  typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional). Strain window in
+  typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
+  2026-09-28). Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data, on a Pixel 6 too (2026-09-26); a concrete set fails as
   expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
