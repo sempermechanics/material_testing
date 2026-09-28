@@ -437,6 +437,23 @@ loads, dimensions and ROI. Its table lists 4.90, 9.81 and 14.71 N, with
 `BeamDeflection.loadSteps` drops unloaded frames. The graph page shows
 slope 148.20 N/mm and E ≈ 0.04 GPa, the same as the viewer.
 
+**5.1b.39 on the Pixel 6 (`7f32583a`, 2026-09-29)** passes on a debug build of
+#93 with the same PMMA photos (pmma_00 as the reference, pmma_01–04 as the
+photos). In **Absolute**, Photo 3 was retyped as "1,5" with the keypad's comma.
+Switching to **Incremental** turned 0.5, 1, 1,5, 0 into 0.5, 0.5, 0.5, -1.5, with
+"Total 0.5 kg", "Total 1 kg", "Total 1.5 kg" and "Total 0 kg" under them, and
+the subtitle changed to increments. The keypad had a minus key and kept the
+comma. With the last box at -2, **Done** stayed open on "This takes the hanger
+below 0 kg". Set back to -1.5, **Absolute** read 0.5, 1, 1.5, 0 again. After
+**Done** in Incremental, reopening from the card showed Incremental; so did the
+sheet after the app restarted overnight. Computed with L 75, b 12, t 31 mm,
+edge taps at 39 and 612 px (573 px, 0.0541 mm/px) and ROI 2180 × 520 at
+(100, 60): Results show 4 of 4 photos (slope 148.96 N/mm), and the session
+stores 4.903, 9.807, 14.710 and 0 N (`loadsN`, read with `run-as`, since the
+scrub label reads the line under the finger, not the dot). One gap: after a
+switch the cursor goes to the first box, but the keyboard stays down until a
+box is tapped (TD-141).
+
 #### 5.1a Video source
 
 Reached whenever the file picked — from the grid or through Files — is a video.
