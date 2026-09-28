@@ -12,6 +12,23 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-28 — Backend deploy: one phone per app (#279, #280)
+
+Production `semper-api` from `ed0adbc` (`deploy-backend.yml` run 36419849032,
+image `semper-api-36419849032-1`; the previous revision `semper-api-00029-z72`
+is pinned as `rollback-prev`). The gateway ran as dry-run: its spec did not
+change. `/readyz` passed on the candidate before the promote.
+
+- #279 (TD-137): a device-lock mismatch is Demo for that request only; it is
+  no longer stored on the account.
+- #280 (TD-138, [ADR-010](../adr/ADR-010-device-binding-per-app.md)): each app
+  names itself with `X-App-Id` and has its own registered device, release hold,
+  lock and cooldown. A request without the header is Semper, so builds in the
+  field are unchanged.
+
+Not yet out: the console half of #280 (Hosting), and Material Testing builds
+that send the header (material_testing#90).
+
 ## 2026-09-26 — Backend, gateway and console deploy: compat shims 1–5 retired (#267), account status line (#271)
 
 Staging first (run 36237349656 → `semper-api-staging-36237349656-1`, staging
