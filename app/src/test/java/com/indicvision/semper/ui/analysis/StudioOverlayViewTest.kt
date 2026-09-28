@@ -327,6 +327,22 @@ class StudioOverlayViewTest {
     }
 
     @Test
+    fun `a pan ends where the fingers lift, not where the last move overshot`() {
+        zoomTwiceAtCentre() // image now (-200, 0)-(600, 400)
+        fingers(MotionEvent.ACTION_DOWN, 200f to 150f)
+        fingers(secondDown, 200f to 150f, 200f to 250f)
+        // Input resampling can put the last MOVE a few px past the fingers.
+        fingers(MotionEvent.ACTION_MOVE, 146f to 150f, 146f to 250f)
+        fingers(secondUp, 150f to 150f, 150f to 250f)
+        fingers(MotionEvent.ACTION_UP, 150f to 150f)
+
+        assertEquals(2f, overlay.zoom, EPS)
+        val drawn = RectF(0f, 0f, 200f, 100f)
+        Matrix(image.imageMatrix).mapRect(drawn)
+        assertRect(RectF(-250f, 0f, 550f, 400f), drawn)
+    }
+
+    @Test
     fun `zoomed in, a drawn ROI is finer in image pixels`() {
         zoomTwiceAtCentre() // 2.5 image px per view px, image left edge at view x -200
         drag(0f, 0f, 200f, 200f)

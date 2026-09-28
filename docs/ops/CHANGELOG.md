@@ -12,6 +12,15 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-29 — material_testing: a ROI-editor pan stops where the fingers lift (TD-141)
+
+Tier 3 had been red on `main` since #86 added `e2e/RoiEditorGestureTest`: on the
+CI emulator a 200 px two-finger pan moved the photo 204 px. The overlay moved
+the photo on each MOVE and only re-anchored when a finger lifted, and input
+resampling can put the last MOVE a few px past the fingers. A lift now first
+follows the fingers to where the lift event says they are
+(`StudioOverlayView.settleThenTrack`). `StudioOverlayViewTest` covers it.
+
 ## 2026-09-28 — material_testing: synced with semperdic-app `ed0adbc`, one phone per app
 
 A plain merge of the parent's #273, #278, #279 and #280. #280 adds
