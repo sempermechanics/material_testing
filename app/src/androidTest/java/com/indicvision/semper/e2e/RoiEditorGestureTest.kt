@@ -96,9 +96,20 @@ class RoiEditorGestureTest {
             assertEquals(zoom, zoom(scenario), 0.01f)
             assertEquals(zoomed.left - 200f, photoOnScreen(scenario).left, PAN_TOLERANCE)
 
-            // Far further right than the photo reaches: it stops at the canvas edge.
-            repeat(4) {
-                twoFingers(c.plus(-300f, -50f), c.plus(-300f, 50f), c.plus(300f, -50f), c.plus(300f, 50f))
+            // Far further right than the photo reaches: it stops at the canvas edge. The
+            // fingers go down inside the canvas, clear of its edges: a DOWN off the screen
+            // is refused, and the CI emulator's canvas is narrower than a phone's.
+            val canvas = canvasOnScreen(scenario)
+            val inset = canvas.width() * EDGE_INSET
+            val from = canvas.left + inset
+            val to = canvas.right - inset
+            repeat(SWEEPS) {
+                twoFingers(
+                    PointF(from, c.y - 50f),
+                    PointF(from, c.y + 50f),
+                    PointF(to, c.y - 50f),
+                    PointF(to, c.y + 50f),
+                )
             }
             assertEquals(canvasOnScreen(scenario).left, photoOnScreen(scenario).left, 1f)
             assertRect(before, roi(scenario), ROI_TOLERANCE)
@@ -341,6 +352,11 @@ class RoiEditorGestureTest {
     }
 
     private companion object {
+        /** Share of the canvas width kept clear at each end of the far pan's sweep. */
+        const val EDGE_INSET = 0.15f
+
+        /** Sweeps of 70 % of the canvas each: well past what a 4x photo can travel. */
+        const val SWEEPS = 6
         const val IMG_W = 800
         const val IMG_H = 600
         const val ROI_X = 40
