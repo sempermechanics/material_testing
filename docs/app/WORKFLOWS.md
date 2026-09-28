@@ -415,7 +415,7 @@ offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
 | [ ] 5.1b.33 | Type 0.5, **Next**, 1, **Next**, 1,5 (the keypad's comma), **Next**, leave the last empty, tap **Done** | The comma stays in the box (reopened, it reads 1.5; never 15). The sheet stays open, the cursor on the empty box: "Type the mass in kg: 0 if there is no weight". Type 0, **Done**: the card reads "Typed loads · 4 of 4 photos · kg × 9.80665 = N · tap to edit"; no dropzone |
 | [ ] 5.1b.33a | Reopen, clear one box, press back | Kept, but the card warns "1 photo has no load yet" and **Next** is disabled with "1 photo has no load: type it (0 if no weight) to continue" |
 | [ ] 5.1b.34 | Reopen by tapping the summary; type `1.2.3` in a box; **Done** | The box shows "Enter the mass in kg, e.g. 0.5" and the sheet stays open. Fix it or press back: back keeps every valid box and the bad box's old value |
-| [ ] 5.1b.35 | Compute; open Results and the lab report | Loads 4.90, 9.81, 14.71, 0 N. Scrubbing the graph shows the point as "(δ mm, W N)" beside the dot, clear of the scrub line; near the right edge it flips to the line's left |
+| [ ] 5.1b.35 | Compute; open Results and the lab report | Loads 4.90, 9.81, 14.71, 0 N on the Results graph. The lab report's table lists the loaded steps only (4.90, 9.81, 14.71 N): unloaded frames are left out of it by design. Scrubbing the graph shows the point as "(δ mm, W N)" beside the dot, clear of the scrub line; near the right edge it flips to the line's left |
 | [ ] 5.1b.36 | Re-sort the frames (Name ↓, or drag) after typing | Each mass stays with its photo: reopen the sheet and check |
 | [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.indicvision.semper.materialtesting` while backgrounded), return | The typed loads come back |
 | [ ] 5.1b.38 | Tap ✕ on the typed loads; import a CSV; tap ✕ on it | ✕ clears the typed loads and brings back the button and dropzone; with the CSV in, the typing sheet is never offered (no button, the summary does not open it); its ✕ brings the button back. Tensile never shows the button |
@@ -429,8 +429,12 @@ at the right edge it flips to the left of the line. After Name ↓ and after
 `am kill` each mass stays with its photo. For tensile (`1_tensile_steel_real`,
 3 frames) the card offers only **Import load log**.
 
-The 5.1b.35 lab report is not checked yet: an unlicensed lab build disables
-Share, so the report cannot be opened.
+The 5.1b.35 lab report was checked on an API 36 emulator instead (`91640d47`,
+debug build, so sign-in is bypassed and Share is on), with the same photos,
+loads, dimensions and ROI. Its table lists 4.90, 9.81 and 14.71 N, with
+σb 0.048, 0.096 and 0.144 MPa. The 0 kg photo is not a row, because
+`BeamDeflection.loadSteps` drops unloaded frames. The graph page shows
+slope 148.20 N/mm and E ≈ 0.04 GPa, the same as the viewer.
 
 #### 5.1a Video source
 
