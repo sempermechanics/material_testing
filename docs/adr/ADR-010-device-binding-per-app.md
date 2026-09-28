@@ -1,8 +1,8 @@
 # ADR-010: Device binding per app — one phone per app, not one phone per account
 
 **Status:** Accepted. Phase 0 (a lock mismatch is no longer stored, #279)
-and phases 1–3 (one phone per app) are built. Material Testing gets the
-header when it next merges this repository's `main`.
+and phases 1–3 (one phone per app) are built; the backend is deployed
+(2026-09-28). Material Testing gets the header from material_testing#90.
 **Date:** 2026-09-28
 **Deciders:** product owner, backend owner
 
@@ -102,7 +102,10 @@ support, and nothing is migrated.
 - [x] Phase 2: per-app fields and cooldown (`apps.py`, `repo/devlock.py`,
       `repo/devices.py`, `repo/seats.py`, `repo/users.py`); TD-138.
 - [x] Phase 3: consoles and docs; TD-138.
+- [x] Deploy the backend (2026-09-28, `deploy-backend.yml` run 36419849032).
+- [ ] Deploy the consoles (the per-app device columns and the account page's
+      Material Testing button).
 - [ ] Merge this repository's `main` into material_testing so its builds send
-      the header.
+      the header (material_testing#90, open).
 - [ ] Register Material Testing for App Check (Play Integrity) and check the
       header against the token's `app_id`.
