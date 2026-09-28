@@ -682,6 +682,7 @@ async def test_staff_clear_a_seat_lock_over_http(client, monkeypatch, audited):
     assert resp.json() == {
         "licenseId": license_id, "uid": "u1",
         "deviceIdLock": "", "previousDeviceId": "old-phone",
+        "previousDeviceIdMaterialTesting": "",
     }
     assert store._data[f"licenses/{license_id}/seats"]["u1"]["deviceIdLock"] == ""
     assert [r for r in audited if r["action"] == "ADMIN_DEVICE_LOCK_CLEAR"]

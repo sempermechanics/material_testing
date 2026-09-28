@@ -226,6 +226,15 @@ the stored public key and returns `201` with `healed: true` (see
 new hardware means an admin revokes the prior device first. (There is no
 `:rebind` endpoint — that was a design idea, not something implemented.)
 
+**One device per app, not per account** ([ADR-010](../adr/ADR-010-device-binding-per-app.md)).
+Semper and Material Testing share accounts, and Android gives each app on a
+phone its own `ANDROID_ID`, so the same phone is two device ids. Every app
+call carries `X-App-Id` (its `applicationId`; none means Semper, an unlisted
+one is `400 unknown_app`), and "the account's device" above means that app's:
+Semper's is `activeDeviceId`, Material Testing's `activeDeviceIdMaterialTesting`
+(`backend/app/apps.py`). The same suffix applies to the release hold and to
+the licence or seat lock (§20.10).
+
 **Device records are settled, not orphaned.** Both transitions now write the old
 record rather than leaving it `ACTIVE` and unreachable:
 
@@ -471,6 +480,8 @@ users/{uid}                       (uid = Google 'sub')
   role: "user" | "admin"
   access_status: "PENDING" | "APPROVED" | "SUSPENDED"
   activeDeviceId: string | null
+  activeDeviceIdMaterialTesting   (the same for Material Testing; every per-app
+                                   device field has this suffix, ADR-010)
   driveFolderId                   (…/user/{uid} folder)
   maxSessions, maxFilesPerSession, maxFrames   (optional per-user quota overrides)
   # License terms, mirrored from licenses/{id} at activation so the read path
@@ -2043,6 +2054,18 @@ console previously called the institution-tier one, which returns
 (§20.1), an empty lock is `_LOCK_UNBOUND` and `revalidate_device_lock` binds
 it to the next device that may take it, first writer wins. Nothing is
 re-activated, no key is re-issued, and nothing is typed on the new device.
+
+**One lock per app** ([ADR-010](../adr/ADR-010-device-binding-per-app.md)).
+A licence or seat holds `deviceIdLock` for Semper and
+`deviceIdLockMaterialTesting` for Material Testing, and everything below is
+per app: the registered phone, the release hold (`releasedDeviceId…`,
+`releasedAt…`) and the self-service cooldown (`deviceChangedAt…`). A staff or
+IT clear empties every app's lock and releases every app's phone, since the
+holder is changing phones. The holder's own clear moves only the app that
+asks (`X-App-Id`, or `?app=materialtesting` from the account page), against
+that app's cooldown. Responses and audit details carry each app's ids side by
+side: `previousDeviceId` / `previousDeviceIdMaterialTesting`,
+`releasedDeviceId` / `releasedDeviceIdMaterialTesting`.
 
 **Only the registered phone takes the lock** (`devlock._may_bind`): the
 account's `activeDeviceId`, or, while nothing is registered, any device but a
