@@ -87,7 +87,7 @@ android {
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "com.indicvision.semper"
+        applicationId = "com.indicvision.semper.materialtesting"
         minSdk = 24
         targetSdk = 36
         // Overridable from the release workflow: -PversionCode / -PversionName.

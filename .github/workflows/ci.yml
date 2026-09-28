@@ -662,10 +662,10 @@ jobs:
           script: |
             ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
             ./gradlew :app:installDebug :app:installDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
-            "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED com.indicvision.semper.test/androidx.test.runner.AndroidJUnitRunner | tee micro-instrument.txt
+            "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED com.indicvision.semper.materialtesting.test/androidx.test.runner.AndroidJUnitRunner | tee micro-instrument.txt
             mkdir -p app/build/outputs/connected_android_test_additional_output
-            "$ANDROID_HOME/platform-tools/adb" pull /sdcard/Android/media/com.indicvision.semper.test app/build/outputs/connected_android_test_additional_output || true
-            "$ANDROID_HOME/platform-tools/adb" pull /sdcard/Android/media/com.indicvision.semper app/build/outputs/connected_android_test_additional_output || true
+            "$ANDROID_HOME/platform-tools/adb" pull /sdcard/Android/media/com.indicvision.semper.materialtesting.test app/build/outputs/connected_android_test_additional_output || true
+            "$ANDROID_HOME/platform-tools/adb" pull /sdcard/Android/media/com.indicvision.semper.materialtesting app/build/outputs/connected_android_test_additional_output || true
             "$ANDROID_HOME/platform-tools/adb" logcat -d -s Benchmark:I || true
             grep -q "^OK (" micro-instrument.txt
 

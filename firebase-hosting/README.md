@@ -91,7 +91,8 @@ firebase deploy --only hosting
 curl -s https://app.sempermechanics.com/.well-known/assetlinks.json
 curl -s https://indicvision-dic-app-auth.firebaseapp.com/.well-known/assetlinks.json
 
-# On a connected device/emulator (Android 12+):
+# On a connected device/emulator (Android 12+). Material Testing is
+# com.indicvision.semper.materialtesting; the file lists both apps (ADR-009).
 adb shell pm verify-app-links --re-verify com.indicvision.semper
 adb shell pm get-app-links com.indicvision.semper   # expect: verified
 ```

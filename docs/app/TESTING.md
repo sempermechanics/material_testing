@@ -57,8 +57,8 @@ so the only claim worth making is that a third-party decoder agrees.
 `analysis/WizardStateTest` covers the wizard's process-death restore on the
 JVM, `ui/analysis/WizardDraftRestoreTest` covers it through a real Parcel on a
 device, and neither can kill the process. The kill is a scripted pass: take
-the wizard to step 2, press Home, run `adb shell am kill com.indicvision.semper`
-(if `pidof` still shows the process, `adb shell run-as com.indicvision.semper
+the wizard to step 2, press Home, run `adb shell am kill com.indicvision.semper.materialtesting`
+(if `pidof` still shows the process, `adb shell run-as com.indicvision.semper.materialtesting
 kill -9 <pid>`), then reopen from Recents. Step, sliders, ROI and both slots
 must come back. Run it once more with `run-as … rm -rf cache/temp_deformed`
 before reopening: expect an empty step 1 and the "cleared while Semper was in
@@ -86,7 +86,7 @@ fixed, so a change in allocations is caused by the code and nothing else.
 ./gradlew :app:installDebug :app:installDebugAndroidTest
 adb shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark \
   -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED \
-  com.indicvision.semper.test/androidx.test.runner.AndroidJUnitRunner
+  com.indicvision.semper.materialtesting.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 Emulators on API 34 and 37 both raise `ACTIVITY-MISSING` and `NOT-AOT-COMPILED`
@@ -138,7 +138,7 @@ Four things that will otherwise cost you an afternoon:
 
 - **The connected task installs over whatever is on the phone, then uninstalls it.**
   `:benchmark:connectedBenchmarkAndroidTest` installs the `benchmark` build over an
-  existing `com.indicvision.semper` (same debug key), keeping its data, and uninstalls
+  existing `com.indicvision.semper.materialtesting` (same debug key), keeping its data, and uninstalls
   the app when it finishes, taking that data with it. Back up anything you need first.
   A signed-in session left over from a debug install also changes the launch route
   (Splash → Home rather than sign-in); before TD-90 that crashed both `StartupBenchmark`

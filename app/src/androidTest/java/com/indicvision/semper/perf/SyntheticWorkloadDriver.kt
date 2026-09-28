@@ -61,7 +61,7 @@ import kotlin.random.Random
  * adb shell am instrument -w \
  *   -e class com.indicvision.semper.perf.SyntheticWorkloadDriver#run \
  *   -e op analysis -e scale large \
- *   com.indicvision.semper.test/androidx.test.runner.AndroidJUnitRunner
+ *   com.indicvision.semper.materialtesting.test/androidx.test.runner.AndroidJUnitRunner
  * ```
  * `op` ∈ {screen, analysis, backup, restore}; `scale` ∈ {light, large}; `cloudId` (restore
  * only) overrides auto-discovery of the most recently uploaded session.
