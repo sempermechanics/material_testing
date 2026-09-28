@@ -12,6 +12,21 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-28 — material_testing: synced with semperdic-app `ed0adbc`, one phone per app
+
+A plain merge of the parent's #273, #278, #279 and #280. #280 adds
+`data/net/AppIdHeader.kt`: every API call sends `X-App-Id`, the build's
+`applicationId`, and the backend (deployed 2026-09-28, `semper-api-36419849032-1`)
+keeps one registered device, lock and cooldown per app
+([ADR-010](../adr/ADR-010-device-binding-per-app.md), TD-138). #279 serves a
+lock mismatch as Demo for that request only (TD-137). The next Material Testing
+build signs in on a phone that has Semper; `v1.2-beta.1` still reads as Semper.
+
+The parent's ADR-010 and TD-137 took numbers this repo had used, so the viewer's
+deformed-frame decision is now ADR-011 and its open row TD-139; #88's keyboard
+row, recorded as TD-138, is TD-140. The ADR index
+note that the parent wrote with a literal backslash-n is fixed here.
+
 ## 2026-09-28 — material_testing: its own app, released as v1.2-beta.1 (#82)
 
 Material Testing installs as `com.indicvision.semper.materialtesting` beside
@@ -25,7 +40,7 @@ On a phone already registered to Semper, sign-in fails with "already linked".
 Each app has its own `ANDROID_ID`, and the backend allowed one device per
 account. ADR-009's trade-off section first blamed only the licence lock and has
 been corrected. The fix is the parent's one phone per app (its ADR-010,
-semperdic-app #279 and #280). It reaches this app through a `sync/` merge.
+semperdic-app #279 and #280), synced here the same day.
 
 ## 2026-09-28 — material_testing: the viewer draws each frame on its own photo (#83)
 
@@ -33,13 +48,14 @@ After compute, the result viewer drew every frame's heatmap on the reference
 photo. A tensile bar never stretched and a bending beam never bent on screen,
 though the map said they did. Each frame now shows its own deformed photo, with
 the map drawn where the points moved to, (x + u, y + v), so it stays on the
-specimen ([ADR-010](../adr/ADR-010-viewer-deformed-frame.md)).
+specimen ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md)).
 `VisualizationEngine.generateDeformedHeatmap` fills each displaced grid cell by
 inverse-bilinear interpolation, in the reference render's colour range. Probe
 taps find the moved point, and a frame with no photo on disk falls back to the
 reference. `generateHeatmapIndices` is unchanged, so the GIF bytes stay pinned.
 The summary GIF, the PNG export and the report still draw on the reference
-(TD-137).
+(TD-139; recorded as TD-137 until the parent's ADR-010 and TD-137/138 arrived in
+the 2026-09-28 sync).
 
 Checked on an emulator with the PMMA bending set: frame 4 shows pmma_33 with
 the U map on the bent beam. E is unchanged at 1.93 GPa from the graph and

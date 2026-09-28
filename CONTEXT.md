@@ -134,6 +134,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
+  ADR and TD numbers are shared: ADR-008, 009 and 011 and TD-133–135, TD-139 and TD-140 are ours.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain, E from the
   longest straight leading run, the elastic-region view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
@@ -173,12 +174,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - **Own app (ADR-009, TD-133).** Installs as `com.indicvision.semper.materialtesting`
     beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
-    (#82), with Asset Links on Hosting. On a phone already registered to Semper,
-    sign-in is refused ("already linked") until the parent binds one phone per app
-    (its ADR-010, semperdic-app #279 → #280, then a backend deploy) and a `sync/` merge
-    brings in `AppIdHeader`. That merge keeps this repo's `applicationId` and
-    `google-services.json`, and the parent's ADR-010 and TD-137/138 need new numbers
-    here (ours are the viewer's). App Check for this app is owed.
+    (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
+    TD-138) is deployed and synced here (2026-09-28): builds send `X-App-Id`, so this
+    app signs in beside Semper. `v1.2-beta.1` predates the header and still gets
+    "already linked" there; the next build is owed, and App Check for this app. A
+    `sync/` merge keeps this repo's `applicationId` and `google-services.json`.
   - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
