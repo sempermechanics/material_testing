@@ -113,6 +113,16 @@ class VsgPlotView @JvmOverloads constructor(
             return "(${part(x, xUnit)}, ${part(y, yUnit)})"
         }
 
+        /**
+         * Where the scrub label starts: right of the line at [px], [clearance]
+         * clear of the dot, or flipped to its left where it would run past
+         * [right] — never across the line it labels. Held inside [left].
+         */
+        internal fun scrubLabelX(px: Float, width: Float, clearance: Float, left: Float, right: Float): Float {
+            val x = if (px + clearance + width <= right) px + clearance else px - clearance - width
+            return x.coerceAtLeast(left)
+        }
+
         /** The i-th y tick value, 0 at the bottom gridline to [GRID_LINES] at the top. */
         internal fun yTick(yMin: Float, yMax: Float, i: Int): Float = yMin + (yMax - yMin) * i / GRID_LINES
 
@@ -607,7 +617,13 @@ class VsgPlotView @JvmOverloads constructor(
                 valuePaint.textAlign = Paint.Align.LEFT
                 canvas.drawText(
                     label,
-                    (px + dp(TICK_GAP_DP)).coerceAtMost(right - valuePaint.measureText(label)).coerceAtLeast(left),
+                    scrubLabelX(
+                        px,
+                        valuePaint.measureText(label),
+                        dp(MARKER_RADIUS_DP) + dp(TICK_GAP_DP),
+                        left,
+                        right,
+                    ),
                     (py - dp(TICK_GAP_DP)).coerceAtLeast(top + valuePaint.textSize),
                     valuePaint,
                 )

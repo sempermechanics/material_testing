@@ -53,6 +53,7 @@
         android:hint="@string/load_typed_hint"
         android:imeOptions="actionNext|flagNoExtractUi"
         android:importantForAutofill="no"
+        android:digits="0123456789.,"
         android:inputType="numberDecimal"
         android:maxLength="8"
         android:minHeight="48dp"

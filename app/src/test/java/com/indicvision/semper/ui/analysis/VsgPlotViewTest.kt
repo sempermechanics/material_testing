@@ -370,6 +370,16 @@ class VsgPlotViewTest {
     }
 
     @Test
+    fun `the scrub label sits clear of its line, flipping left near the edge`() {
+        // Plot 100..900, label 200 wide, 10 clear of the dot.
+        assertEquals(410f, VsgPlotView.scrubLabelX(400f, 200f, 10f, 100f, 900f), EPS)
+        assertEquals(700f, VsgPlotView.scrubLabelX(690f, 200f, 10f, 100f, 900f), EPS) // just fits
+        assertEquals(640f, VsgPlotView.scrubLabelX(850f, 200f, 10f, 100f, 900f), EPS)
+        // Too wide for either side: held at the left edge.
+        assertEquals(100f, VsgPlotView.scrubLabelX(150f, 900f, 10f, 100f, 900f), EPS)
+    }
+
+    @Test
     fun `scrubbing draws the point's x and y beside the dot`() {
         view.setData(listOf(rising), "deflection", "load", xUnit = "mm", yUnit = "N")
         redraw()

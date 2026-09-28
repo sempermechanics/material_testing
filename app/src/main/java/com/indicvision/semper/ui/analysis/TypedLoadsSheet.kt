@@ -21,7 +21,6 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.R
 import com.indicvision.semper.data.TypedLoads
-import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -84,7 +83,6 @@ internal object TypedLoadsSheet {
         list.layoutManager = LinearLayoutManager(activity)
         list.adapter = adapter
         list.setItemViewCacheSize(frames.size.coerceAtMost(MAX_CACHED_ROWS))
-        Insets.padImeBottom(list)
 
         val sheet = BottomSheetDialog(activity)
         sheet.setContentView(root)
