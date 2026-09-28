@@ -596,7 +596,9 @@ node. **Exit:** Home, or back to the Lattice.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 8.1.1 | Open a result | The U field is shown as a jet heatmap over the reference |
+| [ ] 8.1.1 | Open a result | The U field is shown as a jet heatmap over that frame's own photo, drawn where the points moved to |
+| [ ] 8.1.1a | Step through the frames of a run whose specimen visibly deforms | The photo under the map changes with each frame and the map stays on the specimen. A sweep shows its one deformed photo under every node |
+| [ ] 8.1.1b | Open a session whose deformed photos are not on the phone | Each frame falls back to the reference photo, with the map at the reference positions, still lined up |
 | [ ] 8.1.2 | Tap the field FAB, then pick V / Exx / Eyy / Exy | Heatmap and colour scale follow; edge title updates; the live field stays checked in the popup |
 | [ ] 8.1.2a | Open the field popup | All five fields are listed; the one on screen is highlighted |
 | [ ] 8.1.2b | Check fit at rest | Heatmap (ROI or accepted points) is contained between the top bar and scrub bar; the colour scale may overlay the right edge and stays put while the figure pans |
