@@ -12,6 +12,24 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-28 — material_testing: the viewer draws each frame on its own photo (#83)
+
+After compute, the result viewer drew every frame's heatmap on the reference
+photo. A tensile bar never stretched and a bending beam never bent on screen,
+though the map said they did. Each frame now shows its own deformed photo, with
+the map drawn where the points moved to, (x + u, y + v), so it stays on the
+specimen ([ADR-010](../adr/ADR-010-viewer-deformed-frame.md)).
+`VisualizationEngine.generateDeformedHeatmap` fills each displaced grid cell by
+inverse-bilinear interpolation, in the reference render's colour range. Probe
+taps find the moved point, and a frame with no photo on disk falls back to the
+reference. `generateHeatmapIndices` is unchanged, so the GIF bytes stay pinned.
+The summary GIF, the PNG export and the report still draw on the reference
+(TD-137).
+
+Checked on an emulator with the PMMA bending set: frame 4 shows pmma_33 with
+the U map on the bent beam. E is unchanged at 1.93 GPa from the graph and
+2.09 GPa averaged. `DeformedHeatmapTest` adds 8 tests.
+
 ## 2026-09-26 — material_testing: the keyboard makes room on every text-field screen (#71)
 
 Merged as `e90b23ba`. Before Android 15, the wizard and the result viewer ran in
