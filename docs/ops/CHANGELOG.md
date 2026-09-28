@@ -19,7 +19,11 @@ CI emulator a 200 px two-finger pan moved the photo 204 px. The overlay moved
 the photo on each MOVE and only re-anchored when a finger lifted, and input
 resampling can put the last MOVE a few px past the fingers. A lift now first
 follows the fingers to where the lift event says they are
-(`StudioOverlayView.settleThenTrack`). `StudioOverlayViewTest` covers it.
+(`StudioOverlayView.settleThenTrack`). `StudioOverlayViewTest` covers it. With
+the pan fixed, the same e2e test reached its last swipe, which started 300 px
+left of the centre: off-screen on CI's 320 px emulator. It now sweeps inside
+the canvas. That last check still sometimes stops the photo 4.7 px short of
+the canvas edge on CI (TD-146).
 
 ## 2026-09-28 — material_testing: synced with semperdic-app `ed0adbc`, one phone per app
 
