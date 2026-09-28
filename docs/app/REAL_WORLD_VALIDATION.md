@@ -63,7 +63,7 @@ so **only camera 1** was used, as a student's single phone would be.
 
 App strain is the mean Exx over the analysed region (what the curve plotted
 until [ADR-012](../adr/ADR-012-tensile-strain-virtual-extensometer.md); it now
-plots the virtual extensometer's ΔL / L₀, and this table is owed a re-run, TD-142).
+plots the virtual extensometer's ΔL / L₀, and this table is owed a re-run, TD-144).
 Dataset strain is the change in distance between the two gauge points over
 their starting 60 mm.
 

@@ -113,7 +113,7 @@ means. Rejected.
   `# elastic_modulus_gpa` trailer changes.
 - The real-world numbers in
   [REAL_WORLD_VALIDATION.md](../app/REAL_WORLD_VALIDATION.md) were taken with the
-  region mean. They are owed a re-run (TD-142).
+  region mean. They are owed a re-run (TD-144).
 - `.dat` and GIF oracles are untouched: this is downstream of the solve.
 
 ## Action items
@@ -121,5 +121,5 @@ means. Rejected.
 - [x] `Axial` strain from the gauge, `StressStrain.Collector`, CSV writer on the
       collector, report wording, tests (`StressStrainTest`, `ExtensometerTest`,
       `AnalysisCsvPreambleTest`); device-test and benchmark seeds stretch u.
-- [ ] TD-142: re-run the steel validation under ΔL / L₀ and replace the table.
+- [ ] TD-144: re-run the steel validation under ΔL / L₀ and replace the table.
 - [ ] Option C when a tensile mm scale exists.
