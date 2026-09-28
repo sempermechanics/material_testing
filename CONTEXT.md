@@ -147,7 +147,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room
   on every screen with a text field: wizard, ROI editor, viewer frame jump (#71, TD-99).
-  The ROI editor zooms (pinch to 10×, double-tap 2× / fit) and pans with two fingers.
+  The ROI editor zooms (pinch to 10×, double-tap 2× / fit) and pans with two fingers
+  (#84); `e2e/RoiEditorGestureTest` passes on the API 37 emulator (2026-09-28).
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   run in Tier 3 and pass on a Galaxy S21+ and the API 37 emulator (TD-95).
   `WizardDraftRestoreTest`: a load log survives process death.
@@ -160,7 +161,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   A/B (ADR-008); the Pixel 6 references are owed a re-take.
   TD-86–TD-88 and TD-90 match the parent's numbers; its TD-81 is TD-89 here.
 - **Owed.**
-  - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): ROI zoom and pan (§6.21–6.25).
+  - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): how ROI zoom and pan feel
+    on a real screen (§6.21–6.25; the gestures themselves pass in e2e on the emulator).
     From §5.1a: a phone-recorded MP4
     (5.1a.12) and a real UTM clip. The rest of §5.1a, including Key frames with loads
     (5.1a.16), passes on a Pixel 6 with synthetic clips (2026-09-26); MP4 luma stays
