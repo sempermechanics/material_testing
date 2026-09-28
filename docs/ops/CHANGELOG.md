@@ -23,7 +23,8 @@ lock mismatch as Demo for that request only (TD-137). The next Material Testing
 build signs in on a phone that has Semper; `v1.2-beta.1` still reads as Semper.
 
 The parent's ADR-010 and TD-137 took numbers this repo had used, so the viewer's
-deformed-frame decision is now ADR-011 and its open row TD-139. The ADR index
+deformed-frame decision is now ADR-011 and its open row TD-139; #88's keyboard
+row, recorded as TD-138, is TD-140. The ADR index
 note that the parent wrote with a literal backslash-n is fixed here.
 
 ## 2026-09-28 — material_testing: its own app, released as v1.2-beta.1 (#82)
