@@ -316,6 +316,7 @@ class StudioOverlayView @JvmOverloads constructor(
         object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 cancelEdit()
+                viewport.beginPan()
                 viewport.toggle(e.x, e.y)
                 applyViewport()
                 viewportGesture = true
@@ -345,6 +346,7 @@ class StudioOverlayView @JvmOverloads constructor(
             MotionEvent.ACTION_POINTER_DOWN -> {
                 if (!viewportGesture) {
                     cancelEdit()
+                    viewport.beginPan()
                     viewportGesture = true
                 }
                 trackPinch(event)
@@ -352,7 +354,7 @@ class StudioOverlayView @JvmOverloads constructor(
             MotionEvent.ACTION_POINTER_UP -> if (viewportGesture) settleThenTrack(event)
             MotionEvent.ACTION_MOVE -> if (viewportGesture) pinchMove(event)
             MotionEvent.ACTION_UP -> if (viewportGesture) {
-                pinchMove(event, lifting = NO_POINTER)
+                pinchMove(event, lifting = NO_POINTER, settle = true)
                 viewportGesture = false
                 return true
             }
@@ -372,16 +374,20 @@ class StudioOverlayView @JvmOverloads constructor(
      * the fingers left it.
      */
     private fun settleThenTrack(event: MotionEvent) {
-        pinchMove(event, lifting = NO_POINTER)
+        pinchMove(event, lifting = NO_POINTER, settle = true)
         trackPinch(event)
     }
 
-    private fun pinchMove(event: MotionEvent, lifting: Int = liftingIndex(event)) {
+    private fun pinchMove(event: MotionEvent, lifting: Int = liftingIndex(event), settle: Boolean = false) {
         val prevX = pinchFocusX
         val prevY = pinchFocusY
         val prevSpan = pinchSpan
         trackPinch(event, lifting)
-        viewport.panBy(pinchFocusX - prevX, pinchFocusY - prevY)
+        if (settle) {
+            viewport.settleBy(pinchFocusX - prevX, pinchFocusY - prevY)
+        } else {
+            viewport.panBy(pinchFocusX - prevX, pinchFocusY - prevY)
+        }
         if (prevSpan > MIN_PINCH_SPAN && pinchSpan > MIN_PINCH_SPAN) {
             viewport.zoomBy(pinchSpan / prevSpan, pinchFocusX, pinchFocusY)
         }
