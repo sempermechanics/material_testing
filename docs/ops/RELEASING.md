@@ -37,6 +37,11 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
   stable releases are tagged `v<versionName>`.
 - `versionCode` increases for every build handed to anyone (the run number is
   monotonic, so successive releases always increase).
+- `ci.yml` signs its `release-apk` artifact with the same key but numbers it with
+  **its own** run number (in the 250s by 2026-09-29, against 4 for
+  `v1.2-beta.3`). It installs over any release, and then no release installs over
+  it until the app is uninstalled, which deletes local analyses. Hand out
+  releases, not CI artifacts (TD-148).
 
 ## Release checklist
 

@@ -103,6 +103,45 @@ class StressStrainTest {
     }
 
     @Test
+    fun `the peak stress counts a loaded frame with no strain, but the curve's peak does not`() {
+        // Frame 2 carries the highest load, but its field has no accepted point
+        // (a band left the picture), so it has no strain and no point (TD-147).
+        val fields = listOf(field(0.001f, 0f), field(0.002f, 0f), field(0.003f, 0f, accepted = false))
+
+        val curve = StressStrain.build(
+            loadsN = listOf(100f, 200f, 300f),
+            model = StressStrain.Model.Axial(areaMm2 = 10f, axisX = true),
+            frameData = { fields[it] },
+        )
+
+        assertEquals(listOf(0, 1), curve.points.map { it.frame })
+        assertEquals(1, curve.peak!!.frame)
+        assertEquals(StressStrain.Peak(2, 300f, 30f, onCurve = false), curve.peakStress)
+    }
+
+    @Test
+    fun `the peak stress is the curve's own when the top load has a strain`() {
+        val curve = StressStrain.build(
+            loadsN = listOf(100f, -300f, 200f),
+            model = StressStrain.Model.Axial(areaMm2 = 10f, axisX = true),
+            frameData = { field(0.001f * (it + 1), 0f) },
+        )
+
+        assertEquals(StressStrain.Peak(1, -300f, -30f, onCurve = true), curve.peakStress)
+        assertEquals(curve.peak!!.frame, curve.peakStress!!.frame)
+    }
+
+    @Test
+    fun `a curve made from points alone reports its own peak`() {
+        val model = StressStrain.Model.Axial(areaMm2 = 10f, axisX = true)
+        val points = listOf(StressStrain.Point(0, 100f, 10f, 1f), StressStrain.Point(1, 50f, 5f, 2f))
+        val curve = StressStrain.Curve(model, 2, points)
+
+        assertEquals(StressStrain.Peak(0, 100f, 10f, onCurve = true), curve.peakStress)
+        assertNull(StressStrain.Curve(model, 0, emptyList()).peakStress)
+    }
+
+    @Test
     fun `a frame with no matched load is left off the curve and its field is not read`() {
         val read = mutableListOf<Int>()
 

@@ -260,10 +260,16 @@ object PdfReportGenerator {
         layout.drawTitle(curve.model.curveTitle)
         layout.drawDimensions(curve.model)
         layout.drawKeyValue("Strain:", "${curve.model.strainName} ${curve.model.strainBasis}")
-        curve.peak?.let {
-            layout.drawKeyValue("Peak Stress:", "%.3f MPa at frame %d".format(Locale.US, it.stressMPa, it.frame + 1))
+        curve.peakStress?.let {
+            val where = if (it.onCurve) "" else ", off the curve (no strain)"
+            val value = "%.3f MPa at frame %d%s".format(Locale.US, it.stressMPa, it.frame + 1, where)
+            layout.drawKeyValue("Peak Stress:", value)
         }
         page.modulus?.let { layout.drawKeyValue("Modulus E (approx.):", LabReport.modulusSummary(it)) }
+        page.modulus?.let { YieldStrength.offset(curve, it) }?.let {
+            val value = "%.3f MPa at %.3f mε (0.2%% offset)".format(Locale.US, it.stressMPa, it.strainMilli)
+            layout.drawKeyValue("Yield Strength Rp0.2:", value)
+        }
         layout.advanceY(20f)
         page.plot?.let {
             layout.drawDiagnosticBlock(

@@ -55,12 +55,13 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
   - Every run length is tried, so noisy first photos don't stop it.
   - MPa ÷ mε = GPa.
 - **The reference is not forced onto the line.** Labs zero the gauge under a preload. Through the origin, Exp. 2 would read 218 GPa, not 194.
-- **Peak stress.**
+- **Yield strength Rp0.2** (0.2 % offset): where the curve meets the E line moved 0.2 % (2 mε) along the strain axis, read between the two photos either side (`YieldStrength`). It is marked with a diamond, with its value in the legend, on the viewer's curve and the report's full curve graph. Without E, or when the curve peaks before it reaches the offset line, there is none, and the viewer and the report say so. Photos far apart around yield make it coarse.
+- **Peak stress,** the highest over every photo with a load. A photo with a load but no strain still counts; the viewer and the report then say it is off the curve (TD-147).
 - **The virtual extensometer** (`Extensometer`) gives both ε and the report table's **Extension (px)**:
   - Two end bands, each a tenth of the region, are fixed on the first solved photo.
   - ΔL is the mean displacement of the far band minus that of the near band.
   - The distance between the bands is L₀, the **DIC gauge length** (px), printed under Observations. Pixels cancel in ΔL / L₀, so no mm scale is needed.
-  - Before ADR-012 the curve plotted the region's mean strain; on the steel case ΔL / L₀ tracked it within 0.5 % in the elastic range (1.95×10⁻³ against 1.94×10⁻³ at 263 MPa).
+  - Before ADR-012 the curve plotted the region's mean strain; on the steel case ΔL / L₀ reads 0.8 % above it over the elastic frames 13–28 (1.95×10⁻³ against 1.94×10⁻³ at 263 MPa; re-run 2026-09-29).
   - A photo where an end band has no points (it left the view, usually well past yield) has no strain and is left off the curve.
 
 ## Bending (Exp. 5)
@@ -90,6 +91,7 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
 - **Viewer → Results:** the page the viewer opens on. It shows:
   - the curve or graph with its fitted line;
   - E and the frames it came from;
+  - the yield strength Rp0.2, also marked on the curve;
   - peak stress, or the bending summary.
 
   The same block closes the ⓘ sheet. The heatmap loop is under **Share → Animations**.
@@ -105,8 +107,8 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
   5. Observations (area, DIC gauge);
   6. table: S.No, Frame, Load, Extension (px), Stress, Strain, with Elastic / Plastic / Break point bracketed;
   7. Calculation for row 1;
-  8. graphs: the elastic region with its line, and the full curve with E;
-  9. Results;
+  8. graphs: the elastic region with its line, and the full curve with E and the yield point;
+  9. Results (E, yield strength Rp0.2, peak stress);
   10. ruled Conclusions.
 
 <img src="../images/lab-report-bending.png" width="540" alt="Bending lab report pages">
@@ -155,9 +157,9 @@ It's offered once the thickness is tapped.
 ## Accuracy
 
 - **Camera strain is noisier than an extensometer's,** so E is approximate. Steel's elastic range is below 1 mε, which is where the noise matters most. More pixels and a still camera help most.
-- **Strain is ΔL / L₀ over a gauge the ROI sets,** so after necking it is the average over that gauge, as with a clip-on extensometer, and a longer ROI reads a smaller elongation. The steel figures below were taken with the older region-mean strain (TD-144).
+- **Strain is ΔL / L₀ over a gauge the ROI sets,** so after necking it is the average over that gauge, as with a clip-on extensometer, and a longer ROI reads a smaller elongation. A band that leaves the picture ends the curve there, so frame the specimen with room in the picture past both ends of the ROI.
 - **A seating start** that never straightens can still give no E, and the report says so.
-- **On published steel data,** the strain reads about 8% above the dataset's 3D gauge points and E about 5% below ([REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)).
+- **On published steel data,** ΔL / L₀ reads about 8% above the dataset's 3D gauge points in the elastic range and E (148.9 GPa) about 5.5% below theirs (157.5 GPa); Rp0.2 (305.6 MPa) is 0.7% below theirs (307.8 MPa), the same on the emulator and a Pixel 6. Peak stress matches the logged 435.5 MPa (frame 38), but the curve ends at frame 35 of 40, before it, when the stretching strip carries the far band out of the picture ([REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)).
 - **On a published PMMA 3-point bend,** the deflection at the load point is within 0.0074 mm RMS of the authors' own DIC, 0.5% of the peak. Both E values are within 1%. Displacement agrees to 0.013 px, and strain to about 400 µε at the 45 px window. The thickness taps matter most: a 49 px slip on 572 px put E 9% low (same page, case 2).
 
 ## Deferred

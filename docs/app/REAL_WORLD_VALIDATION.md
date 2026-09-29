@@ -6,8 +6,9 @@
 (case 1); bending deflection, E, displacement and strain against a published
 3-point bend's own DIC (case 2, 2026-09-24); both again on a Pixel 6, and a
 concrete set that is expected to fail (case 3), 2026-09-26
-([below](#on-a-pixel-6-2026-09-26)); bending end to end on a synthetic
-video ([below](#bending-end-to-end-on-a-synthetic-video)).
+([below](#on-a-pixel-6)); case 1 again under the virtual extensometer's
+ΔL / L₀ on the emulator and a Pixel 6, 2026-09-29; bending end to end on a
+synthetic video ([below](#bending-end-to-end-on-a-synthetic-video)).
 
 Unit tests prove the math on numbers typed in by hand. This page runs the whole
 app — images in, the DIC solve, the load CSV, the stress–strain curve and E out —
@@ -50,91 +51,151 @@ so **only camera 1** was used, as a student's single phone would be.
   the elastic range) and 35, 40, 45, 55, 80, 130, 205, 305, 405, 509, 605, 705
   (yield to past the peak): 40 deformed frames. Each frame was cropped to the
   specimen band, `(0, 780, 2000, 1215)`, and saved as PNG.
-- **Loads:** the dataset's force at those steps, as a kN load CSV with one row
-  per deformed frame.
+- **Loads:** the dataset's force, in kN. The 2026-09-23 run used one row per
+  deformed frame, paired in order. The 2026-09-29 re-run paired them by time.
+  The dataset logs no times, so `prep --timed` gives each frame an EXIF
+  capture time *step* seconds after the reference and writes every logged
+  step (751 rows) with its time. The app matched all 40 frames by time
+  (`TIME_NEAREST`), each to the dataset's force within the CSV's 0.1 N rounding.
 - **App settings:** test type Tensile; area 12.5 mm²; load axis x; ROI
   1960 × 298 px at (20, 69); subset 19 px (the speckle check's suggestion);
-  step 5 px; strain window 15 px (a VSG; the window is now entered in points,
-  and 15 px at step 5 is none of them).
-- **Result of the solve:** 40 of 40 frames on the curve, 96.1% of points
-  converged, about 25 s on the emulator.
+  step 5 px. Strain window 15 px on 2026-09-23, and 5 points (the default, a
+  21 px VSG) on 2026-09-29. The window changes only the region-mean column
+  below: ΔL / L₀ comes from the displacement u, not from the strain field.
+- **Result of the solve (2026-09-29):** 96.1% of points converged on frame 1,
+  20.2 s on a Pixel_8 AVD (API 37, x86_64). **35 of 40** frames are on the
+  curve; frames 36–40 are not ([below](#after-the-curve-ends)). With the region
+  mean (2026-09-23) all 40 were.
 
 ### Strain: the app against the dataset's gauge points
 
-App strain is the mean Exx over the analysed region (what the curve plotted
-until [ADR-012](../adr/ADR-012-tensile-strain-virtual-extensometer.md); it now
-plots the virtual extensometer's ΔL / L₀, and this table is owed a re-run, TD-144).
+App strain is the virtual extensometer's ΔL / L₀
+([ADR-012](../adr/ADR-012-tensile-strain-virtual-extensometer.md)): the far end
+band's mean u minus the near band's, over their distance on the reference.
+Here the gauge is L₀ = 1740 px, with bands at x 35–228 and 1772–1965 px.
+Re-run on 2026-09-29 on the emulator (Pixel_8 AVD) and on a Pixel 6
+([below](#on-a-pixel-6)), branch `ccr-8f48992e-daajxu` at `2b94d644`.
+The region mean, the mean Exx over the analysed region that the curve
+plotted before ADR-012, is kept as a reference column from the same run.
 Dataset strain is the change in distance between the two gauge points over
 their starting 60 mm.
 
-| Frame | Step | Stress (MPa) | App strain (mε) | Gauge points (mε) |
-|---:|---:|---:|---:|---:|
-| 1 | 3 | 6.5 | 0.062 | 0.064 |
-| 13 | 15 | 80.0 | 0.549 | 0.532 |
-| 20 | 22 | 160.4 | 1.006 | 0.935 |
-| 26 | 28 | 238.8 | 1.661 | 1.575 |
-| 33 | 80 | 345.7 | 21.07 | 20.98 |
-| 38 | 509 | 435.5 (peak) | 213.9 | 200.5 |
-| 40 | 705 | 422.1 | 336.1 | 301.7 |
+| Frame | Step | Stress (MPa) | App ΔL / L₀ (mε) | Region mean (mε) | Gauge points (mε) |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 3 | 6.5 | 0.068 | 0.062 | 0.064 |
+| 13 | 15 | 80.0 | 0.556 | 0.549 | 0.532 |
+| 20 | 22 | 160.4 | 1.019 | 1.006 | 0.935 |
+| 26 | 28 | 238.8 | 1.681 | 1.661 | 1.575 |
+| 33 | 80 | 345.7 | 20.83 | 21.07 | 20.98 |
+| 35 | 205 | 404.1 | 66.87 | 71.29 | 69.55 |
+| 38 | 509 | 435.5 (peak) | off the curve | 213.9 | 200.5 |
+| 40 | 705 | 422.1 | off the curve | 336.7 | 301.7 |
 
-Over frames 13–28 the app reads **7.8% higher** than the gauge points. Over
-the elastic frames 1–28 (up to 1.8 mε) the strain RMSE is **67 µε**, bias
-+50 µε. Removing the constant 6.8% scale leaves 30 µε. Over frames 29–40
-(3–302 mε) it is 12,400 µε, about 4% of the range. The two
-agree to within the scatter of the gauge points themselves at the smallest loads
-(the gauge-point fits below have R² as low as 0.94).
+Over frames 13–28 ΔL / L₀ reads **8.0% higher** than the gauge points
+(ratio 1.0796). The region mean from the same run reads 7.1% higher; the
+2026-09-23 run's region mean, with its 15 px window, read 7.8%. So the
+extensometer sits slightly further from the gauge points, not closer: in the
+elastic range ΔL / L₀ and the region mean agree within 1%, and both carry
+the same offset. Over the elastic frames 1–28 (up to 1.95 mε) the strain RMSE
+is **73 µε**, bias +58 µε (region mean: 67 µε, +50 µε). Removing a constant
+7.6% scale leaves 33 µε. Over frames 29–35 (3.1–69.5 mε) the RMSE is
+1,070 µε, and the ratio to the gauge points falls from 1.044 at frame 29 to
+0.961 at frame 35. The two agree to within the scatter of the gauge points
+themselves at the smallest loads (the gauge-point fits below have R² as low
+as 0.94).
 
 A likely cause is the camera, not the solve: camera 1 of a stereo pair looks at
 the specimen at an angle, and one camera cannot tell stretching from the
 specimen moving towards it. A phone facing the specimen square-on should do
 better. This has not been checked here.
 
-After necking (frames 36–40) the app reads 4–11% higher. The mean over
-the analysed region includes the neck, while the gauge points span 60 mm.
+#### After the curve ends
+
+Frames 36–40 (step 305 onwards, from about 110 mε, including the peak at
+frame 38) are **off the curve**. As the strip stretches, its far end moves
+towards the right edge of the 2000 px picture. By frame 36 no point of the far
+band (reference x 1772–1965 px) is still solved: the last solved point is at
+reference x 1770, displaced to x 1980. With no point in one band, the app
+leaves the frame off rather than read a strain over a different length
+(ADR-012). So this set no longer tests elongation after necking; that needs a
+view with room past both ends of the gauge. Over those frames the region mean
+went on over the points still in view and read 4–12% above the gauge points,
+because the neck sits inside the region while the gauge points span 60 mm.
 
 ### Young's modulus E
 
 | Source | Frames or window | E (GPa) | R² |
 |---|---|---:|---:|
-| **App** (`ElasticModulus`) | frames 1–26, 6.5–238.8 MPa | **149.6** | 0.9955 |
+| **App** (`ElasticModulus`, ΔL / L₀) | frames 1–26, 6.5–238.8 MPa | **148.9** | 0.9952 |
+| App, region mean (2026-09-23) | frames 1–26 | 149.6 | 0.9955 |
 | Gauge points, same frames | frames 1–26 | 157.5 | 0.9915 |
 | Gauge points | 20–100 MPa | 157.7 | 0.939 |
 | Gauge points | 30–150 MPa | 165.6 | 0.974 |
 | Gauge points | 50–200 MPa | 163.6 | 0.981 |
-| App strain, same windows | 20–100 / 30–150 / 50–200 MPa | 147.1 / 156.4 / 155.2 | 0.976 / 0.991 / 0.995 |
+| App ΔL / L₀, same windows | 20–100 / 30–150 / 50–200 MPa | 145.9 / 156.1 / 155.3 | 0.977 / 0.991 / 0.995 |
 | Handbook, ferritic stainless steel | — | about 220 | — |
 
-- The app's E is **5% below** the dataset's own gauge-point E over the same
-  frames, which follows from the 7.8% strain difference above.
+- The app's E is **5.5% below** the dataset's own gauge-point E over the same
+  frames (5.0% with the region mean), which follows from the 8.0% strain
+  difference above. The fit covers the same 26 frames as before.
 - Both are far below the handbook value. The dataset's own stereo measurement
   gives about 160 GPa, so this gap is not the phone's doing. Optical E on thin
   sheet is often low; the app quotes no textbook E and labels its own as
   approximate ([STUDENT_LAB_WORKFLOW.md](STUDENT_LAB_WORKFLOW.md)).
-- Peak stress reads 435.50 MPa at frame 38, which matches the dataset exactly.
-  This only shows that the load CSV is read correctly: the loads came from the
-  dataset's own force column. It does not test the camera.
+- In this run (`2b94d644`) peak stress read **404.07 MPa at frame 35**, the
+  last frame on the curve. The dataset's peak, 435.5 MPa at frame 38, is off
+  the curve, and the app then took the peak over the curve's points only.
+  Since TD-147 the peak counts every frame with a load, so this session now
+  reports 435.50 MPa at frame 38 and says it is off the curve. The viewer on
+  the Pixel_8 AVD shows exactly that for this session (2026-09-29), and
+  `StressStrainTest` and `LabReportTest` cover it. With the region mean it
+  read 435.50 MPa, an exact match, which showed only that the load CSV was
+  read correctly.
+
+### Yield strength Rp0.2
+
+The app reads the 0.2 % offset yield (`report/YieldStrength`, added after
+this run): where the curve meets the E line moved 2 mε along the strain axis,
+interpolated between the two photos either side. Worked out from the emulator
+run's strains (`RealSteelModulusTest`) and from the dataset's gauge points:
+
+| Source | E used (GPa) | Rp0.2 (MPa) | At (mε) |
+|---|---:|---:|---:|
+| **App**, ΔL / L₀, 40 photos | 148.9 | **305.6** | 4.03 |
+| Gauge points, the same 40 photo steps | 157.5 | 305.6 | 3.90 |
+| Gauge points, all 751 steps | 157.5 | 307.8 | 3.92 |
+
+- The app is **0.7% below** the dense gauge-point value. The gauge points
+  show the same 2.2 MPa gap at the photo steps alone, so it is the photo
+  spacing, not DIC: frames 29 and 30 (steps 35 and 40) are the only photos
+  between 263 and 312 MPa, and the offset line crosses between them.
+- The lower E barely moves it: near 4 mε the curve rises only about 6 MPa
+  per mε, so a line 5.5% less steep meets it at almost the same stress.
+- The curve yields gradually, with no drop in load, so there is no upper or
+  lower yield point to read instead.
 
 ### What this run found and changed
 
-The first run showed **"Young's modulus E: not found"**. `ElasticModulus` used
-to grow the run one frame at a time and give up at the first run that failed
-R² ≥ 0.995. Frames 1–3 span only 6.5–16.8 MPa, where camera noise is as large as
-the signal, so their line has R² 0.913 and the fit stopped there. Longer runs
-pass: frames 1–20 reach 0.9956, and frames 1–26 reach 0.9955.
+The first run (2026-09-23, region mean) showed **"Young's modulus E: not
+found"**. `ElasticModulus` used to grow the run one frame at a time and give
+up at the first run that failed R² ≥ 0.995. Frames 1–3 span only
+6.5–16.8 MPa, where camera noise is as large as the signal, so their line had
+R² 0.913 and the fit stopped there. Longer runs passed: frames 1–20 reached
+0.9956, and frames 1–26 reached 0.9955.
 
 The rule now tries every leading run and keeps the longest one that is
 straight enough. On the Experiment 2 lab table it still uses all 12 rows
-(194.03 GPa), and it still stops at the knee (`ElasticModulusTest`). This curve
-is pinned as a regression test in
-`app/src/test/java/com/indicvision/semper/report/RealSteelModulusTest.kt`: E
-149.58 GPa over frames 1–26, the first three frames alone at R² 0.913, and
+(194.03 GPa), and it still stops at the knee (`ElasticModulusTest`). The
+2026-09-29 ΔL / L₀ curve (the 35 frames on it) is pinned as a regression test
+in `app/src/test/java/com/indicvision/semper/report/RealSteelModulusTest.kt`:
+E 148.85 GPa over frames 1–26, the first three frames alone at R² 0.897, and
 within 10% of the gauge-point E.
 
-The viewer's Results section plots the whole test, out to 336 mε, so the
-elastic frames sit in a vertical line at the left edge. The lab-report PDF
-draws a separate elastic-region graph. The viewer has an **Elastic region**
+The viewer's Results section plots the whole curve, out to 67 mε at frame 35,
+so the elastic frames sit in a vertical line at the left edge. The lab-report
+PDF draws a separate elastic-region graph. The viewer has an **Elastic region**
 toggle beside the Results title (`report/ElasticRegion`). It zooms to the
-fitted frames plus half their strain span, which is frames 1–28 up to 1.94 mε
+fitted frames plus half their strain span, which is frames 1–28 up to 1.95 mε
 here, with the fit line across it. It is pinned in `RealSteelModulusTest`.
 
 ### Reproduce
@@ -143,17 +204,25 @@ The image archive is 2.3 GB (`Images_series.zip`). Put it, together with
 `X,Y coordinates and displacements.txt`, in one folder, then:
 
 ```bash
-python scripts/real_data_steel_tensile.py prep --data <zenodo folder> --out <frames folder>
+python scripts/real_data_steel_tensile.py prep --data <zenodo folder> --out <frames folder> --timed
 ```
 
 This writes `steel_00.png` (the reference) through `steel_40.png`, plus
-`steel_loads.csv`. It needs numpy and Pillow.
+`steel_loads.csv` (one row per frame). With `--timed` it also writes
+`steel_loads_timed.csv` (751 timed rows) and gives each frame an EXIF capture
+time. It needs numpy and Pillow. `--frames <folder>` takes the PNGs from an
+earlier prep instead of the zip, so only the 395 KB text file has to be
+downloaded.
 
-1. Copy the frames and the CSV to the device (`adb push … /sdcard/Download/`).
-2. New analysis → reference `steel_00.png`, deformed frames `steel_01`–`steel_40`
-   (the file picker's Select all).
-3. Choose Tensile, load `steel_loads.csv` (kN), area 12.5 mm², load axis x.
-4. Draw the ROI over the specimen band, apply the suggested subset, run.
+1. Copy the frames and the CSVs to the device (`adb push … /sdcard/Download/steel/`).
+   Files pushed this way may not show in the file picker until they are
+   media-scanned.
+2. New analysis → Tensile → **Files** → reference `steel_00.png`, deformed frames
+   `steel_01`–`steel_40` (long-press, Select all, untick `steel_00`).
+3. Load `steel_loads_timed.csv`: the card should read "751 rows · kN · matched
+   by time". Area 12.5 mm², load axis x.
+4. ROI → Edit → Manual: 20, 69, 1960 × 298. Keep the suggested subset (19),
+   step 5 and window 5 points, then Compute.
 5. Pull the session's results:
 
 ```bash
@@ -386,9 +455,9 @@ displacement and strain RMSEs. `--windows` adds the plane-fit recompute.
 
 ---
 
-## On a Pixel 6 (2026-09-26)
+## On a Pixel 6
 
-Cases 1 and 2 run again on a phone, plus a third set that the app cannot
+On 2026-09-26, cases 1 and 2 were run again on a phone, plus a third set that the app cannot
 analyse. Pixel 6 (`oriole`), Android 17, debug build (arm64) of `3f50d0e7`,
 the TD-92 fix merged in #51. Cases 1 and 2 use the `prep` output above. Each
 set ships with a README (outside the repo) that gives its settings, and each
@@ -396,15 +465,38 @@ run used them.
 
 | Set | Settings | Frames | Solve, Pixel 6 | Solve, emulator | Result |
 |---|---|---|---:|---:|---|
-| Case 1, steel | Tensile; area 12.5 mm², load axis x; ROI 1960 × 297 at (20, 69); subset 19 (suggested); step 5; window 5 points | 40 of 40, 96.1% converged | **21.3 s** | about 25 s | E **149.6 GPa** over frames 1–26, R² 0.9955; peak **435.50 MPa** at frame 38 |
+| Case 1, steel (region mean) | Tensile; area 12.5 mm², load axis x; ROI 1960 × 297 at (20, 69); subset 19 (suggested); step 5; window 5 points | 40 of 40, 96.1% converged | **21.3 s** | about 25 s | E **149.6 GPa** over frames 1–26, R² 0.9955; peak **435.50 MPa** at frame 38 |
 | Case 2, PMMA | Bending; L 75, b 12, t 31 mm; taps 573 px (0.0541 mm/px); ROI 2260 × 510 at (60, 70); subset 27 (suggested); step 5; window 9 points | 33 of 33, 92.9% converged | **44.1 s** | about 137 s | E from the graph **2.01 GPa** (slope 6800.26 N/mm, R² 0.9993); average E **2.11 GPa** |
 | Case 3, concrete | Bending; L 700 (placeholder), b 150, t 150 mm; taps 1141 px (0.1314 mm/px); ROI 2250 × 1080 at (60, 70); subset 109 (suggested); step 5; window 9 points | **2 of 7**, stopped early | 102 s for 2 frames | — | 41% converged on frame 1; no usable E ([below](#case-3--reinforced-concrete-beam-in-3-point-bending-expected-to-fail)) |
 
-- **Steel** is identical to the emulator run: the same E, R² and peak.
+- **Steel** is identical to the emulator run: the same E, R² and peak. This
+  was the region-mean strain; the ΔL / L₀ re-run is below.
 - **PMMA** is within 0.5% of the emulator's 2.00 / 2.10 GPa (slope 6777.7
   N/mm). The taps were 573 px, 2 px wider than case 2's 570.8, and a pixel of
   tap error moves E by about 100 / N % (see case 2).
 - The phone solves 1.2× (steel) to 3.1× (PMMA) faster than the emulator.
+
+### Case 1 again under ΔL / L₀ (2026-09-29)
+
+Pixel 6 (`oriole`), Android 17, debug build (arm64) of `2b94d644` on
+`ccr-8f48992e-daajxu`. It ran the same timed frames and settings as the
+emulator re-run in [case 1](#what-was-run) (a Pixel_8 AVD, API 37, x86_64).
+
+| | Pixel 6 | Emulator |
+|---|---:|---:|
+| Loads matched by time | 40 of 40 | 40 of 40 |
+| Converged on frame 1 | 96.1% | 96.1% |
+| Solve | 20.3 s | 20.2 s |
+| Frames on the curve | 35 of 40 (36–40 off) | 35 of 40 (36–40 off) |
+| E, frames 1–26 | **148.9 GPa**, R² 0.9952 | **148.9 GPa**, R² 0.9952 |
+| ΔL / L₀ ÷ gauge points, frames 13–28 | 1.0796 | 1.0796 |
+| RMSE / bias, frames 1–28 | 73 / +58 µε | 73 / +58 µε |
+| Peak on the curve (before TD-147) | 404.07 MPa, frame 35 | 404.07 MPa, frame 35 |
+
+The two agree. `compare` prints the same numbers except at frame 33, where
+ΔL / L₀ reads 20.826 mε on the phone and 20.827 on the emulator; the phone kept
+2 fewer of that frame's 21,651 points. Across all 40 `.dat` files no value
+differs by more than 0.001, which is arm64 against x86_64 floating point.
 
 ## Case 3 — reinforced concrete beam in 3-point bending: expected to fail
 

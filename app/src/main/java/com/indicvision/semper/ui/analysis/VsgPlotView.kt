@@ -64,6 +64,13 @@ class VsgPlotView @JvmOverloads constructor(
     )
 
     /**
+     * One point called out on the plot, e.g. the yield point: a diamond at
+     * ([x], [y]) in data units, with [label] beside a matching diamond in the
+     * plot's legend. It does not widen the axes; outside them it is not drawn.
+     */
+    data class Mark(val x: Float, val y: Float, val label: String, val color: Int)
+
+    /**
      * One curve's value under the scrub line, carrying the colour it is drawn
      * in — the readout is only readable against several curves if each entry
      * matches the line it came from.
@@ -182,6 +189,9 @@ class VsgPlotView @JvmOverloads constructor(
         const val LINE_WIDTH_DP = 2f
         const val MARKER_RADIUS_DP = 3.5f
 
+        /** Half the diagonal of a [Mark]'s diamond. */
+        const val MARK_RADIUS_DP = 6f
+
         /** Full axis gutters: a separate descriptive title line/rotated title
          *  beside the tick labels -- used for the detached PNG export, which has
          *  the 1600x1000px room to spare and no other on-screen context to lean on. */
@@ -252,7 +262,15 @@ class VsgPlotView @JvmOverloads constructor(
     }
     private val path = Path()
 
+    /** A [Mark]'s outline, so it stands off the curve under it. */
+    private val markRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1.5f)
+        color = ContextCompat.getColor(context, R.color.viewer_plot_ink_strong)
+    }
+
     private var series: List<Series> = emptyList()
+    private var marks: List<Mark> = emptyList()
     private var xLabel: String = ""
     private var yLabel: String = ""
     private var xUnit: String = ""
@@ -360,8 +378,9 @@ class VsgPlotView @JvmOverloads constructor(
      *   (switching solved node or Highlight/Isolate), so the zoom survives.
      * @param xUnit @param yUnit only used when [compactAxes] is true, appended to
      *   the outermost tick in place of the (then unused) [xLabel] / [yLabel] title.
+     * @param marks points called out with a diamond and a legend entry.
      */
-    @Suppress("LongParameterList") // a plot's full config: series + 4 optional, named, defaulted display params
+    @Suppress("LongParameterList") // a plot's full config: series + 5 optional, named, defaulted display params
     fun setData(
         series: List<Series>,
         xLabel: String,
@@ -370,8 +389,10 @@ class VsgPlotView @JvmOverloads constructor(
         preserveViewport: Boolean = false,
         xUnit: String = "",
         yUnit: String = "",
+        marks: List<Mark> = emptyList(),
     ) {
         this.series = series
+        this.marks = marks
         this.xLabel = xLabel
         this.yLabel = yLabel
         this.xUnit = xUnit
@@ -630,10 +651,44 @@ class VsgPlotView @JvmOverloads constructor(
             }
         }
 
+        drawMarks(canvas, b, ::sx, ::sy)
         drawGridTicks(canvas, b, frame)
         // Compact mode folds the unit onto the outermost tick instead of a
         // separate title line -- drawAxisLabels draws that line, so skip it.
         if (!compactAxes) drawAxisLabels(canvas, left, right, top, bottom)
+    }
+
+    /**
+     * Each [Mark] inside the viewport as a diamond, and a legend for them in
+     * the bottom-right corner, which a rising curve leaves empty.
+     */
+    private fun drawMarks(canvas: Canvas, b: Bounds, sx: (Float) -> Float, sy: (Float) -> Float) {
+        val shown = marks.filter { it.x in b.xMin..b.xMax && it.y in b.yMin..b.yMax }
+        if (shown.isEmpty()) return
+        val r = dp(MARK_RADIUS_DP)
+        canvas.withClip(clipRect) { shown.forEach { drawDiamond(this, sx(it.x), sy(it.y), r, it.color) } }
+        val rowHeight = maxOf(textPaint.textSize, r * 2f) + dp(TICK_GAP_DP)
+        var baseline = frame.bottom - dp(TICK_GAP_DP) - rowHeight * (shown.size - 1)
+        valuePaint.textAlign = Paint.Align.RIGHT
+        shown.forEach {
+            val textRight = frame.right - dp(TICK_GAP_DP)
+            canvas.drawText(it.label, textRight, baseline, valuePaint)
+            val cx = textRight - valuePaint.measureText(it.label) - dp(TICK_GAP_DP) - r
+            drawDiamond(canvas, cx, baseline - valuePaint.textSize * TICK_BASELINE, r, it.color)
+            baseline += rowHeight
+        }
+    }
+
+    private fun drawDiamond(canvas: Canvas, cx: Float, cy: Float, r: Float, color: Int) {
+        path.reset()
+        path.moveTo(cx, cy - r)
+        path.lineTo(cx + r, cy)
+        path.lineTo(cx, cy + r)
+        path.lineTo(cx - r, cy)
+        path.close()
+        markerPaint.color = color
+        canvas.drawPath(path, markerPaint)
+        canvas.drawPath(path, markRingPaint)
     }
 
     @Suppress("ReturnCount", "CyclomaticComplexMethod") // gesture phases: scale, pan, scrub, double-tap

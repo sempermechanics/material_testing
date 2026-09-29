@@ -64,6 +64,8 @@ object LabReport {
             val series: List<Series>,
             /** Boxed on the plot, e.g. "E = 194.0 GPa". */
             val annotation: String?,
+            /** Points called out with a marker and a legend entry, e.g. the yield point. */
+            val marks: List<Mark> = emptyList(),
         ) : Block()
 
         /** Ruled blank lines, e.g. for the student's own conclusion. */
@@ -74,6 +76,9 @@ object LabReport {
     data class Bracket(val first: Int, val last: Int, val label: String)
 
     data class Series(val points: List<Pair<Float, Float>>, val isFit: Boolean)
+
+    /** A point called out on a [Block.Graph], with its legend [label]. */
+    data class Mark(val x: Float, val y: Float, val label: String)
 
     const val GRAPH_ELASTIC = "elastic"
     const val GRAPH_FULL = "full"
@@ -138,7 +143,11 @@ object LabReport {
                 addAll(tensileGraphs(curve, modulus))
                 add(Block.Heading(LabReportText.RESULTS))
                 add(Block.Field(t.RESULT_E, modulus?.let { modulusSummary(it) } ?: t.NO_FIT))
-                curve.peak?.let { add(Block.Field(t.RESULT_PEAK, "${num(it.stressMPa, 2)} MPa")) }
+                modulus?.takeIf { it.modulusGPa > 0f }?.let { fit ->
+                    val point = YieldStrength.offset(curve, fit)
+                    add(Block.Field(t.RESULT_YIELD, point?.let { "${num(it.stressMPa, 2)} MPa" } ?: t.NO_YIELD))
+                }
+                curve.peakStress?.let { add(Block.Field(t.RESULT_PEAK, t.peakValue(num(it.stressMPa, 2), it))) }
                 add(Block.Paragraph(LabReportText.APPROXIMATE_NOTE))
                 add(Block.Heading(LabReportText.CONCLUSIONS))
                 add(Block.RuledLines(CONCLUSION_LINES))
@@ -180,11 +189,13 @@ object LabReport {
 
     /**
      * Elastic for the fitted run, Plastic from there to the peak, Break point
-     * after it — the regions the handwritten table marks in its margin.
+     * after it — the regions the handwritten table marks in its margin. A
+     * peak off the curve (TD-147) ends Plastic at the last row before it.
      */
     internal fun tensileBrackets(curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): List<Bracket> {
         val points = curve.points
-        val peakRow = curve.peak?.let { points.indexOf(it) } ?: return emptyList()
+        val peakRow = curve.peakStress?.let { peak -> points.indexOfLast { it.frame <= peak.frame } } ?: -1
+        if (peakRow < 0) return emptyList()
         val elasticEnd = modulus?.let { fit -> points.indexOfLast { fit.covers(it.frame) } } ?: -1
         return buildList {
             if (elasticEnd >= 0) add(Bracket(0, elasticEnd, LabReportText.Tensile.ELASTIC))
@@ -197,6 +208,8 @@ object LabReport {
         val t = LabReportText.Tensile
         val fitSeries = modulus?.let { fitLine(curve, it) }
         val annotation = modulus?.let { "E = ${gpa(it.modulusGPa)} GPa" }
+        val yieldMark = modulus?.let { YieldStrength.offset(curve, it) }
+            ?.let { Mark(it.strainMilli, it.stressMPa, t.yieldMark(num(it.stressMPa, 1))) }
         return buildList {
             if (modulus != null && fitSeries != null) {
                 val elastic = curve.points.filter { modulus.covers(it.frame) }.map { it.strainMilli to it.stressMPa }
@@ -219,6 +232,7 @@ object LabReport {
                     LabReportText.AXIS_STRESS,
                     listOfNotNull(Series(curve.plotPoints(), isFit = false), fitSeries),
                     annotation,
+                    listOfNotNull(yieldMark),
                 ),
             )
         }

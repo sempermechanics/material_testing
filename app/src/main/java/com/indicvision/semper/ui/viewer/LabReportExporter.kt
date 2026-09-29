@@ -65,6 +65,7 @@ class LabReportExporter(private val context: Context) {
                 },
                 graph.xLabel,
                 graph.yLabel,
+                marks = graph.marks.map { VsgPlotView.Mark(it.x, it.y, it.label, VsgPlotView.paletteColor(print, 1)) },
             )
             renderToBitmap(PLOT_W, PLOT_H)
         }

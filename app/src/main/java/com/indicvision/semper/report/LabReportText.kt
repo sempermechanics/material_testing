@@ -45,7 +45,8 @@ object LabReportText {
                 "deformation.",
             "Beyond the elastic limit stress and strain no longer vary linearly, producing a curved graph. The " +
                 "deformation in this region is plastic, meaning it is permanent and not recoverable when the load " +
-                "is removed.",
+                "is removed. The yield strength Rp0.2 is read where the curve meets a line parallel to the " +
+                "elastic line, moved 0.2 % along the strain axis (the 0.2 % offset method).",
         )
         const val FIGURE = "Specimen in the UTM — reference photo, analysed region outlined"
 
@@ -79,6 +80,18 @@ object LabReportText {
 
         const val RESULT_E = "Modulus of elasticity E"
         const val RESULT_PEAK = "Peak (ultimate) stress"
+        const val RESULT_YIELD = "Yield strength Rp0.2 (0.2 % offset)"
+        const val NO_YIELD = "not found — the curve does not reach the offset line before its peak"
+
+        /** The yield point's legend on the full curve graph. */
+        fun yieldMark(stressMPa: String) = "Yield (0.2% offset) $stressMPa MPa"
+
+        /** The peak's value; one off the curve (TD-147) names its frame, which is not a table row. */
+        fun peakValue(stressMPa: String, peak: StressStrain.Peak) = if (peak.onCurve) {
+            "$stressMPa MPa"
+        } else {
+            "$stressMPa MPa (frame ${peak.frame + 1}, past the end of the curve)"
+        }
         const val NO_FIT = "not found — fewer than three straight-line points before the peak"
     }
 
