@@ -74,6 +74,7 @@ support, and nothing is migrated.
 | Share one device id across both apps (same signing key, or an id both apps derive) | Undoes material_testing ADR-009's separate signing key, and a shared id is spoofable across apps |
 | Trust the App Check `app_id` claim instead of a header | App Check is off by default (`APP_CHECK_MODE`) and not registered for Material Testing; the header works now and can be checked against the claim once it is |
 | Raise the device limit to two, any apps | Lets one licence run on two phones of the same app |
+| Bind to an id the app generates (UUID, Firebase Installation ID, a Keystore key) instead of `ANDROID_ID` | It is new after every reinstall or "clear data", so each one reads as a new phone and runs into `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` (30 in production). `ANDROID_ID` survives both and changes only on a factory reset or a new signing key. Hardware ids (IMEI, serial) are closed to non-system apps since Android 10 |
 | Per-app maps (`activeDevices.{app}`) | Every read and write of the five fields changes shape, with a fallback for existing accounts; the suffix keeps Semper's fields as they are |
 
 ## Trade-offs
@@ -95,6 +96,15 @@ support, and nothing is migrated.
 - Accounts demoted before phase 0 stay Demo until an operator re-stamps
   `mode`/`plan` or clears the device.
 - Devices registered from now on carry `app` on `devices/{id}`.
+- A new signing key is a new phone. `ANDROID_ID` is scoped to the key, so a
+  release build installed over a debug or locally built one sends a
+  different device id and sign-in fails as already linked until that app's
+  device is reset (account page or operator console). Only testers meet this:
+  users only ever install release builds. Seen on a Pixel 6 moving to Material
+  Testing v1.2-beta.2 (2026-09-29); its release notes say so. The id itself is
+  kept in shared preferences (`DeviceKeyManager.deviceId`), which
+  `backup_rules.xml` and `data_extraction_rules.xml` exclude, so it never
+  moves to another phone with a backup.
 
 ## Action items
 
