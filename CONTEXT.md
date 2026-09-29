@@ -134,7 +134,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
-  ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135 and TD-139–144 are ours.
+  ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
+  TD-139–144 and TD-146 are ours (TD-145 is semperdic-app's).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012; steel re-validation owed, TD-144), E from the
   longest straight leading run, the elastic-region view, a lab-report PDF.
@@ -152,7 +153,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   on every screen with a text field: wizard, ROI editor, viewer frame jump (#71, TD-99).
   The ROI editor zooms (pinch to 10×, double-tap 2× / fit) and pans with two fingers
   (#84); `e2e/RoiEditorGestureTest` passes on the API 37 emulator (2026-09-28); a pan
-  now stops where the fingers lift (TD-142), which had kept Tier 3 red on `main` since #86.
+  now stops where the fingers lift (TD-142), which had kept Tier 3 red on `main` since #86;
+  the test's last check is still flaky on CI (TD-146).
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   run in Tier 3 and pass on a Galaxy S21+ and the API 37 emulator (TD-95).
   `WizardDraftRestoreTest`: a load log survives process death.
