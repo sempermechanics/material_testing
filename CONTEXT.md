@@ -157,7 +157,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   The ROI editor zooms (pinch to 10×, double-tap 2× / fit) and pans with two fingers
   (#84); `e2e/RoiEditorGestureTest` passes on the API 37 emulator (2026-09-28); a pan
   now stops where the fingers lift (TD-142), which had kept Tier 3 red on `main` since #86;
-  the test's last check is still flaky on CI (TD-146).
+  and a pan pushed against an edge stays on it when they lift (TD-146), which had made
+  the test's last check flaky on CI.
 - **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
   run in Tier 3 and pass on a Galaxy S21+ and the API 37 emulator (TD-95).
   `WizardDraftRestoreTest`: a load log survives process death.
