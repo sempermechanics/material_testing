@@ -126,7 +126,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-28)
+## Current state (2026-09-29)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
@@ -144,9 +144,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
   2026-09-28), as totals or as increments per photo (stored as totals). Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
-  steel and PMMA data, on a Pixel 6 too (2026-09-26); a concrete set fails as
+  steel and PMMA data, on a Pixel 6 too (2026-09-26; steel re-run under ΔL / L₀
+  on 2026-09-29, TD-144); a concrete set fails as
   expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
-  Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94).
+  Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
+  counts frames off the curve).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room

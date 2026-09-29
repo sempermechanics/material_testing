@@ -808,6 +808,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- frame, load N, deflection mm, bending stress MPa, E GPa -->
     <string name="bending_frame_caption_fmt">Frame %1$d · %2$s N · δ %3$s mm · σb %4$s MPa · E %5$s GPa</string>
     <string name="results_peak_stress_fmt">Peak stress: %1$s MPa (frame %2$d)</string>
+    <string name="results_peak_stress_off_curve_fmt">Peak stress: %1$s MPa (frame %2$d, off the curve: no strain there)</string>
     <string name="modulus_fit_label">Elastic fit</string>
     <string name="modulus_tensile_fmt">Young’s modulus E ≈ %1$s GPa, from the straight part of the curve (frames %2$d–%3$d, R² %4$s). Approximate: the strain comes from the camera, not an extensometer.</string>
     <string name="modulus_tensile_none">Young’s modulus E: not found. It needs at least three photos on the straight, early part of the curve, before the peak.</string>

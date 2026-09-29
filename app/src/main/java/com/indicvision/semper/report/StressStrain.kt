@@ -168,21 +168,41 @@ object StressStrain {
     )
 
     /**
+     * The highest |stress| over the frames with a load and a field. [onCurve]
+     * is false when that frame had no strain, so it is not one of the points.
+     */
+    data class Peak(val frame: Int, val loadN: Float, val stressMPa: Float, val onCurve: Boolean)
+
+    /**
      * The curve for a session. Frames whose field could not be read or had no
      * accepted point are absent from [points] rather than plotted at zero.
+     * [loadPeak] is the [Collector]'s peak over every frame it was given.
      */
     data class Curve(
         val model: Model,
         val frameCount: Int,
         val points: List<Point>,
         val gauge: Extensometer.Gauge? = null,
+        val loadPeak: Peak? = null,
     ) {
         val isEmpty: Boolean get() = points.isEmpty()
 
         fun at(frame: Int): Point? = points.firstOrNull { it.frame == frame }
 
-        /** Largest |stress| on the curve, or null when empty. */
+        /**
+         * Largest |stress| on the curve, or null when empty. The E fit and the
+         * elastic-region view stop here; the stress to report is [peakStress].
+         */
         val peak: Point? get() = points.maxByOrNull { abs(it.stressMPa) }
+
+        /**
+         * The peak (ultimate) stress to report: the highest over every frame
+         * with a load, including one left off the curve because a band had
+         * left the picture (TD-147). A curve made from points alone falls
+         * back to [peak].
+         */
+        val peakStress: Peak?
+            get() = loadPeak ?: peak?.let { Peak(it.frame, it.loadN, it.stressMPa, onCurve = true) }
 
         /**
          * (strain, stress) pairs for plotting — (deflection mm, load N) when
@@ -203,23 +223,30 @@ object StressStrain {
      * Collects a curve's points one frame at a time, in frame order, for
      * [build] and the streaming CSV writer alike. A tensile curve fixes its
      * [Extensometer] gauge on the first frame that can set one, and a frame
-     * with no strain is left off.
+     * with no strain is left off. Every frame counts towards the [Peak].
      */
     class Collector(private val model: Model) {
         private val points = ArrayList<Point>()
         private var gauge: Extensometer.Gauge? = null
+        private var peak: Peak? = null
 
         fun add(frame: Int, loadN: Float, data: FloatArray) {
             if (gauge == null && model is Model.Axial) gauge = Extensometer.gauge(data, model.axisX)
-            val strain = model.strainMilli(data, gauge) ?: return
+            val stress = model.stressMPa(loadN)
+            val strain = model.strainMilli(data, gauge)
+            val best = peak
+            if (stress.isFinite() && (best == null || abs(stress) > abs(best.stressMPa))) {
+                peak = Peak(frame, loadN, stress, onCurve = strain != null)
+            }
+            if (strain == null) return
             val extension = if (model is Model.Axial) gauge?.extensionPx(data) else null
-            points += Point(frame, loadN, model.stressMPa(loadN), strain, model.deflectionMm(data), extension)
+            points += Point(frame, loadN, stress, strain, model.deflectionMm(data), extension)
         }
 
         val isEmpty: Boolean get() = points.isEmpty()
 
         /** The curve so far; a bending curve's δ is signed by its loads ([BeamDeflection.alongLoad]). */
-        fun curve(frameCount: Int): Curve = Curve(model, frameCount, BeamDeflection.alongLoad(points), gauge)
+        fun curve(frameCount: Int): Curve = Curve(model, frameCount, BeamDeflection.alongLoad(points), gauge, peak)
     }
 
     /**

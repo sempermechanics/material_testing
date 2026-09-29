@@ -55,7 +55,7 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
   - Every run length is tried, so noisy first photos don't stop it.
   - MPa ÷ mε = GPa.
 - **The reference is not forced onto the line.** Labs zero the gauge under a preload. Through the origin, Exp. 2 would read 218 GPa, not 194.
-- **Peak stress,** the highest over the photos on the curve: a photo with a load but no strain does not count (TD-147).
+- **Peak stress,** the highest over every photo with a load. A photo with a load but no strain still counts; the viewer and the report then say it is off the curve (TD-147).
 - **The virtual extensometer** (`Extensometer`) gives both ε and the report table's **Extension (px)**:
   - Two end bands, each a tenth of the region, are fixed on the first solved photo.
   - ΔL is the mean displacement of the far band minus that of the near band.
@@ -157,7 +157,7 @@ It's offered once the thickness is tapped.
 - **Camera strain is noisier than an extensometer's,** so E is approximate. Steel's elastic range is below 1 mε, which is where the noise matters most. More pixels and a still camera help most.
 - **Strain is ΔL / L₀ over a gauge the ROI sets,** so after necking it is the average over that gauge, as with a clip-on extensometer, and a longer ROI reads a smaller elongation. A band that leaves the picture ends the curve there, so frame the specimen with room in the picture past both ends of the ROI.
 - **A seating start** that never straightens can still give no E, and the report says so.
-- **On published steel data,** ΔL / L₀ reads about 8% above the dataset's 3D gauge points in the elastic range and E (148.9 GPa) about 5.5% below theirs (157.5 GPa), the same on the emulator and a Pixel 6. The curve ends at frame 35 of 40, before the peak, when the stretching strip carries the far band out of the picture ([REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)).
+- **On published steel data,** ΔL / L₀ reads about 8% above the dataset's 3D gauge points in the elastic range and E (148.9 GPa) about 5.5% below theirs (157.5 GPa), the same on the emulator and a Pixel 6. Peak stress matches the logged 435.5 MPa (frame 38), but the curve ends at frame 35 of 40, before it, when the stretching strip carries the far band out of the picture ([REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md)).
 - **On a published PMMA 3-point bend,** the deflection at the load point is within 0.0074 mm RMS of the authors' own DIC, 0.5% of the peak. Both E values are within 1%. Displacement agrees to 0.013 px, and strain to about 400 µε at the 45 px window. The thickness taps matter most: a 49 px slip on 572 px put E 9% low (same page, case 2).
 
 ## Deferred

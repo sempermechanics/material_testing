@@ -85,10 +85,10 @@ object ViewerStressStrainResults {
                 add(context.getString(R.string.modulus_sign_caution))
             }
         }
-        curve.peak?.let { peak ->
+        curve.peakStress?.let { peak ->
             add(
                 context.getString(
-                    R.string.results_peak_stress_fmt,
+                    if (peak.onCurve) R.string.results_peak_stress_fmt else R.string.results_peak_stress_off_curve_fmt,
                     String.format(Locale.US, "%.2f", peak.stressMPa),
                     peak.frame + 1,
                 ),

@@ -138,7 +138,7 @@ object LabReport {
                 addAll(tensileGraphs(curve, modulus))
                 add(Block.Heading(LabReportText.RESULTS))
                 add(Block.Field(t.RESULT_E, modulus?.let { modulusSummary(it) } ?: t.NO_FIT))
-                curve.peak?.let { add(Block.Field(t.RESULT_PEAK, "${num(it.stressMPa, 2)} MPa")) }
+                curve.peakStress?.let { add(Block.Field(t.RESULT_PEAK, t.peakValue(num(it.stressMPa, 2), it))) }
                 add(Block.Paragraph(LabReportText.APPROXIMATE_NOTE))
                 add(Block.Heading(LabReportText.CONCLUSIONS))
                 add(Block.RuledLines(CONCLUSION_LINES))
@@ -180,11 +180,13 @@ object LabReport {
 
     /**
      * Elastic for the fitted run, Plastic from there to the peak, Break point
-     * after it — the regions the handwritten table marks in its margin.
+     * after it — the regions the handwritten table marks in its margin. A
+     * peak off the curve (TD-147) ends Plastic at the last row before it.
      */
     internal fun tensileBrackets(curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): List<Bracket> {
         val points = curve.points
-        val peakRow = curve.peak?.let { points.indexOf(it) } ?: return emptyList()
+        val peakRow = curve.peakStress?.let { peak -> points.indexOfLast { it.frame <= peak.frame } } ?: -1
+        if (peakRow < 0) return emptyList()
         val elasticEnd = modulus?.let { fit -> points.indexOfLast { fit.covers(it.frame) } } ?: -1
         return buildList {
             if (elasticEnd >= 0) add(Bracket(0, elasticEnd, LabReportText.Tensile.ELASTIC))

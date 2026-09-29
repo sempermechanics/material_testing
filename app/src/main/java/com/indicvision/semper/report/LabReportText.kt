@@ -79,6 +79,13 @@ object LabReportText {
 
         const val RESULT_E = "Modulus of elasticity E"
         const val RESULT_PEAK = "Peak (ultimate) stress"
+
+        /** The peak's value; one off the curve (TD-147) names its frame, which is not a table row. */
+        fun peakValue(stressMPa: String, peak: StressStrain.Peak) = if (peak.onCurve) {
+            "$stressMPa MPa"
+        } else {
+            "$stressMPa MPa (frame ${peak.frame + 1}, past the end of the curve)"
+        }
         const val NO_FIT = "not found — fewer than three straight-line points before the peak"
     }
 

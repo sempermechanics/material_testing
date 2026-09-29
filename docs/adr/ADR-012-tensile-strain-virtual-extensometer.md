@@ -117,7 +117,8 @@ means. Rejected.
   (TD-144): E 148.9 GPa over the same 26 frames (was 149.6), strain 8.0 % above
   the gauge points over frames 13–28 (was 7.8 %). The curve now ends at frame
   35 of 40, when the stretching strip carries the far band out of the picture,
-  so the reported peak misses the logged one (TD-147).
+  so the peak over the curve missed the logged one. The reported peak now
+  counts every frame with a load (TD-147).
 - `.dat` and GIF oracles are untouched: this is downstream of the solve.
 
 ## Action items

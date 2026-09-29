@@ -32,7 +32,7 @@ The results match [app/REAL_WORLD_VALIDATION.md](../app/REAL_WORLD_VALIDATION.md
 | `step3-sweep.png` | Sweep step 3: the planned 3 × 3 lattice and the line cut, steel set | Manual §8 |
 | `result-lattice.png` | The sweep result: 6 of 9 solved, the Exx line cut for each node | Manual §8 |
 | `running.png` | Frame 10 of 40, with the converged and convergence tiles | Manual §5 |
-| `results-tensile.png` | Results: stress–strain curve, E ≈ 148.9 GPa (frames 1–26), peak 404.07 MPa (frame 35, the last on the curve) | Manual §2, lab workflow, README |
+| `results-tensile.png` | Results: stress–strain curve, E ≈ 148.9 GPa (frames 1–26), peak 435.50 MPa (frame 38, off the curve: no strain there) | Manual §2, lab workflow, README |
 | `results-bending.png` | Results: load–deflection graph, E 142.0 GPa (slope), 173.7 GPa (average), 0.0375 mm/px | Manual §2, lab workflow, README |
 | `result-viewer.png` | Exx, frame 29 / 40, a probe at the centre | Manual §9, README |
 | `settings-used.png` | The ⓘ sheet: stats, histogram, settings with test type, area, load, stress | Manual §9 |

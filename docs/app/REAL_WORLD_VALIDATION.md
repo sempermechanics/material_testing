@@ -142,11 +142,15 @@ because the neck sits inside the region while the gauge points span 60 mm.
   gives about 160 GPa, so this gap is not the phone's doing. Optical E on thin
   sheet is often low; the app quotes no textbook E and labels its own as
   approximate ([STUDENT_LAB_WORKFLOW.md](STUDENT_LAB_WORKFLOW.md)).
-- Peak stress now reads **404.07 MPa at frame 35**, the last frame on the
-  curve. The dataset's peak, 435.5 MPa at frame 38, is off it, because the
-  app takes the peak over the curve's points only (TD-147). With the region
-  mean it read 435.50 MPa, an exact match, which showed only that the load CSV
-  was read correctly.
+- In this run (`2b94d644`) peak stress read **404.07 MPa at frame 35**, the
+  last frame on the curve. The dataset's peak, 435.5 MPa at frame 38, is off
+  the curve, and the app then took the peak over the curve's points only.
+  Since TD-147 the peak counts every frame with a load, so this session now
+  reports 435.50 MPa at frame 38 and says it is off the curve. That follows
+  from the loads above and is covered by `StressStrainTest` and
+  `LabReportTest`; the fix was not re-run on a device. With the region mean it
+  read 435.50 MPa, an exact match, which showed only that the load CSV was
+  read correctly.
 
 ### What this run found and changed
 
@@ -465,7 +469,7 @@ emulator re-run in [case 1](#what-was-run) (a Pixel_8 AVD, API 37, x86_64).
 | E, frames 1–26 | **148.9 GPa**, R² 0.9952 | **148.9 GPa**, R² 0.9952 |
 | ΔL / L₀ ÷ gauge points, frames 13–28 | 1.0796 | 1.0796 |
 | RMSE / bias, frames 1–28 | 73 / +58 µε | 73 / +58 µε |
-| Peak on the curve | 404.07 MPa, frame 35 | 404.07 MPa, frame 35 |
+| Peak on the curve (before TD-147) | 404.07 MPa, frame 35 | 404.07 MPa, frame 35 |
 
 The two agree. `compare` prints the same numbers except at frame 33, where
 ΔL / L₀ reads 20.826 mε on the phone and 20.827 on the emulator; the phone kept
