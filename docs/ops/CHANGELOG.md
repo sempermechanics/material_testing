@@ -12,6 +12,19 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-29 — material_testing: released as v1.2-beta.3
+
+Built by `release.yml` from `main` at `528afdfc` (beta channel, versionCode 4,
+release key). It adds the 0.2% offset yield strength Rp0.2 to the tensile curve,
+the viewer and both PDFs (#100), and a peak stress taken over every frame with a
+load, named when it falls off the curve (#99, TD-147). The steel check under
+ΔL / L₀ is in #99 (TD-144). On the Pixel 6 it went on with `adb install -r` over
+v1.2-beta.2, same key: still signed in and licensed, local analyses kept.
+
+It was cut rather than installing `main`'s CI APK, which is signed with the same
+key but numbered by `ci.yml`'s run counter (257 here). That would have installed
+over beta.2 and then refused every later release until uninstalled (TD-148).
+
 ## 2026-09-29 — material_testing: released as v1.2-beta.2
 
 Built by `release.yml` from `main` at `fc1aaa4e` (beta channel, versionCode 3,
