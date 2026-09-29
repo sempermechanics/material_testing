@@ -343,6 +343,21 @@ class StudioOverlayViewTest {
     }
 
     @Test
+    fun `a pan pushed against the edge stays on it when the fingers lift`() {
+        zoomTwiceAtCentre() // image now (-200, 0)-(600, 400)
+        fingers(MotionEvent.ACTION_DOWN, 100f to 150f)
+        fingers(secondDown, 100f to 150f, 100f to 250f)
+        // 254 px right against 200 px of room; the lift is 4 px back from the last MOVE.
+        fingers(MotionEvent.ACTION_MOVE, 354f to 150f, 354f to 250f)
+        fingers(secondUp, 350f to 150f, 350f to 250f)
+        fingers(MotionEvent.ACTION_UP, 350f to 150f)
+
+        val drawn = RectF(0f, 0f, 200f, 100f)
+        Matrix(image.imageMatrix).mapRect(drawn)
+        assertRect(RectF(0f, 0f, 800f, 400f), drawn)
+    }
+
+    @Test
     fun `zoomed in, a drawn ROI is finer in image pixels`() {
         zoomTwiceAtCentre() // 2.5 image px per view px, image left edge at view x -200
         drag(0f, 0f, 200f, 200f)

@@ -65,6 +65,43 @@ class RoiViewportTest {
     }
 
     @Test
+    fun `a lift's correction does not pull the photo off an edge it was pushed against`() {
+        viewport.zoomBy(2f, 200f, 200f) // (-200, 0)-(600, 400)
+        viewport.beginPan()
+        viewport.panBy(250f, 0f) // stops 50 px short: left edge on 0
+        viewport.settleBy(-4f, 0f)
+        assertRect(RectF(0f, 0f, 800f, 400f), bounds())
+    }
+
+    @Test
+    fun `a lift's correction moves the photo once the stopped travel is used up`() {
+        viewport.zoomBy(2f, 200f, 200f) // (-200, 0)-(600, 400)
+        viewport.beginPan()
+        viewport.panBy(203f, 0f) // 3 px stopped
+        viewport.settleBy(-5f, 0f)
+        assertRect(RectF(-2f, 0f, 798f, 400f), bounds())
+    }
+
+    @Test
+    fun `a move back clears the stopped travel, so a later correction moves the photo`() {
+        viewport.zoomBy(2f, 200f, 200f) // (-200, 0)-(600, 400)
+        viewport.beginPan()
+        viewport.panBy(250f, 0f)
+        viewport.panBy(-30f, 0f) // the photo follows at once
+        viewport.settleBy(-4f, 0f)
+        assertRect(RectF(-34f, 0f, 766f, 400f), bounds())
+    }
+
+    @Test
+    fun `a new pan starts with nothing stopped`() {
+        viewport.zoomBy(2f, 200f, 200f) // (-200, 0)-(600, 400)
+        viewport.panBy(250f, 0f)
+        viewport.beginPan()
+        viewport.settleBy(-4f, 0f)
+        assertRect(RectF(-4f, 0f, 796f, 400f), bounds())
+    }
+
+    @Test
     fun `a side narrower than the view stays centred`() {
         viewport.zoomBy(1.5f, 200f, 200f) // 600 × 300: taller view, so y is letterboxed
         viewport.panBy(0f, 500f)
