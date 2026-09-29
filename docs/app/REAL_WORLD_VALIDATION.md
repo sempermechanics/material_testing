@@ -146,9 +146,9 @@ because the neck sits inside the region while the gauge points span 60 mm.
   last frame on the curve. The dataset's peak, 435.5 MPa at frame 38, is off
   the curve, and the app then took the peak over the curve's points only.
   Since TD-147 the peak counts every frame with a load, so this session now
-  reports 435.50 MPa at frame 38 and says it is off the curve. That follows
-  from the loads above and is covered by `StressStrainTest` and
-  `LabReportTest`; the fix was not re-run on a device. With the region mean it
+  reports 435.50 MPa at frame 38 and says it is off the curve. The viewer on
+  the Pixel_8 AVD shows exactly that for this session (2026-09-29), and
+  `StressStrainTest` and `LabReportTest` cover it. With the region mean it
   read 435.50 MPa, an exact match, which showed only that the load CSV was
   read correctly.
 
