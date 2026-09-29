@@ -126,7 +126,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-28)
+## Current state (2026-09-29)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
@@ -179,9 +179,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   - **Own app (ADR-009, TD-133).** Installs as `com.indicvision.semper.materialtesting`
     beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
     (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
-    TD-138) is deployed and synced here (2026-09-28): builds send `X-App-Id`, so this
-    app signs in beside Semper. `v1.2-beta.1` predates the header and still gets
-    "already linked" there; the next build is owed, and App Check for this app. A
+    TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
+    sends `X-App-Id` and signed in licensed on a Pixel 6. A release installed over a
+    debug build is a new phone to the backend (`ANDROID_ID` follows the signing key):
+    reset this app's device first. Owed: signing in where Semper is signed in too, and
+    App Check for this app (its attestation fails; production runs it `off`). A
     `sync/` merge keeps this repo's `applicationId` and `google-services.json`.
   - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in

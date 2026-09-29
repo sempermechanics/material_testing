@@ -12,6 +12,24 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-29 — material_testing: released as v1.2-beta.2
+
+Built by `release.yml` from `main` at `fc1aaa4e` (beta channel, versionCode 3,
+release key). It is the first release that sends `X-App-Id` (#90), so it binds its
+own device beside Semper (ADR-010). It also carries ROI zoom and pan (#84, #94),
+typed hanger loads (#85, #93, #97), the virtual-extensometer strain and UTM
+exports with a header block (#95, ADR-012), frames drawn on their own photos
+(#83), full-range video luma (#81) and the Android 15 keyboard fix (#88).
+
+On a Pixel 6 that had a debug build, the release said the account was already
+linked: `ANDROID_ID` is scoped to the signing key, so the release sent a new
+device id against the debug build's Material Testing lock (backend: `device lock
+mismatch … app=materialtesting`, then 409 on `/v1/devices/register`). Clearing
+that app's device let it bind, and it read licensed with Semper's lock unchanged.
+The release notes now tell testers to reset first; semperdic-app#285 records it
+in ADR-010. The release build's App Check attestation fails (403); production runs
+`APP_CHECK_MODE=off`, so nothing is refused.
+
 ## 2026-09-29 — material_testing: a ROI-editor pan stops where the fingers lift (TD-142)
 
 Tier 3 had been red on `main` since #86 added `e2e/RoiEditorGestureTest`: on the
