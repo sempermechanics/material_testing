@@ -8,7 +8,7 @@ import kotlin.math.min
  * [ElasticModulus] fitted E to, plus a margin of the curve just past them, so
  * the straight part and its line fill a plot. On the whole curve they are a
  * vertical stroke at x≈0 — real steel fits E over frames 1–26 below 2 mε on a
- * curve that runs to 336 mε (docs/app/REAL_WORLD_VALIDATION.md). The viewer's
+ * curve that runs to 67 mε (docs/app/REAL_WORLD_VALIDATION.md). The viewer's
  * counterpart to the lab report's elastic graph ([LabReport.GRAPH_ELASTIC]).
  *
  * The window runs from the unloaded origin through the fitted run, widened by
