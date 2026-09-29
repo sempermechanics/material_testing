@@ -173,6 +173,7 @@ class ViewerStressStrainHelper(
             highlightX = if (bending) current?.deflectionMm else current?.strainMilli,
             xUnit = if (bending) ViewerBendingResults.UNIT_DEFLECTION else StressStrain.UNIT_STRAIN,
             yUnit = if (bending) ViewerBendingResults.UNIT_LOAD else StressStrain.UNIT_STRESS,
+            marks = plotMarks(host, curve, modulus),
         )
         views.caption.text = caption(curve, current, modulus?.takeIf { zoomed != null })
         result.isVisible = true
@@ -273,6 +274,18 @@ class ViewerStressStrainHelper(
         } else {
             ViewerStressStrainResults.plotSeries(context, curve, modulus)
         }
+
+        /** The yield point on a tensile curve's plot; none for bending. */
+        fun plotMarks(
+            context: Context,
+            curve: StressStrain.Curve,
+            modulus: ElasticModulus.Fit?,
+        ): List<VsgPlotView.Mark> =
+            if (curve.model.plotsLoadDeflection) {
+                emptyList()
+            } else {
+                listOfNotNull(ViewerStressStrainResults.yieldMark(context, curve, modulus))
+            }
 
         /**
          * The Results summary under the curve — what the lab report's Results

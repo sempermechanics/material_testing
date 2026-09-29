@@ -74,6 +74,18 @@ class RealSteelModulusTest {
     }
 
     @Test
+    fun `Rp0_2 falls between frames 29 and 30, within 1 percent of the gauge points'`() {
+        // The gauge points over all 751 logged steps give 307.8 MPa.
+        val yieldPoint = YieldStrength.offset(curve(), ElasticModulus.fit(curve())!!)!!
+
+        assertEquals(305.6f, yieldPoint.stressMPa, 0.1f)
+        assertEquals(4.03f, yieldPoint.strainMilli, 0.01f)
+        assertEquals(28, yieldPoint.frameBefore)
+        assertEquals(29, yieldPoint.frameAfter)
+        assertEquals(1f, yieldPoint.stressMPa / 307.8f, 0.01f)
+    }
+
+    @Test
     fun `E sits within ten percent of the dataset's own gauge points`() {
         // The dataset's stereo gauge points, 60 mm apart, over the same 26 frames.
         val gaugePointGPa = 157.5f

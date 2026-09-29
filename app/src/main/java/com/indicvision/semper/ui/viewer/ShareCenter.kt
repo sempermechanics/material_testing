@@ -610,6 +610,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
                     ViewerStressStrainHelper.plotSeries(print, curve, modulus),
                     axisLabels.first,
                     axisLabels.second,
+                    marks = ViewerStressStrainHelper.plotMarks(print, curve, modulus),
                 )
                 renderToBitmap(STRESS_STRAIN_PLOT_W, STRESS_STRAIN_PLOT_H)
             }

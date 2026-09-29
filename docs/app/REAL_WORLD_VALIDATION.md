@@ -152,6 +152,28 @@ because the neck sits inside the region while the gauge points span 60 mm.
   read 435.50 MPa, an exact match, which showed only that the load CSV was
   read correctly.
 
+### Yield strength Rp0.2
+
+The app reads the 0.2 % offset yield (`report/YieldStrength`, added after
+this run): where the curve meets the E line moved 2 mε along the strain axis,
+interpolated between the two photos either side. Worked out from the emulator
+run's strains (`RealSteelModulusTest`) and from the dataset's gauge points:
+
+| Source | E used (GPa) | Rp0.2 (MPa) | At (mε) |
+|---|---:|---:|---:|
+| **App**, ΔL / L₀, 40 photos | 148.9 | **305.6** | 4.03 |
+| Gauge points, the same 40 photo steps | 157.5 | 305.6 | 3.90 |
+| Gauge points, all 751 steps | 157.5 | 307.8 | 3.92 |
+
+- The app is **0.7% below** the dense gauge-point value. The gauge points
+  show the same 2.2 MPa gap at the photo steps alone, so it is the photo
+  spacing, not DIC: frames 29 and 30 (steps 35 and 40) are the only photos
+  between 263 and 312 MPa, and the offset line crosses between them.
+- The lower E barely moves it: near 4 mε the curve rises only about 6 MPa
+  per mε, so a line 5.5% less steep meets it at almost the same stress.
+- The curve yields gradually, with no drop in load, so there is no upper or
+  lower yield point to read instead.
+
 ### What this run found and changed
 
 The first run (2026-09-23, region mean) showed **"Young's modulus E: not
