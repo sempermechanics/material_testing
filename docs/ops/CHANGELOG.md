@@ -12,6 +12,17 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-29 — material_testing: a pan pushed against an edge stays on it (TD-146)
+
+`e2e/RoiEditorGestureTest`'s far pan failed about one CI run in seven with the
+photo 4.5–5 px off the canvas edge. A probe that ran the pan 25 times caught 12
+misses: a sweep put the photo on the edge, and the next sweep, pushing further,
+left it a few px off. TD-142's lift correction moved the photo back by however
+far the last MOVE had run past the fingers, but against an edge the clamp had
+already stopped that overshoot. `RoiViewport` now keeps the travel an edge
+stopped as slack and `settleBy` gives it back first. With the fix the probe
+landed all 25 on the edge. `RoiViewportTest` and `StudioOverlayViewTest` cover it.
+
 ## 2026-09-29 — material_testing: released as v1.2-beta.3
 
 Built by `release.yml` from `main` at `528afdfc` (beta channel, versionCode 4,
