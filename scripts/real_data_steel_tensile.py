@@ -6,7 +6,9 @@ sheet, 12.5 mm² section, stereo DIC images plus two gauge points 60 mm apart.
 Two steps sit around one manual app run (docs/app/REAL_WORLD_VALIDATION.md):
 
   prep     crop camera 1's frames for the steps in STEPS and write the
-           app's load CSV (kN, one row per deformed frame)
+           app's load CSV (kN, one row per deformed frame). With --timed,
+           each frame also gets an EXIF capture time and a timed log is
+           written, so the app pairs loads with photos by time (see below).
   compare  read the app's .dat files and print its strain against the
            gauge points, and E by the app's rule next to fixed-window fits.
            The app's strain is the virtual extensometer's ΔL / L0 (ADR-012);
@@ -14,13 +16,20 @@ Two steps sit around one manual app run (docs/app/REAL_WORLD_VALIDATION.md):
 
 Needs numpy; `prep` also needs Pillow. Run by hand, never in CI.
 
+The dataset logs no times, so --timed makes them up: step n is taken n
+seconds after the reference. steel_loads_timed.csv then holds every logged
+step (751 rows, like a machine's log), and the app has to find each photo's
+row by time instead of by position.
+
 Usage:
-  python scripts/real_data_steel_tensile.py prep --data DIR --out DIR
+  python scripts/real_data_steel_tensile.py prep --data DIR --out DIR [--timed] [--frames DIR]
   python scripts/real_data_steel_tensile.py compare --data DIR --dat DIR
 """
 from __future__ import annotations
 
 import argparse
+import datetime
+import sys
 import zipfile
 from pathlib import Path
 
@@ -39,6 +48,9 @@ STRIDE, IDX_X, IDX_U, IDX_EXX, IDX_ZNSSD, MAX_ZNSSD = 8, 0, 2, 4, 7, 0.15
 BAND_FRACTION = 0.1
 # Mirrors ElasticModulus.
 MIN_R2, MIN_POINTS = 0.995, 3
+# --timed: the reference's made-up capture time; step n is n seconds later.
+TIMED_START = datetime.datetime(2026, 9, 29, 10, 0, 0)
+EXIF_IFD, DATETIME, DATETIME_ORIGINAL, SUBSEC_ORIGINAL = 0x8769, 0x0132, 0x9003, 0x9291
 
 
 def gauge_points(data: Path) -> dict[int, tuple[float, float]]:
@@ -56,18 +68,42 @@ def gauge_points(data: Path) -> dict[int, tuple[float, float]]:
     return {int(s): (f * 1000, e) for s, f, e in zip(a[:, 0], a[:, 1], strain)}
 
 
-def prep(data: Path, out: Path) -> None:
+def capture_time(step: int):
+    """EXIF with a capture time `step` seconds after TIMED_START, as PhotoCaptureTime reads it."""
+    from PIL import Image
+
+    stamp = (TIMED_START + datetime.timedelta(seconds=step)).strftime("%Y:%m:%d %H:%M:%S")
+    exif = Image.Exif()
+    exif[DATETIME] = stamp
+    exif[EXIF_IFD] = {DATETIME_ORIGINAL: stamp, SUBSEC_ORIGINAL: "000"}
+    return exif
+
+
+def prep(data: Path, out: Path, timed: bool = False, frames: Path | None = None) -> None:
+    """Frames from the zip, or from `frames` (steel_NN.png of an earlier prep) when given."""
     from PIL import Image
 
     ref = gauge_points(data)
     out.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(data / IMAGE_ZIP) as z:
-        for k, step in enumerate(STEPS):
+    z = None if frames else zipfile.ZipFile(data / IMAGE_ZIP)
+    for k, step in enumerate(STEPS):
+        if z:
             name = f"Images_series/series_step_{step}_camera_pos_1.tiff"
-            Image.open(z.open(name)).convert("L").crop(CROP).save(out / f"steel_{k:02d}.png")
+            image = Image.open(z.open(name)).convert("L").crop(CROP)
+        else:
+            image = Image.open(frames / f"steel_{k:02d}.png")
+        extra = {"exif": capture_time(step)} if timed else {}
+        image.save(out / f"steel_{k:02d}.png", **extra)
+    if z:
+        z.close()
     loads = ["Step,Load (kN)"] + [f"{k},{ref[s][0] / 1000:.4f}" for k, s in enumerate(STEPS) if k]
     (out / "steel_loads.csv").write_text("\n".join(loads) + "\n", newline="")
-    print(f"{len(STEPS)} frames and steel_loads.csv in {out}")
+    written = "steel_loads.csv"
+    if timed:
+        rows = ["Time (s),Load (kN)"] + [f"{s:.3f},{ref[s][0] / 1000:.4f}" for s in sorted(ref)]
+        (out / "steel_loads_timed.csv").write_text("\n".join(rows) + "\n", newline="")
+        written += f" and steel_loads_timed.csv ({len(rows) - 1} rows)"
+    print(f"{len(STEPS)} frames and {written} in {out}")
 
 
 def fit(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
@@ -170,12 +206,15 @@ def main() -> None:
     p = sub.add_parser("prep")
     p.add_argument("--data", type=Path, required=True, help="folder with the Zenodo files")
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--timed", action="store_true", help="EXIF capture times and a timed load log")
+    p.add_argument("--frames", type=Path, help="take steel_NN.png from here instead of the zip")
     c = sub.add_parser("compare")
     c.add_argument("--data", type=Path, required=True, help="folder with the Zenodo files")
     c.add_argument("--dat", type=Path, required=True, help="the app session's frame_NNNN.dat files")
     args = parser.parse_args()
+    sys.stdout.reconfigure(encoding="utf-8")  # µε on a Windows console
     if args.cmd == "prep":
-        prep(args.data, args.out)
+        prep(args.data, args.out, args.timed, args.frames)
     else:
         compare(args.data, args.dat)
 

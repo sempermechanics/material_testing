@@ -113,7 +113,12 @@ means. Rejected.
   `# elastic_modulus_gpa` trailer changes.
 - The real-world numbers in
   [REAL_WORLD_VALIDATION.md](../app/REAL_WORLD_VALIDATION.md) were taken with the
-  region mean. They are owed a re-run (TD-144).
+  region mean. Re-run under ΔL / L₀ on 2026-09-29 on the emulator and a Pixel 6
+  (TD-144): E 148.9 GPa over the same 26 frames (was 149.6), strain 8.0 % above
+  the gauge points over frames 13–28 (was 7.8 %). The curve now ends at frame
+  35 of 40, when the stretching strip carries the far band out of the picture,
+  so the peak over the curve missed the logged one. The reported peak now
+  counts every frame with a load (TD-147).
 - `.dat` and GIF oracles are untouched: this is downstream of the solve.
 
 ## Action items
@@ -121,5 +126,6 @@ means. Rejected.
 - [x] `Axial` strain from the gauge, `StressStrain.Collector`, CSV writer on the
       collector, report wording, tests (`StressStrainTest`, `ExtensometerTest`,
       `AnalysisCsvPreambleTest`); device-test and benchmark seeds stretch u.
-- [ ] TD-144: re-run the steel validation under ΔL / L₀ and replace the table.
+- [x] TD-144: re-run the steel validation under ΔL / L₀ and replace the table
+      (2026-09-29, emulator and Pixel 6).
 - [ ] Option C when a tensile mm scale exists.

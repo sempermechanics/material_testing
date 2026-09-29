@@ -135,18 +135,20 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
-  TD-139–144 and TD-146 are ours (TD-145 is semperdic-app's).
+  TD-139–144, TD-146 and TD-147 are ours (TD-145 is semperdic-app's).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
-  extensometer's ΔL / L₀ since ADR-012; steel re-validation owed, TD-144), E from the
+  extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, the elastic-region view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video; bending's are
   typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
   2026-09-28), as totals or as increments per photo (stored as totals). Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
-  steel and PMMA data, on a Pixel 6 too (2026-09-26); a concrete set fails as
+  steel and PMMA data, on a Pixel 6 too (2026-09-26; steel re-run under ΔL / L₀
+  on 2026-09-29, TD-144); a concrete set fails as
   expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
-  Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94).
+  Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
+  counts frames off the curve).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
   the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room

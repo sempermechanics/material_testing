@@ -128,6 +128,25 @@ class LabReportTest {
     }
 
     @Test
+    fun `a peak off the curve is reported with its frame, and the table has no break point`() {
+        // The steel case of TD-147: the highest load came after the last point.
+        val base = labCurve()
+        val points = base.points.take(12)
+        val curve = base.copy(
+            points = points,
+            loadPeak = StressStrain.Peak(14, 40_000f, model.stressMPa(40_000f), onCurve = false),
+        )
+        val doc = LabReport.of(curve, ElasticModulus.fit(curve))!!
+        val fields = doc.blocks.filterIsInstance<LabReport.Block.Field>().associate { it.label to it.value }
+
+        assertEquals("323.87 MPa (frame 15, past the end of the curve)", fields[LabReportText.Tensile.RESULT_PEAK])
+        assertEquals(
+            listOf(LabReport.Bracket(0, 11, "Elastic")),
+            doc.blocks.filterIsInstance<LabReport.Block.Table>().single().brackets,
+        )
+    }
+
+    @Test
     fun `no fit still reports, without the elastic graph or bracket`() {
         val curve = labCurve()
         val doc = LabReport.of(curve, modulus = null)!!
