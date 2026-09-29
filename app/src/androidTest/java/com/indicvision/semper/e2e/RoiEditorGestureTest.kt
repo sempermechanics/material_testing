@@ -128,6 +128,63 @@ class RoiEditorGestureTest {
         }
     }
 
+    /** TEMPORARY (TD-146): the far pan 25 times, fresh launches, to catch the flake's trace on CI. */
+    @Test
+    fun farPanProbe() {
+        val misses = mutableListOf<String>()
+        var sample = ""
+        repeat(PROBE_RUNS) { run ->
+            launch().use { scenario ->
+                setRoi(scenario)
+                val c = centre(scenario)
+                twoFingers(c.plus(-60f, 0f), c.plus(60f, 0f), c.plus(-240f, 0f), c.plus(240f, 0f))
+                twoFingers(c.plus(-80f, -50f), c.plus(-80f, 50f), c.plus(-280f, -50f), c.plus(-280f, 50f))
+                val canvas = canvasOnScreen(scenario)
+                val inset = canvas.width() * EDGE_INSET
+                val from = canvas.left + inset
+                val to = canvas.right - inset
+                val sweeps = ((canvas.left - photoOnScreen(scenario).left) / (to - from)).toInt() + EXTRA_SWEEPS
+                val trace = mutableListOf("run ${run + 1} start: ${probeState(scenario)}")
+                repeat(sweeps) { i ->
+                    twoFingers(
+                        PointF(from, c.y - 50f),
+                        PointF(from, c.y + 50f),
+                        PointF(to, c.y - 50f),
+                        PointF(to, c.y + 50f),
+                    )
+                    trace += "sweep ${i + 1}: ${probeState(scenario)}"
+                }
+                Thread.sleep(PROBE_SETTLE_MS)
+                instrumentation.waitForIdleSync()
+                trace += "settled: ${probeState(scenario)}"
+                val gap = photoOnScreen(scenario).left - canvasOnScreen(scenario).left
+                if (run == 0) sample = trace.joinToString("\n")
+                if (kotlin.math.abs(gap) > 1f) misses += trace.joinToString("\n")
+            }
+        }
+        assertTrue(
+            "${misses.size} of $PROBE_RUNS missed the edge\n" + misses.joinToString("\n----\n") +
+                "\n==== first run ====\n" + sample,
+            misses.isEmpty(),
+        )
+    }
+
+    private fun probeState(scenario: ActivityScenario<RoiDrawActivity>): String {
+        var extra = ""
+        scenario.onActivity {
+            val iv = it.findViewById<ImageView>(R.id.imgRoiCanvas)
+            val at = IntArray(2)
+            iv.getLocationOnScreen(at)
+            val m = FloatArray(9)
+            iv.imageMatrix.getValues(m)
+            val bar = it.findViewById<View>(R.id.bottomToolbar)
+            val head = it.findViewById<View>(R.id.headerChrome)
+            extra = "iv=${at[0]},${at[1]} ${iv.width}x${iv.height} tx=${m[2]} sx=${m[0]} " +
+                "bar=${bar.height} head=${head.height} focus=${it.currentFocus?.javaClass?.simpleName}"
+        }
+        return state(scenario) + " " + extra
+    }
+
     @Test
     fun aDoubleTapZoomsToTwiceAndBackToFit() {
         launch().use { scenario ->
@@ -374,6 +431,8 @@ class RoiEditorGestureTest {
 
         /** Sweeps past the ones the photo needs to reach the canvas edge. */
         const val EXTRA_SWEEPS = 2
+        const val PROBE_RUNS = 25
+        const val PROBE_SETTLE_MS = 500L
         const val IMG_W = 800
         const val IMG_H = 600
         const val ROI_X = 40
