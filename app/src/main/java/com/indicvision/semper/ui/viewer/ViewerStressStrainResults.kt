@@ -6,6 +6,7 @@ import com.indicvision.semper.report.ElasticModulus
 import com.indicvision.semper.report.ElasticRegion
 import com.indicvision.semper.report.LabReportFormat
 import com.indicvision.semper.report.StressStrain
+import com.indicvision.semper.report.YieldStrength
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import java.util.Locale
 
@@ -66,6 +67,21 @@ object ViewerStressStrainResults {
         ),
     )
 
+    /**
+     * The 0.2 % offset yield point as a plot [VsgPlotView.Mark], or null
+     * without a fit or before the curve yields. The plot drops it when the
+     * view (the elastic region) does not reach it.
+     */
+    fun yieldMark(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): VsgPlotView.Mark? {
+        val point = modulus?.let { YieldStrength.offset(curve, it) } ?: return null
+        return VsgPlotView.Mark(
+            x = point.strainMilli,
+            y = point.stressMPa,
+            label = context.getString(R.string.results_yield_mark_fmt, one(point.stressMPa)),
+            color = VsgPlotView.paletteColor(context, 1),
+        )
+    }
+
     fun resultsText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): String = buildList {
         if (curve.model is StressStrain.Model.Axial) {
             add(
@@ -84,6 +100,7 @@ object ViewerStressStrainResults {
             if (modulus != null && modulus.modulusGPa <= 0f) {
                 add(context.getString(R.string.modulus_sign_caution))
             }
+            modulus?.let { yieldText(context, curve, it) }?.let(::add)
         }
         curve.peakStress?.let { peak ->
             add(
@@ -95,6 +112,22 @@ object ViewerStressStrainResults {
             )
         }
     }.joinToString("\n")
+
+    /** Rp0.2 with the frames it lies between, or why there is none; null when E is not positive. */
+    private fun yieldText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit): String? {
+        if (modulus.modulusGPa <= 0f) return null
+        return YieldStrength.offset(curve, modulus)?.let { point ->
+            context.getString(
+                R.string.results_yield_fmt,
+                one(point.stressMPa),
+                String.format(Locale.US, "%.2f", point.strainMilli),
+                point.frameBefore + 1,
+                point.frameAfter + 1,
+            )
+        } ?: context.getString(R.string.results_yield_none)
+    }
+
+    private fun one(value: Float): String = String.format(Locale.US, "%.1f", value)
 
     fun axisLabels(context: Context, model: StressStrain.Model): Pair<String, String> = when (model) {
         is StressStrain.Model.Axial ->

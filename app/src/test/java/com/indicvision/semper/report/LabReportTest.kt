@@ -147,6 +147,32 @@ class LabReportTest {
     }
 
     @Test
+    fun `a curve that peaks before the offset line reports no yield and marks none`() {
+        val doc = document()
+        val fields = doc.blocks.filterIsInstance<LabReport.Block.Field>().associate { it.label to it.value }
+
+        assertEquals(LabReportText.Tensile.NO_YIELD, fields[LabReportText.Tensile.RESULT_YIELD])
+        assertTrue(doc.graphs.all { it.marks.isEmpty() })
+    }
+
+    @Test
+    fun `the yield point is reported and marked on the full curve only`() {
+        // E = 200 GPa to 400 MPa, then a gentle rise: Rp0.2 ≈ 402.01 MPa at 4.01 mε.
+        val points = listOf(0.5f to 100f, 1f to 200f, 1.5f to 300f, 2f to 400f, 3f to 401f, 5f to 403f, 7f to 405f)
+            .mapIndexed { i, (strain, stress) -> StressStrain.Point(i, stress * area, stress, strain) }
+        val curve = StressStrain.Curve(model, points.size, points)
+        val doc = LabReport.of(curve, ElasticModulus.fit(curve))!!
+        val fields = doc.blocks.filterIsInstance<LabReport.Block.Field>().associate { it.label to it.value }
+        val graphs = doc.graphs.associateBy { it.id }
+        val mark = graphs.getValue(LabReport.GRAPH_FULL).marks.single()
+
+        assertEquals("402.01 MPa", fields[LabReportText.Tensile.RESULT_YIELD])
+        assertEquals("Yield (0.2% offset) 402.0 MPa", mark.label)
+        assertEquals(4.01f, mark.x, 0.01f)
+        assertTrue(graphs.getValue(LabReport.GRAPH_ELASTIC).marks.isEmpty())
+    }
+
+    @Test
     fun `no fit still reports, without the elastic graph or bracket`() {
         val curve = labCurve()
         val doc = LabReport.of(curve, modulus = null)!!

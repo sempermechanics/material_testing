@@ -64,6 +64,8 @@ object LabReport {
             val series: List<Series>,
             /** Boxed on the plot, e.g. "E = 194.0 GPa". */
             val annotation: String?,
+            /** Points called out with a marker and a legend entry, e.g. the yield point. */
+            val marks: List<Mark> = emptyList(),
         ) : Block()
 
         /** Ruled blank lines, e.g. for the student's own conclusion. */
@@ -74,6 +76,9 @@ object LabReport {
     data class Bracket(val first: Int, val last: Int, val label: String)
 
     data class Series(val points: List<Pair<Float, Float>>, val isFit: Boolean)
+
+    /** A point called out on a [Block.Graph], with its legend [label]. */
+    data class Mark(val x: Float, val y: Float, val label: String)
 
     const val GRAPH_ELASTIC = "elastic"
     const val GRAPH_FULL = "full"
@@ -138,6 +143,10 @@ object LabReport {
                 addAll(tensileGraphs(curve, modulus))
                 add(Block.Heading(LabReportText.RESULTS))
                 add(Block.Field(t.RESULT_E, modulus?.let { modulusSummary(it) } ?: t.NO_FIT))
+                modulus?.takeIf { it.modulusGPa > 0f }?.let { fit ->
+                    val point = YieldStrength.offset(curve, fit)
+                    add(Block.Field(t.RESULT_YIELD, point?.let { "${num(it.stressMPa, 2)} MPa" } ?: t.NO_YIELD))
+                }
                 curve.peakStress?.let { add(Block.Field(t.RESULT_PEAK, t.peakValue(num(it.stressMPa, 2), it))) }
                 add(Block.Paragraph(LabReportText.APPROXIMATE_NOTE))
                 add(Block.Heading(LabReportText.CONCLUSIONS))
@@ -199,6 +208,8 @@ object LabReport {
         val t = LabReportText.Tensile
         val fitSeries = modulus?.let { fitLine(curve, it) }
         val annotation = modulus?.let { "E = ${gpa(it.modulusGPa)} GPa" }
+        val yieldMark = modulus?.let { YieldStrength.offset(curve, it) }
+            ?.let { Mark(it.strainMilli, it.stressMPa, t.yieldMark(num(it.stressMPa, 1))) }
         return buildList {
             if (modulus != null && fitSeries != null) {
                 val elastic = curve.points.filter { modulus.covers(it.frame) }.map { it.strainMilli to it.stressMPa }
@@ -221,6 +232,7 @@ object LabReport {
                     LabReportText.AXIS_STRESS,
                     listOfNotNull(Series(curve.plotPoints(), isFit = false), fitSeries),
                     annotation,
+                    listOfNotNull(yieldMark),
                 ),
             )
         }
