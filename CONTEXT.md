@@ -135,10 +135,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
-  TD-139–144, TD-146 and TD-147 are ours (TD-145 is semperdic-app's).
+  TD-139–144 and TD-146–148 are ours (TD-145 is semperdic-app's).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
-  longest straight leading run, the elastic-region view, a lab-report PDF.
+  longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
+  view, a lab-report PDF.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video; bending's are
   typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
@@ -182,7 +183,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
     (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
     TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
-    sends `X-App-Id` and signed in licensed on a Pixel 6. A release installed over a
+    sends `X-App-Id` and signed in licensed on a Pixel 6, which now runs `v1.2-beta.3`
+    (`528afdfc`, versionCode 4). Don't hand out `main`'s CI APK: its versionCode is
+    CI's run number, above every release (TD-148). A release installed over a
     debug build is a new phone to the backend (`ANDROID_ID` follows the signing key):
     reset this app's device first. Owed: signing in where Semper is signed in too, and
     App Check for this app (its attestation fails; production runs it `off`). A
