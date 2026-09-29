@@ -87,6 +87,8 @@ finish that link, because the pending email lives in the app that sent it.
       `v1.2-beta.1` from `2d28c3fc` (#82).
 - [x] One phone per app: semperdic-app #279 and #280 merged and deployed,
       and synced here (2026-09-28).
-- [ ] Cut a build with `AppIdHeader` and sign in on a phone that has Semper.
+- [x] Cut a build with `AppIdHeader`: `v1.2-beta.2` from `fc1aaa4e`; it signed
+      in licensed on a Pixel 6 (2026-09-29).
+- [ ] Sign in on a phone where Semper is signed in too.
 - [ ] App Check: register the app with Play Integrity before
       `APP_CHECK_MODE=enforce`.
