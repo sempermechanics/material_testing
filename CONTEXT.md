@@ -115,8 +115,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (TD-137) and #280 (TD-138) merged and the backend deployed 2026-09-28 (image
   `semper-api-36419849032-1`; `rollback-prev` is `semper-api-00029-z72`); consoles
   deployed from `0c3946f7` the same day. material_testing#90 merged: its builds send
-  `X-App-Id`, and a debug build signed in licensed on the Pixel 6 (2026-09-28). Owed: a
-  Material Testing release, and App Check for it.
+  `X-App-Id`; its release `v1.2-beta.2` (2026-09-29) signed in licensed on the Pixel 6
+  once that app's device was reset, since a new signing key is a new phone (ADR-010,
+  Consequences). Owed: Material Testing signed in beside a signed-in Semper on one
+  phone, and App Check for it.
 - **App release `v1.2-beta.3`** (beta, private GitHub Release, run 36239577288, from
   `ae05bb87`, versionCode 35): everything the app merged since `v1.2-beta.2`, including
   the wrong-information audit's app half, one delete queue (#227), Restore (#234), the Home
