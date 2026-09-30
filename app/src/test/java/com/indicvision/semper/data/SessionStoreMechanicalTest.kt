@@ -2,6 +2,7 @@ package com.indicvision.semper.data
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.indicvision.semper.report.BeamDeflection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -72,6 +73,22 @@ class SessionStoreMechanicalTest {
         assertTrue(SessionStore.upsert(context, record.copy(geometry = geometry.copy(loadPoint = BeamEdgeTaps.NONE))))
         val index = File(context.filesDir, "sessions/index.json").readText()
         assertFalse(index.contains("loadPoint"))
+    }
+
+    @Test
+    fun `a deflection correction set in the viewer is saved on the session and keeps the rest`() {
+        val taps = BeamEdgeTaps(topX = 400f, topY = 210f, bottomX = 401f, bottomY = 338f)
+        val geometry = SpecimenGeometry(spanMm = 935f, widthMm = 150f, thicknessMm = 6.38f, loadPoint = taps)
+        val record = typedRecord(loadsN = listOf(0f, 42f, 51f)).copy(testType = "bending", geometry = geometry)
+        assertTrue(SessionStore.upsert(context, record))
+
+        assertTrue(SessionStore.setDeflectionCorrection(context, record.id, BeamDeflection.Correction(1.05f, -0.12f)))
+        val back = SessionStore.get(context, record.id)!!
+
+        assertEquals(BeamDeflection.Correction(1.05f, -0.12f), back.geometry.deflectionCorrection)
+        assertEquals(geometry, back.geometry.withCorrection(BeamDeflection.Correction.NONE))
+        assertEquals(record.syncState, back.syncState)
+        assertTrue(back.updatedAt > record.updatedAt)
     }
 
     @Test

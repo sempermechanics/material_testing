@@ -1,6 +1,7 @@
 package com.indicvision.semper.ui.viewer
 
 import androidx.lifecycle.ViewModel
+import com.indicvision.semper.report.BeamDeflection
 import com.indicvision.semper.report.StressStrain
 
 /**
@@ -18,4 +19,7 @@ class ResultViewerViewModel : ViewModel() {
 
     /** Results plot zoomed to the elastic region E is fitted to, on both surfaces; else the whole test. */
     var showElasticRegion: Boolean = false
+
+    /** Bending's deflection correction set in Results; null keeps the one the viewer opened with. */
+    var deflectionCorrection: BeamDeflection.Correction? = null
 }

@@ -36,8 +36,8 @@ object DicKeys {
     const val LOADS_N = "LOADS_N"
 
     /**
-     * [com.indicvision.semper.data.SpecimenGeometry.toArray] — the bending /
-     * dimensions; all zero on a tensile test.
+     * [com.indicvision.semper.data.SpecimenGeometry.toArray] — the bending
+     * dimensions, taps and deflection correction; all zero (scale 1) on a tensile test.
      */
     const val SPECIMEN_GEOMETRY = "SPECIMEN_GEOMETRY"
 

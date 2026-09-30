@@ -415,11 +415,15 @@ offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
 | [ ] 5.1b.33 | Type 0.5, **Next**, 1, **Next**, 1,5 (the keypad's comma), **Next**, leave the last empty, tap **Done** | The comma stays in the box (reopened, it reads 1.5; never 15). The sheet stays open, the cursor on the empty box: "Type the mass in kg: 0 if there is no weight". Type 0, **Done**: the card reads "Typed loads · 4 of 4 photos · kg × 9.80665 = N · tap to edit"; no dropzone |
 | [ ] 5.1b.33a | Reopen, clear one box, press back | Kept, but the card warns "1 photo has no load yet" and **Next** is disabled with "1 photo has no load: type it (0 if no weight) to continue" |
 | [ ] 5.1b.34 | Reopen by tapping the summary; type `1.2.3` in a box; **Done** | The box shows "Enter the mass in kg, e.g. 0.5" and the sheet stays open. Fix it or press back: back keeps every valid box and the bad box's old value |
-| [ ] 5.1b.35 | Compute; open Results and the lab report | Loads 4.90, 9.81, 14.71, 0 N on the Results graph. The lab report's table lists the loaded steps only (4.90, 9.81, 14.71 N): unloaded frames are left out of it by design. Scrubbing the graph shows the point as "(δ mm, W N)" beside the dot, clear of the scrub line; near the right edge it flips to the line's left |
+| [ ] 5.1b.35 | Compute; open Results and the lab report | Loads 0.50, 1.00, 1.50, 0 kg on the Results graph (4.90, 9.81, 14.71, 0 N in the maths and the CSV). The lab report's table lists the loaded steps only (0.50, 1.00, 1.50 kg): unloaded frames are left out of it by design; its row-1 calculation opens "W = m·g = 0.50 kg × 9.81 m/s² = 4.90 N". Scrubbing the graph shows the point as "(δ mm, kg)" beside the dot, clear of the scrub line; near the right edge it flips to the line's left |
 | [ ] 5.1b.36 | Re-sort the frames (Name ↓, or drag) after typing | Each mass stays with its photo: reopen the sheet and check |
 | [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.indicvision.semper.materialtesting` while backgrounded), return | The typed loads come back |
 | [ ] 5.1b.38 | Tap ✕ on the typed loads; import a CSV; tap ✕ on it | ✕ clears the typed loads and brings back the button and dropzone; with the CSV in, the typing sheet is never offered (no button, the summary does not open it); its ✕ brings the button back. Tensile never shows the button |
 | [ ] 5.1b.39 | With 0.5, 1, 1.5, 0 typed, pick **Incremental (added per photo)** under **Loads typed as** | The boxes become 0.5, 0.5, 0.5, -1.5, each with "Total n kg" under it (0.5, 1, 1.5, 0); the keypad now has a minus key and the subtitle explains increments. Change the last to -2, **Done**: refused, "This takes the hanger below 0 kg". Back to **Absolute**: the totals return unchanged; 1,5 typed with the keypad comma still reads 1.5. **Done** in Incremental, reopen: still Incremental; the loads are the same 4.90, 9.81, 14.71, 0 N |
+| [ ] 5.1b.40 | Open a finished **Bending** analysis with the load point tapped; look at Results on the summary page and in Details | **Adjust deflection** beside the RESULTS title on the summary, and under the Results text in Details. Not on tensile, nor on bending without the tap. The wizard has no scale or bias boxes |
+| [ ] 5.1b.41 | Tap it; type scale 1.05 and bias -0.12; **Apply** | Both Results redraw at once, with no progress count: "Deflection corrected: δ = 1.050 × δ measured − 0.120 mm", and every δ in the graph, caption and table is 1.05 × δ − 0.12. E from the graph drops by 1/1.05 and does not move with the bias; the average E moves with both. Share the lab report and CSV: the report lists the correction under Observations, and the CSV's `# mechanical_results` block leads with `deflection_correction_scale` / `_bias_mm` |
+| [ ] 5.1b.42 | Type scale 0, **Apply**; then a lone `-` as the bias (the number keypad blocks letters and a second point) | The dialog stays open with "Enter a number above 0, e.g. 1.05" (or "Enter a number in mm, e.g. -0.12") under the box; nothing changes. Blank boxes mean 1 and 0 |
+| [ ] 5.1b.43 | Back out to Home, reopen the analysis; then rotate; then kill it in the background (`adb shell am kill com.indicvision.semper`) and return | The correction is still applied each time, and the dialog opens with 1.05 and -0.12. **Reset** puts every number back to the camera's δ and saves that |
 
 **5.1b.32–38 on the Pixel 6 (`f4209a7f`, 2026-09-28)** pass on an offline lab
 build with `semper_test_data/2_bending_pmma_real` (pmma_00 as the reference,
@@ -453,6 +457,27 @@ stores 4.903, 9.807, 14.710 and 0 N (`loadsN`, read with `run-as`, since the
 scrub label reads the line under the finger, not the dot). One gap: after a
 switch the cursor goes to the first box, but the keyboard stays down until a
 box is tapped (TD-141).
+
+**5.1b.40–43 on the Pixel 6 (uncommitted tree on `f7b2f7f2`, 2026-09-30)**, with
+`semper_test_data/2_bending_pmma_real` and its CSV loads (taps 573 px,
+0.0541 mm/px; ROI 2210 × 470 at (80, 90); subset 25), pass apart from the parts
+noted below. Uncorrected: E from the graph 2.01 GPa (695.00 kg/mm, R² 0.9993),
+average 2.12 GPa over 31 steps, as in the set's README. With 1.05 / −0.12: slope
+661.90 kg/mm (exactly ÷ 1.05), E from the graph 1.92 GPa, average 2.58 GPa over 29
+steps. The bias takes the two smallest δ under a pixel, so those steps drop out.
+The session index stores the scale and bias. They survive a background kill and
+a reopen from Home, and **Reset** brings back 2.01 / 695.00 / 2.12. Loads read in
+kg in the axis, slope, Details load row and caption ("Frame 1 · 3.59 kg · …").
+
+- The graph's unloaded reference was drawn at (0, 0), not at the bias, so a
+  bias left a stray segment. Fixed and rechecked on the phone. The lab report's
+  graph had the same fault, and it is fixed there too.
+- Not checked on the phone: rotation (forcing it needs a system setting), and
+  the lab report / CSV from Share, which the signed-out build greys out
+  (`LicenseEntitlements.shareEnabled`). Unit tests cover the report's correction
+  line, kg table and graph origin, and the CSV's correction rows.
+- 5.1b.42: the keypad cannot type `1.2.3` or `abc`. A lone `-` as the bias gives
+  the bias error, alongside scale 0's.
 
 #### 5.1a Video source
 
@@ -880,7 +905,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.14e | Tap **Elastic region** | The plot zooms to the frames E was fitted to plus half their strain span again (from the origin), with the fit line drawn across it, so the student can see where the curve leaves the line. Frames after the peak are left out. On the Zenodo steel run (docs/app/REAL_WORLD_VALIDATION.md) that is frames 1–28 up to 1.94 mε, where the whole test runs to 336 mε. The caption and the E / peak lines are unchanged |
 | [ ] 8.4.14f | With **Elastic region** on, close the sheet, step frames, reopen; go to the summary page | The choice is kept (ViewModel), on both surfaces and after rotating. On a frame outside the window the highlight line is off the plot; the caption still gives that frame's values |
 | [ ] 8.4.15 | Open it on a bending run without taps (made before this build) | Rows **Support span**, **Width**, **Thickness**, **Machine load**, **Flexural stress**; the curve's y-axis reads "Flexural stress (MPa)" |
-| [ ] 8.4.15a | Open a bending run with taps | Results shows the **load–deflection** graph (W on δ) with a muted slope line from the first measured δ to the last, never from δ = 0 (a fit whose intercept is below zero no longer pulls the load axis down to it; the axis still reaches about 8 % of the load span below 0 N as head-room, e.g. -1582 N on `concrete_00`), then E from the graph (slope, R²), average E over the load steps ("n load steps" counts held loads, not frames), the mm/px scale and the approximate note. On the synthetic video of §5.1b.24: 141.5 GPa and 173.1 GPa over 6 load steps. A modulus under 10 GPa (PMMA) shows two decimals, so two close values stay apart. The axes never read "-0.00", and a five-digit load tick (e.g. 21686) reads in full |
+| [ ] 8.4.15a | Open a bending run with taps | Results shows the **load–deflection** graph (load in kg on δ) with a muted slope line from the first measured δ to the last, never from δ = 0 (a fit whose intercept is below zero no longer pulls the load axis down to it; the axis still reaches about 8 % of the load span below 0 N as head-room, e.g. about -161 kg (-1582 N) on `concrete_00`), then E from the graph (slope, R²), average E over the load steps ("n load steps" counts held loads, not frames), the mm/px scale and the approximate note. On the synthetic video of §5.1b.24: 141.5 GPa and 173.1 GPa over 6 load steps. A modulus under 10 GPa (PMMA) shows two decimals, so two close values stay apart. The axes never read "-0.00", and a five-digit load tick (e.g. 21686) reads in full |
 
 ### 8.5 Share and export
 

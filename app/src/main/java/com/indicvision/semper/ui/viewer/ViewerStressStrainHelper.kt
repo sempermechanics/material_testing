@@ -11,7 +11,7 @@ import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionPaths
-import com.indicvision.semper.data.loadOfFrame
+import com.indicvision.semper.report.BeamDeflection
 import com.indicvision.semper.report.ElasticModulus
 import com.indicvision.semper.report.ElasticRegion
 import com.indicvision.semper.report.StressStrain
@@ -21,10 +21,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.util.WeakHashMap
 
 /**
  * The stress–strain curve in the viewer: the Results on the summary page and
- * in the Details sheet, and the sheet's dimension / Load / Stress rows. The
+ * in the Details sheet (its per-frame rows are [ViewerFrameRows]). The
  * curve needs the mean strain of every frame, so it is a full decode pass over
  * the batch — started only when a Results surface is shown, and cached in the
  * ViewModel so the other surface, a reopen, or the share sheet reuses it.
@@ -35,16 +36,21 @@ class ViewerStressStrainHelper(
 ) {
     /**
      * Where a curve is drawn: the Details sheet's section or the summary page.
-     * [range] is the Whole test / Elastic region toggle, inside its pill clip.
+     * [range] is the Whole test / Elastic region toggle, inside its pill clip;
+     * [adjust] opens bending's deflection correction.
      */
     class Views(
         val plot: VsgPlotView,
         val caption: TextView,
         val result: TextView,
         val range: MaterialButtonToggleGroup,
+        val adjust: View,
     )
 
     private var job: Job? = null
+
+    /** The surfaces drawn so far, by plot, so a new correction redraws what is on screen. */
+    private val drawn = WeakHashMap<VsgPlotView, Views>()
 
     /** True while [bindRange] sets the toggle to match the ViewModel, so its listener ignores it. */
     private var syncingRange = false
@@ -57,25 +63,6 @@ class ViewerStressStrainHelper(
 
     /** Whether this session has Results at all: loads, and not a parameter sweep. */
     val showsResults: Boolean get() = hasLoads && !host.isSweep
-
-    /** Dimension, load, torque and stress rows for the frame on screen; none on the summary. */
-    fun rows(): List<Pair<String, String>> {
-        val loadN = host.loadsN.loadOfFrame(host.plannedFrameIndex(host.currentFrameIndex))
-            ?.takeUnless { host.isShowingSummary }
-            ?: return emptyList()
-        val model = host.stressModel
-        val stress = model.stressMPa(loadN)
-        return buildList {
-            model.dimensions.forEach { (dimension, value) ->
-                if (value > 0f) add(row(dimensionLabelRes(dimension), unitRes(dimension), value))
-            }
-            add(row(R.string.setting_load, R.string.setting_n_fmt, loadN))
-            if (!stress.isNaN()) add(row(stressLabelRes(model), R.string.setting_mpa_fmt, stress))
-        }
-    }
-
-    private fun row(labelRes: Int, valueRes: Int, value: Float): Pair<String, String> =
-        host.getString(labelRes) to host.getString(valueRes, fmt(value))
 
     /**
      * Fills the sheet's stress–strain section, building the curve first if it
@@ -93,6 +80,7 @@ class ViewerStressStrainHelper(
                 sheetView.findViewById(R.id.tvStressStrainCaption),
                 sheetView.findViewById(R.id.tvStressStrainResult),
                 sheetView.findViewById(R.id.toggleStressStrainRange),
+                sheetView.findViewById(R.id.btnStressStrainAdjust),
             ),
         )
     }
@@ -110,6 +98,7 @@ class ViewerStressStrainHelper(
     private fun build(views: Views) {
         views.plot.isVisible = false
         views.result.isVisible = false
+        views.adjust.isVisible = false
         (views.range.parent as View).isVisible = false
         views.caption.text = host.getString(R.string.stress_strain_progress_fmt, 0, host.loadsN.size)
         waiting += views
@@ -135,8 +124,10 @@ class ViewerStressStrainHelper(
                     Trace.endSection()
                 }
             }
-            vm.stressStrain = built
-            waiting.forEach { draw(it, built) }
+            // The correction may have changed while the frames were read.
+            val current = BeamDeflection.Correction.recorrect(built, host.stressModel)
+            vm.stressStrain = current
+            waiting.forEach { draw(it, current) }
             waiting.clear()
         }
     }
@@ -146,9 +137,18 @@ class ViewerStressStrainHelper(
         waiting.clear()
     }
 
+    /** Redraws every surface on screen from the cached curve, after a deflection correction. */
+    fun redraw() {
+        val curve = vm.stressStrain ?: return
+        drawn.values.toList().filter { it.plot.isAttachedToWindow }.forEach { draw(it, curve) }
+    }
+
     private fun draw(views: Views, curve: StressStrain.Curve) {
+        drawn[views.plot] = views
         val plot = views.plot
         val result = views.result
+        views.adjust.isVisible = curve.model.plotsLoadDeflection && !curve.isEmpty
+        views.adjust.setOnClickListener { ViewerDeflectionCorrection.show(host) }
         if (curve.isEmpty) {
             plot.isVisible = false
             result.isVisible = false
@@ -316,8 +316,5 @@ class ViewerStressStrainHelper(
             StressStrain.Dimension.WIDTH -> R.string.setting_width
             StressStrain.Dimension.THICKNESS -> R.string.setting_thickness
         }
-
-        private fun unitRes(dimension: StressStrain.Dimension): Int =
-            if (dimension == StressStrain.Dimension.CROSS_SECTION) R.string.setting_mm2_fmt else R.string.setting_mm_fmt
     }
 }
