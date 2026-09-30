@@ -135,7 +135,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
-  TD-139–144 and TD-146–148 are ours (TD-145 is semperdic-app's).
+  TD-139–144 and TD-146–149 are ours (TD-145 is semperdic-app's).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
