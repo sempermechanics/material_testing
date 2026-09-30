@@ -42,6 +42,7 @@ internal object LabReportBending {
                 add(Block.Field(b.THICKNESS, num(model.thicknessMm, 2)))
                 add(Block.Field(b.NO_LOAD, b.NO_LOAD_VALUE))
                 add(Block.Field(b.SCALE, String.format(Locale.US, "%.4f", summary.mmPerPx)))
+                summary.correction.takeUnless { it.isNone }?.let { add(Block.Field(b.CORRECTION, b.correction(it))) }
                 add(Block.Heading(LabReportText.CALCULATION))
                 add(Block.Calculation(calculation(model, summary)))
                 add(table(summary))
@@ -92,7 +93,8 @@ internal object LabReportBending {
     private fun graph(summary: BeamDeflection.Summary): Block.Graph {
         val b = LabReportText.Bending
         val steps = summary.loadSteps
-        val points = listOf(0f to 0f) + steps.map { it.deflectionMm to it.loadN }
+        // The unloaded reference: δ 0 to the camera, the bias once corrected.
+        val points = listOf(summary.correction.apply(0f) to 0f) + steps.map { it.deflectionMm to it.loadN }
         val line = summary.slope
         val fit = summary.slopeLine()?.let { Series(it, isFit = true) }
         val annotation = if (line != null && summary.slopeModulusGPa != null) {

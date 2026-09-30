@@ -135,7 +135,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
-  TD-139–144 and TD-146–149 are ours (TD-145 is semperdic-app's).
+  TD-139–144 and TD-146–150 are ours (TD-145 is semperdic-app's).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
@@ -143,7 +143,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video; bending's are
   typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
-  2026-09-28), as totals or as increments per photo (stored as totals). Strain window in
+  2026-09-28), as totals or as increments per photo (stored as totals). A per-session
+  deflection scale and bias is set from Results (`ViewerDeflectionCorrection`, not the
+  wizard; TD-150). Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data, on a Pixel 6 too (2026-09-26; steel re-run under ΔL / L₀
   on 2026-09-29, TD-144); a concrete set fails as

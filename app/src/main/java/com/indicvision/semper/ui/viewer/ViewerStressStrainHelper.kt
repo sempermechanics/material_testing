@@ -12,6 +12,7 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.loadOfFrame
+import com.indicvision.semper.report.BeamDeflection
 import com.indicvision.semper.report.ElasticModulus
 import com.indicvision.semper.report.ElasticRegion
 import com.indicvision.semper.report.StressStrain
@@ -21,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.util.WeakHashMap
 
 /**
  * The stress–strain curve in the viewer: the Results on the summary page and
@@ -29,22 +31,30 @@ import java.util.Locale
  * the batch — started only when a Results surface is shown, and cached in the
  * ViewModel so the other surface, a reopen, or the share sheet reuses it.
  */
+// One surface's lifecycle (fill, build, draw, redraw, cancel) plus the sheet's rows;
+// splitting it would scatter the shared build job and the waiting/drawn surfaces.
+@Suppress("TooManyFunctions")
 class ViewerStressStrainHelper(
     private val host: ResultViewerActivity,
     private val vm: ResultViewerViewModel,
 ) {
     /**
      * Where a curve is drawn: the Details sheet's section or the summary page.
-     * [range] is the Whole test / Elastic region toggle, inside its pill clip.
+     * [range] is the Whole test / Elastic region toggle, inside its pill clip;
+     * [adjust] opens bending's deflection correction.
      */
     class Views(
         val plot: VsgPlotView,
         val caption: TextView,
         val result: TextView,
         val range: MaterialButtonToggleGroup,
+        val adjust: View,
     )
 
     private var job: Job? = null
+
+    /** The surfaces drawn so far, by plot, so a new correction redraws what is on screen. */
+    private val drawn = WeakHashMap<VsgPlotView, Views>()
 
     /** True while [bindRange] sets the toggle to match the ViewModel, so its listener ignores it. */
     private var syncingRange = false
@@ -93,6 +103,7 @@ class ViewerStressStrainHelper(
                 sheetView.findViewById(R.id.tvStressStrainCaption),
                 sheetView.findViewById(R.id.tvStressStrainResult),
                 sheetView.findViewById(R.id.toggleStressStrainRange),
+                sheetView.findViewById(R.id.btnStressStrainAdjust),
             ),
         )
     }
@@ -110,6 +121,7 @@ class ViewerStressStrainHelper(
     private fun build(views: Views) {
         views.plot.isVisible = false
         views.result.isVisible = false
+        views.adjust.isVisible = false
         (views.range.parent as View).isVisible = false
         views.caption.text = host.getString(R.string.stress_strain_progress_fmt, 0, host.loadsN.size)
         waiting += views
@@ -135,8 +147,10 @@ class ViewerStressStrainHelper(
                     Trace.endSection()
                 }
             }
-            vm.stressStrain = built
-            waiting.forEach { draw(it, built) }
+            // The correction may have changed while the frames were read.
+            val current = BeamDeflection.Correction.recorrect(built, host.stressModel)
+            vm.stressStrain = current
+            waiting.forEach { draw(it, current) }
             waiting.clear()
         }
     }
@@ -146,9 +160,18 @@ class ViewerStressStrainHelper(
         waiting.clear()
     }
 
+    /** Redraws every surface on screen from the cached curve, after a deflection correction. */
+    fun redraw() {
+        val curve = vm.stressStrain ?: return
+        drawn.values.toList().filter { it.plot.isAttachedToWindow }.forEach { draw(it, curve) }
+    }
+
     private fun draw(views: Views, curve: StressStrain.Curve) {
+        drawn[views.plot] = views
         val plot = views.plot
         val result = views.result
+        views.adjust.isVisible = curve.model.plotsLoadDeflection && !curve.isEmpty
+        views.adjust.setOnClickListener { ViewerDeflectionCorrection.show(host) }
         if (curve.isEmpty) {
             plot.isVisible = false
             result.isVisible = false

@@ -8,6 +8,7 @@ package com.indicvision.semper.data
 import android.content.Context
 import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.report.BeamDeflection
 import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -349,6 +350,28 @@ object SessionStore {
             records.map {
                 if (it.id == id) {
                     it.copy(name = newName, renamedByUser = true, updatedAt = System.currentTimeMillis())
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    /**
+     * Bending's deflection scale and bias, set in the viewer's Results. Like
+     * [rename] it leaves the sync state alone: a backed-up session's cloud copy
+     * keeps the correction it was uploaded with.
+     */
+    @WorkerThread
+    fun setDeflectionCorrection(
+        context: Context,
+        id: String,
+        correction: BeamDeflection.Correction,
+    ) = synchronized(lock) {
+        mutateIndex(context) { records ->
+            records.map {
+                if (it.id == id) {
+                    it.copy(geometry = it.geometry.withCorrection(correction), updatedAt = System.currentTimeMillis())
                 } else {
                     it
                 }

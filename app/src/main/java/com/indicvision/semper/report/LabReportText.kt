@@ -3,6 +3,9 @@
 
 package com.indicvision.semper.report
 
+import java.util.Locale
+import kotlin.math.abs
+
 /**
  * Fixed wording of the student lab report, kept beside [LabReport] so the
  * layout tests can read it without Android. English, like the rest of the
@@ -129,6 +132,11 @@ object LabReportText {
         const val NO_LOAD = "No-load reading"
         const val NO_LOAD_VALUE = "reference photo = 0 mm"
         const val SCALE = "Scale from the thickness taps (mm per pixel)"
+        const val CORRECTION = "Deflection correction for the camera setup"
+        fun correction(c: BeamDeflection.Correction): String {
+            val sign = if (c.biasMm < 0f) "−" else "+"
+            return String.format(Locale.US, "δ = %.3f × δ measured %s %.3f mm", c.scale, sign, abs(c.biasMm))
+        }
 
         val TABLE_HEADERS =
             listOf("Sr. No", "Frame", "Load W (N)", "Deflection δ (mm)", "Bending stress σb (MPa)", "E (GPa)")
