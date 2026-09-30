@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Prototype: a tensile stress-strain curve with a strain-variance band.
 
-The app's tensile curve plots stress (load / area) against the mean axial
-strain of each frame's accepted points (StressStrain.axisStrainMilli). This
-script draws the same curve from a session's files and shades, around it,
-mean +/- K standard deviations of that axial strain over the same points
-(K = 3 by default). The band runs left-right, along the strain axis, at each
-frame's stress.
+This script plots stress (load / area) against the mean axial strain of each
+frame's accepted points, and shades around it mean +/- K standard deviations
+of that axial strain over the same points (K = 3 by default). The band runs
+left-right, along the strain axis, at each frame's stress.
+
+The centre line is the app's tensile curve from before ADR-012. The app now
+plots the virtual extensometer's ΔL / L₀ between two end bands
+(report/Extensometer.kt), which on the steel set reads about 0.8 % above
+this mean in the elastic range, so the two curves are close but not the same.
 
 The SD is the spread of strain across the specimen, not the uncertainty of
 the mean (that is SD / sqrt(n), with thousands of points, far narrower). It
@@ -118,7 +121,7 @@ def draw_band(ax, rows: list[FrameStrain], k: float, legend: bool) -> None:
     ax.errorbar(
         mean, stress, xerr=half, fmt="none", ecolor=BAND, elinewidth=0.8, alpha=0.7
     )
-    # Led by the unloaded reference at the origin, as the app draws it.
+    # Led by the unloaded reference at the origin, as the app draws its curve.
     ax.plot(
         np.r_[0.0, mean],
         np.r_[0.0, stress],
@@ -126,7 +129,7 @@ def draw_band(ax, rows: list[FrameStrain], k: float, legend: bool) -> None:
         color=BAND,
         ms=3,
         lw=1.4,
-        label="mean strain (app curve)",
+        label="mean strain (pre-ADR-012 app curve)",
     )
     ax.set_xlabel("Strain (mε)")
     ax.set_ylabel("Stress (MPa)")
