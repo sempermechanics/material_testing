@@ -31,6 +31,9 @@ object TokenStore {
     private const val K_LOCAL_COUNT = "quota_local_count"
     private const val K_LIMIT_FORCED = "session_limit_forced"
     private const val K_BETA_ACKED_PREFIX = "beta_notice_acked_"
+
+    /** The ack made with no account signed in; no Firebase uid can collide with it. */
+    private const val K_BETA_ACKED_SIGNED_OUT = "signed_out_beta_notice_acked"
     private const val K_TERMS_REQUIRED = "terms_required_version"
     private const val K_TERMS_ACCEPTED = "terms_accepted_version"
     private const val K_TERMS_SYNCED = "terms_accepted_synced"
@@ -137,16 +140,20 @@ object TokenStore {
     /**
      * Whether the current account has acknowledged the beta / data-use notice.
      * Stored outside the session prefs so it survives [clear].
+     *
+     * Each account acks once. With no account signed in (a debug build with no
+     * API URL, or the dev-auth bypass) the ack is the phone's, under a fixed key,
+     * and does not stand in for an account's: the first sign-in still asks.
      */
-    fun hasAckedBetaNotice(context: Context): Boolean {
-        val uid = cachedUid(context) ?: return false
-        return onboardingPrefs(context).getBoolean(K_BETA_ACKED_PREFIX + uid, false)
-    }
+    fun hasAckedBetaNotice(context: Context): Boolean =
+        onboardingPrefs(context).getBoolean(betaAckKey(context), false)
 
     fun setBetaNoticeAcked(context: Context) {
-        val uid = cachedUid(context) ?: return
-        onboardingPrefs(context).edit { putBoolean(K_BETA_ACKED_PREFIX + uid, true) }
+        onboardingPrefs(context).edit { putBoolean(betaAckKey(context), true) }
     }
+
+    private fun betaAckKey(context: Context): String =
+        cachedUid(context)?.let { K_BETA_ACKED_PREFIX + it } ?: K_BETA_ACKED_SIGNED_OUT
 
     // ------------------------------------------------------------ legal / consent
 
