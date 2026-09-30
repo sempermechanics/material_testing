@@ -1,7 +1,9 @@
 """Google Drive: create the session folder tree and initiate resumable uploads.
 
-Metadata calls only. File BYTES never pass through here — the client PUTs
-directly to the resumable session URI returned by init_resumable().
+Metadata calls, plus one small write: replace_content() overwrites a session's
+metadata.json (a few KB) in place. Every other file's BYTES never pass through
+here — the client PUTs directly to the resumable session URI returned by
+init_resumable().
 """
 import logging
 import threading
@@ -507,3 +509,25 @@ def init_resumable(token: str, parent_folder_id: str, filename: str, size_bytes:
     )
     r.raise_for_status()
     return r.headers["Location"]
+
+
+def replace_content(token: str, drive_file_id: str, data: bytes, mime: str = "application/json") -> dict:
+    """Overwrite a small file's bytes in place: same id, same folder.
+
+    Only for a session's metadata.json, which the app re-sends when a change
+    made after the backup (a bending deflection correction) must reach the
+    cloud copy. One media PUT with no retry loop: the bytes are the whole
+    payload, and the app retries a failed call itself.
+    Returns {"size": int|None, "md5": str|None} as Drive recorded them.
+    """
+    r = http().patch(
+        f"https://www.googleapis.com/upload/drive/v3/files/{drive_file_id}",
+        headers={**_headers(token), "Content-Type": mime},
+        params={"uploadType": "media", "supportsAllDrives": "true", "fields": "size,md5Checksum"},
+        data=data,
+        timeout=30,
+    )
+    r.raise_for_status()
+    j = r.json()
+    size = j.get("size")
+    return {"size": int(size) if size is not None else None, "md5": j.get("md5Checksum")}
