@@ -12,6 +12,23 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-30 — Backend deploy: frame ceiling 500 (#286)
+
+Staging first (`deploy-backend.yml` run 36669887146 → `semper-api-staging-36669887146-1`),
+then production run 36670760641 → image `semper-api-36670760641-1`, both from
+`31a33e79`; the previous production image is pinned as `rollback-prev`. The
+gateway ran as dry-run on both: no route changed. `/readyz` passed on each
+candidate before the promote, and neither service sets `MAX_FRAMES_PER_ANALYSIS`
+in its env, so the new default is what `/config` serves.
+
+- #286: `MAX_FRAMES_PER_ANALYSIS` default 150 → 500, for Semper and Material
+  Testing alike. Both apps already allowed 500 on their own
+  (`DicSettings.MAX_MAX_FRAMES`, the slider's `valueTo`); the backend default was
+  the only 150. `MAX_FILES_PER_SESSION` stays 600: uploads since 2026-08-12 are
+  three objects whatever the frame count. A build older than that still uploads
+  per file (3F+4) and gets a 413 past ~198 frames. Same change as
+  material_testing#104.
+
 ## 2026-09-28 — Backend deploy: one phone per app (#279, #280)
 
 Production `semper-api` from `ed0adbc` (`deploy-backend.yml` run 36419849032,
