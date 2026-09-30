@@ -216,8 +216,8 @@ def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depe
     """Replace a backed-up analysis's metadata.json with the app's current one.
 
     Every other file in a session is written once. This one changes when the
-    user edits the analysis after its backup (a bending deflection correction,
-    TD-150), and a restore reads the correction back from it, so without a
+    user edits the analysis after its backup (Material Testing's bending
+    deflection correction, its TD-150), and a restore reads the correction back from it, so without a
     replace the cloud copy restores the old deflection and E (ADR-013).
 
     The session must be COMPLETED: before that, the upload itself still carries
