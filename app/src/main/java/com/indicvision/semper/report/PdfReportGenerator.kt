@@ -13,6 +13,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.indicvision.semper.R
+import com.indicvision.semper.data.TypedLoads
 import com.indicvision.semper.ui.analysis.VsgStudy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -241,7 +242,11 @@ object PdfReportGenerator {
         layout.drawDimensions(m.model)
         layout.drawKeyValue("Strain:", m.model.strainName)
         m.loadN?.let { loadN ->
-            layout.drawKeyValue("Machine Load:", "%.2f N".format(Locale.US, loadN))
+            if (m.model is StressStrain.Model.Flexural) {
+                layout.drawKeyValue("Load:", "%.2f kg".format(Locale.US, TypedLoads.kg(loadN)))
+            } else {
+                layout.drawKeyValue("Machine Load:", "%.2f N".format(Locale.US, loadN))
+            }
         }
         m.stressMPa?.let {
             layout.drawKeyValue("${m.model.stressName}:", "%.3f MPa".format(Locale.US, it))
@@ -283,7 +288,7 @@ object PdfReportGenerator {
         val rows = curve.points.map {
             listOfNotNull(
                 "Frame ${it.frame + 1}",
-                "%.2f".format(Locale.US, it.loadN),
+                "%.2f".format(Locale.US, if (deflection) TypedLoads.kg(it.loadN) else it.loadN),
                 "%.3f".format(Locale.US, it.stressMPa),
                 "%.3f".format(Locale.US, it.strainMilli),
                 if (deflection) it.deflectionMm?.let { d -> "%.4f".format(Locale.US, d) } ?: "—" else null,
@@ -291,7 +296,7 @@ object PdfReportGenerator {
         }
         val headers = listOfNotNull(
             "Frame",
-            "Load (N)",
+            if (deflection) "Load (kg)" else "Load (N)",
             "Stress (MPa)",
             "Strain (mε)",
             "Deflection (mm)".takeIf { deflection },

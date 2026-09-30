@@ -2,11 +2,13 @@ package com.indicvision.semper.ui.viewer
 
 import android.content.Context
 import com.indicvision.semper.R
+import com.indicvision.semper.data.TypedLoads
 import com.indicvision.semper.report.BeamDeflection
 import com.indicvision.semper.report.LabReportFormat.gpa
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import java.util.Locale
+import kotlin.math.abs
 
 /**
  * Bending's Results, for a curve whose model
@@ -20,18 +22,18 @@ import java.util.Locale
 object ViewerBendingResults {
 
     const val UNIT_DEFLECTION = "mm"
-    const val UNIT_LOAD = "N"
+    const val UNIT_LOAD = "kg"
 
     fun axisLabels(context: Context): Pair<String, String> =
         context.getString(R.string.bending_axis_deflection) to context.getString(R.string.bending_axis_load)
 
-    /** Load on deflection, and the fitted slope as a muted line across the measured δ. */
+    /** Load (kg, [TypedLoads.loadsInKg]) on deflection, and the fitted slope as a muted line across the measured δ. */
     fun plotSeries(context: Context, curve: StressStrain.Curve): List<VsgPlotView.Series> = buildList {
         add(
             VsgPlotView.Series(
                 label = context.getString(R.string.bending_curve_title),
                 color = VsgPlotView.paletteColor(context, 0),
-                points = curve.plotPoints(),
+                points = TypedLoads.loadsInKg(curve.plotPoints()),
             ),
         )
         val line = BeamDeflection.summarize(curve)?.slopeLine() ?: return@buildList
@@ -39,7 +41,7 @@ object ViewerBendingResults {
             VsgPlotView.Series(
                 label = context.getString(R.string.bending_slope_label),
                 color = VsgPlotView.paletteColor(context, 1),
-                points = line,
+                points = TypedLoads.loadsInKg(line),
                 markers = false,
                 muted = true,
             ),
@@ -59,7 +61,7 @@ object ViewerBendingResults {
                     context.getString(
                         R.string.bending_modulus_slope_fmt,
                         gpa(slopeE),
-                        String.format(Locale.US, "%.2f", slope.slope),
+                        String.format(Locale.US, "%.2f", TypedLoads.kg(slope.slope.toFloat())),
                         String.format(Locale.US, "%.4f", slope.r2),
                     )
                 },
@@ -69,6 +71,16 @@ object ViewerBendingResults {
                 add(context.resources.getQuantityString(R.plurals.bending_modulus_mean_fmt, used, gpa(mean), used))
             }
             add(context.getString(R.string.bending_scale_fmt, String.format(Locale.US, "%.4f", summary.mmPerPx)))
+            summary.correction.takeUnless { it.isNone }?.let { c ->
+                add(
+                    context.getString(
+                        R.string.bending_correction_fmt,
+                        String.format(Locale.US, "%.3f", c.scale),
+                        if (c.biasMm < 0f) "−" else "+",
+                        String.format(Locale.US, "%.3f", abs(c.biasMm)),
+                    ),
+                )
+            }
             add(context.getString(R.string.bending_caution))
         }.joinToString("\n")
     }
@@ -79,7 +91,7 @@ object ViewerBendingResults {
         return context.getString(
             R.string.bending_frame_caption_fmt,
             frame + 1,
-            String.format(Locale.US, "%.1f", step.loadN),
+            String.format(Locale.US, "%.2f", TypedLoads.kg(step.loadN)),
             String.format(Locale.US, "%.3f", step.deflectionMm),
             String.format(Locale.US, "%.2f", step.stressMPa),
             step.modulusGPa?.let(::gpa) ?: "—",

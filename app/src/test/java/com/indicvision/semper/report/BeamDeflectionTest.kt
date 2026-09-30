@@ -200,6 +200,17 @@ class BeamDeflectionTest {
         assertEquals(listOf(0f to 0f, 0.5f to 10f, 1f to 20f), curve.plotPoints())
     }
 
+    @Test
+    fun `the plotted reference sits at the bias, where the correction puts an unloaded beam`() {
+        val geometry = SpecimenGeometry(935f, 150f, 5f, upright, deflectionScale = 2f, deflectionBiasMm = -0.1f)
+        val model = StressStrain.Model.of("bending", 0f, true, geometry)
+        val curve = StressStrain.build(listOf(10f, 20f), model, { f -> field(P(500f, 150f, 0f, 10f * (f + 1))) })
+
+        // Raw 0.5 and 1 mm become 0.9 and 1.9; the reference's 0 becomes −0.1, not the origin.
+        val plotted = curve.plotPoints().map { (d, w) -> Math.round(d * 1e4f) / 1e4f to w }
+        assertEquals(listOf(-0.1f to 0f, 0.9f to 10f, 1.9f to 20f), plotted)
+    }
+
     // The upright beam tapped bottom edge first: the probe's direction points up the image.
     private val bottomFirst = BeamEdgeTaps(topX = 500f, topY = 200f, bottomX = 500f, bottomY = 100f)
 
@@ -265,5 +276,81 @@ class BeamDeflectionTest {
 
         assertFalse(model.plotsLoadDeflection)
         assertTrue(model.isComplete)
+    }
+
+    @Test
+    fun `the TA's correction scales and shifts every deflection after the sign`() {
+        val geometry = SpecimenGeometry(935f, 150f, 5f, bottomFirst, deflectionScale = 2f, deflectionBiasMm = -0.1f)
+        val model = StressStrain.Model.of("bending", 0f, true, geometry)
+        val curve = StressStrain.build(listOf(10f, 20f), model, { f -> field(P(500f, 150f, 0f, 10f * (f + 1))) })
+
+        // Raw 0.5 and 1 mm, signed by the loads, then 2 × δ − 0.1.
+        assertEquals(listOf(0.9f, 1.9f), curve.points.map { it.deflectionMm!! }.map { Math.round(it * 1e4f) / 1e4f })
+    }
+
+    @Test
+    fun `scale divides both E values and bias leaves the slope E alone`() {
+        fun summary(scale: Float, bias: Float): BeamDeflection.Summary {
+            val geometry = SpecimenGeometry(935f, 150f, 5f, upright, scale, bias)
+            val model = StressStrain.Model.of("bending", 0f, true, geometry)
+            val loads = listOf(0f) + labKg.map { it * 9.81f }
+            val dropsPx = listOf(0f) + labMm.map { it / 0.05f }
+            val curve = StressStrain.build(loads, model, { f -> field(P(500f, 150f, 0f, dropsPx[f])) })
+            return BeamDeflection.summarize(curve)!!
+        }
+        val plain = summary(1f, 0f)
+        val scaled = summary(2f, 0f)
+        val biased = summary(1f, 0.3f)
+
+        assertEquals(plain.slopeModulusGPa!! / 2f, scaled.slopeModulusGPa!!, 1e-2f)
+        assertEquals(plain.meanModulusGPa!! / 2f, scaled.meanModulusGPa!!, 1e-2f)
+        assertEquals(plain.slopeModulusGPa!!, biased.slopeModulusGPa!!, 1e-2f)
+        assertTrue(biased.meanModulusGPa!! < plain.meanModulusGPa!!)
+        assertEquals(BeamDeflection.Correction(1f, 0.3f), biased.correction)
+    }
+
+    @Test
+    fun `recorrecting a built curve matches building it with the new correction`() {
+        fun model(scale: Float, bias: Float) = StressStrain.Model.of(
+            "bending",
+            0f,
+            true,
+            SpecimenGeometry(935f, 150f, 5f, bottomFirst, deflectionScale = scale, deflectionBiasMm = bias),
+        )
+        val loads = listOf(10f, 20f, 30f)
+        val frames = { f: Int -> field(P(500f, 150f, 0f, 10f * (f + 1))) }
+        val built = StressStrain.build(loads, model(2f, -0.1f), frames)
+        val target = model(1.05f, 0.25f)
+
+        val recorrected = BeamDeflection.Correction.recorrect(built, target)
+        val rebuilt = StressStrain.build(loads, target, frames)
+
+        assertEquals(target, recorrected.model)
+        rebuilt.points.zip(recorrected.points).forEach { (a, b) ->
+            assertEquals(a.deflectionMm!!, b.deflectionMm!!, 1e-5f)
+        }
+        // Back to none gives the camera's δ, signed by the loads.
+        val plain = BeamDeflection.Correction.recorrect(built, model(1f, 0f))
+        assertEquals(listOf(0.5f, 1f, 1.5f), plain.points.map { Math.round(it.deflectionMm!! * 1e4f) / 1e4f })
+    }
+
+    @Test
+    fun `recorrecting with the same correction keeps the points`() {
+        val model = StressStrain.Model.of("bending", 0f, true, SpecimenGeometry(935f, 150f, 5f, upright))
+        val curve = StressStrain.build(listOf(10f), model, { field(P(500f, 150f, 0f, 10f)) })
+
+        assertSame(curve.points, BeamDeflection.Correction.recorrect(curve, model).points)
+    }
+
+    @Test
+    fun `typed scale and bias read blank as none, a comma as a decimal point, and need a positive scale`() {
+        assertEquals(1f, BeamDeflection.Correction.parseScale(" "))
+        assertEquals(1.05f, BeamDeflection.Correction.parseScale("1,05"))
+        assertNull(BeamDeflection.Correction.parseScale("0"))
+        assertNull(BeamDeflection.Correction.parseScale("-1"))
+        assertNull(BeamDeflection.Correction.parseScale("abc"))
+        assertEquals(0f, BeamDeflection.Correction.parseBias(""))
+        assertEquals(-0.12f, BeamDeflection.Correction.parseBias("-0.12"))
+        assertNull(BeamDeflection.Correction.parseBias("NaN"))
     }
 }

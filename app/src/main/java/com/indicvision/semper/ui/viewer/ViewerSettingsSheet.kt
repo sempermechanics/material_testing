@@ -94,7 +94,7 @@ object ViewerSettingsSheet {
                 host.getString(R.string.setting_strain_method) to
                     args.strainMethod,
             )
-            addAll(host.stressStrain.rows())
+            addAll(ViewerFrameRows.of(host))
             addAll(stopRows(host))
             // ROI is only meaningful when one was actually recorded.
             if (roiW > 0 && roiH > 0) {

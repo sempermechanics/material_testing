@@ -58,7 +58,7 @@ class LabReportBendingTest {
 
         assertEquals(LabReportText.Bending.TABLE_HEADERS, table.headers)
         assertEquals(6, table.rows.size)
-        assertEquals(listOf("1", "1", "41.99", "1.140", "9.645", "193.21"), table.rows[0])
+        assertEquals(listOf("1", "1", "4.28", "1.140", "9.645", "193.21"), table.rows[0])
     }
 
     @Test
@@ -81,9 +81,10 @@ class LabReportBendingTest {
         val calc = document().blocks.filterIsInstance<LabReport.Block.Calculation>().single()
 
         assertEquals("σb = M · y / I", calc.lines[0])
-        assertEquals("M = W·L / 4 = 41.99 N × 0.935 m / 4 = 9.81 N·m", calc.lines[1])
-        assertEquals("σb = 9.645 MPa", calc.lines[4])
-        assertTrue(calc.lines[5], calc.lines[5].endsWith("E = 193.21 GPa"))
+        assertEquals("W = m·g = 4.28 kg × 9.81 m/s² = 41.99 N", calc.lines[1])
+        assertEquals("M = W·L / 4 = 41.99 N × 0.935 m / 4 = 9.81 N·m", calc.lines[2])
+        assertEquals("σb = 9.645 MPa", calc.lines[5])
+        assertTrue(calc.lines[6], calc.lines[6].endsWith("E = 193.21 GPa"))
     }
 
     @Test
@@ -95,11 +96,43 @@ class LabReportBendingTest {
         assertEquals("142.0 GPa", fields[LabReportText.Bending.RESULT_GRAPH])
         assertEquals("0.0500", fields[LabReportText.Bending.SCALE])
         val graph = doc.blocks.filterIsInstance<LabReport.Block.Graph>().single()
-        assertEquals("Slope = 27.06 N/mm · E = 142.0 GPa", graph.annotation)
+        assertEquals("Slope = 2.76 kg/mm (27.06 N/mm) · E = 142.0 GPa", graph.annotation)
         assertEquals(2, graph.series.size)
         // The fit runs over the lab's readings, 1.14 to 3.88 mm, not from δ = 0.
         val fit = graph.series.single { it.isFit }.points
         assertEquals(1.14f, fit.first().first, 1e-4f)
         assertEquals(3.88f, fit.last().first, 1e-4f)
+        // The graph's load axis is the hanger mass: 4.28 kg × 9.81 / g.
+        val measured = graph.series.single { !it.isFit }.points
+        assertEquals(4.28f * 9.81f / 9.80665f, measured[1].second, 1e-4f)
+    }
+
+    @Test
+    fun `a deflection correction is listed under the observations only when set`() {
+        val labels = { doc: LabReport.Document ->
+            doc.blocks.filterIsInstance<LabReport.Block.Field>().associate { it.label to it.value }
+        }
+        assertEquals(null, labels(document())[LabReportText.Bending.CORRECTION])
+        assertEquals(
+            "δ = 1.050 × δ measured − 0.120 mm",
+            LabReportText.Bending.correction(BeamDeflection.Correction(1.05f, -0.12f)),
+        )
+    }
+
+    @Test
+    fun `the graph's unloaded reference moves to the bias with a correction`() {
+        val taps = BeamEdgeTaps(0f, 0f, 0f, 127.6f)
+        val probe = BeamDeflection.Probe(taps, 6.38f, BeamDeflection.Correction(1.05f, -0.12f))
+        val model = StressStrain.Model.Flexural(935f, 150f, 6.38f, true, probe)
+        val points = labKg.indices.map { i ->
+            val w = labKg[i] * 9.81f
+            StressStrain.Point(i, w, model.stressMPa(w), 0f, labMm[i])
+        }
+        val doc = LabReport.of(StressStrain.Curve(model, points.size, points), null)!!
+
+        val measured = doc.blocks.filterIsInstance<LabReport.Block.Graph>().single().series.single { !it.isFit }
+        assertEquals(-0.12f to 0f, measured.points.first())
+        val plain = document().blocks.filterIsInstance<LabReport.Block.Graph>().single().series.single { !it.isFit }
+        assertEquals(0f to 0f, plain.points.first())
     }
 }

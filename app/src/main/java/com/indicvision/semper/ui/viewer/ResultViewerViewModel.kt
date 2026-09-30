@@ -2,6 +2,7 @@ package com.indicvision.semper.ui.viewer
 
 import androidx.lifecycle.ViewModel
 import com.indicvision.semper.data.CurveCorrection
+import com.indicvision.semper.report.BeamDeflection
 import com.indicvision.semper.report.StressStrain
 
 /**
@@ -22,4 +23,7 @@ class ResultViewerViewModel : ViewModel() {
 
     /** Tensile scale and bias typed in Results this visit; null reads the session's. */
     var curveCorrection: CurveCorrection? = null
+
+    /** Bending's deflection correction set in Results; null keeps the one the viewer opened with. */
+    var deflectionCorrection: BeamDeflection.Correction? = null
 }

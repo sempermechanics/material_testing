@@ -48,7 +48,8 @@ data class CurveCorrection(
          * is not finite, gives [NONE] rather than a curve that cannot be undone.
          */
         fun of(strainScale: Float, strainBiasMilli: Float, stressScale: Float, stressBiasMPa: Float): CurveCorrection {
-            val usable = strainScale > 0f && stressScale > 0f &&
+            val usable = strainScale > 0f &&
+                stressScale > 0f &&
                 listOf(strainScale, strainBiasMilli, stressScale, stressBiasMPa).all { it.isFinite() }
             return if (usable) CurveCorrection(strainScale, strainBiasMilli, stressScale, stressBiasMPa) else NONE
         }

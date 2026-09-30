@@ -21,7 +21,6 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.ReportBuilder
-import com.indicvision.semper.report.StressStrain
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,7 +48,6 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     private val status: TextView = host.findViewById(R.id.tvSummaryStatus)
     private val cancelButton: MaterialButton = host.findViewById(R.id.btnSummaryCancel)
     private val resultsPanel: View = host.findViewById(R.id.summaryResults)
-    private val adjustButton: MaterialButton = host.findViewById(R.id.btnSummaryAdjust)
 
     /** Value range per field over the whole sequence; empty until the pass finishes. */
     private var ranges: Map<Int, Pair<Float, Float>> = emptyMap()
@@ -82,7 +80,6 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
 
     init {
         cancelButton.setOnClickListener { cancel() }
-        adjustButton.setOnClickListener { ViewerCurveCorrection.show(host) }
     }
 
     /**
@@ -131,13 +128,13 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
         if (showsResults) {
             statusPanel.isVisible = false
             // Only a tensile curve has a scale and bias to match the machine with.
-            adjustButton.isVisible = host.stressModel is StressStrain.Model.Axial
             host.stressStrain.fill(
                 ViewerStressStrainHelper.Views(
                     host.findViewById(R.id.plotSummaryResults),
                     host.findViewById(R.id.tvSummaryResultsCaption),
                     host.findViewById(R.id.tvSummaryResultsText),
                     host.findViewById(R.id.toggleSummaryRange),
+                    host.findViewById(R.id.btnSummaryAdjust),
                 ),
             )
             return

@@ -362,6 +362,12 @@ object AnalysisCsvWriter {
 
     private fun writeBendingResults(w: Writer, summary: BeamDeflection.Summary) {
         w.append("# mechanical_results\n")
+        // Only when set, so a session without one writes the same bytes as before.
+        summary.correction.takeUnless { it.isNone }?.let { c ->
+            w.append("# deflection_correction_scale,").append(String.format(Locale.US, "%.4f", c.scale)).append('\n')
+            w.append("# deflection_correction_bias_mm,").append(String.format(Locale.US, "%.4f", c.biasMm))
+                .append('\n')
+        }
         w.append("# bending_step,frame,load_N,deflection_mm,flexural_stress_MPa,e_GPa\n")
         summary.steps.forEach { step ->
             w.append("# bending_step,${step.frame + 1},")

@@ -179,6 +179,10 @@ object SessionUploadMetadata {
         putIf("spanMm", geometry.spanMm)
         putIf("widthMm", geometry.widthMm)
         putIf("thicknessMm", geometry.thicknessMm)
+        geometry.deflectionCorrection.takeUnless { it.isNone }?.let { c ->
+            json.put("deflectionScale", c.scale.toDouble())
+            json.put("deflectionBiasMm", c.biasMm.toDouble())
+        }
         geometry.loadPoint.takeIf { it.isSet }?.let { taps ->
             json.put(
                 "loadPoint",

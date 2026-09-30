@@ -891,6 +891,8 @@ object CloudRestore {
             widthMm = mm("widthMm"),
             thicknessMm = mm("thicknessMm"),
             loadPoint = restoredTaps(json.optJSONObject("loadPoint")),
+            deflectionScale = json.optDouble("deflectionScale", 1.0).toFloat(),
+            deflectionBiasMm = json.optDouble("deflectionBiasMm", 0.0).toFloat(),
         )
     }
 

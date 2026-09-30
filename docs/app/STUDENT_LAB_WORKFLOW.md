@@ -80,6 +80,7 @@ Typed loads and a CSV are never combined; ✕ on one brings back the choice. Ten
   - Under 40 px it warns, because a 1 px slip then moves E by more than 2.5%.
   - The second mark stays on the first mark's vertical line, so the thickness is measured straight down.
   - Either edge can be tapped first. δ is read along the line between the marks and then signed the way the load pushes (`BeamDeflection.alongLoad`), so the order never flips δ or E.
+- **Units:** loads read in kg wherever the student sees them (graph, table, captions, the report, slope in kg/mm); the report's calculation shows W = m·g in N. The maths, the CSV and the JSON stay in N.
 - **Strain window:** bending starts at 9 points, not 5: a 41 px VSG at step 5, not 21 px. δ and E come from displacement, so strain only draws the maps, and at about 45 px they are about 2.5× less noisy. The cost is a band about 20 px wide along the ROI's edges with no strain (the outer fibres), which also lowers the "converged" figure. On a thin beam, lower it or frame closer.
 - **Load steps:**
   - Frames within 0.5% of the largest load of each other form one averaged row, so a 1 fps video gives the same six rows as six photos.
@@ -139,6 +140,7 @@ It's offered once the thickness is tapped.
 4. Get at least three photos in the elastic part before yield. More is better.
 5. Loads: one CSV row per photo in order (no time column), or the machine's timed log for a video or for photos straight off the phone.
 6. Bending: frame the **middle** of the beam, not the whole span. Aim for 100+ px across the thickness.
+7. Bending: if your TA gives a deflection scale and bias for your camera, lighting and tripod, open **Results** after the run and tap **Adjust deflection**. The app uses δ = scale × δ measured + bias for the graph, table, both E values, the lab report and the CSV, prints the correction in the report, and saves it with the analysis. **Reset** goes back to the camera's δ. No re-run is needed.
 
 ## Worked numbers
 

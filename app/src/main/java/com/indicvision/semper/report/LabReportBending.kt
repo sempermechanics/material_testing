@@ -1,5 +1,6 @@
 package com.indicvision.semper.report
 
+import com.indicvision.semper.data.TypedLoads
 import com.indicvision.semper.report.LabReport.Block
 import com.indicvision.semper.report.LabReport.Document
 import com.indicvision.semper.report.LabReport.Series
@@ -42,6 +43,7 @@ internal object LabReportBending {
                 add(Block.Field(b.THICKNESS, num(model.thicknessMm, 2)))
                 add(Block.Field(b.NO_LOAD, b.NO_LOAD_VALUE))
                 add(Block.Field(b.SCALE, String.format(Locale.US, "%.4f", summary.mmPerPx)))
+                summary.correction.takeUnless { it.isNone }?.let { add(Block.Field(b.CORRECTION, b.correction(it))) }
                 add(Block.Heading(LabReportText.CALCULATION))
                 add(Block.Calculation(calculation(model, summary)))
                 add(table(summary))
@@ -54,7 +56,7 @@ internal object LabReportBending {
         )
     }
 
-    /** Row 1 worked through in SI units, line by line, as the report does. */
+    /** Row 1 worked through in SI units, line by line, from the hanger mass in kg. */
     internal fun calculation(model: StressStrain.Model.Flexural, summary: BeamDeflection.Summary): List<String> {
         val b = LabReportText.Bending
         val first = summary.loadSteps.firstOrNull() ?: summary.steps.first()
@@ -64,6 +66,7 @@ internal object LabReportBending {
         val inertiaM4 = summary.secondMomentMm4 / MM4_PER_M4
         return listOf(
             b.SIGMA_FORMULA,
+            b.weightLine(num(TypedLoads.kg(first.loadN), 2), num(first.loadN, 2)),
             b.momentLine(num(first.loadN, 2), num(spanM, SPAN_M_DECIMALS), num(momentNm, 2)),
             b.yLine(sci(yM)),
             b.inertiaLine(sci(inertiaM4)),
@@ -80,7 +83,7 @@ internal object LabReportBending {
             listOf(
                 "${i + 1}",
                 frameCell(step.frame, step.lastFrame),
-                num(step.loadN, 2),
+                num(TypedLoads.kg(step.loadN), 2),
                 num(step.deflectionMm, DEFLECTION_DECIMALS),
                 num(step.stressMPa, STRESS_DECIMALS),
                 step.modulusGPa?.let { num(it, 2) } ?: LabReport.BLANK_CELL,
@@ -92,11 +95,15 @@ internal object LabReportBending {
     private fun graph(summary: BeamDeflection.Summary): Block.Graph {
         val b = LabReportText.Bending
         val steps = summary.loadSteps
-        val points = listOf(0f to 0f) + steps.map { it.deflectionMm to it.loadN }
+        // The unloaded reference: δ 0 to the camera, the bias once corrected.
+        val reference = summary.correction.apply(0f) to 0f
+        val points = TypedLoads.loadsInKg(listOf(reference) + steps.map { it.deflectionMm to it.loadN })
         val line = summary.slope
-        val fit = summary.slopeLine()?.let { Series(it, isFit = true) }
+        val fit = summary.slopeLine()?.let { Series(TypedLoads.loadsInKg(it), isFit = true) }
         val annotation = if (line != null && summary.slopeModulusGPa != null) {
-            "Slope = ${num(line.slope.toFloat(), 2)} N/mm · E = ${gpa(summary.slopeModulusGPa)} GPa"
+            val slopeN = line.slope.toFloat()
+            "Slope = ${num(slopeN / TypedLoads.G, 2)} kg/mm (${num(slopeN, 2)} N/mm) · " +
+                "E = ${gpa(summary.slopeModulusGPa)} GPa"
         } else {
             null
         }

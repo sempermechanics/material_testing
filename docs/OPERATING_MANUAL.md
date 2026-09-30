@@ -340,7 +340,7 @@ Long exports carry on in the background.
 | **Analyses data management** | Local and cloud rows: **Download** (zip to a folder), **Restore** (when the local frames are missing), **Delete** (5 s Undo) |
 | **Storage** | **Free up space** (drops frames that are backed up), **Clear cache**, and an **auto-free budget** (0–64 GB) |
 | **Your data** | Crash reports and analytics (off by default), **Export my data**, cloud data download, **Delete account** (confirm who you are first) |
-| **Analysis preferences** | Max frames (10–150): a ceiling on imported and video frames |
+| **Analysis preferences** | Max frames (10–500): a ceiling on imported and video frames |
 | **Help & support** | The manual, feedback, support email (carries device and build) |
 
 - **Transfers keep going when you leave the screen.** A permanent failure shows a dialog with **Try again**.
@@ -380,7 +380,7 @@ Long exports carry on in the background.
 | Step | 1–30 | 5 |
 | Strain window | 3–31 points, odd | 5; bending 9 |
 | Kernel | 4×4 / 6×6 | 4×4 Bicubic |
-| Max frames | 10–150 | 50 |
+| Max frames | 10–500 | 50 |
 | Sweep step denominator | 2–9 | 3 |
 | Sweep samples | 1–8 per axis | 3 |
 

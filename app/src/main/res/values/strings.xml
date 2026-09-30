@@ -281,6 +281,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="setting_test_type">Test type</string>
     <string name="setting_cross_section">Cross-section</string>
     <string name="setting_load">Machine load</string>
+    <string name="setting_load_bending">Load</string>
     <string name="setting_stress">Stress</string>
     <string name="setting_stress_flexural">Flexural stress</string>
     <string name="setting_span">Support span</string>
@@ -289,6 +290,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="setting_mm2_fmt">%1$s mm²</string>
     <string name="setting_mm_fmt">%1$s mm</string>
     <string name="setting_n_fmt">%1$s N</string>
+    <string name="setting_kg_fmt">%1$s kg</string>
     <string name="setting_mpa_fmt">%1$s MPa</string>
     <string name="setting_subset">Subset size</string>
     <string name="setting_step">Step size</string>
@@ -804,19 +806,29 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Bending Results: load–deflection graph and the lab's Results lines -->
     <string name="bending_curve_title">Load–deflection</string>
     <string name="bending_axis_deflection">Deflection δ (mm)</string>
-    <string name="bending_axis_load">Load W (N)</string>
+    <string name="bending_axis_load">Load (kg)</string>
     <string name="bending_slope_label">Slope</string>
-    <string name="bending_modulus_slope_fmt">E from the graph ≈ %1$s GPa (slope %2$s N/mm, R² %3$s)</string>
+    <string name="bending_modulus_slope_fmt">E from the graph ≈ %1$s GPa (slope %2$s kg/mm, R² %3$s)</string>
     <string name="bending_modulus_slope_none">E from the graph: needs at least two photos with a deflection.</string>
     <plurals name="bending_modulus_mean_fmt">
         <item quantity="one">Average E from the calculation ≈ %1$s GPa (%2$d load step)</item>
         <item quantity="other">Average E from the calculations ≈ %1$s GPa (%2$d load steps)</item>
     </plurals>
     <string name="bending_scale_fmt">Scale from the thickness taps: %1$s mm/px</string>
+    <string name="bending_correction_fmt">Deflection corrected: δ = %1$s × δ measured %2$s %3$s mm</string>
+    <!-- Bending Results: Adjust deflection (ViewerDeflectionCorrection) -->
+    <string name="deflection_adjust">Adjust deflection</string>
+    <string name="deflection_adjust_title">Deflection correction</string>
+    <string name="deflection_adjust_body">δ = scale × δ measured + bias, for this analysis, e.g. from your TA for your camera and tripod. The graph, table, both E values, the report and the CSV all use it.\n\nThe scale changes both E values. The bias changes each step\'s E but not E from the graph.</string>
+    <string name="deflection_scale_hint">Scale (×), 1 for none</string>
+    <string name="deflection_bias_hint">Bias (mm), 0 for none</string>
+    <string name="deflection_scale_invalid">Enter a number above 0, e.g. 1.05</string>
+    <string name="deflection_bias_invalid">Enter a number in mm, e.g. -0.12</string>
+    <string name="deflection_reset">Reset</string>
     <string name="bending_caution">Approximate: the deflection comes from the camera, not a dial gauge, and includes any movement of the whole beam. The graph value ignores that movement; trust it more.</string>
     <string name="bending_no_deflection">No deflection was read at the load point. Check that the tapped point is inside the analysed region.</string>
-    <!-- frame, load N, deflection mm, bending stress MPa, E GPa -->
-    <string name="bending_frame_caption_fmt">Frame %1$d · %2$s N · δ %3$s mm · σb %4$s MPa · E %5$s GPa</string>
+    <!-- frame, load kg, deflection mm, bending stress MPa, E GPa -->
+    <string name="bending_frame_caption_fmt">Frame %1$d · %2$s kg · δ %3$s mm · σb %4$s MPa · E %5$s GPa</string>
     <string name="results_peak_stress_fmt">Peak stress: %1$s MPa (frame %2$d)</string>
     <string name="results_peak_stress_off_curve_fmt">Peak stress: %1$s MPa (frame %2$d, off the curve: no strain there)</string>
     <string name="modulus_fit_label">Elastic fit</string>

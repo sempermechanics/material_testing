@@ -154,7 +154,7 @@ object StressStrain {
                     geometry.widthMm,
                     geometry.thicknessMm,
                     loadAxisX,
-                    BeamDeflection.Probe.of(geometry.loadPoint, geometry.thicknessMm),
+                    BeamDeflection.Probe.of(geometry.loadPoint, geometry.thicknessMm, geometry.deflectionCorrection),
                 )
                 TestType.TENSILE, TestType.DIC_2D, null -> Axial(crossSectionMm2, loadAxisX, correction)
             }
@@ -217,14 +217,17 @@ object StressStrain {
          * (strain, stress) pairs for plotting — (deflection mm, load N) when
          * the model [plots load on deflection][Model.plotsLoadDeflection] —
          * led by the unloaded reference at the origin so the elastic line
-         * reads from zero. Display only — it is not a solved frame and is not
-         * exported.
+         * reads from zero; for bending at (bias, 0), where a deflection
+         * correction puts it. Display only — it is not a solved frame and is
+         * not exported.
          */
-        fun plotPoints(): List<Pair<Float, Float>> = listOf(0f to 0f) +
+        fun plotPoints(): List<Pair<Float, Float>> =
             if (model.plotsLoadDeflection) {
-                points.mapNotNull { p -> p.deflectionMm?.let { it to p.loadN } }
+                // The reference's δ is 0 to the camera, so under a correction it is the bias.
+                listOf(BeamDeflection.Correction.of(model).apply(0f) to 0f) +
+                    points.mapNotNull { p -> p.deflectionMm?.let { it to p.loadN } }
             } else {
-                points.map { it.strainMilli to it.stressMPa }
+                listOf(0f to 0f) + points.map { it.strainMilli to it.stressMPa }
             }
     }
 
@@ -254,8 +257,14 @@ object StressStrain {
 
         val isEmpty: Boolean get() = points.isEmpty()
 
-        /** The curve so far; a bending curve's δ is signed by its loads ([BeamDeflection.alongLoad]). */
-        fun curve(frameCount: Int): Curve = Curve(model, frameCount, BeamDeflection.alongLoad(points), gauge, peak)
+        /**
+         * The curve so far; a bending curve's δ is signed by its loads and
+         * corrected ([BeamDeflection.alongLoad], [BeamDeflection.Correction]).
+         */
+        fun curve(frameCount: Int): Curve {
+            val signed = BeamDeflection.Correction.of(model).applyTo(BeamDeflection.alongLoad(points))
+            return Curve(model, frameCount, signed, gauge, peak)
+        }
     }
 
     /**
