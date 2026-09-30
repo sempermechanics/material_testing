@@ -421,9 +421,9 @@ offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
 | [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.indicvision.semper.materialtesting` while backgrounded), return | The typed loads come back |
 | [ ] 5.1b.38 | Tap ✕ on the typed loads; import a CSV; tap ✕ on it | ✕ clears the typed loads and brings back the button and dropzone; with the CSV in, the typing sheet is never offered (no button, the summary does not open it); its ✕ brings the button back. Tensile never shows the button |
 | [ ] 5.1b.39 | With 0.5, 1, 1.5, 0 typed, pick **Incremental (added per photo)** under **Loads typed as** | The boxes become 0.5, 0.5, 0.5, -1.5, each with "Total n kg" under it (0.5, 1, 1.5, 0); the keypad now has a minus key and the subtitle explains increments. Change the last to -2, **Done**: refused, "This takes the hanger below 0 kg". Back to **Absolute**: the totals return unchanged; 1,5 typed with the keypad comma still reads 1.5. **Done** in Incremental, reopen: still Incremental; the loads are the same 4.90, 9.81, 14.71, 0 N |
-| [ ] 5.1b.40 | Open a finished **Bending** analysis with the load point tapped; look at Results on the summary page and in Details | **Adjust deflection** beside the RESULTS title on the summary, and under the Results text in Details. Not on tensile, nor on bending without the tap. The wizard has no scale or bias boxes |
+| [x] 5.1b.40 | Open a finished **Bending** analysis with the load point tapped; look at Results on the summary page and in Details | **Adjust deflection** beside the RESULTS title on the summary, and under the Results text in Details. Not on tensile, nor on bending without the tap. The wizard has no scale or bias boxes |
 | [ ] 5.1b.41 | Tap it; type scale 1.05 and bias -0.12; **Apply** | Both Results redraw at once, with no progress count: "Deflection corrected: δ = 1.050 × δ measured − 0.120 mm", and every δ in the graph, caption and table is 1.05 × δ − 0.12. E from the graph drops by 1/1.05 and does not move with the bias; the average E moves with both. Share the lab report and CSV: the report lists the correction under Observations, and the CSV's `# mechanical_results` block leads with `deflection_correction_scale` / `_bias_mm` |
-| [ ] 5.1b.42 | Type scale 0, **Apply**; then a lone `-` as the bias (the number keypad blocks letters and a second point) | The dialog stays open with "Enter a number above 0, e.g. 1.05" (or "Enter a number in mm, e.g. -0.12") under the box; nothing changes. Blank boxes mean 1 and 0 |
+| [x] 5.1b.42 | Type scale 0, **Apply**; then a lone `-` as the bias (the number keypad blocks letters and a second point) | The dialog stays open with "Enter a number above 0, e.g. 1.05" (or "Enter a number in mm, e.g. -0.12") under the box; nothing changes. Blank boxes mean 1 and 0 |
 | [ ] 5.1b.43 | Back out to Home, reopen the analysis; then rotate; then kill it in the background (`adb shell am kill com.indicvision.semper`) and return | The correction is still applied each time, and the dialog opens with 1.05 and -0.12. **Reset** puts every number back to the camera's δ and saves that |
 
 **5.1b.32–38 on the Pixel 6 (`f4209a7f`, 2026-09-28)** pass on an offline lab
@@ -459,7 +459,7 @@ scrub label reads the line under the finger, not the dot). One gap: after a
 switch the cursor goes to the first box, but the keyboard stays down until a
 box is tapped (TD-141).
 
-**5.1b.40–43 on the Pixel 6 (uncommitted tree on `f7b2f7f2`, 2026-09-30)**, with
+**5.1b.40–43 on the Pixel 6 (2026-09-30, the tree merged as #108 and #107)**, with
 `semper_test_data/2_bending_pmma_real` and its CSV loads (taps 573 px,
 0.0541 mm/px; ROI 2210 × 470 at (80, 90); subset 25), pass apart from the parts
 noted below. Uncorrected: E from the graph 2.01 GPa (695.00 kg/mm, R² 0.9993),
@@ -473,9 +473,9 @@ kg in the axis, slope, Details load row and caption ("Frame 1 · 3.59 kg · …"
 - The graph's unloaded reference was drawn at (0, 0), not at the bias, so a
   bias left a stray segment. Fixed and rechecked on the phone. The lab report's
   graph had the same fault, and it is fixed there too.
-- Not checked on the phone: rotation (forcing it needs a system setting), and
-  the lab report / CSV from Share, which the signed-out build greys out
-  (`LicenseEntitlements.shareEnabled`). Unit tests cover the report's correction
+- Not checked on the phone, so 5.1b.41 and 5.1b.43 stay unticked: rotation
+  (forcing it needs a system setting), and the lab report / CSV from Share,
+  which the signed-out build greys out (`LicenseEntitlements.shareEnabled`). Unit tests cover the report's correction
   line, kg table and graph origin, and the CSV's correction rows.
 - 5.1b.42: the keypad cannot type `1.2.3` or `abc`. A lone `-` as the bias gives
   the bias error, alongside scale 0's.
