@@ -68,6 +68,13 @@ data class SessionRecord(
     val cloudSessionId: String = "",
     val syncState: SyncState = SyncState.LOCAL_ONLY,
 
+    /**
+     * The cloud copy's metadata.json predates a change made here after the
+     * backup (a bending deflection correction), so [SessionMetadataSync] still
+     * has to send it. Cleared once the backend holds the current geometry.
+     */
+    val metadataStale: Boolean = false,
+
     // ── Parameter sweep (VsgStudy)
     // A sweep varies the settings instead of the image, so [subset], [step] and
     // [strainWindow] above only describe its first frame. These carry the rest,
@@ -359,8 +366,9 @@ object SessionStore {
 
     /**
      * Bending's deflection scale and bias, set in the viewer's Results. Like
-     * [rename] it leaves the sync state alone: a backed-up session's cloud copy
-     * keeps the correction it was uploaded with.
+     * [rename] it leaves the sync state alone. A session with a cloud copy, or
+     * one on its way, is marked [SessionRecord.metadataStale] when the
+     * correction changes, so [SessionMetadataSync] re-sends its metadata.json.
      */
     @WorkerThread
     fun setDeflectionCorrection(
@@ -371,12 +379,40 @@ object SessionStore {
         mutateIndex(context) { records ->
             records.map {
                 if (it.id == id) {
-                    it.copy(geometry = it.geometry.withCorrection(correction), updatedAt = System.currentTimeMillis())
+                    val changed = it.geometry.deflectionCorrection != correction
+                    val inCloud = it.syncState != SessionRecord.SyncState.LOCAL_ONLY || it.cloudSessionId.isNotBlank()
+                    it.copy(
+                        geometry = it.geometry.withCorrection(correction),
+                        metadataStale = it.metadataStale || (changed && inCloud),
+                        updatedAt = System.currentTimeMillis(),
+                    )
                 } else {
                     it
                 }
             }
         }
+    }
+
+    /**
+     * The backend now holds metadata built from [sent]. Clears
+     * [SessionRecord.metadataStale] only if the geometry is still [sent], so a
+     * correction made while the send was in flight is sent again. Returns
+     * whether it cleared.
+     */
+    @WorkerThread
+    fun clearMetadataStale(context: Context, id: String, sent: SpecimenGeometry): Boolean = synchronized(lock) {
+        var cleared = false
+        val written = mutateIndex(context) { records ->
+            records.map {
+                if (it.id == id && it.geometry == sent) {
+                    cleared = true
+                    it.copy(metadataStale = false)
+                } else {
+                    it
+                }
+            }
+        }
+        written && cleared
     }
 
     @WorkerThread

@@ -292,6 +292,26 @@ paths:
         '200': { description: OK }
         '401': { description: Missing or invalid device attestation }
         '429': { description: Rate limited }
+  /v1/sessions/{sid}/metadata:
+    put:
+      operationId: replaceSessionMetadata
+      description: >
+        Device-attested. Replaces a COMPLETED session's metadata.json with the
+        app's current one (a change made after the backup, ADR-013). The body is
+        the metadata JSON itself, at most 256 KB.
+      parameters:
+        - name: sid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '404': { description: session_not_found or metadata_not_found }
+        '409': { description: session_not_complete or drive_file_gone }
+        '413': { description: metadata_too_large }
+        '422': { description: metadata_invalid }
+        '429': { description: Rate limited }
   /v1/sessions/{sid}/files:
     get:
       operationId: listSessionFiles

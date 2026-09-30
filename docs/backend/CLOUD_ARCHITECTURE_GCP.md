@@ -467,7 +467,11 @@ cross-section, load axis / unit / source / mapping, and from `/5` a `geometry`
 object holding the bending dimensions; from `/6` `geometry.loadPoint`, the
 bending thickness taps, written only when set) and a `loadN` per frame
 when the session has machine loads. The backend stores it verbatim; only the
-app's restore reads the additions. This trades in-Drive
+app's restore reads the additions. It is the one file a backup can change after
+it completes: `PUT /v1/sessions/{sid}/metadata` writes the app's current
+metadata over the same Drive object and updates the file doc's size and
+checksums, for a change made after the backup such as a bending deflection
+correction ([ADR-013](../adr/ADR-013-session-metadata-replace.md)). This trades in-Drive
 browsability of individual frames for far fewer resumable inits and Firestore
 writes. The `raw/processed/reports/metadata` subfolder tree below is the older
 per-file layout, kept for reference.

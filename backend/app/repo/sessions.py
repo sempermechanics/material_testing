@@ -46,6 +46,25 @@ def get_file(file_id: str):
     return {**snap.to_dict(), "fileId": file_id} if snap.exists else None
 
 
+def metadata_file_id(sid: str) -> str:
+    """The file doc of a session's metadata.json: `{sid}_{role}_{name}`, as
+    POST /v1/sessions names every file doc."""
+    return f"{sid}_metadata_metadata.json"
+
+
+def replace_file_content(sid: str, file_id: str, size_bytes: int, sha256: str, drive_md5: str | None) -> None:
+    """Record new bytes for a COMPLETED file (a re-sent metadata.json): its size
+    and checksums, so the restore's size check and the bundle manifest match
+    what Drive now holds. The session's `updatedAt` moves with it."""
+    db().collection("files").document(file_id).update({
+        "sizeBytes": size_bytes,
+        "sha256": sha256,
+        "driveMd5": drive_md5,
+        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+    })
+    db().collection("sessions").document(sid).update({"updatedAt": _base.firestore.SERVER_TIMESTAMP})
+
+
 def _session_file_docs(sid: str, page_size: int):
     """Every file document in a session, fetched [page_size] at a time."""
     query = db().collection("files").where("sessionId", "==", sid).order_by("__name__")

@@ -46,6 +46,7 @@ import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.SessionMetadataSync
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SpecimenGeometry
@@ -739,7 +740,11 @@ class ResultViewerActivity : AppCompatActivity() {
         stressStrain.redraw()
         val id = args.sessionId ?: return
         val appContext = applicationContext
-        lifecycleScope.launch(Dispatchers.IO) { SessionStore.setDeflectionCorrection(appContext, id, correction) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            SessionStore.setDeflectionCorrection(appContext, id, correction)
+            // A backed-up session's cloud copy gets the new metadata (ADR-013).
+            if (SessionStore.get(appContext, id)?.metadataStale == true) SessionMetadataSync.enqueue(appContext, id)
+        }
     }
 
     private fun loadFrameData(index: Int) {

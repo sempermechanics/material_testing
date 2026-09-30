@@ -49,6 +49,14 @@ SIZE_MISMATCH = "size_mismatch"
 CHECKSUM_MISMATCH = "checksum_mismatch"
 SIZE_OR_STATE_MISMATCH = "size_or_state_mismatch"
 RANGE_NOT_SATISFIABLE = "range_not_satisfiable"
+# PUT /v1/sessions/{sid}/metadata: the upload has not finished, so there is no
+# metadata.json to replace yet (409; the app waits for the upload), no
+# metadata file in the session (404), or a body that is not this session's
+# metadata (422) or is too big for one (413).
+SESSION_NOT_COMPLETE = "session_not_complete"
+METADATA_NOT_FOUND = "metadata_not_found"
+METADATA_INVALID = "metadata_invalid"
+METADATA_TOO_LARGE = "metadata_too_large"
 
 # --- admin -----------------------------------------------------------------
 USER_NOT_FOUND = "user_not_found"
@@ -190,6 +198,7 @@ APP_CHECK_REQUIRED = "app_check_required"
 RATE_LIMITED = "rate_limited"
 DRIVE_DOWNLOAD_FAILED = "drive_download_failed"
 DRIVE_META_FAILED = "drive_meta_failed"
+DRIVE_WRITE_FAILED = "drive_write_failed"
 # Drive answered 404 for an object the index points at: it was deleted straight
 # in Drive, or the client's upload never landed. Not an outage, so never 502 —
 # a 5xx makes the app retry forever. Download → 404 (the app gives up and says
@@ -221,6 +230,8 @@ CLIENT_BRANCHED = frozenset(
         NONCE_INVALID_OR_REPLAYED,
         BAD_SIGNATURE,
         SESSION_NOT_FOUND,
+        # The app waits for the upload to finish before re-sending metadata.
+        SESSION_NOT_COMPLETE,
         FILE_NOT_FOUND,
         RATE_LIMITED,
         SESSION_QUOTA_EXCEEDED,

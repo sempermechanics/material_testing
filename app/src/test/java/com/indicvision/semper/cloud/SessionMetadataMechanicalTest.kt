@@ -7,6 +7,7 @@ import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionUploadMetadata
 import com.indicvision.semper.data.SpecimenGeometry
+import com.indicvision.semper.report.BeamDeflection
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -69,6 +70,22 @@ class SessionMetadataMechanicalTest {
         assertEquals("bending", restored.testType)
         assertEquals(geometry, restored.geometry)
         assertEquals(listOf(0f, 100f, 200f), restored.loadsN)
+    }
+
+    @Test
+    fun `a deflection correction round-trips through metadata and restore`() {
+        // What a re-sent metadata.json carries after a correction set post-backup (TD-150).
+        val geometry = SpecimenGeometry(spanMm = 935f, widthMm = 150f, thicknessMm = 6.38f)
+            .withCorrection(BeamDeflection.Correction(1.05f, -0.12f))
+        val record = record(testType = "bending", loadsN = listOf(0f, 42f, 51f)).copy(geometry = geometry)
+        val meta = JSONObject()
+            .put("schema", SessionUploadMetadata.SCHEMA)
+            .put("test", SessionUploadMetadata.testJson(record)!!)
+            .put("frames", SessionUploadMetadata.framesJson(record))
+
+        val restored = CloudRestore.recordFrom(meta, target())
+
+        assertEquals(BeamDeflection.Correction(1.05f, -0.12f), restored.geometry.deflectionCorrection)
     }
 
     @Test

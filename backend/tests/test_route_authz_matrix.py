@@ -85,6 +85,7 @@ EXPECTED = {
     ("DELETE", "/v1/sessions/{sid}"): DEVICE,
     ("GET", "/v1/sessions/{sid}/uploads"): DEVICE,              # returns Drive upload URIs
     ("GET", "/v1/sessions/{sid}/files"): USER,
+    ("PUT", "/v1/sessions/{sid}/metadata"): DEVICE,          # writes into the Drive folder
     # The whole analysis out through a browser. USER_STEPUP because the
     # device-attested single-file route it stands in for is DEVICE, and the
     # data is the same data — a bare ID token must not be enough to drain an

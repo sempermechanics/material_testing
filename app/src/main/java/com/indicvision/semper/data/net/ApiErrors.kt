@@ -51,6 +51,12 @@ object ApiErrors {
     /** No such cloud session for this account (404). */
     const val SESSION_NOT_FOUND = "session_not_found"
 
+    /**
+     * The session's upload has not completed, so its metadata.json cannot be
+     * replaced yet (409 from `PUT /v1/sessions/{sid}/metadata`).
+     */
+    const val SESSION_NOT_COMPLETE = "session_not_complete"
+
     /** No such cloud file for this account (404). */
     const val FILE_NOT_FOUND = "file_not_found"
 
