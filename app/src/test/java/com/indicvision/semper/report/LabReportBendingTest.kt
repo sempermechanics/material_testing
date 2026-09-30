@@ -102,4 +102,33 @@ class LabReportBendingTest {
         assertEquals(1.14f, fit.first().first, 1e-4f)
         assertEquals(3.88f, fit.last().first, 1e-4f)
     }
+
+    @Test
+    fun `a deflection correction is listed under the observations only when set`() {
+        val labels = { doc: LabReport.Document ->
+            doc.blocks.filterIsInstance<LabReport.Block.Field>().associate { it.label to it.value }
+        }
+        assertEquals(null, labels(document())[LabReportText.Bending.CORRECTION])
+        assertEquals(
+            "δ = 1.050 × δ measured − 0.120 mm",
+            LabReportText.Bending.correction(BeamDeflection.Correction(1.05f, -0.12f)),
+        )
+    }
+
+    @Test
+    fun `the graph's unloaded reference moves to the bias with a correction`() {
+        val taps = BeamEdgeTaps(0f, 0f, 0f, 127.6f)
+        val probe = BeamDeflection.Probe(taps, 6.38f, BeamDeflection.Correction(1.05f, -0.12f))
+        val model = StressStrain.Model.Flexural(935f, 150f, 6.38f, true, probe)
+        val points = labKg.indices.map { i ->
+            val w = labKg[i] * 9.81f
+            StressStrain.Point(i, w, model.stressMPa(w), 0f, labMm[i])
+        }
+        val doc = LabReport.of(StressStrain.Curve(model, points.size, points), null)!!
+
+        val measured = doc.blocks.filterIsInstance<LabReport.Block.Graph>().single().series.single { !it.isFit }
+        assertEquals(-0.12f to 0f, measured.points.first())
+        val plain = document().blocks.filterIsInstance<LabReport.Block.Graph>().single().series.single { !it.isFit }
+        assertEquals(0f to 0f, plain.points.first())
+    }
 }

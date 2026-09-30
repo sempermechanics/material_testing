@@ -7,6 +7,7 @@ import com.indicvision.semper.report.LabReportFormat.gpa
 import com.indicvision.semper.report.StressStrain
 import com.indicvision.semper.ui.analysis.VsgPlotView
 import java.util.Locale
+import kotlin.math.abs
 
 /**
  * Bending's Results, for a curve whose model
@@ -69,6 +70,16 @@ object ViewerBendingResults {
                 add(context.resources.getQuantityString(R.plurals.bending_modulus_mean_fmt, used, gpa(mean), used))
             }
             add(context.getString(R.string.bending_scale_fmt, String.format(Locale.US, "%.4f", summary.mmPerPx)))
+            summary.correction.takeUnless { it.isNone }?.let { c ->
+                add(
+                    context.getString(
+                        R.string.bending_correction_fmt,
+                        String.format(Locale.US, "%.3f", c.scale),
+                        if (c.biasMm < 0f) "−" else "+",
+                        String.format(Locale.US, "%.3f", abs(c.biasMm)),
+                    ),
+                )
+            }
             add(context.getString(R.string.bending_caution))
         }.joinToString("\n")
     }

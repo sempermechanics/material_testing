@@ -803,6 +803,16 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">Average E from the calculations ≈ %1$s GPa (%2$d load steps)</item>
     </plurals>
     <string name="bending_scale_fmt">Scale from the thickness taps: %1$s mm/px</string>
+    <string name="bending_correction_fmt">Deflection corrected: δ = %1$s × δ measured %2$s %3$s mm</string>
+    <!-- Bending Results: Adjust deflection (ViewerDeflectionCorrection) -->
+    <string name="deflection_adjust">Adjust deflection</string>
+    <string name="deflection_adjust_title">Deflection correction</string>
+    <string name="deflection_adjust_body">δ = scale × δ measured + bias, for this analysis, e.g. from your TA for your camera and tripod. The graph, table, both E values, the report and the CSV all use it.\n\nThe scale changes both E values. The bias changes each step\'s E but not E from the graph.</string>
+    <string name="deflection_scale_hint">Scale (×), 1 for none</string>
+    <string name="deflection_bias_hint">Bias (mm), 0 for none</string>
+    <string name="deflection_scale_invalid">Enter a number above 0, e.g. 1.05</string>
+    <string name="deflection_bias_invalid">Enter a number in mm, e.g. -0.12</string>
+    <string name="deflection_reset">Reset</string>
     <string name="bending_caution">Approximate: the deflection comes from the camera, not a dial gauge, and includes any movement of the whole beam. The graph value ignores that movement; trust it more.</string>
     <string name="bending_no_deflection">No deflection was read at the load point. Check that the tapped point is inside the analysed region.</string>
     <!-- frame, load N, deflection mm, bending stress MPa, E GPa -->

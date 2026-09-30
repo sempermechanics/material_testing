@@ -24,6 +24,10 @@ import kotlin.math.max
  * motion would remove the bending with it, so the slope E — which a constant
  * offset does not change — is the headline number. Millimetres and newtons
  * in, MPa and GPa out. Pure.
+ *
+ * A [Correction] the TA gives for the camera, lighting and tripod setup —
+ * δ = scale × δ_camera + bias — is applied once, after the sign
+ * ([Correction.applyTo]), so every table, graph, E and export reads it.
  */
 object BeamDeflection {
 
@@ -57,7 +61,11 @@ object BeamDeflection {
      * is only the tap order, so one frame's δ can come out with either sign;
      * a curve's points take theirs from the load ([alongLoad]).
      */
-    data class Probe(val taps: BeamEdgeTaps, val thicknessMm: Float) {
+    data class Probe(
+        val taps: BeamEdgeTaps,
+        val thicknessMm: Float,
+        val correction: Correction = Correction.NONE,
+    ) {
         val mmPerPx: Float = thicknessMm / taps.thicknessPx
         val downX: Float = (taps.bottomX - taps.topX) / taps.thicknessPx
         val downY: Float = (taps.bottomY - taps.topY) / taps.thicknessPx
@@ -65,8 +73,71 @@ object BeamDeflection {
 
         companion object {
             /** A probe when the taps are set and the thickness entered; else null. */
-            fun of(taps: BeamEdgeTaps, thicknessMm: Float): Probe? =
-                if (taps.isSet && thicknessMm > 0f) Probe(taps, thicknessMm) else null
+            fun of(taps: BeamEdgeTaps, thicknessMm: Float, correction: Correction = Correction.NONE): Probe? =
+                if (taps.isSet && thicknessMm > 0f) Probe(taps, thicknessMm, correction) else null
+        }
+    }
+
+    /**
+     * The setup's deflection correction, δ = [scale] × δ_camera + [biasMm].
+     * [scale] changes both E values (E ∝ 1 / scale); [biasMm] changes the
+     * per-step E but not the slope E, whose fit has a free intercept.
+     */
+    data class Correction(val scale: Float = 1f, val biasMm: Float = 0f) {
+        val isNone: Boolean get() = scale == 1f && biasMm == 0f
+
+        fun apply(deflectionMm: Float): Float = scale * deflectionMm + biasMm
+
+        /**
+         * [points] with every δ corrected. Call it on [alongLoad]'s output:
+         * the bias goes on after the sign, so a session with its taps
+         * reversed shifts δ the same way as one tapped top first.
+         */
+        fun applyTo(points: List<StressStrain.Point>): List<StressStrain.Point> =
+            if (isNone) points else points.map { p -> p.copy(deflectionMm = p.deflectionMm?.let(::apply)) }
+
+        /** The camera's δ back from a corrected one: the inverse of [apply]. */
+        fun remove(deflectionMm: Float): Float = (deflectionMm - biasMm) / scale
+
+        companion object {
+            val NONE = Correction()
+
+            /** The [model]'s correction; none unless it is bending with a probe. */
+            fun of(model: StressStrain.Model): Correction =
+                (model as? StressStrain.Model.Flexural)?.probe?.correction ?: NONE
+
+            /** A usable correction: a scale that is not positive, or a non-finite value, is none. */
+            fun of(scale: Float, biasMm: Float): Correction =
+                if (scale > 0f && scale.isFinite() && biasMm.isFinite()) Correction(scale, biasMm) else NONE
+
+            /** A typed scale: blank is 1, a decimal comma is accepted; null unless a positive number. */
+            fun parseScale(text: String): Float? = typed(text, blank = 1f)?.takeIf { it > 0f }
+
+            /** A typed bias in mm: blank is 0, a decimal comma is accepted; null unless a number. */
+            fun parseBias(text: String): Float? = typed(text, blank = 0f)
+
+            private fun typed(text: String, blank: Float): Float? {
+                val trimmed = text.trim()
+                if (trimmed.isEmpty()) return blank
+                return trimmed.replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() }
+            }
+
+            /**
+             * [curve] under [model]'s correction instead of its own: each δ taken
+             * back to the camera's and corrected again, so the viewer can change
+             * the correction without decoding every frame. The sign
+             * ([alongLoad]) was set on the camera's δ and stays. [curve] itself
+             * when the correction is the same.
+             */
+            fun recorrect(curve: StressStrain.Curve, model: StressStrain.Model): StressStrain.Curve {
+                val old = of(curve.model)
+                val new = of(model)
+                if (old == new) return curve.copy(model = model)
+                val points = curve.points.map { p ->
+                    p.copy(deflectionMm = p.deflectionMm?.let { new.apply(old.remove(it)) })
+                }
+                return curve.copy(model = model, points = points)
+            }
         }
     }
 
@@ -158,6 +229,7 @@ object BeamDeflection {
         val steps: List<Step>,
         val loadSteps: List<Step>,
         val mmPerPx: Float,
+        val correction: Correction,
         val secondMomentMm4: Float,
         val meanModulusGPa: Float?,
         val slope: LinearFit.Line?,
@@ -210,6 +282,7 @@ object BeamDeflection {
             steps = steps,
             loadSteps = held,
             mmPerPx = probe.mmPerPx,
+            correction = probe.correction,
             secondMomentMm4 = inertia,
             meanModulusGPa = if (moduli.isEmpty()) null else moduli.average().toFloat(),
             slope = line,
