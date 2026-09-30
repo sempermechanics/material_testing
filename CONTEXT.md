@@ -141,7 +141,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
   view, a lab-report PDF. Results' **Adjust curve** takes a strain and stress scale
   and bias to match the machine's own export (`CurveCorrection`, in `Model.Axial`;
-  per session, TD-151).
+  per session, TD-152).
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video; bending's are
   typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
