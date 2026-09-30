@@ -41,9 +41,12 @@ class Settings:
     # gets DEMO_MAX_ANALYSES for unlicensed users — see
     # docs/backend/BACKEND_SETUP_GCP.md.
     #
-    # MAX_FILES_PER_SESSION bounds one analysis (150 frames x raw+dat+csv +
-    # reference + report + metadata ≈ 460, so 600 gives headroom);
-    # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces.
+    # MAX_FILES_PER_SESSION bounds one analysis's upload manifest. Apps since
+    # 2026-08-12 send three objects (metadata + Session.zip + Extras.zip) whatever
+    # the frame count; 600 was sized for earlier builds that sent one file per
+    # artifact (3 x frames + 4).
+    # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces
+    # (DicSettings.MAX_MAX_FRAMES, the app's offline fallback, is also 500).
     DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
     LICENSED_MAX_SESSIONS_PER_USER = _env_int("LICENSED_MAX_SESSIONS_PER_USER", "999")
 
@@ -69,7 +72,7 @@ class Settings:
     LICENSE_LEASE_HOURS = _env_int("LICENSE_LEASE_HOURS", "8")
     LICENSE_LEASE_HEARTBEAT_MINUTES = _env_int("LICENSE_LEASE_HEARTBEAT_MINUTES", "30")
     MAX_FILES_PER_SESSION = _env_int("MAX_FILES_PER_SESSION", "600")
-    MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "150")
+    MAX_FRAMES_PER_ANALYSIS = _env_int("MAX_FRAMES_PER_ANALYSIS", "500")
 
     # Version gate for the .dat archive codec (Phase 1.3 of the perf plan):
     # SessionZip's *read* side has understood a DatCodec-encoded .dat entry

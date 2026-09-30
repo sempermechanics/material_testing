@@ -311,7 +311,7 @@ bundle downloads, **Export my data** and **Download my cloud account data**.
 | [ ] 4.21 | Confirm the delete with no network | Nothing local is touched; a failure toast is shown |
 | [ ] 4.22 | Confirm the delete online | Everything is wiped, including the sign-in identity, and you land back on Login |
 | [ ] 4.22a | Sign up again with the same email afterwards | It behaves as a brand-new account — the old identity is gone |
-| [ ] 4.23 | Drag the **Max frames** slider | Value label tracks in steps of 10 from 10 up to the ceiling. 150 is the compile-time fallback; the live ceiling comes from remote config, so a backend can lower it |
+| [ ] 4.23 | Drag the **Max frames** slider | Value label tracks in steps of 10 from 10 up to the ceiling. 500 is the compile-time fallback and the backend default; the live ceiling comes from remote config, so a backend can lower it |
 | [ ] 4.24 | Tap the ⓘ next to it | Explains the cost of more frames |
 | [ ] 4.25 | Set it to 20, then import 40 frames in an analysis | Only the first 20 are kept, with a "capped" toast |
 | [ ] 4.26 | Expand **Help & support** | Five actions: **Open Manual**, Report a bug, Request a feature, **Send feedback**, Email support — plus the support address, selectable and copyable |
@@ -818,7 +818,7 @@ heatmap loop. The field animations are still built for Share → Animations.
 | [ ] 8.2a.1b | Open a result with a sub-frame ROI (or a small accepted patch) | The summary GIF is framed on that coloured region — same rest-fit contain scale as the live viewer, not a letterboxed full photo |
 | [ ] 8.2a.1a | Watch it build | Determinate progress with a status ("Reading frames…", then "Rendering <field>…") and a **Cancel** button |
 | [ ] 8.2a.2 | Watch a short (≤33 frame) analysis | Each frame is visible for about 300 ms |
-| [ ] 8.2a.3 | Watch a 150-frame analysis | Every frame is there and the loop still finishes inside 10 s |
+| [ ] 8.2a.3 | Watch a 500-frame analysis | Every frame is there and the loop still finishes inside 10 s |
 | [ ] 8.2a.4 | Compare early and late frames of a growing test | Colour rises through the sequence — one scale throughout, no per-frame renormalising |
 | [ ] 8.2a.5 | Read the scale labels beside it | The widest bounds in the whole sequence, not the current frame's |
 | [ ] 8.2a.5a | Open ⓘ on the summary | Max and min of that GIF scale, no mean, and no histogram |
