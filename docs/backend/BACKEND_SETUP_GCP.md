@@ -335,7 +335,7 @@ Everything above is required (or near enough). These are the rest of what
 | `ADMIN_WEB_REAUTH_SECONDS` | `900` | How old a console sign-in may be and still authorise an ordinary state change. Sudo mode, not a session length |
 | `ADMIN_WEB_REVOKE_REAUTH_SECONDS` | `120` | Tighter window for whole-licence revoke; the operator page forces password/Google re-auth plus TOTP before that call |
 | `MAX_FILES_PER_SESSION` | `600` | Upper bound on files in one analysis |
-| `MAX_FRAMES_PER_ANALYSIS` | `150` | Deformed-frame ceiling the app enforces |
+| `MAX_FRAMES_PER_ANALYSIS` | `500` | Deformed-frame ceiling the app enforces |
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
 | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |

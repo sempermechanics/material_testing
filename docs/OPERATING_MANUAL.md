@@ -313,7 +313,7 @@ your subject.
 
 ### Max frames
 
-In Settings, not here. 10–150, default 50. Caps frames per analysis.
+In Settings, not here. 10–500, default 50. Caps frames per analysis.
 
 ---
 
@@ -693,7 +693,7 @@ Write above that block; leave it in place.
 | Step | 1–30 | 5 | Runtime matters | You need a denser field |
 | Strain window | 3–31 points, odd | 5 | Strain is noisy | Detail is being smoothed away |
 | Kernel | 4×4 / 6×6 | 4×4 Bicubic | Studying interpolation bias | — |
-| Max frames | 10–150 | 50 | Long sequences | Runs are killed for memory |
+| Max frames | 10–500 | 50 | Long sequences | Runs are killed for memory |
 | Sweep subset range | 15–121, odd | Around recommended | — | — |
 | Sweep strain window range | 3–31 points, odd | 3–11 | Strain is noisy | Detail is being smoothed away |
 | Step denominator | 2–9 | — | Denser correlation | Faster runs |
