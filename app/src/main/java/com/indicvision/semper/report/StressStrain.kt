@@ -249,12 +249,12 @@ object StressStrain {
         val isEmpty: Boolean get() = points.isEmpty()
 
         /**
-         * The curve so far; a bending curve's δ is signed by its loads
-         * ([BeamDeflection.alongLoad]), then corrected ([BeamDeflection.Correction]).
+         * The curve so far; a bending curve's δ is signed by its loads and
+         * corrected ([BeamDeflection.alongLoad], [BeamDeflection.Correction]).
          */
         fun curve(frameCount: Int): Curve {
-            val deflected = BeamDeflection.Correction.of(model).applyTo(BeamDeflection.alongLoad(points))
-            return Curve(model, frameCount, deflected, gauge, peak)
+            val signed = BeamDeflection.Correction.of(model).applyTo(BeamDeflection.alongLoad(points))
+            return Curve(model, frameCount, signed, gauge, peak)
         }
     }
 
