@@ -11,7 +11,6 @@ import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionPaths
-import com.indicvision.semper.data.loadOfFrame
 import com.indicvision.semper.report.BeamDeflection
 import com.indicvision.semper.report.ElasticModulus
 import com.indicvision.semper.report.ElasticRegion
@@ -26,14 +25,11 @@ import java.util.WeakHashMap
 
 /**
  * The stress–strain curve in the viewer: the Results on the summary page and
- * in the Details sheet, and the sheet's dimension / Load / Stress rows. The
+ * in the Details sheet (its per-frame rows are [ViewerFrameRows]). The
  * curve needs the mean strain of every frame, so it is a full decode pass over
  * the batch — started only when a Results surface is shown, and cached in the
  * ViewModel so the other surface, a reopen, or the share sheet reuses it.
  */
-// One surface's lifecycle (fill, build, draw, redraw, cancel) plus the sheet's rows;
-// splitting it would scatter the shared build job and the waiting/drawn surfaces.
-@Suppress("TooManyFunctions")
 class ViewerStressStrainHelper(
     private val host: ResultViewerActivity,
     private val vm: ResultViewerViewModel,
@@ -67,25 +63,6 @@ class ViewerStressStrainHelper(
 
     /** Whether this session has Results at all: loads, and not a parameter sweep. */
     val showsResults: Boolean get() = hasLoads && !host.isSweep
-
-    /** Dimension, load, torque and stress rows for the frame on screen; none on the summary. */
-    fun rows(): List<Pair<String, String>> {
-        val loadN = host.loadsN.loadOfFrame(host.plannedFrameIndex(host.currentFrameIndex))
-            ?.takeUnless { host.isShowingSummary }
-            ?: return emptyList()
-        val model = host.stressModel
-        val stress = model.stressMPa(loadN)
-        return buildList {
-            model.dimensions.forEach { (dimension, value) ->
-                if (value > 0f) add(row(dimensionLabelRes(dimension), unitRes(dimension), value))
-            }
-            add(row(R.string.setting_load, R.string.setting_n_fmt, loadN))
-            if (!stress.isNaN()) add(row(stressLabelRes(model), R.string.setting_mpa_fmt, stress))
-        }
-    }
-
-    private fun row(labelRes: Int, valueRes: Int, value: Float): Pair<String, String> =
-        host.getString(labelRes) to host.getString(valueRes, fmt(value))
 
     /**
      * Fills the sheet's stress–strain section, building the curve first if it
@@ -339,8 +316,5 @@ class ViewerStressStrainHelper(
             StressStrain.Dimension.WIDTH -> R.string.setting_width
             StressStrain.Dimension.THICKNESS -> R.string.setting_thickness
         }
-
-        private fun unitRes(dimension: StressStrain.Dimension): Int =
-            if (dimension == StressStrain.Dimension.CROSS_SECTION) R.string.setting_mm2_fmt else R.string.setting_mm_fmt
     }
 }

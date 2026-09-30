@@ -14,12 +14,15 @@ object TypedLoads {
     /** Standard gravity, m/s²: W (N) = m (kg) × [G]. */
     const val G = 9.80665f
 
+    /** A load W (N) as the mass that weighs it, W / [G], in kg. */
+    fun kg(loadN: Float): Float = loadN / G
+
     /**
-     * (x, W N) graph points as (x, kg): each load as the mass that weighs it,
-     * W / [G]. The bending graphs plot load in kg, what the student hung; the
-     * maths, tables and exports stay in newtons.
+     * (x, W N) graph points as (x, kg). Bending shows load in kg, what the
+     * student hung — graphs, tables and captions; the maths runs in newtons
+     * and the CSV/JSON exports stay in newtons.
      */
-    fun loadsInKg(points: List<Pair<Float, Float>>): List<Pair<Float, Float>> = points.map { (x, w) -> x to w / G }
+    fun loadsInKg(points: List<Pair<Float, Float>>): List<Pair<Float, Float>> = points.map { (x, w) -> x to kg(w) }
 
     /** Stored as the session's `loadSource` where a CSV stores its file name. Not shown. */
     const val SOURCE = "typed in the app (kg)"
