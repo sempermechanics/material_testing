@@ -52,8 +52,8 @@ class SummaryAnimationTest {
 
     @Test
     fun `a long sequence keeps every frame and stays inside the ceiling`() {
-        // Max frames per analysis is 150; nothing may be dropped to fit 10 s.
-        for (frames in 34..150) {
+        // Max frames per analysis is 500; nothing may be dropped to fit 10 s.
+        for (frames in 34..500) {
             val delay = SummaryAnimation.delayCentis(frames)
             val total = frames * delay
             assertTrue("$frames frames ran to $total cs", total <= SummaryAnimation.MAX_TOTAL_CENTIS)
