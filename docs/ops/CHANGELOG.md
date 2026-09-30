@@ -12,6 +12,32 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-09-30 — material_testing: synced with semperdic-app `1e80954`
+
+A plain merge of the parent's #274, #276, #277 and #281–#287. The only code
+that changes here is the console's #276 (Edit on a Demo key opens Issue licence).
+#277's full-range video luma and #286's 500-frame ceiling were already here
+byte for byte (#81, #104); #286 is deployed, so `/config` now serves
+`maxFrames: 500` to both apps. TD-145 comes in as the parent's row. TD-134 keeps
+this repo's text, and the parent's note on which TD rows live here is left out.
+
+## 2026-09-30 — Backend deploy: frame ceiling 500 (#286)
+
+Staging first (`deploy-backend.yml` run 36669887146 → `semper-api-staging-36669887146-1`),
+then production run 36670760641 → image `semper-api-36670760641-1`, both from
+`31a33e79`; the previous production image is pinned as `rollback-prev`. The
+gateway ran as dry-run on both: no route changed. `/readyz` passed on each
+candidate before the promote, and neither service sets `MAX_FRAMES_PER_ANALYSIS`
+in its env, so the new default is what `/config` serves.
+
+- #286: `MAX_FRAMES_PER_ANALYSIS` default 150 → 500, for Semper and Material
+  Testing alike. Both apps already allowed 500 on their own
+  (`DicSettings.MAX_MAX_FRAMES`, the slider's `valueTo`); the backend default was
+  the only 150. `MAX_FILES_PER_SESSION` stays 600: uploads since 2026-08-12 are
+  three objects whatever the frame count. A build older than that still uploads
+  per file (3F+4) and gets a 413 past ~198 frames. Same change as
+  material_testing#104.
+
 ## 2026-09-29 — material_testing: a pan pushed against an edge stays on it (TD-146)
 
 `e2e/RoiEditorGestureTest`'s far pan failed about one CI run in seven with the
@@ -234,6 +260,83 @@ Bending's **Load point → Mark** row is now **Beam height → Set**. The sample
 box uses an opaque `info_code_bg`, because the translucent `viewer_plot_grid`
 did not draw on the dark dialog. Checked by hand on the API 36 emulator, in
 light and dark themes. Ships with the next app release.
+## 2026-09-28 — Backend deploy: one phone per app (#279, #280)
+
+Production `semper-api` from `ed0adbc` (`deploy-backend.yml` run 36419849032,
+image `semper-api-36419849032-1`; the previous revision `semper-api-00029-z72`
+is pinned as `rollback-prev`). The gateway ran as dry-run: its spec did not
+change. `/readyz` passed on the candidate before the promote.
+
+- #279 (TD-137): a device-lock mismatch is Demo for that request only; it is
+  no longer stored on the account.
+- #280 (TD-138, [ADR-010](../adr/ADR-010-device-binding-per-app.md)): each app
+  names itself with `X-App-Id` and has its own registered device, release hold,
+  lock and cooldown. A request without the header is Semper, so builds in the
+  field are unchanged.
+
+The console half of #280 went out the same day (`scripts/deploy-console.sh`
+from `0c3946f7`): seats and the pending-users list show each app's device, and
+the account page offers "Use Material Testing on a different device".
+material_testing#90 brought the header to Material Testing; a debug build of it
+signed in on a Pixel 6 (Semper not installed there). It read as licensed once
+the account's stored `mode: demo`, left by the old mismatch bug, was set back
+by hand: #279 stops new demotions but does not undo old ones.
+
+## 2026-09-26 — App release `v1.2-beta.3`
+
+Release run 36239577288 on `main` at `ae05bb87` (CI green on that commit,
+emulator E2E included): signed APK, versionCode 35, private GitHub pre-release
+`v1.2-beta.3`, R8 mapping uploaded to Crashlytics. It carries every app change
+merged since `v1.2-beta.2` (28 PRs that touch `app/`). Pixel 6 smoke the same day
+on the account #264 demoted, which runs as Demo:
+- Clean install and sign-in.
+- A two-frame run: 79.3 % converged, and frame names follow the picked files.
+- Attested upload: `POST /v1/sessions`, then `…/uploads` and three `complete` calls, all 200.
+- Home read "9 / 25" after a refresh.
+- No crashes.
+
+Share, PDF, Delete everywhere, Restore and the backups card need a licensed account
+and were not smoked. The Current state entries this release closes, as they stood:
+
+- **App release `v1.2-beta.2`** (beta, private GitHub Release, from `fab33cb`): the
+  burn-down's app half, #180's strain window in data points, engine `v0.2.2`, #182 (TD-66).
+- **Merged, awaiting release:** #189, four fixes ported from material_testing
+  (`SubsetRecommender` reads speckle inside the ROI from textured patches only,
+  `VsgPlotView` y gutter, `TouchImageView` zoom across a resize, `AviReader` µs slack);
+  #197, `settingsScroll` skips the licence-only settings headers and
+  `scripts/ci_test_report.py` puts failing device tests and benchmark numbers in the CI log;
+  #203 (TD-81), Compute comes back after a single run fails outright, and a first frame
+  that kept no points says why (the strain window with the run's VSG and step, nothing
+  correlated, or an unreadable frame).
+- **Measured optimisation (2026-09-25, all six passes done).** Passes 1–2 (#191, #206) take
+  an app open from 12 to 3 requests on the Pixel 6 and ship with the next app build; Pass 4
+  (#202) is deployed; Passes 3, 5 and 6 measured nothing worth changing
+  ([perf/request-volume.md](../perf/request-volume.md), [CHANGELOG](CHANGELOG.md)).
+- **Benchmarks in CI.** `HotPathMicroBenchmark` runs (#200, TD-86: debug-only permission,
+  `am instrument`); the scrub seeder writes the ranges sidecar (#208, TD-87: 150-frame heap
+  161 → 21 MB); #214 reuses one frame buffer, #217 (TD-88) saves the sidecar after a full
+  decode. #229/#230 (TD-90): no API URL now reads as offline instead of crashing on open.
+- **Wrong-information audit, app half (merged, awaiting release):** #211 (enforce a known
+  licensed ceiling), #212 (PDF page cover image and name, mixed bulk-delete prompt, sweep
+  export header, per-node sweep reasons, restored skip count), #218 (licence countdown, backup
+  status, local quota count, restored stop reasons), #219 (PDF and share extremes), #220 (run
+  counts, stale Home rows), #223 (counts, captions, report names, progress), #225 (frame names
+  past a skipped frame, Home headline, partial-run dialog). No audit TECH_DEBT rows remain.
+- **Bulk delete.** Backend half deployed (#226, [CHANGELOG](CHANGELOG.md)); app half
+  merged, awaiting release (#227: one `SessionDeletes` queue, Delete everywhere, cloud link cleared).
+  Pixel 6, 10 rows, Delete everywhere: 10 DELETEs, all 200, in ~17 s (was 61 in 100 s).
+  **Restore (#234, merged, awaiting release):** Home says Restore, restores a multi-selection,
+  shares `RestoreStart` with Settings, and announces a failed restore once (`RestoreFailureLedger`).
+  Pixel 6, 3 at once: 13 requests, 0 × 429, ~17 s, so restores stay parallel. **Home cloud
+  backups (#235, merged, awaiting release):** a card offers backups this phone has no row for (`CloudBackupListing`).
+- **"Upload pending" with no upload coming (#254, merged, awaiting release):** a build with no
+  backend saves analyses as not backed up, and each reconcile queues rows still PENDING again.
+  Pixel 6, 2026-09-26: its 8 waiting analyses backed up on their own after sign-in.
+- **`v1.2-beta.2` shows "1 / 1 analyses used"** after a user's first analysis, whatever
+  the cap: its plural's "one" form is a hard-coded "1 / 1", so a licensed account (cap 999)
+  looks capped at 1. TD-82's fix (`b9c218da`) is on `main`, so the next release carries it.
+  The backend floor for a licensed cap (#211) is deployed; the app half ships with that release.
+
 ## 2026-09-26 — Backend, gateway and console deploy: compat shims 1–5 retired (#267), account status line (#271)
 
 Staging first (run 36237349656 → `semper-api-staging-36237349656-1`, staging
