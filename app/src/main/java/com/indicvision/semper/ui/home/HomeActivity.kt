@@ -217,19 +217,21 @@ class HomeActivity : AppCompatActivity() {
             fab.performClick()
         }
 
-        // Consent first, then the coach mark — two overlays at once is noise, and
-        // the diagnostics choice must be made before anything is collected.
-        maybeAskDiagnostics {
-            fab.post {
-                CoachMarkController(this).maybeShow(
-                    CoachPrefs.Screen.HOME,
-                    listOf(
-                        CoachMarkController.Step(
-                            fab,
-                            getString(R.string.coach_home_fab),
+        // Beta notice, then consent, then the coach mark: one overlay at a time,
+        // and the diagnostics choice must be made before anything is collected.
+        maybeShowBetaNotice {
+            maybeAskDiagnostics {
+                fab.post {
+                    CoachMarkController(this).maybeShow(
+                        CoachPrefs.Screen.HOME,
+                        listOf(
+                            CoachMarkController.Step(
+                                fab,
+                                getString(R.string.coach_home_fab),
+                            ),
                         ),
-                    ),
-                )
+                    )
+                }
             }
         }
 
@@ -289,7 +291,6 @@ class HomeActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, exitAppCallback)
         onBackPressedDispatcher.addCallback(this, backCallback)
 
-        maybeShowBetaNotice()
         // Cold start / return with an already-full quota → persistent support screen.
         lifecycleScope.launch {
             val localCount = withContext(Dispatchers.IO) {
@@ -411,15 +412,22 @@ class HomeActivity : AppCompatActivity() {
         refresh()
     }
 
-    /** One-time beta / data-use declaration after the account first reaches Home. */
-    private fun maybeShowBetaNotice() {
-        if (TokenStore.hasAckedBetaNotice(this)) return
+    /**
+     * One-time beta / data-use declaration after the account first reaches Home,
+     * then [next]. The only way out is "I understand", so [next] runs from there.
+     */
+    private fun maybeShowBetaNotice(next: () -> Unit) {
+        if (TokenStore.hasAckedBetaNotice(this)) {
+            next()
+            return
+        }
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.beta_notice_title)
             .setMessage(R.string.beta_notice_body)
             .setCancelable(false)
             .setPositiveButton(R.string.beta_notice_ack) { _, _ ->
                 TokenStore.setBetaNoticeAcked(this)
+                next()
             }
             .show()
     }
