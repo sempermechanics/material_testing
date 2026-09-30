@@ -47,8 +47,10 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.imaging.BitmapDecode
+import com.indicvision.semper.report.BeamDeflection
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.ReportImageNames
@@ -162,7 +164,10 @@ class ResultViewerActivity : AppCompatActivity() {
     internal val crossSectionMm2: Float get() = args.crossSectionMm2
     internal val loadAxisX: Boolean get() = args.loadAxisX
     internal val loadsN: FloatArray by lazy { args.loadsN.toFloatArray() }
-    internal val geometry: SpecimenGeometry get() = args.geometry
+
+    /** The session's geometry, with the deflection correction set in Results when there is one. */
+    internal val geometry: SpecimenGeometry
+        get() = viewerVm.deflectionCorrection?.let(args.geometry::withCorrection) ?: args.geometry
 
     /** How this session's loads become stress; axial for a plain DIC session. */
     internal val stressModel: StressStrain.Model
@@ -330,6 +335,10 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
             showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
             pendingShareKind = savedInstanceState.getString(STATE_SHARE_KIND)
+            // After process death the ViewModel is new and the Intent still has the old correction.
+            if (viewerVm.deflectionCorrection == null) {
+                viewerVm.deflectionCorrection = ViewerDeflectionCorrection.restore(savedInstanceState)
+            }
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
@@ -715,6 +724,22 @@ class ResultViewerActivity : AppCompatActivity() {
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
         outState.putBoolean("SHOWING_SUMMARY", showingSummary)
         pendingShareKind?.let { outState.putString(STATE_SHARE_KIND, it) }
+        viewerVm.deflectionCorrection?.let { ViewerDeflectionCorrection.save(outState, it) }
+    }
+
+    /**
+     * Results' Adjust deflection: [correction] becomes the session's. The
+     * cached curve is re-mapped rather than rebuilt, the Results on screen
+     * redraw, and the share sheet, report and CSV read it through [geometry].
+     * Saved to the session so a reopen shows it too.
+     */
+    internal fun applyDeflectionCorrection(correction: BeamDeflection.Correction) {
+        viewerVm.deflectionCorrection = correction
+        viewerVm.stressStrain = viewerVm.stressStrain?.let { BeamDeflection.Correction.recorrect(it, stressModel) }
+        stressStrain.redraw()
+        val id = args.sessionId ?: return
+        val appContext = applicationContext
+        lifecycleScope.launch(Dispatchers.IO) { SessionStore.setDeflectionCorrection(appContext, id, correction) }
     }
 
     private fun loadFrameData(index: Int) {

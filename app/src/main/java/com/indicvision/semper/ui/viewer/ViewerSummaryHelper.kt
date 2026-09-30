@@ -133,6 +133,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
                     host.findViewById(R.id.tvSummaryResultsCaption),
                     host.findViewById(R.id.tvSummaryResultsText),
                     host.findViewById(R.id.toggleSummaryRange),
+                    host.findViewById(R.id.btnSummaryAdjust),
                 ),
             )
             return
