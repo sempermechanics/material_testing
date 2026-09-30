@@ -1,5 +1,6 @@
 package com.indicvision.semper.report
 
+import com.indicvision.semper.data.CurveCorrection
 import com.indicvision.semper.report.LabReportFormat.frameCell
 import com.indicvision.semper.report.LabReportFormat.gpa
 import com.indicvision.semper.report.LabReportFormat.num
@@ -123,6 +124,7 @@ object LabReport {
                 add(Block.Field(t.DIAMETER, null))
                 add(Block.Field(t.AREA, num(model.areaMm2, 2)))
                 add(Block.Field(t.STRAIN_BY, t.strainBy(model.strainName)))
+                model.correction.takeUnless { it.isNone }?.let { add(Block.Field(t.CORRECTION, t.correction(it))) }
                 curve.gauge?.let { add(Block.Field(t.dicGauge(axisName(model)), t.dicGaugeValue(num(it.lengthPx, 0)))) }
                 add(Block.Field(t.FINAL_DIAMETER, null))
                 add(Block.Field(t.FINAL_GAUGE_LENGTH, null))
@@ -134,10 +136,10 @@ object LabReport {
                             t.stressLine(
                                 num(first.loadN / NEWTONS_PER_KN, LOAD_DECIMALS),
                                 num(model.areaMm2, 2),
-                                num(first.stressMPa, 2),
+                                num(model.correction.removeStress(first.stressMPa), 2),
                             ),
-                            t.strainLine(sci(first.strainMilli / MILLI)),
-                        ) + extensionLine(curve, first),
+                            t.strainLine(sci(model.correction.removeStrain(first.strainMilli) / MILLI)),
+                        ) + extensionLine(curve, first) + correctedLine(model.correction, first),
                     ),
                 )
                 addAll(tensileGraphs(curve, modulus))
@@ -154,6 +156,14 @@ object LabReport {
             },
         )
     }
+
+    /** The row-1 values after the hand-entered match; none when there is no match. */
+    private fun correctedLine(c: CurveCorrection, first: StressStrain.Point): List<String> =
+        if (c.isNone) {
+            emptyList()
+        } else {
+            listOf(LabReportText.Tensile.correctedLine(num(first.stressMPa, 2), sci(first.strainMilli / MILLI)))
+        }
 
     private fun axisName(model: StressStrain.Model.Axial): String = if (model.axisX) "x" else "y"
 

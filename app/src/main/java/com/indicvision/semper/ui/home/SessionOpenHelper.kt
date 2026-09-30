@@ -74,5 +74,6 @@ object SessionOpenHelper {
             loadAxisX = session.loadAxisX,
             loadsN = if (session.hasMachineLoads) session.loadsN else emptyList(),
             geometry = session.geometry,
+            curveCorrection = session.curveCorrection,
         )
 }

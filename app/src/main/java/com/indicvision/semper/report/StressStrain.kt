@@ -1,6 +1,7 @@
 package com.indicvision.semper.report
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.CurveCorrection
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.data.TestType
 import kotlin.math.abs
@@ -77,18 +78,24 @@ object StressStrain {
          * Tensile: σ = P / A, and engineering strain ΔL / L₀ along the load
          * axis from the virtual extensometer, as a clip-on extensometer reads
          * it (ADR-012). No gauge, or a band with no point, is no strain.
+         * [correction] is the session's hand-entered scale and bias, applied
+         * to both here so every reader of the curve sees them.
          */
-        data class Axial(val areaMm2: Float, val axisX: Boolean) :
-            Model(
-                wireName = "axial",
-                stressName = "Engineering stress",
-                strainName = "ΔL/L₀ along ${if (axisX) "x" else "y"}",
-            ) {
+        data class Axial(
+            val areaMm2: Float,
+            val axisX: Boolean,
+            val correction: CurveCorrection = CurveCorrection.NONE,
+        ) : Model(
+            wireName = "axial",
+            stressName = "Engineering stress",
+            strainName = "ΔL/L₀ along ${if (axisX) "x" else "y"}",
+        ) {
             override val isComplete: Boolean get() = areaMm2 > 0f
-            override fun stressMPa(loadN: Float): Float = if (isComplete) loadN / areaMm2 else Float.NaN
+            override fun stressMPa(loadN: Float): Float =
+                if (isComplete) correction.stress(loadN / areaMm2) else Float.NaN
             override fun strainMilli(data: FloatArray, gauge: Extensometer.Gauge?): Float? {
                 val extension = gauge?.extensionPx(data) ?: return null
-                return extension / gauge.lengthPx * DicResult.STRAIN_TO_MILLISTRAIN
+                return correction.strain(extension / gauge.lengthPx * DicResult.STRAIN_TO_MILLISTRAIN)
             }
             override val strainBasis: String get() = "between the end bands of the analysed region"
             override val dimensions get() = listOf(Dimension.CROSS_SECTION to areaMm2)
@@ -133,12 +140,14 @@ object StressStrain {
              * The model for a stored session. A blank or unknown type reads
              * as axial, which is what every session before bending had inputs
              * for — including one stored as a test this build no longer offers.
+             * [correction] applies to axial only; bending ignores it.
              */
             fun of(
                 testType: String,
                 crossSectionMm2: Float,
                 loadAxisX: Boolean,
                 geometry: SpecimenGeometry,
+                correction: CurveCorrection = CurveCorrection.NONE,
             ): Model = when (TestType.fromWire(testType)) {
                 TestType.BENDING -> Flexural(
                     geometry.spanMm,
@@ -147,7 +156,7 @@ object StressStrain {
                     loadAxisX,
                     BeamDeflection.Probe.of(geometry.loadPoint, geometry.thicknessMm),
                 )
-                TestType.TENSILE, TestType.DIC_2D, null -> Axial(crossSectionMm2, loadAxisX)
+                TestType.TENSILE, TestType.DIC_2D, null -> Axial(crossSectionMm2, loadAxisX, correction)
             }
         }
     }
@@ -269,6 +278,27 @@ object StressStrain {
             onProgress(index + 1)
         }
         return collector.curve(loadsN.size)
+    }
+
+    /**
+     * [curve] under [correction] instead of the one it was built with: each
+     * strain and stress taken back to the camera's and the load's and corrected
+     * again, so the viewer can change the correction without decoding every
+     * frame. A curve that is not axial comes back as it was.
+     */
+    fun recorrect(curve: Curve, correction: CurveCorrection): Curve {
+        val model = curve.model as? Model.Axial
+        if (model == null || model.correction == correction) return curve
+        val old = model.correction
+        fun strain(v: Float) = correction.strain(old.removeStrain(v))
+        fun stress(v: Float) = correction.stress(old.removeStress(v))
+        return curve.copy(
+            model = model.copy(correction = correction),
+            points = curve.points.map { p ->
+                p.copy(strainMilli = strain(p.strainMilli), stressMPa = stress(p.stressMPa))
+            },
+            loadPeak = curve.loadPeak?.let { it.copy(stressMPa = stress(it.stressMPa)) },
+        )
     }
 
     private fun axisStrainMilli(data: FloatArray, axisX: Boolean): Float? =

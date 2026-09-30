@@ -85,6 +85,17 @@
                         android:textSize="11sp"
                         android:textStyle="bold" />
 
+                    <!-- Tensile: the curve's scale and bias (ViewerCurveCorrection).
+                         In the header row: the panel does not scroll. -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSummaryAdjust"
+                        style="@style/Widget.Semper.Button.Outlined.Compact"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/curve_adjust"
+                        android:visibility="gone" />
+
                     <!-- Whole curve or the elastic region E is fitted to; shown only with a fit.
                          Pill clip set in code, as activity_vsg_lattice.xml's togglePlotModeClip. -->
                     <FrameLayout

@@ -867,6 +867,19 @@ object CloudRestore {
             loadSource = test.optString("loadSource"),
             loadMapping = test.optString("loadMapping"),
             geometry = restoredGeometry(test.optJSONObject("geometry")),
+            curveCorrection = restoredCorrection(test.optJSONObject("curveCorrection")),
+        )
+    }
+
+    /** Tensile's scale and bias from a backup that has one; anything unusable is none. */
+    private fun restoredCorrection(json: JSONObject?): CurveCorrection {
+        if (json == null) return CurveCorrection.NONE
+        fun value(key: String, default: Double) = json.optDouble(key, default).toFloat()
+        return CurveCorrection.of(
+            value("strainScale", 1.0),
+            value("strainBiasMilli", 0.0),
+            value("stressScale", 1.0),
+            value("stressBiasMPa", 0.0),
         )
     }
 

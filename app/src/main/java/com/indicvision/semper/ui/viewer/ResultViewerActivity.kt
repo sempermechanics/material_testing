@@ -45,8 +45,10 @@ import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CurveCorrection
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
@@ -164,9 +166,12 @@ class ResultViewerActivity : AppCompatActivity() {
     internal val loadsN: FloatArray by lazy { args.loadsN.toFloatArray() }
     internal val geometry: SpecimenGeometry get() = args.geometry
 
+    /** The tensile scale and bias: one typed on this screen, else the session's. */
+    internal val curveCorrection: CurveCorrection get() = viewerVm.curveCorrection ?: args.curveCorrection
+
     /** How this session's loads become stress; axial for a plain DIC session. */
     internal val stressModel: StressStrain.Model
-        get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry)
+        get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
     internal val stressStrain: ViewerStressStrainHelper by lazy { ViewerStressStrainHelper(this, viewerVm) }
 
     /** The reference at display size. Exports and the report read it; it is never a frame's photo. */
@@ -330,6 +335,11 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
             showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
             pendingShareKind = savedInstanceState.getString(STATE_SHARE_KIND)
+            // Process death drops the ViewModel; the saved one was also written
+            // to the session, but the Intent still carries the one it opened with.
+            if (viewerVm.curveCorrection == null) {
+                viewerVm.curveCorrection = ViewerCurveCorrection.restore(savedInstanceState)
+            }
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
@@ -715,6 +725,21 @@ class ResultViewerActivity : AppCompatActivity() {
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
         outState.putBoolean("SHOWING_SUMMARY", showingSummary)
         pendingShareKind?.let { outState.putString(STATE_SHARE_KIND, it) }
+        viewerVm.curveCorrection?.let { ViewerCurveCorrection.save(outState, it) }
+    }
+
+    /**
+     * Results' Adjust curve: redraws the cached curve under [correction]
+     * without decoding the frames again, and saves it on the session so the
+     * next open, the CSV and the report read it.
+     */
+    internal fun applyCurveCorrection(correction: CurveCorrection) {
+        viewerVm.curveCorrection = correction
+        viewerVm.stressStrain = viewerVm.stressStrain?.let { StressStrain.recorrect(it, correction) }
+        if (isShowingSummary) summary.show()
+        val id = args.sessionLocalId ?: return
+        val appContext = applicationContext
+        lifecycleScope.launch(Dispatchers.IO) { SessionStore.setCurveCorrection(appContext, id, correction) }
     }
 
     private fun loadFrameData(index: Int) {
@@ -1239,6 +1264,7 @@ class ResultViewerActivity : AppCompatActivity() {
             loadAxisX = loadAxisX,
             loadsN = loadsN,
             geometry = geometry,
+            curveCorrection = curveCorrection,
             stressStrain = viewerVm.stressStrain,
         )
     }

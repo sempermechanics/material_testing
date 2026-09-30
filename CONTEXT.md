@@ -139,7 +139,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
-  view, a lab-report PDF.
+  view, a lab-report PDF. Results' **Adjust curve** takes a strain and stress scale
+  and bias to match the machine's own export (`CurveCorrection`, in `Model.Axial`;
+  per session, TD-149).
   Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
   from a machine CSV, matched by time within 100 ms for video; bending's are
   typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6

@@ -139,6 +139,7 @@ object SessionUploadBundler {
             crossSectionMm2 = record.crossSectionMm2,
             loadAxisX = record.loadAxisX,
             geometry = record.geometry,
+            curveCorrection = record.curveCorrection,
         )
         val csvAppender = csvFile?.let { AnalysisCsvWriter.open(it, record.isSweep, csvMetadata) }
         try {
@@ -421,7 +422,7 @@ object SessionUploadBundler {
         if (testType.isBlank()) return null
         return MechanicalCover(
             testType = testType,
-            model = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry),
+            model = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection),
             loadN = frameLoadN(index),
         )
     }

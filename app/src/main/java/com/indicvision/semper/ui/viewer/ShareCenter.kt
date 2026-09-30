@@ -24,6 +24,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CacheJanitor
+import com.indicvision.semper.data.CurveCorrection
 import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SpecimenGeometry
@@ -550,6 +551,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             crossSectionMm2 = s.crossSectionMm2,
             loadAxisX = s.loadAxisX,
             geometry = s.geometry,
+            curveCorrection = s.curveCorrection,
         )
         val f = File(shareDir(), "${s.baseName}_data.csv")
         AnalysisCsvWriter.write(f, sweep, frames, metadata)
@@ -848,6 +850,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val loadAxisX: Boolean = true,
         val loadsN: FloatArray = FloatArray(0),
         val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
+        val curveCorrection: CurveCorrection = CurveCorrection.NONE,
         /** The viewer's already-built curve, if the Details sheet has been opened. */
         val stressStrain: StressStrain.Curve? = null,
         /**
@@ -858,7 +861,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val plannedFrames: List<Int> = emptyList(),
     ) {
         val stressModel: StressStrain.Model
-            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry)
+            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
 
         /** Grid pitch of frame [index] — what rendering that frame depends on. */
         fun stepAt(index: Int): Int = stepPerFrame?.getOrNull(index) ?: step
