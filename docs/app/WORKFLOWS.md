@@ -155,6 +155,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.2 | Relaunch, and again after signing out and back in | The notice does not reappear |
 | [ ] 3.2a | Acknowledge the beta notice on a fresh install | A second dialog asks whether to send crash reports; **declining is the default outcome** and nothing is collected until you accept |
 | [ ] 3.2b | Relaunch after answering it | It does not reappear; the choice is mirrored by the Settings toggle (§4, Your data) |
+| [ ] 3.2c | Signed out (a debug build with no API URL): acknowledge, then relaunch and after a process kill; then sign in to an account that has not seen it | Signed out, the notice does not reappear; the account is asked once, since each account acks for itself |
 | [ ] 3.3 | First visit | A coach mark points at the **+** button; Skip and Got it both dismiss it |
 | [ ] 3.4 | Look at a session row | Thumbnail, name, "date · N frames" (or "Parameter sweep"), headline value, sync badge. A single-setting headline is the first frame's convergence — "97.5% converged", or "97.5% converged on frame 1" when the run has several frames |
 | [ ] 3.5 | Tap a normal session | Result viewer opens on frame 1 |

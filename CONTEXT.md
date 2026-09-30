@@ -126,7 +126,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-29)
+## Current state (2026-09-30)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
@@ -135,7 +135,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
-  TD-139–144 and TD-146–148 are ours (TD-145 is semperdic-app's).
+  TD-139–144 and TD-146–150 are ours (TD-145 is semperdic-app's).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
@@ -188,11 +188,14 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
     sends `X-App-Id` and signed in licensed on a Pixel 6, which now runs `v1.2-beta.3`
     (`528afdfc`, versionCode 4). Don't hand out `main`'s CI APK: its versionCode is
-    CI's run number, above every release (TD-148). A release installed over a
-    debug build is a new phone to the backend (`ANDROID_ID` follows the signing key):
-    reset this app's device first. Owed: signing in where Semper is signed in too, and
-    App Check for this app (its attestation fails; production runs it `off`). A
-    `sync/` merge keeps this repo's `applicationId` and `google-services.json`.
+    CI's run number, above every release (TD-148). Signed out (a debug build with no
+    API URL), Home's Beta notice is acked once per phone, no longer on every launch
+    (#106, TD-149; Pixel 6 2026-09-30); each account still acks once. A release
+    installed over a debug build is a new phone to the backend (`ANDROID_ID` follows
+    the signing key): reset this app's device first. Owed: signing in where Semper is
+    signed in too, and App Check for this app (its attestation fails; production runs
+    it `off`). A `sync/` merge keeps this repo's `applicationId` and
+    `google-services.json`.
   - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
