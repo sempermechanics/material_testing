@@ -199,13 +199,20 @@ object CloudRestore {
         val outDir = CacheJanitor.shareDir(context.applicationContext.cacheDir)
         val dest = File(outDir, SessionNaming.bundleFileName(displayName))
         discard(dest)
-        val whole = api.downloadReporting(token, bundleEntry, dest, onProgress)
-        RestoreZipVerifier.verifySessionZip(dest, bundleEntry.declaredSize, bundleEntry.sha256)
-        // Since the payload was split, Session.zip alone is no longer the whole
-        // analysis. "Save to Files" is the deliverables use case, so pull Extras.zip
-        // too and hand over one merged archive — the same single file as before.
-        files.firstOrNull { it.role == ArtifactRoles.EXTRAS }?.let { mergeExtrasInto(api, token, it, dest) }
-        onProgress(whole, whole)
+        var complete = false
+        try {
+            val whole = api.downloadReporting(token, bundleEntry, dest, onProgress)
+            RestoreZipVerifier.verifySessionZip(dest, bundleEntry.declaredSize, bundleEntry.sha256)
+            // Since the payload was split, Session.zip alone is no longer the whole
+            // analysis. "Save to Files" is the deliverables use case, so pull Extras.zip
+            // too and hand over one merged archive — the same single file as before.
+            files.firstOrNull { it.role == ArtifactRoles.EXTRAS }?.let { mergeExtrasInto(api, token, it, dest) }
+            onProgress(whole, whole)
+            complete = true
+        } finally {
+            // A failed or cancelled attempt leaves no half-verified archive in the share dir.
+            if (!complete) discard(dest)
+        }
         dest
     }
 

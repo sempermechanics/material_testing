@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.cloud.CorruptTransferException
 import com.indicvision.semper.data.cloud.restore.CloudRestore
+import com.indicvision.semper.data.session.CacheJanitor
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.util.AtomicFiles
@@ -193,6 +194,21 @@ class CloudRestorePipelineTest {
         val fake = FakeCloudApi().apply { onListSessions = { _, _ -> throw CancellationException("call cancelled") } }
 
         assertTrue(CloudRestore.listCompleted(context, fake, tokens) is CloudRestore.ListResult.Failed)
+    }
+
+    @Test
+    fun `a Save-to-Files download whose extras fail attestation leaves no archive behind`() {
+        val bundle = bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat())
+        val extrasBytes = RestoreFakeApi.zipOf(listOf("csv/analysis_data.csv" to "a,b".toByteArray()))
+        val staleSha = RestoreFakeApi.sha256Of("an older extras body".toByteArray())
+        api.files = listOf(bundle, api.file("extras-1", "extras", extrasBytes, staleSha))
+
+        assertThrows(CorruptTransferException::class.java) {
+            runBlocking { CloudRestore.downloadBundleZip(context, CLOUD_ID, "Specimen", api = api, tokens = tokens) }
+        }
+
+        val left = CacheJanitor.shareDir(context.cacheDir).listFiles().orEmpty().map { it.name }
+        assertEquals(emptyList<String>(), left)
     }
 
     private companion object {
