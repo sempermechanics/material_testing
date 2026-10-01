@@ -5,7 +5,6 @@
 package com.indicvision.semper.ui.viewer
 
 import android.graphics.Bitmap
-import androidx.core.graphics.scale
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.ReportBuilder
@@ -43,14 +42,12 @@ object ViewerReportFactory {
                 rawHeight = host.imgH,
             )
         }
-        val cached = host.cachedBaseImage
-        val baseImg = when {
-            decodedCapped != null -> decodedCapped
-            cached != null && cached.width == host.imgW && cached.height == host.imgH -> cached
-            cached != null -> cached.scale(host.imgW, host.imgH)
-            else -> return null
-        }
-        val ownsBase = baseImg !== cached
+        // Without a reference file, the viewer's display-size reference stands in
+        // as it is: buildReport scales whatever it is given into its capped
+        // composite and keeps only 600 px copies, so scaling it up first (it was
+        // scaled to the full sensor size, ~104 MB at 26 MP) bought nothing.
+        val baseImg = decodedCapped ?: host.cachedBaseImage ?: return null
+        val ownsBase = baseImg === decodedCapped
 
         val frameStep = host.sweepSteps?.getOrNull(frameIndex) ?: host.baseStep
         val frameSubset = host.sweepSubsets?.getOrNull(frameIndex)
@@ -65,35 +62,39 @@ object ViewerReportFactory {
             EngineStats(0, 0, 0, 0, 0, 0, 0, 0, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
         }
 
-        // This frame's own image. It used to be the viewer's opening one for
-        // every page — the first frame after a run, the reference from Home —
-        // under each frame's own "Def:" name.
-        val realDefImg = host.deformedImagePathAt(frameIndex)?.let {
-            BitmapDecode.decodeFileForView(
-                it,
-                capW,
-                capH,
-                cap,
-                rawWidth = host.imgW,
-                rawHeight = host.imgH,
-            )
-        } ?: baseImg
-
         // buildReport keeps only a downscaled copy of the cover images, so the
-        // full-size decode above is ours to free — and an all-frames report
-        // calls this once per frame.
-        return buildReportWith(
-            host = host,
-            data = data,
-            baseImg = baseImg,
-            realDefImg = realDefImg,
-            frameIndex = frameIndex,
-            frameStep = frameStep,
-            frameSubset = frameSubset,
-            frameStrainWin = frameStrainWin,
-            engineStats = engineStats,
-        ).also {
-            if (realDefImg !== baseImg) realDefImg.recycle()
+        // decodes here are ours to free — on a throw too, since an all-frames
+        // report calls this once per frame.
+        var realDefImg: Bitmap? = null
+        try {
+            // This frame's own image. It used to be the viewer's opening one for
+            // every page — the first frame after a run, the reference from Home —
+            // under each frame's own "Def:" name.
+            val defImg = host.deformedImagePathAt(frameIndex)?.let {
+                BitmapDecode.decodeFileForView(
+                    it,
+                    capW,
+                    capH,
+                    cap,
+                    rawWidth = host.imgW,
+                    rawHeight = host.imgH,
+                )
+            } ?: baseImg
+            realDefImg = defImg
+
+            return buildReportWith(
+                host = host,
+                data = data,
+                baseImg = baseImg,
+                realDefImg = defImg,
+                frameIndex = frameIndex,
+                frameStep = frameStep,
+                frameSubset = frameSubset,
+                frameStrainWin = frameStrainWin,
+                engineStats = engineStats,
+            )
+        } finally {
+            realDefImg?.takeIf { it !== baseImg }?.recycle()
             if (ownsBase) baseImg.recycle()
         }
     }
