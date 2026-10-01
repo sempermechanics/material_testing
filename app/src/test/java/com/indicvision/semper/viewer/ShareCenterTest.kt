@@ -1,5 +1,7 @@
 package com.indicvision.semper.viewer
 
+import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import android.view.ViewGroup
 import android.widget.TextView
@@ -9,7 +11,9 @@ import com.indicvision.semper.R
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import com.indicvision.semper.ui.viewer.ShareCenter
 import com.indicvision.semper.ui.viewer.ViewerArgs
+import kotlinx.coroutines.asCoroutineDispatcher
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -19,11 +23,13 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.Executor
 
 /**
  * The viewer's "save to Files" export, end to end from a real viewer: the CSV
@@ -153,6 +159,87 @@ class ShareCenterTest {
 
         assertEquals(activity.getString(R.string.share_failed), pillText(activity))
         assertTrue(!dest.exists() || dest.length() == 0L)
+    }
+
+    private fun controller(): ActivityController<ResultViewerActivity> {
+        val intent = ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
+            .toIntent(ApplicationProvider.getApplicationContext())
+        return Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup()
+    }
+
+    /** The CSV export's point rows per image column, from a file it saved. */
+    private fun rowsByImage(csv: File): Map<String, Int> {
+        val lines = csv.readLines()
+        val header = lines.indexOfFirst { it.startsWith("image,") }
+        return lines.drop(header + 1).filter { it.isNotBlank() }.groupingBy { it.substringBefore(',') }.eachCount()
+    }
+
+    @Test
+    fun `an export the user is waiting on survives a rotation`() {
+        val controller = controller()
+        val activity = controller.get()
+        idleUntil(activity) { activity.buildShareSnapshot() != null }
+        val dest = File(temp.root, "picked.csv")
+
+        ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
+        // Rotate before the job can report back to the main thread.
+        val rebuilt = controller.recreate().get()
+        idleUntil(rebuilt) { ShadowToast.getLatestToast() != null || pillText(rebuilt) != null }
+
+        assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
+        assertEquals((1..FRAMES).associate { "Frame_$it" to GRID * GRID }, rowsByImage(dest))
+    }
+
+    @Test
+    fun `a save-as picked across a rotation saves from the rebuilt viewer`() {
+        val controller = controller()
+        val activity = controller.get()
+        idleUntil(activity) { activity.buildShareSnapshot() != null }
+        activity.pickShareDocument("csv", "text/csv", "picked.csv")
+        val picker = shadowOf(activity).nextStartedActivityForResult
+
+        // Rotated while the picker was up: its answer reaches the new viewer.
+        val rebuilt = controller.recreate().get()
+        val dest = File(temp.root, "picked.csv")
+        rebuilt.activityResultRegistry.dispatchResult(
+            picker.requestCode,
+            Activity.RESULT_OK,
+            Intent().setData(Uri.fromFile(dest)),
+        )
+        idleUntil(rebuilt) { ShadowToast.getLatestToast() != null || pillText(rebuilt) != null }
+
+        assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
+        assertEquals((1..FRAMES).associate { "Frame_$it" to GRID * GRID }, rowsByImage(dest))
+    }
+
+    @Test
+    fun `a save-as answer that lands before the frames are read still saves`() {
+        val intent = ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
+            .toIntent(ApplicationProvider.getApplicationContext())
+        val controller = Robolectric.buildActivity(ResultViewerActivity::class.java, intent)
+        // Hold the frame listing, as a viewer the system just restored has not read
+        // it yet when the picker answers; the frame on screen is not loaded either.
+        val held = mutableListOf<Runnable>()
+        controller.get().frameSetDispatcher = Executor { held += it }.asCoroutineDispatcher()
+        val activity = controller.setup().get()
+        activity.pickShareDocument("csv", "text/csv", "picked.csv")
+        val picker = shadowOf(activity).nextStartedActivityForResult
+        val dest = File(temp.root, "picked.csv")
+
+        activity.activityResultRegistry.dispatchResult(
+            picker.requestCode,
+            Activity.RESULT_OK,
+            Intent().setData(Uri.fromFile(dest)),
+        )
+        shadowOf(activity.mainLooper).idle()
+        assertNull("no 'share failed' for a viewer still loading", pillText(activity))
+        assertEquals(null, activity.rawData)
+
+        held.toList().forEach { it.run() }
+        idleUntil(activity) { ShadowToast.getLatestToast() != null || pillText(activity) != null }
+
+        assertEquals(activity.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
+        assertEquals((1..FRAMES).associate { "Frame_$it" to GRID * GRID }, rowsByImage(dest))
     }
 
     @Test

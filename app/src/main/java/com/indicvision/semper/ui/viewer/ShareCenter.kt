@@ -15,10 +15,8 @@ import android.graphics.Rect
 import android.net.Uri
 import android.view.View
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
-import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
@@ -32,13 +30,6 @@ import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
-import com.indicvision.semper.ui.common.DeterminateProgressDialog
-import com.indicvision.semper.ui.common.TransferBannerController
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
@@ -60,10 +51,11 @@ class ShareCenter(private val host: ResultViewerActivity) {
     private val snap by lazy { host.buildShareSnapshot() }
 
     /**
-     * The share snapshot, which [show] has already confirmed is non-null before
-     * opening the sheet. Every generator below runs inside [runJob]'s try/catch, so
-     * throwing here (rather than a raw `!!` NPE) turns the impossible-but-defended
-     * "no snapshot" case into the normal "share failed" snackbar instead of a crash.
+     * The share snapshot, which [show] and [runJob] have already confirmed is
+     * non-null (on the main thread) before any generator runs. Every generator
+     * runs inside the job's catch, so throwing here (rather than a raw `!!` NPE)
+     * turns the impossible-but-defended "no snapshot" case into the normal
+     * "share failed" message instead of a crash.
      */
     private fun requireSnapshot(): Snapshot =
         snap ?: error("Share snapshot unavailable")
@@ -106,7 +98,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
         v.findViewById<View>(R.id.rowSharePhoto).setOnClickListener {
             sheet.dismiss()
-            runJob(R.string.share_generating) { listOf(currentPhoto()) to "image/png" }
+            runJob(KIND_PHOTO, R.string.share_generating) { listOf(currentPhoto()) to "image/png" }
         }
         v.findViewById<View>(R.id.rowShareAllPhotos).setOnClickListener {
             sheet.dismiss()
@@ -137,7 +129,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         sheet.show()
     }
 
-    // ── Job runner: progress dialog → system share sheet (+ Local) ───────
+    // ── Job runner: ShareExportJobs (survives rotation) → share sheet / file ──
 
     /**
      * Save vs Share before any generation. Save opens SAF immediately; Share
@@ -153,7 +145,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             host,
             onSave = { host.pickShareDocument(kind, mime, filename) },
             onShare = {
-                runJob(progressText, shareDirect = true) { report -> buildKind(kind, report) }
+                runJob(kind, progressText, direct = true) { report -> buildKind(kind, report) }
             },
         )
     }
@@ -164,7 +156,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             KIND_GIFS -> R.string.share_generating_gif
             else -> R.string.share_generating
         }
-        runJob(progressText, destUri = uri) { report -> buildKind(kind, report) }
+        runJob(kind, progressText, destUri = uri) { report -> buildKind(kind, report) }
     }
 
     private suspend fun buildKind(
@@ -198,126 +190,42 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     private fun animationsZipName(): String = "${requireSnapshot().baseName}_animations.zip"
 
+    /**
+     * Starts an export in the viewer's [ShareExportJobs], which outlive a
+     * rotation; [ShareExportUi] shows its progress and delivers the result.
+     */
     private fun runJob(
+        kind: String,
         progressText: Int,
         destUri: Uri? = null,
-        shareDirect: Boolean = false,
+        direct: Boolean = false,
         build: suspend (report: (Int, String) -> Unit) -> Pair<List<File>, String>,
     ) {
-        var job: Job? = null
-        val transferId = "share-$progressText"
-        val title = host.getString(progressText)
-        fun stopJob() {
-            job?.cancel()
-            host.shareBanner.remove(transferId)
-        }
-        val progress = DeterminateProgressDialog(
-            host,
-            title,
-            onCancel = { stopJob() },
-            onBackground = {
-                host.shareBanner.upsert(
-                    TransferBannerController.Transfer(
-                        id = transferId,
-                        title = title,
-                        onCancel = { stopJob() },
-                    ),
-                )
-            },
-        )
-        progress.show()
-        job = host.lifecycleScope.launch {
-            try {
-                val report: (Int, String) -> Unit = { pct, label ->
-                    progress.update(pct, label)
-                    if (host.shareBanner.contains(transferId)) {
-                        host.shareBanner.updateProgress(transferId, pct, label)
-                    }
-                }
-                val (files, mime) = withContext(Dispatchers.Default) { build(report) }
-                // Safety: never hand an empty or missing file to the share sheet —
-                // a generator that silently produced nothing would otherwise share
-                // a 0-byte document.
-                if (files.isEmpty() || files.any { !it.exists() || it.length() == 0L }) {
-                    fail(progress, transferId, null, "Share produced no usable files")
-                    return@launch
-                }
-                // SAF saves one document; bundle multi-file exports into a zip first.
-                val handoff = withContext(Dispatchers.Default) {
-                    if (files.size == 1) {
-                        files[0] to mime
-                    } else {
-                        zipInto(files, "${snap?.baseName ?: "analysis"}_export.zip") to "application/zip"
-                    }
-                }
-                if (!handoff.first.exists() || handoff.first.length() == 0L) {
-                    fail(progress, transferId, null, "Bundled export was empty")
-                    return@launch
-                }
-                progress.dismiss()
-                host.shareBanner.remove(transferId)
-                deliverHandoff(handoff.first, handoff.second, destUri, shareDirect)
-            } catch (e: CancellationException) {
-                progress.dismiss()
-                host.shareBanner.remove(transferId)
-                CrispToast.show(host, host.getString(R.string.share_cancelled))
-                throw e
-            } catch (e: Throwable) {
-                // Throwable, not just Exception: a large multi-frame ZIP/PDF export
-                // can hit OutOfMemoryError (an Error), which we'd rather surface as
-                // a snackbar than let crash the app.
-                fail(progress, transferId, e, "Share generation failed")
-            }
-        }
-    }
-
-    private fun fail(
-        progress: DeterminateProgressDialog,
-        transferId: String,
-        e: Throwable?,
-        log: String,
-    ) {
-        progress.dismiss()
-        host.shareBanner.remove(transferId)
-        if (e != null) Timber.e(e, log) else Timber.e(log)
-        CrispToast.show(host, host.getString(R.string.share_failed), long = true)
-    }
-
-    private suspend fun deliverHandoff(
-        file: File,
-        mime: String,
-        destUri: Uri?,
-        shareDirect: Boolean,
-    ) {
-        if (destUri != null) {
-            val copied = withContext(Dispatchers.IO) {
-                runCatching {
-                    host.contentResolver.openOutputStream(destUri)?.use { out ->
-                        file.inputStream().use { it.copyTo(out) }
-                    } ?: 0L
-                }.onFailure { Timber.e(it, "Save to Files failed") }.getOrDefault(0L)
-            }
-            Toast.makeText(
-                host,
-                if (copied > 0L) R.string.save_success else R.string.save_failed,
-                Toast.LENGTH_LONG,
-            ).show()
+        // Captured here, on the main thread, from the viewer as it is now; the
+        // generators then only read this snapshot off the main thread.
+        val s = snap
+        if (s == null) {
+            Timber.e("Share snapshot unavailable for %s", kind)
+            CrispToast.show(host, host.getString(R.string.share_failed), long = true)
             return
         }
-        if (shareDirect) {
-            host.startActivity(SendToSheet.shareChooser(host, file, mime))
-        } else {
-            shareWithLocalOption(file, mime)
+        host.shareExports.start(kind, host.getString(progressText), destUri, direct) { report ->
+            val (files, mime) = build(report)
+            // Safety: never hand an empty or missing file to the share sheet —
+            // a generator that silently produced nothing would otherwise share
+            // a 0-byte document.
+            check(files.isNotEmpty() && files.all { it.exists() && it.length() > 0L }) {
+                "Share produced no usable files"
+            }
+            // SAF saves one document; bundle multi-file exports into a zip first.
+            val handoff = if (files.size == 1) {
+                files[0] to mime
+            } else {
+                zipInto(files, "${s.baseName}_export.zip") to "application/zip"
+            }
+            check(handoff.first.exists() && handoff.first.length() > 0L) { "Bundled export was empty" }
+            handoff
         }
-    }
-
-    /**
-     * Our own "Send to" sheet: Save to Files (folder icon) + Share. Owning the
-     * rows is the only reliable way to show a folder icon — the system share
-     * sheet ignores custom icons on EXTRA_INITIAL_INTENTS on Android 12+.
-     */
-    private fun shareWithLocalOption(file: File, mime: String) {
-        SendToSheet.show(host, file, mime)
     }
 
     private fun shareDir(): File = CacheJanitor.shareDir(host.cacheDir)
@@ -464,18 +372,19 @@ class ShareCenter(private val host: ResultViewerActivity) {
     private fun currentPhoto(): File {
         val s = requireSnapshot()
         return writePng(
-            renderAnnotated(s.data, s.dataIndex, s.typeString, s.frameIndex),
+            renderAnnotated(s.frameData(), s.dataIndex, s.typeString, s.frameIndex),
             "${s.baseName}_${s.typeString}_frame${s.frameIndex + 1}.png",
         )
     }
 
     private fun allFieldPhotos(): List<File> {
         val s = requireSnapshot()
+        val data = s.frameData()
         val baseCache = mutableMapOf<Pair<Int, Int>, Bitmap>()
         return try {
             FIELDS.map { (label, idx) ->
                 writePng(
-                    renderAnnotated(s.data, idx, label, s.frameIndex, baseCache),
+                    renderAnnotated(data, idx, label, s.frameIndex, baseCache),
                     "${s.baseName}_${label}_frame${s.frameIndex + 1}.png",
                 )
             }
@@ -713,7 +622,12 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     /** Everything the generators need, captured once from the viewer. */
     data class Snapshot(
-        val data: FloatArray,
+        /**
+         * The field of the frame on screen, or null while it is still loading —
+         * a save-as answer can reach a recreated viewer first. Only the photo
+         * kinds need it; read it through [frameData].
+         */
+        val data: FloatArray?,
         val batchFiles: List<File>,
         /** Frame names in planned-frame order; look one up with [nameAt]. */
         val defNames: List<String>,
@@ -774,6 +688,11 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
         /** The name of the frame at position [index], or null when it has none. */
         fun nameAt(index: Int): String? = ReportImageNames.frameName(defNames, plannedAt(index))
+
+        /** The field of frame [frameIndex]: the viewer's copy, else read from disk. Off the main thread. */
+        fun frameData(): FloatArray = data
+            ?: batchFiles.getOrNull(frameIndex)?.let { DicResult.decodeDatFile(it) }
+            ?: error("Frame ${frameIndex + 1} is unreadable")
     }
 
     private companion object {
@@ -791,6 +710,9 @@ class ShareCenter(private val host: ResultViewerActivity) {
         const val KIND_ZIP = "zip"
         const val KIND_CSV = "csv"
         const val KIND_PHOTOS = "photos"
+
+        /** The current frame's photo; shared straight away, never saved-as. */
+        const val KIND_PHOTO = "photo"
         const val KIND_GIFS = "gifs"
     }
 }

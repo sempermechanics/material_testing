@@ -21,6 +21,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.net.Uri
 import android.os.Bundle
 import android.os.Trace
 import android.view.View
@@ -39,6 +40,7 @@ import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.os.BundleCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -111,8 +113,21 @@ class ResultViewerActivity : AppCompatActivity() {
     internal lateinit var shareBanner: com.indicvision.semper.ui.common.TransferBannerController
     private val chromeHideDelayMs = 2_500L
 
+    /** Shows the running exports, which live in [viewerVm] and outlive this screen's rotations. */
+    internal lateinit var shareExports: ShareExportUi
+
     /** Stashed while the SAF save-as picker is open for a slow share export. */
     internal var pendingShareKind: String? = null
+
+    /**
+     * A picked save-as document whose export has not started yet: the answer can
+     * reach a recreated viewer before its frames are listed. Kept in the saved
+     * state until the export starts.
+     */
+    private var pendingSave: Pair<String, Uri>? = null
+
+    /** Run once the frame set is read; see [whenFrameSetLoaded]. */
+    private val afterFrameSet = mutableListOf<() -> Unit>()
 
     private val createShareDocument = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -121,7 +136,20 @@ class ResultViewerActivity : AppCompatActivity() {
         pendingShareKind = null
         val uri = result.data?.data
         if (result.resultCode != RESULT_OK || uri == null || kind == null) return@registerForActivityResult
+        pendingSave = kind to uri
+        startPendingSave()
+    }
+
+    /** Starts [pendingSave]'s export once the frames it covers are known. */
+    private fun startPendingSave() = whenFrameSetLoaded {
+        val (kind, uri) = pendingSave ?: return@whenFrameSetLoaded
+        pendingSave = null
         ShareCenter(this).writeKindToUri(kind, uri)
+    }
+
+    /** Runs [action] now if the frame set is read, else right after [onFrameSetRead]. */
+    private fun whenFrameSetLoaded(action: () -> Unit) {
+        if (frameSetLoaded) action() else afterFrameSet += action
     }
 
     private lateinit var inspect: ViewerInspectHelper
@@ -291,6 +319,8 @@ class ResultViewerActivity : AppCompatActivity() {
         shareBanner = com.indicvision.semper.ui.common.TransferBannerController(
             findViewById(R.id.transferBannerRoot),
         )
+        // Re-attaches any export a rotation left running.
+        shareExports = ShareExportUi(this, viewerVm.exports).also { it.attach() }
 
         Insets.padTop(findViewById(R.id.viewerTopStack))
         // Lifted, not padded, above the keyboard: the image is fitted to the
@@ -314,6 +344,12 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
             showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
             pendingShareKind = savedInstanceState.getString(STATE_SHARE_KIND)
+            val saveKind = savedInstanceState.getString(STATE_SAVE_KIND)
+            val saveUri = BundleCompat.getParcelable(savedInstanceState, STATE_SAVE_URI, Uri::class.java)
+            if (saveKind != null && saveUri != null) {
+                pendingSave = saveKind to saveUri
+                startPendingSave()
+            }
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
@@ -511,6 +547,9 @@ class ResultViewerActivity : AppCompatActivity() {
             showingSummary = false
             FaqRedirect.snackbar(this, R.string.no_batch_data, R.string.url_faq_no_batch_data)
         }
+        val waiting = afterFrameSet.toList()
+        afterFrameSet.clear()
+        waiting.forEach { it() }
     }
 
     /**
@@ -668,6 +707,8 @@ class ResultViewerActivity : AppCompatActivity() {
             btnFieldFab.animate().cancel()
             layoutColorScale.animate().cancel()
         }
+        // The exports themselves run on in the ViewModel; only their dialogs go.
+        if (::shareExports.isInitialized) shareExports.detach()
         loadFrameJob?.cancel()
         visualizationJob?.cancel()
         scrubDebounceJob?.cancel()
@@ -742,6 +783,10 @@ class ResultViewerActivity : AppCompatActivity() {
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
         outState.putBoolean("SHOWING_SUMMARY", showingSummary)
         pendingShareKind?.let { outState.putString(STATE_SHARE_KIND, it) }
+        pendingSave?.let { (kind, uri) ->
+            outState.putString(STATE_SAVE_KIND, kind)
+            outState.putParcelable(STATE_SAVE_URI, uri)
+        }
     }
 
     private fun loadFrameData(index: Int) {
@@ -1192,7 +1237,6 @@ class ResultViewerActivity : AppCompatActivity() {
             ?: args.defFilePaths.getOrNull(planned)?.takeIf { File(it).isFile }
     }
 
-    /** Everything ShareCenter needs, captured from the viewer's state. */
     /**
      * A filename-safe base for exports, drawn from the specimen/reference name so
      * shared files read like "IMG_0768_report.pdf" instead of a generic prefix.
@@ -1227,8 +1271,14 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     internal val args: ViewerArgs by lazy { ViewerArgs.from(intent) { sessionRecord } }
 
+    /**
+     * Everything an export needs, or null before the frame set is read or when
+     * there are no frames. The frame on screen may still be loading ([rawData]
+     * null): only the photo kinds need it, and they read it from disk then.
+     */
     internal fun buildShareSnapshot(): ShareCenter.Snapshot? {
-        val data = rawData ?: return null
+        if (!frameSetLoaded || batchFiles.isEmpty()) return null
+        val data = rawData
         // Snapshot can open with ref path alone while display decode is still in flight.
         val base = cachedBaseImage
         val summaryHelper = summary
@@ -1500,5 +1550,7 @@ class ResultViewerActivity : AppCompatActivity() {
         const val FIELD_METRICS_CACHE_MAX = 64
 
         const val STATE_SHARE_KIND = "PENDING_SHARE_KIND"
+        const val STATE_SAVE_KIND = "PENDING_SAVE_KIND"
+        const val STATE_SAVE_URI = "PENDING_SAVE_URI"
     }
 }
