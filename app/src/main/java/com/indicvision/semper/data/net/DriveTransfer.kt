@@ -468,12 +468,14 @@ internal class DriveTransfer(
                 throw e
             } catch (e: IOException) {
                 if (attempt >= DOWNLOAD_MAX_ATTEMPTS) throw e
+                // Class name, not the exception: a file error's message is the
+                // local path, and WARN reaches Crashlytics.
                 Timber.w(
-                    e,
-                    "download %s interrupted at %d bytes (attempt %d); resuming",
+                    "download %s interrupted at %d bytes (attempt %d, %s); resuming",
                     fileId,
                     if (part.exists()) part.length() else 0L,
                     attempt,
+                    e.javaClass.simpleName,
                 )
             }
         }

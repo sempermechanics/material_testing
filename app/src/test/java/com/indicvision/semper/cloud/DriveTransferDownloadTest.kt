@@ -1,8 +1,10 @@
 package com.indicvision.semper.cloud
 
+import com.indicvision.semper.data.LogCapture
 import com.indicvision.semper.data.net.DriveTransfer
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.junit4.MockWebServerRule
@@ -332,5 +334,26 @@ class DriveTransferDownloadTest {
         assertTrue("restore UI needs at least one progress tick", seen.isNotEmpty())
         assertEquals("progress must be monotonic", seen.sorted(), seen)
         assertEquals(1000L, seen.last())
+    }
+
+    @Test
+    fun `an interrupted download logs no local path`() {
+        // A directory where the full-body scratch file goes makes every write fail
+        // with an IOException whose message is that path.
+        val scratch = AtomicFiles.fullOf(dest)
+        File(scratch, "blocker").apply { parentFile?.mkdirs() }.writeText("x")
+        repeat(DOWNLOAD_ATTEMPTS) { server.enqueue(MockResponse(code = HttpStatus.OK, body = payload(10))) }
+
+        LogCapture().use { log ->
+            assertThrows(java.io.IOException::class.java) { download(expectedBytes = 10L) }
+
+            assertTrue("the retries are logged", log.warnings.isNotEmpty())
+            assertTrue(log.warnings.joinToString(" / "), log.warnings.none { dir.name in it })
+        }
+    }
+
+    private companion object {
+        /** DriveTransfer's DOWNLOAD_MAX_ATTEMPTS. */
+        const val DOWNLOAD_ATTEMPTS = 8
     }
 }
