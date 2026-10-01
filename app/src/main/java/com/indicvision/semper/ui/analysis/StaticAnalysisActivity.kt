@@ -1285,6 +1285,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     /** Largest odd subset the loaded image and ROI can hold. */
     private fun maxSubsetForRoi(): Int = RoiResolveHelper.maxSubsetForRoi(
         hasCustomRoi = viewModel.hasCustomRoi,
+        roiX = viewModel.roiX,
+        roiY = viewModel.roiY,
         roiW = viewModel.roiW,
         roiH = viewModel.roiH,
         realRefWidth = viewModel.realRefWidth,

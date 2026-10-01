@@ -64,11 +64,29 @@ class RoiResolveHelperTest {
         // A stale 2000 px ROI on a 150 px tall image: the image decides.
         val cap = RoiResolveHelper.maxSubsetForRoi(
             hasCustomRoi = true,
+            roiX = 0,
+            roiY = 0,
             roiW = 2000,
             roiH = 2000,
             realRefWidth = 640,
             realRefHeight = 150,
         )
         assertEquals(111, cap)
+    }
+
+    @Test
+    fun `the subset cap clips a custom ROI where it sits, not from the corner`() {
+        // 500 px wide from x = 600 on a 640 px image: only 40 px of it is
+        // inside, so the cap bottoms out. Clipped from (0, 0) it read 100 px.
+        val cap = RoiResolveHelper.maxSubsetForRoi(
+            hasCustomRoi = true,
+            roiX = 600,
+            roiY = 0,
+            roiW = 500,
+            roiH = 100,
+            realRefWidth = 640,
+            realRefHeight = 480,
+        )
+        assertEquals(SubsetRecommender.MIN_SUBSET, cap)
     }
 }

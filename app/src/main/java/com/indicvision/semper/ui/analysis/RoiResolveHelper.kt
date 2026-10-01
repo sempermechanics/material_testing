@@ -57,10 +57,13 @@ object RoiResolveHelper {
 
     /**
      * Largest odd subset the loaded image and ROI can actually hold, given
-     * [ENGINE_EDGE_BUFFER_PX]. Kept inside [SubsetRecommender]'s slider range.
+     * [ENGINE_EDGE_BUFFER_PX]. A custom ROI counts only the part inside the
+     * image, at its own position. Kept inside [SubsetRecommender]'s slider range.
      */
     fun maxSubsetForRoi(
         hasCustomRoi: Boolean,
+        roiX: Int,
+        roiY: Int,
         roiW: Int,
         roiH: Int,
         realRefWidth: Int,
@@ -70,7 +73,7 @@ object RoiResolveHelper {
         val h = realRefHeight
         if (w <= 0 || h <= 0) return SubsetRecommender.MAX_SUBSET
         val fits = if (hasCustomRoi) {
-            val clipped = clipToImage(0, 0, roiW, roiH, w, h)
+            val clipped = clipToImage(roiX, roiY, roiW, roiH, w, h)
             minOf(clipped?.get(2) ?: 0, clipped?.get(3) ?: 0) - 2 * ENGINE_EDGE_BUFFER_PX
         } else {
             // Full frame is inset by (subset/2 + slack) a side and must still be
