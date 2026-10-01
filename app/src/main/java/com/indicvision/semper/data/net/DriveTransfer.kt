@@ -12,9 +12,13 @@ import okhttp3.MediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.security.MessageDigest
 
@@ -250,15 +254,14 @@ internal class DriveTransfer(
      * [onBytes] receives the cumulative bytes on disk after each successful
      * chunk (and while streaming a full-body 200) so restore UI can show
      * download percent instead of sitting at 0% for the whole Session.zip.
-     */
-    @Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList")
-    /**
+     *
      * @param rangeStart absolute offset in the remote object that [dest] should begin
      *   at. Non-zero fetches a **window** rather than the whole object — used by
      *   restore to pull a legacy backup's central directory and then only the prefix
      *   of entries it actually needs. [expectedBytes] is then the window's *length*
      *   and is required, since the object's own total no longer describes the target.
      */
+    @Suppress("LongParameterList") // the call's shape; all but the first three and the signer are defaulted
     suspend fun downloadFile(
         fileId: String,
         dest: File,
@@ -273,236 +276,188 @@ internal class DriveTransfer(
             "a windowed download must declare its length"
         }
         dest.parentFile?.mkdirs()
-        val part = AtomicFiles.partOf(dest)
         // Stale complete from a prior corrupt finalize — always rebuild.
         if (dest.exists()) dest.delete()
-        val path = "/v1/files/$fileId/content"
-        var attempt = 0
-        var reportedTotal = -1L
-        // Adapts toward the observed link's throughput after every completed window —
-        // see nextWindowBytes' doc. Persists across retries within this call (a single
-        // transient failure doesn't mean the link itself got slower).
-        var windowBytes = INITIAL_DOWNLOAD_WINDOW_BYTES
+        val download = Download(fileId, dest, baseUrl, expectedBytes, rangeStart, onBytes)
         while (true) {
-            attempt++
-            val offset = if (part.exists()) part.length() else 0L
-            if (offset > 0L) onBytes(offset)
-            if (
-                RestoreDownloadOutcomes.isComplete(
-                    haveBytes = offset,
-                    expectedBytes = expectedBytes,
-                    reportedTotal = reportedTotal,
-                )
-            ) {
-                finalizeDownload(part, dest)
-                onBytes(dest.length())
-                return@withContext
-            }
+            download.attempt++
+            val offset = download.haveBytes()
+            if (download.finishIfComplete(offset)) return@withContext
             try {
-                // Fresh challenge per chunk so a resumed Range never replays a nonce.
-                val headers = signedGetHeaders(path)
-                // `offset` is a position within the window; `remoteOffset` is the
-                // absolute position in the remote object, which is what both the wire
-                // Range header and the Content-Range response must agree on (checked
-                // below). Using window-relative `offset` in the header here was a bug —
-                // harmless for a whole-object fetch (rangeStart == 0, so the two
-                // coincide) but wrong for any windowed fetch (rangeStart > 0), where it
-                // requested `bytes=0-…` instead of the intended window.
-                val remoteOffset = rangeStart + offset
-                val windowEnd = if (expectedBytes > 0L) rangeStart + expectedBytes - 1 else Long.MAX_VALUE
-                val end = minOf(remoteOffset + windowBytes - 1, windowEnd)
-                val builder = Request.Builder()
-                    .url("$baseUrl$path")
-                    .headers(headers)
-                    // identity: OkHttp's default Accept-Encoding: gzip + Range
-                    // can corrupt binary zips (partial gzip windows inflate to
-                    // garbage → ZipException: invalid distance too far back).
-                    .header("Accept-Encoding", "identity")
-                    .header("Range", "bytes=$remoteOffset-$end")
-                    .get()
-                val windowStartMs = System.currentTimeMillis()
-                downloadClient.newCall(builder.build()).execute().use { resp ->
-                    when (resp.code) {
-                        HttpStatus.OK -> {
-                            // Proxy ignored Range and sent a full-body reply.
-                            // Write to a scratch file first — a truncated 200
-                            // must not wipe a good partial `.part`.
-                            val scratch = AtomicFiles.fullOf(dest)
-                            scratch.delete()
-                            java.io.FileOutputStream(scratch, false).use { out ->
-                                resp.body.byteStream().use { input ->
-                                    copyWithProgress(input, out, onBytes)
-                                }
-                            }
-                            val got = scratch.length()
-                            // A proxy that ignores Range hands back the whole object.
-                            // For a windowed fetch that is still usable — slice out the
-                            // window instead of failing and retrying forever.
-                            if (rangeStart > 0L || (expectedBytes in 1 until got)) {
-                                if (got < rangeStart + expectedBytes) {
-                                    scratch.delete()
-                                    throw IOException(
-                                        "full-body download for $fileId is $got B, " +
-                                            "too short for window $rangeStart+$expectedBytes",
-                                    )
-                                }
-                                sliceInPlace(scratch, rangeStart, expectedBytes)
-                            }
-                            val sliced = scratch.length()
-                            if (expectedBytes > 0L && sliced != expectedBytes) {
-                                scratch.delete()
-                                throw IOException(
-                                    "truncated full-body download for $fileId: got $sliced, expected $expectedBytes",
-                                )
-                            }
-                            if (sliced <= 0L) {
-                                scratch.delete()
-                                throw IOException("empty full-body download for $fileId")
-                            }
-                            part.delete()
-                            AtomicFiles.promote(scratch, part)
-                            finalizeDownload(part, dest)
-                            onBytes(dest.length())
-                            return@withContext
-                        }
-                        HttpStatus.PARTIAL_CONTENT -> {
-                            val range = RestoreDownloadOutcomes.parseContentRange(
-                                resp.header("Content-Range"),
-                            ) ?: throw IOException(
-                                "206 without Content-Range at offset $offset for $fileId",
-                            )
-                            // Appending a window that does not start where we asked
-                            // would splice the wrong bytes into the destination.
-                            if (range.start != remoteOffset) {
-                                throw IOException(
-                                    "Content-Range start ${range.start} != offset $remoteOffset for $fileId",
-                                )
-                            }
-                            // For a windowed fetch the object's total says nothing
-                            // about the target length; expectedBytes is authoritative.
-                            if (rangeStart == 0L) range.total?.let { reportedTotal = it }
-                            val before = offset
-                            java.io.FileOutputStream(part, true).use { out ->
-                                resp.body.byteStream().use { input ->
-                                    input.copyTo(out, DOWNLOAD_COPY_BUFFER)
-                                }
-                            }
-                            val after = part.length()
-                            val wrote = after - before
-                            if (wrote <= 0L) {
-                                throw IOException("empty 206 body at offset $offset for $fileId")
-                            }
-                            val expectedWrote = range.end - range.start + 1
-                            if (wrote != expectedWrote) {
-                                // Truncated chunk — rewind to [before] and retry.
-                                RandomAccessFile(part, "rw").use { it.setLength(before) }
-                                throw IOException(
-                                    "short 206 for $fileId: wrote $wrote, Content-Range expected $expectedWrote",
-                                )
-                            }
-                            attempt = 0
-                            // Size the *next* window from this one's throughput — see
-                            // nextWindowBytes' doc. A short/failed window above never
-                            // reaches here, so a transient stall doesn't shrink the
-                            // window on bad data.
-                            windowBytes = nextWindowBytes(wrote, System.currentTimeMillis() - windowStartMs)
-                            onBytes(after)
-                            if (
-                                RestoreDownloadOutcomes.isComplete(
-                                    haveBytes = after,
-                                    expectedBytes = expectedBytes,
-                                    reportedTotal = reportedTotal,
-                                )
-                            ) {
-                                finalizeDownload(part, dest)
-                                onBytes(dest.length())
-                                return@withContext
-                            }
-                        }
-                        HttpStatus.RANGE_NOT_SATISFIABLE -> {
-                            if (
-                                RestoreDownloadOutcomes.isComplete(
-                                    haveBytes = offset,
-                                    expectedBytes = expectedBytes,
-                                    reportedTotal = reportedTotal,
-                                )
-                            ) {
-                                finalizeDownload(part, dest)
-                                return@withContext
-                            }
-                            if (offset > 0L && attempt < DOWNLOAD_MAX_ATTEMPTS) {
-                                part.delete()
-                                reportedTotal = -1L
-                                throw IOException("range_not_satisfiable; restarting $fileId")
-                            }
-                            throw IndicApiHttp.apiException(resp)
-                        }
-                        else -> {
-                            val body = IndicApiHttp.bodyText(resp)
-                            if (ClientNonce.isRefusal(resp.code, body) && ClientNonce.usable()) {
-                                // Signed with a client nonce the server would not
-                                // take: go back to challenges and re-sign this window.
-                                ClientNonce.markRefused()
-                                throw IOException("client nonce refused downloading $fileId")
-                            }
-                            val resume = RestoreDownloadOutcomes.shouldResumeAfterHttp(
-                                code = resp.code,
-                                attempt = attempt,
-                                maxAttempts = DOWNLOAD_MAX_ATTEMPTS,
-                            )
-                            if (resume) {
-                                val preview = body.take(DOWNLOAD_ERROR_BODY_PREVIEW)
-                                throw IOException(
-                                    "transient HTTP ${resp.code} downloading $fileId" +
-                                        if (preview.isNotBlank()) ": $preview" else "",
-                                )
-                            }
-                            throw IndicApi.ApiException(resp.code, body, IndicApiHttp.requestIdOf(resp))
-                        }
-                    }
-                }
+                // Fresh challenge per window so a resumed Range never replays a nonce.
+                if (fetchWindow(download, offset, signedGetHeaders(download.path))) return@withContext
             } catch (e: IndicApi.ApiException) {
                 throw e
             } catch (e: IOException) {
-                if (attempt >= DOWNLOAD_MAX_ATTEMPTS) throw e
+                if (download.attempt >= DOWNLOAD_MAX_ATTEMPTS) throw e
                 // Class name, not the exception: a file error's message is the
                 // local path, and WARN reaches Crashlytics.
                 Timber.w(
                     "download %s interrupted at %d bytes (attempt %d, %s); resuming",
                     fileId,
-                    if (part.exists()) part.length() else 0L,
-                    attempt,
+                    download.haveBytes(),
+                    download.attempt,
                     e.javaClass.simpleName,
                 )
             }
         }
     }
 
-    /**
-     * Reduce [file] in place to the [length] bytes starting at [start] — the window a
-     * Range-ignoring proxy forced us to download in full.
-     */
-    private fun sliceInPlace(file: File, start: Long, length: Long) {
-        RandomAccessFile(file, "rw").use { raf ->
-            val buffer = ByteArray(DOWNLOAD_COPY_BUFFER)
-            var read = start
-            var write = 0L
-            var remaining = length
-            while (remaining > 0L) {
-                raf.seek(read)
-                val n = raf.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                if (n <= 0) break
-                raf.seek(write)
-                raf.write(buffer, 0, n)
-                read += n
-                write += n
-                remaining -= n
+    /** GETs the next window after [offset] bytes on disk. True when the download is done. */
+    private suspend fun fetchWindow(d: Download, offset: Long, headers: Headers): Boolean {
+        // `offset` is a position within the window; `remoteOffset` is the absolute
+        // position in the remote object, which the Range header and the
+        // Content-Range answer must agree on. They differ for a windowed fetch
+        // (rangeStart > 0), where a window-relative Range asked for `bytes=0-…`.
+        val remoteOffset = d.rangeStart + offset
+        val windowEnd = if (d.expectedBytes > 0L) d.rangeStart + d.expectedBytes - 1 else Long.MAX_VALUE
+        val end = minOf(remoteOffset + d.windowBytes - 1, windowEnd)
+        val request = Request.Builder()
+            .url(d.baseUrl + d.path)
+            .headers(headers)
+            // identity: OkHttp's default Accept-Encoding: gzip + Range
+            // can corrupt binary zips (partial gzip windows inflate to
+            // garbage → ZipException: invalid distance too far back).
+            .header("Accept-Encoding", "identity")
+            .header("Range", "bytes=$remoteOffset-$end")
+            .get()
+            .build()
+        val startedMs = System.currentTimeMillis()
+        downloadClient.newCall(request).execute().use { resp ->
+            return when (resp.code) {
+                HttpStatus.OK -> {
+                    acceptFullBody(d, resp)
+                    true
+                }
+                HttpStatus.PARTIAL_CONTENT -> appendPartial(d, resp, offset, startedMs)
+                HttpStatus.RANGE_NOT_SATISFIABLE -> finishUnsatisfiableRange(d, resp, offset)
+                else -> failWindow(d, resp)
             }
-            raf.setLength(write)
         }
     }
 
-    private fun finalizeDownload(part: File, dest: File) {
+    /**
+     * The proxy ignored Range and sent a full-body reply. It goes to a scratch
+     * file first — a truncated 200 must not wipe a good partial `.part` — and
+     * becomes the whole download once its length checks out.
+     */
+    private suspend fun acceptFullBody(d: Download, resp: Response) {
+        val scratch = AtomicFiles.fullOf(d.dest)
+        scratch.delete()
+        FileOutputStream(scratch, false).use { out ->
+            resp.body.byteStream().use { input -> copyWithProgress(input, out, d.onBytes) }
+        }
+        d.sliceToWindow(scratch)
+        val got = scratch.length()
+        val problem = when {
+            d.expectedBytes > 0L && got != d.expectedBytes ->
+                "truncated full-body download for ${d.fileId}: got $got, expected ${d.expectedBytes}"
+            got <= 0L -> "empty full-body download for ${d.fileId}"
+            else -> null
+        }
+        if (problem != null) {
+            scratch.delete()
+            throw IOException(problem)
+        }
+        d.part.delete()
+        AtomicFiles.promote(scratch, d.part)
+        d.promoteToDest()
+        d.onBytes(d.dest.length())
+    }
+
+    /** Appends a 206 window to the `.part` file. True when that completed the download. */
+    private suspend fun appendPartial(d: Download, resp: Response, offset: Long, startedMs: Long): Boolean {
+        val range = d.contentRangeAt(resp, offset)
+        // For a windowed fetch the object's total says nothing about the target
+        // length; expectedBytes is authoritative.
+        if (d.rangeStart == 0L) range.total?.let { d.reportedTotal = it }
+        val wrote = d.appendWindow(resp, offset, range)
+        d.attempt = 0
+        // Size the next window from this one's throughput. A short or failed
+        // window never gets here, so a stall doesn't shrink it on bad data.
+        d.windowBytes = nextWindowBytes(wrote, System.currentTimeMillis() - startedMs)
+        return d.finishIfComplete(d.part.length())
+    }
+
+    /** A 416: done if what is on disk is the whole target, else restart from zero (or give up). */
+    private fun finishUnsatisfiableRange(d: Download, resp: Response, offset: Long): Boolean {
+        if (d.isComplete(offset)) {
+            d.promoteToDest()
+            return true
+        }
+        if (offset > 0L && d.attempt < DOWNLOAD_MAX_ATTEMPTS) {
+            d.part.delete()
+            d.reportedTotal = -1L
+            throw IOException("range_not_satisfiable; restarting ${d.fileId}")
+        }
+        throw IndicApiHttp.apiException(resp)
+    }
+
+    /**
+     * Any other status. A refused client nonce and a transient proxy failure
+     * are [IOException]s, which [downloadFile] resumes; the rest is final.
+     */
+    private fun failWindow(d: Download, resp: Response): Nothing {
+        val body = IndicApiHttp.bodyText(resp)
+        // Signed with a client nonce the server would not take: go back to
+        // challenges and re-sign this window.
+        val nonceRefused = ClientNonce.isRefusal(resp.code, body) && ClientNonce.usable()
+        if (nonceRefused) ClientNonce.markRefused()
+        val transient = RestoreDownloadOutcomes.shouldResumeAfterHttp(
+            code = resp.code,
+            attempt = d.attempt,
+            maxAttempts = DOWNLOAD_MAX_ATTEMPTS,
+        )
+        throw when {
+            nonceRefused -> IOException("client nonce refused downloading ${d.fileId}")
+            transient -> IOException(
+                "transient HTTP ${resp.code} downloading ${d.fileId}" +
+                    body.take(DOWNLOAD_ERROR_BODY_PREVIEW).let { if (it.isNotBlank()) ": $it" else "" },
+            )
+            else -> IndicApi.ApiException(resp.code, body, IndicApiHttp.requestIdOf(resp))
+        }
+    }
+}
+
+/** One [DriveTransfer.downloadFile] call: what it fetches, where the bytes go, and how far it got. */
+private class Download(
+    val fileId: String,
+    val dest: File,
+    val baseUrl: String,
+    val expectedBytes: Long,
+    val rangeStart: Long,
+    val onBytes: suspend (haveBytes: Long) -> Unit,
+) {
+    val path = "/v1/files/$fileId/content"
+    val part: File = AtomicFiles.partOf(dest)
+    var attempt = 0
+
+    /** The object's size from a whole-object fetch's Content-Range, or -1. */
+    var reportedTotal = -1L
+
+    /**
+     * Adapts toward the link's throughput after every completed window (see
+     * [nextWindowBytes]). Kept across retries: a single transient failure
+     * doesn't mean the link itself got slower.
+     */
+    var windowBytes = INITIAL_DOWNLOAD_WINDOW_BYTES
+
+    fun haveBytes(): Long = if (part.exists()) part.length() else 0L
+
+    fun isComplete(haveBytes: Long): Boolean =
+        RestoreDownloadOutcomes.isComplete(haveBytes, expectedBytes, reportedTotal)
+
+    /** Reports [haveBytes] and, when they are the whole target, promotes them. True when done. */
+    suspend fun finishIfComplete(haveBytes: Long): Boolean {
+        if (haveBytes > 0L) onBytes(haveBytes)
+        if (!isComplete(haveBytes)) return false
+        promoteToDest()
+        onBytes(dest.length())
+        return true
+    }
+
+    /** Renames the finished `.part` onto [dest]. */
+    fun promoteToDest() {
         if (dest.exists() && !dest.delete()) {
             // Size, not the path: it names the user's files, and WARN reaches Crashlytics.
             Timber.w("Could not replace existing download target (%d B)", dest.length())
@@ -510,25 +465,101 @@ internal class DriveTransfer(
         AtomicFiles.promote(part, dest)
     }
 
-    /** Copy [input] → [out], reporting cumulative bytes via [onBytes] each buffer. */
-    private suspend fun copyWithProgress(
-        input: java.io.InputStream,
-        out: java.io.OutputStream,
-        onBytes: suspend (haveBytes: Long) -> Unit,
-    ) {
-        val buf = ByteArray(DOWNLOAD_COPY_BUFFER)
-        var have = 0L
-        var lastReport = 0L
-        while (true) {
-            val n = input.read(buf)
-            if (n < 0) break
-            out.write(buf, 0, n)
-            have += n
-            if (have - lastReport >= DOWNLOAD_COPY_BUFFER) {
-                lastReport = have
-                onBytes(have)
-            }
+    /**
+     * A proxy that ignores Range hands back the whole object. For a windowed
+     * fetch that is still usable: slice the window out of [scratch] instead of
+     * failing and retrying forever.
+     */
+    fun sliceToWindow(scratch: File) {
+        val got = scratch.length()
+        if (rangeStart == 0L && expectedBytes !in 1 until got) return
+        if (got < rangeStart + expectedBytes) {
+            scratch.delete()
+            throw IOException(
+                "full-body download for $fileId is $got B, too short for window $rangeStart+$expectedBytes",
+            )
         }
-        onBytes(have)
+        sliceInPlace(scratch, rangeStart, expectedBytes)
     }
+
+    /**
+     * The 206's Content-Range, which must start where we asked: appending a
+     * window that starts elsewhere would splice the wrong bytes into the file.
+     */
+    fun contentRangeAt(resp: Response, offset: Long): RestoreDownloadOutcomes.ContentRange {
+        val range = RestoreDownloadOutcomes.parseContentRange(resp.header("Content-Range"))
+            ?: throw IOException("206 without Content-Range at offset $offset for $fileId")
+        val remoteOffset = rangeStart + offset
+        if (range.start != remoteOffset) {
+            throw IOException("Content-Range start ${range.start} != offset $remoteOffset for $fileId")
+        }
+        return range
+    }
+
+    /**
+     * Appends the 206 body after [offset] bytes and returns how many it wrote.
+     * A body that is not exactly [range] long is rewound to [offset] and thrown.
+     */
+    fun appendWindow(resp: Response, offset: Long, range: RestoreDownloadOutcomes.ContentRange): Long {
+        FileOutputStream(part, true).use { out ->
+            resp.body.byteStream().use { input -> input.copyTo(out, DOWNLOAD_COPY_BUFFER) }
+        }
+        val wrote = part.length() - offset
+        val expectedWrote = range.end - range.start + 1
+        if (wrote == expectedWrote) return wrote
+        if (wrote > 0L) RandomAccessFile(part, "rw").use { it.setLength(offset) }
+        throw IOException(
+            if (wrote <= 0L) {
+                "empty 206 body at offset $offset for $fileId"
+            } else {
+                "short 206 for $fileId: wrote $wrote, Content-Range expected $expectedWrote"
+            },
+        )
+    }
+}
+
+/**
+ * Reduce [file] in place to the [length] bytes starting at [start] — the window a
+ * Range-ignoring proxy forced us to download in full.
+ */
+private fun sliceInPlace(file: File, start: Long, length: Long) {
+    RandomAccessFile(file, "rw").use { raf ->
+        val buffer = ByteArray(DOWNLOAD_COPY_BUFFER)
+        var read = start
+        var write = 0L
+        var remaining = length
+        while (remaining > 0L) {
+            raf.seek(read)
+            val n = raf.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+            if (n <= 0) break
+            raf.seek(write)
+            raf.write(buffer, 0, n)
+            read += n
+            write += n
+            remaining -= n
+        }
+        raf.setLength(write)
+    }
+}
+
+/** Copy [input] → [out], reporting cumulative bytes via [onBytes] each buffer. */
+private suspend fun copyWithProgress(
+    input: InputStream,
+    out: OutputStream,
+    onBytes: suspend (haveBytes: Long) -> Unit,
+) {
+    val buf = ByteArray(DOWNLOAD_COPY_BUFFER)
+    var have = 0L
+    var lastReport = 0L
+    while (true) {
+        val n = input.read(buf)
+        if (n < 0) break
+        out.write(buf, 0, n)
+        have += n
+        if (have - lastReport >= DOWNLOAD_COPY_BUFFER) {
+            lastReport = have
+            onBytes(have)
+        }
+    }
+    onBytes(have)
 }
