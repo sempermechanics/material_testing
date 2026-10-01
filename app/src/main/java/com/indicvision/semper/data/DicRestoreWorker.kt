@@ -89,8 +89,10 @@ class DicRestoreWorker internal constructor(
                 )
                 failWith(LicenseErrors.restoreMessage(applicationContext, e.body))
             } else {
-                // Keep cacheDir *.part so the next attempt can Range-resume the
-                // Session.zip after a gateway/Cloud Run 5xx kill.
+                // Any other status (a 5xx the download's own in-call Range-resume
+                // could not ride out, a 429, …). The next attempt starts the files
+                // over: CloudRestore deletes its cache temps and their *.part
+                // sidecars, and the session dir is cleared at the top of doWork.
                 Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
                 Result.retry()
             }
@@ -108,7 +110,8 @@ class DicRestoreWorker internal constructor(
                 // logged above, never shown.
                 failWith(applicationContext.getString(R.string.restore_failed_generic))
             } else {
-                // Do not wipe *.part — DriveTransfer resumes from the last byte.
+                // Transient (network, sign-in, storage). Retried from scratch, as above:
+                // nothing of this attempt's download is kept for the next one.
                 Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
                 Result.retry()
             }

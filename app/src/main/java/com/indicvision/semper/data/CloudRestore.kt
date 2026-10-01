@@ -394,8 +394,13 @@ object CloudRestore {
     private class FetchedMetadata(val bytes: ByteArray, val json: JSONObject)
 
     /**
-     * Download and parse the backup's `metadata.json`. A body that is not JSON is
-     * corrupt (terminal), not a reason to download it again.
+     * Download and check the backup's `metadata.json`.
+     *
+     * Every attempt starts from nothing: [tmp] and its `.part` / `.full` sidecars are
+     * cleared first, since the download resumes from a `.part` beside its destination
+     * and one an earlier attempt left could hold an older body of this file (a rename
+     * rewrites it). The declared sha256 is checked like the bundle's, when the file
+     * list carries one; a mismatch or a body that is not JSON is corrupt (terminal).
      */
     private suspend fun fetchMetadata(
         api: CloudApi,
@@ -403,6 +408,8 @@ object CloudRestore {
         entry: CloudFileDto,
         tmp: File,
     ): FetchedMetadata {
+        tmp.delete()
+        AtomicFiles.deleteSidecars(tmp)
         try {
             api.downloadFile(
                 token,
@@ -411,6 +418,10 @@ object CloudRestore {
                 expectedBytes = entry.sizeBytes.takeIf { it > 0L } ?: -1L,
             )
             val bytes = tmp.readBytes()
+            val expectedSha = entry.sha256?.lowercase()?.takeIf { it.length == 64 }
+            if (expectedSha != null && Digests.toHex(Digests.sha256(bytes)) != expectedSha) {
+                throw CorruptTransferException("metadata_sha256_mismatch")
+            }
             val json = try {
                 JSONObject(String(bytes, Charsets.UTF_8))
             } catch (e: JSONException) {
@@ -419,6 +430,7 @@ object CloudRestore {
             return FetchedMetadata(bytes, json)
         } finally {
             tmp.delete()
+            AtomicFiles.deleteSidecars(tmp)
         }
     }
 

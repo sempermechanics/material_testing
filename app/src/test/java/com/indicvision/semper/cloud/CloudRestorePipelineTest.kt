@@ -6,6 +6,7 @@ import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CorruptTransferException
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -92,6 +93,17 @@ class CloudRestorePipelineTest {
     }
 
     @Test
+    fun `a metadata body that does not match its sha256 is refused before the bundle is fetched`() {
+        api.files = listOf(
+            metadata(sha256 = RestoreFakeApi.sha256Of("something else".toByteArray())),
+            bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
+        )
+
+        assertThrows(CorruptTransferException::class.java) { restore() }
+        assertFalse(api.calls.contains("downloadFile:bundle-1"))
+    }
+
+    @Test
     fun `metadata that is not JSON is corrupt, not retryable`() {
         api.files = listOf(
             metadata("<html>gateway error</html>".toByteArray()),
@@ -109,6 +121,23 @@ class CloudRestorePipelineTest {
         )
 
         assertEquals(LOCAL_ID, restore())
+    }
+
+    @Test
+    fun `each attempt fetches metadata from scratch, never from an earlier attempt's part file`() {
+        val metaTmp = File(context.cacheDir, "restore_${CLOUD_ID}_metadata.json")
+        AtomicFiles.partOf(metaTmp).writeText("{\"stale\":")
+        api.beforeDownload = { fileId, dest ->
+            if (fileId == "meta-1") {
+                assertFalse("a stale .part would be resumed into the new body", AtomicFiles.partOf(dest).exists())
+            }
+        }
+        api.files = listOf(metadata(), bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()))
+
+        restore()
+
+        assertFalse(metaTmp.exists())
+        assertFalse(AtomicFiles.partOf(metaTmp).exists())
     }
 
     private companion object {

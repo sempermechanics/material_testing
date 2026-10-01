@@ -8,8 +8,9 @@ import java.util.zip.ZipException
  *
  * Session.zip streams through API Gateway → Cloud Run → Drive. A gateway /
  * Cloud Run deadline kill often surfaces as HTTP 5xx with an **empty** body
- * (not FastAPI's `{"detail":…}`). Those are retryable with `Range` from the
- * bytes already on disk — same as a mid-stream `IOException`.
+ * (not FastAPI's `{"detail":…}`). Within one download call those are retried
+ * with `Range` from the bytes already on disk — same as a mid-stream
+ * `IOException`. A later WorkManager attempt starts the file over.
  */
 object RestoreDownloadOutcomes {
 
