@@ -150,6 +150,14 @@ class IndicApi private constructor(context: Context) : CloudApi {
      */
     class DeviceNotActiveException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_NOT_ACTIVE)
 
+    /**
+     * Drive no longer knows the resumable upload link (404 or 410 on the status
+     * probe): the link expired, or the upload session was cancelled. Sending
+     * bytes to it cannot work, and neither can a retry with the same link; the
+     * cloud session has to be opened again.
+     */
+    class UploadLinkExpiredException(val code: Int) : IOException("Drive upload link expired (HTTP $code)")
+
     /** Maps a failed signed-request response to the most specific exception. */
     private fun failSigned(resp: Response): Nothing =
         failSigned(resp.code, IndicApiHttp.bodyText(resp), IndicApiHttp.requestIdOf(resp))

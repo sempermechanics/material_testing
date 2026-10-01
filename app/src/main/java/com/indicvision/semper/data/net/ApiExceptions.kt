@@ -34,3 +34,6 @@ typealias NoSeatAvailableException = IndicApi.NoSeatAvailableException
 
 /** The backend has no active device record for this phone; re-register. */
 typealias DeviceNotActiveException = IndicApi.DeviceNotActiveException
+
+/** Drive refused the resumable upload link as gone (404/410); the session must be reopened. */
+typealias UploadLinkExpiredException = IndicApi.UploadLinkExpiredException

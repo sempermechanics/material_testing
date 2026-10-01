@@ -14,6 +14,7 @@ object HttpStatus {
     const val FORBIDDEN = 403
     const val NOT_FOUND = 404
     const val CONFLICT = 409
+    const val GONE = 410
     const val PAYLOAD_TOO_LARGE = 413
     const val RANGE_NOT_SATISFIABLE = 416
     const val UNPROCESSABLE = 422

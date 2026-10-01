@@ -201,7 +201,13 @@ internal class DriveTransfer(
     /** Current state of a resumable session: continue at [offset], or already [result]. */
     private data class UploadProbe(val offset: Long, val result: Pair<String, String?>?)
 
-    /** Ask Drive what it already has: PUT `bytes * /total` with an empty body. */
+    /**
+     * Ask Drive what it already has: PUT `bytes * /total` with an empty body.
+     *
+     * Any answer but those three is a failure, not "start at zero": re-sending
+     * bytes Drive already holds is what made a resumed upload fail its size
+     * check, and a gone link (404/410) fails every PUT the same way.
+     */
     private fun probeStatus(uploadUrl: String, total: Long): UploadProbe {
         val req = Request.Builder().url(uploadUrl)
             .header("Content-Range", "bytes */$total")
@@ -216,8 +222,9 @@ internal class DriveTransfer(
                     total,
                     IndicApiHttp.parseDriveResult(resp.body.string()),
                 )
-                // 404/410 = session expired; start fresh (caller re-inits on retry).
-                else -> UploadProbe(0L, null)
+                HttpStatus.NOT_FOUND, HttpStatus.GONE -> throw IndicApi.UploadLinkExpiredException(resp.code)
+                // Drive's resumable endpoint, not the Semper backend: no X-Request-Id.
+                else -> throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))
             }
         }
     }
