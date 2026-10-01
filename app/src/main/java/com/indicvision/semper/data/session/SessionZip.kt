@@ -1,5 +1,3 @@
-@file:Suppress("TooManyFunctions")
-
 package com.indicvision.semper.data.session
 
 import com.indicvision.semper.data.cloud.CorruptTransferException

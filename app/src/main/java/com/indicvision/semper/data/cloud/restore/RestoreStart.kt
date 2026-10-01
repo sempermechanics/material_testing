@@ -49,13 +49,23 @@ object RestoreStart {
      * the link behind. Writes the index, so call it off the main thread.
      */
     @WorkerThread
-    @Suppress("ReturnCount")
-    fun start(context: Context, cloudSessionId: String, targetLocalId: String, name: String): Result {
-        if (cloudSessionId.isBlank()) return Result.FAILED
-        if (isRunning(context, cloudSessionId)) return Result.ALREADY_RUNNING
-        val existing = SessionStore.get(context, targetLocalId)
-        // Restore is only offered when the phone has no frames for this row.
-        if (existing?.hasLocalData() == true) return Result.FAILED
+    fun start(context: Context, cloudSessionId: String, targetLocalId: String, name: String): Result = when {
+        cloudSessionId.isBlank() -> Result.FAILED
+        isRunning(context, cloudSessionId) -> Result.ALREADY_RUNNING
+        else -> {
+            val existing = SessionStore.get(context, targetLocalId)
+            // Restore is only offered when the phone has no frames for this row.
+            if (existing?.hasLocalData() == true) {
+                Result.FAILED
+            } else {
+                writeRowAndEnqueue(context, Target(cloudSessionId, targetLocalId, name), existing)
+            }
+        }
+    }
+
+    /** [start]'s row write and queueing; the row is put back as it was if the queueing fails. */
+    private fun writeRowAndEnqueue(context: Context, target: Target, existing: SessionRecord?): Result {
+        val (cloudSessionId, targetLocalId, name) = target
         val now = System.currentTimeMillis()
         val row = existing?.let { restoredRow(it, cloudSessionId, name, now) }
             ?: newRow(context, cloudSessionId, targetLocalId, name, now)

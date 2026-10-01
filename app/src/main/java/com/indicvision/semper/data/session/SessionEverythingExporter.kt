@@ -60,7 +60,8 @@ object SessionEverythingExporter {
                     // banner's Cancel) is only seen here, between sessions.
                     ensureActive()
                     buildSessionEverythingZip(app, record, stagingRoot, index, ts)?.let { sessionZip ->
-                        Zips.putFile(masterZip, sanitizeZipName(record.name, record.id) + ".zip", sessionZip)
+                        val entryName = SessionNaming.exportEntryName(record.name, record.id) + ".zip"
+                        Zips.putFile(masterZip, entryName, sessionZip)
                         sessionZip.delete()
                     }
                     onProgress(index + 1, sessions.size)
@@ -98,7 +99,7 @@ object SessionEverythingExporter {
         val stagingRoot = File(outDir, "export_one_$ts").apply { mkdirs() }
         try {
             val built = buildSessionEverythingZip(app, record, stagingRoot, 0, ts) ?: return@withContext null
-            val named = File(outDir, sanitizeZipName(record.name, record.id) + ".zip")
+            val named = File(outDir, SessionNaming.exportEntryName(record.name, record.id) + ".zip")
             named.delete()
             AtomicFiles.promote(built, named)
             named.takeIf { it.exists() && it.length() > 0L }
@@ -202,16 +203,6 @@ object SessionEverythingExporter {
         }
     }
 
-    /** Internal for test: entry names must stay filesystem- and archive-safe. */
-    internal fun sanitizeZipName(name: String, id: String): String {
-        val cleaned = name.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_')
-        return cleaned.ifBlank { "session" }.take(MAX_NAME_CHARS) + "_" + id.take(ID_CHARS)
-    }
-
     private const val MASTER_PREFIX = "Semper_sessions_export_"
     private const val SESSION_PREFIX = "Semper_session_"
-
-    /** Entry names stay readable and well clear of any archive path limit. */
-    private const val MAX_NAME_CHARS = 40
-    private const val ID_CHARS = 8
 }

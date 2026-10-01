@@ -13,6 +13,8 @@ import com.indicvision.semper.data.DicBundleDownloadWorker
 import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.cloud.CorruptTransferException
 import com.indicvision.semper.data.cloud.restore.CloudRestore
+import com.indicvision.semper.data.net.ApiErrors
+import com.indicvision.semper.data.net.ApiException
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionStore
@@ -135,6 +137,20 @@ class RestoreWorkersTest {
         assertEquals(ListenableWorker.Result.retry(), runRestore(cloudRestorer))
     }
 
+    @Test
+    fun `a backup the backend says is gone fails with its explanation`() {
+        val gone = ApiException(404, """{"detail":"${ApiErrors.DRIVE_FILE_GONE}"}""")
+
+        val result = runRestore { _, _, _, _ -> throw gone }
+
+        assertEquals(context.getString(R.string.restore_backup_gone), failureReason(result))
+    }
+
+    @Test
+    fun `a server error during a restore is retried`() {
+        assertEquals(ListenableWorker.Result.retry(), runRestore { _, _, _, _ -> throw ApiException(503, "") })
+    }
+
     // ------------------------------------------------------ bundle download
 
     private fun runDownload(
@@ -192,6 +208,23 @@ class RestoreWorkersTest {
         )
 
         assertEquals("session_zip_sha256_mismatch", failureReason(result))
+    }
+
+    @Test
+    fun `a bundle download the backend refuses fails with its body, not the phone's copy`() {
+        seedLocalSession("local-1")
+        val body = """{"detail":"${ApiErrors.FEATURE_NOT_LICENSED}"}"""
+
+        val result = runDownload({ _, _, _, _ -> throw ApiException(403, body) }, localSessionId = "local-1")
+
+        assertEquals(body, failureReason(result))
+    }
+
+    @Test
+    fun `a server error during a bundle download is retried`() {
+        val result = runDownload({ _, _, _, _ -> throw ApiException(502, "") })
+
+        assertEquals(ListenableWorker.Result.retry(), result)
     }
 
     @Test

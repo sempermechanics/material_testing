@@ -134,4 +134,30 @@ class SessionStoreAtomicTest {
         assertTrue(SessionStore.upsert(ctx, listed[0].copy(name = "Legacy renamed")))
         assertEquals("Legacy renamed", SessionStore.get(ctx, "legacy-1")?.name)
     }
+
+    @Test
+    fun `save says why a row was not written`() {
+        assertEquals(SessionStore.UpsertResult.SAVED, SessionStore.save(ctx, record("a", 1)))
+
+        indexFile().writeText("{truncated")
+        bakFile().writeText("{also-bad")
+
+        assertEquals(SessionStore.UpsertResult.INDEX_UNAVAILABLE, SessionStore.save(ctx, record("b", 2)))
+    }
+
+    @Test
+    fun `update changes only its own row and refuses a corrupt index`() {
+        assertTrue(SessionStore.upsert(ctx, record("a", 1)))
+        assertTrue(SessionStore.upsert(ctx, record("b", 2)))
+
+        assertTrue(SessionStore.update(ctx, "a") { it.copy(cloudSessionId = "c-a") })
+
+        assertEquals("c-a", SessionStore.get(ctx, "a")?.cloudSessionId)
+        assertEquals("", SessionStore.get(ctx, "b")?.cloudSessionId)
+
+        indexFile().writeText("{truncated")
+        bakFile().writeText("{also-bad")
+        assertFalse(SessionStore.update(ctx, "a") { it.copy(name = "x") })
+        assertTrue(indexFile().readText().startsWith("{truncated"))
+    }
 }
