@@ -37,6 +37,33 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # An unconfigured environment otherwise fails in the auth step and again
+      # in the purge, whose "drill project equals production" is only two
+      # empty strings matching.
+      - id: configured
+        name: Check the restore-drill environment is configured
+        env:
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          FIRESTORE_RESTORE_DRILL_SERVICE_ACCOUNT: ${{ vars.FIRESTORE_RESTORE_DRILL_SERVICE_ACCOUNT }}
+          FIRESTORE_RESTORE_DRILL_PROJECT: ${{ vars.FIRESTORE_RESTORE_DRILL_PROJECT }}
+          FIRESTORE_BACKUP_BUCKET: ${{ vars.FIRESTORE_BACKUP_BUCKET }}
+          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for v in GCP_WORKLOAD_IDENTITY_PROVIDER FIRESTORE_RESTORE_DRILL_SERVICE_ACCOUNT \
+                   FIRESTORE_RESTORE_DRILL_PROJECT FIRESTORE_BACKUP_BUCKET GCP_PROJECT; do
+            [ -n "${!v:-}" ] || missing="${missing} ${v}"
+          done
+          if [ -n "${missing}" ]; then
+            echo "::error::The restore-drill environment is missing:${missing}. See docs/backend/FIRESTORE_DATA_PROTECTION.md (Configuring the restore-drill environment)."
+            exit 1
+          fi
+          if [ "${FIRESTORE_RESTORE_DRILL_PROJECT}" = "${GCP_PROJECT}" ]; then
+            echo "::error::FIRESTORE_RESTORE_DRILL_PROJECT is the production project; refusing to run."
+            exit 2
+          fi
+
       - name: Authenticate with Workload Identity Federation
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
@@ -87,7 +114,7 @@ jobs:
       # populated between monthly runs would be a second copy of everything, in
       # a project with weaker access controls than production.
       - name: Purge the drill database
-        if: always()
+        if: always() && steps.configured.outcome == 'success'
         env:
           RESTORE_DRILL_PROJECT: ${{ vars.FIRESTORE_RESTORE_DRILL_PROJECT }}
           PRODUCTION_PROJECT: ${{ vars.GCP_PROJECT }}
