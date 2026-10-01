@@ -5,15 +5,13 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.os.BundleCompat
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 
 /**
@@ -22,6 +20,8 @@ import java.io.File
  */
 @MainThread
 class SaveExportActivity : AppCompatActivity() {
+
+    private val copier: SaveExportViewModel by viewModels()
 
     private var pendingFile: File? = null
 
@@ -74,7 +74,8 @@ class SaveExportActivity : AppCompatActivity() {
         when {
             // The picker still open answers this instance.
             awaitingPicker -> Unit
-            // The rotation cancelled the copy. Finish it, rather than leave this
+            // A copy was started: wait on it (still running after a rotation),
+            // or run it again after process death, rather than leave this
             // transparent proxy over the app doing nothing.
             uri != null -> {
                 destUri = uri
@@ -90,18 +91,15 @@ class SaveExportActivity : AppCompatActivity() {
         destUri?.let { outState.putParcelable(STATE_DEST_URI, it) }
     }
 
+    /**
+     * Waits on the copy into [uri], then reports and finishes. The copy itself
+     * runs in [SaveExportViewModel], so an instance recreated mid-copy waits on
+     * the same one rather than starting another into the same document.
+     */
     private fun copyInto(uri: Uri, file: File) {
+        val copy = copier.copyOnce(uri, file)
         lifecycleScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                runCatching {
-                    // Treat the copy as successful only if bytes actually landed —
-                    // an opened-but-empty stream shouldn't report "Saved".
-                    val copied = contentResolver.openOutputStream(uri)?.use { out ->
-                        file.inputStream().use { it.copyTo(out) }
-                    } ?: 0L
-                    copied > 0L
-                }.onFailure { Timber.e(it, "Save to Files failed") }.getOrDefault(false)
-            }
+            val ok = copy.await()
             Toast.makeText(
                 this@SaveExportActivity,
                 if (ok) R.string.save_success else R.string.save_failed,

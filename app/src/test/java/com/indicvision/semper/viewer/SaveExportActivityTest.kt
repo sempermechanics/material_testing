@@ -6,6 +6,9 @@ import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.viewer.SaveExportActivity
+import com.indicvision.semper.ui.viewer.SaveExportViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -20,6 +23,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 import java.io.File
+import java.util.concurrent.Executor
 
 /**
  * The "Save to Files" proxy over a rotation: one picker, never two, and the
@@ -101,5 +105,34 @@ class SaveExportActivityTest {
 
         assertNull("no new picker", shadowOf(rebuilt).nextStartedActivityForResult)
         assertEquals(CSV, dest.readText())
+    }
+
+    @Test
+    fun `a rotation mid-copy waits on the running copy instead of starting another`() {
+        val copies = mutableListOf<Runnable>()
+        SaveExportViewModel.ioDispatcher = Executor { copies += it }.asCoroutineDispatcher()
+        try {
+            val controller = Robolectric.buildActivity(SaveExportActivity::class.java, intent(staged())).setup()
+            val first = controller.get()
+            val picker = shadowOf(first).nextStartedActivityForResult
+            val dest = File(temp.root, "picked.csv")
+            first.activityResultRegistry.dispatchResult(
+                picker.requestCode,
+                Activity.RESULT_OK,
+                Intent().setData(Uri.fromFile(dest)),
+            )
+            assertEquals("the copy is under way", 1, copies.size)
+
+            // Rotated while that copy is still writing the document.
+            val rebuilt = controller.recreate().get()
+            assertEquals("no second copy into the same document", 1, copies.size)
+
+            copies.toList().forEach { it.run() }
+            idleUntil(rebuilt) { rebuilt.isFinishing }
+            assertEquals(CSV, dest.readText())
+            assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
+        } finally {
+            SaveExportViewModel.ioDispatcher = Dispatchers.IO
+        }
     }
 }
