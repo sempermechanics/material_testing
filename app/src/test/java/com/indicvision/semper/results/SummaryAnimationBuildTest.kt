@@ -141,4 +141,20 @@ class SummaryAnimationBuildTest {
 
         assertFalse(other.isBuilt(DicResult.IDX_U, "U", BOUNDS))
     }
+
+    @Test
+    fun `frames re-solved in place are not taken for the ones the file was built from`() {
+        val dir = temp.newFolder("frames")
+        val out = temp.newFolder("out")
+        val frames = writeFrames(dir)
+        runBlocking { animation(frames, out).build(DicResult.IDX_U, "U", BOUNDS) }
+
+        // Same folder, same frame count, same size: one frame solved again later.
+        // (Only its time moves; the build mapped the file, which Windows will
+        // not let a test rewrite.)
+        val last = frames.last()
+        last.setLastModified(last.lastModified() + 60_000)
+
+        assertFalse(animation(frames, out).isBuilt(DicResult.IDX_U, "U", BOUNDS))
+    }
 }

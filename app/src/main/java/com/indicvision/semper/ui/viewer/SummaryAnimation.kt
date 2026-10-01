@@ -63,9 +63,18 @@ class SummaryAnimation(private val spec: Spec) {
      * Whose frames a GIF on disk was rendered from. The file names below carry
      * the field, canvas colour and fit box but not the session, so two sessions'
      * U animations share a name; the build record has to tell them apart.
+     *
+     * The folder and frame count alone also matched a session whose frames were
+     * re-solved in place (same folder, same count, new fields), so the frames'
+     * newest modification time and total size are part of it too. Those are
+     * disk reads: computed on first use, which is [build]'s, off the main thread.
      */
-    private val owner: String =
-        "${spec.batchFiles.firstOrNull()?.absoluteFile?.parent.orEmpty()}#${spec.batchFiles.size}"
+    private val owner: String by lazy {
+        val files = spec.batchFiles
+        val newest = files.maxOfOrNull { it.lastModified() } ?: 0L
+        val bytes = files.sumOf { it.length() }
+        "${files.firstOrNull()?.absoluteFile?.parent.orEmpty()}#${files.size}#$newest#$bytes"
+    }
 
     /**
      * Resolved once per encode so every frame shares the same crop. Builds of
@@ -94,7 +103,10 @@ class SummaryAnimation(private val spec: Spec) {
         )
     }
 
-    /** True when [fileFor] is on disk and was built from these frames against [bounds]. */
+    /**
+     * True when [fileFor] is on disk and was built from these frames against
+     * [bounds]. Reads the frames' file stats on first use: off the main thread.
+     */
     fun isBuilt(dataIndex: Int, label: String, bounds: Pair<Float, Float>): Boolean {
         val out = fileFor(label)
         return builds[out.absolutePath] == Built(owner, dataIndex, bounds) && out.isFile
