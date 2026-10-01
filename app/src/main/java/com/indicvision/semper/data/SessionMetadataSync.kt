@@ -22,10 +22,9 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Re-sends a backed-up session's metadata.json after a change made here since
- * the backup, so a restore brings the change back (ADR-013, TD-150). Today the
- * only such change is bending's deflection correction, which
- * [SessionStore.setDeflectionCorrection] marks with
- * [SessionRecord.metadataStale].
+ * the backup, so a restore brings the change back (ADR-013). [SessionStore]
+ * marks [SessionRecord.metadataStale] for each such change: a rename and, in
+ * material_testing, bending's deflection and the tensile curve corrections.
  *
  * The metadata is rebuilt from the row as the upload builds it
  * ([SessionUploadMetadata.buildMetadataJson]) and replaces the cloud copy's
@@ -75,7 +74,7 @@ object SessionMetadataSync {
         val json = SessionUploadMetadata.buildMetadataJson(record, context)
         return try {
             api.replaceSessionMetadata(token, record.cloudSessionId, json)
-            // A correction made while this was in flight is still to send.
+            // A change made while this was in flight is still to send.
             if (SessionStore.clearMetadataStale(context, record.id, record)) Outcome.DONE else Outcome.RETRY
         } catch (e: IndicApi.ApiException) {
             refused(record.id, e)
@@ -104,7 +103,7 @@ object SessionMetadataSync {
     /**
      * Queue a send for [localSessionId]. [ExistingWorkPolicy.KEEP]: a queued or
      * running send reads the row when it runs, and one that sent an older
-     * correction sends again ([SessionStore.clearMetadataStale]).
+     * change sends again ([SessionStore.clearMetadataStale]).
      */
     fun enqueue(context: Context, localSessionId: String) {
         val work = OneTimeWorkRequestBuilder<SessionMetadataWorker>()

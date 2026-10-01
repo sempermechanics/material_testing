@@ -148,6 +148,11 @@ Results land as `*-benchmarkData.json` under the module's
 `build/outputs/connected_android_test_additional_output/`. A worked before/after
 comparison is in [../perf/round2-main-vs-branch.md](../perf/round2-main-vs-branch.md).
 
+The benchmarks drive `:app`'s `applicationId`: `benchmark/build.gradle.kts` reads it
+from `:app`'s build into `BuildConfig.TARGET_PACKAGE` and the manifest's `<queries>`,
+so the same sources run in material_testing under its own id. CI's micro step and
+`scripts/startup_ab.py` read the same `applicationId` line of `app/build.gradle.kts`.
+
 ### Pixel 6 against the CI emulator (2026-09-25)
 
 Pixel 6 (`oriole`), Android 17 (API 37, `CP2A.260705.006`), battery 100 %, over

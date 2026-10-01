@@ -70,9 +70,9 @@ data class SessionRecord(
 
     /**
      * The cloud copy's metadata.json predates a change made here after the
-     * backup (bending's deflection correction or the tensile curve's), so
-     * [SessionMetadataSync] still has to send it. Cleared once the backend
-     * holds the current corrections.
+     * backup (a rename, bending's deflection correction or the tensile
+     * curve's), so [SessionMetadataSync] still has to send it. Cleared once
+     * the backend holds the current metadata.
      */
     val metadataStale: Boolean = false,
 
@@ -362,12 +362,22 @@ object SessionStore {
         allowOverLimit: Boolean = false,
     ): Boolean = withContext(Dispatchers.IO) { upsert(context, record, allowOverLimit) }
 
+    /**
+     * Rename an analysis. The name is in metadata.json, which a restore reads
+     * it from, so a backed-up analysis, or one with a backup on its way, is
+     * marked [SessionRecord.metadataStale] and [SessionMetadataSync] re-sends it.
+     */
     @WorkerThread
     fun rename(context: Context, id: String, newName: String) = synchronized(lock) {
         mutateIndex(context) { records ->
             records.map {
                 if (it.id == id) {
-                    it.copy(name = newName, renamedByUser = true, updatedAt = System.currentTimeMillis())
+                    it.copy(
+                        name = newName,
+                        renamedByUser = true,
+                        metadataStale = it.metadataStale || (newName != it.name && it.hasCloudCopy),
+                        updatedAt = System.currentTimeMillis(),
+                    )
                 } else {
                     it
                 }
@@ -429,18 +439,17 @@ object SessionStore {
 
     /**
      * The backend now holds metadata built from [sent]. Clears
-     * [SessionRecord.metadataStale] only if the corrections the metadata
-     * carries — the geometry (bending's deflection) and the tensile
-     * [SessionRecord.curveCorrection] — are still [sent]'s, so a correction
-     * made while the send was in flight is sent again. Returns whether it
-     * cleared.
+     * [SessionRecord.metadataStale] only if what the metadata carries and can
+     * change after a backup ([sameMetadataInputs]) is still [sent]'s, so a
+     * change made while the send was in flight is sent again. Returns whether
+     * it cleared.
      */
     @WorkerThread
     fun clearMetadataStale(context: Context, id: String, sent: SessionRecord): Boolean = synchronized(lock) {
         var cleared = false
         val written = mutateIndex(context) { records ->
             records.map {
-                if (it.id == id && it.geometry == sent.geometry && it.curveCorrection == sent.curveCorrection) {
+                if (it.id == id && sameMetadataInputs(it, sent)) {
                     cleared = true
                     it.copy(metadataStale = false)
                 } else {
@@ -450,6 +459,15 @@ object SessionStore {
         }
         written && cleared
     }
+
+    /**
+     * The fields a change after the backup can alter in metadata.json, the ones
+     * that mark [SessionRecord.metadataStale]: the name, the geometry (bending's
+     * deflection correction) and the tensile [SessionRecord.curveCorrection].
+     * One place, so a field added to that list is compared here too.
+     */
+    private fun sameMetadataInputs(a: SessionRecord, b: SessionRecord): Boolean =
+        a.name == b.name && a.geometry == b.geometry && a.curveCorrection == b.curveCorrection
 
     @WorkerThread
     fun markSynced(context: Context, id: String) = setSyncState(context, id, SessionRecord.SyncState.SYNCED)

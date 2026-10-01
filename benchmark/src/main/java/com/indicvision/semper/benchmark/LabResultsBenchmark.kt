@@ -69,7 +69,7 @@ class LabResultsBenchmark {
     }
 
     companion object {
-        private const val PACKAGE = "com.indicvision.semper.materialtesting"
+        private const val PACKAGE = BuildConfig.TARGET_PACKAGE
         private const val SEEDER = "com.indicvision.semper.benchmark.BenchmarkSeedActivity"
         private const val TRACE_BUILD = "Semper.viewer.stressStrain"
         private const val ELASTIC_BUTTON = "btnRangeElastic"

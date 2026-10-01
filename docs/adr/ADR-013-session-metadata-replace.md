@@ -4,6 +4,11 @@
 **Date:** 2026-09-30
 **Deciders:** app owner
 
+> **In this repo:** the app side for bending's deflection correction (#112,
+> TD-150) and the tensile curve correction (#113, TD-152). The backend route
+> deploys from semperdic-app (#288), which since 2026-10-01 also re-sends
+> metadata after a rename, and so does this app.
+
 ## Context
 
 A cloud backup is written once. `POST /v1/sessions` reserves three files
@@ -50,11 +55,15 @@ Two ways to reach the cloud copy were weighed:
      on a row that has, or is getting, a cloud copy.
    - `SessionMetadataSync` rebuilds the metadata the way the upload does
      (`SessionUploadMetadata.buildMetadataJson`) and sends it.
-   - `SessionStore.clearMetadataStale` clears the mark only if the geometry
-     sent is still the row's, so a correction made during the send is sent
-     again.
+   - `SessionStore.clearMetadataStale` clears the mark only if what was sent
+     is still the row's (the name, the geometry and the curve correction,
+     `sameMetadataInputs`), so a change made during the send is sent again.
+   - `SessionStore.rename` sets the mark the same way: the name is in
+     `metadata.json`, and a restore with no local row takes it from there
+     (`CloudRestore.recordFrom`).
 3. **Who sends.**
-   - The viewer queues `SessionMetadataWorker` after a correction. The worker
+   - The viewer queues `SessionMetadataWorker` after a correction (Home's
+     rename dialog after a rename, `SessionSelectionController.promptRename`). The worker
      waits out an upload in flight and transient failures with WorkManager's
      backoff, and stops after nine tries.
    - `CloudSync.reconcile` queues it again for any SYNCED row still marked.
@@ -73,6 +82,8 @@ Two ways to reach the cloud copy were weighed:
 - The tensile curve correction (#111) takes the same path (TD-152, 2026-10-01):
   `setCurveCorrection` sets the mark, the viewer queues the send, and
   `clearMetadataStale` compares the curve correction as well as the geometry.
-- A rename still does not reach the cloud copy. It could set the same mark,
-  but the name that matters on another phone is the local one after a
-  restore, and a cloud-only row is named from `specimen`. Left as it is.
+- A rename reaches the cloud copy too (added 2026-10-01). It was first left
+  out on the grounds that the local name wins after a restore. That holds only
+  on a phone that still has the row: on a new phone, or after a reinstall,
+  there is no row, so the restore named the analysis from the old
+  `metadata.json`.

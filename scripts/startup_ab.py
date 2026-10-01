@@ -22,7 +22,7 @@ phone's state per round, and exits 1 if B's median is more than ``abMargin``
 
 Usage:
   python scripts/startup_ab.py --a ref/app-benchmark.apk --b new/app-benchmark.apk \\
-      --bench benchmark-benchmark.apk --out ab-run [--serial S] [--rounds 2]
+      --bench benchmark-benchmark.apk --out ab-run [--serial S] [--rounds 2] [--package ID]
   python scripts/startup_ab.py --analyse ab-run
 """
 
@@ -30,13 +30,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import subprocess
 import sys
 import threading
 from pathlib import Path
 
-APP = "com.indicvision.semper.materialtesting"
+ROOT = Path(__file__).resolve().parent.parent
+FALLBACK_APP = "com.indicvision.semper"
 BENCH = "com.indicvision.semper.benchmark"
 RUNNER = f"{BENCH}/androidx.test.runner.AndroidJUnitRunner"
 MEDIA = f"/sdcard/Android/media/{BENCH}"
@@ -47,7 +49,20 @@ DEFAULT_TESTS = [
 ]
 METRIC = "timeToInitialDisplayMs"
 WAKE_EVERY_S = 10
-GATES = Path(__file__).resolve().parent.parent / "benchmark" / "gates.json"
+GATES = ROOT / "benchmark" / "gates.json"
+
+
+def default_app_id(build_file: Path = ROOT / "app" / "build.gradle.kts") -> str:
+    """The ``applicationId`` in ``app/build.gradle.kts``, the one ``:benchmark`` targets.
+
+    Read from the build, not written here, so this script runs unchanged in
+    material_testing, which has its own app id.
+    """
+    try:
+        ids = re.findall(r'^\s*applicationId\s*=\s*"([^"]+)"', build_file.read_text(encoding="utf-8"), re.M)
+    except OSError:
+        ids = []
+    return ids[0] if len(ids) == 1 else FALLBACK_APP
 
 
 def abba(rounds: int) -> list[str]:
@@ -150,9 +165,9 @@ def refuse_if_unsafe(adb: Adb) -> None:
         raise RuntimeError("another instrumentation is running on the phone")
 
 
-def backup_app(adb: Adb, out: Path) -> list[Path]:
+def backup_app(adb: Adb, out: Path, package: str) -> list[Path]:
     """Pull the installed app's APK(s) so the run can put them back."""
-    paths = [line.split(":", 1)[1].strip() for line in adb.shell(f"pm path {APP}", check=False).splitlines() if ":" in line]
+    paths = [line.split(":", 1)[1].strip() for line in adb.shell(f"pm path {package}", check=False).splitlines() if ":" in line]
     backup_dir = out / "backup"
     backup_dir.mkdir(parents=True, exist_ok=True)
     saved = []
@@ -200,7 +215,7 @@ def run(args: argparse.Namespace) -> None:
     refuse_if_unsafe(adb)
     out: Path = args.out
     out.mkdir(parents=True, exist_ok=True)
-    saved = backup_app(adb, out)
+    saved = backup_app(adb, out, args.package)
     stop = threading.Event()
     waker = threading.Thread(target=keep_awake, args=(adb, stop), daemon=True)
     try:
@@ -223,6 +238,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--bench", type=Path, help="benchmark-benchmark.apk (the :benchmark module)")
     parser.add_argument("--out", type=Path, help="where to pull each round")
     parser.add_argument("--serial", help="adb serial, if more than one device is attached")
+    parser.add_argument(
+        "--package",
+        default=default_app_id(),
+        help="app id to back up and restore (default: app/build.gradle.kts's applicationId, %(default)s)",
+    )
     parser.add_argument("--rounds", type=int, default=2, help="ABBA blocks to run (default 2: A B B A A B B A)")
     parser.add_argument("--tests", nargs="+", default=DEFAULT_TESTS, help="tests as Class#method")
     parser.add_argument("--keep-bench", action="store_true", help="leave the benchmark APK installed")

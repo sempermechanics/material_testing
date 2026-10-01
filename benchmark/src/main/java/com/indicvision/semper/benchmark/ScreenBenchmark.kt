@@ -165,7 +165,7 @@ class ScreenBenchmark {
     }
 
     companion object {
-        private const val PACKAGE = "com.indicvision.semper.materialtesting"
+        private const val PACKAGE = BuildConfig.TARGET_PACKAGE
         private const val SETTINGS_ACTIVITY = "com.indicvision.semper.ui.settings.SettingsActivity"
         private const val ANALYSIS_ACTIVITY = "com.indicvision.semper.ui.analysis.StaticAnalysisActivity"
         private const val ITERATIONS = 5

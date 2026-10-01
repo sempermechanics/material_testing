@@ -3,7 +3,7 @@
 
 from google.api_core.exceptions import NotFound
 
-from .. import statuses
+from .. import apps, statuses
 from ..models import FileComplete, FileSpec, SessionCreate
 
 from . import _base
@@ -240,28 +240,92 @@ def count_unprovisioned_files(sid: str) -> int:
     return sum(1 for _ in iter_unprovisioned_files(sid))
 
 
+def session_app(session: dict | None) -> str:
+    """The app a session was backed up from (ADR-014): `apps.SEMPER` or
+    `apps.MATERIAL_TESTING`, the vocabulary of `devices/{id}.app`.
+
+    A session written before the tag has no `app` field and reads as Semper's,
+    as a request with no `X-App-Id` does; `scripts/tag_session_apps.py` stamps
+    the Material Testing ones before this is relied on.
+    """
+    return (session or {}).get("app") or apps.SEMPER
+
+
+def _listed_session(doc_id: str, s: dict) -> dict:
+    """One entry of `GET /v1/sessions` (and of the export built on it)."""
+    return {
+        "sessionId": doc_id,
+        "localSessionId": s.get("localSessionId") or "",
+        "specimen": s.get("specimen"),
+        "status": s.get("status"),
+        "fileCount": s.get("fileCount", 0),
+        "completedCount": s.get("completedCount", 0),
+        "totalBytes": s.get("totalBytes", 0),
+        "driveFolderId": s.get("driveFolderId"),
+        "app": session_app(s),
+    }
+
+
+def _scan_user_sessions(uid: str, page_token: str | None, chunk: int):
+    """Every session of `uid` after `page_token`, in document-id order,
+    fetched `chunk` at a time. A token naming a deleted document restarts
+    from the beginning, as `_cursor_page` does."""
+    col = db().collection("sessions")
+    query = col.where("uid", "==", uid).order_by("__name__")
+    cursor = None
+    if page_token:
+        snap = col.document(page_token).get()
+        if snap.exists:
+            cursor = snap
+    while True:
+        page_q = query.limit(chunk)
+        if cursor is not None:
+            page_q = page_q.start_after(cursor)
+        docs = list(page_q.stream())
+        yield from docs
+        if len(docs) < chunk:
+            return
+        cursor = docs[-1]
+
+
 def list_user_sessions(
     uid: str,
     limit: int = 50,
     page_token: str | None = None,
+    app: str | None = None,
 ) -> tuple[list, str | None]:
-    """Cursor-paginated cloud analyses. Returns (page, next_page_token_or_None)."""
-    col = db().collection("sessions")
-    docs, next_token = _cursor_page(col, col.where("uid", "==", uid), limit, page_token)
-    out = []
-    for d in docs:
+    """Cursor-paginated cloud analyses. Returns (page, next_page_token_or_None).
+
+    `app` keeps only that app's sessions (`session_app`, ADR-014). None lists
+    the whole account, which the export and erasure paths
+    (`iter_all_user_sessions`) need and keep.
+
+    The filter runs here, over the same uid query, not as a
+    `where("app", "==", ...)`: an equality filter cannot match a document with
+    no `app` field, which is every session from before the tag, and it would
+    need a new composite index. Pages are filled: the scan reads on past the
+    other app's sessions until `limit` match or the account ends, so a page is
+    short only when it is the last. The token is the id of the last session
+    returned, and is issued only when another session (of any app) follows it.
+    Worst case one call reads the whole account, which the quota bounds.
+    """
+    if app is None:
+        col = db().collection("sessions")
+        docs, next_token = _cursor_page(col, col.where("uid", "==", uid), limit, page_token)
+        return [_listed_session(d.id, d.to_dict()) for d in docs], next_token
+
+    out: list = []
+    # limit + 1 per read, as `_cursor_page` reads: when every session is this
+    # app's, the filtered page costs what the unfiltered one does.
+    scan = _scan_user_sessions(uid, page_token, limit + 1)
+    for d in scan:
         s = d.to_dict()
-        out.append({
-            "sessionId": d.id,
-            "localSessionId": s.get("localSessionId") or "",
-            "specimen": s.get("specimen"),
-            "status": s.get("status"),
-            "fileCount": s.get("fileCount", 0),
-            "completedCount": s.get("completedCount", 0),
-            "totalBytes": s.get("totalBytes", 0),
-            "driveFolderId": s.get("driveFolderId"),
-        })
-    return out, next_token
+        if session_app(s) != app:
+            continue
+        out.append(_listed_session(d.id, s))
+        if len(out) == limit:
+            return out, (d.id if next(scan, None) is not None else None)
+    return out, None
 
 
 def iter_all_user_sessions(uid: str, *, page_size: int = 100):
@@ -341,6 +405,9 @@ def count_user_sessions(uid: str) -> int:
     drops a document with no `status`, and it needs a composite index.
     A failed session that a Cloud Tasks retry later provisions counts again
     from then on; the quota is soft, so that overshoot is accepted.
+
+    Account-wide, across both apps (ADR-014): the cap is the account's, so a
+    session tagged with either app counts, though each app lists only its own.
     """
     sessions = db().collection("sessions").where("uid", "==", uid)
     total = int(sessions.count().get()[0][0].value)
@@ -380,16 +447,21 @@ def find_incomplete_session(uid: str, local_session_id: str):
     return None
 
 
-def create_session(sid: str, user: dict, device: dict, body: SessionCreate):
+def create_session(sid: str, user: dict, device: dict, body: SessionCreate,
+                   app: str = apps.SEMPER):
     """Reserve the session doc BEFORE any Drive folder or file doc is created.
 
     Writing the parent first means a failure while staging files can never leave
     file docs (or a Drive subtree) with no session pointing at them: the reserved
     doc counts toward the quota and is reclaimable. `driveFolderId` is filled in
     by [set_session_folder] once the folder exists. Returns the doc as written.
+
+    `app` is the app that asked (`deps.request_app`, from `X-App-Id`), never a
+    body field: the server derives it, as it does the device binding (ADR-014).
     """
     doc = {
         "uid": user["uid"],
+        "app": app,
         "deviceId": device.get("deviceId"),
         "specimen": body.specimen,
         "localSessionId": body.localSessionId,

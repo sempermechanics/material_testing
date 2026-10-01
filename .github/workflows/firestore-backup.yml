@@ -15,6 +15,10 @@ concurrency:
 
 jobs:
   export:
+    # Only the upstream repo deploys or touches production. material_testing
+    # carries this file through its syncs; there it would deploy semper-api
+    # (or, on the schedule, fail daily for want of secrets).
+    if: github.repository == 'sempermechanics/semperdic-app'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: production-backup

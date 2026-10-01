@@ -51,7 +51,7 @@ class StartupBenchmark {
     }
 
     companion object {
-        private const val PACKAGE = "com.indicvision.semper.materialtesting"
+        private const val PACKAGE = BuildConfig.TARGET_PACKAGE
 
         /**
          * 15, not 5: a Pixel 6's cold starts spread 404–478 ms within one run, so a

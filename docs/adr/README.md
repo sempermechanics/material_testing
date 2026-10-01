@@ -20,6 +20,7 @@ record that replaced it.
 | [011](ADR-011-viewer-deformed-frame.md) | The viewer draws each frame on its own photo, at the displaced positions | Accepted, built | TD-139 |
 | [012](ADR-012-tensile-strain-virtual-extensometer.md) | Tensile strain is the virtual extensometer's ΔL / L₀ | Accepted, built | TD-144 (fixed), TD-147 (fixed) |
 | [013](ADR-013-session-metadata-replace.md) | A backed-up session's metadata.json can be replaced | Accepted, built, deployed 2026-10-01 | TD-150 |
+| [014](ADR-014-session-app-tag.md) | Cloud sessions are tagged with the app that backed them up | Accepted, built, deployed 2026-10-01 (semperdic-app) | semperdic-app TD-153 |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md). ADR-008, ADR-009,
-ADR-011, ADR-012 and ADR-013 are material_testing's; the numbers are shared so they do not collide.
+ADR-011, ADR-012 and ADR-013 are material_testing's; ADR-010 and ADR-014 are semperdic-app's (ADR-008's harness, ADR-011's viewer and ADR-013's route are in both). The numbers are shared so they do not collide.
