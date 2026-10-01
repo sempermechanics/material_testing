@@ -44,6 +44,10 @@ class ViewerScrubBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
+    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    @get:Rule
+    val deviceState = DeviceStateRule()
+
     @Test
     fun scrub150Frames() = scrub(frameCount = 150)
 
@@ -80,7 +84,7 @@ class ViewerScrubBenchmark {
     }
 
     companion object {
-        private const val PACKAGE = "com.indicvision.semper"
+        private const val PACKAGE = BuildConfig.TARGET_PACKAGE
         private const val SEEDER = "com.indicvision.semper.benchmark.BenchmarkSeedActivity"
         private const val NEXT_BUTTON = "btnNextFrame"
         private const val ITERATIONS = 5

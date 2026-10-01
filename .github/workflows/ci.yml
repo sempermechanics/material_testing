@@ -638,6 +638,15 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
           df -h /
 
+      # The app id, read from app/build.gradle.kts as :benchmark reads it, so this
+      # job runs unchanged in material_testing (its own id). The emulator script
+      # runs each line in its own shell, so it takes the id from the environment.
+      - name: Read the app id
+        run: |
+          APP_ID=$(sed -n 's/^ *applicationId = "\([^"]*\)".*/\1/p' app/build.gradle.kts)
+          test -n "$APP_ID" && test "$(printf '%s\n' "$APP_ID" | wc -l)" -eq 1
+          echo "APP_ID=$APP_ID" >> "$GITHUB_ENV"
+
       # One emulator boot, two suites; each line is its own command, and a failing
       # one fails the step. The micro run is a debug build on an emulator, hence
       # DEBUGGABLE in its suppress list: its numbers are relative, not absolutes.
@@ -658,10 +667,10 @@ jobs:
           script: |
             ./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR,LOW-BATTERY,UNLOCKED
             ./gradlew :app:installDebug :app:installDebugAndroidTest -PabiFilters=x86_64 -PnativeCompilerLauncher=ccache --console=plain
-            "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED com.indicvision.semper.test/androidx.test.runner.AndroidJUnitRunner | tee micro-instrument.txt
+            "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED "$APP_ID.test/androidx.test.runner.AndroidJUnitRunner" | tee micro-instrument.txt
             mkdir -p app/build/outputs/connected_android_test_additional_output
-            "$ANDROID_HOME/platform-tools/adb" pull /sdcard/Android/media/com.indicvision.semper.test app/build/outputs/connected_android_test_additional_output || true
-            "$ANDROID_HOME/platform-tools/adb" pull /sdcard/Android/media/com.indicvision.semper app/build/outputs/connected_android_test_additional_output || true
+            "$ANDROID_HOME/platform-tools/adb" pull "/sdcard/Android/media/$APP_ID.test" app/build/outputs/connected_android_test_additional_output || true
+            "$ANDROID_HOME/platform-tools/adb" pull "/sdcard/Android/media/$APP_ID" app/build/outputs/connected_android_test_additional_output || true
             "$ANDROID_HOME/platform-tools/adb" logcat -d -s Benchmark:I || true
             grep -q "^OK (" micro-instrument.txt
 
