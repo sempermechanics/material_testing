@@ -30,6 +30,8 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -208,6 +210,28 @@ class RestoreWorkersTest {
         )
 
         assertEquals("session_zip_sha256_mismatch", failureReason(result))
+    }
+
+    @Test
+    fun `an undecodable dat in the merged archive fails as corrupt, not with the phone's copy`() {
+        seedLocalSession("local-1")
+        // A DatCodec header with a negative point count: the decode refuses it.
+        val hostileDat = ByteArrayOutputStream().also { out ->
+            DataOutputStream(out).use { d ->
+                d.write("SDC1".toByteArray())
+                d.writeShort(1)
+                d.writeInt(-1)
+                d.writeByte(1)
+            }
+        }.toByteArray()
+        api.files = listOf(
+            api.file("bundle-1", "bundle", RestoreFakeApi.zipOf(listOf("dat/frame_0000.dat" to hostileDat))),
+            api.file("extras-1", "extras", RestoreFakeApi.zipOf(listOf("csv/analysis_data.csv" to "a,b".toByteArray()))),
+        )
+
+        val result = runDownload(cloudSource, localSessionId = "local-1")
+
+        assertEquals("entry_datcodec_decode_failed", failureReason(result))
     }
 
     @Test

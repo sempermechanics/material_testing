@@ -196,8 +196,8 @@ internal object SessionZip {
             // Save to Files hands the user a real, directly-usable session archive —
             // a DatCodec-encoded .dat inside it would not be a valid .dat to anything
             // outside this app, so decode it back to the real layout on the way out.
-            val decoded = DatCodec.decodeIfEncoded(from.getInputStream(entry).use { it.readBytes() })
-            Zips.putStoredBytes(zos, entry.name, decoded)
+            // A payload that will not decode is a corrupt transfer, as on restore.
+            Zips.putStoredBytes(zos, entry.name, decodeDatEntryOrThrow(from, entry))
             return
         }
         val copy = ZipEntry(entry.name).apply {
