@@ -24,10 +24,6 @@ set are fixed (content extracted behind `SettingsScrollContentView` /
 `main` (#65 / #67, re-landed as #69 / #70) are on `origin/main` as of
 2026-08-16.
 
-Orphaned strings the 2026-08-18 workflow audit found are listed in
-[../app/WORKFLOWS.md](../app/WORKFLOWS.md) §11 — none of them fail a gate, so they
-are removed opportunistically rather than in a sweep.
-
 ## Proposed improvements live next door
 
 Forward-looking items are in [FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md).

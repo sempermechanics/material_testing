@@ -34,9 +34,6 @@ object VsgStudyRunner {
     /** Outcome code for a user-cancelled sweep. */
     const val ERROR_CANCELLED = AnalysisRunCodes.ERROR_CANCELLED
 
-    /** Engine returned no usable field for one of the sweep's combinations. */
-    const val ERROR_ENGINE_FAILED = -97
-
     private const val PERCENT = 100
 
     @Suppress("LongParameterList") // one-shot bundle of engine inputs
