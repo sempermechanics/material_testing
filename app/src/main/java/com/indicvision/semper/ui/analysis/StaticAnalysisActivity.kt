@@ -659,14 +659,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         val bytes = stream.readBytes()
-        return withContext(SemperNativeLib.nativeDispatcher) {
-            val dims = SemperNativeLib.getImageDimensions(bytes)
-            val preview = SemperNativeLib.getPreviewFromBytes(
-                bytes,
-                com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE,
-            )
-            LoadedReference(bytes, dims[0], dims[1], preview)
-        }
+        // Sizes from the native decoder, which applies EXIF as the engine does.
+        val loaded = ReferencePreviewLoader.load(
+            ReferencePreviewLoader.Request(bytes, 0, 0, com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE),
+        )
+        if (loaded.width <= 0 || loaded.height <= 0) return null
+        return LoadedReference(bytes, loaded.width, loaded.height, loaded.bitmap)
     }
 
     /** Shared result path for the deformed-frame pickers (Photos and Files). */
@@ -1804,12 +1802,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val restore = viewModel.restoreDraft()
             val bytes = viewModel.refBytes
             if (bytes != null) {
-                refPreviewBmp = withContext(SemperNativeLib.nativeDispatcher) {
-                    SemperNativeLib.getPreviewFromBytes(
-                        bytes,
-                        com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE,
-                    )
-                }
+                // Through the loader, not the native decoder directly: a RAW
+                // reference is a headerless RGBA blob, which OpenCV cannot read.
+                refPreviewBmp = ReferencePreviewLoader.load(
+                    ReferencePreviewLoader.Request(
+                        bytes = bytes,
+                        intentWidth = viewModel.realRefWidth,
+                        intentHeight = viewModel.realRefHeight,
+                        previewMaxEdge = com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE,
+                    ),
+                ).bitmap
             }
             wizardSlots.refreshRefSlot(refPreviewBmp)
             wizardSlots.refreshDefSlot()
