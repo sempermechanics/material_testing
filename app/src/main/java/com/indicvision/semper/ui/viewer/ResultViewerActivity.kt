@@ -220,7 +220,8 @@ class ResultViewerActivity : AppCompatActivity() {
     private var currentHeatmapMin = 0f
     private var currentHeatmapMax = 0f
 
-    private val customBoundsMap = mutableMapOf<Int, Pair<Float, Float>>()
+    /** Fixed colour scales per field; in the ViewModel so a rotation keeps them. */
+    private val customBoundsMap: MutableMap<Int, Pair<Float, Float>> get() = viewerVm.customBounds
 
     private lateinit var etFrameNumber: EditText
     private lateinit var tvFrameTotal: TextView
