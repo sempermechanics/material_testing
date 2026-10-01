@@ -22,10 +22,9 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Re-sends a backed-up session's metadata.json after a change made here since
- * the backup, so a restore brings the change back (ADR-013). Here the only such
- * change is a rename, which [SessionStore.rename] marks with
- * [SessionRecord.metadataStale]; material_testing, which this came from, marks
- * its deflection and curve corrections the same way.
+ * the backup, so a restore brings the change back (ADR-013). [SessionStore]
+ * marks [SessionRecord.metadataStale] for each such change: a rename and, in
+ * material_testing, bending's deflection and the tensile curve corrections.
  *
  * The metadata is rebuilt from the row as the upload builds it
  * ([SessionUploadMetadata.buildMetadataJson]) and replaces the cloud copy's
