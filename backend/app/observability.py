@@ -124,6 +124,9 @@ def classify_route(method: str, path: str) -> tuple[str, str]:
         return "sync", template
     if template.startswith("/v1/sessions/") and method_u == "DELETE":
         return "backup", template  # erase one cloud backup
+    # Re-sending a backed-up session's metadata.json (ADR-013).
+    if template.endswith("/metadata") and "/sessions/" in template and method_u == "PUT":
+        return "backup", template
     if template.endswith("/files") and "/sessions/" in template and method_u == "GET":
         return "restore", template
     if template.endswith("/content") and "/files/" in template and method_u == "GET":

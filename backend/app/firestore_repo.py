@@ -165,6 +165,8 @@ from .repo.sessions import (  # noqa: F401
     list_session_files_all,
     _LIST_SOFT_LIMIT,
     list_user_sessions,
+    metadata_file_id,
+    replace_file_content,
     set_file_upload_url,
     set_session_folder,
     set_session_status,
