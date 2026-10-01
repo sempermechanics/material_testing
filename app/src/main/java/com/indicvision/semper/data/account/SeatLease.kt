@@ -10,7 +10,9 @@ import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.authed
+import com.indicvision.semper.util.rethrowIfCallerCancelled
 import timber.log.Timber
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Floating-seat lease: release on sign-out, renew while the process is up.
@@ -67,11 +69,7 @@ object SeatLease {
         api: CloudApi = IndicApi.get(context),
         tokens: TokenSource = TokenProvider,
     ) {
-        val fetched = when (val outcome = api.authed(tokens) { getConfig(it) }) {
-            is Authed.Ok -> Result.success(outcome.value)
-            is Authed.Failed -> Result.failure(outcome.failure.cause)
-            Authed.Disabled, Authed.NoToken -> return
-        }
+        val fetched = bestEffort(api, tokens) { getConfig(it) }.toResult() ?: return
         if (AppRemoteConfig.record(context, fetched) && holdsFloatingSeat(context)) {
             heartbeatBestEffort(context, api, tokens)
         }
@@ -90,14 +88,42 @@ object SeatLease {
         call: suspend CloudApi.(idToken: String) -> Unit,
     ): Boolean {
         if (!holdsSeat) return false
-        val outcome = api.authed(tokens, call)
+        val outcome = bestEffort(api, tokens, call)
         if (outcome is Authed.Failed) logFailure(what, outcome.failure)
         return outcome is Authed.Ok
     }
 
-    /** An unexpected throw is a bug, not a dropped connection, so it is logged louder. */
+    /**
+     * [authed], with nothing let through: a best-effort call that throws an
+     * Error fails like any other, so sign-out always gets past the seat
+     * release to clearing the session. Only the caller's own cancellation is
+     * rethrown.
+     */
+    private suspend fun <T> bestEffort(
+        api: CloudApi,
+        tokens: TokenSource,
+        call: suspend CloudApi.(idToken: String) -> T,
+    ): Authed<T> = try {
+        api.authed(tokens, call)
+    } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+        e.rethrowIfCallerCancelled()
+        Authed.Failed(HttpFailure.classify(e))
+    }
+
+    /** The value or failure of a call that was made; null when none was (no backend, no token). */
+    private fun <T> Authed<T>.toResult(): Result<T>? = when (this) {
+        is Authed.Ok -> Result.success(value)
+        is Authed.Failed -> Result.failure(failure.cause)
+        Authed.Disabled, Authed.NoToken -> null
+    }
+
+    /**
+     * An unexpected throw is a bug, not a dropped connection, so it is logged
+     * as an error (a Crashlytics non-fatal). A Task cancelled under a caller
+     * still waiting is not a bug: a warning.
+     */
     private fun logFailure(what: String, failure: HttpFailure) {
-        if (failure.kind == HttpFailure.Kind.UNEXPECTED) {
+        if (failure.kind == HttpFailure.Kind.UNEXPECTED && failure.cause !is CancellationException) {
             Timber.e(failure.cause, "Floating-seat %s failed unexpectedly", what)
         } else {
             Timber.w(failure.cause, "Floating-seat %s failed (%s)", what, failure.kind)

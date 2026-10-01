@@ -33,3 +33,17 @@ internal suspend fun <T> firebaseOp(
         }
     }
 }
+
+/**
+ * Runs a Firebase call nothing waits on the outcome of (a verification mail,
+ * a refresh of cached state): whatever it throws is logged as [failureLog]
+ * and dropped, except the caller's own cancellation.
+ */
+internal suspend fun firebaseBestEffort(failureLog: String, op: suspend () -> Unit) {
+    try {
+        op()
+    } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
+        e.rethrowIfCallerCancelled()
+        Timber.w(e, failureLog)
+    }
+}

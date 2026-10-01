@@ -1,13 +1,16 @@
 package com.indicvision.semper.cloud
 
+import android.util.Log
 import com.indicvision.semper.data.account.SeatLease
 import com.indicvision.semper.data.net.AppConfigDto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import timber.log.Timber
 
 /**
  * Floating-seat release and renew gates ([SeatLease.seatCall], which both
@@ -19,6 +22,17 @@ class SeatLeaseTest {
     private val api = FakeCloudApi()
     private val tokens = FakeTokens()
     private val steps = mutableListOf<String>()
+
+    /** The priority of every line logged, in order. */
+    private val logged = mutableListOf<Int>()
+    private val tree = object : Timber.Tree() {
+        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            logged += priority
+        }
+    }.also { Timber.plant(it) }
+
+    @After
+    fun uproot() = Timber.uproot(tree)
 
     private fun config(): AppConfigDto = AppConfigDto(mode = "demo")
 
@@ -55,6 +69,16 @@ class SeatLeaseTest {
 
         assertFalse(release())
         assertFalse(steps.contains("apply"))
+        assertEquals("a bug is an error (a Crashlytics non-fatal)", listOf(Log.ERROR), logged)
+    }
+
+    @Test
+    fun `an Error from the release is swallowed too, so sign-out still clears the session`() = runBlocking {
+        // suspendRunCatching caught Throwable; authed alone catches Exception.
+        api.onReleaseLease = { throw LinkageError("bad class") }
+
+        assertFalse(release())
+        assertFalse(steps.contains("apply"))
     }
 
     @Test
@@ -65,6 +89,7 @@ class SeatLeaseTest {
 
         assertFalse(release())
         assertFalse(steps.contains("apply"))
+        assertEquals("a cancelled task is not a bug report", listOf(Log.WARN), logged)
     }
 
     @Test

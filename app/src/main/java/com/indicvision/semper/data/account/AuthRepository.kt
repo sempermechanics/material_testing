@@ -48,9 +48,6 @@ internal enum class SignInMethod(val analyticsName: String) {
 
 private const val WRONG_TOTP_CODE = "Incorrect authenticator code."
 
-/** Never shown: the verification mail is best-effort, and its failure is only logged. */
-private const val VERIFICATION_NOT_SENT = "Could not send the verification email."
-
 /**
  * Authentication + access-gate.
  *
@@ -112,9 +109,7 @@ class AuthRepository(
     suspend fun signUpWithPassword(email: String, password: String): Result<String> =
         firebaseThen(SignInMethod.PASSWORD_SIGN_UP) {
             val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
-            firebaseOp("Could not send verification email", VERIFICATION_NOT_SENT) {
-                result.user?.sendEmailVerification()?.await()
-            }
+            firebaseBestEffort("Could not send verification email") { result.user?.sendEmailVerification()?.await() }
             result
         }
 
@@ -422,7 +417,7 @@ class AuthRepository(
      */
     private suspend fun unverifiedEmailError(user: FirebaseUser): Exception? {
         if (!needsEmailVerification(user)) return null
-        firebaseOp("Could not re-send verification email", VERIFICATION_NOT_SENT) {
+        firebaseBestEffort("Could not re-send verification email") {
             auth.currentUser?.sendEmailVerification()?.await()
         }
         val email = user.email.orEmpty()
@@ -435,9 +430,7 @@ class AuthRepository(
         if (user.providerData.none { it.providerId == EmailAuthProvider.PROVIDER_ID }) return false
         // Someone who just clicked the link in a browser is still unverified in
         // this cached user object; reload before judging them.
-        firebaseOp("Could not refresh verification state; using cached value", "Could not refresh the account.") {
-            user.reload().await()
-        }
+        firebaseBestEffort("Could not refresh verification state; using cached value") { user.reload().await() }
         return auth.currentUser?.isEmailVerified == false
     }
 
