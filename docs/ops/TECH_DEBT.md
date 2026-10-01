@@ -37,8 +37,12 @@ This file stays the record of what is *owed* and what is deliberately deferred.
 
 Priority = (Impact + Risk) × (6 − Effort).
 
-TD numbers are shared with material_testing: TD-135 and TD-139–TD-144 are its rows
-and are not listed here. TD-134 is the same fix in both repos. The next row here is TD-146.
+TD numbers are shared with material_testing. Its own rows are TD-78, TD-89, TD-91–TD-96,
+TD-98, TD-99, TD-135, TD-139–TD-144 and TD-146–TD-152, and are not listed here (checked
+against its `main` @ `3afbc76` on 2026-10-01). TD-81 means a different item in each repo:
+here the Compute-after-failed-run fix, there the bending E decimals (it carries ours as
+TD-89). TD-134 is the same fix in both. The next row here is TD-153; re-check its register
+before taking a number ([FORK_SYNC.md](FORK_SYNC.md)).
 
 **Re-verified against the code on 2026-09-23.** Every row below was checked at
 `main` @ `4d04c28`, not copied from the previous register; several of the old
