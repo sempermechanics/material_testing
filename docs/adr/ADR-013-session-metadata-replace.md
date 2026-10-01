@@ -1,6 +1,6 @@
 # ADR-013: A backed-up session's metadata.json can be replaced
 
-**Status:** Accepted, built (backend deploy owed from semperdic-app)
+**Status:** Accepted, built; backend deployed 2026-10-01 (semperdic-app#288, gateway `v202610010433-80`)
 **Date:** 2026-09-30
 **Deciders:** app owner
 
