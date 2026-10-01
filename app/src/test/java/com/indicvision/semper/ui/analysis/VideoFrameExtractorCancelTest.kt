@@ -44,7 +44,8 @@ class VideoFrameExtractorCancelTest {
     fun setUp() {
         uri = Uri.fromFile(temp.newFile("clip.mp4").apply { writeBytes(ByteArray(64)) })
         for (timeUs in listOf(0L, 500_000L, 1_000_000L)) {
-            ShadowMediaMetadataRetriever.addFrame(context, uri, timeUs, Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))
+            val frame = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+            ShadowMediaMetadataRetriever.addFrame(context, uri, timeUs, frame)
         }
     }
 

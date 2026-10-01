@@ -3,7 +3,6 @@ package com.indicvision.semper.ui.analysis
 import androidx.exifinterface.media.ExifInterface
 import com.indicvision.semper.imaging.ExifOrientedSize
 import java.io.ByteArrayInputStream
-import java.io.IOException
 
 /**
  * Reads square patches of an EXIF-oriented image from a decoder that ignores
@@ -74,12 +73,10 @@ internal class ExifPatchMap(
             orientation != ExifInterface.ORIENTATION_NORMAL && orientation != ExifInterface.ORIENTATION_UNDEFINED
 
         /** The EXIF orientation of an encoded image, or NORMAL when it has none or cannot be read. */
-        fun orientationOf(bytes: ByteArray): Int = try {
+        fun orientationOf(bytes: ByteArray): Int = runCatching {
             ExifInterface(ByteArrayInputStream(bytes))
                 .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-        } catch (e: IOException) {
-            ExifInterface.ORIENTATION_NORMAL
-        }
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
 
         /**
          * The map for an image OpenCV measured as [uprightWidth] x
@@ -95,12 +92,11 @@ internal class ExifPatchMap(
             storedWidth: Int,
             storedHeight: Int,
         ): ExifPatchMap? {
-            if (!isRotated(orientation)) return null
             val swaps = ExifOrientedSize.swapsAxes(orientation)
             val expectedW = if (swaps) uprightHeight else uprightWidth
             val expectedH = if (swaps) uprightWidth else uprightHeight
-            if (storedWidth != expectedW || storedHeight != expectedH) return null
-            return ExifPatchMap(orientation, storedWidth, storedHeight)
+            val agrees = storedWidth == expectedW && storedHeight == expectedH
+            return if (isRotated(orientation) && agrees) ExifPatchMap(orientation, storedWidth, storedHeight) else null
         }
     }
 }

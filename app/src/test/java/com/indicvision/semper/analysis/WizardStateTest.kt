@@ -257,7 +257,8 @@ class WizardStateTest {
         draft.writeMask(MASK)
 
         var saved: android.os.Bundle? = null
-        assertTrue("saveWizardState blocked on the draft's lock", returnsWhileDraftIsBusy { saved = vm.saveWizardState() })
+        val returned = returnsWhileDraftIsBusy { saved = vm.saveWizardState() }
+        assertTrue("saveWizardState blocked on the draft's lock", returned)
         drainDraftLane()
 
         assertEquals(2, saved?.getInt("frameCount"))

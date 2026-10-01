@@ -404,7 +404,14 @@ object SubsetRecommender {
      * [w] x [h] pixels the ROI and sample points are in ([ExifPatchMap]).
      */
     @Suppress("LongParameterList") // the image as measured both ways
-    private fun upright(stored: PatchSource, bytes: ByteArray, w: Int, h: Int, storedW: Int, storedH: Int): PatchSource {
+    private fun upright(
+        stored: PatchSource,
+        bytes: ByteArray,
+        w: Int,
+        h: Int,
+        storedW: Int,
+        storedH: Int,
+    ): PatchSource {
         val map = ExifPatchMap.forImage(ExifPatchMap.orientationOf(bytes), w, h, storedW, storedH) ?: return stored
         return OrientedSource(stored, map)
     }

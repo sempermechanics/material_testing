@@ -22,7 +22,7 @@ class ExifPatchMapTest {
         fun transpose() = Grid(h, w, FloatArray(w * h) { this[it / h, it % h] })
 
         fun patch(x0: Int, y0: Int, side: Int): FloatArray? {
-            if (x0 < 0 || y0 < 0 || x0 + side > w || y0 + side > h) return null
+            if (x0 !in 0..w - side || y0 !in 0..h - side) return null
             return FloatArray(side * side) { this[x0 + it % side, y0 + it / side] }
         }
     }

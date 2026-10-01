@@ -935,18 +935,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
             sheet.dismiss()
             val preferKeyframes = toggleMode.checkedButtonId == R.id.btnModeKeyframes
             val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
-            val (startMs, endMs) = segmentMs()
-            extractVideoFrames(uri, fpsExtract, startMs, endMs, preferKeyframes, meta.rotationDegrees)
+            extractVideoFrames(uri, fpsExtract, segmentMs(), preferKeyframes, meta.rotationDegrees)
         }
         sheet.show()
     }
 
-    /** Extracts frames at [fpsExtract] over [startMs, endMs] with the progress overlay. */
+    /** Extracts frames at [fpsExtract] over [segmentMs] (start to end) with the progress overlay. */
     private fun extractVideoFrames(
         uri: Uri,
         fpsExtract: Double,
-        startMs: Long,
-        endMs: Long,
+        segmentMs: Pair<Long, Long>,
         preferKeyframes: Boolean = true,
         rotationDegrees: Int? = null,
     ) {
@@ -961,8 +959,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             viewModel = viewModel,
             uri = uri,
             fpsExtract = fpsExtract,
-            startMs = startMs,
-            endMs = endMs,
+            startMs = segmentMs.first,
+            endMs = segmentMs.second,
             cacheDir = cacheDir,
             tvResult = tvResult,
             overlayHelper = overlayHelper,

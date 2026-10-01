@@ -32,7 +32,14 @@ class UnsavedRerunTest {
 
     /** What the re-run solved with: not what the previous run did. */
     private val rerunSettings = SessionRecordSettings(
-        subset = 31, step = 7, strainWin = 43, roiX = 4, roiY = 6, roiW = 50, roiH = 40, use6x6 = true,
+        subset = 31,
+        step = 7,
+        strainWin = 43,
+        roiX = 4,
+        roiY = 6,
+        roiW = 50,
+        roiH = 40,
+        use6x6 = true,
     )
 
     private fun run(framesOnDisk: Int, stopCode: Int = -2) =
@@ -90,7 +97,10 @@ class UnsavedRerunTest {
         // BatchRunController opens the viewer on a partial run whose frames
         // went into the previous row: it used to get refPath "", stop 0, planned 0.
         val row = afterUnsavedRerun(previous(SyncState.LOCAL_ONLY), run(framesOnDisk = 3, stopCode = -7))!!
-        val vm = AnalysisViewModel().apply { realRefWidth = 64; realRefHeight = 64 }
+        val vm = AnalysisViewModel().apply {
+            realRefWidth = 64
+            realRefHeight = 64
+        }
 
         vm.recordKeptRow(row)
         val args = AnalysisNavHelper.resultArgs(vm, sweep = false, frameNames = listOf("a.png"))

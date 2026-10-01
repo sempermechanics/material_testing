@@ -42,7 +42,7 @@ object RoiResolveHelper {
         realRefHeight: Int,
     ): IntArray? {
         val roi = if (hasCustomRoi) {
-            clipToImage(roiX, roiY, roiW, roiH, realRefWidth, realRefHeight) ?: return null
+            clipToImage(roiX, roiY, roiW, roiH, realRefWidth, realRefHeight)
         } else {
             val margin = (subset / 2) + ROI_MARGIN_SLACK_PX
             intArrayOf(
@@ -52,8 +52,7 @@ object RoiResolveHelper {
                 realRefHeight - (2 * margin),
             )
         }
-        if (roi[2] < subset || roi[3] < subset) return null
-        return roi
+        return roi?.takeIf { it[2] >= subset && it[3] >= subset }
     }
 
     /**
@@ -91,7 +90,6 @@ object RoiResolveHelper {
         val top = y.coerceIn(0, height)
         val right = (x.toLong() + w).coerceIn(left.toLong(), width.toLong()).toInt()
         val bottom = (y.toLong() + h).coerceIn(top.toLong(), height.toLong()).toInt()
-        if (right <= left || bottom <= top) return null
-        return intArrayOf(left, top, right - left, bottom - top)
+        return if (right > left && bottom > top) intArrayOf(left, top, right - left, bottom - top) else null
     }
 }

@@ -11,16 +11,13 @@ import org.junit.Test
  */
 class RoiResolveHelperTest {
 
+    /** [roi] is `[x, y, w, h]` on a 640 x 480 image unless [image] says otherwise. */
     private fun resolve(
-        x: Int,
-        y: Int,
-        w: Int,
-        h: Int,
+        vararg roi: Int,
         custom: Boolean = true,
         subset: Int = 21,
-        imageW: Int = 640,
-        imageH: Int = 480,
-    ) = RoiResolveHelper.resolve(subset, custom, x, y, w, h, imageW, imageH)?.toList()
+        image: Pair<Int, Int> = 640 to 480,
+    ) = RoiResolveHelper.resolve(subset, custom, roi[0], roi[1], roi[2], roi[3], image.first, image.second)?.toList()
 
     @Test
     fun `a custom ROI inside the image is solved as drawn`() {
@@ -50,7 +47,7 @@ class RoiResolveHelperTest {
 
     @Test
     fun `a custom ROI with no image size cannot be solved`() {
-        assertNull(resolve(0, 0, 100, 100, imageW = 0, imageH = 0))
+        assertNull(resolve(0, 0, 100, 100, image = 0 to 0))
     }
 
     @Test

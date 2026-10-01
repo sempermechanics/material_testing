@@ -401,24 +401,6 @@ class RoiDrawActivity : AppCompatActivity() {
         }
     }
 
-    /** The reference the wizard staged for the editor, or null when it is gone. */
-    @WorkerThread
-    private fun readReference(file: File): ByteArray? = try {
-        file.takeIf(File::exists)?.readBytes()
-    } catch (e: IOException) {
-        Timber.e(e, "Could not read the ROI reference")
-        null
-    }
-
-    @WorkerThread
-    private fun writeMask(file: File, bytes: ByteArray): Boolean = try {
-        FileOutputStream(file).use { it.write(bytes) }
-        true
-    } catch (e: IOException) {
-        Timber.e(e, "Could not write the ROI mask")
-        false
-    }
-
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt(DicKeys.DRAW_MODE, rgDrawMode.checkedButtonId)
@@ -453,4 +435,23 @@ internal fun roiPixels(roi: RectF, imageWidth: Int, imageHeight: Int): Rect {
     val right = roi.right.roundToInt().coerceAtMost(imageWidth)
     val bottom = roi.bottom.roundToInt().coerceAtMost(imageHeight)
     return Rect(x, y, right, bottom)
+}
+
+/** The reference the wizard staged for the ROI editor, or null when it is gone. */
+@WorkerThread
+private fun readReference(file: File): ByteArray? = try {
+    file.takeIf(File::exists)?.readBytes()
+} catch (e: IOException) {
+    Timber.e(e, "Could not read the ROI reference")
+    null
+}
+
+/** Writes the ROI mask the wizard reads back; false when it could not. */
+@WorkerThread
+private fun writeMask(file: File, bytes: ByteArray): Boolean = try {
+    FileOutputStream(file).use { it.write(bytes) }
+    true
+} catch (e: IOException) {
+    Timber.e(e, "Could not write the ROI mask")
+    false
 }

@@ -187,7 +187,6 @@ internal class AviCodecDecoder private constructor(
         }
     }
 
-
     override fun close() {
         runCatching {
             codec.stop()
