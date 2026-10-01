@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -36,9 +37,10 @@ class MediaPickerSheet private constructor(
     private val requestPermission: () -> Unit,
     private val onBrowseSaf: () -> Unit,
     private val onPicked: (List<Uri>) -> Unit,
-    /** Where the MediaStore query runs; tests pass an inline dispatcher. */
-    private val queryDispatcher: CoroutineDispatcher,
 ) {
+    /** Where the MediaStore query runs, fixed when the sheet opens. */
+    private val queryDispatcher: CoroutineDispatcher = Companion.queryDispatcher
+
     private val sheet = BottomSheetDialog(activity)
     private val root: View = activity.layoutInflater.inflate(R.layout.sheet_media_picker, null)
     private val title: TextView = root.findViewById(R.id.tvMediaTitle)
@@ -345,20 +347,22 @@ class MediaPickerSheet private constructor(
     companion object {
         private const val REF_HINT_MS = 1000L
 
+        /** Seam for tests, which query inline so the grid fills as the main thread idles. */
+        @VisibleForTesting
+        internal var queryDispatcher: CoroutineDispatcher = Dispatchers.IO
+
         fun show(
             activity: AppCompatActivity,
             mode: MediaSourceChooser.Mode,
             requestPermission: () -> Unit,
             onBrowseSaf: () -> Unit,
             onPicked: (List<Uri>) -> Unit,
-            queryDispatcher: CoroutineDispatcher = Dispatchers.IO,
         ): MediaPickerSheet = MediaPickerSheet(
             activity,
             mode,
             requestPermission,
             onBrowseSaf,
             onPicked,
-            queryDispatcher,
         )
     }
 }

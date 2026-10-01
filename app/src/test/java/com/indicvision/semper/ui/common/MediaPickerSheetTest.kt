@@ -17,6 +17,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.R
 import kotlinx.coroutines.Dispatchers
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -98,6 +99,13 @@ class MediaPickerSheetTest {
         )
         FakeMediaProvider.lastSelectionArgs = emptyList()
         FakeMediaProvider.queriedOnMain = null
+        // Inline, so each test sees the grid as soon as the main thread idles.
+        MediaPickerSheet.queryDispatcher = Dispatchers.Unconfined
+    }
+
+    @After
+    fun tearDown() {
+        MediaPickerSheet.queryDispatcher = Dispatchers.IO
     }
 
     private fun grantGallery() {
@@ -111,8 +119,6 @@ class MediaPickerSheetTest {
             requestPermission = { permissionRequests++ },
             onBrowseSaf = { safBrowses++ },
             onPicked = { picks += it },
-            // Inline, so each test sees the grid as soon as the main thread idles.
-            queryDispatcher = Dispatchers.Unconfined,
         )
         idle()
         return ShadowDialog.getLatestDialog()
@@ -170,14 +176,7 @@ class MediaPickerSheetTest {
 
     @Test
     fun `a granted permission reloads the grid`() {
-        val picker = MediaPickerSheet.show(
-            activity,
-            MediaSourceChooser.Mode.DEFORMED,
-            {},
-            {},
-            {},
-            queryDispatcher = Dispatchers.Unconfined,
-        )
+        val picker = MediaPickerSheet.show(activity, MediaSourceChooser.Mode.DEFORMED, {}, {}, {})
         idle()
         val sheet = ShadowDialog.getLatestDialog()
         assertEquals(0, sheet.adapter().itemCount)
@@ -205,6 +204,7 @@ class MediaPickerSheetTest {
 
     @Test
     fun `the gallery is queried off the main thread`() {
+        MediaPickerSheet.queryDispatcher = Dispatchers.IO
         grantGallery()
         MediaPickerSheet.show(activity, MediaSourceChooser.Mode.HOME_REFERENCE, {}, {}, {})
         val sheet = ShadowDialog.getLatestDialog()
