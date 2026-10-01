@@ -1,6 +1,6 @@
 # ADR-014: Cloud sessions are tagged with the app that backed them up
 
-**Status:** Accepted, built (backfill, console and backend deploy owed).
+**Status:** Accepted, built; backfill applied 2026-10-01 (console and backend deploy owed).
 **Date:** 2026-10-01
 **Deciders:** product owner, backend owner
 
@@ -109,6 +109,7 @@ Every app call already names its app (`X-App-Id`, ADR-010), resolved once in
       `backend/tests/test_session_app_tag.py`).
 - [x] Console App column and `?app=all`
       (`firebase-hosting/public/console/account/account.js`).
-- [ ] Run the backfill against production (dry-run, then `--apply`).
+- [x] Run the backfill against production (dry-run, then `--apply`): 2026-10-01,
+      75 sessions tagged, 68 `semper` and 7 `materialtesting`.
 - [ ] Deploy the console, then the backend; re-run the backfill.
 - [ ] TD-153: settle rows restored across apps before the deploy.

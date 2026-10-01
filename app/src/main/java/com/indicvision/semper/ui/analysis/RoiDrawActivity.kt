@@ -27,14 +27,12 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.CacheJanitor
-import com.indicvision.semper.imaging.RawRgba
 import com.indicvision.semper.ui.common.Insets
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -93,7 +91,10 @@ class RoiDrawActivity : AppCompatActivity() {
         etRoiH = findViewById(R.id.etRoiH)
 
         Insets.padTop(findViewById(R.id.headerChrome))
-        Insets.padBottom(findViewById(R.id.bottomToolbar))
+        // The dock rises above the keyboard so the typed X/Y/W/H and Apply stay
+        // reachable; the canvas shrinks and the overlay remaps the crop onto the
+        // smaller image (StudioOverlayView.updateImageBounds).
+        Insets.padBottomAboveIme(findViewById(R.id.bottomToolbar))
 
         val imageFilePath = intent.getStringExtra(DicKeys.IMAGE_FILE_PATH)
         realImageWidth = intent.getIntExtra(DicKeys.IMAGE_WIDTH, 0)
@@ -106,42 +107,21 @@ class RoiDrawActivity : AppCompatActivity() {
             val file = File(imageFilePath)
             if (file.exists()) {
                 val bytes = file.readBytes()
-                val screenWidth = resources.displayMetrics.widthPixels
-
-                // A RAW/DNG reference is stored as a headerless RGBA blob, which no
-                // decoder can read — both calls below would fail and leave the editor
-                // with nothing to draw on. Its dimensions arrive in the intent and are
-                // already correct, so skip the decode probes entirely.
-                val isRawRgba = RawRgba.matches(bytes.size.toLong(), realImageWidth, realImageHeight)
+                // Twice the screen, as the beam-edge editor, so a zoomed-in
+                // crop edge still lands on visible speckle.
+                val screen = resources.displayMetrics
+                val maxEdge = PREVIEW_OVERSAMPLE * max(screen.widthPixels, screen.heightPixels)
+                val longEdge = max(realImageWidth, realImageHeight).takeIf { it > 0 } ?: maxEdge
 
                 lifecycleScope.launch {
-                    // Prefer decoder-native dims (OpenCV applies EXIF) over intent
-                    // extras from BitmapFactory bounds, which do not. Off the main
-                    // thread: getImageDimensions decodes the whole image rather
-                    // than parsing a header, which is ~0.3s and tens of MB on a
-                    // 12MP shot.
-                    val dims = if (isRawRgba) {
-                        null
-                    } else {
-                        withContext(SemperNativeLib.nativeDispatcher) {
-                            runCatching { SemperNativeLib.getImageDimensions(bytes) }.getOrNull()
-                        }
-                    }
-                    if (dims != null && dims.size >= 2 && dims[0] > 0 && dims[1] > 0) {
-                        realImageWidth = dims[0]
-                        realImageHeight = dims[1]
-                        overlayRoi.realImageWidth = realImageWidth
-                        overlayRoi.realImageHeight = realImageHeight
-                    }
-                    val bitmap = if (isRawRgba) {
-                        withContext(Dispatchers.Default) {
-                            RawRgba.preview(bytes, realImageWidth, realImageHeight, screenWidth)
-                        }
-                    } else {
-                        withContext(SemperNativeLib.nativeDispatcher) {
-                            SemperNativeLib.getPreviewFromBytes(bytes, screenWidth)
-                        }
-                    }
+                    val loaded = ReferencePreviewLoader.load(
+                        ReferencePreviewLoader.Request(bytes, realImageWidth, realImageHeight, min(longEdge, maxEdge)),
+                    )
+                    realImageWidth = loaded.width
+                    realImageHeight = loaded.height
+                    overlayRoi.realImageWidth = realImageWidth
+                    overlayRoi.realImageHeight = realImageHeight
+                    val bitmap = loaded.bitmap
 
                     if (bitmap == null) {
                         Toast.makeText(this@RoiDrawActivity, R.string.roi_decode_failed, Toast.LENGTH_LONG).show()
@@ -205,6 +185,15 @@ class RoiDrawActivity : AppCompatActivity() {
             setEditMode(editManual)
         } else {
             setEditMode(false)
+            tvHud.text = getString(R.string.roi_hud_zoom_hint)
+        }
+
+        overlayRoi.onZoomChangedListener = { zoom ->
+            tvHud.text = if (zoom > 1f) {
+                getString(R.string.roi_hud_zoom, zoom)
+            } else {
+                getString(R.string.roi_hud_zoom_fit)
+            }
         }
 
         btnCancelRoi.setOnClickListener { finish() }
@@ -415,6 +404,7 @@ class RoiDrawActivity : AppCompatActivity() {
     private companion object {
         const val STATE_MANUAL = "roi_edit_manual"
         const val STATE_ERASE = "roi_edit_erase"
+        const val PREVIEW_OVERSAMPLE = 2
     }
 }
 

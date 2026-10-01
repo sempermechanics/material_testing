@@ -63,6 +63,9 @@
     <string name="roi_hud_mode_crop">Mode: Crop</string>
     <string name="roi_hud_mode_manual">Mode: Manual entry</string>
     <string name="roi_hud_canvas_cleared">Canvas cleared</string>
+    <string name="roi_hud_zoom_hint">Mode: Crop · pinch or double-tap to zoom</string>
+    <string name="roi_hud_zoom">Zoom %1$.1f× · two fingers pan · double-tap to fit</string>
+    <string name="roi_hud_zoom_fit">Zoom: fit</string>
     <string name="roi_hud_dimensions">ROI: %1$d × %2$d px  |  Pos: (%3$d, %4$d)</string>
     <string name="roi_full_image_selected">Full image selected</string>
     <string name="roi_invalid_size">Invalid ROI size</string>
@@ -492,7 +495,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">Kept %1$d of %2$d frames — the ones solved before the images decorrelated. They are saved and open next.</item>
     </plurals>
     <string name="run_stopped_early_view">View results</string>
-    <string name="error_low_convergence">Analysis stopped: convergence fell below 50%% on 2 consecutive frames. The images may have decorrelated due to change in spackle pattern or moved out of view.</string>
+    <string name="error_low_convergence">Analysis stopped: convergence fell below 50%% on 2 consecutive frames. The images may have decorrelated due to change in speckle pattern or moved out of view.</string>
     <string name="vsg_lattice_all_failed">All combinations failed — tap a node for details.</string>
 
     <!-- One-line failure labels for lattice nodes, in measurement terms. -->

@@ -471,8 +471,8 @@ the report archives (plus a small `metadata.json` at the session root), so a
 session costs ~1–2 Firestore file docs instead of 3F+4. `metadata.json` is the
 one file a backup can change after it completes: `PUT /v1/sessions/{sid}/metadata`
 writes the app's current metadata over the same Drive object and updates the file
-doc's size and checksums. Material Testing uses it for a bending deflection
-correction made after the backup ([ADR-013](../adr/ADR-013-session-metadata-replace.md)). This trades in-Drive
+doc's size and checksums. Semper sends it after a rename, Material Testing also
+after a deflection or curve correction, made after the backup ([ADR-013](../adr/ADR-013-session-metadata-replace.md)). This trades in-Drive
 browsability of individual frames for far fewer resumable inits and Firestore
 writes. The `raw/processed/reports/metadata` subfolder tree below is the older
 per-file layout, kept for reference.

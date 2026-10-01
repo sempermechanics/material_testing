@@ -100,8 +100,10 @@ object DicResult {
     /**
      * Axis-aligned box of accepted points as `[minX, minY, maxX, maxY]`, or null
      * when nothing is accepted. Used by the result viewer to rest-fit the heatmap.
+     * [displaced] boxes where the points moved to, (x + u, y + v), for a map
+     * drawn on the deformed frame.
      */
-    fun acceptedPointsBounds(data: FloatArray): FloatArray? {
+    fun acceptedPointsBounds(data: FloatArray, displaced: Boolean = false): FloatArray? {
         var minX = Float.POSITIVE_INFINITY
         var minY = Float.POSITIVE_INFINITY
         var maxX = Float.NEGATIVE_INFINITY
@@ -110,8 +112,8 @@ object DicResult {
         var i = 0
         while (i < data.size) {
             if (isAcceptedPoint(data[i + IDX_ZNSSD])) {
-                val x = data[i + IDX_X]
-                val y = data[i + IDX_Y]
+                val x = if (displaced) data[i + IDX_X] + data[i + IDX_U] else data[i + IDX_X]
+                val y = if (displaced) data[i + IDX_Y] + data[i + IDX_V] else data[i + IDX_Y]
                 if (x < minX) minX = x
                 if (y < minY) minY = y
                 if (x > maxX) maxX = x

@@ -372,8 +372,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         Insets.padBottom(findViewById(R.id.bottomNav))
 
         // Keyboard: the settings/sweep pages hold number fields; pad their scroll
-        // viewports by the IME inset so a focused field scrolls clear of the
-        // keyboard instead of hiding behind it.
+        // viewports by the part of the IME above the nav bar, and scroll the
+        // focused field clear of the keyboard.
         Insets.padImeBottom(findViewById(R.id.scrollStepSettings))
         Insets.padImeBottom(findViewById(R.id.scrollStepSweep))
 

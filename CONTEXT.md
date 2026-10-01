@@ -132,9 +132,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),
   with #251's step-up and #257's edit fixes. Production has no duplicate holders (checked 2026-09-26).
-- **material_testing shares this history** (it merged `643462c`, material_testing#22):
-  sync with a plain `git merge`. Lab features stay there; only general fixes come here.
-  It also ships under Semper's app id (TD-133), so its lab build replaces Semper on a phone.
+- **material_testing shares this history** and merges this `main` (last at `1e80954`,
+  material_testing#105); it has its own app id since material_testing#82 (TD-133). Shared
+  code and backend changes land here first: [FORK_SYNC.md](docs/ops/FORK_SYNC.md).
 - **Owed.** The public release of `v1.2-beta.3` (website / Play); a licensed-account smoke
   of the paths a Demo account cannot reach (share and PDF, Delete everywhere, Restore, the
   backups card); AVI import has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a);

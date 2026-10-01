@@ -36,7 +36,8 @@ straight out of logcat) is the confirming measurement.
 ## Design note: deformed originals are restore-essential, not deferred
 
 An earlier iteration additionally deferred the deformed original photos out of the restore
-payload — they are never displayed (the viewer draws heatmaps over the reference alone), so
+payload — at the time they were never displayed (the viewer drew heatmaps over the reference alone;
+since [ADR-011](../adr/ADR-011-viewer-deformed-frame.md) it draws each frame on its own photo), so
 restoring only `reference.png` + `dat/` reached ~78% saved instead of ~26%. That version
 shipped and was then **reverted**: a restored session's on-device re-export needs the
 original photos to be complete (report covers, the raw-photos export folder), and losing
