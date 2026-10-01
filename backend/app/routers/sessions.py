@@ -8,10 +8,10 @@ import zipfile
 from datetime import datetime
 
 import requests
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from .. import audit, drive, errors, firestore_repo as repo, statuses
+from .. import apps, audit, drive, errors, firestore_repo as repo, statuses
 from .. import observability as obs
 from .. import rate_limit
 from .. import tasks
@@ -20,6 +20,7 @@ from ..deps import (
     attested_or_mfa_user,
     current_user,
     rate_limited,
+    request_app,
     verified_device,
 )
 from ..models import SessionCreate
@@ -40,28 +41,56 @@ def _owned_session(sid: str, user: dict) -> dict:
     return session
 
 
+#: `GET /v1/sessions?app=all`: every app's sessions, for the account console.
+_ALL_APPS = "all"
+
+
+def _listed_app(app: str, header_app: str) -> str | None:
+    """Which app's sessions `GET /v1/sessions` lists: the caller's (by
+    `X-App-Id`) when `?app=` is absent, the named one, or None for `all`.
+    Anything else is 400 `unknown_app`, as `?app=` on `/v1/licenses/unbind`."""
+    if not app:
+        return header_app
+    if app.strip().lower() == _ALL_APPS:
+        return None
+    named = apps.from_name(app)
+    if named is None:
+        raise HTTPException(400, errors.UNKNOWN_APP)
+    return named
+
+
 @router.get("/v1/sessions")
 def list_sessions(
     verify: bool = False,
     page_size: int = 50,
     page_token: PageToken = "",
+    app: str = Query(default="", max_length=32),
     user=Depends(current_user),
+    header_app=Depends(request_app),
 ):
     """The caller's cloud analyses. The app reconciles local sync state against
     this, so a session deleted in the cloud stops showing as 'synced'.
 
+    One app's analyses (ADR-014): the asking app's, by `X-App-Id`, unless
+    `?app=semper|materialtesting` names one or `?app=all` asks for the whole
+    account (the console). Each entry carries its `app`. Semper and Material
+    Testing share accounts, and each restoring the other's backups dropped
+    what it did not understand.
+
     Cursor-paginated (`page_size` 1..100, `page_token`, `nextPageToken`). Quota
-    `used` is the full account count, not the page length.
+    `used` is the full account count, every app's, not the page length: the
+    cap is the account's.
 
     Firestore is only an index. `?verify=true` additionally confirms each
     session on the *current page* still exists in Drive (bounded parallel
     probes — not a full-account N+1). Orphaned metadata on that page is purged.
     """
+    listed_app = _listed_app(app, header_app)
     page_size = clamp_page_size(page_size, 100)
     if verify:
         rate_limit.enforce(rate_limit.session_verify_bucket, user["uid"])
     sessions, next_token = repo.list_user_sessions(
-        user["uid"], limit=page_size, page_token=page_token or None,
+        user["uid"], limit=page_size, page_token=page_token or None, app=listed_app,
     )
 
     purged = 0
@@ -181,14 +210,21 @@ def list_session_files(
     page_size: int = 1000,
     page_token: PageToken = "",
     user=Depends(current_user),
+    app=Depends(request_app),
 ):
     """The manifest for one analysis — what the app needs to restore it.
 
     Cursor-paginated. This silently truncated at 2000 files before, which for a
     restore means a manifest quietly missing entries.
+
+    Only the app that backed the analysis up gets its manifest (ADR-014): the
+    other app's session reads as absent, so a stale id cannot start a restore
+    that drops what the restoring app does not understand.
     """
     rate_limit.enforce(rate_limit.listing_bucket, user["uid"])
     session = _owned_session(sid, user)
+    if repo.session_app(session) != app:
+        raise HTTPException(404, errors.SESSION_NOT_FOUND)
     page_size = clamp_page_size(page_size, 1000)
     files, next_token = repo.list_session_files(
         sid, limit=page_size, page_token=page_token or None,
@@ -436,7 +472,8 @@ _QUOTA_REMEDY = {
 
 
 @router.post("/v1/sessions", dependencies=[rate_limited(rate_limit.session_bucket)])
-def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device)):
+def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device),
+                   app=Depends(request_app)):
     """Record an analysis: create the session and hand back its upload slots.
 
     Open to every approved account, demo included. Recording is not the
@@ -483,7 +520,8 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     # concurrent-create race is on a *soft* quota, not a security boundary, and is
     # accepted deliberately (a transactional cross-doc count is not modelled by
     # the Firestore client uniformly and adds no security value here).
-    session = repo.create_session(sid, user, device, body)
+    # Tagged with the asking app (ADR-014), so each app lists only its own.
+    session = repo.create_session(sid, user, device, body, app)
 
     # Write the file docs (cheap, no Drive I/O) so the manifest is durable before
     # any upload target exists. Provisioning then only has to fill in uploadUrl,
@@ -501,7 +539,7 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
         device.get("deviceId"),
         action="SESSION_CREATE",
         target={"type": "session", "id": sid},
-        detail=counts,
+        detail={**counts, "app": app},
     )
     # Access-log middleware reads this after the response returns.
     request.state.usage_counts = counts

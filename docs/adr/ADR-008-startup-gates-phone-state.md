@@ -39,6 +39,12 @@ app. Left alone it produces false alarms, and people learn to ignore it.
 5. **References under the protocol.** Re-take them on the charger, at thermal
    status 0, with known app data, and put that state in the device's `label`.
    (Owed.)
+6. **One harness, two apps.** The benchmark sources, `ci_test_report.py`,
+   `startup_ab.py` and CI's benchmark job name no app id. `:benchmark` reads
+   `:app`'s `applicationId` from its build (`benchmark/build.gradle.kts`, since semperdic-app#304, into
+   `BuildConfig.TARGET_PACKAGE` and the manifest's `<queries>`); the CI job and
+   `startup_ab.py` read the same line of `app/build.gradle.kts`. Only
+   `gates.json`'s `devices` differ between the repos.
 
 ## Options considered
 

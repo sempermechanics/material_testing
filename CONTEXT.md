@@ -122,7 +122,8 @@ non-modal `TransferBannerController` strip.
 Baselines, `targetSdk`, Kover and the backend lock: see CLAUDE.md. `OldTargetApi` stays
 disabled until the `targetSdk` bump. Settings / wizard XML stay under `TooManyViews` via
 `SettingsScrollContentView` / `WizardStepSettingsContentView`. Macrobenchmark CI is smoke,
-no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 solves/s,
+no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchmark/gates.json`,
+[ADR-008](docs/adr/ADR-008-startup-gates-phone-state.md)) list no device yet (TD-155); the engine floor (≥ 4557 solves/s,
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
@@ -130,7 +131,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`). The parent deploys, and its TD rows jump to TD-122. General
+  --grep=semperdic-app`; last `5dc4522`, 2026-10-01; rules in the parent's
+  `docs/ops/FORK_SYNC.md`). The parent deploys, and its TD rows jump to TD-122. General
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).

@@ -79,7 +79,7 @@ Rejected by the app owner.
 
 ## Consequences
 
-- The summary GIF, the PNG export (`ShareCenter.kt:388`) and the report
+- The summary GIF, the PNG export (`ShareCenter.kt:388` here, `:360` in semperdic-app) and the report
   heatmap (`ReportBuilder.kt:278`) still draw on the reference. TD-139.
 - Restored sessions need the deformed originals to show their frames this
   way. They already restore them (`docs/perf/backup-restore-split.md`).

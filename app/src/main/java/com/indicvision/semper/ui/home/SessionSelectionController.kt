@@ -17,6 +17,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionDeletes
+import com.indicvision.semper.data.SessionMetadataSync
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.ui.common.DeleteChoiceDialog
@@ -220,6 +221,11 @@ class SessionSelectionController(
                 if (newName.isNotEmpty()) {
                     activity.lifecycleScope.launch(Dispatchers.IO) {
                         SessionStore.rename(activity, record.id, newName)
+                        // A backed-up analysis restores under the name in its
+                        // cloud metadata.json, so send the new one (ADR-013).
+                        if (SessionStore.get(activity, record.id)?.metadataStale == true) {
+                            SessionMetadataSync.enqueue(activity, record.id)
+                        }
                         withContext(Dispatchers.Main) {
                             clearSelection()
                             onRefresh()

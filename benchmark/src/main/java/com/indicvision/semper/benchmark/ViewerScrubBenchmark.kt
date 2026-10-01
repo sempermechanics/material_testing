@@ -84,7 +84,7 @@ class ViewerScrubBenchmark {
     }
 
     companion object {
-        private const val PACKAGE = "com.indicvision.semper.materialtesting"
+        private const val PACKAGE = BuildConfig.TARGET_PACKAGE
         private const val SEEDER = "com.indicvision.semper.benchmark.BenchmarkSeedActivity"
         private const val NEXT_BUTTON = "btnNextFrame"
         private const val ITERATIONS = 5

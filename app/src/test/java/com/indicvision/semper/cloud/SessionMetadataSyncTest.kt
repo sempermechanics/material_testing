@@ -33,8 +33,8 @@ import java.io.File
 import java.io.IOException
 
 /**
- * TD-150, TD-152 / ADR-013: a deflection correction (bending) or a curve
- * correction (tensile) set after the backup reaches the cloud copy's
+ * TD-150, TD-152 / ADR-013: a rename, a deflection correction (bending) or a
+ * curve correction (tensile) made after the backup reaches the cloud copy's
  * metadata.json, so a restore brings it back.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -116,6 +116,30 @@ class SessionMetadataSyncTest {
         assertFalse(SessionStore.get(context, "t2")!!.metadataStale)
     }
 
+    @Test
+    fun `renaming a backed-up session, or one whose upload is on its way, marks it`() {
+        store("s1", SyncState.SYNCED, cloudId = "c1")
+        store("s2", SyncState.PENDING)
+
+        SessionStore.rename(context, "s1", "Beam B")
+        SessionStore.rename(context, "s2", "Beam C")
+
+        assertTrue(SessionStore.get(context, "s1")!!.metadataStale)
+        assertTrue(SessionStore.get(context, "s2")!!.metadataStale)
+    }
+
+    @Test
+    fun `renaming a session never backed up, or to the same name, marks nothing`() {
+        store("s1", SyncState.LOCAL_ONLY)
+        store("s2", SyncState.SYNCED, cloudId = "c2")
+
+        SessionStore.rename(context, "s1", "Beam B")
+        SessionStore.rename(context, "s2", "s2")
+
+        assertFalse(SessionStore.get(context, "s1")!!.metadataStale)
+        assertFalse(SessionStore.get(context, "s2")!!.metadataStale)
+    }
+
     // ── Sending ─────────────────────────────────────────────────────────────
 
     @Test
@@ -161,6 +185,31 @@ class SessionMetadataSyncTest {
         assertEquals(Outcome.RETRY, send("t1"))
 
         assertTrue(SessionStore.get(context, "t1")!!.metadataStale)
+    }
+
+    @Test
+    fun `a renamed session sends metadata carrying the new name, then clears`() {
+        store("s1", SyncState.SYNCED, cloudId = "c1")
+        SessionStore.rename(context, "s1", "Beam B")
+
+        assertEquals(Outcome.DONE, send("s1"))
+
+        assertEquals("Beam B", sent.single().second.getString("name"))
+        assertFalse(SessionStore.get(context, "s1")!!.metadataStale)
+    }
+
+    @Test
+    fun `a rename made while the send was in flight is sent again`() {
+        store("s1", SyncState.SYNCED, cloudId = "c1")
+        SessionStore.setDeflectionCorrection(context, "s1", corrected)
+        api.onReplaceSessionMetadata = { _, sid, json ->
+            sent += sid to JSONObject(json)
+            SessionStore.rename(context, "s1", "Beam C")
+        }
+
+        assertEquals(Outcome.RETRY, send("s1"))
+
+        assertTrue(SessionStore.get(context, "s1")!!.metadataStale)
     }
 
     @Test

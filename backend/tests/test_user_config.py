@@ -252,7 +252,7 @@ async def test_list_sessions_quota_uses_resolved_max(client, monkeypatch):
         "_DEV_USER",
         {**deps._DEV_USER, "maxSessions": 70},
     )
-    monkeypatch.setattr(repo, "list_user_sessions", lambda uid, limit=50, page_token=None: ([], None))
+    monkeypatch.setattr(repo, "list_user_sessions", lambda uid, limit=50, page_token=None, app=None: ([], None))
     monkeypatch.setattr(repo, "count_user_sessions", lambda uid: 0)
 
     resp = await client.get("/v1/sessions")
