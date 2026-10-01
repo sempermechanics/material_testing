@@ -367,25 +367,36 @@ class ShareCenter(private val host: ResultViewerActivity) {
             null,
             maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
         )
-        val base = loadCappedBase(s, renderW, renderH, baseCache)
-        val out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(out)
-        canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
-        canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
-        // Signed, as the PDF does: with absolute values "MIN" marked the strain
-        // nearest zero under a label giving the most negative.
-        val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
-        val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
-        ReportBuilder.bakeAnnotationsToCanvas(
-            canvas, renderW, renderH, actualMin, actualMax,
-            typeString, unit, extrema.maxIdx, extrema.minIdx, data,
-            dataIndex = dataIndex,
-            coordScale = renderScale,
-            imageName = sourceImageName(s, frameIndex),
-        )
-        heatmap.recycle()
-        if (baseCache == null && base !== s.baseImage) base.recycle()
-        return out
+        // Each full-size bitmap is freed in finally, so a throw part-way (no
+        // reference to draw on, an OOM) does not strand the others.
+        var base: Bitmap? = null
+        var out: Bitmap? = null
+        var done = false
+        try {
+            base = loadCappedBase(s, renderW, renderH, baseCache)
+            out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(out)
+            canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
+            canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
+            // Signed, as the PDF does: with absolute values "MIN" marked the strain
+            // nearest zero under a label giving the most negative.
+            val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
+            val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
+            ReportBuilder.bakeAnnotationsToCanvas(
+                canvas, renderW, renderH, actualMin, actualMax,
+                typeString, unit, extrema.maxIdx, extrema.minIdx, data,
+                dataIndex = dataIndex,
+                coordScale = renderScale,
+                imageName = sourceImageName(s, frameIndex),
+            )
+            done = true
+            return out
+        } finally {
+            heatmap.recycle()
+            // A cached base belongs to the cache; the display bitmap to the viewer.
+            if (baseCache == null && base != null && base !== s.baseImage) base.recycle()
+            if (!done) out?.recycle()
+        }
     }
 
     /** Filename stamped on share photos: the real image, not a sweep settings label. */
@@ -439,11 +450,15 @@ class ShareCenter(private val host: ResultViewerActivity) {
         cache.clear()
     }
 
+    /** Writes [bmp] as a PNG and frees it, whether or not the write succeeds. */
     private fun writePng(bmp: Bitmap, name: String): File {
-        val f = File(shareDir(), name)
-        f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, it) }
-        bmp.recycle()
-        return f
+        try {
+            val f = File(shareDir(), name)
+            f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, ImageEncode.PNG_QUALITY_MAX, it) }
+            return f
+        } finally {
+            bmp.recycle()
+        }
     }
 
     private fun currentPhoto(): File {
