@@ -14,6 +14,7 @@
 package com.indicvision.semper.ui.analysis
 
 import android.content.Context
+import androidx.annotation.WorkerThread
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.EngineDebug
 import com.indicvision.semper.ProgressCallback
@@ -37,6 +38,7 @@ import kotlin.coroutines.CoroutineContext
  * JNI [SemperNativeLib.computeFullFieldDirect] stays in this loop — do not
  * fragment it. Buffer allocate / overrun / `.dat` write are [DicFieldIo].
  */
+@WorkerThread
 internal fun AnalysisViewModel.runBatchAnalysisBody(
     appContext: Context,
     spec: RunSpec,
@@ -310,7 +312,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val keptRawNames = persistedRawNames.filterTo(HashSet()) { it.isNotBlank() }
     rawDeformedDir.listFiles()?.forEach { if (it.name !in keptRawNames) it.delete() }
 
-    repointDeformedPaths(resolvedDefPaths)
+    // On Main: the wizard's fields are not this thread's to write.
+    repointDeformedPathsOnMain(resolvedDefPaths)
 
     // With every frame moved out, the committed import is dead weight that
     // would otherwise survive until the next import. A partial run leaves it
@@ -354,7 +357,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 // session, exporting and cloud upload resolve images by these.
                 defNames = persistedRawNames.mapIndexed { i, persisted ->
                     persisted.ifBlank {
-                        (defOriginalNames.getOrNull(i) ?: defFilePaths[i])
+                        (defOriginalNames.getOrNull(i) ?: resolvedDefPaths[i])
                             .baseName()
                     }
                 },
@@ -388,7 +391,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         failedFrameIndex = failedFrameIndex,
         failedFrameName = failedFrameIndex
             .takeIf { it >= 0 }
-            ?.let { defFilePaths.getOrNull(it)?.substringAfterLast('/') },
+            ?.let { resolvedDefPaths.getOrNull(it)?.substringAfterLast('/') },
         firstFrameCorrelatedPoints = firstFrameCorrelatedPoints,
         saved = recordSaved,
     )

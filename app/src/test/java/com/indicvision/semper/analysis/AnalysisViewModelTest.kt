@@ -1,5 +1,6 @@
 package com.indicvision.semper.analysis
 
+import android.os.Looper
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,7 +11,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import kotlin.concurrent.thread
 
 /**
  * Wizard state contracts in [AnalysisViewModel].
@@ -188,6 +191,25 @@ class AnalysisViewModelTest {
 
         assertTrue("a new reference overwrote the previous one's session", vm.wouldCreateNewSession())
         assertNull(vm.lastBatchDirPath)
+    }
+
+    // ------------------------------------------------------- run on the native thread
+
+    @Test
+    fun `a run moving the frames repoints them on the main thread, not its own`() {
+        vm.defFilePaths = listOf("/cache/0000_a.png", "/cache/0001_b.png")
+        vm.defFrameSizes = mapOf("/cache/0000_a.png" to (4 to 3), "/cache/0001_b.png" to (4 to 3))
+
+        thread { vm.repointDeformedPathsOnMain(listOf("/session/a.png", "/session/b.png")) }.join()
+        assertEquals(
+            "the native thread wrote the wizard's paths itself",
+            listOf("/cache/0000_a.png", "/cache/0001_b.png"),
+            vm.defFilePaths,
+        )
+
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(listOf("/session/a.png", "/session/b.png"), vm.defFilePaths)
+        assertEquals(mapOf("/session/a.png" to (4 to 3), "/session/b.png" to (4 to 3)), vm.defFrameSizes)
     }
 
     @Test

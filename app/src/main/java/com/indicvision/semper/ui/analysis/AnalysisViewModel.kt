@@ -17,6 +17,9 @@ package com.indicvision.semper.ui.analysis
 import android.content.Context
 import android.os.Bundle
 import android.os.Trace
+import androidx.annotation.AnyThread
+import androidx.annotation.MainThread
+import androidx.annotation.WorkerThread
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -517,7 +520,11 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      * this view model was handed at import time go stale the moment a run
      * finishes; a re-run reading them would find nothing. [defFrameSizes] is
      * keyed by path, so it is re-keyed alongside.
+     *
+     * Main thread only, like every wizard input field; a run on the native
+     * thread goes through [repointDeformedPathsOnMain].
      */
+    @MainThread
     internal fun repointDeformedPaths(resolved: List<String>) {
         val previous = defFilePaths
         defFrameSizes = defFrameSizes.mapKeys { (path, _) ->
@@ -527,10 +534,24 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     }
 
     /**
+     * [repointDeformedPaths] for a run on the native thread, which must not
+     * write the wizard's fields: the Activity reads them on Main, and the two
+     * used to race. Posted rather than awaited, because the run's loop cannot
+     * suspend; it is posted before the run's outcome is emitted, and both reach
+     * the Activity through the main queue in that order, so the outcome
+     * handler already sees the moved paths.
+     */
+    @AnyThread
+    internal fun repointDeformedPathsOnMain(resolved: List<String>) {
+        viewModelScope.launch(Dispatchers.Main) { repointDeformedPaths(resolved) }
+    }
+
+    /**
      * The deformed frame the sweep was solved against is persisted once, under
      * the name every combination shares — a sweep varies settings, not images.
      */
     @Suppress("LongParameterList") // the run's outputs a sweep session is assembled from
+    @WorkerThread
     private fun persistSweepSession(
         appContext: Context,
         localSessionId: String,
@@ -548,7 +569,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         val rawName = sessions.persistRawDeformed(batchDir, frameIndex, defFilePaths, defOriginalNames)
         if (rawName.isNotBlank()) {
             val moved = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).resolve(rawName)
-            repointDeformedPaths(
+            repointDeformedPathsOnMain(
                 defFilePaths.toMutableList().also { it[frameIndex] = moved.absolutePath },
             )
         }
