@@ -13,6 +13,7 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.zip.DataFormatException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 
@@ -56,6 +57,16 @@ internal object DatCodec {
     private const val FIELD_COUNT_EXPLICIT = DicResult.STRIDE
 
     private const val COMPRESSION_BUFFER = 64 * 1024
+
+    /**
+     * Deflate's ceiling on expansion: one 258-byte match per 2 bits of stream. A
+     * header claiming more output than its payload could ever inflate to is
+     * corrupt, and is refused before anything that size is allocated.
+     */
+    private const val MAX_DEFLATE_RATIO = 1032L
+
+    /** Slack over [MAX_DEFLATE_RATIO] for the stream's own header and final block. */
+    private const val DEFLATE_RATIO_SLACK_BYTES = 1024L
 
     /**
      * Encode raw `.dat` bytes — exactly what [DicResult.decodeDatFile] reads, native
@@ -112,7 +123,15 @@ internal object DatCodec {
             bytes
         }
 
-    /** Inverse of [encode] — reproduces [DicResult]-layout bytes, bit-for-bit. */
+    /**
+     * Inverse of [encode] — reproduces [DicResult]-layout bytes, bit-for-bit.
+     *
+     * [encoded] comes off the network, so every size in its header is checked before
+     * it is used. A malformed archive fails with [IllegalArgumentException] (or
+     * [IllegalStateException] / [java.io.EOFException] for a short read), which
+     * `SessionZip` reports as a corrupt transfer, never as an allocation failure, an
+     * unchecked zlib exception, or a decode that does not terminate.
+     */
     fun decode(encoded: ByteArray): ByteArray {
         val d = DataInputStream(encoded.inputStream())
         val magic = ByteArray(MAGIC.size).also { d.readFully(it) }
@@ -120,6 +139,9 @@ internal object DatCodec {
         val version = d.readUnsignedShort()
         require(version == FORMAT_VERSION) { "unsupported DatCodec version $version" }
         val pointCount = d.readInt()
+        require(pointCount in 0..Int.MAX_VALUE / DicResult.BYTES_PER_POINT) {
+            "DatCodec point count $pointCount out of range"
+        }
         val modeId = d.readUnsignedByte()
 
         return when (modeId) {
@@ -146,6 +168,8 @@ internal object DatCodec {
 
     private fun readPayload(d: DataInputStream): ByteArray {
         val len = d.readInt()
+        // The stream wraps an in-memory array, so available() is exactly what is left.
+        require(len in 0..d.available()) { "DatCodec payload length $len exceeds the archive" }
         return ByteArray(len).also { d.readFully(it) }
     }
 
@@ -235,7 +259,12 @@ internal object DatCodec {
     }
 
     private fun inflateUnshuffle(payload: ByteArray, pointCount: Int, fieldCount: Int): Array<FloatArray> {
-        val expected = fieldCount * pointCount * Float.SIZE_BYTES
+        val expectedLong = fieldCount.toLong() * pointCount * Float.SIZE_BYTES
+        require(expectedLong <= payload.size * MAX_DEFLATE_RATIO + DEFLATE_RATIO_SLACK_BYTES) {
+            "DatCodec claims $expectedLong bytes from a ${payload.size}-byte payload"
+        }
+        // Fits: decode bounds pointCount so that fieldCount (<= STRIDE) points do.
+        val expected = expectedLong.toInt()
         val shuffled = inflate(payload, expected)
         val soaBytes = byteUnshuffle(shuffled)
         val buf = ByteBuffer.wrap(soaBytes).order(ByteOrder.LITTLE_ENDIAN)
@@ -272,32 +301,43 @@ internal object DatCodec {
 
     private fun deflate(data: ByteArray): ByteArray {
         val deflater = Deflater(Deflater.DEFAULT_COMPRESSION, false)
-        deflater.setInput(data)
-        deflater.finish()
-        val out = ByteArrayOutputStream(data.size / 2 + COMPRESSION_BUFFER)
-        val buf = ByteArray(COMPRESSION_BUFFER)
-        while (!deflater.finished()) {
-            val n = deflater.deflate(buf)
-            out.write(buf, 0, n)
+        try {
+            deflater.setInput(data)
+            deflater.finish()
+            val out = ByteArrayOutputStream(data.size / 2 + COMPRESSION_BUFFER)
+            val buf = ByteArray(COMPRESSION_BUFFER)
+            while (!deflater.finished()) {
+                val n = deflater.deflate(buf)
+                out.write(buf, 0, n)
+            }
+            return out.toByteArray()
+        } finally {
+            deflater.end() // frees native zlib memory now, not whenever a cleaner runs
         }
-        deflater.end()
-        return out.toByteArray()
     }
 
     private fun inflate(data: ByteArray, expectedSize: Int): ByteArray {
         if (expectedSize == 0) return ByteArray(0)
         val inflater = Inflater(false)
-        inflater.setInput(data)
-        val out = ByteArray(expectedSize)
-        var written = 0
-        while (!inflater.finished() && written < expectedSize) {
-            val n = inflater.inflate(out, written, expectedSize - written)
-            if (n == 0 && inflater.needsInput()) break // malformed stream — checked below
-            written += n
+        try {
+            inflater.setInput(data)
+            val out = ByteArray(expectedSize)
+            var written = 0
+            while (!inflater.finished() && written < expectedSize) {
+                val n = inflater.inflate(out, written, expectedSize - written)
+                // No progress and none possible: out of input, or the stream wants a
+                // preset dictionary (encode never sets one), which would otherwise spin
+                // here forever. Either way the stream is malformed; checked below.
+                if (n == 0 && (inflater.needsInput() || inflater.needsDictionary())) break
+                written += n
+            }
+            check(written == expectedSize) { "DatCodec inflate size mismatch: $written != $expectedSize" }
+            return out
+        } catch (e: DataFormatException) {
+            throw IllegalArgumentException("DatCodec payload is not a valid deflate stream", e)
+        } finally {
+            inflater.end()
         }
-        inflater.end()
-        check(written == expectedSize) { "DatCodec inflate size mismatch: $written != $expectedSize" }
-        return out
     }
 
     // ── reassembly ────────────────────────────────────────────────────────
@@ -305,6 +345,10 @@ internal object DatCodec {
     private fun reassembleDense(fields: Array<FloatArray>, pointCount: Int, lattice: Lattice): ByteArray {
         check(lattice.gridW.toLong() * lattice.gridH.toLong() == pointCount.toLong()) {
             "DatCodec DENSE grid ${lattice.gridW} x ${lattice.gridH} does not match point count $pointCount"
+        }
+        // A (-2) x (-2) grid passes the product check above and would emit no points.
+        require(lattice.gridW >= 0 && lattice.gridH >= 0 && lattice.step > 0) {
+            "DatCodec DENSE grid ${lattice.gridW} x ${lattice.gridH} step ${lattice.step} is malformed"
         }
         val out = ByteBuffer.allocate(pointCount * DicResult.BYTES_PER_POINT).order(ByteOrder.nativeOrder())
         var p = 0
