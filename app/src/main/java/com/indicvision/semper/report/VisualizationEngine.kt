@@ -16,7 +16,7 @@ package com.indicvision.semper.report
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.core.graphics.createBitmap
-import com.indicvision.semper.DicResult
+import com.indicvision.semper.field.DicResult
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor

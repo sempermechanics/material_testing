@@ -1,6 +1,6 @@
 package com.indicvision.semper.report
 
-import com.indicvision.semper.DicResult
+import com.indicvision.semper.field.DicResult
 import java.util.Locale
 
 /** One frame's accepted-point ZNSSD: the mean, and how many points it is over. */

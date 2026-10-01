@@ -3,10 +3,10 @@ package com.indicvision.semper.cloud
 import android.content.Context
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.data.CloudRestore
-import com.indicvision.semper.data.CorruptTransferException
-import com.indicvision.semper.data.SessionPaths
-import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.cloud.CorruptTransferException
+import com.indicvision.semper.data.cloud.restore.CloudRestore
+import com.indicvision.semper.data.session.SessionPaths
+import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred

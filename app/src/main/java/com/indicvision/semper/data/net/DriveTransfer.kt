@@ -1,6 +1,6 @@
 package com.indicvision.semper.data.net
 
-import com.indicvision.semper.data.RestoreDownloadOutcomes
+import com.indicvision.semper.data.cloud.restore.RestoreDownloadOutcomes
 import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.Dispatchers

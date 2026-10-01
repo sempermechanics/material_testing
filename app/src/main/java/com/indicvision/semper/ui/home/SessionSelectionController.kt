@@ -15,11 +15,11 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CloudSync
-import com.indicvision.semper.data.SessionDeletes
-import com.indicvision.semper.data.SessionMetadataSync
-import com.indicvision.semper.data.SessionRecord
-import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.cloud.CloudSync
+import com.indicvision.semper.data.cloud.SessionDeletes
+import com.indicvision.semper.data.cloud.SessionMetadataSync
+import com.indicvision.semper.data.session.SessionRecord
+import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.ui.common.DeleteChoiceDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

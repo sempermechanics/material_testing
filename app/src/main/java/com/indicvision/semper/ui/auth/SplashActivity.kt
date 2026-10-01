@@ -10,11 +10,11 @@ import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.BuildConfig
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.AccessStatus
-import com.indicvision.semper.data.AuthRepository
-import com.indicvision.semper.data.DevAuth
+import com.indicvision.semper.data.account.AccessStatus
+import com.indicvision.semper.data.account.AuthRepository
+import com.indicvision.semper.data.account.DevAuth
+import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.home.HomeActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch

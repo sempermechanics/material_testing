@@ -13,8 +13,8 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.indicvision.semper.R
-import com.indicvision.semper.data.SessionDeletes
-import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.data.cloud.SessionDeletes
+import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.fixtures.sessionRecord
 import org.junit.Assert.assertEquals

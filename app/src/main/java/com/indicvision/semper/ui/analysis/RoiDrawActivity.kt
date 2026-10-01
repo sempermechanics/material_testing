@@ -26,9 +26,12 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.chip.Chip
 import com.google.android.material.textfield.TextInputEditText
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CacheJanitor
+import com.indicvision.semper.data.session.CacheJanitor
+import com.indicvision.semper.navigation.DicKeys
+import com.indicvision.semper.ui.analysis.roi.StudioOverlayMaskEncoder
+import com.indicvision.semper.ui.analysis.roi.StudioOverlayView
+import com.indicvision.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.indicvision.semper.ui.common.Insets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -5,8 +5,8 @@ import android.content.Context
 import android.content.Intent
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
-import com.indicvision.semper.data.SessionRecord
-import com.indicvision.semper.data.SkippedNode
+import com.indicvision.semper.data.session.SessionRecord
+import com.indicvision.semper.data.session.SkippedNode
 import com.indicvision.semper.ui.viewer.ViewerArgs
 import com.indicvision.semper.ui.viewer.ViewerSweepArgs
 

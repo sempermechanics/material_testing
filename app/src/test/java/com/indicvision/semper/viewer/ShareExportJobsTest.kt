@@ -2,7 +2,7 @@ package com.indicvision.semper.viewer
 
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.ui.viewer.ShareExportJobs
+import com.indicvision.semper.ui.viewer.share.ShareExportJobs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

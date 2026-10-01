@@ -14,8 +14,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
-import com.indicvision.semper.data.AuthRepository
-import com.indicvision.semper.data.DeviceKeyManager
+import com.indicvision.semper.data.account.AuthRepository
+import com.indicvision.semper.data.account.DeviceKeyManager
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.SignOutRun

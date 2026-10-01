@@ -1,6 +1,7 @@
 package com.indicvision.semper.ui.analysis
 
-import com.indicvision.semper.DicResult
+import com.indicvision.semper.field.DicResult
+import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test

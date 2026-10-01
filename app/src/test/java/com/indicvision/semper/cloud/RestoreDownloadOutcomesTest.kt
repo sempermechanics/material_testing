@@ -1,8 +1,8 @@
 package com.indicvision.semper.cloud
 
-import com.indicvision.semper.data.CorruptTransferException
-import com.indicvision.semper.data.RestoreDownloadOutcomes
-import com.indicvision.semper.data.UnrestorableBackupException
+import com.indicvision.semper.data.cloud.CorruptTransferException
+import com.indicvision.semper.data.cloud.restore.RestoreDownloadOutcomes
+import com.indicvision.semper.data.cloud.restore.UnrestorableBackupException
 import com.indicvision.semper.data.net.HttpStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

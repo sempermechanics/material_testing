@@ -6,7 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
 import androidx.exifinterface.media.ExifInterface
-import com.indicvision.semper.ui.analysis.SubsetRecommender
+import com.indicvision.semper.ui.analysis.recommend.SubsetRecommender
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Rule

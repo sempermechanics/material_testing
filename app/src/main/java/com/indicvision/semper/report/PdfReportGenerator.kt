@@ -13,7 +13,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.indicvision.semper.R
-import com.indicvision.semper.ui.analysis.VsgStudy
+import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext

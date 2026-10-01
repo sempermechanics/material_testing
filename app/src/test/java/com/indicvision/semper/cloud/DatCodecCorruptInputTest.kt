@@ -1,9 +1,9 @@
 package com.indicvision.semper.cloud
 
-import com.indicvision.semper.DicResult
-import com.indicvision.semper.data.CorruptTransferException
-import com.indicvision.semper.data.DatCodec
-import com.indicvision.semper.data.SessionZip
+import com.indicvision.semper.data.cloud.CorruptTransferException
+import com.indicvision.semper.data.session.DatCodec
+import com.indicvision.semper.data.session.SessionZip
+import com.indicvision.semper.field.DicResult
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue

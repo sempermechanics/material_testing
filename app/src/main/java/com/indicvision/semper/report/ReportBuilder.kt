@@ -18,8 +18,8 @@ import android.os.Build
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import com.indicvision.semper.BuildConfig
-import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.DicUploadWorker
+import com.indicvision.semper.field.DicResult
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

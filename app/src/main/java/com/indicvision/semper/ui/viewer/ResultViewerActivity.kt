@@ -43,12 +43,12 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
-import com.indicvision.semper.DicKeys
-import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
-import com.indicvision.semper.data.LicenseEntitlements
-import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.data.account.LicenseEntitlements
+import com.indicvision.semper.data.session.SessionPaths
+import com.indicvision.semper.field.DicResult
 import com.indicvision.semper.imaging.BitmapDecode
+import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.RoiData
@@ -56,6 +56,15 @@ import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.viewer.inspect.InspectOverlayView
+import com.indicvision.semper.ui.viewer.inspect.TouchImageView
+import com.indicvision.semper.ui.viewer.inspect.ViewerInspectHelper
+import com.indicvision.semper.ui.viewer.share.ShareCenter
+import com.indicvision.semper.ui.viewer.share.ShareExportUi
+import com.indicvision.semper.ui.viewer.share.ViewerReportFactory
+import com.indicvision.semper.ui.viewer.summary.SummaryAnimation
+import com.indicvision.semper.ui.viewer.summary.SummaryCaption
+import com.indicvision.semper.ui.viewer.summary.ViewerSummaryHelper
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1256,9 +1265,9 @@ class ResultViewerActivity : AppCompatActivity() {
      * all-frames report want the same few fields off it, and re-reading the
      * session index per report page would be a file read per page.
      */
-    internal val sessionRecord: com.indicvision.semper.data.SessionRecord? by lazy {
+    internal val sessionRecord: com.indicvision.semper.data.session.SessionRecord? by lazy {
         intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
-            ?.let { runCatching { com.indicvision.semper.data.SessionStore.get(this, it) }.getOrNull() }
+            ?.let { runCatching { com.indicvision.semper.data.session.SessionStore.get(this, it) }.getOrNull() }
     }
 
     /**

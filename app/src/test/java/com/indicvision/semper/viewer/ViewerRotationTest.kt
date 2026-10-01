@@ -5,8 +5,8 @@ import android.view.View
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.field.DicResult
 import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.fixtures.viewerArgs
 import com.indicvision.semper.fixtures.viewerController

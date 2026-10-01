@@ -5,9 +5,10 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.cloud.FakeCloudApi
 import com.indicvision.semper.cloud.FakeTokens
+import com.indicvision.semper.data.cloud.SessionUploadBundlerTest
+import com.indicvision.semper.data.cloud.UploadErrors
 import com.indicvision.semper.data.net.CloudApi
 import com.indicvision.semper.data.net.FileCompleteRequest
 import com.indicvision.semper.data.net.IndicApi
@@ -18,7 +19,11 @@ import com.indicvision.semper.data.net.SessionUploadsResponse
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.data.session.SessionPaths
+import com.indicvision.semper.data.session.SessionRecord
+import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.navigation.AppIntents
+import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking

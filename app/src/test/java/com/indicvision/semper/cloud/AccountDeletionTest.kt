@@ -1,6 +1,6 @@
 package com.indicvision.semper.cloud
 
-import com.indicvision.semper.data.CloudSync
+import com.indicvision.semper.data.cloud.CloudSync
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers

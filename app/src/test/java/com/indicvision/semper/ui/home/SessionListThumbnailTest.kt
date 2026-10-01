@@ -7,7 +7,7 @@ import android.os.Looper
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.indicvision.semper.R
-import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.fixtures.idleUntil
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull

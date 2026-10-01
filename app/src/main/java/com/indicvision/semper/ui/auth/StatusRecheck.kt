@@ -2,8 +2,8 @@ package com.indicvision.semper.ui.auth
 
 import android.content.Context
 import android.content.Intent
-import com.indicvision.semper.data.AccessStatus
-import com.indicvision.semper.data.AuthRepository
+import com.indicvision.semper.data.account.AccessStatus
+import com.indicvision.semper.data.account.AuthRepository
 import com.indicvision.semper.ui.common.AuthRoute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

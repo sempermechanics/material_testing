@@ -1,7 +1,7 @@
 package com.indicvision.semper.ui.settings
 
 import androidx.work.WorkInfo
-import com.indicvision.semper.data.CloudRestore
+import com.indicvision.semper.data.cloud.restore.CloudRestore
 import java.util.UUID
 
 /**

@@ -28,23 +28,23 @@ import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.indicvision.semper.BuildConfig
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.AuthRepository
-import com.indicvision.semper.data.CloudRestore
-import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DicBundleDownloadWorker
 import com.indicvision.semper.data.DicRestoreWorker
-import com.indicvision.semper.data.DicSettings
-import com.indicvision.semper.data.LicenseEntitlements
-import com.indicvision.semper.data.LicenseErrors
-import com.indicvision.semper.data.RestoreFailureLedger
-import com.indicvision.semper.data.RestoreStart
-import com.indicvision.semper.data.SessionDeletes
-import com.indicvision.semper.data.SessionRecord
-import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.account.AuthRepository
+import com.indicvision.semper.data.account.LicenseEntitlements
+import com.indicvision.semper.data.account.LicenseErrors
+import com.indicvision.semper.data.cloud.CloudSync
+import com.indicvision.semper.data.cloud.SessionDeletes
+import com.indicvision.semper.data.cloud.restore.CloudRestore
+import com.indicvision.semper.data.cloud.restore.RestoreFailureLedger
+import com.indicvision.semper.data.cloud.restore.RestoreStart
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.prefs.DicSettings
+import com.indicvision.semper.data.session.SessionRecord
+import com.indicvision.semper.data.session.SessionStore
+import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.ConflatedRefresh
@@ -485,7 +485,7 @@ class SettingsActivity : AppCompatActivity() {
                     when (info.state) {
                         WorkInfo.State.RUNNING -> {
                             if (key.isNotBlank()) {
-                                val pct = info.progress.getInt(com.indicvision.semper.DicKeys.UPLOAD_PERCENT, 0)
+                                val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, 0)
                                 if (!transferBanner.contains(key)) {
                                     transferBanner.upsert(
                                         TransferBannerController.Transfer(
@@ -556,7 +556,7 @@ class SettingsActivity : AppCompatActivity() {
                     when (info.state) {
                         WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> {
                             if (key.isNotBlank()) {
-                                val pct = info.progress.getInt(com.indicvision.semper.DicKeys.UPLOAD_PERCENT, 0)
+                                val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, 0)
                                 if (!transferBanner.contains(key)) {
                                     transferBanner.upsert(
                                         TransferBannerController.Transfer(

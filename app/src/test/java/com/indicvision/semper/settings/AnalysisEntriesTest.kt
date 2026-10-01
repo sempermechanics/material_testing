@@ -1,7 +1,7 @@
 package com.indicvision.semper.settings
 
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.net.CloudSessionDto
+import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.settings.AnalysisEntries
 import com.indicvision.semper.ui.settings.AnalysisLocation

@@ -10,7 +10,7 @@ import android.widget.TextView
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CacheJanitor
+import com.indicvision.semper.data.session.CacheJanitor
 import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.fixtures.launchViewer
 import com.indicvision.semper.fixtures.viewerArgs
@@ -18,8 +18,8 @@ import com.indicvision.semper.fixtures.viewerController
 import com.indicvision.semper.fixtures.writeGridBatch
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import com.indicvision.semper.ui.viewer.ResultViewerViewModel
-import com.indicvision.semper.ui.viewer.ShareCenter
-import com.indicvision.semper.ui.viewer.ShareExportBuilder
+import com.indicvision.semper.ui.viewer.share.ShareCenter
+import com.indicvision.semper.ui.viewer.share.ShareExportBuilder
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
