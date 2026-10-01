@@ -258,38 +258,53 @@ class SessionListAdapter(
         if (syncVisible) holder.badge.setOnClickListener { onBadgeClick(r) }
     }
 
+    /**
+     * The view's tag names the reference it is showing (or waiting for), and a
+     * decode only lands while it still matches. Every branch sets it: a holder
+     * rebound from a row still decoding to a cached row used to keep the old
+     * tag, and the old decode then painted over the new row's thumbnail.
+     */
     private fun bindThumbnail(holder: Holder, r: SessionRecord) {
-        val refFile = File(r.refPath)
-        val cached = thumbCache[r.refPath]?.takeIf { !it.isRecycled }
+        val path = r.refPath
+        val cached = thumbCache[path]?.takeIf { !it.isRecycled }
         when {
-            !refFile.exists() || r.refPath in thumbMisses -> {
+            path.isBlank() || path in thumbMisses -> {
                 holder.thumb.tag = null
                 holder.thumb.setImageDrawable(null)
             }
-            cached != null -> holder.thumb.setImageBitmap(cached)
+            cached != null -> {
+                holder.thumb.tag = path
+                holder.thumb.setImageBitmap(cached)
+            }
             else -> {
-                // Decode off the main thread; tag avoids applying a stale bind.
                 holder.thumb.setImageDrawable(null)
-                holder.thumb.tag = r.refPath
-                val path = r.refPath
+                holder.thumb.tag = path
                 thumbExecutor.execute {
+                    // The existence check is file I/O, so it runs here rather
+                    // than on every bind. A missing reference is not a miss: a
+                    // restore can still bring it back.
+                    val exists = File(path).exists()
                     // Sniff-first via BitmapDecode — never hand TIFF/RAW to
                     // BitmapFactory (Skia "invalid input" spam on Home rebind).
-                    val bmp = BitmapDecode.decodeFileForView(
-                        path,
-                        THUMB_EDGE,
-                        THUMB_EDGE,
-                        THUMB_EDGE,
-                        rawWidth = r.imgW,
-                        rawHeight = r.imgH,
-                    )
+                    val bmp = if (exists) {
+                        BitmapDecode.decodeFileForView(
+                            path,
+                            THUMB_EDGE,
+                            THUMB_EDGE,
+                            THUMB_EDGE,
+                            rawWidth = r.imgW,
+                            rawHeight = r.imgH,
+                        )
+                    } else {
+                        null
+                    }
                     mainHandler.post {
                         if (holder.thumb.tag != path) {
                             bmp?.recycle()
                         } else if (bmp != null) {
                             thumbCache[path] = bmp
                             holder.thumb.setImageBitmap(bmp)
-                        } else {
+                        } else if (exists) {
                             thumbMisses.add(path)
                         }
                     }
