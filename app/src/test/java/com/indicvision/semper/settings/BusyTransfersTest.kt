@@ -15,12 +15,13 @@ import java.util.UUID
  * Settings used to answer this with `getWorkInfosForUniqueWork(…).get()` on
  * the main thread — on every row tap and twice per busy row on each WorkInfo
  * change. It now reads the WorkInfo lists its observers already receive; these
- * pin that the answer is the same one the database query gave.
+ * pin that answer, and that a tap's mark neither sticks nor drops early
+ * whichever order WorkManager reports the job in.
  */
 class BusyTransfersTest {
 
-    private fun restore(cloudId: String, state: WorkInfo.State) =
-        WorkInfo(UUID.randomUUID(), state, setOf("restore", "restore-$cloudId"))
+    private fun restore(cloudId: String, state: WorkInfo.State, id: UUID = UUID.randomUUID()) =
+        WorkInfo(id, state, setOf("restore", "restore-$cloudId"))
 
     private fun download(cloudId: String, state: WorkInfo.State) = WorkInfo(
         UUID.randomUUID(),
@@ -73,21 +74,53 @@ class BusyTransfersTest {
     }
 
     @Test
-    fun `a tap marks the row busy before WorkManager lists the job`() {
+    fun `a mark holds until WorkManager lists the job, then goes when it ends`() {
         val busy = BusyTransfers()
         busy.mark("c1")
+
+        // Other work reports first; c1's job is not listed yet.
+        busy.onRestoreWork(listOf(restore("other", WorkInfo.State.SUCCEEDED)))
+        assertTrue("not dropped before its job is listed", busy.isBusy("c1"))
+
+        val job = UUID.randomUUID()
+        busy.onRestoreWork(listOf(restore("c1", WorkInfo.State.ENQUEUED, job)))
         assertTrue(busy.isBusy("c1"))
 
-        // Another job's outcome arrives first: the mark only goes once its own
-        // work is reported, and then the list keeps the row busy by itself.
-        busy.onRestoreWork(listOf(restore("c1", WorkInfo.State.ENQUEUED)))
-        busy.settle()
-        assertTrue(busy.isBusy("c1"))
-
-        busy.onRestoreWork(listOf(restore("c1", WorkInfo.State.SUCCEEDED)))
-        busy.settle()
+        busy.onRestoreWork(listOf(restore("c1", WorkInfo.State.SUCCEEDED, job)))
         assertFalse("finished work frees the row", busy.isBusy("c1"))
         assertEquals(emptySet<String>(), busy.keys())
+    }
+
+    @Test
+    fun `a job that finishes before it is ever listed running still frees the row`() {
+        val busy = BusyTransfers()
+        busy.mark("c1")
+
+        busy.onRestoreWork(listOf(restore("c1", WorkInfo.State.SUCCEEDED)))
+
+        assertFalse("the mark does not stick", busy.isBusy("c1"))
+    }
+
+    @Test
+    fun `an older finished job for the same row does not end a new mark`() {
+        // WorkManager keeps finished work for a while: yesterday's restore of
+        // this backup is still listed when the user starts another.
+        val busy = BusyTransfers()
+        val yesterday = restore("c1", WorkInfo.State.FAILED)
+        busy.onRestoreWork(listOf(yesterday))
+
+        busy.mark("c1")
+        busy.onRestoreWork(listOf(yesterday))
+
+        assertTrue(busy.isBusy("c1"))
+    }
+
+    @Test
+    fun `a transfer that did not start is unmarked`() {
+        val busy = BusyTransfers()
+        busy.mark("c1")
+        busy.unmark("c1")
+        assertFalse(busy.isBusy("c1"))
     }
 
     @Test
@@ -97,7 +130,6 @@ class BusyTransfersTest {
         busy.mark("r")
         busy.onRestoreWork(listOf(restore("r", WorkInfo.State.RUNNING)))
         busy.onDownloadWork(listOf(download("d", WorkInfo.State.FAILED)))
-        busy.settle()
 
         assertEquals(setOf("r"), busy.keys())
     }

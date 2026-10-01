@@ -353,6 +353,9 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.save_failed, Toast.LENGTH_LONG).show()
             return
         }
+        // Marked before the enqueue, so the job is not lost if it finishes
+        // before the observed list ever shows it running.
+        markDownloading(key)
         val enqueued = runCatching {
             CloudRestore.enqueueBundleDownload(
                 this,
@@ -370,10 +373,10 @@ class SettingsActivity : AppCompatActivity() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 )
             }
+            unmarkDownloading(key)
             Toast.makeText(this, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
             return
         }
-        markDownloading(key)
         transferBanner.upsert(
             TransferBannerController.Transfer(
                 id = key,
@@ -413,20 +416,21 @@ class SettingsActivity : AppCompatActivity() {
         // Prefer the existing phone row id so a freed stub / re-download fills
         // in-place rather than creating a second "restored-…" id.
         val targetLocalId = entry.record?.id ?: CloudRestore.targetLocalId(cloud)
+        // Marked before the IO hop: the restore can run and finish inside it.
+        markDownloading(key)
         lifecycleScope.launch {
             val started = withContext(Dispatchers.IO) {
                 RestoreStart.start(this@SettingsActivity, cloud.sessionId, targetLocalId, entry.name)
             }
             if (started == RestoreStart.Result.ALREADY_RUNNING) {
-                markDownloading(key)
                 Toast.makeText(this@SettingsActivity, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
                 return@launch
             }
             if (started != RestoreStart.Result.STARTED) {
+                unmarkDownloading(key)
                 Toast.makeText(this@SettingsActivity, R.string.restore_failed_generic, Toast.LENGTH_LONG).show()
                 return@launch
             }
-            markDownloading(key)
             transferBanner.upsert(
                 TransferBannerController.Transfer(
                     id = key,
@@ -444,11 +448,13 @@ class SettingsActivity : AppCompatActivity() {
         publishBusy()
     }
 
-    /** Drop finished restore / download keys. */
-    private fun syncDownloadingKeys() {
-        busy.settle()
+    private fun unmarkDownloading(key: String) {
+        busy.unmark(key)
         publishBusy()
     }
+
+    /** Show the busy rows again; [BusyTransfers] already dropped the ones whose work ended. */
+    private fun syncDownloadingKeys() = publishBusy()
 
     private fun publishBusy() = analysesAdapter.setDownloadingKeys(busy.keys())
 
