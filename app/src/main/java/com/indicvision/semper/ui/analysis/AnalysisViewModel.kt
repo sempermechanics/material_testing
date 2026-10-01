@@ -28,6 +28,7 @@ import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionRecordSettings
 import com.indicvision.semper.data.SessionRepository
 import com.indicvision.semper.data.SessionStore
@@ -200,6 +201,31 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
 
     internal fun recordRunSettings(settings: SessionRecordSettings) {
         _runResult.update { it.copy(settings = settings) }
+    }
+
+    /**
+     * The run result of a re-run whose frames went into the existing Home row
+     * [row] rather than a record of its own: the viewer then opens on that
+     * row's reference, stop code, planned size and settings.
+     */
+    internal fun recordKeptRow(row: SessionRecord) {
+        _runResult.update {
+            it.copy(
+                refPath = row.refPath,
+                stopCode = row.stopCode,
+                plannedFrames = row.plannedFrameCount,
+                settings = SessionRecordSettings(
+                    subset = row.subset,
+                    step = row.step,
+                    strainWin = row.strainWindow,
+                    roiX = row.roiX,
+                    roiY = row.roiY,
+                    roiW = row.roiW,
+                    roiH = row.roiH,
+                    use6x6 = row.use6x6,
+                ),
+            )
+        }
     }
 
     // Buffered (not conflated): a StateFlow would drop intermediate per-frame /
