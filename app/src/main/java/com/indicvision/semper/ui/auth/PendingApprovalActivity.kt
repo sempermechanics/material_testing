@@ -3,7 +3,6 @@
 
 package com.indicvision.semper.ui.auth
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -14,10 +13,10 @@ import androidx.annotation.MainThread
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.DeviceKeyManager
+import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.SupportMail
 import com.indicvision.semper.ui.home.HomeActivity
@@ -163,14 +162,8 @@ class PendingApprovalActivity : AppCompatActivity() {
         }
     }
 
-    private fun routeToLogin(message: String) {
-        val intent = Intent(this, AuthActivity::class.java)
-        intent.putExtra(DicKeys.ROUTING_ERROR, message)
-        // CLEAR_TASK and NEW_TASK wipe the Android backstack completely
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        startActivity(intent)
-        finish()
-    }
+    /** Back to sign-in with [message], the back stack cleared ([AuthRoute]). */
+    private fun routeToLogin(message: String) = AuthRoute.toSignIn(this, message)
 
     private fun setLoadingState(isLoading: Boolean) {
         if (isLoading) {

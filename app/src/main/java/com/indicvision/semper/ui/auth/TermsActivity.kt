@@ -21,6 +21,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.LegalTerms
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.home.HomeActivity
 import kotlinx.coroutines.launch
@@ -120,10 +121,7 @@ class TermsActivity : AppCompatActivity() {
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Sign-out on decline failed, forcing local exit.")
             } finally {
-                val intent = Intent(this@TermsActivity, AuthActivity::class.java)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                startActivity(intent)
-                finish()
+                AuthRoute.toSignIn(this@TermsActivity)
             }
         }
     }
