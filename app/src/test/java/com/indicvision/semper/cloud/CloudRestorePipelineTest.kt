@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.cloud.CorruptTransferException
 import com.indicvision.semper.data.cloud.restore.CloudRestore
+import com.indicvision.semper.data.session.CacheJanitor
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.util.AtomicFiles
@@ -84,6 +85,23 @@ class CloudRestorePipelineTest {
     }
 
     @Test
+    fun `a deformed image named reference_png does not become the restored reference`() {
+        api.files = listOf(
+            metadata(),
+            bundle(
+                "raw/Reference.png" to byteArrayOf(1, 2, 3),
+                "raw/reference.png" to byteArrayOf(4, 5),
+                "dat/frame_0001.dat" to RestoreFakeApi.onePointDat(),
+            ),
+        )
+
+        restore()
+
+        val dir = SessionStore.dirFor(context, LOCAL_ID)
+        assertEquals(File(dir, "reference.png").absolutePath, SessionStore.get(context, LOCAL_ID)?.refPath)
+    }
+
+    @Test
     fun `an entry that climbs into a sibling session directory is refused`() {
         // "<localId>X" shares the session dir's path as a string prefix, which is
         // all a startsWith(canonicalPath) check compared.
@@ -118,6 +136,19 @@ class CloudRestorePipelineTest {
         )
 
         assertThrows(CorruptTransferException::class.java) { restore() }
+    }
+
+    @Test
+    fun `metadata whose frame is not an object is corrupt before the bundle is fetched`() {
+        api.files = listOf(
+            metadata("""{"schema":"indic.session.metadata/3","frames":["def.png"]}""".toByteArray()),
+            bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
+        )
+
+        val thrown = assertThrows(CorruptTransferException::class.java) { restore() }
+
+        assertEquals("metadata_json_invalid", thrown.message)
+        assertFalse(api.calls.contains("downloadFile:bundle-1"))
     }
 
     @Test
@@ -180,6 +211,21 @@ class CloudRestorePipelineTest {
         val fake = FakeCloudApi().apply { onListSessions = { _, _ -> throw CancellationException("call cancelled") } }
 
         assertTrue(CloudRestore.listCompleted(context, fake, tokens) is CloudRestore.ListResult.Failed)
+    }
+
+    @Test
+    fun `a Save-to-Files download whose extras fail attestation leaves no archive behind`() {
+        val bundle = bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat())
+        val extrasBytes = RestoreFakeApi.zipOf(listOf("csv/analysis_data.csv" to "a,b".toByteArray()))
+        val staleSha = RestoreFakeApi.sha256Of("an older extras body".toByteArray())
+        api.files = listOf(bundle, api.file("extras-1", "extras", extrasBytes, staleSha))
+
+        assertThrows(CorruptTransferException::class.java) {
+            runBlocking { CloudRestore.downloadBundleZip(context, CLOUD_ID, "Specimen", api = api, tokens = tokens) }
+        }
+
+        val left = CacheJanitor.shareDir(context.cacheDir).listFiles().orEmpty().map { it.name }
+        assertEquals(emptyList<String>(), left)
     }
 
     private companion object {

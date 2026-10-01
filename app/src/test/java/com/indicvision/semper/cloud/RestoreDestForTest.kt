@@ -1,8 +1,8 @@
 package com.indicvision.semper.cloud
 
 import com.indicvision.semper.data.cloud.CorruptTransferException
-import com.indicvision.semper.data.cloud.restore.CloudRestore
-import com.indicvision.semper.data.session.SessionPaths
+import com.indicvision.semper.data.cloud.restore.RestoreUnpacker
+import com.indicvision.semper.data.session.SessionLayout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Rule
@@ -11,7 +11,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 /**
- * [CloudRestore.destFor] is the one zip-slip guard both restore paths share:
+ * [RestoreUnpacker.destFor] is the one zip-slip guard both restore paths share:
  * every artifact must land strictly inside its own session directory.
  */
 class RestoreDestForTest {
@@ -21,14 +21,14 @@ class RestoreDestForTest {
 
     private val layout by lazy {
         val sessionDir = File(tmp.root, "sessions/s1").apply { mkdirs() }
-        CloudRestore.Layout(sessionDir, File(sessionDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply { mkdirs() })
+        SessionLayout(sessionDir).apply { rawDeformedDir.mkdirs() }
     }
 
-    private fun dest(role: String, name: String) = CloudRestore.destFor(role, name, layout)
+    private fun dest(role: String, name: String) = RestoreUnpacker.destFor(role, name, layout)
 
     @Test
     fun `each role lands where a local run puts it`() {
-        val dir = layout.sessionDir
+        val dir = layout.dir
         assertEquals(File(dir, "reference.png"), dest("raw", "Reference.png"))
         assertEquals(File(layout.rawDeformedDir, "def.png"), dest("raw", "def.png"))
         assertEquals(File(dir, "frame_0001.dat"), dest("dat", "frame_0001.dat"))
@@ -39,7 +39,7 @@ class RestoreDestForTest {
     @Test
     fun `a dot-dot that stays inside the session is allowed`() {
         assertEquals(
-            File(layout.sessionDir, "frame_0001.dat").canonicalFile,
+            File(layout.dir, "frame_0001.dat").canonicalFile,
             dest("raw", "../frame_0001.dat").canonicalFile,
         )
     }
