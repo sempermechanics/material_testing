@@ -12,6 +12,16 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-01 — material_testing: synced with semperdic-app `ff0cfc3`
+
+A plain merge of the parent's #306–#308. Nothing changes here at run time:
+
+- **#307 and #308** took this repo's `RoiEditorGestureTest` (the TD-146 CI fixes) and
+  `SessionMetadataSync` KDoc, so both files merge as identical blobs.
+- **#306:** the restore drill fails early, naming missing variables, and
+  `FIRESTORE_DATA_PROTECTION.md` has the drill project's setup (its TD-156: no export has
+  been restored yet). The drill runs only in semperdic-app.
+
 ## 2026-10-01 — material_testing: synced with semperdic-app `5dc4522`
 
 A plain merge of the parent's #297–#305. Most of it was ported from here, so it

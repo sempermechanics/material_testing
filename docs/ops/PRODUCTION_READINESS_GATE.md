@@ -43,7 +43,7 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       has no `roles/editor`. Open: `indic-deployer`'s project-wide
       `storage.admin` and `iam.serviceAccountUser` (TD-71), and Shared Drive
       Manager rights for `indic-api`.
-- [ ] Run and record one **Firestore restore drill**. The drill is automated
+- [ ] Run and record one **Firestore restore drill** (TD-156: it has never run). The drill is automated
       (`.github/workflows/firestore-restore-drill.yml`) but needs a
       **`restore-drill` GitHub Environment** (separate from `production-backup`)
       plus one recorded RTO

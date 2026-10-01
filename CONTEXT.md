@@ -131,15 +131,15 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`; last `5dc4522`, 2026-10-01; rules in the parent's
+  --grep=semperdic-app`; last `ff0cfc3`, 2026-10-01; rules in the parent's
   `docs/ops/FORK_SYNC.md`). The parent deploys, and its TD rows jump to TD-122. General
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
-  TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–155 are semperdic-app's; its
+  TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-156; check both before taking one.
+  free in both registers is TD-157; check both before taking one.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region

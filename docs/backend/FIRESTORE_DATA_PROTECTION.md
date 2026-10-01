@@ -76,6 +76,51 @@ Create it under **Settings → Environments → New environment**, name it
 Adding required reviewers to the environment is worth doing: it makes an
 on-demand drill a deliberate act rather than a button anyone can hit.
 
+The workflow checks these five first and fails naming the ones that are empty.
+Until 2026-10-01 no drill project existed and the environment had no variables, so
+every run had failed (TD-156). One-time setup, run by someone with owner rights on
+production and a billing account (the project id is a suggestion):
+
+```bash
+DRILL=indicvision-dic-restore-drill
+PROD=indicvision-dic-app
+BUCKET=indicvision-dic-app-firestore-backups
+SA=restore-drill@${DRILL}.iam.gserviceaccount.com
+POOL=projects/641964711637/locations/global/workloadIdentityPools/github
+
+gcloud projects create "$DRILL"
+gcloud billing projects link "$DRILL" --billing-account=<account id>
+gcloud services enable firestore.googleapis.com --project="$DRILL"
+gcloud firestore databases create --location=asia-south1 --type=firestore-native --project="$DRILL"
+
+# The drill identity: owns Firestore in the throwaway project only.
+gcloud iam service-accounts create restore-drill --project="$DRILL"
+gcloud projects add-iam-policy-binding "$DRILL" --member="serviceAccount:$SA" --role=roles/datastore.owner
+gcloud iam service-accounts add-iam-policy-binding "$SA" --project="$DRILL" \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/$POOL/attribute.repository/sempermechanics/semperdic-app"
+
+# Read-only on the exports: the drill lists them and reads manifest.json, and the
+# drill project's Firestore agent reads them for the import.
+DRILL_NUM=$(gcloud projects describe "$DRILL" --format='value(projectNumber)')
+gcloud beta services identity create --service=firestore.googleapis.com --project="$DRILL"
+for m in "serviceAccount:$SA" "serviceAccount:service-${DRILL_NUM}@gcp-sa-firestore.iam.gserviceaccount.com"; do
+  gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="$m" --role=roles/storage.objectViewer
+done
+
+for kv in "GCP_WORKLOAD_IDENTITY_PROVIDER=$POOL/providers/github" \
+          "FIRESTORE_RESTORE_DRILL_SERVICE_ACCOUNT=$SA" \
+          "FIRESTORE_RESTORE_DRILL_PROJECT=$DRILL" \
+          "FIRESTORE_BACKUP_BUCKET=$BUCKET" "GCP_PROJECT=$PROD"; do
+  gh variable set "${kv%%=*}" --env restore-drill --body "${kv#*=}" -R sempermechanics/semperdic-app
+done
+
+gh workflow run firestore-restore-drill.yml -R sempermechanics/semperdic-app
+```
+
+Nothing here grants the drill identity any role on production: it can read the
+backup bucket and nothing else there.
+
 Verification is not a checklist — it is `scripts/firestore_verify.py`, which
 compares the restored database against `manifest.json`, written beside each
 export by `scripts/firestore-export.sh` at export time:
