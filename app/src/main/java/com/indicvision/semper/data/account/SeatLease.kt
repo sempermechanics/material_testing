@@ -2,13 +2,14 @@ package com.indicvision.semper.data.account
 
 import android.content.Context
 import com.indicvision.semper.data.LicenseConfigWorker
-import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.Authed
 import com.indicvision.semper.data.net.CloudApi
+import com.indicvision.semper.data.net.HttpFailure
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
-import com.indicvision.semper.util.suspendRunCatching
+import com.indicvision.semper.data.net.authed
 import timber.log.Timber
 
 /**
@@ -37,13 +38,9 @@ object SeatLease {
         api: CloudApi = IndicApi.get(context),
         tokens: TokenSource = TokenProvider,
     ) {
-        release(
-            shouldRelease = { holdsFloatingSeat(context) },
-            token = tokens::usableIdToken,
-            apiEnabled = { api.enabled },
-            release = api::releaseLease,
-            applyConfig = { AppRemoteConfig.apply(context, it) },
-        )
+        seatCall(holdsFloatingSeat(context), api, tokens, "release") {
+            AppRemoteConfig.apply(context, releaseLease(it))
+        }
     }
 
     /**
@@ -55,13 +52,9 @@ object SeatLease {
         api: CloudApi = IndicApi.get(context),
         tokens: TokenSource = TokenProvider,
     ) {
-        heartbeat(
-            shouldHeartbeat = { holdsFloatingSeat(context) },
-            token = tokens::usableIdToken,
-            apiEnabled = { api.enabled },
-            checkout = api::checkoutLease,
-            applyConfig = { AppRemoteConfig.apply(context, it) },
-        )
+        seatCall(holdsFloatingSeat(context), api, tokens, "heartbeat") {
+            AppRemoteConfig.apply(context, checkoutLease(it))
+        }
     }
 
     /**
@@ -74,51 +67,40 @@ object SeatLease {
         api: CloudApi = IndicApi.get(context),
         tokens: TokenSource = TokenProvider,
     ) {
-        val token = if (api.enabled) tokens.usableIdToken() else null
-        if (token == null) return
-        val refreshed = suspendRunCatching { api.getConfig(token) }
-            .onSuccess { AppRemoteConfig.apply(context, it) }
-            .onFailure {
-                AppRemoteConfig.recordFetchFailure(context)
-                Timber.d(it, "Background license config refresh failed")
-            }
-            .isSuccess
-        if (refreshed && holdsFloatingSeat(context)) {
+        val fetched = when (val outcome = api.authed(tokens) { getConfig(it) }) {
+            is Authed.Ok -> Result.success(outcome.value)
+            is Authed.Failed -> Result.failure(outcome.failure.cause)
+            Authed.Disabled, Authed.NoToken -> return
+        }
+        if (AppRemoteConfig.record(context, fetched) && holdsFloatingSeat(context)) {
             heartbeatBestEffort(context, api, tokens)
         }
     }
 
-    /** Injectable half of [releaseBestEffort] — order and gates are what tests pin. */
-    internal suspend fun release(
-        shouldRelease: () -> Boolean,
-        token: suspend () -> String?,
-        apiEnabled: () -> Boolean,
-        release: suspend (String) -> AppConfigDto,
-        applyConfig: (AppConfigDto) -> Unit,
+    /**
+     * One seat [call] (the release or the checkout, applying the config it
+     * answers), made only while [holdsSeat]. True when it went through; a
+     * failure is logged and swallowed. [what] names the call in the log.
+     */
+    internal suspend fun seatCall(
+        holdsSeat: Boolean,
+        api: CloudApi,
+        tokens: TokenSource,
+        what: String,
+        call: suspend CloudApi.(idToken: String) -> Unit,
     ): Boolean {
-        val idToken = if (shouldRelease() && apiEnabled()) token() else null
-        if (idToken == null) return false
-        return suspendRunCatching {
-            applyConfig(release(idToken))
-            true
-        }.onFailure { Timber.w(it, "Could not release floating seat on sign-out") }
-            .getOrDefault(false)
+        if (!holdsSeat) return false
+        val outcome = api.authed(tokens, call)
+        if (outcome is Authed.Failed) logFailure(what, outcome.failure)
+        return outcome is Authed.Ok
     }
 
-    /** Injectable half of [heartbeatBestEffort]. */
-    internal suspend fun heartbeat(
-        shouldHeartbeat: () -> Boolean,
-        token: suspend () -> String?,
-        apiEnabled: () -> Boolean,
-        checkout: suspend (String) -> AppConfigDto,
-        applyConfig: (AppConfigDto) -> Unit,
-    ): Boolean {
-        val idToken = if (shouldHeartbeat() && apiEnabled()) token() else null
-        if (idToken == null) return false
-        return suspendRunCatching {
-            applyConfig(checkout(idToken))
-            true
-        }.onFailure { Timber.w(it, "Floating-seat heartbeat failed") }
-            .getOrDefault(false)
+    /** An unexpected throw is a bug, not a dropped connection, so it is logged louder. */
+    private fun logFailure(what: String, failure: HttpFailure) {
+        if (failure.kind == HttpFailure.Kind.UNEXPECTED) {
+            Timber.e(failure.cause, "Floating-seat %s failed unexpectedly", what)
+        } else {
+            Timber.w(failure.cause, "Floating-seat %s failed (%s)", what, failure.kind)
+        }
     }
 }

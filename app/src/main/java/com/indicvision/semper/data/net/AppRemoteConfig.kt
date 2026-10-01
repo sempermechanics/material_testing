@@ -7,6 +7,7 @@ import com.indicvision.semper.data.prefs.PrefFiles.RemoteConfig
 import com.indicvision.semper.data.prefs.get
 import com.indicvision.semper.data.prefs.privatePrefs
 import com.indicvision.semper.data.prefs.put
+import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -136,6 +137,20 @@ object AppRemoteConfig {
         config.licenseDuration == DURATION_PERPETUAL -> DURATION_PERPETUAL
         !config.licenseExpiresAt.isNullOrBlank() -> DURATION_TIMED
         else -> DURATION_PERPETUAL
+    }
+
+    /**
+     * Stores the outcome of one `/v1/config` fetch: [apply] when it answered,
+     * [recordFetchFailure] when not. Returns whether it answered.
+     */
+    fun record(context: Context, fetched: Result<AppConfigDto>): Boolean {
+        fetched
+            .onSuccess { apply(context, it) }
+            .onFailure {
+                recordFetchFailure(context)
+                Timber.d(it, "Could not fetch app remote config")
+            }
+        return fetched.isSuccess
     }
 
     /** Record a failed /v1/config fetch (uploads stay gated until config lands). */
