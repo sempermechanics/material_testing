@@ -1,7 +1,10 @@
 package com.indicvision.semper.ui.common
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -66,6 +69,35 @@ class ConflatedRefreshTest {
         gate.complete(Unit)
         advanceUntilIdle()
         assertEquals(listOf(false, true), ran)
+    }
+
+    @Test
+    fun `a run that throws takes the queued request with it`() = runTest {
+        val ran = mutableListOf<Int>()
+        val gate = CompletableDeferred<Unit>()
+        // Its own job, so the throw does not fail the test's scope.
+        val scope = CoroutineScope(coroutineContext + SupervisorJob() + CoroutineExceptionHandler { _, _ -> })
+        val refresh = ConflatedRefresh<Int>(scope, merge = { _, next -> next }) { arg ->
+            ran += arg
+            if (arg == 1) {
+                gate.await()
+                error("reconcile blew up")
+            }
+        }
+
+        refresh.request(1)
+        advanceUntilIdle()
+        refresh.request(2)
+        assertTrue(refresh.hasPending)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse("the queue went with the failed run", refresh.hasPending)
+        assertEquals(listOf(1), ran)
+
+        refresh.request(3)
+        advanceUntilIdle()
+        assertEquals("a later request starts afresh", listOf(1, 3), ran)
     }
 
     @Test

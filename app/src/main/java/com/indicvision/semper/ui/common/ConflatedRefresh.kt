@@ -38,9 +38,16 @@ class ConflatedRefresh<T : Any>(
         // Lazy, so [job] is set before the body can call back into request().
         val next = scope.launch(start = CoroutineStart.LAZY) {
             var current: T? = arg
-            while (current != null) {
-                run(current)
-                current = pending
+            try {
+                while (current != null) {
+                    run(current)
+                    current = pending
+                    pending = null
+                }
+            } finally {
+                // A run that threw (or was cancelled) takes the queued request
+                // with it; the next request starts afresh instead of finding a
+                // stale one waiting behind nothing.
                 pending = null
             }
         }

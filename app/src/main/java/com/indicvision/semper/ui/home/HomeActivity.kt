@@ -104,14 +104,17 @@ class HomeActivity : AppCompatActivity() {
      */
     private val cloudCheck: ConflatedRefresh<Boolean> by lazy {
         ConflatedRefresh<Boolean>(lifecycleScope, merge = { a, b -> a || b }) { deep ->
+            var completed = false
             try {
                 listRefresh?.join()
                 reconcileWithCloud(deep)
+                completed = true
             } finally {
                 // The spinner tracks the cloud check, not the local list read —
-                // that's the part worth waiting for — and stays while a
-                // pull-to-refresh waits behind a running check.
-                if (!cloudCheck.hasPending) swipeRefresh.isRefreshing = false
+                // that's the part worth waiting for. After a check that ended
+                // normally it stays while a pull-to-refresh waits its turn; a
+                // check that threw or was cancelled takes the queue with it.
+                if (!completed || !cloudCheck.hasPending) swipeRefresh.isRefreshing = false
             }
         }
     }
