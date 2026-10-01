@@ -102,9 +102,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-26)
 
-- **Deployed.** Cloud Run `semper-api` (`semper-api-00029-z72`: image of `semper-api-36237900008-1`,
-  from `10809473`, with `REQUIRE_ATTESTED_UPLOADS` removed by hand; scales to zero) behind API Gateway
-  `semper-gw` (config `v202609261112-75`, deployed by CI, ADR-006);
+- **Deployed.** Cloud Run `semper-api` (image `semper-api-36815427585-1` from `9b12b14b`,
+  2026-10-01; scales to zero) behind API Gateway
+  `semper-gw` (config `v202610010433-80`, deployed by CI, ADR-006);
   staging `semper-api-staging` behind `semper-gw-staging` (CI since #258); project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
   #240 (cost), the licence desk (backend and console), the device-change fixes (#248, #249,

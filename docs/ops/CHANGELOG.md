@@ -12,7 +12,30 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
-## 2026-09-30 — Backend deploy: frame ceiling 500 (#286)
+## 2026-10-01 — Backend deploy: replace a backup's metadata.json (#288)
+
+From `9b12b14b`. Staging first: `deploy-backend.yml` run 36814500108 →
+`semper-api-staging-36814500108-1`, with `semper-gw-staging` going from
+`v202609261024-71` to `v202610010422-79`. Then production: run 36815427585 →
+image `semper-api-36815427585-1`, with `semper-gw` going from `v202609261112-75`
+to `v202610010433-80`. The previous production image is pinned as `rollback-prev`.
+
+- Both runs used `gateway_mode: apply`. `/readyz` passed on each candidate
+  before the promote. Each gateway's outside check answered 401 on
+  `GET /v1/config` and 200 on the preflight.
+- Production's gateway diff was the new route alone.
+- Staging's diff also dropped the four `/v1/campus/*` alias paths and the
+  "campus is accepted" note. Production lost those on 2026-09-26; staging's
+  gateway had not been switched since.
+
+- #288: `PUT /v1/sessions/{sid}/metadata` (device-signed) writes the app's
+  current metadata.json over a COMPLETED session's Drive object and updates the
+  file doc's size and checksums ([ADR-013](../adr/ADR-013-session-metadata-replace.md)).
+  It is Material Testing's TD-150 fix: a bending deflection correction set after
+  the backup now reaches the cloud copy, and so a restore. The app side is
+  material_testing#112, which ships with that app's next release. Its builds
+  until then never call the route. Semper's app does not call it.
+
 
 Staging first (`deploy-backend.yml` run 36669887146 → `semper-api-staging-36669887146-1`),
 then production run 36670760641 → image `semper-api-36670760641-1`, both from
