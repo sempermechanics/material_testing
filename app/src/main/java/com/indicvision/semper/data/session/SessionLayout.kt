@@ -94,8 +94,13 @@ class StagingLayout(val dir: File) {
     /** `<name>.tmp`: the archive while it is written. */
     fun tmpOf(name: String): File = File(dir, name + TMP_SUFFIX)
 
-    /** What a restage deletes before regenerating: the bundle, its write sidecar and its hash. */
-    fun staleBundleFiles(): List<File> = listOf(sessionZip, tmpOf(SESSION_ZIP), sha256Sidecar(SESSION_ZIP))
+    /**
+     * What a rebuild of archive [name] deletes first: the archive, its `.sha256`
+     * and its `.tmp`. The restage drops [SESSION_ZIP]'s before regenerating the
+     * bundles; `stageArchive` drops either zip's ([EXTRAS_ZIP] too) when its
+     * digest does not verify.
+     */
+    fun staleFiles(name: String): List<File> = listOf(archive(name), sha256Sidecar(name), tmpOf(name))
 
     companion object {
         const val ANALYSIS_CSV = "analysis_data.csv"

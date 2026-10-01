@@ -98,4 +98,42 @@ class AtomicWritesTest {
         assertFalse(AtomicFiles.partOf(dest).exists())
         assertFalse(dest.exists())
     }
+
+    // A non-local `return` out of the write does not compile (`write` is
+    // crossinline). Inlined, it skipped writeVia's finally and left the .part
+    // behind. An early exit is a labelled return, which promotes, or a throw,
+    // which cleans up.
+
+    @Test
+    fun `a labelled early return from the write still promotes what it wrote`() {
+        val dest = tmp.newFile("bundle.zip").apply { writeText("previous") }
+
+        val result = AtomicFiles.writeVia(dest) { part ->
+            part.writeText("header")
+            if (part.length() > 0L) return@writeVia "early"
+            part.appendText(" and the rest")
+            "full"
+        }
+
+        assertEquals("early", result)
+        assertEquals("header", dest.readText())
+        assertFalse(AtomicFiles.partOf(dest).exists())
+    }
+
+    @Test
+    fun `a throw out of the promote removes the sidecar too`() {
+        val dest = tmp.newFolder("occupied")
+        File(dest, "child").writeText("keeps the directory from being replaced")
+        val sidecar = File(tmp.root, "occupied.tmp")
+
+        try {
+            AtomicFiles.writeVia(dest, tmp = sidecar) { t -> t.writeText("zip") }
+            fail("expected the promote to fail")
+        } catch (_: IOException) {
+            // The rename is refused and copyTo will not overwrite a non-empty directory.
+        }
+
+        assertFalse(sidecar.exists())
+        assertTrue(dest.isDirectory)
+    }
 }

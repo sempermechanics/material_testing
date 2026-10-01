@@ -1,6 +1,5 @@
 package com.indicvision.semper.ui.analysis.run
 
-import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.newMetrics
 import org.junit.After
@@ -47,10 +46,19 @@ class SemperEngineTest {
         val buffer = ByteBuffer.allocate(64).apply { position(40) }
         val metrics = EngineStats.newMetrics()
 
-        val solved = SemperEngine.solve(
-            ref, def, 10, 20, 30, 40, step = 5, subset = 21, strainWindow = 41,
-            buffer = buffer, metrics = metrics, maskData = mask, use6x6 = true,
+        val params = SemperEngine.Params(
+            roiX = 10,
+            roiY = 20,
+            roiW = 30,
+            roiH = 40,
+            step = 5,
+            subset = 21,
+            strainWindow = 41,
+            maskData = mask,
+            use6x6 = true,
         )
+
+        val solved = SemperEngine.solve(ref, def, params, buffer = buffer, metrics = metrics)
 
         assertEquals(123, solved)
         val call = calls.single()
@@ -66,29 +74,38 @@ class SemperEngineTest {
         fake(result = -4)
         val metrics = FloatArray(EngineStats.SLOT_COUNT)
 
-        val solved = SemperEngine.solve(
-            ByteArray(0), ByteArray(0), 0, 0, 8, 8, step = 2, subset = 11, strainWindow = 3,
-            buffer = ByteBuffer.allocate(8), metrics = metrics,
+        // NoiseFloorProbe's solve takes (subset, step, strainWindow); named arguments keep them apart.
+        val probeSubset = 11
+        val probeStep = 2
+        val params = SemperEngine.Params(
+            roiX = 0,
+            roiY = 0,
+            roiW = 8,
+            roiH = 8,
+            subset = probeSubset,
+            step = probeStep,
+            strainWindow = 3,
         )
+
+        val solved = SemperEngine.solve(ByteArray(0), ByteArray(0), params, ByteBuffer.allocate(8), metrics)
 
         assertEquals(-4, solved)
         val args = calls.single().args
         assertTrue((args[2] as ByteArray).isEmpty())
+        assertEquals("the JNI takes step, then subset", listOf(probeStep, probeSubset, 3), args.subList(7, 10))
         assertEquals(false, args[10])
         assertSame(metrics, args[13])
     }
 
     @Test
-    fun `default metrics are newMetrics, and a progress callback is passed through`() {
+    fun `default metrics are newMetrics, and progress is silent`() {
         fake(result = 1)
-        val progress = object : ProgressCallback {
-            override fun onProgressUpdate(percentage: Int) = Unit
-        }
 
-        SemperEngine.solve(ByteArray(0), ByteArray(0), 0, 0, 1, 1, 1, 1, 1, ByteBuffer.allocate(4), progress = progress)
+        val params = SemperEngine.Params(roiX = 0, roiY = 0, roiW = 1, roiH = 1, step = 1, subset = 1, strainWindow = 1)
+        SemperEngine.solve(ByteArray(0), ByteArray(0), params, ByteBuffer.allocate(4))
 
         val args = calls.single().args
-        assertSame(progress, args[12])
+        assertSame(SemperEngine.SILENT, args[12])
         val expected = EngineStats.newMetrics().also { it[EngineStats.SLOT_CONVERGENCE] = 97f }
         assertArrayEquals(expected, args[13] as FloatArray, 0f)
     }

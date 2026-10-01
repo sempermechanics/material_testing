@@ -79,13 +79,14 @@ class HttpFailureTest {
     }
 
     @Test
-    fun `retryable is the metadata send's rule - 429, 5xx, no answer`() {
+    fun `retryable is the generic rule - 429, 5xx, no answer`() {
         assertTrue(HttpFailure.classify(ApiException(429, "")).isRetryable)
         assertTrue(HttpFailure.classify(ApiException(502, "")).isRetryable)
         assertTrue(HttpFailure.classify(IOException()).isRetryable)
         assertFalse(HttpFailure.classify(ApiException(404, "")).isRetryable)
         assertFalse(HttpFailure.classify(ApiException(409, "")).isRetryable)
         assertFalse(HttpFailure.classify(DeviceConflictException()).isRetryable)
+        assertFalse(HttpFailure.classify(DeviceNotActiveException()).isRetryable)
     }
 
     @Test
