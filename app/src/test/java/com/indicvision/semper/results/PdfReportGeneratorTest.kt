@@ -127,11 +127,11 @@ class PdfReportGeneratorTest {
 
             assertEquals(
                 listOf("0.01000", "87.50 %", "1.50"),
-                PdfReportGenerator.qualityRows(stats, summary).map { it[1] },
+                summary.qualityRows(stats).map { it[1] },
             )
             assertEquals(
                 listOf("12.5 ms", "3.3 ms", "7.5 ms", "2.5 ms", "1234.5 ms", "0.75 pts/ms"),
-                PdfReportGenerator.timingRows(stats).map { it[1] },
+                TelemetrySummary.timingRows(stats).map { it[1] },
             )
         } finally {
             Locale.setDefault(before)

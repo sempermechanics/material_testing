@@ -40,7 +40,10 @@ class ShareExportJobsTest {
 
     // Stands in for viewModelScope, off the main looper so nothing needs idling.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val jobs = ShareExportJobs(scope, ApplicationProvider.getApplicationContext<android.app.Application>().contentResolver)
+    private val jobs = ShareExportJobs(
+        scope,
+        ApplicationProvider.getApplicationContext<android.app.Application>().contentResolver,
+    )
 
     @After
     fun stop() = scope.cancel()
