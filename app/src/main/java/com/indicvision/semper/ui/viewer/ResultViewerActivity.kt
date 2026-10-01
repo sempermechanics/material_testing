@@ -37,6 +37,7 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.MainThread
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
@@ -55,6 +56,7 @@ import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -339,60 +341,23 @@ class ResultViewerActivity : AppCompatActivity() {
         roiH = args.roiH
 
         val refPath = args.refPath.ifBlank { null }
-        if ((imgW <= 0 || imgH <= 0) && refPath != null) {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(refPath, bounds)
-            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
-                imgW = bounds.outWidth
-                imgH = bounds.outHeight
-            }
-        }
-        // True sensor dims stay on the intent for math / probe / export; the
-        // on-screen bitmap is decoded off-main at ImageView scale.
-        imgMain.setTrueImageDimensions(imgW, imgH)
-        updateHeatmapFitBounds(data = null)
-        if (refPath != null) {
-            decodeReferenceForDisplay(refPath)
-        }
-
-        val batchDirPath = args.batchDirPath
         originalDefNames = args.frameNames
         refImagePath = refPath
-        // Prefer the raw deformed originals persisted in the session dir (survive
-        // reopen/eviction); fall back to the just-analysed session's temp paths.
-        val rawDeformedDir = batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
-        defImagePaths = rawDeformedDir?.takeIf { it.isDirectory }
-            ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
-            ?: args.defFilePaths
-
-        if (batchDirPath != null) {
-            val dir = File(batchDirPath)
-            if (dir.exists() && dir.isDirectory) {
-                batchFiles = dir.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name } ?: emptyList()
-                plannedFrames = SessionPaths.plannedFrameIndices(batchFiles)
-                maxDatBytes = batchFiles.maxOfOrNull { it.length() } ?: 0L
-            }
-        }
+        // Every writer puts the image size on the Intent; only an old one makes
+        // the reference's header be read for it, off the main thread below.
+        val dimsKnown = imgW > 0 && imgH > 0
+        if (dimsKnown) showReference(refPath)
 
         summary = ViewerSummaryHelper(this)
 
-        if (batchFiles.isNotEmpty()) {
-            // A START_FRAME (or restored index) past the batch would load nothing.
-            currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
-            tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
-            loadFrameData(currentFrameIndex)
-            // Summary GIF / share animations are single-setting only.
-            if (!isSweep && batchFiles.size > 1) summary.start()
-            if (showingSummary && !isSweep) {
-                enterSummary()
-            } else {
-                showingSummary = false
-                updateNavButtons()
-                bumpChrome()
-            }
-        } else {
-            showingSummary = false
-            FaqRedirect.snackbar(this, R.string.no_batch_data, R.string.url_faq_no_batch_data)
+        // The directory listings, and a stat per frame, used to run here on the
+        // main thread on every open. The first frame (and, with it, everything
+        // the batch drives) starts once they are read, as it did before.
+        val knownW = imgW
+        val knownH = imgH
+        lifecycleScope.launch {
+            val set = withContext(frameSetDispatcher) { readFrameSet(refPath, knownW, knownH) }
+            onFrameSetRead(set, refPath, dimsKnown)
         }
 
         btnPrevFrame.setOnClickListener {
@@ -449,6 +414,102 @@ class ResultViewerActivity : AppCompatActivity() {
         imgMain.post {
             inspect.refreshCrosshairs()
             bumpChrome()
+        }
+    }
+
+    /** What [onCreate] needs from disk before the first frame can load; see [readFrameSet]. */
+    private class FrameSet(
+        val imgW: Int,
+        val imgH: Int,
+        val defImagePaths: List<String>,
+        val batchFiles: List<File>,
+        val plannedFrames: List<Int>,
+        val maxDatBytes: Long,
+    )
+
+    /** True once [onFrameSetRead] has run: [batchFiles] and the rest are final. */
+    internal var frameSetLoaded = false
+        private set
+
+    /** Where [readFrameSet] runs. A test holds it to see what onCreate does without it. */
+    @VisibleForTesting
+    internal var frameSetDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+    /**
+     * Reads the batch listing, the deformed originals, each frame's size and (for an
+     * Intent without it) the reference's dimensions. Disk only — call it off the
+     * main thread.
+     */
+    private fun readFrameSet(refPath: String?, knownW: Int, knownH: Int): FrameSet {
+        var w = knownW
+        var h = knownH
+        if ((w <= 0 || h <= 0) && refPath != null) {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(refPath, bounds)
+            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                w = bounds.outWidth
+                h = bounds.outHeight
+            }
+        }
+        val batchDirPath = args.batchDirPath
+        // Prefer the raw deformed originals persisted in the session dir (survive
+        // reopen/eviction); fall back to the just-analysed session's temp paths.
+        val rawDeformedDir = batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
+        val defPaths = rawDeformedDir?.takeIf { it.isDirectory }
+            ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
+            ?: args.defFilePaths
+        val dir = batchDirPath?.let { File(it) }?.takeIf { it.isDirectory }
+        val files = dir?.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name }.orEmpty()
+        return FrameSet(
+            imgW = w,
+            imgH = h,
+            defImagePaths = defPaths,
+            batchFiles = files,
+            plannedFrames = SessionPaths.plannedFrameIndices(files),
+            // Once, here: the prefetch heap guard used to stat() every file per load.
+            maxDatBytes = files.maxOfOrNull { it.length() } ?: 0L,
+        )
+    }
+
+    /** Puts the reference on screen at its true dimensions (decoded off-main, display size). */
+    private fun showReference(refPath: String?) {
+        // True sensor dims stay on the intent for math / probe / export; the
+        // on-screen bitmap is decoded off-main at ImageView scale.
+        imgMain.setTrueImageDimensions(imgW, imgH)
+        updateHeatmapFitBounds(data = null)
+        if (refPath != null) {
+            decodeReferenceForDisplay(refPath)
+        }
+    }
+
+    /** The rest of [onCreate], once [readFrameSet] is back: open the batch on its first frame or summary. */
+    private fun onFrameSetRead(set: FrameSet, refPath: String?, referenceShownAlready: Boolean) {
+        imgW = set.imgW
+        imgH = set.imgH
+        if (!referenceShownAlready) showReference(refPath)
+        defImagePaths = set.defImagePaths
+        batchFiles = set.batchFiles
+        plannedFrames = set.plannedFrames
+        maxDatBytes = set.maxDatBytes
+        frameSetLoaded = true
+
+        if (batchFiles.isNotEmpty()) {
+            // A START_FRAME (or restored index) past the batch would load nothing.
+            currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
+            tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
+            loadFrameData(currentFrameIndex)
+            // Summary GIF / share animations are single-setting only.
+            if (!isSweep && batchFiles.size > 1) summary.start()
+            if (showingSummary && !isSweep) {
+                enterSummary()
+            } else {
+                showingSummary = false
+                updateNavButtons()
+                bumpChrome()
+            }
+        } else {
+            showingSummary = false
+            FaqRedirect.snackbar(this, R.string.no_batch_data, R.string.url_faq_no_batch_data)
         }
     }
 

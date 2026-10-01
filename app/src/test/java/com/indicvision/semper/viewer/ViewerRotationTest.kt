@@ -9,6 +9,7 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import com.indicvision.semper.ui.viewer.ViewerArgs
+import kotlinx.coroutines.asCoroutineDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -24,6 +25,7 @@ import org.robolectric.shadows.ShadowDialog
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.Executor
 
 /** What the result viewer keeps when a rotation recreates it. */
 @RunWith(RobolectricTestRunner::class)
@@ -73,6 +75,28 @@ class ViewerRotationTest {
             check(System.currentTimeMillis() < deadline) { "timed out waiting on the viewer" }
             Thread.sleep(20)
         }
+    }
+
+    @Test
+    fun `opening the viewer lists the batch off the main thread`() {
+        val intent = ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
+            .toIntent(ApplicationProvider.getApplicationContext())
+        val controller = Robolectric.buildActivity(ResultViewerActivity::class.java, intent)
+        // Hold the disk work: whatever onCreate and the main looper do without it
+        // must not include the listing.
+        val held = mutableListOf<Runnable>()
+        controller.get().frameSetDispatcher = Executor { held += it }.asCoroutineDispatcher()
+        val activity = controller.setup().get()
+        shadowOf(activity.mainLooper).idle()
+
+        assertEquals(0, activity.frameCount())
+        assertEquals(false, activity.frameSetLoaded)
+
+        held.toList().forEach { it.run() }
+        idleUntil(activity) { activity.frameSetLoaded }
+        assertEquals(FRAMES, activity.frameCount())
+        idleUntil(activity) { activity.rawData != null }
+        assertEquals(0, activity.currentFrameIndex)
     }
 
     @Test

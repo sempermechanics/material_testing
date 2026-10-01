@@ -43,6 +43,7 @@ class FrameNumberEntryTest {
         const val FRAMES = 6
         const val GRID = 4
         const val STEP = 4
+        const val TIMEOUT_MS = 10_000L
     }
 
     @Before
@@ -70,8 +71,14 @@ class FrameNumberEntryTest {
         // the frame field is about.
         val intent = ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
             .toIntent(ApplicationProvider.getApplicationContext())
-        return Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get().also {
-            shadowOf(it.mainLooper).idle()
+        // The batch is listed off the main thread, so wait for it rather than one idle.
+        val activity = Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get()
+        val deadline = System.currentTimeMillis() + TIMEOUT_MS
+        while (true) {
+            shadowOf(activity.mainLooper).idle()
+            if (activity.frameSetLoaded) return activity
+            check(System.currentTimeMillis() < deadline) { "timed out waiting on the viewer" }
+            Thread.sleep(20)
         }
     }
 
