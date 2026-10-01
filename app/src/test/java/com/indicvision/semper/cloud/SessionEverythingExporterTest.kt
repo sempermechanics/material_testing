@@ -6,15 +6,14 @@ import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.SessionEverythingExporter
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionStore
-import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.fixtures.CleanAppState
 import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -26,19 +25,10 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class SessionEverythingExporterTest {
 
+    @get:Rule
+    val clean = CleanAppState()
+
     private val context: Context = ApplicationProvider.getApplicationContext()
-
-    @Before
-    fun setUp() {
-        TokenStore.clear(context)
-        SessionStore.deleteAll(context)
-    }
-
-    @After
-    fun tearDown() {
-        SessionStore.deleteAll(context)
-        TokenStore.clear(context)
-    }
 
     /** A local session with one readable frame; image size 0 skips report rendering. */
     private fun seedSession(id: String) {

@@ -12,7 +12,7 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.StorageBudget
 import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
-import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.fixtures.CleanAppState
 import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.FrameImportHelper
 import org.junit.After
@@ -20,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -35,13 +36,14 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 class LocalStorageFootprintTest {
 
+    @get:Rule
+    val clean = CleanAppState()
+
     private lateinit var ctx: Context
 
     @Before
     fun setUp() {
         ctx = ApplicationProvider.getApplicationContext()
-        TokenStore.clear(ctx)
-        SessionStore.deleteAll(ctx)
         DicSettings.setAutoFreeBudgetGb(ctx, DicSettings.AUTO_FREE_OFF)
         ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
         // Eviction presumes the cloud copy can be pulled back, which is the
@@ -51,8 +53,6 @@ class LocalStorageFootprintTest {
 
     @After
     fun tearDown() {
-        SessionStore.deleteAll(ctx)
-        TokenStore.clear(ctx)
         AppRemoteConfig.clear(ctx)
         ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
     }

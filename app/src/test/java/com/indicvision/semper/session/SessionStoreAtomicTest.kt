@@ -4,13 +4,13 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
-import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.fixtures.CleanAppState
 import com.indicvision.semper.fixtures.sessionRecord
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -23,19 +23,14 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 class SessionStoreAtomicTest {
 
+    @get:Rule
+    val clean = CleanAppState()
+
     private lateinit var ctx: Context
 
     @Before
     fun setUp() {
         ctx = ApplicationProvider.getApplicationContext()
-        TokenStore.clear(ctx)
-        SessionStore.deleteAll(ctx)
-    }
-
-    @After
-    fun tearDown() {
-        SessionStore.deleteAll(ctx)
-        TokenStore.clear(ctx)
     }
 
     private fun record(id: String, createdAt: Long = 1L) = sessionRecord(
