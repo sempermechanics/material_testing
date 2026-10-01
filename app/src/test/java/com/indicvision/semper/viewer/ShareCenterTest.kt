@@ -4,6 +4,7 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.widget.TextView
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.fixtures.launchViewer
 import com.indicvision.semper.fixtures.viewerArgs
 import com.indicvision.semper.fixtures.writeGridBatch
@@ -17,7 +18,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowToast
 import java.io.File
 
@@ -39,7 +39,6 @@ class ShareCenterTest {
         const val FRAMES = 3
         const val GRID = 4
         const val STEP = 4
-        const val TIMEOUT_MS = 10_000L
     }
 
     @Before
@@ -50,19 +49,8 @@ class ShareCenterTest {
 
     private fun viewer(frameNames: List<String> = emptyList()): ResultViewerActivity {
         val activity = launchViewer(viewerArgs(batchDir, GRID, STEP, frameNames))
-        idleUntil(activity) { activity.buildShareSnapshot() != null }
+        idleUntil("the viewer") { activity.buildShareSnapshot() != null }
         return activity
-    }
-
-    /** The export builds off the main thread and hands back to it, so pump both. */
-    private fun idleUntil(activity: ResultViewerActivity, done: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + TIMEOUT_MS
-        while (true) {
-            shadowOf(activity.mainLooper).idle()
-            if (done()) return
-            check(System.currentTimeMillis() < deadline) { "timed out waiting on the viewer" }
-            Thread.sleep(20)
-        }
     }
 
     /** The in-app pill CrispToast adds over the content, or null when none is up. */
@@ -75,7 +63,7 @@ class ShareCenterTest {
         val activity = viewer()
         val dest = File(temp.root, "picked.csv")
         ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
-        idleUntil(activity) { ShadowToast.getLatestToast() != null }
+        idleUntil("the viewer") { ShadowToast.getLatestToast() != null }
 
         assertEquals(activity.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
         val lines = dest.readLines()
@@ -91,7 +79,7 @@ class ShareCenterTest {
     private fun csvRowsByImage(activity: ResultViewerActivity): Map<String, Int> {
         val dest = File(temp.root, "picked_${System.nanoTime()}.csv")
         ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
-        idleUntil(activity) { ShadowToast.getLatestToast() != null }
+        idleUntil("the viewer") { ShadowToast.getLatestToast() != null }
         val lines = dest.readLines()
         val header = lines.indexOfFirst { it.startsWith("image,") }
         return lines.drop(header + 1).filter { it.isNotBlank() }.groupingBy { it.substringBefore(',') }.eachCount()
@@ -125,7 +113,7 @@ class ShareCenterTest {
         val activity = viewer()
         val dest = File(temp.root, "picked.bin")
         ShareCenter(activity).writeKindToUri("bogus", Uri.fromFile(dest))
-        idleUntil(activity) { pillText(activity) != null }
+        idleUntil("the viewer") { pillText(activity) != null }
 
         assertEquals(activity.getString(R.string.share_failed), pillText(activity))
         assertTrue(!dest.exists() || dest.length() == 0L)

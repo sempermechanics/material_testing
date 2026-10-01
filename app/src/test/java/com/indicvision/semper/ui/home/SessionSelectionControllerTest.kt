@@ -15,6 +15,7 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.fixtures.sessionRecord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -324,7 +325,7 @@ class SessionSelectionControllerTest {
         controller.selectAll()
         delete.performClick()
         confirmPositive()
-        pumpUntil { refreshes > 0 }
+        idleUntil("the erase to refresh the list") { refreshes > 0 }
 
         assertTrue(queuedDeletes.isEmpty())
     }
@@ -384,7 +385,7 @@ class SessionSelectionControllerTest {
         controller.startSelection(both)
         delete.performClick()
         pick(R.string.delete_choice_phone)
-        pumpUntil { refreshes > 0 }
+        idleUntil("the erase to refresh the list") { refreshes > 0 }
 
         assertEquals(1, deviceOnlyDeletes)
         assertTrue(queuedDeletes.isEmpty())
@@ -477,16 +478,5 @@ class SessionSelectionControllerTest {
             }
         }
         error("no EditText under $root")
-    }
-
-    /** The erase runs on Dispatchers.IO and hands back to main, so pump both. */
-    private fun pumpUntil(done: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + 10_000L
-        while (true) {
-            shadowOf(Looper.getMainLooper()).idle()
-            if (done()) return
-            check(System.currentTimeMillis() < deadline) { "timed out" }
-            Thread.sleep(20)
-        }
     }
 }

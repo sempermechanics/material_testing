@@ -7,6 +7,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.fixtures.launchViewer
 import com.indicvision.semper.fixtures.viewerArgs
 import com.indicvision.semper.ui.analysis.EngineFailure
@@ -18,7 +19,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowDialog
 import java.io.File
 import java.nio.ByteBuffer
@@ -42,7 +42,6 @@ class ViewerSettingsSheetTest {
         const val FRAMES = 3
         const val GRID = 4
         const val STEP = 4
-        const val TIMEOUT_MS = 10_000L
     }
 
     @Before
@@ -67,18 +66,8 @@ class ViewerSettingsSheetTest {
 
     private fun viewer(args: ViewerArgs = baseArgs()): ResultViewerActivity {
         val activity = launchViewer(args)
-        idleUntil(activity) { activity.rawData != null }
+        idleUntil("the viewer") { activity.rawData != null }
         return activity
-    }
-
-    private fun idleUntil(activity: ResultViewerActivity, done: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + TIMEOUT_MS
-        while (true) {
-            shadowOf(activity.mainLooper).idle()
-            if (done()) return
-            check(System.currentTimeMillis() < deadline) { "timed out waiting on the viewer" }
-            Thread.sleep(20)
-        }
     }
 
     private fun ResultViewerActivity.rows(): Map<String, String> = ViewerSettingsSheet.entriesFor(this).toMap()
