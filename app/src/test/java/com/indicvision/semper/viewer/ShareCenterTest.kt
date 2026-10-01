@@ -63,7 +63,7 @@ class ShareCenterTest {
         val activity = viewer()
         val dest = File(temp.root, "picked.csv")
         ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
-        idleUntil("the viewer") { ShadowToast.getLatestToast() != null }
+        idleUntil("the save toast") { ShadowToast.getLatestToast() != null }
 
         assertEquals(activity.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
         val lines = dest.readLines()
@@ -79,7 +79,7 @@ class ShareCenterTest {
     private fun csvRowsByImage(activity: ResultViewerActivity): Map<String, Int> {
         val dest = File(temp.root, "picked_${System.nanoTime()}.csv")
         ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
-        idleUntil("the viewer") { ShadowToast.getLatestToast() != null }
+        idleUntil("the save toast") { ShadowToast.getLatestToast() != null }
         val lines = dest.readLines()
         val header = lines.indexOfFirst { it.startsWith("image,") }
         return lines.drop(header + 1).filter { it.isNotBlank() }.groupingBy { it.substringBefore(',') }.eachCount()
@@ -113,7 +113,7 @@ class ShareCenterTest {
         val activity = viewer()
         val dest = File(temp.root, "picked.bin")
         ShareCenter(activity).writeKindToUri("bogus", Uri.fromFile(dest))
-        idleUntil("the viewer") { pillText(activity) != null }
+        idleUntil("the failure pill") { pillText(activity) != null }
 
         assertEquals(activity.getString(R.string.share_failed), pillText(activity))
         assertTrue(!dest.exists() || dest.length() == 0L)
