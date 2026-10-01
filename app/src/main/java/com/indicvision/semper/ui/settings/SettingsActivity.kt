@@ -286,8 +286,8 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun openOrDownloadAnalysis(entry: AnalysisEntry) {
         val record = entry.record
-        if (record?.hasLocalData() == true) {
-            SessionOpenHelper.openOrExplain(this, record)
+        if (record != null && entry.hasLocalData) {
+            SessionOpenHelper.openOrExplain(this, record, hasLocalData = true)
             return
         }
         if (entry.cloud != null) {
@@ -295,7 +295,7 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
         if (record != null) {
-            SessionOpenHelper.openOrExplain(this, record)
+            SessionOpenHelper.openOrExplain(this, record, hasLocalData = false)
         }
     }
 

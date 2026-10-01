@@ -46,8 +46,12 @@ class SessionListAdapter(
     /** id → live upload progress; empty except for rows currently backing up. */
     private var progress: Map<String, RowProgress> = emptyMap()
 
-    /** Ids that are SYNCED but have no local `.dat`s — "Only in cloud" badge. */
-    private var cloudOnlyIds: Set<String> = emptySet()
+    /**
+     * Ids whose frames are not on this phone, read off the main thread with
+     * the list ([submit]). A SYNCED one is badged "Only in cloud"; selection
+     * and open ask [hasLocalData] instead of listing the session directory.
+     */
+    private var withoutLocalData: Set<String> = emptySet()
 
     /**
      * Whether rows show their sync badge and upload bar at all. False on a
@@ -69,10 +73,18 @@ class SessionListAdapter(
     /** Paths that are not platform-decodable (e.g. TIFF bytes named `.png`). */
     private val thumbMisses: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
 
-    fun submit(newItems: List<SessionRecord>) {
+    /**
+     * Shows [newItems]. [withoutLocalData] are the ids among them with no frame
+     * data on this phone, from [SessionRecord.hasLocalData] read on IO.
+     */
+    fun submit(newItems: List<SessionRecord>, withoutLocalData: Set<String>) {
         items = newItems
+        this.withoutLocalData = withoutLocalData
         notifyDataSetChanged()
     }
+
+    /** Whether [id]'s frames were on this phone when the list was read; no disk access. */
+    fun hasLocalData(id: String): Boolean = id !in withoutLocalData
 
     fun allIds(): List<String> = items.map { it.id }
 
@@ -96,14 +108,6 @@ class SessionListAdapter(
         (old.keys + new.keys).forEach { id ->
             if (old[id] != new[id]) rebindRow(id)
         }
-    }
-
-    /** Ids with no local frame data (derived on IO); rebinds rows whose badge changes. */
-    fun setCloudOnlyIds(new: Set<String>) {
-        val old = cloudOnlyIds
-        if (old == new) return
-        cloudOnlyIds = new
-        (old + new).forEach { rebindRow(it) }
     }
 
     /** Rows whose ids are in [ids], in list order. */
@@ -235,7 +239,8 @@ class SessionListAdapter(
             holder.progressBar.isIndeterminate = false
             holder.progressBar.isVisible = false
             holder.badge.text = when {
-                r.id in cloudOnlyIds -> ctx.getString(R.string.badge_cloud_only)
+                r.syncState == SessionRecord.SyncState.SYNCED && r.id in withoutLocalData ->
+                    ctx.getString(R.string.badge_cloud_only)
                 r.syncState == SessionRecord.SyncState.SYNCED -> ctx.getString(R.string.badge_synced)
                 r.syncState == SessionRecord.SyncState.PENDING -> ctx.getString(R.string.badge_pending)
                 r.syncState == SessionRecord.SyncState.LOCAL_ONLY -> ctx.getString(R.string.badge_local)

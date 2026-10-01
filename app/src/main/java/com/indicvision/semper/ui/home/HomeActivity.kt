@@ -468,13 +468,7 @@ class HomeActivity : AppCompatActivity() {
     private fun refresh(deep: Boolean = false, reconcile: Boolean = true) {
         lifecycleScope.launch {
             val sessions = visibleSessions()
-            val cloudOnly = withContext(Dispatchers.IO) {
-                sessions.filter {
-                    it.syncState == SessionRecord.SyncState.SYNCED && !it.hasLocalData()
-                }.map { it.id }.toSet()
-            }
-            adapter.submit(sessions)
-            adapter.setCloudOnlyIds(cloudOnly)
+            submitSessions(sessions)
             // Demo: analyses are recorded silently and there is no restore, so
             // the list carries no sync badge, bar or "only in cloud" state.
             adapter.setSyncVisible(showsCloudState())
@@ -595,7 +589,7 @@ class HomeActivity : AppCompatActivity() {
                 updateCloudBackups()
                 if (outcome.repaired > 0) {
                     // The rows changed underneath us — show the corrected state.
-                    adapter.submit(visibleSessions())
+                    submitSessions(visibleSessions())
                     if (!showsCloudState()) return
                     Toast.makeText(
                         this,
@@ -627,7 +621,8 @@ class HomeActivity : AppCompatActivity() {
     // ── Row actions ──────────────────────────────────────────────────────
 
     private fun openSession(record: SessionRecord) {
-        if (record.hasLocalData()) {
+        val hasLocal = adapter.hasLocalData(record.id)
+        if (hasLocal) {
             startActivity(SessionOpenHelper.intentFor(this, record))
             return
         }
@@ -636,7 +631,7 @@ class HomeActivity : AppCompatActivity() {
         // A demo account cannot pull its recorded copy back, so a row with
         // no local data is simply unopenable — no download offer.
         if (!hasCloud || !showsCloudState()) {
-            SessionOpenHelper.openOrExplain(this, record)
+            SessionOpenHelper.openOrExplain(this, record, hasLocal)
             return
         }
         MaterialAlertDialogBuilder(this)
@@ -757,6 +752,17 @@ class HomeActivity : AppCompatActivity() {
             .firstOrNull { it.state == WorkInfo.State.FAILED }
             ?.outputData?.getString(DicKeys.UPLOAD_FAIL_REASON)
     }.getOrNull()
+
+    /**
+     * Shows [sessions] with which of them still have frames on this phone,
+     * read here on IO so binding, selecting and opening a row never do.
+     */
+    private suspend fun submitSessions(sessions: List<SessionRecord>) {
+        val withoutLocalData = withContext(Dispatchers.IO) {
+            sessions.filterNot { it.hasLocalData() }.map { it.id }.toSet()
+        }
+        adapter.submit(sessions, withoutLocalData)
+    }
 
     /** The phone's analyses, less any a queued delete is about to remove. */
     private suspend fun visibleSessions(): List<SessionRecord> {
