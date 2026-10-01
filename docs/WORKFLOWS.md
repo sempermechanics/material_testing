@@ -463,7 +463,7 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade
 | C9 | `GET /v1/sessions/{sid}/files` | C1 | The restore manifest, cursor-paginated (it used to truncate at 2000) |
 | C10 | `GET /v1/files/{id}/content` | C4 | The one route that streams file bytes out. Forwards `Range` to Drive and returns 206 so a restore resumes; audits only the window starting at byte 0; sanitises the client-supplied filename before it reaches `Content-Disposition` |
 | C11 | `DELETE /v1/sessions/{sid}` 🔒 | C4 | Drive folder then Firestore metadata; nothing soft-deleted |
-| C21 | `PUT /v1/sessions/{sid}/metadata` | C4 | Replaces a COMPLETED session's metadata.json in place, for a change made after the backup (a bending deflection correction; ADR-013). Refuses an unfinished upload (409 `session_not_complete`), another session's metadata or an unknown schema (422), over 256 KB (413). The file doc's size and checksums follow the new bytes. The only write to a completed file |
+| C21 | `PUT /v1/sessions/{sid}/metadata` | C4 | Replaces a COMPLETED session's metadata.json in place, for a change made after the backup (a rename; in Material Testing also a deflection or tensile curve correction; ADR-013). Refuses an unfinished upload (409 `session_not_complete`), another session's metadata or an unknown schema (422), over 256 KB (413). The file doc's size and checksums follow the new bytes. The only write to a completed file |
 | C-health | `GET /healthz`, `GET /readyz` | none | Liveness never probes dependencies; readiness pings Firestore + Drive and answers with stable `DependencyError` codes |
 
 Backend tests mirror these one-to-one — `backend/tests/test_route_authz_matrix.py`

@@ -50,6 +50,8 @@ interface CloudApi {
 
     suspend fun listSessionFiles(idToken: String, sessionId: String): SessionFilesResponse
 
+    suspend fun replaceSessionMetadata(idToken: String, sessionId: String, metadataJson: String)
+
     suspend fun downloadRange(idToken: String, fileId: String, dest: File, rangeStart: Long, length: Long)
 
     suspend fun downloadFile(

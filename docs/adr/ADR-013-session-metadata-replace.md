@@ -4,11 +4,11 @@
 **Date:** 2026-09-30
 **Deciders:** app owner
 
-> **In this repo:** the backend route and its tests. The app side (marking a
-> session, sending, the reconcile re-queue) is Material Testing's, in
-> `sempermechanics/material_testing` #112, and so is TD-150. Semper's app does
-> not call the route; its `ApiErrors.SESSION_NOT_COMPLETE` exists only so the
-> backend's client-branched codes match both apps.
+> **In this repo:** the backend route and its tests, and since 2026-10-01 the
+> app side for a **rename** (`SessionStore.rename` marks the row;
+> `SessionMetadataSync`, `SessionMetadataWorker` and the reconcile re-queue were
+> ported from `sempermechanics/material_testing` #112/#113). Material Testing
+> marks its deflection and curve corrections the same way (its TD-150, TD-152).
 
 ## Context
 
@@ -56,11 +56,15 @@ Two ways to reach the cloud copy were weighed:
      on a row that has, or is getting, a cloud copy.
    - `SessionMetadataSync` rebuilds the metadata the way the upload does
      (`SessionUploadMetadata.buildMetadataJson`) and sends it.
-   - `SessionStore.clearMetadataStale` clears the mark only if the geometry
-     sent is still the row's, so a correction made during the send is sent
-     again.
+   - `SessionStore.clearMetadataStale` clears the mark only if what was sent
+     is still the row's (here the name; in Material Testing also the geometry
+     and curve correction), so a change made during the send is sent again.
+   - Here, `SessionStore.rename` sets the mark the same way: the name is in
+     `metadata.json`, and a restore with no local row takes it from there
+     (`CloudRestore.recordFrom`).
 3. **Who sends.**
-   - The viewer queues `SessionMetadataWorker` after a correction. The worker
+   - The viewer queues `SessionMetadataWorker` after a correction (Home's
+     rename dialog after a rename, `SessionSelectionController.promptRename`). The worker
      waits out an upload in flight and transient failures with WorkManager's
      backoff, and stops after nine tries.
    - `CloudSync.reconcile` queues it again for any SYNCED row still marked.
@@ -76,6 +80,8 @@ Two ways to reach the cloud copy were weighed:
   from semperdic-app only, so this change goes upstream first. Until then the
   app's send gets the gateway's 404 and leaves the row marked. Nothing is
   lost: the next reconcile after the deploy sends it.
-- A rename still does not reach the cloud copy. It could set the same mark,
-  but the name that matters on another phone is the local one after a
-  restore, and a cloud-only row is named from `specimen`. Left as it is.
+- A rename reaches the cloud copy too (added 2026-10-01). It was first left
+  out on the grounds that the local name wins after a restore. That holds only
+  on a phone that still has the row: on a new phone, or after a reinstall,
+  there is no row, so the restore named the analysis from the old
+  `metadata.json`.
