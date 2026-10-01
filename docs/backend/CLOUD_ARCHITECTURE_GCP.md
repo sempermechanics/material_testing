@@ -235,6 +235,13 @@ Semper's is `activeDeviceId`, Material Testing's `activeDeviceIdMaterialTesting`
 (`backend/app/apps.py`). The same suffix applies to the release hold and to
 the licence or seat lock (§20.10).
 
+The same header tags each cloud session with the app that created it
+([ADR-014](../adr/ADR-014-session-app-tag.md)): `GET /v1/sessions` lists the
+asking app's backups (`?app=all` for the whole account, as the account console
+asks) and `GET /v1/sessions/{sid}/files`, the restore manifest, answers only
+that app, so neither app restores the other's backup. The quota stays the
+account's (§5).
+
 **Device records are settled, not orphaned.** Both transitions now write the old
 record rather than leaving it `ACTIVE` and unreachable:
 
@@ -521,18 +528,29 @@ challenges/{nonce}                (short-lived, TTL-deleted)
 
 sessions/{sessionId}
   uid, deviceId
+  app: "semper" | "materialtesting"   (the app that created it, from X-App-Id,
+                                  never the body — ADR-014. Absent on sessions
+                                  from before the tag, which read as "semper"
+                                  (`repo/sessions.session_app`) until
+                                  `backend/scripts/tag_session_apps.py`
+                                  stamps them.
+                                  GET /v1/sessions lists one app's;
+                                  /files answers only that app)
   specimen: string
   status: "PENDING" | "PROVISIONING" | "PROVISION_FAILED"
         | "UPLOADING" | "COMPLETED" | "FAILED"
         (PROVISIONING and UPLOADING are IN_FLIGHT_STATUSES — both still
          expect more bytes. Every status but PROVISION_FAILED counts
          against the session quota: `count_user_sessions`, behind both the
-         create check and `quota.used`. COMPLETED is terminal —
+         create check and `quota.used`, and counts whichever app it is
+         tagged with: the quota is the account's. COMPLETED is terminal —
          provisioning never writes over it)
   driveFolderId                   (…/session/{sid} folder)
   totalBytes, fileCount, completedCount   (totalBytes is the size declared
                                   at create, not what is stored)
-  metrics: { pointsConverged, avgIcgnIters, execMs }  // small, from device
+  metrics: { pointsConverged, avgIterations, executionTimeMs, frameCount,
+             isSweep, sweepSkipped }  // small scalars, from the device
+                                  (`DicUploadWorker.createSession`)
   createdAt, updatedAt, completedAt
 
 files/{fileId}                    (fileId = deterministic sid_role_name)
@@ -689,6 +707,7 @@ the way it does.
 | Audit trail | [`backend/app/audit.py`](../../backend/app/audit.py) | |
 | Config / env vars | [`backend/app/config.py`](../../backend/app/config.py) | Includes `DEV_INSECURE_AUTH`, `APP_CHECK_MODE`, `TASKS_*` |
 | Schema migrations | [`backend/scripts/migrate_schema.py`](../../backend/scripts/migrate_schema.py) | Versioned steps in `backend/scripts/migrations/` — see [FIRESTORE_SCHEMA_RUNBOOK.md](FIRESTORE_SCHEMA_RUNBOOK.md) |
+| Session app tag | [`backend/app/repo/sessions.py`](../../backend/app/repo/sessions.py), [`routers/sessions.py`](../../backend/app/routers/sessions.py), [`backend/scripts/tag_session_apps.py`](../../backend/scripts/tag_session_apps.py) | `session_app` (absent = `semper`), `create_session(…, app)`, `list_user_sessions(…, app=None)` filling pages in Python, the `/files` gate; the backfill (§5, [ADR-014](../adr/ADR-014-session-app-tag.md)) |
 | Container | [`backend/Dockerfile`](../../backend/Dockerfile) | Installs from `requirements.lock` with `--require-hashes`. `requirements.txt` is the pin list; lock versions of direct deps must match txt. |
 | API Gateway spec | [`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml) | Covers all current routes; `__CLOUD_RUN_URL__` is substituted at deploy |
 
@@ -2249,7 +2268,7 @@ The bundle route is the browser's way out: one analysis as one zip, at the
 `USER_STEPUP` tier (§20.10) — a second factor and a recent sign-in stand in for
 the attestation a browser cannot produce.
 
-Four decisions in it are worth keeping:
+Five decisions in it are worth keeping:
 
 - **One archive over every completed artifact, not a proxy of the stored
   `Session.zip`.** A modern session stores *two* Drive artifacts — the
@@ -2270,6 +2289,11 @@ Four decisions in it are worth keeping:
   status code left to send. The central directory, written last, is the
   completion signal — a truncated transfer is detectable rather than looking
   like a smaller but valid archive.
+- **Every app's analyses, not one.** The bundle is not gated by the session's
+  app tag ([ADR-014](../adr/ADR-014-session-app-tag.md)): a browser cannot send
+  `X-App-Id`, so it would always read as Semper and lose Material Testing's
+  backups. The account page lists them all (`GET /v1/sessions?app=all`) with
+  an App column.
 
 `list_session_artifacts` is a second projection over the same `files`
 collection, deliberately kept apart from `list_session_files_all`. That one

@@ -17,6 +17,30 @@ meaning do not bump `SCHEMA_VERSION`:
 `source` is `app` when the request carried `X-Device-Id`, else `console`. Both
 records are returned by `GET /v1/me/export` and deleted with the user document.
 
+### `sessions/{sid}.app`, and its backfill
+
+`app` (`semper` or `materialtesting`) is written by `POST /v1/sessions` from
+`X-App-Id` ([ADR-014](../adr/ADR-014-session-app-tag.md)). Absent means
+`semper` (`repo/sessions.session_app`), so it needs no version bump either, but
+a Material Testing session left untagged drops out of Material Testing's list
+and restore. `backend/scripts/tag_session_apps.py` tags every session without
+`app` from its device (`devices/{deviceId}.app`, `materialtesting` only when the
+device says so). It is not a chain migration: it does not stamp
+`schemaVersion` and keeps no ledger, because it is idempotent by construction
+(a tagged session is skipped).
+
+1. With Application Default Credentials that can read and write Firestore,
+   dry-run: `python backend/scripts/tag_session_apps.py --project PROJECT_ID`.
+   It prints the sessions scanned, already tagged, and how many would be tagged
+   each way, plus those with no device document (read as `semper`).
+2. Apply: the same command with `--apply`.
+3. Deploy the account console (it asks `?app=all`), then the backend that
+   writes and filters on the tag.
+4. Run the dry-run again, then `--apply` for any session the old backend wrote
+   between step 2 and its replacement. A second dry-run must report zero to tag.
+
+Staging and production share one database, so there is one run.
+
 ## How migrations are defined
 
 Migrations live in `backend/scripts/migrations/` as `NNN_slug.py`, each exporting:
