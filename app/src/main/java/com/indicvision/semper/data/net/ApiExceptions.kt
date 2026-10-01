@@ -4,11 +4,9 @@ package com.indicvision.semper.data.net
  * The backend failures by their own names, so a caller can write
  * `catch (e: ApiException)` instead of `IndicApi.ApiException`.
  *
- * The classes are still declared inside [IndicApi]; these are aliases, so a
- * `catch` of either spelling catches the same class and nothing that throws
- * them changes. Moving the declarations here (and leaving the aliases
- * behind in IndicApi, or rewriting the `IndicApi.` references) is a
- * separate step.
+ * The classes are declared inside [IndicApi] and stay there: over twenty
+ * files in the app and its tests name them `IndicApi.XException`. These are
+ * aliases, so a `catch` of either spelling catches the same class.
  */
 
 /** A non-2xx from the backend, with its status [IndicApi.ApiException.code], body and request id. */

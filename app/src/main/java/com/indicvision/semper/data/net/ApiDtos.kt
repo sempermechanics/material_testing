@@ -1,10 +1,10 @@
-// A couple of default numeric literals (limits/versions) read clearest inline.
-@file:Suppress("MagicNumber")
-
 package com.indicvision.semper.data.net
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+
+/** The backend's resumable chunk size when a pending upload does not name one. */
+private const val DEFAULT_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
 
 /**
  * Wire DTOs for the Semper GCP backend (FastAPI on Cloud Run). Field names match
@@ -218,7 +218,7 @@ data class FileCompleteRequest(
 data class PendingUploadDto(
     val fileId: String,
     val uploadUrl: String,
-    val chunkSize: Int = 8 * 1024 * 1024,
+    val chunkSize: Int = DEFAULT_UPLOAD_CHUNK_BYTES,
     val name: String = "",
     val role: String = "",
     val sizeBytes: Long = 0,
