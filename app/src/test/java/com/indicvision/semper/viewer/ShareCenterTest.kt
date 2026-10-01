@@ -3,12 +3,12 @@ package com.indicvision.semper.viewer
 import android.net.Uri
 import android.view.ViewGroup
 import android.widget.TextView
-import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.launchViewer
+import com.indicvision.semper.fixtures.viewerArgs
+import com.indicvision.semper.fixtures.writeGridBatch
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import com.indicvision.semper.ui.viewer.ShareCenter
-import com.indicvision.semper.ui.viewer.ViewerArgs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -16,14 +16,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * The viewer's "save to Files" export, end to end from a real viewer: the CSV
@@ -50,30 +47,11 @@ class ShareCenterTest {
     @Before
     fun writeBatch() {
         batchDir = temp.newFolder("batch")
-        for (f in 0 until FRAMES) {
-            val points = GRID * GRID
-            val buffer = ByteBuffer.allocate(points * DicResult.BYTES_PER_POINT).order(ByteOrder.nativeOrder())
-            for (i in 0 until points) {
-                buffer.putFloat(((i % GRID) * STEP).toFloat())
-                buffer.putFloat(((i / GRID) * STEP).toFloat())
-                buffer.putFloat(f.toFloat()).putFloat(0f)
-                buffer.putFloat(f * 0.001f).putFloat(0f).putFloat(0f)
-                buffer.putFloat(0.01f)
-            }
-            File(batchDir, "frame_%03d.dat".format(f)).writeBytes(buffer.array())
-        }
+        writeGridBatch(batchDir, FRAMES, GRID, STEP)
     }
 
     private fun viewer(frameNames: List<String> = emptyList()): ResultViewerActivity {
-        val intent = ViewerArgs.ofFrames(
-            batchDir.absolutePath,
-            GRID * STEP,
-            GRID * STEP,
-            STEP,
-            frameNames = frameNames,
-            startFrame = 0,
-        ).toIntent(ApplicationProvider.getApplicationContext())
-        val activity = Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get()
+        val activity = launchViewer(viewerArgs(batchDir, GRID, STEP, frameNames))
         idleUntil(activity) { activity.buildShareSnapshot() != null }
         return activity
     }

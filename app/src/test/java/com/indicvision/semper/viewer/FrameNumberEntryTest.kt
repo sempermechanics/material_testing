@@ -3,11 +3,11 @@ package com.indicvision.semper.viewer
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
-import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.launchViewer
+import com.indicvision.semper.fixtures.viewerArgs
+import com.indicvision.semper.fixtures.writeGridBatch
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
-import com.indicvision.semper.ui.viewer.ViewerArgs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -15,13 +15,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.time.Duration
 
 /**
@@ -48,29 +45,13 @@ class FrameNumberEntryTest {
     @Before
     fun writeBatch() {
         batchDir = temp.newFolder("batch")
-        for (f in 0 until FRAMES) {
-            val points = GRID * GRID
-            val buffer = ByteBuffer.allocate(points * DicResult.BYTES_PER_POINT).order(ByteOrder.nativeOrder())
-            for (i in 0 until points) {
-                buffer.putFloat(((i % GRID) * STEP).toFloat())
-                buffer.putFloat(((i / GRID) * STEP).toFloat())
-                buffer.putFloat(f.toFloat()) // u — differs per frame
-                buffer.putFloat(0f)
-                buffer.putFloat(f * 0.001f)
-                buffer.putFloat(0f)
-                buffer.putFloat(0f)
-                buffer.putFloat(0.01f)
-            }
-            File(batchDir, "frame_%03d.dat".format(f)).writeBytes(buffer.array())
-        }
+        writeGridBatch(batchDir, FRAMES, GRID, STEP) // u differs per frame
     }
 
     private fun viewer(): ResultViewerActivity {
-        // startFrame opens on a frame rather than the summary, which is what
+        // viewerArgs opens on a frame rather than the summary, which is what
         // the frame field is about.
-        val intent = ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
-            .toIntent(ApplicationProvider.getApplicationContext())
-        return Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get().also {
+        return launchViewer(viewerArgs(batchDir, GRID, STEP)).also {
             shadowOf(it.mainLooper).idle()
         }
     }

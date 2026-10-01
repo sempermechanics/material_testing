@@ -5,9 +5,10 @@ import android.text.style.ImageSpan
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.launchViewer
+import com.indicvision.semper.fixtures.viewerArgs
 import com.indicvision.semper.ui.analysis.EngineFailure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,7 +17,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -44,7 +44,6 @@ class ViewerSettingsSheetTest {
         const val FRAMES = 3
         const val GRID = 4
         const val STEP = 4
-        const val SIZE = GRID * STEP
         const val TIMEOUT_MS = 10_000L
     }
 
@@ -66,12 +65,10 @@ class ViewerSettingsSheetTest {
     }
 
     /** A plain three-frame run over the whole 16×16 image, opened on frame 1. */
-    private fun baseArgs() = ViewerArgs.ofFrames(batchDir.absolutePath, SIZE, SIZE, STEP, startFrame = 0)
-        .copy(strainWindow = 25, refName = "Dogbone A")
+    private fun baseArgs() = viewerArgs(batchDir, GRID, STEP).copy(strainWindow = 25, refName = "Dogbone A")
 
     private fun viewer(args: ViewerArgs = baseArgs()): ResultViewerActivity {
-        val intent = args.toIntent(ApplicationProvider.getApplicationContext())
-        val activity = Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get()
+        val activity = launchViewer(args)
         idleUntil(activity) { activity.rawData != null }
         return activity
     }
