@@ -9,22 +9,12 @@ import com.indicvision.semper.util.writeVia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
-import okhttp3.CertificatePinner
-import okhttp3.Headers
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.File
 import java.io.IOException
-import java.util.concurrent.TimeUnit
-
-// OkHttp client timeouts, in seconds.
-private const val CONNECT_TIMEOUT_S = 30L
-private const val WRITE_TIMEOUT_S = 300L
-private const val READ_TIMEOUT_S = 60L
-private const val DOWNLOAD_READ_TIMEOUT_S = 300L
 
 /** Seat routes take no body; the backend reads the caller from the token. */
 private const val EMPTY_JSON = "{}"
@@ -36,7 +26,8 @@ private const val SESSIONS_PAGE_SIZE = 100
  * Client for the Semper GCP backend (Cloud Run / FastAPI).
  *
  * Every mutating call carries a Google **ID token** (user proof) plus a
- * challenge-response **device signature** (device proof, [IndicApiSigning]).
+ * challenge-response **device signature** (device proof, [IndicApiSigning]),
+ * both sent through [IndicApiCalls].
  * File bytes go **directly to Google Drive** via the resumable session URI
  * returned by the broker — they never pass through this client's backend host.
  */
@@ -67,9 +58,9 @@ class IndicApi private constructor(context: Context) : CloudApi {
     /** The backend URL for [path]; see [IndicApiHttp.endpoint]. */
     private fun endpoint(path: String): String = IndicApiHttp.endpoint(base, path)
 
-    private val drive = DriveTransfer(client, downloadClient, IndicApiHttp.OCTET_MEDIA)
-    private val signing = IndicApiSigning(
-        client,
+    private val drive = DriveTransfer(IndicApiClients.api, IndicApiClients.download, IndicApiHttp.OCTET_MEDIA)
+    private val calls = IndicApiCalls(
+        IndicApiClients.api,
         ::endpoint,
         deviceId = { device.getDeviceId() },
         sign = { device.signMessage(it) },
@@ -111,9 +102,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      */
     class DeviceConflictException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_CONFLICT)
 
-    /**
-     * This device is already bound to a different account (409 from `GET /v1/me`).
-     */
+    /** This device is already bound to a different account (409 from `GET /v1/me`). */
     class DeviceInUseException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_IN_USE)
 
     /**
@@ -140,40 +129,6 @@ class IndicApi private constructor(context: Context) : CloudApi {
      */
     class UploadLinkExpiredException(val code: Int) : IOException("Drive upload link expired (HTTP $code)")
 
-    // ---------------------------------------------------------- request helpers
-
-    /**
-     * A token-authenticated call: the ID token and this device's id, then
-     * [route]'s URL, method and body. [read] takes a 200; any other answer goes
-     * to [onRefusal], which throws the route's most specific exception (a plain
-     * [ApiException] unless it says otherwise) or accepts the answer.
-     */
-    private suspend fun <T> bearer(
-        idToken: String,
-        route: Request.Builder.() -> Unit,
-        onRefusal: (Refusal) -> T = Refusal::fail,
-        read: (Response) -> T,
-    ): T = withContext(Dispatchers.IO) {
-        val request = Request.Builder().bearer(idToken, device.getDeviceId()).apply(route).build()
-        client.newCall(request).execute().use { resp -> answer(resp, onRefusal, read) }
-    }
-
-    /**
-     * A device-signed call ([IndicApiSigning]). [read] takes a 200; any other
-     * answer goes to [onRefusal], by default [failSigned].
-     */
-    private suspend fun <T> signed(
-        idToken: String,
-        call: SignedCall,
-        onRefusal: (Refusal) -> T = ::failSigned,
-        read: (Response) -> T,
-    ): T = withContext(Dispatchers.IO) {
-        signing.execute(idToken, call).use { resp -> answer(resp, onRefusal, read) }
-    }
-
-    private fun <T> answer(resp: Response, onRefusal: (Refusal) -> T, read: (Response) -> T): T =
-        if (resp.code == HttpStatus.OK) read(resp) else onRefusal(Refusal.of(resp))
-
     private inline fun <reified T> decode(resp: Response): T = json.decodeFromString(resp.body.string())
 
     private inline fun <reified T> jsonBody(value: T): RequestBody =
@@ -181,33 +136,10 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     private inline fun <reified T> jsonBytes(value: T): ByteArray = json.encodeToString(value).toByteArray()
 
-    /**
-     * Maps a refused signed call to the most specific exception, matching the
-     * parsed `detail` code ([ApiErrors]) rather than a substring of the body.
-     */
-    private fun failSigned(refusal: Refusal): Nothing {
-        val detail = if (refusal.code == HttpStatus.CONFLICT) ApiErrors.detailOf(refusal.body) else null
-        throw when {
-            detail == null -> refusal.exception()
-            ApiErrors.isCode(detail, ApiErrors.DEVICE_NOT_ACTIVE) -> DeviceNotActiveException(refusal.requestId)
-            ApiErrors.isCode(detail, ApiErrors.DEVICE_IN_USE) -> DeviceInUseException(refusal.requestId)
-            ApiErrors.isCode(detail, ApiErrors.DEVICE_CONFLICT) -> DeviceConflictException(refusal.requestId)
-            else -> refusal.exception()
-        }
-    }
-
-    /** The 403 mapping of the token-authenticated routes only an approved account reaches. */
-    private fun approvedOnly(refusal: Refusal): Nothing =
-        if (refusal.code == HttpStatus.FORBIDDEN) throw NotApprovedException() else refusal.fail()
-
-    /** A signed GET's headers per attempt, for a download that sends its own requests. */
-    private fun signedGet(idToken: String): (path: String) -> Headers =
-        { path -> signing.headersFor(idToken, SignedCall("GET", path)) }
-
     // ---------------------------------------------------------------- identity
 
     /** GET /v1/me. Throws [NotApprovedException] for a PENDING/SUSPENDED user. */
-    override suspend fun me(idToken: String): MeResponse = bearer(
+    override suspend fun me(idToken: String): MeResponse = calls.bearer(
         idToken,
         route = { url(endpoint("/v1/me")) },
         onRefusal = { refusal ->
@@ -228,7 +160,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * user's token.
      */
     override suspend fun getConfig(idToken: String): AppConfigDto = configFlight.run {
-        bearer(idToken, { url(endpoint("/v1/config")) }, ::approvedOnly) { decode(it) }
+        calls.bearer(idToken, { url(endpoint("/v1/config")) }, Refusal::failApprovedOnly) { decode(it) }
     }
 
     private val configFlight = SingleFlight<AppConfigDto>()
@@ -248,7 +180,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * this device.
      */
     override suspend fun exportAccount(idToken: String, dest: File): Unit =
-        signed(idToken, SignedCall("GET", "/v1/me/export")) { resp ->
+        calls.signed(idToken, SignedCall("GET", "/v1/me/export")) { resp ->
             // Promoted only after the whole body landed: a truncated transfer
             // must not look like a complete export.
             AtomicFiles.writeVia(dest) { part ->
@@ -275,7 +207,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
         val request = Request.Builder().url(endpoint("/v1/devices/register"))
             .header(IndicApiHttp.AUTHORIZATION, "Bearer $idToken")
             .post(jsonBody(body)).build()
-        client.newCall(request).execute().use { resp ->
+        IndicApiClients.api.newCall(request).execute().use { resp ->
             when (resp.code) {
                 HttpStatus.CREATED, HttpStatus.OK -> Unit
                 HttpStatus.CONFLICT -> throw DeviceConflictException(IndicApiHttp.requestIdOf(resp))
@@ -298,7 +230,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * `license_device_mismatch`, `license_revoked`, `license_seat_disabled`,
      * `license_seats_exhausted`, `license_already_redeemed`, `license_not_found`).
      */
-    override suspend fun activateLicense(idToken: String, key: String): AppConfigDto = bearer(
+    override suspend fun activateLicense(idToken: String, key: String): AppConfigDto = calls.bearer(
         idToken,
         route = { url(endpoint("/v1/licenses/activate")).post(jsonBody(LicenseActivateRequest(key = key))) },
     ) { decode<LicenseActivateResponse>(it).config }
@@ -320,7 +252,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
     /** POST /v1/licenses/release — give a floating seat back. Idempotent. */
     override suspend fun releaseLease(idToken: String): AppConfigDto = seatCall(idToken, "release")
 
-    private suspend fun seatCall(idToken: String, action: String): AppConfigDto = bearer(
+    private suspend fun seatCall(idToken: String, action: String): AppConfigDto = calls.bearer(
         idToken,
         route = { url(endpoint("/v1/licenses/$action")).post(EMPTY_JSON.toRequestBody(IndicApiHttp.JSON_MEDIA)) },
         onRefusal = { refusal ->
@@ -342,7 +274,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * Throws [TermsVersionMismatchException] when the server no longer serves
      * [version] — the app is older than the published Terms.
      */
-    override suspend fun acceptTerms(idToken: String, version: String): Unit = bearer(
+    override suspend fun acceptTerms(idToken: String, version: String): Unit = calls.bearer(
         idToken,
         route = { url(endpoint("/v1/me/terms")).post(jsonBody(TermsAcceptanceBody(version))) },
         onRefusal = { refusal ->
@@ -353,7 +285,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     /** PUT /v1/me/consents — grant or withdraw the optional product-improvement consent. */
     override suspend fun setImprovementConsent(idToken: String, granted: Boolean): Unit =
-        bearer(idToken, { url(endpoint("/v1/me/consents")).put(jsonBody(ConsentUpdateBody(granted))) }) {}
+        calls.bearer(idToken, { url(endpoint("/v1/me/consents")).put(jsonBody(ConsentUpdateBody(granted))) }) {}
 
     // ----------------------------------------------------------- session/files
 
@@ -376,7 +308,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
                     if (verify) append("&verify=true")
                     if (token != null) append('&').append(pageTokenParam(token))
                 }
-                bearer(idToken, { url(endpoint("/v1/sessions?$query")) }, ::approvedOnly) {
+                calls.bearer(idToken, { url(endpoint("/v1/sessions?$query")) }, Refusal::failApprovedOnly) {
                     decode<ListSessionsResponse>(it)
                 }
             },
@@ -387,7 +319,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     /** POST /v1/sessions (device-signed). Initiates a session + one resumable target per file. */
     override suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse =
-        signed(idToken, SignedCall("POST", "/v1/sessions", jsonBytes(request))) { decode(it) }
+        calls.signed(idToken, SignedCall("POST", "/v1/sessions", jsonBytes(request))) { decode(it) }
 
     /**
      * GET /v1/sessions/{sid}/uploads — what still needs uploading, every page
@@ -407,14 +339,14 @@ class IndicApi private constructor(context: Context) : CloudApi {
         fetchAllPages(
             fetch = { token ->
                 val path = "/v1/sessions/$sessionId/uploads" + pageTokenQuery(token)
-                signed(idToken, SignedCall("GET", path)) { decode<SessionUploadsResponse>(it) }
+                calls.signed(idToken, SignedCall("GET", path)) { decode<SessionUploadsResponse>(it) }
             },
             pageOf = { it.page },
         ).merged()
 
     /** POST /v1/files/{id}/complete (device-signed). */
     override suspend fun completeFile(idToken: String, fileId: String, request: FileCompleteRequest) =
-        signed(idToken, SignedCall("POST", "/v1/files/$fileId/complete", jsonBytes(request))) {}
+        calls.signed(idToken, SignedCall("POST", "/v1/files/$fileId/complete", jsonBytes(request))) {}
 
     /**
      * PUT /v1/sessions/{sid}/metadata — replace a backed-up analysis's
@@ -422,7 +354,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * (ADR-013). Device-signed; any non-200 throws [ApiException].
      */
     override suspend fun replaceSessionMetadata(idToken: String, sessionId: String, metadataJson: String) =
-        signed(idToken, SignedCall("PUT", "/v1/sessions/$sessionId/metadata", metadataJson.toByteArray())) {}
+        calls.signed(idToken, SignedCall("PUT", "/v1/sessions/$sessionId/metadata", metadataJson.toByteArray())) {}
 
     // ----------------------------------------------------------------- restore
 
@@ -433,7 +365,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
     override suspend fun listSessionFiles(idToken: String, sessionId: String): SessionFilesResponse =
         fetchAllPages(
             fetch = { token ->
-                bearer(idToken, { url(endpoint("/v1/sessions/$sessionId/files" + pageTokenQuery(token))) }) {
+                calls.bearer(idToken, { url(endpoint("/v1/sessions/$sessionId/files" + pageTokenQuery(token))) }) {
                     decode<SessionFilesResponse>(it)
                 }
             },
@@ -453,19 +385,10 @@ class IndicApi private constructor(context: Context) : CloudApi {
             endpoint(""), // the base; DriveTransfer appends its own paths
             expectedBytes = length,
             rangeStart = rangeStart,
-            signedGetHeaders = signedGet(idToken),
+            signedGetHeaders = calls.signedGet(idToken),
         )
 
-    /**
-     * GET /v1/files/{id}/content — stream a file back from Drive into [dest]
-     * ([DriveTransfer.downloadFile]). These bytes are proxied by the backend
-     * (Drive has no anonymous download), so this is the one path where the
-     * backend touches file content.
-     *
-     * Device-attested like writes: a fresh nonce and signature per window.
-     * `Range` is an unsigned header (not part of the signed message) so resume
-     * offsets can change without rehashing the body.
-     */
+    /** GET /v1/files/{id}/content into [dest], device-attested per window: [DriveTransfer.downloadFile]. */
     override suspend fun downloadFile(
         idToken: String,
         fileId: String,
@@ -478,13 +401,13 @@ class IndicApi private constructor(context: Context) : CloudApi {
         endpoint(""), // the base; DriveTransfer appends its own paths
         expectedBytes = expectedBytes,
         onBytes = onBytes,
-        signedGetHeaders = signedGet(idToken),
+        signedGetHeaders = calls.signedGet(idToken),
     )
 
     // ------------------------------------------------------------------- admin
 
     /** GET /v1/admin/users?status=… (admin ID token; no device signature). */
-    override suspend fun listUsers(idToken: String, status: String): List<AdminUserDto> = bearer(
+    override suspend fun listUsers(idToken: String, status: String): List<AdminUserDto> = calls.bearer(
         idToken,
         route = { url(endpoint(if (status.isBlank()) "/v1/admin/users" else "/v1/admin/users?status=$status")) },
         onRefusal = { refusal ->
@@ -497,7 +420,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     /** POST /v1/admin/users/{uid}/{action} — device-attested (approve/revoke). */
     override suspend fun setUserStatus(idToken: String, uid: String, action: String) =
-        signed(idToken, SignedCall("POST", "/v1/admin/users/$uid/$action"), Refusal::fail) {}
+        calls.signed(idToken, SignedCall("POST", "/v1/admin/users/$uid/$action"), Refusal::fail) {}
 
     // ----------------------------------------------------------------- erasure
 
@@ -511,7 +434,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * Gateway). Treating that as success would wipe the local copy while
      * leaving every byte in the cloud.
      */
-    override suspend fun deleteAccount(idToken: String) = signed(idToken, SignedCall("DELETE", "/v1/me")) {}
+    override suspend fun deleteAccount(idToken: String) = calls.signed(idToken, SignedCall("DELETE", "/v1/me")) {}
 
     /**
      * DELETE /v1/sessions/{id} — erase an analysis from the cloud: the Drive
@@ -523,12 +446,12 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * accepting that as success would delete the local copy and orphan the
      * cloud data forever.
      */
-    override suspend fun deleteSession(idToken: String, sessionId: String) = signed(
+    override suspend fun deleteSession(idToken: String, sessionId: String) = calls.signed(
         idToken,
         SignedCall("DELETE", "/v1/sessions/$sessionId"),
         onRefusal = { refusal ->
             if (refusal.code != HttpStatus.NOT_FOUND || !refusal.hasCode(ApiErrors.SESSION_NOT_FOUND)) {
-                failSigned(refusal)
+                refusal.failSigned()
             }
         },
     ) {}
@@ -536,10 +459,8 @@ class IndicApi private constructor(context: Context) : CloudApi {
     // ------------------------------------------------- direct-to-Drive uploads
 
     /**
-     * Resumable upload of [file] to a Drive [uploadUrl], in [chunkSize] chunks
-     * (multiple of 256 KiB). Resumes from the server offset on reconnect. Bytes
-     * go straight to Drive — not through the backend.
-     * Returns [DriveUpload.toPair]: (driveFileId, localMd5Hex), md5 always set for `:complete`.
+     * Resumable upload of [file] straight to Drive ([DriveUploader.uploadResumable]), as the
+     * `(driveFileId, localMd5Hex)` pair ([DriveUpload.toPair]) that `:complete` needs.
      */
     override suspend fun uploadResumable(
         uploadUrl: String,
@@ -549,40 +470,6 @@ class IndicApi private constructor(context: Context) : CloudApi {
     ): Pair<String, String> = drive.uploadResumable(uploadUrl, file, chunkSize, onBytes).toPair()
 
     companion object {
-        // One connection pool + dispatcher shared by every IndicApi instance.
-        // The class is constructed per worker/repo (many times), and a fresh
-        // OkHttpClient each time would throw away TLS session reuse and
-        // keep-alive. downloadClient shares this pool via newBuilder().
-        private val client: OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
-            .writeTimeout(WRITE_TIMEOUT_S, TimeUnit.SECONDS) // large chunk PUTs to Drive
-            .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
-            // Application interceptors, so each sees the logical call once
-            // rather than once per redirect hop. Retry first, so a retried
-            // request gets a freshly read App Check token rather than replaying
-            // the one that may have expired while it waited. downloadClient
-            // inherits both through newBuilder() below.
-            .addInterceptor(RetryOnTransient())
-            .addInterceptor(AppCheckHeader())
-            // Which app's device binding a call is for (ADR-010).
-            .addInterceptor(AppIdHeader())
-            .addInterceptor(ClientNonce.ServerDateObserver(ApiHost.configured))
-            .apply { certificatePins()?.let(::certificatePinner) }
-            .build()
-
-        /** `INDIC_API_CERT_PINS` for the backend host, or null when there are none. */
-        private fun certificatePins(): CertificatePinner? {
-            val pins = BuildConfig.INDIC_API_CERT_PINS.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            val host = ApiHost.configured
-            if (pins.isEmpty() || host.isEmpty()) return null
-            return CertificatePinner.Builder().apply { pins.forEach { add(host, it) } }.build()
-        }
-
-        /** Longer read idle for large Session.zip / legacy restores through the proxy. */
-        private val downloadClient = client.newBuilder()
-            .readTimeout(DOWNLOAD_READ_TIMEOUT_S, TimeUnit.SECONDS)
-            .build()
-
         @Volatile
         private var instance: IndicApi? = null
 
