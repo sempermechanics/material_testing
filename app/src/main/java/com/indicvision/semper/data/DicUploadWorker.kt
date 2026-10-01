@@ -33,6 +33,7 @@ import com.indicvision.semper.data.net.SessionCreateRequest
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.navigation.AppIntents
 import com.indicvision.semper.util.Digests
 import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.CancellationException
@@ -153,7 +154,8 @@ private fun abandonIfInputsGone(context: Context, record: SessionRecord, staging
 /**
  * Delete cloud session [cloudSessionId], then forget it locally. If the delete
  * fails the pointer stays, so a later run deletes it rather than orphaning it
- * against the quota. Top-level, like [abandonIfInputsGone].
+ * against the quota. Returns whether the pointer is now clear (true for no
+ * session at all). Top-level, like [abandonIfInputsGone].
  */
 private suspend fun discardCloudSession(
     context: Context,
@@ -161,11 +163,24 @@ private suspend fun discardCloudSession(
     idToken: String,
     localId: String,
     cloudSessionId: String,
-) {
-    if (cloudSessionId.isBlank()) return
-    suspendRunCatching { api.deleteSession(idToken, cloudSessionId) }
+): Boolean {
+    if (cloudSessionId.isBlank()) return true
+    return suspendRunCatching { api.deleteSession(idToken, cloudSessionId) }
         .onSuccess { SessionStore.setCloudSessionId(context, localId, "") }
-        .onFailure { Timber.w(it, "Could not delete unusable session — keeping its pointer") }
+        .onFailure { Timber.w("Could not delete unusable session (%s) — keeping its pointer", it.javaClass.simpleName) }
+        .isSuccess
+}
+
+/**
+ * Whether one of this app's activities is on screen. Only then may a worker
+ * start an activity: Android 10+ blocks background activity starts. Read from
+ * the process's own importance — `lifecycle-process` is not on the compile
+ * classpath. A foreground service alone (this worker) ranks below FOREGROUND.
+ */
+private fun appInForeground(): Boolean {
+    val info = android.app.ActivityManager.RunningAppProcessInfo()
+    android.app.ActivityManager.getMyMemoryState(info)
+    return info.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
 }
 
 /**
@@ -177,6 +192,7 @@ private suspend fun discardCloudSession(
 internal object DicUploadSeams {
     var api: (Context) -> CloudApi = { IndicApi.get(it) }
     var tokens: TokenSource = TokenProvider
+    var inForeground: () -> Boolean = ::appInForeground
 }
 
 class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -729,6 +745,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     Timber.w("Cloud session already complete")
                     SessionStore.markSynced(applicationContext, localId)
                     stagingDir.deleteRecursively()
+                    UploadErrors.clearIntegrityRebuilds(sessionDir)
                     return@withContext Result.success()
                 }
                 is Step.Retry -> return@withContext step.result
@@ -806,11 +823,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 ?.cloudSessionId.orEmpty()
                 .ifBlank { record.cloudSessionId }
 
-            // Terminal: mark the row failed and drop its staging.
+            // Terminal: mark the row failed and drop its staging. The next
+            // attempt is a fresh one, so the integrity count starts over too.
             fun giveUp(analyticsReason: String) {
                 Timber.e("Upload rejected (%d): %s", e.code, e.parsedDetail)
                 SessionStore.setSyncState(applicationContext, localId, SessionRecord.SyncState.FAILED)
                 stagingDir.deleteRecursively()
+                UploadErrors.clearIntegrityRebuilds(sessionDir)
                 SemperAnalytics.event(
                     applicationContext,
                     SemperAnalytics.CLOUD_UPLOAD_FAILED,
@@ -818,14 +837,28 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 )
             }
 
+            // The token read at the start can have expired during a long
+            // upload; a delete refused for it would keep a session we meant to drop.
+            suspend fun freshToken(): String = tokens.usableIdToken() ?: idToken
+
             when (UploadErrors.classify(e.code, e.body)) {
                 UploadErrors.Kind.QUOTA -> {
                     giveUp("quota")
                     // Quota full has its own persistent "email support" screen.
-                    // A worker may not open it (background activity starts are
-                    // blocked), so raise the gate Home opens it from.
                     TokenStore.setSessionLimitReached(applicationContext, true)
-                    Result.failure()
+                    // Android blocks a background activity start, so open it only
+                    // while the app is on screen; otherwise Home opens it from the
+                    // gate above (and can read UPLOAD_FAIL_KIND).
+                    if (DicUploadSeams.inForeground()) {
+                        runCatching { applicationContext.startActivity(AppIntents.sessionLimit(applicationContext)) }
+                            .onFailure { Timber.w("Could not open the limit screen (%s)", it.javaClass.simpleName) }
+                    }
+                    Result.failure(
+                        workDataOf(
+                            UploadErrors.UPLOAD_FAIL_KIND to UploadErrors.FAIL_KIND_QUOTA,
+                            DicKeys.SESSION_LOCAL_ID to localId,
+                        ),
+                    )
                 }
                 UploadErrors.Kind.TOO_LARGE -> {
                     // Too many files for one analysis — retrying won't help; tell the user.
@@ -844,7 +877,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // recreate is cheap.
                 UploadErrors.Kind.STALE_SESSION -> {
                     Timber.e("Upload %d (%s) — discarding stale session, keeping staging", e.code, e.parsedDetail)
-                    discardCloudSession(applicationContext, api, idToken, localId, currentCloudId())
+                    discardCloudSession(applicationContext, api, freshToken(), localId, currentCloudId())
                     retryLater("HTTP ${e.code} stale session — ${e.parsedDetail.take(120)}", e.requestId)
                 }
                 // Drive holds other bytes than ours. Completing again fails the
@@ -852,20 +885,27 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // a bounded number of times.
                 UploadErrors.Kind.INTEGRITY -> {
                     Timber.e("Upload %d (%s) — Drive bytes differ from the staged file", e.code, e.parsedDetail)
-                    discardCloudSession(applicationContext, api, idToken, localId, currentCloudId())
-                    if (UploadErrors.recordIntegrityRebuild(sessionDir) > UploadErrors.MAX_INTEGRITY_REBUILDS) {
-                        UploadErrors.clearIntegrityRebuilds(sessionDir)
-                        giveUp("integrity")
-                        failure(applicationContext.getString(R.string.cloud_backup_failed_generic), e.requestId)
-                    } else {
-                        stagingDir.deleteRecursively()
-                        retryLater("HTTP ${e.code} integrity — restaging", e.requestId)
+                    when {
+                        // The session is still ours to resume, so its staging must
+                        // stay as declared: restaging under a live pointer would
+                        // resume the old session (bad object finalized) with new
+                        // bytes and burn every rebuild. Try the delete again later.
+                        !discardCloudSession(applicationContext, api, freshToken(), localId, currentCloudId()) ->
+                            retryLater("HTTP ${e.code} integrity — session not deleted yet", e.requestId)
+                        UploadErrors.recordIntegrityRebuild(sessionDir) > UploadErrors.MAX_INTEGRITY_REBUILDS -> {
+                            giveUp("integrity")
+                            failure(applicationContext.getString(R.string.cloud_backup_failed_generic), e.requestId)
+                        }
+                        else -> {
+                            stagingDir.deleteRecursively()
+                            retryLater("HTTP ${e.code} integrity — restaging", e.requestId)
+                        }
                     }
                 }
                 UploadErrors.Kind.TRANSIENT -> {
                     // Transient — keep the staged files so the retry resumes identically.
-                    Timber.e(e, "Upload HTTP %d — %s", e.code, e.parsedDetail)
-                    retryLater(e.message.orEmpty().take(RETRY_REASON_MAX_LEN))
+                    Timber.e("Upload HTTP %d — %s", e.code, e.parsedDetail)
+                    retryLater("HTTP ${e.code}: ${e.parsedDetail.take(RETRY_REASON_MAX_LEN)}", e.requestId)
                 }
             }
         } catch (e: OutOfMemoryError) {
@@ -885,10 +925,10 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // every stop as an error (a Crashlytics non-fatal) and asking for a retry.
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Timber.e(e, "Upload failed; will retry")
-            retryLater(
-                "${e.javaClass.simpleName}: ${e.message?.take(160) ?: "(no message)"}",
-            )
+            // Class name only: an I/O message carries the file's path, and a
+            // deformed image's path is the user's own file name (→ Crashlytics).
+            Timber.e("Upload failed (%s); will retry", e.javaClass.simpleName)
+            retryLater(e.javaClass.simpleName)
         } finally {
             // Stop the progress sampler so this coroutine can complete (a live
             // child would otherwise keep the worker from returning).

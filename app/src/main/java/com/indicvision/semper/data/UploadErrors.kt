@@ -12,13 +12,6 @@ import java.io.File
  */
 internal object UploadErrors {
 
-    // Not in ApiErrors (yet): codes from `backend/app/errors.py` the upload
-    // worker branches on. They belong in ApiErrors.kt and the backend's
-    // CLIENT_BRANCHED set, which pins the two sides together.
-    private const val SIZE_OR_STATE_MISMATCH = "size_or_state_mismatch"
-    private const val CHECKSUM_MISMATCH = "checksum_mismatch"
-    private const val SIZE_MISMATCH = "size_mismatch"
-
     // Not in HttpStatus.
     private const val HTTP_GONE = 410
     private const val HTTP_UNPROCESSABLE = 422
@@ -63,11 +56,12 @@ internal object UploadErrors {
             code == HttpStatus.CONFLICT && detailIs(ApiErrors.SESSION_QUOTA_EXCEEDED) -> Kind.QUOTA
             code == HttpStatus.PAYLOAD_TOO_LARGE -> Kind.TOO_LARGE
             code == HttpStatus.BAD_REQUEST -> Kind.STALE_SESSION
-            code == HttpStatus.CONFLICT && detailIs(SIZE_OR_STATE_MISMATCH) -> Kind.STALE_SESSION
+            code == HttpStatus.CONFLICT && detailIs(ApiErrors.SIZE_OR_STATE_MISMATCH) -> Kind.STALE_SESSION
             // Only when OUR backend says so — a bare 404 is an unreachable route.
             code == HttpStatus.NOT_FOUND && detailIs(ApiErrors.FILE_NOT_FOUND, ApiErrors.SESSION_NOT_FOUND) ->
                 Kind.STALE_SESSION
-            code == HTTP_UNPROCESSABLE && detailIs(CHECKSUM_MISMATCH, SIZE_MISMATCH) -> Kind.INTEGRITY
+            code == HTTP_UNPROCESSABLE && detailIs(ApiErrors.CHECKSUM_MISMATCH, ApiErrors.SIZE_MISMATCH) ->
+                Kind.INTEGRITY
             code == HttpStatus.CONFLICT -> Kind.REJECTED
             else -> Kind.TRANSIENT
         }
@@ -82,6 +76,16 @@ internal object UploadErrors {
     fun isSessionGone(code: Int, body: String): Boolean =
         code == HTTP_GONE ||
             (code == HttpStatus.NOT_FOUND && ApiErrors.hasCode(body, ApiErrors.SESSION_NOT_FOUND))
+
+    /**
+     * Upload work output key naming the kind of a terminal failure, for a caller
+     * that reacts to it (Home opening the limit screen) rather than showing
+     * [com.indicvision.semper.DicKeys.UPLOAD_FAIL_REASON]. Named like DicKeys.
+     */
+    const val UPLOAD_FAIL_KIND = "UPLOAD_FAIL_KIND"
+
+    /** [UPLOAD_FAIL_KIND] for an account whose analysis quota is full. */
+    const val FAIL_KIND_QUOTA = "quota"
 
     /**
      * Session-dir file counting the integrity rebuilds ([Kind.INTEGRITY]) since

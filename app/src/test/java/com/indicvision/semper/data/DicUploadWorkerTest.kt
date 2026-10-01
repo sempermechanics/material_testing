@@ -16,7 +16,9 @@ import com.indicvision.semper.data.net.SessionCreateRequest
 import com.indicvision.semper.data.net.SessionCreateResponse
 import com.indicvision.semper.data.net.SessionUploadsResponse
 import com.indicvision.semper.data.net.TokenProvider
+import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.navigation.AppIntents
 import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -55,17 +57,20 @@ class DicUploadWorkerTest {
     private val api = UploadApi()
     private lateinit var sessionDir: File
     private lateinit var staging: File
+    private val realForeground = DicUploadSeams.inForeground
 
     @Before
     fun setUp() {
         DicUploadSeams.api = { api }
         DicUploadSeams.tokens = FakeTokens("tok")
+        DicUploadSeams.inForeground = { false }
     }
 
     @After
     fun tearDown() {
         DicUploadSeams.api = { IndicApi.get(it) }
         DicUploadSeams.tokens = TokenProvider
+        DicUploadSeams.inForeground = realForeground
         SessionStore.deleteAll(context)
     }
 
@@ -336,18 +341,96 @@ class DicUploadWorkerTest {
     }
 
     @Test
-    fun `quota full raises the limit gate without starting an activity`() {
+    fun `quota full in the background raises the limit gate without starting an activity`() {
         seed()
         api.onCreateSession = { throw apiError(409, "session_quota_exceeded: 25/25 analyses stored.") }
+        DicUploadSeams.inForeground = { false }
         assertFalse(TokenStore.isSessionLimitReached(context))
 
-        assertEquals(ListenableWorker.Result.failure(), run())
+        val result = run()
 
+        assertTrue(result is ListenableWorker.Result.Failure)
+        assertEquals(UploadErrors.FAIL_KIND_QUOTA, result.outputData.getString(UploadErrors.UPLOAD_FAIL_KIND))
+        assertNull("no reason: Home shows no snackbar for it", result.outputData.getString(DicKeys.UPLOAD_FAIL_REASON))
         assertTrue(TokenStore.isSessionLimitReached(context))
         // Background activity starts are blocked on targetSdk 36; Home opens the
         // limit screen from the gate instead.
         assertNull(shadowOf(context).nextStartedActivity)
         assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
+    }
+
+    @Test
+    fun `quota full with the app on screen opens the limit screen`() {
+        seed()
+        api.onCreateSession = { throw apiError(409, "session_quota_exceeded: 25/25 analyses stored.") }
+        DicUploadSeams.inForeground = { true }
+
+        assertTrue(run() is ListenableWorker.Result.Failure)
+
+        val started = shadowOf(context).nextStartedActivity
+        assertEquals(AppIntents.sessionLimit(context).component, started?.component)
+        assertTrue(TokenStore.isSessionLimitReached(context))
+    }
+
+    @Test
+    fun `an integrity mismatch whose session delete fails keeps the staging and the count`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw apiError(422, "checksum_mismatch") }
+        api.base.onDeleteSession = { _, _ -> throw apiError(401, "invalid_token") }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        // The pointer is still live, so its declared staging must stay as it is;
+        // restaging under it would resume the old session with new bytes.
+        assertEquals("cs1", row().cloudSessionId)
+        assertTrue(File(staging, "Session.zip").isFile)
+        assertFalse(File(sessionDir, UploadErrors.INTEGRITY_REBUILDS_MARKER).exists())
+    }
+
+    @Test
+    fun `a session is discarded with a token read after the upload, not the first one`() {
+        seed(cloudSessionId = "cs1")
+        var reads = 0
+        DicUploadSeams.tokens = TokenSource { "tok${++reads}" }
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw apiError(409, "size_or_state_mismatch") }
+        val deleteTokens = CopyOnWriteArrayList<String>()
+        api.base.onDeleteSession = { token, _ -> deleteTokens += token }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertEquals(1, deleteTokens.size)
+        assertFalse("the token from the start of the run may have expired", deleteTokens.single() == "tok1")
+    }
+
+    @Test
+    fun `a terminal failure or a completed session resets the integrity count`() {
+        seed(cloudSessionId = "cs1")
+        val marker = File(sessionDir, UploadErrors.INTEGRITY_REBUILDS_MARKER).apply { writeText("2") }
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw apiError(413, "too_many_files") }
+        assertTrue(run() is ListenableWorker.Result.Failure)
+        assertFalse(marker.exists())
+
+        seed(cloudSessionId = "cs2")
+        marker.writeText("2")
+        api.onSessionUploads = { SessionUploadsResponse(sessionId = it, status = "COMPLETED") }
+        assertEquals(ListenableWorker.Result.success(), run())
+        assertFalse(marker.exists())
+    }
+
+    @Test
+    fun `an unexpected failure is logged by class, not by its message`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onUpload = { throw java.io.FileNotFoundException("/data/raw_deformed/Jane_Doe_specimen.png (EACCES)") }
+
+        LogCapture().use { log ->
+            assertEquals(ListenableWorker.Result.retry(), run())
+            assertTrue(log.warnings.any { it.contains("FileNotFoundException") })
+            assertTrue(log.warnings.none { it.contains("Jane_Doe") })
+        }
     }
 
     @Test

@@ -498,7 +498,8 @@ internal class DriveTransfer(
 
     private fun finalizeDownload(part: File, dest: File) {
         if (dest.exists() && !dest.delete()) {
-            Timber.w("Could not replace existing download target %s", dest)
+            // Size, not the path: it names the user's files, and WARN reaches Crashlytics.
+            Timber.w("Could not replace existing download target (%d B)", dest.length())
         }
         AtomicFiles.promote(part, dest)
     }
