@@ -140,6 +140,9 @@ class RoiDrawActivityTest {
         assertEquals(Activity.RESULT_OK, shadowOf(activity).resultCode)
         val mask = File(shadowOf(activity).resultIntent.getStringExtra(DicKeys.MASK_FILE_PATH)!!)
         assertEquals(IMG_W.toLong() * IMG_H, mask.length())
+        // One save, not two: a save of the full image toasts as it starts, so
+        // a second toast means the second tap built and wrote the mask again.
+        assertEquals(1, ShadowToast.shownToastCount())
     }
 
     @Test
