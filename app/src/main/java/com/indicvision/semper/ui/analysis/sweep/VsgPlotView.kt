@@ -15,14 +15,9 @@ import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withClip
-import androidx.core.graphics.withRotation
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.common.PlotStyle
-import com.indicvision.semper.ui.common.ViewportMath
 import com.indicvision.semper.ui.common.dp
-import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.max
 
 /**
  * Minimal XY line plot for the virtual strain gauge study — the two charts
@@ -64,40 +59,12 @@ class VsgPlotView @JvmOverloads constructor(
     data class Sample(val label: String, val value: Float, val color: Int)
 
     companion object {
-        // Resource-backed, not literal ints: each slot needs an independent night
-        // value (see values-night/colors.xml) since this view is shared with the
-        // dark-glass viewer peek sheet. Under emphasis (dataviz skill: onDraw draws
-        // every muted series in one neutral, see ALPHA_MUTED below) at most one
-        // slot is ever shown in colour at a time, so these are validated per-slot
-        // (lightness band, chroma floor, contrast) rather than for pairwise
-        // separation -- scripts/validate_palette.js, run against both surfaces.
-        private val PALETTE_RES = intArrayOf(
-            R.color.viewer_plot_palette_0,
-            R.color.viewer_plot_palette_1,
-            R.color.viewer_plot_palette_2,
-            R.color.viewer_plot_palette_3,
-            R.color.viewer_plot_palette_4,
-            R.color.viewer_plot_palette_5,
-            R.color.viewer_plot_palette_6,
-            R.color.viewer_plot_palette_7,
-        )
-
-        /** exx/eyy/exy on the line-cut: always 3 concurrent curves, so (unlike
-         *  [PALETTE_RES]) this is validated all-pairs, not just per-slot. */
-        private val LINE_CUT_RES = intArrayOf(
-            R.color.viewer_line_cut_0,
-            R.color.viewer_line_cut_1,
-            R.color.viewer_line_cut_2,
-        )
-
         /** Colour for the n-th series of a multi-line plot; safe for any index
          *  (a skipped lattice node has frameIndex -1). */
-        fun paletteColor(context: Context, index: Int): Int =
-            ContextCompat.getColor(context, PALETTE_RES[index.mod(PALETTE_RES.size)])
+        fun paletteColor(context: Context, index: Int): Int = VsgPlotPalette.series(context, index)
 
         /** Colour for the n-th of the line-cut's 3 concurrent strain components. */
-        fun lineCutColor(context: Context, slot: Int): Int =
-            ContextCompat.getColor(context, LINE_CUT_RES[slot.mod(LINE_CUT_RES.size)])
+        fun lineCutColor(context: Context, slot: Int): Int = VsgPlotPalette.lineCut(context, slot)
 
         const val AXIS_LABEL_SP = PlotStyle.AXIS_LABEL_SP
         const val LINE_WIDTH_DP = 2f
@@ -463,18 +430,6 @@ class VsgPlotView @JvmOverloads constructor(
         if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
     }
 
-    private fun MotionEvent.focusX(): Float {
-        var sum = 0f
-        for (i in 0 until pointerCount) sum += getX(i)
-        return sum / pointerCount
-    }
-
-    private fun MotionEvent.focusY(): Float {
-        var sum = 0f
-        for (i in 0 until pointerCount) sum += getY(i)
-        return sum / pointerCount
-    }
-
     private fun panByFocusDelta(dxPx: Float, dyPx: Float) {
         val full = dataBounds() ?: return
         if (!hasFrame()) return
@@ -531,264 +486,5 @@ class VsgPlotView @JvmOverloads constructor(
     }
 }
 
-/**
- * Linear y of [points] (ordered along x) at [x]: an end's value past that end,
- * the left point's over a zero-width step; null with no points.
- */
-@Suppress("ReturnCount") // empty, both clamps, the degenerate span and the interpolated hit
-internal fun interpolateY(points: List<Pair<Float, Float>>, x: Float): Float? {
-    if (points.isEmpty()) return null
-    if (x <= points.first().first) return points.first().second
-    if (x >= points.last().first) return points.last().second
-    for (i in 0 until points.lastIndex) {
-        val (x0, y0) = points[i]
-        val (x1, y1) = points[i + 1]
-        if (x in x0..x1) {
-            val span = (x1 - x0).takeIf { it != 0f } ?: return y0
-            val t = (x - x0) / span
-            return y0 + t * (y1 - y0)
-        }
-    }
-    return null
-}
-
 private const val ALPHA_SOLID = 255
 private const val ALPHA_MUTED = 140
-
-// ── Viewport: the data-space window a pinch or pan leaves behind ──
-
-/** A data-space rectangle: the x and y ranges in the series' own units. */
-internal class PlotBounds(val xMin: Float, val xMax: Float, val yMin: Float, val yMax: Float)
-
-/**
- * The full extent of [series]' points, with [yMarginFraction] of head-room
- * above and below so markers are not clipped; null when there are no points.
- * One primitive pass over every point, no intermediate lists.
- */
-internal fun plotBoundsOf(series: List<VsgPlotView.Series>, yMarginFraction: Float): PlotBounds? {
-    var xMin = Float.POSITIVE_INFINITY
-    var xMax = Float.NEGATIVE_INFINITY
-    var yMin = Float.POSITIVE_INFINITY
-    var yMax = Float.NEGATIVE_INFINITY
-    var any = false
-    for (s in series) {
-        for (p in s.points) {
-            any = true
-            if (p.first < xMin) xMin = p.first
-            if (p.first > xMax) xMax = p.first
-            if (p.second < yMin) yMin = p.second
-            if (p.second > yMax) yMax = p.second
-        }
-    }
-    if (!any) return null
-    val span = max(yMax - yMin, abs(yMax) * yMarginFraction).takeIf { it > 0f } ?: 1f
-    yMin -= span * yMarginFraction
-    yMax += span * yMarginFraction
-    return PlotBounds(xMin, if (xMax > xMin) xMax else xMin + 1f, yMin, yMax)
-}
-
-/**
- * The plot's zoom and pan, held as a data-space window rather than a Canvas
- * matrix (which would scale strokes and tick labels). No window means the
- * full extent. Every change is clamped by [ViewportMath.clampWindow]: never
- * narrower than [minSpanFraction] of the extent, never outside it.
- */
-internal class VsgPlotViewport(private val minSpanFraction: Float) {
-
-    /** Null = show the full extent; otherwise the zoomed window. */
-    private var window: PlotBounds? = null
-
-    /** What is on screen out of [full]. */
-    fun visible(full: PlotBounds): PlotBounds = window ?: full
-
-    /** Back to the full extent. */
-    fun reset() {
-        window = null
-    }
-
-    /**
-     * A pinch step: scales the window by [factor] about the view point
-     * ([focusXPx], [focusYPx]) in [frame], keeping the data point under it fixed.
-     */
-    fun zoomAbout(full: PlotBounds, focusXPx: Float, focusYPx: Float, factor: Float, frame: RectF) {
-        val vp = visible(full)
-        val focusX = pxToDataX(focusXPx, frame, vp)
-        val focusY = pxToDataY(focusYPx, frame, vp)
-        val xSpan = ((vp.xMax - vp.xMin) / factor).coerceAtLeast((full.xMax - full.xMin) * minSpanFraction)
-        val ySpan = ((vp.yMax - vp.yMin) / factor).coerceAtLeast((full.yMax - full.yMin) * minSpanFraction)
-        // Keep the focus point fixed in data space.
-        val leftFrac = (focusX - vp.xMin) / (vp.xMax - vp.xMin).coerceAtLeast(MIN_DIVISOR)
-        val bottomFrac = (focusY - vp.yMin) / (vp.yMax - vp.yMin).coerceAtLeast(MIN_DIVISOR)
-        val xMin = focusX - leftFrac * xSpan
-        val yMin = focusY - bottomFrac * ySpan
-        setClamped(full, PlotBounds(xMin, xMin + xSpan, yMin, yMin + ySpan))
-    }
-
-    /** A two-finger pan of ([dxPx], [dyPx]) view px over [frame]: the data follows the fingers. */
-    fun panByPx(full: PlotBounds, dxPx: Float, dyPx: Float, frame: RectF) {
-        val vp = visible(full)
-        val dxData = -dxPx / (frame.right - frame.left) * (vp.xMax - vp.xMin)
-        val dyData = dyPx / (frame.bottom - frame.top) * (vp.yMax - vp.yMin)
-        setClamped(full, PlotBounds(vp.xMin + dxData, vp.xMax + dxData, vp.yMin + dyData, vp.yMax + dyData))
-    }
-
-    private fun setClamped(full: PlotBounds, next: PlotBounds) {
-        val x = ViewportMath.clampWindow(next.xMin, next.xMax, full.xMin, full.xMax, minSpanFraction)
-        val y = ViewportMath.clampWindow(next.yMin, next.yMax, full.yMin, full.yMax, minSpanFraction)
-        window = PlotBounds(x.min, x.max, y.min, y.max)
-    }
-
-    private companion object {
-        /** Guards the focus fraction against a window with no width. */
-        const val MIN_DIVISOR = 1e-6f
-    }
-}
-
-/** Data x at view x [xPx] in [frame] showing [b]; clamped to the frame's edges. */
-internal fun pxToDataX(xPx: Float, frame: RectF, b: PlotBounds): Float {
-    val ratio = ((xPx - frame.left) / (frame.right - frame.left)).coerceIn(0f, 1f)
-    return b.xMin + ratio * (b.xMax - b.xMin)
-}
-
-/** Data y at view y [yPx] in [frame] showing [b]; clamped to the frame's edges. */
-internal fun pxToDataY(yPx: Float, frame: RectF, b: PlotBounds): Float {
-    val ratio = ((frame.bottom - yPx) / (frame.bottom - frame.top)).coerceIn(0f, 1f)
-    return b.yMin + ratio * (b.yMax - b.yMin)
-}
-
-// ── Axes: gutters, tick labels and titles ──
-
-/**
- * The [plot]'s axes: how wide its left gutter is, its tick labels and its
- * titles, all drawn in [text] (the plot's axis paint).
- */
-internal class VsgPlotAxes(private val plot: View, private val text: Paint) {
-
-    /** The left gutter for [b]: compact (ticks only) or full (ticks beside a rotated title). */
-    fun leftPad(b: PlotBounds, compact: Boolean): Float = if (compact) {
-        compactLeftPad(
-            b.yMin,
-            b.yMax,
-            plot.dp(VsgPlotView.PAD_LEFT_COMPACT_DP),
-            plot.dp(VsgPlotView.TICK_GAP_DP),
-            text::measureText,
-        )
-    } else {
-        fullLeftPad(b)
-    }
-
-    /**
-     * The left gutter with a y title: the rotated title's band, then the
-     * widest tick label, each with its gap. A fixed gutter let a wide tick
-     * ("58.6", "435") run under the title.
-     */
-    private fun fullLeftPad(b: PlotBounds): Float {
-        val widestTick = widestYTick(b.yMin, b.yMax, text::measureText)
-        val titleBand = text.textSize * TITLE_BAND
-        val gaps = plot.dp(VsgPlotView.TICK_GAP_DP) * FULL_PAD_GAPS
-        return maxOf(plot.dp(VsgPlotView.PAD_LEFT_FULL_DP), titleBand + widestTick + gaps)
-    }
-
-    /** The y ticks down the gutter and the x range under the [frame]; [compact] folds the units in. */
-    @Suppress("LongParameterList") // the range, where it is drawn, and the compact units
-    fun drawTicks(canvas: Canvas, b: PlotBounds, frame: RectF, compact: Boolean, xUnit: String, yUnit: String) {
-        val gap = plot.dp(VsgPlotView.TICK_GAP_DP)
-        text.color = PlotStyle.ink(plot.context)
-        text.textAlign = Paint.Align.RIGHT
-        for (i in 0..VsgPlotView.GRID_LINES) {
-            val y = frame.bottom - (frame.bottom - frame.top) * i / VsgPlotView.GRID_LINES
-            val value = yTick(b.yMin, b.yMax, i)
-            canvas.drawText(tickLabel(value), frame.left - gap, y + text.textSize * VsgPlotView.TICK_BASELINE, text)
-        }
-        if (compact && yUnit.isNotEmpty()) {
-            // The compact gutter is sized to the numbers alone, so a number+unit
-            // tick right-aligned into it would run past the view's own left
-            // edge -- draw the unit on its own, left-aligned
-            // into the data area's top-left corner instead, where there's slack.
-            text.textAlign = Paint.Align.LEFT
-            canvas.drawText(yUnit, frame.left + gap, frame.top + text.textSize, text)
-        }
-        val baseline = frame.bottom + text.textSize + gap
-        text.textAlign = Paint.Align.LEFT
-        canvas.drawText(tickLabel(b.xMin), frame.left, baseline, text)
-        text.textAlign = Paint.Align.RIGHT
-        val xMaxLabel = if (compact && xUnit.isNotEmpty()) "${tickLabel(b.xMax)} $xUnit" else tickLabel(b.xMax)
-        canvas.drawText(xMaxLabel, frame.right, baseline, text)
-    }
-
-    /** The x title under the ticks and the y title rotated up the gutter. */
-    fun drawTitles(canvas: Canvas, frame: RectF, xLabel: String, yLabel: String) {
-        val gap = plot.dp(VsgPlotView.TICK_GAP_DP)
-        text.textAlign = Paint.Align.CENTER
-        text.color = PlotStyle.inkStrong(plot.context)
-        canvas.drawText(
-            xLabel,
-            (frame.left + frame.right) / 2f,
-            frame.bottom + text.textSize * 2f + gap,
-            text,
-        )
-        // Pivot at the frame's vertical centre, not bottom/2f -- the old pivot
-        // ignored top's offset (PAD_TOP_DP), so the rotated title sat high.
-        val pivot = (frame.top + frame.bottom) / 2f
-        canvas.withRotation(-QUARTER_TURN, gap + text.textSize, pivot) {
-            drawText(yLabel, gap + text.textSize, pivot, text)
-        }
-        text.textAlign = Paint.Align.LEFT
-    }
-
-    companion object {
-        /**
-         * Compact tick label: enough digits to separate neighbouring gridlines.
-         * A value that rounds to zero is written "0.00", never "-0.00": a padded
-         * axis starting a hair below zero once read that way.
-         */
-        fun tickLabel(value: Float): String {
-            val text = when {
-                abs(value) >= LARGE_VALUE -> String.format(Locale.US, "%.0f", value)
-                abs(value) >= SMALL_VALUE -> String.format(Locale.US, "%.1f", value)
-                else -> String.format(Locale.US, "%.2f", value)
-            }
-            return if (text.startsWith('-') && text.all { it in "-0." }) text.drop(1) else text
-        }
-
-        /**
-         * Where the scrub label starts: right of the line at [px], [clearance]
-         * clear of the dot, or flipped to its left where it would run past
-         * [right] — never across the line it labels. Held inside [left].
-         */
-        fun scrubLabelX(px: Float, width: Float, clearance: Float, left: Float, right: Float): Float {
-            val x = if (px + clearance + width <= right) px + clearance else px - clearance - width
-            return x.coerceAtLeast(left)
-        }
-
-        /** The i-th y tick value, 0 at the bottom gridline to [VsgPlotView.GRID_LINES] at the top. */
-        fun yTick(yMin: Float, yMax: Float, i: Int): Float = yMin + (yMax - yMin) * i / VsgPlotView.GRID_LINES
-
-        /** Width, by [measure], of the widest y tick label as [tickLabel] writes it. */
-        fun widestYTick(yMin: Float, yMax: Float, measure: (String) -> Float): Float =
-            (0..VsgPlotView.GRID_LINES).maxOf { measure(tickLabel(yTick(yMin, yMax, it))) }
-
-        /**
-         * The compact left gutter: the widest y tick with [gap] on either side,
-         * never narrower than [minPad]. A fixed gutter cut the leading digits
-         * off a bending load axis ("21686" read "1686").
-         */
-        fun compactLeftPad(
-            yMin: Float,
-            yMax: Float,
-            minPad: Float,
-            gap: Float,
-            measure: (String) -> Float,
-        ): Float = maxOf(minPad, widestYTick(yMin, yMax, measure) + gap * 2f)
-
-        private const val QUARTER_TURN = 90f
-
-        /** A rotated title's width across its baseline: ascent plus descent, in text sizes. */
-        private const val TITLE_BAND = 1.25f
-
-        /** Tick gaps in a full gutter: edge to title, title to ticks, ticks to the axis. */
-        private const val FULL_PAD_GAPS = 3f
-        private const val LARGE_VALUE = 100f
-        private const val SMALL_VALUE = 1f
-    }
-}
