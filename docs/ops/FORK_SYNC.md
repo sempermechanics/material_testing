@@ -36,6 +36,30 @@ apps. The deploy and Firestore workflows only run in this repo
    (its `real_data_steel_tensile.py` and `real_data_pmma_bending.py` scripts); its JVM
    tests use arrays recorded on the old engine and stay green either way.
 
+### The 2026-10 package move (ADR-015)
+
+The sync that brings in [ADR-015](../adr/ADR-015-package-layout.md) moves 149
+files. The merge follows the renames for files both repos have. Files only
+the fork has, and its edits to moved files, need one more pass:
+
+1. Resolve the merge, then replay the mapping. It is idempotent, so files the
+   merge already moved are skipped, and only the imports still pointing at the
+   old packages are fixed, the fork's lab files included:
+   `python scripts/move_kotlin_packages.py --mapping scripts/package_moves_2026_10.json`.
+2. To move fork-only files too (`data/MachineLoad*`, `data/TypedLoads*`,
+   `ui/viewer/ViewerBending*`, `report/Lab*`), add them to a copy of the
+   mapping and run it again.
+3. Run `./gradlew --no-daemon spotlessApply`, then the same command with
+   `--compile`. It runs the compile tasks and adds imports for any
+   `Unresolved reference` until a pass fixes nothing. Fix what is left by
+   hand: an inline FQCN that grew past detekt's 120 columns, or a name that
+   is declared in two packages.
+4. Run `--kdoc` and `--docs` for KDoc links and doc paths, then
+   `python scripts/check_doc_paths.py`. Leave dated snapshots
+   (`QUALITY_BASELINE_*`, CHANGELOG) as they are.
+5. Before release, do the upgrade check in ADR-015's action items: queued
+   work from the old APK must still run.
+
 ## Porting back
 
 List the fork's commits that touch shared paths and are not here:

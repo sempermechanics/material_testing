@@ -109,7 +109,7 @@ more classes need fakes; nothing in A blocks it.
        `TokenProvider` implement them. ~~`AuthBackend` / `FirebaseAuthBackend`~~:
        replaced by a `signedIn` lambda (As built).
 2. [x] Defaulted parameters on `AuthRepository`, `SeatLease`, `CloudSync`,
-       and the extracted `data/CloudAccountExport.download`.
+       and the extracted `data/cloud/CloudAccountExport.download`.
 3. [x] `FakeCloudApi` + `FakeTokens` in `app/src/test/…/cloud/`;
        `AuthRepositoryTest` (14), `CloudSeamTest` (13: seat refresh, reconcile
        verdicts, erase order, export success / failure / cancel).
