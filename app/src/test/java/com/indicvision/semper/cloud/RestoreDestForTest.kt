@@ -1,7 +1,7 @@
 package com.indicvision.semper.cloud
 
 import com.indicvision.semper.data.cloud.CorruptTransferException
-import com.indicvision.semper.data.cloud.restore.CloudRestore
+import com.indicvision.semper.data.cloud.restore.RestoreUnpacker
 import com.indicvision.semper.data.session.SessionLayout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -11,7 +11,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 /**
- * [CloudRestore.destFor] is the one zip-slip guard both restore paths share:
+ * [RestoreUnpacker.destFor] is the one zip-slip guard both restore paths share:
  * every artifact must land strictly inside its own session directory.
  */
 class RestoreDestForTest {
@@ -24,7 +24,7 @@ class RestoreDestForTest {
         SessionLayout(sessionDir).apply { rawDeformedDir.mkdirs() }
     }
 
-    private fun dest(role: String, name: String) = CloudRestore.destFor(role, name, layout)
+    private fun dest(role: String, name: String) = RestoreUnpacker.destFor(role, name, layout)
 
     @Test
     fun `each role lands where a local run puts it`() {
