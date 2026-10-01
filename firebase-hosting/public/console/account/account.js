@@ -222,8 +222,10 @@ async function loadSessions({ reset }) {
   if (reset) { sessions = []; nextToken = ""; }
   setStatus("Loading your analyses…");
   try {
-    const page = nextToken ? `?page_token=${encodeURIComponent(nextToken)}` : "";
-    const data = await api(`/v1/sessions${page}`);
+    // Every app's analyses: a browser sends no X-App-Id, and without
+    // `app=all` the backend would list only Semper's (ADR-014).
+    const page = nextToken ? `&page_token=${encodeURIComponent(nextToken)}` : "";
+    const data = await api(`/v1/sessions?app=all${page}`);
     sessions = sessions.concat(data.sessions || []);
     nextToken = (data.page || {}).nextPageToken || "";
     $("more").hidden = !nextToken;
@@ -261,7 +263,15 @@ function renderQuota() {
 
 function renderSessions() {
   $("rows").innerHTML = sessions.map(sessionRow).join("") ||
-    '<tr><td colspan="5" class="muted">Nothing backed up yet.</td></tr>';
+    '<tr><td colspan="6" class="muted">Nothing backed up yet.</td></tr>';
+}
+
+// The app that backed an analysis up (ADR-014). A backend without the tag
+// answers nothing, and every analysis then was Semper's.
+const APP_NAMES = { semper: "Semper", materialtesting: "Material Testing" };
+
+function appName(app) {
+  return APP_NAMES[app || "semper"] || app;
 }
 
 function sessionRow(s) {
@@ -279,6 +289,7 @@ function sessionRow(s) {
     <tr>
       <td>${esc(s.specimen || s.localSessionId || s.sessionId)}
           <div class="muted mono">${esc(s.sessionId)}</div></td>
+      <td>${esc(appName(s.app))}</td>
       <td>${state}</td>
       <td>${done ? s.completedCount : `${s.completedCount || 0} of ${s.fileCount || 0}`}</td>
       <td>${storedSize(s)}</td>

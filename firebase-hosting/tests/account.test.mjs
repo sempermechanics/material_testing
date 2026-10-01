@@ -42,7 +42,7 @@ test("the page starts once signed in: 2FA pill, account and analyses", async () 
   assert.equal($("signedOut").hidden, true);
   assert.equal($("mfaPill").hidden, false);
   assert.equal($("mfaPill").textContent, "2FA on");
-  assert.deepEqual(sent(), ["GET /v1/me", "GET /v1/sessions"]);
+  assert.deepEqual(sent(), ["GET /v1/me", "GET /v1/sessions?app=all"]);
 });
 
 test("a live licence shows its kind, key, end date, and may be moved", async () => {
@@ -191,16 +191,30 @@ test("each analysis row says what is stored, not what was declared", async () =>
     { sessionId: "s5", specimen: "<img src=x>", status: "WEIRD" },
   ] } });
   assert.deepEqual(rowTexts(), [
-    ["Steel A s1", "saved", "4", "1.5 MB", "Download"],
-    ["Steel B s2", "uploading", "3 of 10", "2.0 MB when done", "Download"],
-    ["local-3 s3", "failed", "0 of 2", "—", "Download"],
-    ["Nothing yet s4", "uploading", "0 of 0", "—", "Download"],
-    ["<img src=x> s5", "WEIRD", "0 of 0", "—", "Download"],
+    ["Steel A s1", "Semper", "saved", "4", "1.5 MB", "Download"],
+    ["Steel B s2", "Semper", "uploading", "3 of 10", "2.0 MB when done", "Download"],
+    ["local-3 s3", "Semper", "failed", "0 of 2", "—", "Download"],
+    ["Nothing yet s4", "Semper", "uploading", "0 of 0", "—", "Download"],
+    ["<img src=x> s5", "Semper", "WEIRD", "0 of 0", "—", "Download"],
   ]);
   assert.equal($("rows").querySelectorAll("img").length, 0, "a specimen name is text, never markup");
   const buttons = $("rows").querySelectorAll("button");
   assert.deepEqual(buttons.map((b) => b.disabled), [false, false, true, true, true],
     "nothing to download until something finished uploading");
+});
+
+test("every app's analyses are listed, each with the app that backed it up", async () => {
+  // A browser sends no X-App-Id, so without app=all the backend would answer
+  // only Semper's (ADR-014).
+  await open({ sessions: { quota: { used: 3, max: 25 }, sessions: [
+    { sessionId: "s1", specimen: "Steel A", app: "semper", status: "COMPLETED", completedCount: 1 },
+    { sessionId: "s2", specimen: "Beam B", app: "materialtesting", status: "COMPLETED", completedCount: 1 },
+    { sessionId: "s3", specimen: "Old C", status: "COMPLETED", completedCount: 1 },
+    { sessionId: "s4", specimen: "Next D", app: "<b>future</b>", status: "COMPLETED", completedCount: 1 },
+  ] } });
+  assert.deepEqual(sent(/sessions/), ["GET /v1/sessions?app=all"]);
+  assert.deepEqual(rowTexts().map((r) => r[1]), ["Semper", "Material Testing", "Semper", "<b>future</b>"]);
+  assert.equal($("rows").querySelectorAll("b").length, 0, "an unknown app name is text, never markup");
 });
 
 test("no analyses says so", async () => {
@@ -213,7 +227,7 @@ test("Show more fetches the next page and appends it", async () => {
   await open({
     sessions: { sessions: [{ sessionId: "a", status: "COMPLETED", completedCount: 1, totalBytes: 10 }],
       page: { nextPageToken: "t/1" }, quota: { used: 2, max: 25 } },
-    routes: { "GET /v1/sessions?page_token=t%2F1": () => json(200, {
+    routes: { "GET /v1/sessions?app=all&page_token=t%2F1": () => json(200, {
       sessions: [{ sessionId: "b", status: "COMPLETED", completedCount: 1, totalBytes: 10 }],
       page: {}, quota: { used: 2, max: 25 },
     }) },
