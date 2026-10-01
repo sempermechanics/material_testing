@@ -95,11 +95,10 @@ object DicSettings {
 
     /** Cap on deformed frames per analysis (picker + video extraction). */
     fun maxFrames(context: Context, remoteMaxFrames: Int): Int =
-        prefs(context)[Settings.MAX_FRAMES]
-            .coerceIn(MIN_MAX_FRAMES, frameCeiling(remoteMaxFrames))
+        clampMaxFrames(prefs(context)[Settings.MAX_FRAMES], remoteMaxFrames)
 
     fun setMaxFrames(context: Context, value: Int, remoteMaxFrames: Int) = prefs(context).edit {
-        put(Settings.MAX_FRAMES, value.coerceIn(MIN_MAX_FRAMES, frameCeiling(remoteMaxFrames)))
+        put(Settings.MAX_FRAMES, clampMaxFrames(value, remoteMaxFrames))
     }
 
     /**
@@ -108,14 +107,16 @@ object DicSettings {
      * nothing is ever removed without the user asking — the default, since a
      * session that vanishes on its own is a worse surprise than a full disk.
      */
-    fun autoFreeBudgetGb(context: Context): Int =
-        prefs(context)[Settings.AUTO_FREE_GB]
-            .let { if (it <= AUTO_FREE_OFF) AUTO_FREE_OFF else it.coerceIn(MIN_AUTO_FREE_GB, MAX_AUTO_FREE_GB) }
+    fun autoFreeBudgetGb(context: Context): Int = clampAutoFree(prefs(context)[Settings.AUTO_FREE_GB])
 
     fun setAutoFreeBudgetGb(context: Context, value: Int) = prefs(context).edit {
-        put(
-            Settings.AUTO_FREE_GB,
-            if (value <= AUTO_FREE_OFF) AUTO_FREE_OFF else value.coerceIn(MIN_AUTO_FREE_GB, MAX_AUTO_FREE_GB),
-        )
+        put(Settings.AUTO_FREE_GB, clampAutoFree(value))
     }
+
+    private fun clampMaxFrames(value: Int, remoteMaxFrames: Int): Int =
+        value.coerceIn(MIN_MAX_FRAMES, frameCeiling(remoteMaxFrames))
+
+    /** [AUTO_FREE_OFF] for zero or less, else a budget in range. */
+    private fun clampAutoFree(gb: Int): Int =
+        if (gb <= AUTO_FREE_OFF) AUTO_FREE_OFF else gb.coerceIn(MIN_AUTO_FREE_GB, MAX_AUTO_FREE_GB)
 }

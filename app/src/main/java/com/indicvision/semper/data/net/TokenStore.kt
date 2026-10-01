@@ -124,12 +124,10 @@ object TokenStore {
      * Both modes stop at the backend's ceiling once [AppRemoteConfig] has it.
      * Before that, demo uses the 25-run ceiling and licensed has none.
      */
-    @Suppress("ReturnCount")
-    fun isSessionLimitReached(context: Context): Boolean {
-        if (LicenseEntitlements.unlimitedAnalysis(context)) return false
-        if (prefs(context)[Session.LIMIT_FORCED]) return true
-        val max = LicenseEntitlements.analysisCap(context)
-        return quotaUsed(context) >= max
+    fun isSessionLimitReached(context: Context): Boolean = when {
+        LicenseEntitlements.unlimitedAnalysis(context) -> false
+        prefs(context)[Session.LIMIT_FORCED] -> true
+        else -> quotaUsed(context) >= LicenseEntitlements.analysisCap(context)
     }
 
     /**

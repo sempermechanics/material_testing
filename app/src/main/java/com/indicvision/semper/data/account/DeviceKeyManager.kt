@@ -1,7 +1,3 @@
-// Keystore/crypto: literal key sizes read clearest inline, so MagicNumber is
-// suppressed here.
-@file:Suppress("MagicNumber")
-
 package com.indicvision.semper.data.account
 
 import android.content.Context
@@ -37,6 +33,9 @@ class DeviceKeyManager(private val context: Context) {
 
     companion object {
         private const val KEY_ALIAS = "IndicDeviceKeyEc"
+
+        /** PEM wraps its base64 body at 64 characters a line (RFC 7468). */
+        private const val PEM_LINE_LENGTH = 64
 
         // The infamous Android 2.2 bug value shared by many devices — never use it.
         private const val LEGACY_BAD_ANDROID_ID = "9774d56d682e549c"
@@ -95,7 +94,7 @@ class DeviceKeyManager(private val context: Context) {
     fun getPublicKeyPem(): String {
         val der = keyStore.getCertificate(KEY_ALIAS).publicKey.encoded
         val b64 = Base64.encodeToString(der, Base64.NO_WRAP)
-        val wrapped = b64.chunked(64).joinToString("\n")
+        val wrapped = b64.chunked(PEM_LINE_LENGTH).joinToString("\n")
         return "-----BEGIN PUBLIC KEY-----\n$wrapped\n-----END PUBLIC KEY-----\n"
     }
 
