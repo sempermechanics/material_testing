@@ -25,10 +25,10 @@ import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.VisualizationEngine
 import timber.log.Timber
 import java.io.File
-import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -498,8 +498,20 @@ internal class ShareExportBuilder(
          * `cache-path` covers `share/` and everything under it, and the share-dir
          * sweep in [CacheJanitor] removes whole entries, directories included, once
          * they are a day old. Disk I/O: call it off the main thread.
+         *
+         * `File.mkdir` rather than `Files.createTempDirectory`, which needs API 26
+         * (minSdk is 24); a directory another job made first is skipped, as
+         * `mkdir` fails on one that exists.
          */
-        fun newJobDir(cacheDir: File): File =
-            Files.createTempDirectory(CacheJanitor.shareDir(cacheDir).toPath(), "job-").toFile()
+        fun newJobDir(cacheDir: File): File {
+            val shareDir = CacheJanitor.shareDir(cacheDir)
+            repeat(JOB_DIR_ATTEMPTS) {
+                val dir = File(shareDir, "job-${UUID.randomUUID()}")
+                if (dir.mkdir()) return dir
+            }
+            error("Could not create a share job directory in $shareDir")
+        }
+
+        private const val JOB_DIR_ATTEMPTS = 8
     }
 }
