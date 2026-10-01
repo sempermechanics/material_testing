@@ -148,7 +148,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   2026-09-28), as totals or as increments per photo (stored as totals), and shown in kg;
   the maths and CSV stay in N. A per-session deflection scale and bias is set from
   Results (`ViewerDeflectionCorrection`, not the wizard), and re-sent to a backed-up
-  session's metadata.json (ADR-013, TD-150; the route needs a semperdic-app deploy). Strain window in
+  session's metadata.json (ADR-013, TD-150; route deployed 2026-10-01, the app side ships next release). Strain window in
   points (tensile 5, bending 9). Engine `v0.2.2`. Checked against published
   steel and PMMA data, on a Pixel 6 too (2026-09-26; steel re-run under ΔL / L₀
   on 2026-09-29, TD-144); a concrete set fails as
