@@ -2,6 +2,7 @@ package com.indicvision.semper.session
 
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SkippedNode
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.AnalysisRunCodes
 import com.indicvision.semper.ui.analysis.EngineFailure
 import org.junit.Assert.assertEquals
@@ -24,24 +25,14 @@ class FailureProvenanceTest {
         val skipNodes: List<SkippedNode> = emptyList(),
     )
 
-    private fun record(args: RecordArgs = RecordArgs()) = SessionRecord(
+    private fun record(args: RecordArgs = RecordArgs()) = sessionRecord(
         id = "s1",
         name = "run",
         createdAt = 0L,
-        updatedAt = 0L,
         frameCount = args.frameCount,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
-        imgW = 100,
-        imgH = 100,
-        roiX = 0,
-        roiY = 0,
-        roiW = 100,
-        roiH = 100,
         refPath = "ref.png",
-        refName = "ref.png",
         sessionDir = "/dir",
+    ).copy(
         stopCode = args.stopCode,
         plannedFrameCount = args.plannedFrameCount,
         sweepSkipSubsets = args.skipSubsets,

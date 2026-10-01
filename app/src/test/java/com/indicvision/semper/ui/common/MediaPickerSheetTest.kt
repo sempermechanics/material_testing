@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.idleUntil
 import kotlinx.coroutines.Dispatchers
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -38,7 +39,7 @@ import java.time.Duration
  * for deformed frames. MediaStore is a fake provider holding a few rows.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class MediaPickerSheetTest {
 
     /** A stand-in for MediaStore's `media` authority; rows are set per test. */
@@ -209,12 +210,7 @@ class MediaPickerSheetTest {
         MediaPickerSheet.show(activity, MediaSourceChooser.Mode.HOME_REFERENCE, {}, {}, {})
         val sheet = ShadowDialog.getLatestDialog()
 
-        val deadline = System.currentTimeMillis() + 10_000L
-        while (sheet.adapter().itemCount == 0) {
-            idle()
-            check(System.currentTimeMillis() < deadline) { "the grid never filled" }
-            Thread.sleep(10)
-        }
+        idleUntil("the grid to fill") { sheet.adapter().itemCount > 0 }
 
         assertEquals(false, FakeMediaProvider.queriedOnMain)
         assertEquals(3, sheet.adapter().itemCount)

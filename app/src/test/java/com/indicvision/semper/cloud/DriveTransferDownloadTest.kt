@@ -5,7 +5,7 @@ import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
+import mockwebserver3.junit4.MockWebServerRule
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -15,10 +15,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -37,10 +37,11 @@ import java.io.File
  * of the file, and a truncated body finalized as if it were complete.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class DriveTransferDownloadTest {
 
-    private lateinit var server: MockWebServer
+    @get:Rule
+    val serverRule = MockWebServerRule()
+    private val server get() = serverRule.server
     private lateinit var drive: DriveTransfer
     private lateinit var dir: File
     private lateinit var dest: File
@@ -49,8 +50,6 @@ class DriveTransferDownloadTest {
 
     @Before
     fun setUp() {
-        server = MockWebServer()
-        server.start()
         val client = OkHttpClient()
         drive = DriveTransfer(client, client, "application/octet-stream".toMediaType())
         dir = File(System.getProperty("java.io.tmpdir"), "driveDl-${System.nanoTime()}")
@@ -60,7 +59,6 @@ class DriveTransferDownloadTest {
 
     @After
     fun tearDown() {
-        server.close()
         dir.deleteRecursively()
     }
 

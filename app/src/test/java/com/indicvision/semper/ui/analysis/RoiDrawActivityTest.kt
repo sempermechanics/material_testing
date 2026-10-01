@@ -13,6 +13,7 @@ import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CacheJanitor
+import com.indicvision.semper.fixtures.idleUntil
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -38,7 +39,7 @@ import java.io.File
  * without the native decoder, so the whole load runs on the JVM.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RoiDrawActivityTest {
 
@@ -64,12 +65,7 @@ class RoiDrawActivityTest {
     /** Waits for the preview decode (Dispatchers.Default) and the post that hands it to the overlay. */
     private fun awaitCanvas(activity: RoiDrawActivity) {
         val overlay = activity.findViewById<StudioOverlayView>(R.id.overlayRoi)
-        val deadline = System.currentTimeMillis() + TIMEOUT_MS
-        while (overlay.imageView == null) {
-            shadowOf(activity.mainLooper).idle()
-            check(System.currentTimeMillis() < deadline) { "the preview never reached the overlay" }
-            Thread.sleep(20)
-        }
+        idleUntil("the preview to reach the overlay") { overlay.imageView != null }
     }
 
     private fun RoiDrawActivity.hud() = findViewById<TextView>(R.id.tvHud).text.toString()
@@ -278,6 +274,5 @@ class RoiDrawActivityTest {
     private companion object {
         const val IMG_W = 640
         const val IMG_H = 400
-        const val TIMEOUT_MS = 10_000L
     }
 }

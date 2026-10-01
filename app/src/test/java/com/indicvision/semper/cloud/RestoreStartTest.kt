@@ -7,6 +7,7 @@ import com.indicvision.semper.data.RestoreFailureLedger
 import com.indicvision.semper.data.RestoreStart
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.home.RestoreSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,7 +16,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 import java.util.UUID
 
@@ -26,7 +26,6 @@ import java.util.UUID
  * however many times either screen opens.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class RestoreStartTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
@@ -143,22 +142,9 @@ class RestoreStartTest {
         assertFalse(context.getString(R.string.delete_device_only_done).contains("download"))
     }
 
-    private fun record(id: String, name: String = id, cloudId: String) = SessionRecord(
+    private fun record(id: String, name: String = id, cloudId: String) = sessionRecord(
         id = id,
         name = name,
-        createdAt = 1L,
-        updatedAt = 1L,
-        frameCount = 1,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
-        imgW = 100,
-        imgH = 100,
-        roiX = 0,
-        roiY = 0,
-        roiW = 100,
-        roiH = 100,
-        refPath = "",
         refName = "reference.png",
         sessionDir = SessionStore.dirFor(context, id).absolutePath,
         syncState = SessionRecord.SyncState.LOCAL_ONLY,

@@ -15,7 +15,6 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.android.controller.ActivityController
-import org.robolectric.annotation.Config
 
 /**
  * Banner chrome under a real themed Activity (Material indicators need a theme).
@@ -23,7 +22,6 @@ import org.robolectric.annotation.Config
  * freshly inflated copy of the banner layout hosted in the same activity.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class TransferBannerControllerTest {
 
     /**

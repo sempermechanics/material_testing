@@ -6,6 +6,7 @@ import androidx.core.graphics.createBitmap
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -71,13 +72,14 @@ class SessionUploadBundlerDeviceTest {
         png(File(rawDir, "speckle.png"))
         dat(SessionPaths.frameDat(sessionDir, 0))
         dat(SessionPaths.frameDat(sessionDir, 1))
-        val record = SessionRecord(
-            id = "bundler_device", name = "sweep", createdAt = 0, updatedAt = 0, frameCount = 2,
-            subset = 21, step = STEP, strainWindow = 15,
-            imgW = SIDE, imgH = SIDE, roiX = 0, roiY = 0, roiW = SIDE, roiH = SIDE,
-            refPath = ref.path, refName = "ref.png", sessionDir = sessionDir.path,
+        val record = sessionRecord(
+            id = "bundler_device", name = "sweep", createdAt = 0, frameCount = 2, subset = 21, step = STEP,
+            imgW = SIDE, imgH = SIDE, refPath = ref.path, sessionDir = sessionDir.path,
             defNames = listOf("speckle.png", "speckle.png"),
-            sweepSubsets = listOf(21, 31), sweepSteps = listOf(STEP, STEP), sweepStrainWindows = listOf(15, 19),
+        ).copy(
+            sweepSubsets = listOf(21, 31),
+            sweepSteps = listOf(STEP, STEP),
+            sweepStrainWindows = listOf(15, 19),
             sweepLabels = listOf("S21/W15", "S31\\W19"),
         )
         val staging = File(root, "staging")

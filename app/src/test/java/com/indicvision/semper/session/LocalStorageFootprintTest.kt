@@ -12,17 +12,18 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.StorageBudget
 import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
-import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.fixtures.CleanAppState
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.FrameImportHelper
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -33,16 +34,16 @@ import java.io.File
  * touches sessions the cloud already has.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class LocalStorageFootprintTest {
+
+    @get:Rule
+    val clean = CleanAppState()
 
     private lateinit var ctx: Context
 
     @Before
     fun setUp() {
         ctx = ApplicationProvider.getApplicationContext()
-        TokenStore.clear(ctx)
-        SessionStore.deleteAll(ctx)
         DicSettings.setAutoFreeBudgetGb(ctx, DicSettings.AUTO_FREE_OFF)
         ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
         // Eviction presumes the cloud copy can be pulled back, which is the
@@ -52,8 +53,6 @@ class LocalStorageFootprintTest {
 
     @After
     fun tearDown() {
-        SessionStore.deleteAll(ctx)
-        TokenStore.clear(ctx)
         AppRemoteConfig.clear(ctx)
         ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
     }
@@ -275,21 +274,8 @@ class LocalStorageFootprintTest {
             .let { File(it, "specimen.png").writeText("i".repeat(2048)) }
         SessionStore.upsert(
             ctx,
-            SessionRecord(
+            sessionRecord(
                 id = id,
-                name = id,
-                createdAt = 1L,
-                updatedAt = 1L,
-                frameCount = 1,
-                subset = 41,
-                step = 5,
-                strainWindow = 15,
-                imgW = 100,
-                imgH = 100,
-                roiX = 0,
-                roiY = 0,
-                roiW = 100,
-                roiH = 100,
                 refPath = File(dir, "reference.png").absolutePath,
                 refName = "reference.png",
                 sessionDir = dir.absolutePath,

@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.EngineFailure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,7 +28,7 @@ import org.robolectric.annotation.Config
  * whose state did not move.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class SessionListAdapterTest {
 
     private lateinit var activity: AppCompatActivity
@@ -76,26 +77,16 @@ class SessionListAdapterTest {
         stopCode: Int = 0,
         planned: Int = 0,
         sweep: Boolean = false,
-    ) = SessionRecord(
+    ) = sessionRecord(
         id = id,
         name = "Specimen $id",
         createdAt = 0L,
-        updatedAt = 0L,
         frameCount = frameCount,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
-        imgW = 100,
-        imgH = 100,
-        roiX = 0,
-        roiY = 0,
-        roiW = 100,
-        roiH = 100,
         refPath = "/nonexistent/$id/ref.png",
-        refName = "ref.png",
         sessionDir = "/nonexistent/$id",
-        headline = headline,
         syncState = sync,
+    ).copy(
+        headline = headline,
         stopCode = stopCode,
         plannedFrameCount = planned,
         sweepSteps = if (sweep) listOf(5, 7) else emptyList(),

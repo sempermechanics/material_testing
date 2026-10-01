@@ -14,16 +14,13 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
-import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 
 /**
  * Deleting an account is gated on proving the identity, and that proof now
  * happens on the sign-in screen rather than in a password dialog of its own.
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class DeleteAccountReauthTest {
 
     /**

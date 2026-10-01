@@ -8,6 +8,7 @@ import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.fixtures.idleUntil
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -74,23 +75,12 @@ class SessionListThumbnailTest {
 
     private fun SessionListAdapter.Holder.bitmap(): Bitmap? = (thumb.drawable as? BitmapDrawable)?.bitmap
 
-    /** Decodes run on one background thread and post back: pump until [done]. */
-    private fun pumpUntil(done: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + 10_000L
-        while (true) {
-            shadowOf(Looper.getMainLooper()).idle()
-            if (done()) return
-            check(System.currentTimeMillis() < deadline) { "timed out" }
-            Thread.sleep(10)
-        }
-    }
-
     @Test
     fun `a late decode for the previous row does not overwrite a cached thumbnail`() {
         adapter.submit(listOf(record("a"), record("b")), emptySet())
         // b's thumbnail is decoded and cached first.
         val first = holder(1)
-        pumpUntil { first.bitmap() != null }
+        idleUntil("the first thumbnail decode") { first.bitmap() != null }
         val bThumb = first.bitmap()
 
         // A recycled holder starts on a (decode queued), then scrolls to b,
@@ -103,7 +93,7 @@ class SessionListThumbnailTest {
         // A second decode of a, queued after the first on the single decode
         // thread: once it lands, the first one has landed too.
         val witness = holder(0)
-        pumpUntil { witness.bitmap() != null }
+        idleUntil("the witness thumbnail decode") { witness.bitmap() != null }
 
         assertSame("still b's thumbnail", bThumb, recycled.bitmap())
     }
@@ -121,7 +111,7 @@ class SessionListThumbnailTest {
         // The restore writes the reference back; the next bind finds it.
         File(row.refPath).writeBytes(ByteArray(EDGE * EDGE * 4))
         val restored = holder(0)
-        pumpUntil { restored.bitmap() != null }
+        idleUntil("the restored thumbnail decode") { restored.bitmap() != null }
         assertNotNull(restored.bitmap())
     }
 

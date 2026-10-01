@@ -2,6 +2,7 @@ package com.indicvision.semper.settings
 
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.net.CloudSessionDto
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.settings.AnalysisEntries
 import com.indicvision.semper.ui.settings.AnalysisLocation
 import org.junit.Assert.assertEquals
@@ -36,23 +37,11 @@ class AnalysisEntriesTest {
         withLocalData: Boolean = true,
     ): SessionRecord {
         val dir = if (withLocalData) sessionDirWithData(id) else tmp.newFolder("empty-$id").absolutePath
-        return SessionRecord(
+        return sessionRecord(
             id = id,
             name = name,
             createdAt = 0L,
-            updatedAt = 0L,
-            frameCount = 1,
-            subset = 41,
-            step = 5,
-            strainWindow = 15,
-            imgW = 100,
-            imgH = 100,
-            roiX = 0,
-            roiY = 0,
-            roiW = 100,
-            roiH = 100,
             refPath = "$dir/ref.png",
-            refName = "ref.png",
             sessionDir = dir,
             cloudSessionId = cloudSessionId,
             syncState = syncState,

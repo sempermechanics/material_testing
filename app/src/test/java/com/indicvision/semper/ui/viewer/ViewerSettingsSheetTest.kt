@@ -5,9 +5,11 @@ import android.text.style.ImageSpan
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.idleUntil
+import com.indicvision.semper.fixtures.launchViewer
+import com.indicvision.semper.fixtures.viewerArgs
 import com.indicvision.semper.ui.analysis.EngineFailure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,10 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 import java.io.File
 import java.nio.ByteBuffer
@@ -32,7 +31,6 @@ import java.nio.ByteOrder
  * setting instead of the frame's, or hides why a run stopped, misleads.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ViewerSettingsSheetTest {
 
     @get:Rule
@@ -44,8 +42,6 @@ class ViewerSettingsSheetTest {
         const val FRAMES = 3
         const val GRID = 4
         const val STEP = 4
-        const val SIZE = GRID * STEP
-        const val TIMEOUT_MS = 10_000L
     }
 
     @Before
@@ -66,24 +62,12 @@ class ViewerSettingsSheetTest {
     }
 
     /** A plain three-frame run over the whole 16×16 image, opened on frame 1. */
-    private fun baseArgs() = ViewerArgs.ofFrames(batchDir.absolutePath, SIZE, SIZE, STEP, startFrame = 0)
-        .copy(strainWindow = 25, refName = "Dogbone A")
+    private fun baseArgs() = viewerArgs(batchDir, GRID, STEP).copy(strainWindow = 25, refName = "Dogbone A")
 
     private fun viewer(args: ViewerArgs = baseArgs()): ResultViewerActivity {
-        val intent = args.toIntent(ApplicationProvider.getApplicationContext())
-        val activity = Robolectric.buildActivity(ResultViewerActivity::class.java, intent).setup().get()
-        idleUntil(activity) { activity.rawData != null }
+        val activity = launchViewer(args)
+        idleUntil("the viewer") { activity.rawData != null }
         return activity
-    }
-
-    private fun idleUntil(activity: ResultViewerActivity, done: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + TIMEOUT_MS
-        while (true) {
-            shadowOf(activity.mainLooper).idle()
-            if (done()) return
-            check(System.currentTimeMillis() < deadline) { "timed out waiting on the viewer" }
-            Thread.sleep(20)
-        }
     }
 
     private fun ResultViewerActivity.rows(): Map<String, String> = ViewerSettingsSheet.entriesFor(this).toMap()

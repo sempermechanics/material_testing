@@ -21,16 +21,13 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 
 /**
  * Home's first-run prompts come one at a time: the beta / data-use notice, then
  * the diagnostics choice. They used to open together, the notice on top.
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class HomeFirstRunPromptsTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
