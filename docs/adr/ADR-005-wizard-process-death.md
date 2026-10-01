@@ -111,13 +111,18 @@ the import, which on a 150-frame batch is minutes.
   caught on restore: any missing part (a frame, the reference, the mask)
   means **LOST**, with inputs reset to an empty step 1 and a snackbar. A
   partial restore would look ready and solve something else.
-- **Mirroring.** `refBytes` and `roiMaskBytes` setters write the draft on a
-  single-thread IO dispatcher, so writes land in order. The frame list is
-  written by the saved-state provider as the Activity stops.
+- **Mirroring.** All draft I/O runs on `WizardDraft.io`, one serial lane
+  shared by every wizard, so writes land in order. The `refBytes` and
+  `roiMaskBytes` setters queue their write there. The saved-state provider
+  snapshots the frame list on Main as the Activity stops and queues its
+  write on the same lane, so a kill in the few milliseconds before that
+  write lands restores the previous frame list or reports **LOST**.
 - **When the draft goes.** It is deleted when the wizard finishes
   (`onDestroy` with `isFinishing`), not when a run commits: the user
   re-runs from the same wizard, and a kill after a run must still restore.
-  `discard()` also blocks a write still queued behind it. `ViewModel.onCleared`
+  `discard()` does not block Main: it sets a `@Volatile` flag that turns
+  any write still queued into a no-op, then deletes the files on the same
+  lane. `ViewModel.onCleared`
   is not the signal, because "Don't keep activities" clears the view model
   on a destroy the system will restore.
 - **Hand-off extras.** Home's picked Uris are consumed only when
