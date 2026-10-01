@@ -126,7 +126,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the engine floor (≥ 4557 so
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-30)
+## Current state (2026-10-01)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
@@ -135,7 +135,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
-  TD-139–144 and TD-146–151 are ours (TD-145 is semperdic-app's).
+  TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–155 are semperdic-app's; its
+  TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
+  free in both registers is TD-156; check both before taking one.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
@@ -153,6 +155,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   steel and PMMA data, on a Pixel 6 too (2026-09-26; steel re-run under ΔL / L₀
   on 2026-09-29, TD-144); a concrete set fails as
   expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
+  Those checks ran on engine `v0.2.2`: under `v0.2.3` both real-data scripts
+  (`scripts/real_data_steel_tensile.py`, `scripts/real_data_pmma_bending.py`) are
+  owed a re-run on the emulator and a Pixel 6, and a Pixel 6 owes a repeat-solve
+  hash check (TD-65's row). The JVM tests use recorded arrays and stay green.
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
   counts frames off the curve).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
