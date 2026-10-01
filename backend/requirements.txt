@@ -1,9 +1,9 @@
 fastapi==0.141.1
-uvicorn[standard]==0.53.0
-google-auth==2.58.0
-google-cloud-firestore==2.31.0
-google-cloud-tasks==2.24.0
-firebase-admin==7.6.0
+uvicorn[standard]==0.54.0
+google-auth==2.58.1
+google-cloud-firestore==2.32.0
+google-cloud-tasks==2.25.0
+firebase-admin==7.7.0
 requests==2.34.2
 cryptography==50.0.1
 pydantic==2.13.5
