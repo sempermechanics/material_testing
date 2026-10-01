@@ -3,8 +3,11 @@ package com.indicvision.semper.results
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import com.indicvision.semper.DicResult
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.VisualizationEngine
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,6 +31,9 @@ class ReportColorBarTest {
 
         /** One ramp step is ~4 levels; gradient interpolation and dithering add a little. */
         const val TOLERANCE = 12
+
+        /** For the bar's ends read just inside its outline. */
+        const val END_TOLERANCE = 28
     }
 
     @Test
@@ -74,5 +80,65 @@ class ReportColorBarTest {
             if (worst > TOLERANCE) misses += "t=%.3f off by %d".format(t, worst)
         }
         assertTrue("bar differs from the map: ${misses.take(5)} (${misses.size} rows)", misses.isEmpty())
+        // Its ends, against the jet values written out by hand rather than read
+        // back from the ramp under test. The outline covers the very ends, so the
+        // rows read sit ~5 ramp steps (~20 levels) in.
+        val bottom = bitmap.getPixel(x, (barBottom - 5).toInt())
+        val top = bitmap.getPixel(x, (barTop + 5).toInt())
+        assertNear(Color.rgb(0, 0, 127), bottom, END_TOLERANCE)
+        assertNear(Color.rgb(131, 0, 0), top, END_TOLERANCE)
+    }
+
+    @Test
+    fun `the ramp is the jet map less the transparent slot`() {
+        val ramp = VisualizationEngine.rampColors()
+        assertEquals(VisualizationEngine.TRANSPARENT_INDEX, ramp.size)
+        assertEquals(255, ramp.size)
+        // Jet at v = i/255: dark blue, then green, then dark red.
+        assertEquals(Color.rgb(0, 0, 127), ramp[0])
+        assertEquals(Color.rgb(125, 255, 129), ramp[127])
+        assertEquals(Color.rgb(131, 0, 0), ramp[254])
+        // The GIF's colour table holds the same colours below its background slot.
+        val gif = VisualizationEngine.gifPalette(Color.MAGENTA)
+        assertArrayEquals(ramp, gif.copyOf(ramp.size))
+    }
+
+    @Test
+    fun `the map paints the ramp's ends at the ends of the scale`() {
+        assertEquals(VisualizationEngine.rampColors().first(), centrePixelOfUniformField(0f))
+        assertEquals(VisualizationEngine.rampColors().last(), centrePixelOfUniformField(1f))
+    }
+
+    /** The heatmap's centre pixel for a field whose u is [value] everywhere, on a 0..1 scale. */
+    private fun centrePixelOfUniformField(value: Float): Int {
+        val grid = 10
+        val step = 4
+        val data = FloatArray(grid * grid * DicResult.STRIDE)
+        for (i in 0 until grid * grid) {
+            val o = i * DicResult.STRIDE
+            data[o] = ((i % grid) * step).toFloat()
+            data[o + 1] = ((i / grid) * step).toFloat()
+            data[o + DicResult.IDX_U] = value
+            data[o + DicResult.IDX_ZNSSD] = 0.01f // a well-correlated point
+        }
+        val (heatmap, _, _) = VisualizationEngine.generateHeatmap(
+            data,
+            grid * step,
+            grid * step,
+            DicResult.IDX_U,
+            step,
+            customMin = 0f,
+            customMax = 1f,
+        )
+        return heatmap.getPixel(heatmap.width / 2, heatmap.height / 2).also { heatmap.recycle() }
+    }
+
+    private fun assertNear(expected: Int, actual: Int, tolerance: Int) {
+        val worst = maxOf(
+            abs(Color.red(actual) - Color.red(expected)),
+            abs(Color.green(actual) - Color.green(expected)),
+            abs(Color.blue(actual) - Color.blue(expected)),
+        )
+        assertTrue("#%08X vs #%08X".format(actual, expected), worst <= tolerance)
     }
 }
