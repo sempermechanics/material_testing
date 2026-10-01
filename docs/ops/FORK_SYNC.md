@@ -27,8 +27,9 @@ apps. The deploy and Firestore workflows only run in this repo
 ## Syncing into material_testing
 
 1. `git fetch semperdic main` and branch `sync/semperdic-<short sha>` from its `main`.
-2. `git merge semperdic/main`. Keep its `applicationId`, `rootProject.name`,
-   `google-services.json` and benchmark package names.
+2. `git merge semperdic/main`. Keep its `applicationId`, `rootProject.name` and
+   `google-services.json`. The benchmark module and CI read the package from
+   `applicationId` (ADR-008), so nothing else names the app.
 3. Docs conflicts are the norm: keep its CONTEXT and TECH_DEBT, both sides of
    CHANGELOG, and both sides of any ADR both repos added to.
 4. An engine bump (the `native` gitlink) means re-running its real-data checks
