@@ -12,6 +12,12 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-01 — material_testing: synced with semperdic-app `dc13351`
+
+A plain merge of the parent's #309, which records TD-65's arm64 check in its register
+(a Pixel 6 repeat solve, bit-identical on nine solves). This register already had it
+from #119, so ours was kept.
+
 ## 2026-10-01 — material_testing: synced with semperdic-app `ff0cfc3`
 
 A plain merge of the parent's #306–#308. Nothing changes here at run time:

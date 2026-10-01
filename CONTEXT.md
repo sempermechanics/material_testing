@@ -131,7 +131,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`; last `ff0cfc3`, 2026-10-01; rules in the parent's
+  --grep=semperdic-app`; last `dc13351`, 2026-10-01; rules in the parent's
   `docs/ops/FORK_SYNC.md`). The parent deploys, and its TD rows jump to TD-122. General
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
