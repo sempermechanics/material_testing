@@ -349,6 +349,16 @@ class VsgPlotViewTest {
         assertEquals("1962", VsgPlotView.tickLabel(1962f))
     }
 
+    @Test
+    fun `the scrub label sits clear of its line, flipping left near the edge`() {
+        // Plot 100..900, label 200 wide, 10 clear of the dot.
+        assertEquals(410f, VsgPlotView.scrubLabelX(400f, 200f, 10f, 100f, 900f), EPS)
+        assertEquals(700f, VsgPlotView.scrubLabelX(690f, 200f, 10f, 100f, 900f), EPS) // just fits
+        assertEquals(640f, VsgPlotView.scrubLabelX(850f, 200f, 10f, 100f, 900f), EPS)
+        // Too wide for either side: held at the left edge.
+        assertEquals(100f, VsgPlotView.scrubLabelX(150f, 900f, 10f, 100f, 900f), EPS)
+    }
+
     /** Pixel 6 (2.625 dp/px): 11 sp monospace, whose glyphs advance 0.6 em. */
     private val pixel6Px = 2.625f
     private val monoChar = VsgPlotView.AXIS_LABEL_SP * pixel6Px * MONO_ADVANCE_EM
