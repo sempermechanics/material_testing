@@ -25,6 +25,11 @@ object RoiResolveHelper {
     /**
      * Returns `[x, y, w, h]` for the rectangle the engine solves over, or null
      * if it cannot hold one [subset]-sized window.
+     *
+     * A custom ROI is clipped to the image first. It is kept across a
+     * reference of the same size, and restored from a saved state, so it is
+     * never assumed to fit: the engine's grid would otherwise start off the
+     * image and the run fail with an ROI error instead of this check.
      */
     fun resolve(
         subset: Int,
@@ -37,7 +42,7 @@ object RoiResolveHelper {
         realRefHeight: Int,
     ): IntArray? {
         val roi = if (hasCustomRoi) {
-            intArrayOf(roiX, roiY, roiW, roiH)
+            clipToImage(roiX, roiY, roiW, roiH, realRefWidth, realRefHeight) ?: return null
         } else {
             val margin = (subset / 2) + ROI_MARGIN_SLACK_PX
             intArrayOf(
@@ -66,12 +71,27 @@ object RoiResolveHelper {
         val h = realRefHeight
         if (w <= 0 || h <= 0) return SubsetRecommender.MAX_SUBSET
         val fits = if (hasCustomRoi) {
-            minOf(roiW, roiH) - 2 * ENGINE_EDGE_BUFFER_PX
+            val clipped = clipToImage(0, 0, roiW, roiH, w, h)
+            minOf(clipped?.get(2) ?: 0, clipped?.get(3) ?: 0) - 2 * ENGINE_EDGE_BUFFER_PX
         } else {
             // Full frame is inset by (subset/2 + slack) a side and must still be
             // one subset wide: imgW - 2*(s/2 + slack) >= s  =>  s <= imgW/2 - slack.
             minOf(w, h) / 2 - ROI_MARGIN_SLACK_PX
         }
         return (fits - 1 or 1).coerceIn(SubsetRecommender.MIN_SUBSET, SubsetRecommender.MAX_SUBSET)
+    }
+
+    /**
+     * `[x, y, w, h]` of the part of the ROI inside a [width] x [height] image,
+     * or null when none of it is (or the image size is unknown).
+     */
+    fun clipToImage(x: Int, y: Int, w: Int, h: Int, width: Int, height: Int): IntArray? {
+        if (width <= 0 || height <= 0) return null
+        val left = x.coerceIn(0, width)
+        val top = y.coerceIn(0, height)
+        val right = (x.toLong() + w).coerceIn(left.toLong(), width.toLong()).toInt()
+        val bottom = (y.toLong() + h).coerceIn(top.toLong(), height.toLong()).toInt()
+        if (right <= left || bottom <= top) return null
+        return intArrayOf(left, top, right - left, bottom - top)
     }
 }

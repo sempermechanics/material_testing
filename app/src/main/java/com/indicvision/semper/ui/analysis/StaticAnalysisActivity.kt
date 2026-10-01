@@ -38,6 +38,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.annotation.StringRes
+import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
@@ -64,6 +65,7 @@ import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.Motion
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -157,6 +159,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // State
     private var isProcessing = false
     private var importJob: Job? = null
+
+    /** The reference pick still loading; a newer pick cancels it. */
+    private var refJob: Job? = null
 
     private data class CancelRunConfig(
         @StringRes val titleRes: Int,
@@ -565,6 +570,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancelGate
         importJob?.cancel()
         importJob = null
+        refJob?.cancel()
+        refJob = null
         // VsgStudyRunner observes the same gate — no separate flag.
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::overlayHelper.isInitialized) overlayHelper.release()
@@ -585,54 +592,49 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (::settingsSheetHelper.isInitialized) settingsSheetHelper.refreshPasteVisibility()
     }
 
+    /**
+     * Loads a picked reference. A pick cancels the one still loading, so the
+     * last image picked is the one that lands, not the last one to finish
+     * decoding.
+     */
     private fun handleReferenceImage(uri: Uri) {
-        val name = getFileName(uri)
-        val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
-
-        lifecycleScope.launch(Dispatchers.IO) {
+        refJob?.cancel()
+        refJob = lifecycleScope.launch {
             try {
-                val loaded = contentResolver.openInputStream(uri)?.use { stream ->
-                    loadReferenceFromStream(stream, isRaw)
+                val name = withContext(Dispatchers.IO) { getFileName(uri) }
+                val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
+                val loaded = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { stream -> loadReferenceFromStream(stream, isRaw) }
                 }
                 if (loaded == null) {
-                    withContext(Dispatchers.Main) {
-                        FaqRedirect.snackbar(
-                            this@StaticAnalysisActivity,
-                            if (isRaw) R.string.failed_decode_raw else R.string.failed_load_reference,
-                            R.string.url_faq_import_reference,
-                        )
-                    }
+                    FaqRedirect.snackbar(
+                        this@StaticAnalysisActivity,
+                        if (isRaw) R.string.failed_decode_raw else R.string.failed_load_reference,
+                        R.string.url_faq_import_reference,
+                    )
                     return@launch
                 }
 
-                withContext(Dispatchers.Main) {
-                    viewModel.realRefWidth = loaded.width
-                    viewModel.realRefHeight = loaded.height
-                    viewModel.refName = name
-                    viewModel.refBytes = loaded.bytes
-                    refPreviewBmp = loaded.preview
-                    wizardSlots.refreshRefSlot(refPreviewBmp)
-
-                    if (!viewModel.hasCustomRoi) {
-                        viewModel.roiX = 0
-                        viewModel.roiY = 0
-                        viewModel.roiW = viewModel.realRefWidth
-                        viewModel.roiH = viewModel.realRefHeight
-                    }
-                    // Frames may have been loaded before this reference.
-                    validateFrameSizes()
-                    checkReady()
-                    requestSubsetRecommendation()
-                }
+                viewModel.applyNewReference(loaded.bytes, name, loaded.width, loaded.height)
+                refPreviewBmp = loaded.preview
+                wizardSlots.refreshRefSlot(refPreviewBmp)
+                wizardSlots.updateRoiSummary()
+                sweepHelper.refreshLineCutPreview()
+                // Frames may have been loaded before this reference.
+                validateFrameSizes()
+                clearRunStatus()
+                checkReady()
+                requestSubsetRecommendation()
+            } catch (e: CancellationException) {
+                // A newer pick, or the screen closing: nothing failed.
+                throw e
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load reference image")
-                withContext(Dispatchers.Main) {
-                    FaqRedirect.snackbar(
-                        this@StaticAnalysisActivity,
-                        R.string.failed_load_reference,
-                        R.string.url_faq_import_reference,
-                    )
-                }
+                FaqRedirect.snackbar(
+                    this@StaticAnalysisActivity,
+                    R.string.failed_load_reference,
+                    R.string.url_faq_import_reference,
+                )
             }
         }
     }
@@ -644,7 +646,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val preview: Bitmap?,
     )
 
-    /** Decode / dimension / preview work for a reference pick. Runs off Main. */
+    /** Decode / dimension / preview work for a reference pick. Null when it cannot be decoded. */
+    @WorkerThread
     private suspend fun loadReferenceFromStream(
         stream: java.io.InputStream,
         isRaw: Boolean,
@@ -951,6 +954,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     ) {
         if (isProcessing) return
         isProcessing = true
+        // The video's first frame becomes the reference; an image pick still
+        // decoding must not land on top of it.
+        refJob?.cancel()
         checkReady()
         val job = AnalysisVideoExtractHelper.extract(
             activity = this,
@@ -968,6 +974,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 applied.refPreview?.let { refPreviewBmp = it }
                 wizardSlots.refreshRefSlot(refPreviewBmp)
                 wizardSlots.refreshDefSlot()
+                // A different-size reference resets the ROI (applyNewReference).
+                wizardSlots.updateRoiSummary()
+                sweepHelper.refreshLineCutPreview()
                 validateFrameSizes()
                 clearRunStatus()
                 checkReady()
@@ -1377,7 +1386,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
     }
 
+    /** The picked file's display name; a content-provider query, so off the main thread. */
     @SuppressLint("Range")
+    @WorkerThread
     private fun getFileName(uri: Uri): String {
         var result: String? = null
         if (uri.scheme == "content") {

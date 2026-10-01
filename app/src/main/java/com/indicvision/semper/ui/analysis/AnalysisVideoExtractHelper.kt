@@ -79,17 +79,7 @@ object AnalysisVideoExtractHelper {
                         return@withContext
                     }
 
-                    viewModel.clearPreviousResults()
-                    viewModel.realRefWidth = result.refWidth
-                    viewModel.realRefHeight = result.refHeight
-                    viewModel.refBytes = result.refPng
-                    viewModel.refName = result.refName
-                    if (!viewModel.hasCustomRoi) {
-                        viewModel.roiX = 0
-                        viewModel.roiY = 0
-                        viewModel.roiW = result.refWidth
-                        viewModel.roiH = result.refHeight
-                    }
+                    viewModel.applyNewReference(result.refPng, result.refName, result.refWidth, result.refHeight)
                     viewModel.defFilePaths = result.batch.filePaths
                     viewModel.defOriginalNames = result.batch.originalNames
                     viewModel.defFrameSizes = result.batch.frameSizes

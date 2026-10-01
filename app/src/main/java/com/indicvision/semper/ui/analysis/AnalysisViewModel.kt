@@ -652,6 +652,40 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     }
 
     /**
+     * Takes [bytes] as the reference, from a picked image or a video's first
+     * frame. Both pickers come through here, so they cannot disagree.
+     *
+     * - **A new input.** Like a new set of frames, it resets the previous
+     *   results, so the next run starts a new Home row and is checked against
+     *   the quota and seat gates ([wouldCreateNewSession]) instead of
+     *   overwriting the previous reference's session.
+     * - **The ROI and mask follow the pixel size.** Both are in the pixels of
+     *   the image they were drawn on (the mask is one byte per pixel). A
+     *   reference of a different size drops them and goes back to the full
+     *   frame. One of the same size keeps them: that is another shot of the
+     *   same set-up, and the user's crop still lands where they drew it.
+     *   [RoiResolveHelper.resolve] clips whatever is kept to the image anyway.
+     */
+    fun applyNewReference(bytes: ByteArray, name: String, width: Int, height: Int) {
+        val sameSize = width == realRefWidth && height == realRefHeight
+        clearPreviousResults()
+        if (!sameSize) {
+            hasCustomRoi = false
+            roiMaskBytes = null
+        }
+        realRefWidth = width
+        realRefHeight = height
+        refName = name
+        refBytes = bytes
+        if (!hasCustomRoi) {
+            roiX = 0
+            roiY = 0
+            roiW = width
+            roiH = height
+        }
+    }
+
+    /**
      * Identity of the working session on the Home list. Every re-run reuses it,
      * so the exploration loop keeps updating one row instead of leaving a trail
      * of near-identical ones. New inputs reset it via [clearPreviousResults].
