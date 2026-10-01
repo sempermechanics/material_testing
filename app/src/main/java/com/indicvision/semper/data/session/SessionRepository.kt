@@ -19,7 +19,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Session on-disk persistence helpers extracted from [com.indicvision.semper.ui.analysis.AnalysisViewModel].
+ * Session on-disk persistence helpers extracted from [com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel].
  * Keeps file/index bookkeeping off the ViewModel surface.
  */
 class SessionRepository {

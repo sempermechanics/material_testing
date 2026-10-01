@@ -325,7 +325,7 @@ class SummaryAnimation(private val spec: Spec) {
          * Fields with no correlated points anywhere are absent from the result.
          *
          * @param rangesFile optional sidecar written by [FieldRangesStore.write] at
-         *   analysis time (see [com.indicvision.semper.ui.analysis.AnalysisViewModel]).
+         *   analysis time (see [com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel]).
          *   Used only when present and its frame count matches [batchFiles] exactly —
          *   anything else (missing, corrupt, a resumed/edited batch whose frame count
          *   has since changed) falls back to decoding every frame, and that decode

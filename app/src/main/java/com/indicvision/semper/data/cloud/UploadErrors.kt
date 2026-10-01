@@ -81,7 +81,7 @@ internal object UploadErrors {
     /**
      * Upload work output key naming the kind of a terminal failure, for a caller
      * that reacts to it (Home opening the limit screen) rather than showing
-     * [com.indicvision.semper.DicKeys.UPLOAD_FAIL_REASON]. Named like DicKeys.
+     * [com.indicvision.semper.navigation.DicKeys.UPLOAD_FAIL_REASON]. Named like DicKeys.
      */
     const val UPLOAD_FAIL_KIND = "UPLOAD_FAIL_KIND"
 

@@ -8,7 +8,7 @@ import com.indicvision.semper.data.account.LegalTerms
 import com.indicvision.semper.ui.home.HomeActivity
 
 /**
- * Maps [AuthRepository][com.indicvision.semper.data.AuthRepository] access-status
+ * Maps [AuthRepository][com.indicvision.semper.data.account.AuthRepository] access-status
  * strings to the next Activity. Splash, Auth, and PendingApproval all call this
  * so the three screens cannot drift on which statuses mean "in".
  *

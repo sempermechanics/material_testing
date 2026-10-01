@@ -45,7 +45,7 @@ import kotlin.random.Random
  * [android.content.Context], same [SessionStore]/[TokenProvider] a real user session
  * would use — so every op it drives is the real code path, not a mock. It never touches
  * the wizard UI or the gallery picker: sessions are created directly through the same
- * native-engine + persistence calls [com.indicvision.semper.ui.analysis.AnalysisViewModel]
+ * native-engine + persistence calls [com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel]
  * makes, using seeded synthetic speckle (the same generator as
  * [com.indicvision.semper.pipeline.EnginePipelineSmokeTest]) so it is reproducible run to run.
  *
