@@ -12,6 +12,7 @@ import com.indicvision.semper.ui.analysis.FrameOrderDirection
 import com.indicvision.semper.ui.analysis.FrameOrderMode
 import com.indicvision.semper.ui.analysis.WizardState
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -24,6 +25,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.thread
 
 /**
  * The wizard across a process death (ADR-005): the scalars through the
@@ -205,11 +208,67 @@ class WizardStateTest {
     fun `a discarded draft ignores a write still queued behind it`() {
         draft.discard()
         draft.writeReference(REF)
+        drainDraftLane()
         assertFalse(WizardDraft.dirIn(ctx.filesDir).exists())
+    }
+
+    /** Waits for every draft write and delete queued so far. */
+    private fun drainDraftLane() = runBlocking { withContext(WizardDraft.io) {} }
+
+    /**
+     * Holds the draft's lock, as a reference write of tens of megabytes does,
+     * while [onMain] runs on another thread; true when [onMain] returned
+     * without waiting for it.
+     */
+    private fun returnsWhileDraftIsBusy(onMain: () -> Unit): Boolean {
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val writer = thread {
+            synchronized(draft) {
+                held.countDown()
+                release.await()
+            }
+        }
+        held.await()
+        val main = thread { onMain() }
+        main.join(BUSY_WAIT_MS)
+        val returned = !main.isAlive
+        release.countDown()
+        writer.join()
+        main.join()
+        return returned
+    }
+
+    @Test
+    fun `leaving the wizard does not wait for a draft write in flight`() {
+        draft.writeReference(REF)
+
+        assertTrue("discard blocked on the draft's lock", returnsWhileDraftIsBusy { draft.discard() })
+        drainDraftLane()
+        assertFalse(WizardDraft.dirIn(ctx.filesDir).exists())
+    }
+
+    @Test
+    fun `stopping the wizard does not wait for a draft write in flight`() {
+        val vm = editedWizard().also { it.attachDraft(draft) }
+        drainDraftLane()
+        // Set before the draft was attached, so not mirrored: what the setters write.
+        draft.writeReference(REF)
+        draft.writeMask(MASK)
+
+        var saved: android.os.Bundle? = null
+        assertTrue("saveWizardState blocked on the draft's lock", returnsWhileDraftIsBusy { saved = vm.saveWizardState() })
+        drainDraftLane()
+
+        assertEquals(2, saved?.getInt("frameCount"))
+        val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(vm.defFilePaths, after.defFilePaths)
     }
 
     private companion object {
         val REF = ByteArray(64) { it.toByte() }
         val MASK = ByteArray(16) { 1 }
+        const val BUSY_WAIT_MS = 2_000L
     }
 }

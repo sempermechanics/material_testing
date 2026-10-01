@@ -877,7 +877,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     private var draft: WizardDraft? = null
 
     /** One writer at a time, so an older reference can never land after a newer one. */
-    private val draftIo = Dispatchers.IO.limitedParallelism(1)
+    private val draftIo = WizardDraft.io
 
     /** False while [restoreDraft] puts back what the draft already holds. */
     private var mirrorToDraft = true
@@ -926,7 +926,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         }
     }
 
-    /** The wizard was left for good: nothing will restore from the draft. */
+    /** The wizard was left for good: nothing will restore from the draft. Returns at once. */
     fun discardDraft() {
         draft?.discard()
     }
@@ -954,9 +954,19 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         workingLocalId = null
     }
 
-    /** What the system saves as the Activity stops: the scalars, once the frame list is on disk. */
+    /**
+     * What the system saves as the Activity stops: the scalars, with the frame
+     * list queued for the draft.
+     *
+     * The list is written on the draft's lane, not here: the main thread used
+     * to block on the draft's lock behind a reference write still in flight.
+     * A restore reads on the same lane, after it. A process killed before
+     * the write lands restores as LOST (the count in the Bundle will not
+     * match), never as a half-restored wizard.
+     */
     internal fun saveWizardState(): Bundle {
-        draft?.writeFrames(WizardState.encodeFrames(WizardState.frames(this)))
+        val frames = WizardState.frames(this)
+        stage { it.writeFrames(WizardState.encodeFrames(frames)) }
         return WizardState.save(this)
     }
 

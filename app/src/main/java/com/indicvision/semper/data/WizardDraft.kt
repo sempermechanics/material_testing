@@ -1,8 +1,14 @@
 package com.indicvision.semper.data
 
 import android.content.Context
+import androidx.annotation.AnyThread
 import androidx.annotation.WorkerThread
 import com.indicvision.semper.util.AtomicFiles
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
@@ -19,9 +25,8 @@ import java.util.concurrent.TimeUnit
  * this draft is live, and drops the draft once it is a day old.
  *
  * Every write refreshes [MARKER]'s timestamp, which is what "live" is
- * measured from. Blocking I/O throughout: call off the main thread, except
- * [writeFrames] (a few kilobytes, written as the Activity stops), [clear] and
- * [discard].
+ * measured from. Blocking I/O throughout: call it on [io], the one lane all
+ * draft I/O shares, except [discard], which returns at once.
  */
 class WizardDraft(private val dir: File) {
 
@@ -33,6 +38,7 @@ class WizardDraft(private val dir: File) {
     @WorkerThread
     fun writeMask(bytes: ByteArray?) = write(MASK, bytes)
 
+    @WorkerThread
     fun writeFrames(json: String) = write(FRAMES, json.toByteArray())
 
     @WorkerThread
@@ -45,19 +51,28 @@ class WizardDraft(private val dir: File) {
     fun readFrames(): String? = read(FRAMES)?.toString(Charsets.UTF_8)
 
     /** Set by [discard]; a write still queued behind it must not bring the draft back. */
+    @Volatile
     private var discarded = false
 
     /** Empties the draft for a wizard that starts from nothing. */
+    @WorkerThread
     @Synchronized
     fun clear() {
         if (dir.exists() && !dir.deleteRecursively()) Timber.w("Could not delete the wizard draft")
     }
 
-    /** Drops the draft for good: the wizard was left, so nothing will restore it. */
-    @Synchronized
+    /**
+     * Drops the draft for good: the wizard was left, so nothing will restore it.
+     *
+     * Called from `onDestroy`, so it does not wait: it marks the draft, which
+     * stops any write still queued, and deletes the files on [io], behind a
+     * write in flight. Taking the lock here made the main thread wait out a
+     * reference write of tens of megabytes.
+     */
+    @AnyThread
     fun discard() {
         discarded = true
-        clear()
+        cleanup.launch { clear() }
     }
 
     /** Writes atomically; null deletes the part. Failures are logged, not thrown. */
@@ -88,6 +103,16 @@ class WizardDraft(private val dir: File) {
     }
 
     companion object {
+        /**
+         * The one lane all draft I/O goes through, in order. Shared by every
+         * view model, so a draft one wizard discards is gone before the next
+         * wizard's first write, and a restore reads what the stop wrote.
+         */
+        val io: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+        /** Outlives the view model whose wizard discarded the draft. */
+        private val cleanup = CoroutineScope(SupervisorJob() + io)
+
         const val DIR_NAME = "wizard_draft"
         private const val REFERENCE = "reference.bin"
         private const val MASK = "mask.bin"
