@@ -1,4 +1,6 @@
+import hashlib
 import io
+import json
 import logging
 import re
 import uuid
@@ -6,7 +8,7 @@ import zipfile
 from datetime import datetime
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from .. import audit, drive, errors, firestore_repo as repo, statuses
@@ -199,6 +201,68 @@ def list_session_files(
         "files": files,
         "page": page_block(page_size, len(files), next_token),
     }
+
+
+#: A metadata.json is a few KB, and tens at the frame ceiling; this bounds what
+#: one call can write into the user's Drive folder.
+_METADATA_MAX_BYTES = 256 * 1024
+
+#: Every schema the app has written ("indic.session.metadata/1" … "/6").
+_METADATA_SCHEMA_PREFIX = "indic.session.metadata/"
+
+
+@router.put("/v1/sessions/{sid}/metadata", dependencies=[rate_limited(rate_limit.session_bucket)])
+def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depends(verified_device)):
+    """Replace a backed-up analysis's metadata.json with the app's current one.
+
+    Every other file in a session is written once. This one changes when the
+    user edits the analysis after its backup (Material Testing's bending
+    deflection correction, its TD-150), and a restore reads the correction back from it, so without a
+    replace the cloud copy restores the old deflection and E (ADR-013).
+
+    The session must be COMPLETED: before that, the upload itself still carries
+    a metadata.json and the app waits for it. The body must be this session's
+    metadata (same `localSessionId`, a known schema). The bytes are written over
+    the same Drive object, and the file doc's size and checksums follow them,
+    so the restore's size check and the bundle manifest stay true.
+    Device-signed like every other write.
+    """
+    user, device = ctx["user"], ctx["device"]
+    session = _owned_session(sid, user)
+    if session.get("status") != statuses.SESSION_COMPLETED:
+        raise HTTPException(409, errors.SESSION_NOT_COMPLETE)
+
+    schema = payload.get("schema")
+    if not isinstance(schema, str) or not schema.startswith(_METADATA_SCHEMA_PREFIX):
+        raise HTTPException(422, errors.METADATA_INVALID)
+    if payload.get("localSessionId") != session.get("localSessionId"):
+        raise HTTPException(422, errors.METADATA_INVALID)
+    data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    if len(data) > _METADATA_MAX_BYTES:
+        raise HTTPException(413, errors.METADATA_TOO_LARGE)
+
+    file_id = repo.metadata_file_id(sid)
+    rec = repo.get_file(file_id)
+    if (not rec or rec.get("uid") != user["uid"] or rec.get("status") != statuses.FILE_COMPLETED
+            or not rec.get("driveFileId")):
+        raise HTTPException(404, errors.METADATA_NOT_FOUND)
+
+    try:
+        written = drive.replace_content(drive.access_token(), rec["driveFileId"], data)
+    except requests.RequestException as e:
+        if isinstance(e, requests.HTTPError) and e.response is not None and e.response.status_code == 404:
+            log.error("metadata replace %s: object gone from Drive", rec["driveFileId"])
+            raise HTTPException(409, errors.DRIVE_FILE_GONE) from e
+        log.error("metadata replace %s failed: %s", rec["driveFileId"], e)
+        raise HTTPException(502, errors.DRIVE_WRITE_FAILED) from e
+    if written["size"] is not None and written["size"] != len(data):
+        log.error("metadata replace %s: Drive holds %s bytes, sent %d", rec["driveFileId"], written["size"], len(data))
+        raise HTTPException(502, errors.DRIVE_WRITE_FAILED)
+
+    repo.replace_file_content(sid, file_id, len(data), hashlib.sha256(data).hexdigest(), written["md5"])
+    audit.record(user["uid"], device.get("deviceId"), action="SESSION_METADATA_REPLACE",
+                 target={"type": "session", "id": sid}, detail={"bytes": len(data)})
+    return {"sessionId": sid, "sizeBytes": len(data)}
 
 
 #: Listed first in the archive so a reader has the inventory before the bytes,

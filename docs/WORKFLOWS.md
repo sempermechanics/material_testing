@@ -462,13 +462,14 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade
 | C7 | `POST /v1/files/{id}/complete` | C4 | Verifies against Drive's own metadata: size, md5 (skipped only when Drive has none), and that the object's `parents` contains this session's folder — the confused-deputy guard. Advances the session the **file** belongs to, never the one the client named |
 | C8 | `GET /v1/sessions` | C1 | Cursor-paginated; `?verify=true` probes this page's folders in Drive. Purges metadata **only** on a confirmed `MISSING`; an `UNKNOWN` is counted and reported so the client knows the check was incomplete |
 | C9 | `GET /v1/sessions/{sid}/files` | C1 | The restore manifest, cursor-paginated (it used to truncate at 2000) |
-| C10 | `GET /v1/files/{id}/content` | C4 | The one route that touches file bytes. Forwards `Range` to Drive and returns 206 so a restore resumes; audits only the window starting at byte 0; sanitises the client-supplied filename before it reaches `Content-Disposition` |
+| C10 | `GET /v1/files/{id}/content` | C4 | The one route that streams file bytes out. Forwards `Range` to Drive and returns 206 so a restore resumes; audits only the window starting at byte 0; sanitises the client-supplied filename before it reaches `Content-Disposition` |
 | C11 | `DELETE /v1/sessions/{sid}` 🔒 | C4 | Drive folder then Firestore metadata; nothing soft-deleted |
+| C21 | `PUT /v1/sessions/{sid}/metadata` | C4 | Replaces a COMPLETED session's metadata.json in place, for a change made after the backup (a bending deflection correction; ADR-013). Refuses an unfinished upload (409 `session_not_complete`), another session's metadata or an unknown schema (422), over 256 KB (413). The file doc's size and checksums follow the new bytes. The only write to a completed file |
 | C-health | `GET /healthz`, `GET /readyz` | none | Liveness never probes dependencies; readiness pings Firestore + Drive and answers with stable `DependencyError` codes |
 
 Backend tests mirror these one-to-one — `backend/tests/test_route_authz_matrix.py`
 (who may call what), `test_device_auth.py`, `test_content_verified_device.py`,
-`test_upload_integrity.py`, `test_create_session_rollback.py`,
+`test_upload_integrity.py`, `test_session_metadata.py`, `test_create_session_rollback.py`,
 `test_async_provisioning.py`, `test_verify_degradation.py`, `test_access_log.py`,
 `test_security_controls.py`, `test_error_codes.py` (the code contract with the
 app), and the rest of `backend/tests/`.

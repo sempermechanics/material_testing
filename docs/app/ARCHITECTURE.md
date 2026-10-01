@@ -83,6 +83,7 @@ When cloud is configured (`INDIC_API_BASE_URL`):
 |---|---|---|
 | Upload | `DicUploadWorker` | Resume/create remote session, stage artifacts, upload bundles |
 | Metadata JSON | `SessionUploadMetadata` | frames / device / engine JSON for the API |
+| Metadata re-send | `SessionMetadataSync` / `SessionMetadataWorker` | A row marked `metadataStale` (a deflection correction after the backup) sends its rebuilt metadata.json over the cloud copy's (`PUT /v1/sessions/{sid}/metadata`). The viewer queues it; `CloudSync.reconcile` queues it again for a SYNCED row still marked ([ADR-013](../adr/ADR-013-session-metadata-replace.md)) |
 | Bundle build | `SessionUploadBundler` | Render frame bundles + CSV lists offline-testable |
 | Restore | `CloudRestore` / `DicRestoreWorker` | Pull remote sessions back into local session dirs. Home (row tap, multi-select **Restore**, the cloud-backups card) and Settings all start one through `RestoreStart.start`, which writes the row first so either screen shows its progress; `RestoreFailureLedger` announces each failure once across both screens |
 | Backups not on this phone | `CloudBackupListing` | The COMPLETED backups the last successful reconcile listed, saved in prefs, so Home's `CloudBackupsCard` can offer those no row claims (by local id or stored cloud id, the rule `AnalysisEntries.merge` uses) without another request. A cloud delete forgets its entry, sign-out clears it, Hide is remembered per cloud id until that backup leaves the cloud |

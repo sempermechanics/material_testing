@@ -19,6 +19,7 @@ record that replaced it.
 | [010](ADR-010-device-binding-per-app.md) | Device binding per app: one phone per app, not per account | Accepted, built | TD-137, TD-138 |
 | [011](ADR-011-viewer-deformed-frame.md) | The viewer draws each frame on its own photo, at the displaced positions | Accepted, built | TD-139 |
 | [012](ADR-012-tensile-strain-virtual-extensometer.md) | Tensile strain is the virtual extensometer's ΔL / L₀ | Accepted, built | TD-144 (fixed), TD-147 (fixed) |
+| [013](ADR-013-session-metadata-replace.md) | A backed-up session's metadata.json can be replaced | Accepted, built (deploy owed) | TD-150 |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md). ADR-008, ADR-009,
-ADR-011 and ADR-012 are material_testing's; the numbers are shared so they do not collide.
+ADR-011, ADR-012 and ADR-013 are material_testing's; the numbers are shared so they do not collide.
