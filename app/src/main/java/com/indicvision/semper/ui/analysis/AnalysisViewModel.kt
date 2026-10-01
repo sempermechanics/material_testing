@@ -876,7 +876,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     /** Where the heavy inputs are mirrored; null until [attachDraft] (and in JVM tests). */
     private var draft: WizardDraft? = null
 
-    /** One writer at a time, so an older reference can never land after a newer one. */
+    /** The draft's one lane: a restore reads after every write queued before it. */
     private val draftIo = WizardDraft.io
 
     /** False while [restoreDraft] puts back what the draft already holds. */
@@ -885,9 +885,10 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     /** The Bundle a process death left, until [restoreDraft] reads the draft behind it. */
     private var pendingRestore: Bundle? = null
 
+    /** Queues [write] on the draft's lane; it outlives this view model (see [WizardDraft.queue]). */
     private fun stage(write: (WizardDraft) -> Unit) {
         val target = draft?.takeIf { mirrorToDraft } ?: return
-        viewModelScope.launch(draftIo) { write(target) }
+        WizardDraft.queue(target, write)
     }
 
     /**
@@ -960,14 +961,15 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      *
      * The list is written on the draft's lane, not here: the main thread used
      * to block on the draft's lock behind a reference write still in flight.
-     * A restore reads on the same lane, after it. A process killed before
-     * the write lands restores as LOST (the count in the Bundle will not
-     * match), never as a half-restored wizard.
+     * A restore reads on the same lane, after it. The Bundle carries a
+     * fingerprint of the list it queued, so a process killed before that
+     * write lands restores as LOST (the draft's list is not the one the
+     * Bundle names), never as an older list with the newer scalars.
      */
     internal fun saveWizardState(): Bundle {
-        val frames = WizardState.frames(this)
-        stage { it.writeFrames(WizardState.encodeFrames(frames)) }
-        return WizardState.save(this)
+        val framesJson = WizardState.encodeFrames(WizardState.frames(this))
+        stage { it.writeFrames(framesJson) }
+        return WizardState.save(this, framesJson)
     }
 
     init {

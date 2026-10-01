@@ -2,6 +2,10 @@ package com.indicvision.semper.analysis
 
 import android.app.Application
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.data.WizardDraft
@@ -11,6 +15,8 @@ import com.indicvision.semper.ui.analysis.FrameImportHelper
 import com.indicvision.semper.ui.analysis.FrameOrderDirection
 import com.indicvision.semper.ui.analysis.FrameOrderMode
 import com.indicvision.semper.ui.analysis.WizardState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.junit.After
@@ -174,6 +180,62 @@ class WizardStateTest {
         draft.writeReference(null)
 
         assertEquals(DraftRestore.LOST, runBlocking { after.restoreDraft() })
+    }
+
+    @Test
+    fun `a frame list whose write never landed loses the draft, even at the same count`() {
+        val before = editedWizard()
+        // What the previous stop wrote.
+        draft.writeReference(REF)
+        draft.writeMask(MASK)
+        draft.writeFrames(WizardState.encodeFrames(WizardState.frames(before)))
+        // Reordered since: same frames, same count, other order.
+        before.defFilePaths = before.defFilePaths.reversed()
+        before.defOriginalNames = before.defOriginalNames.reversed()
+        before.defFrameDates = before.defFrameDates.reversed()
+        // No draft attached to before: this stop's frame-list write never lands.
+        val saved = before.saveWizardState()
+        val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }
+
+        assertEquals(DraftRestore.LOST, runBlocking { after.restoreDraft() })
+        assertTrue(after.defFilePaths.isEmpty())
+    }
+
+    @Test
+    fun `a Bundle an older app saved restores on the frame count alone`() {
+        val before = editedWizard()
+        draft.writeReference(REF)
+        draft.writeMask(MASK)
+        draft.writeFrames(WizardState.encodeFrames(WizardState.frames(before)))
+        val saved = before.saveWizardState().apply { remove("framesFingerprint") }
+        val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }
+
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(before.defFilePaths, after.defFilePaths)
+    }
+
+    @Test
+    fun `the frame list a stop queued is written after its view model is cleared`() {
+        val store = ViewModelStore()
+        val factory = viewModelFactory { initializer { editedWizard() } }
+        val vm = ViewModelProvider(store, factory)[AnalysisViewModel::class.java]
+        vm.attachDraft(draft)
+        drainDraftLane()
+        // Keep the lane busy, so the stop's write is still queued when the
+        // view model goes ("Don't keep activities").
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        CoroutineScope(WizardDraft.io).launch {
+            started.countDown()
+            release.await()
+        }
+        started.await()
+        vm.saveWizardState()
+        store.clear()
+        release.countDown()
+        drainDraftLane()
+
+        assertEquals(WizardState.encodeFrames(WizardState.frames(vm)), draft.readFrames())
     }
 
     @Test

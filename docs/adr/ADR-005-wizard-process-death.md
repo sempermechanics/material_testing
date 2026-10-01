@@ -112,11 +112,22 @@ the import, which on a 150-frame batch is minutes.
   means **LOST**, with inputs reset to an empty step 1 and a snackbar. A
   partial restore would look ready and solve something else.
 - **Mirroring.** All draft I/O runs on `WizardDraft.io`, one serial lane
-  shared by every wizard, so writes land in order. The `refBytes` and
-  `roiMaskBytes` setters queue their write there. The saved-state provider
-  snapshots the frame list on Main as the Activity stops and queues its
-  write on the same lane, so a kill in the few milliseconds before that
-  write lands restores the previous frame list or reports **LOST**.
+  shared by every wizard, so writes land in the order they were queued.
+  They are queued through `WizardDraft.queue`, on a process-lifetime scope,
+  not `viewModelScope`: "Don't keep activities" clears the view model right
+  after the stop, and that must not cancel the stop's write. The `refBytes`
+  and `roiMaskBytes` setters queue their write there. The saved-state
+  provider encodes the frame list on Main as the Activity stops, queues its
+  write on the same lane, and puts the SHA-256 of that JSON in the Bundle
+  (`framesFingerprint`). On restore, `frames.json` must match it, so a kill
+  before the write lands reports **LOST**, even when the previous list holds
+  as many frames. A Bundle without the key (saved by an older app) is
+  checked on the frame count alone.
+- **Ordering across wizards** is only as good as the queueing. A finishing
+  wizard queues its delete from `onDestroy`, which can land after a new
+  wizard's first writes and remove them. A kill after that restores as
+  **LOST** (the Bundle names parts that are gone), not as wrong inputs.
+  Tagging the draft with a per-wizard generation would close it; not done.
 - **When the draft goes.** It is deleted when the wizard finishes
   (`onDestroy` with `isFinishing`), not when a run commits: the user
   re-runs from the same wizard, and a kill after a run must still restore.

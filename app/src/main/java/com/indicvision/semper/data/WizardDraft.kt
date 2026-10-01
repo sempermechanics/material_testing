@@ -72,7 +72,7 @@ class WizardDraft(private val dir: File) {
     @AnyThread
     fun discard() {
         discarded = true
-        cleanup.launch { clear() }
+        queue(this) { it.clear() }
     }
 
     /** Writes atomically; null deletes the part. Failures are logged, not thrown. */
@@ -104,14 +104,31 @@ class WizardDraft(private val dir: File) {
 
     companion object {
         /**
-         * The one lane all draft I/O goes through, in order. Shared by every
-         * view model, so a draft one wizard discards is gone before the next
-         * wizard's first write, and a restore reads what the stop wrote.
+         * The one lane all draft I/O goes through, one task at a time, in the
+         * order it was queued. Shared by every view model, so a restore reads
+         * what the stop queued before it.
+         *
+         * Order is only as good as the queueing: a wizard that finishes queues
+         * its delete from `onDestroy`, which can run after the next wizard has
+         * queued its first writes, and then deletes them. A process death
+         * after that restores as LOST (the Bundle names parts the draft no
+         * longer holds), never as the wrong inputs.
          */
         val io: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
 
-        /** Outlives the view model whose wizard discarded the draft. */
-        private val cleanup = CoroutineScope(SupervisorJob() + io)
+        /** Where [queue] runs: the process's, so no view model can cancel a write. */
+        private val lane = CoroutineScope(SupervisorJob() + io)
+
+        /**
+         * Runs [write] on [target] on [io], behind everything queued before
+         * it, and returns at once. The work belongs to the process, not to the
+         * caller: a view model cleared under "Don't keep activities" must not
+         * cancel the frame list its Activity's stop just queued.
+         */
+        @AnyThread
+        fun queue(target: WizardDraft, write: (WizardDraft) -> Unit) {
+            lane.launch { write(target) }
+        }
 
         const val DIR_NAME = "wizard_draft"
         private const val REFERENCE = "reference.bin"
