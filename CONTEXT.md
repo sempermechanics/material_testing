@@ -102,7 +102,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 ## Current state (2026-09-26)
 
-- **Deployed.** Cloud Run `semper-api` (image `semper-api-36815427585-1` from `9b12b14b`,
+- **Deployed.** Cloud Run `semper-api` (image `semper-api-36819391914-1` from `615149fd`,
   2026-10-01; scales to zero) behind API Gateway
   `semper-gw` (config `v202610010433-80`, deployed by CI, ADR-006);
   staging `semper-api-staging` behind `semper-gw-staging` (CI since #258); project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
