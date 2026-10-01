@@ -67,7 +67,19 @@ object RestoreDownloadOutcomes {
         return haveBytes == target
     }
 
-    /** Zip or attestation failure — do not WorkManager-retry. */
+    /**
+     * Zip or attestation failure: the bytes are wrong. Never retried, and a bundle
+     * download does not paper over it by packing the phone's copy instead.
+     */
     fun isTerminalCorruptFailure(error: Throwable): Boolean =
         error is ZipException || error is CorruptTransferException
+
+    /**
+     * Whether a restore or bundle-download worker should give up rather than
+     * `Result.retry()`: a corrupt payload ([isTerminalCorruptFailure]) or a backup
+     * that lacks what the transfer needs ([UnrestorableBackupException]). Network
+     * drops, 5xx and a missing sign-in stay retryable.
+     */
+    fun isTerminalFailure(error: Throwable): Boolean =
+        isTerminalCorruptFailure(error) || error is UnrestorableBackupException
 }

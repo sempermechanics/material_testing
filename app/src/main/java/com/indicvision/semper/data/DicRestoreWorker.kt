@@ -9,6 +9,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.R
 import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
@@ -26,7 +27,30 @@ import timber.log.Timber
  * part-way through. As a worker it survives navigation and app death, retries
  * on flaky networks, and reports progress the UI can observe if it's watching.
  */
-class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+class DicRestoreWorker internal constructor(
+    context: Context,
+    params: WorkerParameters,
+    private val restorer: Restorer,
+) : CoroutineWorker(context, params) {
+
+    /** The constructor WorkManager instantiates by reflection; keep it public. */
+    constructor(context: Context, params: WorkerParameters) : this(context, params, Restorer.Cloud)
+
+    /** What the worker runs; a seam so tests can drive [doWork] without a backend. */
+    internal fun interface Restorer {
+        suspend fun restore(
+            context: Context,
+            cloudSessionId: String,
+            targetLocalId: String,
+            onProgress: suspend (done: Long, total: Long) -> Unit,
+        ): String
+
+        companion object {
+            val Cloud = Restorer { context, cloudSessionId, targetLocalId, onProgress ->
+                CloudRestore.restore(context, cloudSessionId, targetLocalId, onProgress = onProgress)
+            }
+        }
+    }
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
         TransferNotifications.restoreForeground(applicationContext)
@@ -40,7 +64,7 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
         try {
             clearPartialArtifacts(targetLocalId)
             publishProgress(targetLocalId, done = 0L, total = 0L)
-            val localId = CloudRestore.restore(
+            val localId = restorer.restore(
                 applicationContext,
                 cloudSessionId,
                 targetLocalId,
@@ -63,8 +87,7 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
                     SemperAnalytics.CLOUD_RESTORE_FAILED,
                     mapOf("reason" to "rejected"),
                 )
-                val message = LicenseErrors.restoreMessage(applicationContext, e.body)
-                Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to message))
+                failWith(LicenseErrors.restoreMessage(applicationContext, e.body))
             } else {
                 // Keep cacheDir *.part so the next attempt can Range-resume the
                 // Session.zip after a gateway/Cloud Run 5xx kill.
@@ -72,15 +95,18 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 Result.retry()
             }
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            if (RestoreDownloadOutcomes.isTerminalCorruptFailure(e)) {
+            if (RestoreDownloadOutcomes.isTerminalFailure(e)) {
                 clearPartialArtifacts(targetLocalId)
-                Timber.e(e, "Restore of %s corrupt — giving up (re-upload needed)", cloudSessionId)
+                val corrupt = RestoreDownloadOutcomes.isTerminalCorruptFailure(e)
+                Timber.e(e, "Restore of %s cannot succeed — giving up (re-upload needed)", cloudSessionId)
                 SemperAnalytics.event(
                     applicationContext,
                     SemperAnalytics.CLOUD_RESTORE_FAILED,
-                    mapOf("reason" to "corrupt"),
+                    mapOf("reason" to if (corrupt) "corrupt" else "unusable"),
                 )
-                Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to (e.message ?: e.javaClass.simpleName)))
+                // e.message is a reason code (e.g. session_zip_sha256_mismatch):
+                // logged above, never shown.
+                failWith(applicationContext.getString(R.string.restore_failed_generic))
             } else {
                 // Do not wipe *.part — DriveTransfer resumes from the last byte.
                 Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
@@ -88,6 +114,18 @@ class DicRestoreWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
         }
     }
+
+    /**
+     * End the work with [DicKeys.DOWNLOAD_ERROR] set to [message].
+     *
+     * For this worker the value is **display-ready, localised text**: Home and
+     * Settings toast it verbatim (falling back to `restore_failed_generic` when it
+     * is absent), so a reason code or a raw response body must never go here.
+     * [DicBundleDownloadWorker] fills the same key the other way round, with a
+     * code its observer translates; see its `fail`.
+     */
+    private fun failWith(message: String): Result =
+        Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to message))
 
     private suspend fun publishProgress(localId: String, done: Long, total: Long) {
         setProgress(DownloadProgress.data(done, total, localId))
