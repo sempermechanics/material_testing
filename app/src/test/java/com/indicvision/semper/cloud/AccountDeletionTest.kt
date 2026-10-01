@@ -1,6 +1,7 @@
 package com.indicvision.semper.cloud
 
 import com.indicvision.semper.data.CloudSync
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -124,6 +125,30 @@ class AccountDeletionTest {
     @Test
     fun `a caller cancelled during sign-out still finishes signing out`() {
         cancelledDuring("signOut")
+        assertEquals(listOf("cloud", "identity", "local", "signOut"), steps)
+    }
+
+    @Test
+    fun `an identity delete whose Firebase Task was cancelled still wipes and signs out`() {
+        // Task.await() throws CancellationException for a cancelled Task while the
+        // caller is active. After the erase that must read as "identity kept", not
+        // abort the wipe and sign-out.
+        val result = runBlocking {
+            CloudSync.deleteAccount(
+                eraseCloud = {
+                    steps.add("cloud")
+                    true
+                },
+                deleteIdentity = {
+                    steps.add("identity")
+                    throw CancellationException("Task was cancelled")
+                },
+                wipeLocal = { steps.add("local") },
+                signOut = { steps.add("signOut") },
+            )
+        }
+
+        assertEquals(CloudSync.AccountDeletion.IDENTITY_KEPT, result)
         assertEquals(listOf("cloud", "identity", "local", "signOut"), steps)
     }
 

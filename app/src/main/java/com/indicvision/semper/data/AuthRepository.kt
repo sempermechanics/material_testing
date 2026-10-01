@@ -24,7 +24,6 @@ import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.util.suspendRunCatching
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -137,9 +136,8 @@ class AuthRepository(
             Result.success(Unit)
         } catch (e: FirebaseAuthInvalidCredentialsException) {
             Result.failure(Exception("Incorrect authenticator code.", e))
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "TOTP challenge failed")
             Result.failure(Exception(e.message ?: "Incorrect authenticator code.", e))
         }
@@ -185,9 +183,8 @@ class AuthRepository(
             Result.failure(mfaRequired(e))
         } catch (e: FirebaseAuthInvalidCredentialsException) {
             Result.failure(Exception("Incorrect password.", e))
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "Re-authentication failed")
             Result.failure(Exception(e.message ?: "Could not verify your identity.", e))
         }
@@ -201,9 +198,8 @@ class AuthRepository(
             Result.success(Unit)
         } catch (e: FirebaseAuthMultiFactorException) {
             Result.failure(mfaRequired(e))
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "Google re-authentication failed")
             Result.failure(Exception(e.message ?: "Could not verify your identity.", e))
         }
@@ -220,9 +216,8 @@ class AuthRepository(
         try {
             user.reauthenticate(EmailAuthProvider.getCredentialWithLink(email, link)).await()
             Result.success(Unit)
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "Email-link re-authentication failed")
             Result.failure(Exception(e.message ?: "Could not verify your identity.", e))
         }
@@ -237,9 +232,8 @@ class AuthRepository(
         try {
             user.delete().await()
             Result.success(Unit)
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "Firebase identity delete failed")
             Result.failure(e)
         }
@@ -262,9 +256,8 @@ class AuthRepository(
             auth.sendSignInLinkToEmail(clean, settings).await()
             linkPrefs().edit { putString(K_PENDING_EMAIL, clean) }
             Result.success(Unit)
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "Could not send sign-in link")
             Result.failure(Exception(e.message ?: "Could not send the sign-in link.", e))
         }
@@ -294,9 +287,8 @@ class AuthRepository(
         } catch (e: FirebaseAuthInvalidUserException) {
             Timber.d(e, "Password reset for an unregistered email (existence not revealed)")
             Result.success(Unit) // don't reveal whether the email is registered
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "Could not send password reset")
             Result.failure(Exception(e.message ?: "Could not send the reset email.", e))
         }
@@ -306,9 +298,8 @@ class AuthRepository(
     suspend fun verifyPasswordResetCode(oobCode: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             Result.success(auth.verifyPasswordResetCode(oobCode).await())
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "Password-reset code invalid or expired")
             Result.failure(Exception(e.message ?: "This reset link is invalid or has expired.", e))
         }
@@ -320,9 +311,8 @@ class AuthRepository(
             try {
                 auth.confirmPasswordReset(oobCode, newPassword).await()
                 Result.success(Unit)
-            } catch (e: CancellationException) {
-                throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                e.rethrowIfCallerCancelled()
                 Timber.w(e, "Could not confirm password reset")
                 Result.failure(Exception(e.message ?: "Could not reset the password.", e))
             }
@@ -456,12 +446,12 @@ class AuthRepository(
      * Run a Firebase sign-in, cache identity, then resolve backend access status.
      *
      * Every failure maps to a `Result.failure` and a `sign_in_failed` event except
-     * cancellation: a sign-in whose screen went away is rethrown, not counted as a
-     * failure (the same rule every generic catch in this class follows).
+     * this coroutine's own cancellation: a sign-in whose screen went away is
+     * rethrown, not counted as a failure. A Firebase Task cancelled while the caller
+     * is still waiting is an ordinary failure ([rethrowIfCallerCancelled]; every
+     * generic catch in this class follows the same rule).
      */
-    // Method-tagged analytics on every early exit (one catch per Firebase failure)
-    // keeps one linear flow.
-    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    @Suppress("LongMethod") // method-tagged analytics on every early-exit keeps one linear flow
     @VisibleForTesting
     internal suspend fun firebaseThen(
         method: String,
@@ -521,9 +511,8 @@ class AuthRepository(
                 "Incorrect email or password."
             }
             return@withContext Result.failure(Exception(message, e))
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.w(e, "Firebase sign-in failed")
             SemperAnalytics.event(
                 appContext,

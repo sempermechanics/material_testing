@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,7 +23,9 @@ import org.robolectric.RobolectricTestRunner
 
 /**
  * A sign-in whose screen goes away is cancelled, not failed: it must not be
- * counted as a `sign_in_failed`, and the cancellation must reach the caller.
+ * counted as a `sign_in_failed`, and the cancellation must reach the caller. A
+ * Firebase Task cancelled on its own, while the caller still waits, is an
+ * ordinary failure the caller must hear about.
  */
 @RunWith(RobolectricTestRunner::class)
 class AuthCancellationTest {
@@ -57,15 +59,19 @@ class AuthCancellationTest {
         job.cancel()
         job.join()
 
+        assertTrue(job.isCancelled)
         assertEquals(emptyList<String>(), events)
     }
 
     @Test
-    fun `a cancellation thrown by the sign-in reaches the caller`() {
-        assertThrows(CancellationException::class.java) {
-            runBlocking { repo.firebaseThen("google") { throw CancellationException("closed") } }
-        }
-        assertEquals(emptyList<String>(), events)
+    fun `a Firebase Task cancelled while the caller still waits is a failed sign-in`() = runBlocking {
+        // Task.await() throws CancellationException for a cancelled Task even though
+        // this coroutine is active; rethrowing it would end the caller silently.
+        val result = repo.firebaseThen("google") { throw CancellationException("Task was cancelled") }
+
+        assertTrue(result.isFailure)
+        assertEquals("Task was cancelled", result.exceptionOrNull()?.message)
+        assertEquals(listOf(SemperAnalytics.SIGN_IN_FAILED), events)
     }
 
     @Test

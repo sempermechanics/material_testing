@@ -1,6 +1,7 @@
 package com.indicvision.semper.cloud
 
 import android.content.Context
+import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.CloudRestore
 import com.indicvision.semper.data.CorruptTransferException
@@ -8,6 +9,10 @@ import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.util.AtomicFiles
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -18,6 +23,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import timber.log.Timber
 import java.io.File
 
 /**
@@ -142,12 +148,38 @@ class CloudRestorePipelineTest {
     }
 
     @Test
-    fun `a cancelled backup listing is cancelled, not reported as a failure`() {
-        val fake = FakeCloudApi().apply { onListSessions = { _, _ -> throw CancellationException("screen closed") } }
-
-        assertThrows(CancellationException::class.java) {
-            runBlocking { CloudRestore.listCompleted(context, fake, tokens) }
+    fun `a backup listing whose screen closed is cancelled, not logged as a failure`() = runBlocking {
+        val errors = mutableListOf<String>()
+        val tree = object : Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+                if (priority >= Log.ERROR) synchronized(errors) { errors += message }
+            }
         }
+        Timber.plant(tree)
+        try {
+            val inFlight = CompletableDeferred<Unit>()
+            val fake = FakeCloudApi().apply {
+                onListSessions = { _, _ ->
+                    inFlight.complete(Unit)
+                    awaitCancellation()
+                }
+            }
+            val call = async(Dispatchers.Default) { CloudRestore.listCompleted(context, fake, tokens) }
+            inFlight.await()
+            call.cancel()
+
+            assertTrue(runCatching { call.await() }.exceptionOrNull() is CancellationException)
+            assertEquals(emptyList<String>(), errors)
+        } finally {
+            Timber.uproot(tree)
+        }
+    }
+
+    @Test
+    fun `a listing call cancelled under a still-waiting screen is a failed listing`() = runBlocking {
+        val fake = FakeCloudApi().apply { onListSessions = { _, _ -> throw CancellationException("call cancelled") } }
+
+        assertTrue(CloudRestore.listCompleted(context, fake, tokens) is CloudRestore.ListResult.Failed)
     }
 
     private companion object {

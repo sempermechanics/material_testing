@@ -21,7 +21,6 @@ import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.util.suspendRunCatching
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
@@ -271,10 +270,8 @@ object CloudSync {
             SessionStore.delete(appContext, localSessionId)
             Timber.i("Erased analysis %s locally and in the cloud", localSessionId)
             EraseResult.ERASED_EVERYWHERE
-        } catch (e: CancellationException) {
-            // The caller went away: not "cloud unreachable", and not a non-fatal.
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.e(e, "Cloud erase failed for %s — leaving local copy intact", localSessionId)
             failureOf(e)
         }
@@ -343,7 +340,15 @@ object CloudSync {
         signOut: suspend () -> Unit,
     ): AccountDeletion = withContext(NonCancellable) {
         if (!eraseCloud()) return@withContext AccountDeletion.CLOUD_UNREACHABLE
-        val identityGone = deleteIdentity()
+        // The data is gone, so nothing may stop the wipe. Under NonCancellable a
+        // CancellationException here is never this sequence's own (a cancelled
+        // Firebase Task, say): it means the identity survived, nothing more.
+        val identityGone = try {
+            deleteIdentity()
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Identity delete failed after the cloud erase; wiping anyway")
+            false
+        }
         wipeLocal()
         signOut()
         Timber.i("Account erased and local data wiped")
@@ -393,9 +398,8 @@ object CloudSync {
             forgetCloudCopy(appContext, localSessionId)
             Timber.i("Deleted cloud backup %s", cloudSessionId)
             EraseResult.ERASED_EVERYWHERE
-        } catch (e: CancellationException) {
-            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            e.rethrowIfCallerCancelled()
             Timber.e(e, "Cloud backup delete failed for %s", cloudSessionId)
             failureOf(e)
         }
