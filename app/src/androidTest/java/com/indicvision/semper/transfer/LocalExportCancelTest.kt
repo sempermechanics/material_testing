@@ -5,8 +5,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.SessionEverythingExporter
 import com.indicvision.semper.data.SessionPaths
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -83,21 +83,16 @@ class LocalExportCancelTest {
         repeat(FRAMES) { SessionPaths.frameDat(dir, it).writeBytes(buf.array()) }
 
         val now = System.currentTimeMillis()
-        val record = SessionRecord(
+        val record = sessionRecord(
             id = id,
             name = "Export cancel $index",
             createdAt = now,
-            updatedAt = now,
             frameCount = FRAMES,
             subset = 21,
             step = STEP,
             strainWindow = 5,
             imgW = COLS * STEP,
             imgH = ROWS * STEP,
-            roiX = 0,
-            roiY = 0,
-            roiW = COLS * STEP,
-            roiH = ROWS * STEP,
             refPath = ref.absolutePath,
             refName = ref.name,
             sessionDir = dir.absolutePath,

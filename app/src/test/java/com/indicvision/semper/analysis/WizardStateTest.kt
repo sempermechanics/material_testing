@@ -42,7 +42,7 @@ import kotlin.concurrent.thread
 @RunWith(RobolectricTestRunner::class)
 // A plain Application: SemperApp.onCreate starts its own startup sweep, which
 // would race these tests for cacheDir/temp_deformed.
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class WizardStateTest {
 
     private val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()

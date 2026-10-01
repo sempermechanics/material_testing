@@ -1,6 +1,6 @@
 package com.indicvision.semper.results
 
-import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.report.ReportImageNames
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -13,12 +13,16 @@ import org.junit.Test
  */
 class ReportImageNamesTest {
 
-    private fun record(defNames: List<String>, sweepLabels: List<String> = emptyList()) = SessionRecord(
-        id = "s", name = "s", createdAt = 0, updatedAt = 0, frameCount = defNames.size,
-        subset = 21, step = 5, strainWindow = 15,
-        imgW = 64, imgH = 64, roiX = 0, roiY = 0, roiW = 64, roiH = 64,
-        refPath = "", refName = "IMG_0001.JPG", sessionDir = "",
+    private fun record(defNames: List<String>, sweepLabels: List<String> = emptyList()) = sessionRecord(
+        id = "s",
+        createdAt = 0,
+        frameCount = defNames.size,
+        subset = 21,
+        imgW = 64,
+        imgH = 64,
+        refName = "IMG_0001.JPG",
         defNames = defNames,
+    ).copy(
         sweepSteps = if (sweepLabels.isEmpty()) emptyList() else sweepLabels.map { 5 },
         sweepLabels = sweepLabels,
     )

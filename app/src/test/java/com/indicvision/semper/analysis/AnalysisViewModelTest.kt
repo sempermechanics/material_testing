@@ -12,7 +12,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 import kotlin.concurrent.thread
 
 /**
@@ -25,7 +24,6 @@ import kotlin.concurrent.thread
  * new inputs depend on — without touching the native solve.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class AnalysisViewModelTest {
 
     private lateinit var vm: AnalysisViewModel

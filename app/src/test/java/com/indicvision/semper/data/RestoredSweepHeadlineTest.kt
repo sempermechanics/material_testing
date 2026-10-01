@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
  * the legacy `subsets` list, so every new backup came back "N of N solved".
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class RestoredSweepHeadlineTest {
 
     private fun engine(skipped: JSONObject) = JSONObject()

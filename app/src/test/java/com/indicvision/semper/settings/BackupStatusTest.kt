@@ -9,11 +9,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /** Settings' backup line must not say "up to date" over a backup that failed. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class BackupStatusTest {
 
     private val res: Resources = ApplicationProvider.getApplicationContext<Context>().resources

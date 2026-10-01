@@ -36,7 +36,7 @@ import java.time.Duration
  * for deformed frames. MediaStore is a fake provider holding a few rows.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class MediaPickerSheetTest {
 
     /** A stand-in for MediaStore's `media` authority; rows are set per test. */

@@ -1,12 +1,12 @@
 package com.indicvision.semper.viewer
 
-import android.content.Intent
-import androidx.test.core.app.ApplicationProvider
 import com.google.android.material.button.MaterialButton
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.viewerArgs
+import com.indicvision.semper.fixtures.viewerController
+import com.indicvision.semper.fixtures.writeGridBatch
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
-import com.indicvision.semper.ui.viewer.ViewerArgs
 import com.indicvision.semper.ui.viewer.ViewerFieldPills
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -14,22 +14,16 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  * The field FAB has to name the field on screen. The layout defaults to U, and
  * the field itself survives rotation in the ViewModel, so a rebuild that trusts
  * the layout comes back showing Exx with a U label.
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ViewerFieldPillsTest {
 
     @get:Rule
@@ -46,26 +40,8 @@ class ViewerFieldPillsTest {
     @Before
     fun writeBatch() {
         batchDir = temp.newFolder("batch")
-        for (f in 0 until FRAMES) {
-            val points = GRID * GRID
-            val buffer = ByteBuffer.allocate(points * DicResult.BYTES_PER_POINT).order(ByteOrder.nativeOrder())
-            for (i in 0 until points) {
-                buffer.putFloat(((i % GRID) * STEP).toFloat())
-                buffer.putFloat(((i / GRID) * STEP).toFloat())
-                buffer.putFloat(f.toFloat())
-                buffer.putFloat(0f)
-                buffer.putFloat(f * 0.001f)
-                buffer.putFloat(0f)
-                buffer.putFloat(0f)
-                buffer.putFloat(0.01f)
-            }
-            File(batchDir, "frame_%03d.dat".format(f)).writeBytes(buffer.array())
-        }
+        writeGridBatch(batchDir, FRAMES, GRID, STEP)
     }
-
-    private fun intent(): Intent =
-        ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
-            .toIntent(ApplicationProvider.getApplicationContext())
 
     private fun ResultViewerActivity.fieldFab(): MaterialButton = findViewById(R.id.btnFieldFab)
 
@@ -85,7 +61,7 @@ class ViewerFieldPillsTest {
 
     @Test
     fun `the field FAB follows the field across a rebuild`() {
-        val controller = Robolectric.buildActivity(ResultViewerActivity::class.java, intent()).setup()
+        val controller = viewerController(viewerArgs(batchDir, GRID, STEP))
         val activity = controller.get()
         shadowOf(activity.mainLooper).idle()
 

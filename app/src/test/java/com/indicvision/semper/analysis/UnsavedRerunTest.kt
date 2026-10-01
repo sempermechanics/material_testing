@@ -1,8 +1,8 @@
 package com.indicvision.semper.analysis
 
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionRecord.SyncState
 import com.indicvision.semper.data.SessionRecordSettings
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.UnsavedRerun
@@ -22,13 +22,17 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class UnsavedRerunTest {
 
-    private fun previous(state: SyncState) = SessionRecord(
-        id = "s1", name = "run", createdAt = 0, updatedAt = 0, frameCount = 12,
-        subset = 21, step = 5, strainWindow = 15,
-        imgW = 64, imgH = 64, roiX = 0, roiY = 0, roiW = 64, roiH = 64,
-        refPath = "/sessions/s1/reference.png", refName = "ref.png", sessionDir = "",
-        headline = "εxx 1.2 mε", engineStats = listOf(1f, 2f), syncState = state,
-    )
+    private fun previous(state: SyncState) = sessionRecord(
+        id = "s1",
+        name = "run",
+        createdAt = 0,
+        frameCount = 12,
+        subset = 21,
+        imgW = 64,
+        imgH = 64,
+        refPath = "/sessions/s1/reference.png",
+        syncState = state,
+    ).copy(headline = "εxx 1.2 mε", engineStats = listOf(1f, 2f))
 
     /** What the re-run solved with: not what the previous run did. */
     private val rerunSettings = SessionRecordSettings(

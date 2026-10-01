@@ -3,16 +3,16 @@ package com.indicvision.semper.cloud
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.RetryOnTransient
 import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
+import mockwebserver3.junit4.MockWebServerRule
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import java.io.IOException
 
@@ -27,21 +27,16 @@ import java.io.IOException
  */
 class RetryOnTransientTest {
 
-    private lateinit var server: MockWebServer
+    @get:Rule
+    val serverRule = MockWebServerRule()
+    private val server get() = serverRule.server
     private lateinit var client: OkHttpClient
 
     private val json = "application/json; charset=utf-8".toMediaType()
 
     @Before
     fun setUp() {
-        server = MockWebServer()
-        server.start()
         client = OkHttpClient.Builder().addInterceptor(RetryOnTransient()).build()
-    }
-
-    @After
-    fun tearDown() {
-        server.close()
     }
 
     private fun get(path: String = "/v1/config") =

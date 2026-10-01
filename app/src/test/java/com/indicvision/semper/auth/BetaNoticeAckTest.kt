@@ -9,16 +9,13 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Home's one-time beta / data-use notice. Each account acks once; with no
  * account signed in the phone acks once, so the notice does not come back on
  * every launch (it did: the ack was keyed by a uid that was null).
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class BetaNoticeAckTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

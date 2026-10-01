@@ -2,12 +2,11 @@ package com.indicvision.semper.cloud
 
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.DatCodec
+import com.indicvision.semper.fixtures.packDat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.random.Random
 
 /**
@@ -21,11 +20,7 @@ class DatCodecTest {
     private fun point(x: Float, y: Float, u: Float, v: Float, exx: Float, eyy: Float, exy: Float, znssd: Float) =
         floatArrayOf(x, y, u, v, exx, eyy, exy, znssd)
 
-    private fun rawBytesOf(points: List<FloatArray>): ByteArray {
-        val out = ByteBuffer.allocate(points.size * DicResult.BYTES_PER_POINT).order(ByteOrder.nativeOrder())
-        for (p in points) for (v in p) out.putFloat(v)
-        return out.array()
-    }
+    private fun rawBytesOf(points: List<FloatArray>): ByteArray = packDat(points)
 
     /** A realistic dense grid: every candidate cell present, smoothly varying fields + noise. */
     private fun denseGridBytes(gridW: Int, gridH: Int, step: Int, seed: Long = 1L): ByteArray {

@@ -15,14 +15,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Authenticator challenge after first-factor sign-in. Enrolment stays on the
  * websites; the phone only has to accept a code when Firebase demands one.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class TotpChallengeTest {
 
     @Test

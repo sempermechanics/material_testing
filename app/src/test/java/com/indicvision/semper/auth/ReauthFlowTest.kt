@@ -17,16 +17,13 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 
 /**
  * The sign-in screen doubles as the identity check before an account is deleted.
  * What matters is that it cannot be used to sign in as someone else, and that it
  * answers the caller instead of routing onward.
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ReauthFlowTest {
 
     private fun launchReauth(): AuthActivity {

@@ -7,12 +7,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 // Bitmap is needed for the ARGB half of the comparison, so this runs under
 // Robolectric, pinned to 34 like the other Robolectric tests here.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class VisualizationEngineTest {
 
     /**
