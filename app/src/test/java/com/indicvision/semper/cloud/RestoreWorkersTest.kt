@@ -224,9 +224,10 @@ class RestoreWorkersTest {
                 d.writeByte(1)
             }
         }.toByteArray()
+        val extras = RestoreFakeApi.zipOf(listOf("csv/analysis_data.csv" to "a,b".toByteArray()))
         api.files = listOf(
             api.file("bundle-1", "bundle", RestoreFakeApi.zipOf(listOf("dat/frame_0000.dat" to hostileDat))),
-            api.file("extras-1", "extras", RestoreFakeApi.zipOf(listOf("csv/analysis_data.csv" to "a,b".toByteArray()))),
+            api.file("extras-1", "extras", extras),
         )
 
         val result = runDownload(cloudSource, localSessionId = "local-1")
