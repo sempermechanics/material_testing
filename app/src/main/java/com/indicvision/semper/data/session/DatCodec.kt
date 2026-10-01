@@ -3,7 +3,7 @@
 // own file-level suppression for the same reason. TooManyFunctions: encode/decode,
 // lattice detection, SoA+shuffle+deflate and reassembly all belong together as one
 // codec, same rationale as SessionZip's own suppression.
-@file:Suppress("MagicNumber", "TooManyFunctions")
+@file:Suppress("TooManyFunctions")
 
 package com.indicvision.semper.data.session
 

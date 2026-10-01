@@ -22,7 +22,6 @@ import java.io.File
  * @property sweep set for a parameter sweep; [subset], [step] and
  *   [strainWindow] are then its first combination
  */
-@Suppress("ArrayInDataClass") // mask compared by identity; never a map key
 data class RunSpec(
     val subset: Int,
     val step: Int,

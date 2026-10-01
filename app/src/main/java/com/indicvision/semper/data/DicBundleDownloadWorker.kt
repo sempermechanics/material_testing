@@ -1,5 +1,5 @@
 // Bundle download worker: literal retry/backoff and percent math read clearest inline.
-@file:Suppress("MagicNumber", "LongMethod", "ReturnCount", "ThrowsCount", "CyclomaticComplexMethod")
+@file:Suppress("LongMethod", "ReturnCount", "ThrowsCount", "CyclomaticComplexMethod")
 
 package com.indicvision.semper.data
 

@@ -1,13 +1,7 @@
 // Upload worker: doWork orchestrates one cohesive resumable-upload flow (session
 // create → per-file chunked PUT → complete), kept together with its literal step
 // and retry constants; splitting it would scatter a single linear protocol.
-@file:Suppress(
-    "MagicNumber",
-    "LongMethod",
-    "CyclomaticComplexMethod",
-    "NestedBlockDepth",
-    "ReturnCount",
-)
+@file:Suppress("MagicNumber", "LongMethod", "CyclomaticComplexMethod", "ReturnCount")
 
 package com.indicvision.semper.data
 

@@ -1,5 +1,4 @@
 // Restore worker: literal retry/backoff and buffer constants read clearest inline.
-@file:Suppress("MagicNumber")
 
 package com.indicvision.semper.data
 

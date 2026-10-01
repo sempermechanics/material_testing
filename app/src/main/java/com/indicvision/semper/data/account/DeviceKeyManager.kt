@@ -1,6 +1,6 @@
 // Keystore/crypto: literal key sizes and the early-return guards over key state
 // read clearest inline, so MagicNumber / ReturnCount are suppressed here.
-@file:Suppress("MagicNumber", "ReturnCount")
+@file:Suppress("MagicNumber")
 
 package com.indicvision.semper.data.account
 

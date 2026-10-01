@@ -2,16 +2,7 @@
 // cohesive loop. Method size, branching, jump statements and per-frame catch
 // are inherent; suppress rather than baseline so new findings elsewhere fail CI.
 
-@file:Suppress(
-    "CyclomaticComplexMethod",
-    "LongMethod",
-    "LoopWithTooManyJumpStatements",
-    "MagicNumber",
-    "TooGenericExceptionCaught",
-    "LargeClass",
-    "NestedBlockDepth",
-    "ReturnCount",
-)
+@file:Suppress("LongMethod", "MagicNumber", "TooGenericExceptionCaught", "ReturnCount")
 
 package com.indicvision.semper.ui.analysis.wizard
 import android.content.Context
@@ -187,7 +178,6 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      * @property settings what the saved session records, once it is saved. For a
      *   sweep that is its first solved combination, not the plan's first.
      */
-    @Suppress("ArrayInDataClass") // engineStats identity-compared; never used as a map key
     data class RunResult(
         val batchDirPath: String? = null,
         val refPath: String? = null,
