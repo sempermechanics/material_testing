@@ -299,7 +299,7 @@ class HomeActivity : AppCompatActivity() {
             val localCount = withContext(Dispatchers.IO) {
                 SessionStore.list(this@HomeActivity).size
             }
-            QuotaStop.foldLocalCount(this@HomeActivity, localCount)
+            TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
             if (TokenStore.isSessionLimitReached(this@HomeActivity)) openSessionLimitScreen()
         }
 
@@ -342,9 +342,10 @@ class HomeActivity : AppCompatActivity() {
                             if (!shownUploadFailures.add(info.id)) return@forEach
                             val reason = info.outputData.getString(DicKeys.UPLOAD_FAIL_REASON)
                             if (reason == null) {
-                                // No reason: the backend refused the backup for the
-                                // account's limit, and the worker forced the stop.
-                                // The worker no longer opens the limit screen itself.
+                                // No reason: a refusal at the account's limit, which
+                                // forces the stop. Open the limit screen from here so
+                                // it shows whether or not the worker also opens it
+                                // (it is singleTop, so the two cannot stack).
                                 if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
                                 return@forEach
                             }
@@ -521,7 +522,7 @@ class HomeActivity : AppCompatActivity() {
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
-            QuotaStop.foldLocalCount(this@HomeActivity, sessions.size)
+            TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
         }
     }
 
