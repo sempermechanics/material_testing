@@ -231,6 +231,8 @@ data class SessionUploadsResponse(
     /** Set when status is PROVISION_FAILED — why the targets were never opened. */
     val provisionError: String? = null,
     val uploads: List<PendingUploadDto> = emptyList(),
+    /** Set when more pending files follow; [IndicApi.sessionUploads] fetches them all. */
+    val page: PageDto? = null,
 )
 
 @Serializable
@@ -250,6 +252,8 @@ data class SessionFilesResponse(
     val specimen: String? = null,
     val status: String? = null,
     val files: List<CloudFileDto> = emptyList(),
+    /** Set when more files follow; [IndicApi.listSessionFiles] fetches them all. */
+    val page: PageDto? = null,
 )
 
 @Serializable

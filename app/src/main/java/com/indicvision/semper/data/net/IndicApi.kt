@@ -443,7 +443,8 @@ class IndicApi private constructor(context: Context) : CloudApi {
     }
 
     /**
-     * GET /v1/sessions/{sid}/uploads — what still needs uploading.
+     * GET /v1/sessions/{sid}/uploads — what still needs uploading, every page
+     * of it. A later page's query string is inside the signature ([signedHeaders]).
      *
      * The resume path: an interrupted upload continues into the same session
      * instead of POSTing a new one (which would duplicate the Drive folder and
@@ -459,14 +460,16 @@ class IndicApi private constructor(context: Context) : CloudApi {
         idToken: String,
         sessionId: String,
     ): SessionUploadsResponse = withContext(Dispatchers.IO) {
-        val resp = signedRequest(idToken, "GET", "/v1/sessions/$sessionId/uploads", ByteArray(0))
-        resp.use {
-            if (it.code == HttpStatus.OK) {
-                json.decodeFromString(it.body.string())
-            } else {
-                failSigned(it)
-            }
-        }
+        fetchAllPages(
+            fetch = { token ->
+                val path = "/v1/sessions/$sessionId/uploads" + pageTokenQuery(token)
+                signedRequest(idToken, "GET", path, ByteArray(0)).use {
+                    if (it.code != HttpStatus.OK) failSigned(it)
+                    json.decodeFromString<SessionUploadsResponse>(it.body.string())
+                }
+            },
+            pageOf = { it.page },
+        ).merged()
     }
 
     /** POST /v1/files/{id}/complete (device-signed). */
@@ -496,12 +499,22 @@ class IndicApi private constructor(context: Context) : CloudApi {
 
     // ----------------------------------------------------------------- restore
 
-    /** GET /v1/sessions/{sid}/files — the manifest for one cloud analysis. */
+    /**
+     * GET /v1/sessions/{sid}/files — the manifest for one cloud analysis, every
+     * page of it: a restore from a truncated manifest would quietly miss files.
+     */
     override suspend fun listSessionFiles(
         idToken: String,
         sessionId: String,
     ): SessionFilesResponse = withContext(Dispatchers.IO) {
-        json.decodeFromString(authedGet(idToken, url("/v1/sessions/$sessionId/files")))
+        fetchAllPages(
+            fetch = { token ->
+                json.decodeFromString<SessionFilesResponse>(
+                    authedGet(idToken, url("/v1/sessions/$sessionId/files" + pageTokenQuery(token))),
+                )
+            },
+            pageOf = { it.page },
+        ).merged()
     }
 
     /**
