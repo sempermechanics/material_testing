@@ -26,7 +26,9 @@ fixes both with a deliberately simple model of the language:
    across new packages. ``R`` and ``BuildConfig`` count as root-package
    symbols, so a file that leaves the root package imports them.
 5. Rewrite moved FQCNs where no import can help: inline in Kotlin code
-   (``com.example.data.Foo.bar()``) and in XML under each source set
+   (``com.example.data.Foo.bar()``; never inside a string literal, where a
+   class name may be persisted or compared, so a match there is only
+   reported) and in XML under each source set
    (layout custom views, which ViewBinding compiles against, and manifest
    entries, shorthand ``.ui.Foo`` names included).
 6. Optionally (``--compile``) run the Gradle compile tasks and add imports for
@@ -47,6 +49,11 @@ such as ``[com.example.data.Foo]``). ``--docs`` rewrites source paths and
 FQCNs in tracked Markdown, workflow YAML, Python, TOML, ProGuard and Gradle
 files. Both are separate passes so the move commit holds only ``package`` and
 ``import`` lines plus the few code/XML FQCNs the build cannot do without.
+``--docs`` leaves dated records as written (metrics snapshots, the
+changelog, decision records, dated perf reports: ``_DOCS_SKIP``) and names
+any it skipped that mention moved files; ``--docs-skip GLOB...`` replaces
+that list. ``--self-test`` checks the text-level rewriting without a
+repository.
 
 Mapping file (JSON)::
 
@@ -65,10 +72,13 @@ star import in its new package.
 
 Usage: python scripts/move_kotlin_packages.py --mapping FILE [--root DIR]
        [--dry-run] [--compile] [--max-passes N] [--kdoc] [--docs]
+       [--docs-skip [GLOB ...]]
+       python scripts/move_kotlin_packages.py --self-test
 """
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -212,6 +222,61 @@ def _code_text(text: str) -> str:
             out.append(c)
             i += 1
     return "".join(out)
+
+
+def _literal_spans(text: str) -> list[tuple[int, int, str]]:
+    """(start, end, kind) of every comment and string literal in ``text``.
+
+    ``kind`` is ``"comment"`` or ``"string"``. A string's ``${expr}``
+    templates are code, so a string is reported as the pieces around them.
+    Both normal and raw (triple-quoted) strings are covered.
+    """
+    spans: list[tuple[int, int, str]] = []
+    i, n = 0, len(text)
+    while i < n:
+        if text.startswith("//", i):
+            end = text.find("\n", i)
+            end = n if end < 0 else end
+            spans.append((i, end, "comment"))
+            i = end
+        elif text.startswith("/*", i):
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if text.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif text.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
+                else:
+                    j += 1
+            spans.append((i, j, "comment"))
+            i = j
+        elif text[i] == '"':
+            quote = '"""' if text.startswith('"""', i) else '"'
+            start, j = i, i + len(quote)
+            while j < n and not text.startswith(quote, j):
+                if quote == '"' and text[j] == "\\":
+                    j += 2
+                elif text.startswith("${", j):
+                    spans.append((start, j, "string"))
+                    depth, j = 1, j + 2
+                    while j < n and depth:
+                        depth += {"{": 1, "}": -1}.get(text[j], 0)
+                        j += 1
+                    start = j
+                else:
+                    j += 1
+            j = min(n, j + len(quote))
+            spans.append((start, j, "string"))
+            i = j
+        elif text[i] == "`":
+            end = text.find("`", i + 1)
+            i = n if end < 0 else end + 1
+        elif text[i] == "'":
+            m = _CHAR_RE.match(text, i)
+            i = m.end() if m else i + 1
+        else:
+            i += 1
+    return spans
 
 
 def _strip_generics(text: str) -> str:
@@ -475,15 +540,7 @@ def _render(f: KtFile, imports: list[Import], fix_code=None) -> str:
     imported = {i.path: i.path.rsplit(".", 1)[-1] for i in seen.values() if not i.star and not i.alias}
     lines = list(f.lines)
     if fix_code:
-        for i, x in enumerate(lines):
-            if _PACKAGE_RE.match(x) or _IMPORT_RE.match(x) or _is_comment(x):
-                continue
-            new = fix_code(x)
-            if new != x:
-                for path, simple in imported.items():
-                    if path not in x:
-                        new = re.sub(re.escape(path) + r"\b", simple, new)
-            lines[i] = new
+        lines = fix_code("\n".join(lines), imported, f.path.as_posix()).split("\n")
     if f.package != f.new_package:
         for i, line in enumerate(lines):
             if _PACKAGE_RE.match(line):
@@ -521,20 +578,74 @@ def _moved_symbols(files: list[KtFile]) -> dict[tuple[str, str], str]:
     return moved
 
 
-def _fqn_rewriter(moved: dict[tuple[str, str], str], prefixes: set[str]):
-    if not prefixes:
-        return lambda text: text
-    pattern = re.compile(r"\b(?:" + "|".join(re.escape(p) for p in sorted(prefixes)) + r")(?:\.\w+)+")
+class _FqnRewriter:
+    """Rewrites dotted names that start with a moved top-level symbol.
 
-    def fix(match: re.Match) -> str:
-        parts = match.group(0).split(".")
+    Called on plain text (XML, docs, comment lines) it rewrites every match;
+    ``code`` is the form for Kotlin sources.
+    """
+
+    def __init__(self, moved: dict[tuple[str, str], str], warn=None):
+        self.moved = moved
+        prefixes = sorted({pkg for pkg, _ in moved})
+        self.pattern = (re.compile(r"\b(?:" + "|".join(re.escape(p) for p in prefixes) + r")(?:\.\w+)+")
+                        if prefixes else None)
+        self.warn = warn or (lambda msg: print(f"WARNING: {msg}", file=sys.stderr))
+
+    def rewrite(self, name: str) -> str:
+        parts = name.split(".")
         for k in range(len(parts) - 1, 0, -1):
             key = (".".join(parts[:k]), parts[k])
-            if key in moved:
-                return ".".join([moved[key]] + parts[k:])
-        return match.group(0)
+            if key in self.moved:
+                return ".".join([self.moved[key]] + parts[k:])
+        return name
 
-    return lambda text: pattern.sub(fix, text)
+    def __call__(self, text: str) -> str:
+        return self.pattern.sub(lambda m: self.rewrite(m.group(0)), text) if self.pattern else text
+
+    def code(self, text: str, imported: dict[str, str], where: str = "") -> str:
+        """Rewrite moved FQCNs in Kotlin *code* only.
+
+        Comments are left to ``--kdoc``; package and import lines are
+        rendered separately. Text inside a string literal (normal or raw
+        ``\"\"\"``) is never touched: a class name there may be persisted or
+        compared, so a match there is reported for a human to decide. A
+        ``${expr}`` template is code and is rewritten. A rewritten name the
+        file already imports collapses to its simple name, which keeps the
+        line inside detekt's MaxLineLength.
+        """
+        if not self.pattern:
+            return text
+        spans = _literal_spans(text)
+        header = [(m.start(), m.end()) for m in re.finditer(r"(?m)^(?:package|import)\s.*$", text)]
+
+        def inside(pos: int) -> str | None:
+            for start, end, kind in spans:
+                if start <= pos < end:
+                    return kind
+            return "header" if any(a <= pos < b for a, b in header) else None
+
+        out, last = [], 0
+        for m in self.pattern.finditer(text):
+            new = self.rewrite(m.group(0))
+            if new == m.group(0):
+                continue
+            kind = inside(m.start())
+            if kind == "string":
+                line = text.count("\n", 0, m.start()) + 1
+                self.warn(f"{where}:{line}: '{m.group(0)}' is inside a string literal; left unchanged")
+                continue
+            if kind:
+                continue
+            for path, simple in imported.items():
+                if new == path or new.startswith(path + "."):
+                    new = simple + new[len(path):]
+                    break
+            out.append(text[last:m.start()])
+            out.append(new)
+            last = m.end()
+        out.append(text[last:])
+        return "".join(out)
 
 
 def _root_package(files: list[KtFile]) -> str:
@@ -579,6 +690,22 @@ def _path_rewriter(files: list[KtFile]):
         return text
 
     return fix
+
+
+# Dated records: they describe the tree as it was on their date, so --docs
+# leaves their paths alone (a decision record's "as built" list, a metrics
+# snapshot, the changelog). Override with --docs-skip.
+_DOCS_SKIP = (
+    "docs/ops/QUALITY_BASELINE_*",
+    "docs/ops/CHANGELOG.md",
+    "docs/adr/ADR-*.md",
+    "docs/engine/PERF_BASELINE_*",
+    "docs/perf/*-20[0-9][0-9]-*",
+)
+
+
+def _docs_skipped(rel: Path, globs) -> bool:
+    return any(fnmatch.fnmatchcase(rel.as_posix(), g) for g in globs)
 
 
 def _tracked(root: Path, suffixes: tuple[str, ...]) -> list[Path]:
@@ -648,9 +775,57 @@ def _write(root: Path, rel: Path, text: str, dry_run: bool) -> None:
         (root / rel).write_text(text, encoding="utf-8", newline="")
 
 
+def _self_test() -> int:
+    """Checks of the text-level rewriting; no repository needed."""
+    warned: list[str] = []
+    fix = _FqnRewriter({("com.example.data", "Foo"): "com.example.data.session"}, warned.append)
+    old, new = "com.example.data.Foo", "com.example.data.session.Foo"
+    q3 = '"' * 3
+    cases = [
+        ("code", f"val x = {old}.bar()", {}, f"val x = {new}.bar()", 0),
+        ("code, already imported", f"val x = {old}.bar()", {new: "Foo"}, "val x = Foo.bar()", 0),
+        ("string", f'val s = "{old}"', {}, f'val s = "{old}"', 1),
+        ("string after escaped quote", f'val s = "a \\" {old}"', {}, f'val s = "a \\" {old}"', 1),
+        ("raw string", f"val s = {q3}\n    {old}\n{q3}", {}, f"val s = {q3}\n    {old}\n{q3}", 1),
+        ("string template", f'val s = "${{{old}.NAME}}"', {}, f'val s = "${{{new}.NAME}}"', 0),
+        ("comment", f"// see [{old}]\n/* {old} */", {}, f"// see [{old}]\n/* {old} */", 0),
+        ("import and package lines", f"package com.example.data\nimport {old}", {},
+         f"package com.example.data\nimport {old}", 0),
+        ("code after a string", f'f("x", {old}.bar())', {}, f'f("x", {new}.bar())', 0),
+    ]
+    failures = []
+    for name, text, imported, want, want_warnings in cases:
+        warned.clear()
+        got = fix.code(text, imported, "test.kt")
+        if got != want or len(warned) != want_warnings:
+            failures.append(f"{name}: got {got!r} with {len(warned)} warning(s), want {want!r} with {want_warnings}")
+    if fix(f"<{old}/>") != f"<{new}/>":
+        failures.append("plain text: XML/doc text is not rewritten")
+    for path, skipped in [
+        ("docs/ops/QUALITY_BASELINE_2026-10-01.md", True), ("docs/ops/CHANGELOG.md", True),
+        ("docs/adr/ADR-004-runspec.md", True), ("docs/perf/engine-viewer-check-2026-09.md", True),
+        ("docs/adr/README.md", False), ("docs/app/ARCHITECTURE.md", False), ("CONTEXT.md", False),
+    ]:
+        if _docs_skipped(Path(path), _DOCS_SKIP) != skipped:
+            failures.append(f"docs skip: {path} should {'' if skipped else 'not '}be skipped")
+    for line, want in [
+        ("@Serializable data class SessionRecord(", ("SessionRecord", False)),
+        ("internal fun <T> List<T>.second(): T = this[1]", ("second", False)),
+        ("private val TAG = \"x\"", ("TAG", True)),
+        ("fun interface Listener {", ("Listener", False)),
+        ("    fun nested() {}", None),
+    ]:
+        if _declared_name(line) != want:
+            failures.append(f"declaration: {line!r} -> {_declared_name(line)!r}, want {want!r}")
+    for failure in failures:
+        print(f"FAIL {failure}")
+    print(f"self-test: {'FAILED' if failures else 'ok'} ({len(failures)} failure(s))")
+    return 1 if failures else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--mapping", required=True, type=Path, help="JSON mapping file")
+    parser.add_argument("--mapping", type=Path, help="JSON mapping file (required unless --self-test)")
     parser.add_argument("--root", default=Path(__file__).resolve().parent.parent, type=Path,
                         help="repository root (default: this script's repo)")
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
@@ -666,7 +841,15 @@ def main() -> int:
                         help="rewrite moved FQCNs in Kotlin comment lines (KDoc links)")
     parser.add_argument("--docs", action="store_true",
                         help="rewrite source paths and FQCNs in tracked .md/.yml/.yaml/.py/.toml/.pro/.kts files")
+    parser.add_argument("--docs-skip", nargs="*", metavar="GLOB",
+                        help="dated records --docs leaves as written (repository-relative globs); replaces "
+                             f"the default {' '.join(_DOCS_SKIP)}; give it no globs to skip nothing")
+    parser.add_argument("--self-test", action="store_true", help="run the built-in checks and exit")
     args = parser.parse_args()
+    if args.self_test:
+        return _self_test()
+    if not args.mapping:
+        parser.error("--mapping is required")
     root: Path = args.root.resolve()
     warnings: list[str] = []
 
@@ -687,7 +870,8 @@ def main() -> int:
         for f in pending_moves:
             print(f"  {f.path.as_posix()} -> {f.new_path.as_posix()}")
 
-    fix_code = _fqn_rewriter(moved, {pkg for pkg, _ in moved})
+    fix = _FqnRewriter(moved, warn)
+    fix_code = fix.code
     changed = 0
     for f in files:
         imports = _rewrite_imports(f, table, packages_after)
@@ -710,8 +894,6 @@ def main() -> int:
     _shadow_warnings(files, warn)
     print(f"rewrote {changed} Kotlin files")
 
-    prefixes = {pkg for pkg, _ in moved}
-    fix = _fqn_rewriter(moved, prefixes)
     root_pkg = _root_package(files)
 
     def fix_relative(m: re.Match) -> str:
@@ -741,14 +923,17 @@ def main() -> int:
                 _write(root, f.path, new, args.dry_run)
 
     if args.docs:
-        fix_fqn = _fqn_rewriter(moved, prefixes)
         fix_path = _path_rewriter(files)
         skip = {Path(args.mapping).resolve(), Path(__file__).resolve()}
+        skip_globs = _DOCS_SKIP if args.docs_skip is None else args.docs_skip
         for rel in _tracked(root, (".md", ".yml", ".yaml", ".py", ".toml", ".pro", ".kts")):
             if (root / rel).resolve() in skip or not (root / rel).is_file():
                 continue
             text = (root / rel).read_text(encoding="utf-8")
-            new = fix_path(fix_fqn(text))
+            new = fix_path(fix(text))
+            if new != text and _docs_skipped(rel, skip_globs):
+                print(f"docs: {rel.as_posix()} names moved files but is a dated record; left as written")
+                continue
             if new != text:
                 print(f"docs: {rel.as_posix()}")
                 _write(root, rel, new, args.dry_run)
