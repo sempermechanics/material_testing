@@ -58,7 +58,10 @@ data class Roi(val x: Int, val y: Int, val w: Int, val h: Int) {
     fun isCustomFor(size: ImageSize): Boolean =
         w > 0 && h > 0 && (x > 0 || y > 0 || w < size.width || h < size.height)
 
-    /** True when this ROI is exactly as wide and tall as [size], wherever it sits; the wizard's "no custom ROI" test. */
+    /**
+     * True when this ROI is exactly as wide and tall as [size], wherever it
+     * sits: the wizard's "no custom ROI" test.
+     */
     fun coversFrameOf(size: ImageSize): Boolean = w == size.width && h == size.height
 
     /**
@@ -129,8 +132,13 @@ data class Roi(val x: Int, val y: Int, val w: Int, val h: Int) {
             rect.bottom.roundToInt().coerceAtMost(size.height),
         )
 
-        /** From an `[x, y, w, h]` array, or null unless it holds exactly four values (as the wizard's restore checks). */
-        fun fromXywh(xywh: IntArray?): Roi? =
-            xywh?.takeIf { it.size == XYWH_SIZE }?.let { (x, y, w, h) -> Roi(x, y, w, h) }
+        /**
+         * From an `[x, y, w, h]` array, or null unless it holds exactly four
+         * values, as the wizard's restore checks.
+         */
+        fun fromXywh(xywh: IntArray?): Roi? = xywh?.takeIf { it.size == XYWH_SIZE }?.let {
+            val next = it.iterator()
+            Roi(x = next.nextInt(), y = next.nextInt(), w = next.nextInt(), h = next.nextInt())
+        }
     }
 }

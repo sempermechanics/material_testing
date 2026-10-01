@@ -26,6 +26,10 @@ class RoiTest {
     private val coords = listOf(-50, -1, 0, 1, 10, 99, 100, 300, 639, 640, 700)
     private val extents = listOf(-10, 0, 1, 20, 21, 90, 300, 640, 1000)
 
+    /** Every pairing of this list's items with [other]'s. */
+    private operator fun <A, B> List<A>.times(other: List<B>): List<Pair<A, B>> =
+        flatMap { a -> other.map { b -> a to b } }
+
     private fun rois(): Sequence<Roi> = sequence {
         for (x in coords) for (y in coords) for (w in extents) for (h in extents) yield(Roi(x, y, w, h))
     }
@@ -49,17 +53,23 @@ class RoiTest {
 
     @Test
     fun `forSolve matches RoiResolveHelper resolve for custom and full-frame ROIs`() {
-        for (subset in listOf(1, 21, 41, 101, 301)) {
-            for (custom in listOf(true, false)) {
-                for (size in sizes) {
-                    for (roi in rois().filter { it.x % 3 == 0 }) {
-                        val expected = RoiResolveHelper.resolve(
-                            subset, custom, roi.x, roi.y, roi.w, roi.h, size.width, size.height,
-                        )
-                        val actual = Roi.forSolve(subset, custom, roi, size)
-                        assertEquals("$roi s=$subset custom=$custom on $size", expected?.toList(), actual?.toXywh()?.toList())
-                    }
-                }
+        val cases = listOf(1, 21, 41, 101, 301) * listOf(true, false) * sizes
+        for ((subsetAndCustom, size) in cases) {
+            val (subset, custom) = subsetAndCustom
+            for (roi in rois().filter { it.x % 3 == 0 }) {
+                val expected = RoiResolveHelper.resolve(
+                    subset,
+                    custom,
+                    roi.x,
+                    roi.y,
+                    roi.w,
+                    roi.h,
+                    size.width,
+                    size.height,
+                )
+                val actual = Roi.forSolve(subset, custom, roi, size)
+                val label = "$roi s=$subset custom=$custom on $size"
+                assertEquals(label, expected?.toList(), actual?.toXywh()?.toList())
             }
         }
     }
@@ -72,7 +82,10 @@ class RoiTest {
     @Test
     fun `insetFullFrame insets by half a subset plus the slack a side`() {
         val margin = 41 / 2 + Roi.FULL_FRAME_SLACK_PX
-        assertEquals(Roi(margin, margin, 640 - 2 * margin, 480 - 2 * margin), Roi.insetFullFrame(ImageSize(640, 480), 41))
+        assertEquals(
+            Roi(margin, margin, 640 - 2 * margin, 480 - 2 * margin),
+            Roi.insetFullFrame(ImageSize(640, 480), 41),
+        )
     }
 
     @Test
@@ -112,8 +125,9 @@ class RoiTest {
     fun `fromImageRect matches RoiDrawActivity roiPixels`() {
         val size = ImageSize(640, 480)
         val edges = listOf(-3.6f, -0.4f, 0f, 0.5f, 1.49f, 99.5f, 320.2f, 639.5f, 640f, 700.7f)
-        for (l in edges) for (t in edges) for (r in edges) for (b in edges) {
-            val rect = RectF(l, t, r, b)
+        for ((ltr, b) in edges * edges * edges * edges) {
+            val (lt, r) = ltr
+            val rect = RectF(lt.first, lt.second, r, b)
             val expected = roiPixels(rect, size.width, size.height)
             assertEquals("$rect", Roi.fromRect(expected), Roi.fromImageRect(rect, size))
         }

@@ -104,7 +104,8 @@ class RoiCodecsTest {
             CloudRestore.RestoreRecordTarget("s_r", "c1", File("r"), "", null),
         )
         val engine = meta.getJSONObject("engine")
-        assertEquals(Roi(restored.roiX, restored.roiY, restored.roiW, restored.roiH), roiFromJson(engine.optJSONObject("roi")))
+        val read = roiFromJson(engine.optJSONObject("roi"))
+        assertEquals(Roi(restored.roiX, restored.roiY, restored.roiW, restored.roiH), read)
         assertEquals(ImageSize(restored.imgW, restored.imgH), ImageSize.fromEngineJson(engine))
     }
 
