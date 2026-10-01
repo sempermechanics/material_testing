@@ -22,7 +22,6 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 
 /**
  * The clickwrap gate. What matters legally: nobody reaches Home or Pending
@@ -30,9 +29,7 @@ import org.robolectric.annotation.Config
  * box starts unticked and the button dead), the improvement consent is a
  * separate choice that never unlocks the button, and declining ends the session.
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class TermsGateTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

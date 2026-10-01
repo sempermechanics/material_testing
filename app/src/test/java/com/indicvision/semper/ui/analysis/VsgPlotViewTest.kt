@@ -26,7 +26,7 @@ import org.robolectric.annotation.Config
  * with a phone's font metrics, which Robolectric's text measuring does not have.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class VsgPlotViewTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()

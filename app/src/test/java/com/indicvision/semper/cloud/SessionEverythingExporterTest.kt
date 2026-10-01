@@ -5,43 +5,30 @@ import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.SessionEverythingExporter
 import com.indicvision.semper.data.SessionPaths
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
-import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.fixtures.CleanAppState
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * The local "export everything" archive. Entry names come from user-supplied
  * analysis names, so they are the part that can break an archive.
  */
-// Pinned like UploadResumableTest: Robolectric 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class SessionEverythingExporterTest {
 
+    @get:Rule
+    val clean = CleanAppState()
+
     private val context: Context = ApplicationProvider.getApplicationContext()
-
-    @Before
-    fun setUp() {
-        TokenStore.clear(context)
-        SessionStore.deleteAll(context)
-    }
-
-    @After
-    fun tearDown() {
-        SessionStore.deleteAll(context)
-        TokenStore.clear(context)
-    }
 
     /** A local session with one readable frame; image size 0 skips report rendering. */
     private fun seedSession(id: String) {
@@ -51,11 +38,12 @@ class SessionEverythingExporterTest {
         SessionPaths.frameDat(dir, 0).writeBytes(bytes.array())
         SessionStore.upsert(
             context,
-            SessionRecord(
-                id = id, name = id, createdAt = 1L, updatedAt = 1L, frameCount = 1,
-                subset = 21, step = 5, strainWindow = 15,
-                imgW = 0, imgH = 0, roiX = 0, roiY = 0, roiW = 0, roiH = 0,
-                refPath = "", refName = "ref.png", sessionDir = dir.absolutePath,
+            sessionRecord(
+                id = id,
+                subset = 21,
+                imgW = 0,
+                imgH = 0,
+                sessionDir = dir.absolutePath,
                 defNames = listOf("a.png"),
             ),
         )

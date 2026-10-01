@@ -14,16 +14,13 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 
 /**
  * Settings → Help & support. The section is the only place in the app a user who
  * is merely stuck can find community links and the support address, so what matters
  * is that those actions are wired and the mail intent stays actionable.
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class HelpSupportSectionTest {
 
     private val supportEmail: String =

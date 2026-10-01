@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
+import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.ui.viewer.SaveExportActivity
 import com.indicvision.semper.ui.viewer.SaveExportViewModel
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +21,6 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 import java.io.File
 import java.util.concurrent.Executor
@@ -30,14 +30,12 @@ import java.util.concurrent.Executor
  * picked document still gets the file whichever instance the answer reaches.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class SaveExportActivityTest {
 
     @get:Rule
     val temp = TemporaryFolder()
 
     private companion object {
-        const val TIMEOUT_MS = 10_000L
         const val CSV = "image,x,y\nFrame_1,0,0\n"
     }
 
@@ -45,16 +43,6 @@ class SaveExportActivityTest {
 
     private fun intent(file: File): Intent =
         SaveExportActivity.intent(ApplicationProvider.getApplicationContext(), file, "text/csv")
-
-    private fun idleUntil(activity: Activity, done: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + TIMEOUT_MS
-        while (true) {
-            shadowOf(activity.mainLooper).idle()
-            if (done()) return
-            check(System.currentTimeMillis() < deadline) { "timed out waiting on the save" }
-            Thread.sleep(20)
-        }
-    }
 
     @Test
     fun `a rotation while the picker is open opens no second picker`() {
@@ -81,7 +69,7 @@ class SaveExportActivityTest {
             Activity.RESULT_OK,
             Intent().setData(Uri.fromFile(dest)),
         )
-        idleUntil(rebuilt) { rebuilt.isFinishing }
+        idleUntil("the save") { rebuilt.isFinishing }
 
         assertEquals(CSV, dest.readText())
         assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
@@ -101,7 +89,7 @@ class SaveExportActivityTest {
 
         // Before the copy's result is back on the main thread.
         val rebuilt = controller.recreate().get()
-        idleUntil(rebuilt) { rebuilt.isFinishing }
+        idleUntil("the save") { rebuilt.isFinishing }
 
         assertNull("no new picker", shadowOf(rebuilt).nextStartedActivityForResult)
         assertEquals(CSV, dest.readText())
@@ -128,7 +116,7 @@ class SaveExportActivityTest {
             assertEquals("no second copy into the same document", 1, copies.size)
 
             copies.toList().forEach { it.run() }
-            idleUntil(rebuilt) { rebuilt.isFinishing }
+            idleUntil("the save") { rebuilt.isFinishing }
             assertEquals(CSV, dest.readText())
             assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
         } finally {

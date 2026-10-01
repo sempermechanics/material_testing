@@ -33,7 +33,7 @@ import java.time.Duration
  * Deliberately not covered here: what a resize does to a zoomed-in view.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class TouchImageViewTest {
 

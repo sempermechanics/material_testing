@@ -3,13 +3,12 @@ package com.indicvision.semper.cloud
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.data.net.AppIdHeader
 import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
+import mockwebserver3.junit4.MockWebServerRule
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -19,18 +18,9 @@ import org.junit.Test
  */
 class AppIdHeaderTest {
 
-    private lateinit var server: MockWebServer
-
-    @Before
-    fun setUp() {
-        server = MockWebServer()
-        server.start()
-    }
-
-    @After
-    fun tearDown() {
-        server.close()
-    }
+    @get:Rule
+    val serverRule = MockWebServerRule()
+    private val server get() = serverRule.server
 
     private fun call(interceptor: AppIdHeader) {
         val client = OkHttpClient.Builder().addInterceptor(interceptor).build()

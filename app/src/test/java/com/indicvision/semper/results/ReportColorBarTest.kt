@@ -12,7 +12,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
 
@@ -22,7 +21,6 @@ import kotlin.math.abs
  * gradient is really rasterised.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ReportColorBarTest {
 

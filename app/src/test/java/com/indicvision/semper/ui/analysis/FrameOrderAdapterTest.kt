@@ -24,7 +24,7 @@ import java.time.Duration
  * change, which once froze the drop's shrink at the dragged 1.06×.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class FrameOrderAdapterTest {
 
     private val context = ContextThemeWrapper(

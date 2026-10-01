@@ -20,7 +20,6 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -28,7 +27,6 @@ import java.io.File
  * and background, and the save-as write they do without a screen.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ShareExportJobsTest {
 
     @get:Rule

@@ -6,16 +6,16 @@ import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
+import mockwebserver3.junit4.MockWebServerRule
 import okhttp3.Headers
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -28,10 +28,11 @@ import java.io.File
  * the server-supplied chunk size being trusted blindly.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class UploadResumableTest {
 
-    private lateinit var server: MockWebServer
+    @get:Rule
+    val serverRule = MockWebServerRule()
+    private val server get() = serverRule.server
     private lateinit var api: IndicApi
     private lateinit var file: File
 
@@ -39,15 +40,12 @@ class UploadResumableTest {
 
     @Before
     fun setUp() {
-        server = MockWebServer()
-        server.start()
         api = IndicApi.get(ApplicationProvider.getApplicationContext<Context>())
         file = File.createTempFile("upload", ".bin")
     }
 
     @After
     fun tearDown() {
-        server.close()
         file.delete()
     }
 

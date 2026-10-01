@@ -15,7 +15,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.ByteArrayOutputStream
 import java.util.Locale
 
@@ -29,7 +28,6 @@ import java.util.Locale
  * `PdfReportDeviceTest`; these cases never start a page.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class PdfReportGeneratorTest {
 
     private fun statuses(events: List<Progress>) = events.filterIsInstance<Progress.Status>()

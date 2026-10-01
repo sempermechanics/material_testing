@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
  * reads the same as the one that was backed up.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class SessionHeadlineTest {
 
     @Test

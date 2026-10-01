@@ -10,7 +10,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import kotlin.math.abs
 
 /**
@@ -19,7 +18,6 @@ import kotlin.math.abs
  * half, pinned to 34 like the other Robolectric tests here.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class DeformedHeatmapTest {
 
     private val step = 4
