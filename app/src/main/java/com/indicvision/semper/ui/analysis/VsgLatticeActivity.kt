@@ -1,7 +1,3 @@
-// One small method per thing the screen does — node taps, the summary, the
-// strain plot, the coach mark — so TooManyFunctions is suppressed here.
-@file:Suppress("TooManyFunctions")
-
 @file:SuppressLint("PrivateResource", "ClickableViewAccessibility")
 
 package com.indicvision.semper.ui.analysis
@@ -20,6 +16,7 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.annotation.MainThread
+import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.animation.doOnEnd
 import androidx.core.content.ContextCompat
@@ -72,6 +69,7 @@ import kotlin.math.roundToInt
  * arguments plus the node's [ViewerArgs.startFrame].
  */
 @MainThread
+@Suppress("TooManyFunctions") // one small method per thing the screen does: node taps, summary, plot, coach mark
 class VsgLatticeActivity : AppCompatActivity() {
 
     private companion object {
@@ -83,18 +81,6 @@ class VsgLatticeActivity : AppCompatActivity() {
             R.string.field_eyy to DicResult.IDX_EYY,
             R.string.field_exy to DicResult.IDX_EXY,
         )
-        const val PNG_QUALITY = 100
-
-        // Exported PNG geometry (px). Plot body kept at a size where SP-sized axis
-        // text stays legible, then header + colour legend are composed around it.
-        const val EXPORT_PLOT_WIDTH_PX = 1600
-        const val EXPORT_PLOT_HEIGHT_PX = 1000
-        const val EXPORT_MARGIN_PX = 44f
-        const val EXPORT_TITLE_PX = 46f
-        const val EXPORT_BODY_PX = 34f
-        const val EXPORT_LINE_PX = 52f
-        const val EXPORT_SWATCH_PX = 30f
-        const val EXPORT_LEGEND_COLS = 1
 
         // Copy-confirmation "pop + highlight" animation (readout and param chip).
         const val COPY_POP_SCALE = 1.06f
@@ -111,7 +97,7 @@ class VsgLatticeActivity : AppCompatActivity() {
      * exhaust the heap on its own. A profile is a single grid row/column (~√n points), so this is
      * O(F·√n) resident and the decode stays O(n) transient.
      */
-    private var frameProfiles: Map<Int, Map<Int, List<Pair<Float, Float>>>> = emptyMap()
+    private var frameProfiles: Map<Int, StrainProfiles> = emptyMap()
 
     /** Solved nodes in lattice order (ascending subset, then window). */
     private var solvedNodes: List<VsgLatticeView.Node> = emptyList()
@@ -148,6 +134,8 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private data class FrameSeries(val frameIndex: Int, val series: VsgPlotView.Series)
 
+    private val graphExport = LatticeGraphExport(this)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityVsgLatticeBinding.inflate(layoutInflater)
@@ -161,8 +149,8 @@ class VsgLatticeActivity : AppCompatActivity() {
             setNavigationOnClickListener { finish() }
         }
 
-        val solved = solvedNodes(args.sweep)
-        val skipped = skippedNodes(args.sweep)
+        val solved = solvedLatticeNodes(args.sweep)
+        val skipped = skippedLatticeNodes(args.sweep) { code -> getString(EngineFailure.shortReasonRes(code)) }
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.vsg }))
         solvedNodes = nodes.filter { it.solved }
         // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).
@@ -207,7 +195,9 @@ class VsgLatticeActivity : AppCompatActivity() {
         binding.btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
         binding.btnSaveGraph.setOnClickListener { saveGraph() }
 
-        binding.plotLatticeStrain.onScrub = { x, samples -> binding.tvStrainPlotReadout.text = scrubReadout(x, samples) }
+        binding.plotLatticeStrain.onScrub = { x, samples ->
+            binding.tvStrainPlotReadout.text = scrubReadout(x, samples)
+        }
         binding.plotLatticeStrain.onScrubMove = { fraction ->
             syncingSlider = true
             binding.sliderScrub.value = if (fraction.isNaN()) 0f else fraction.coerceIn(0f, 1f)
@@ -352,59 +342,16 @@ class VsgLatticeActivity : AppCompatActivity() {
         )
     }
 
-    /** Nodes the sweep could not solve; [ViewerArgs.from] has already folded any legacy keys in. */
-    private fun skippedNodes(sweep: ViewerSweepArgs?): List<VsgLatticeView.Node> {
-        val nodes = sweep?.let { SkippedNode.decodeJson(it.skippedJson) }.orEmpty()
-        return nodes.map { node ->
-            VsgLatticeView.Node(
-                subset = node.subset,
-                step = node.step,
-                window = VsgStudy.windowPointsFor(node.strainWindow, node.step),
-                vsg = node.strainWindow,
-                solved = false,
-                frameIndex = -1,
-                failureReason = getString(EngineFailure.shortReasonRes(node.code)),
-                failureCode = node.code,
-            )
-        }
-    }
-
-    /** One node per solved combination, in frame order. */
-    private fun solvedNodes(sweep: ViewerSweepArgs?): List<VsgLatticeView.Node> {
-        if (sweep == null) return emptyList()
-        val count = minOf(sweep.subsets.size, sweep.steps.size, sweep.strainWindows.size)
-        return (0 until count).map { i ->
-            VsgLatticeView.Node(
-                subset = sweep.subsets[i],
-                step = sweep.steps[i],
-                window = VsgStudy.windowPointsFor(sweep.strainWindows[i], sweep.steps[i]),
-                vsg = sweep.strainWindows[i],
-                solved = true,
-                frameIndex = i,
-                failureReason = "",
-                failureCode = null,
-            )
-        }
-    }
-
-    @Suppress("ReturnCount")
     private fun loadStrainProfiles() {
         val batchDirPath = args.batchDirPath ?: return
-        val steps = args.sweep?.steps ?: return
-        if (steps.isEmpty()) return
-
+        val steps = args.sweep?.steps?.takeIf { it.isNotEmpty() } ?: return
         val line = centreLine()
         val baseStep = args.step.coerceAtLeast(1)
-        val componentsArray = VsgStudy.STRAIN_COMPONENTS.toIntArray()
+        val components = VsgStudy.STRAIN_COMPONENTS.toIntArray()
 
         lifecycleScope.launch {
             val loaded = withContext(Dispatchers.IO) {
-                val dir = File(batchDirPath)
-                if (!dir.isDirectory) return@withContext emptyMap()
-                val files = dir.listFiles { file -> file.extension == "dat" }
-                    ?.sortedBy { it.name }
-                    ?: return@withContext emptyMap()
-                sweepFrameProfiles(files, steps, baseStep, componentsArray, line)
+                loadSweepFrameProfiles(File(batchDirPath), steps, baseStep, components, line)
             }
             if (loaded.isEmpty()) return@launch
             frameProfiles = loaded
@@ -418,31 +365,29 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun lineCutHorizontal(): Boolean = args.sweep?.lineCutHorizontal ?: true
 
-    /** Rebuilds the line-cut plot for Highlight or Isolate mode. */
-    @Suppress("ReturnCount")
+    /**
+     * Rebuilds the line-cut plot for Highlight or Isolate mode: hidden with
+     * nothing to show, or moved onto a frame that has a curve when the focused
+     * one has none.
+     */
     private fun redrawStrainPlot() {
-        if (frameProfiles.isEmpty()) {
-            binding.strainPlotSection.visibility = View.GONE
-            return
-        }
         val component = selectedStrainComponent()
-        val horizontal = lineCutHorizontal()
-        val isolate = binding.togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
+        val seriesByFrame = if (frameProfiles.isEmpty()) emptyList() else buildFrameSeries(component)
         // Keep the zoom across node / mode switches; reset it when the component changes.
         val preserveViewport = component == lastStrainComponent
-        lastStrainComponent = component
-
-        val seriesByFrame = buildFrameSeries(component)
-        if (seriesByFrame.isEmpty()) {
-            binding.strainPlotSection.visibility = View.GONE
-            return
+        if (frameProfiles.isNotEmpty()) lastStrainComponent = component
+        when {
+            seriesByFrame.isEmpty() -> binding.strainPlotSection.visibility = View.GONE
+            focusedFrameIndex >= 0 && seriesByFrame.none { it.frameIndex == focusedFrameIndex } ->
+                selectFocus(seriesByFrame.first().frameIndex)
+            else -> showStrainPlot(seriesByFrame, preserveViewport)
         }
-        if (focusedFrameIndex >= 0 && seriesByFrame.none { it.frameIndex == focusedFrameIndex }) {
-            val fallback = seriesByFrame.first().frameIndex
-            selectFocus(fallback)
-            return
-        }
+    }
 
+    /** Draws [seriesByFrame], the focused curve in colour and on top; Isolate drops the rest. */
+    private fun showStrainPlot(seriesByFrame: List<FrameSeries>, preserveViewport: Boolean) {
+        val horizontal = lineCutHorizontal()
+        val isolate = binding.togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         val toShow = if (isolate) {
             seriesByFrame.filter { it.frameIndex == focusedFrameIndex }
                 .map { it.series.copy(muted = false) }
@@ -577,7 +522,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         if (series.isEmpty() || focusedFrameIndex < 0) return
         lifecycleScope.launch {
             val bitmap = try {
-                buildExportGraph(series)
+                graphExport.render(series, exportHeaderLines(series), exportXLabel, exportYLabel)
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.w(e, "Failed to render strain graph")
                 null
@@ -586,41 +531,14 @@ class VsgLatticeActivity : AppCompatActivity() {
                 Feedback.toast(this@VsgLatticeActivity, R.string.save_failed)
                 return@launch
             }
-            val file = withContext(Dispatchers.IO) { writePng(bitmap) }
+            val file = withContext(Dispatchers.IO) { graphExport.writePng(bitmap) }
             bitmap.recycle()
             if (file == null) {
                 Feedback.toast(this@VsgLatticeActivity, R.string.save_failed)
                 return@launch
             }
-            sharePng(file)
+            graphExport.share(file)
         }
-    }
-
-    /**
-     * Composes the shared PNG: a header (study, images, settings), the plot body
-     * rendered from a detached view at full fit, and a colour legend of the curves.
-     * Detached so it never disturbs the on-screen (scrolled) plot.
-     */
-    private fun buildExportGraph(series: List<VsgPlotView.Series>): Bitmap {
-        val header = exportHeaderLines(series)
-        val plotBitmap = VsgPlotView(this).apply {
-            zoomEnabled = false
-            setData(series, exportXLabel, exportYLabel)
-        }.renderToBitmap(EXPORT_PLOT_WIDTH_PX, EXPORT_PLOT_HEIGHT_PX)
-
-        val legendRows = (series.size + EXPORT_LEGEND_COLS - 1) / EXPORT_LEGEND_COLS
-        val headerHeight = EXPORT_MARGIN_PX * 2 + header.size * EXPORT_LINE_PX
-        val legendHeight = EXPORT_MARGIN_PX + legendRows * EXPORT_LINE_PX
-        val total = (headerHeight + EXPORT_PLOT_HEIGHT_PX + legendHeight).toInt()
-
-        val out = createBitmap(EXPORT_PLOT_WIDTH_PX, total)
-        val canvas = Canvas(out)
-        canvas.drawColor(Color.WHITE)
-        drawExportHeader(canvas, header)
-        canvas.drawBitmap(plotBitmap, 0f, headerHeight, null)
-        plotBitmap.recycle()
-        drawExportLegend(canvas, series, headerHeight + EXPORT_PLOT_HEIGHT_PX)
-        return out
     }
 
     /** Study type, image names, and settings for the export header. */
@@ -658,65 +576,6 @@ class VsgLatticeActivity : AppCompatActivity() {
         return lines
     }
 
-    private fun drawExportHeader(canvas: Canvas, lines: List<String>) {
-        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            textSize = EXPORT_TITLE_PX
-            isFakeBoldText = true
-        }
-        val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.DKGRAY
-            textSize = EXPORT_BODY_PX
-        }
-        var y = EXPORT_MARGIN_PX + EXPORT_TITLE_PX
-        lines.forEachIndexed { i, line ->
-            canvas.drawText(line, EXPORT_MARGIN_PX, y, if (i == 0) titlePaint else bodyPaint)
-            y += EXPORT_LINE_PX
-        }
-    }
-
-    /** One colour swatch + param label per curve, laid out in [EXPORT_LEGEND_COLS] columns. */
-    private fun drawExportLegend(canvas: Canvas, series: List<VsgPlotView.Series>, top: Float) {
-        val swatchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.DKGRAY
-            textSize = EXPORT_BODY_PX
-        }
-        val colWidth = (EXPORT_PLOT_WIDTH_PX - EXPORT_MARGIN_PX * 2) / EXPORT_LEGEND_COLS
-        series.forEachIndexed { i, s ->
-            val x = EXPORT_MARGIN_PX + (i % EXPORT_LEGEND_COLS) * colWidth
-            val y = top + EXPORT_MARGIN_PX + (i / EXPORT_LEGEND_COLS) * EXPORT_LINE_PX
-            swatchPaint.color = s.color
-            canvas.drawRect(x, y - EXPORT_SWATCH_PX, x + EXPORT_SWATCH_PX, y, swatchPaint)
-            canvas.drawText(s.label, x + EXPORT_SWATCH_PX + EXPORT_MARGIN_PX / 2, y, textPaint)
-        }
-    }
-
-    private fun writePng(bitmap: Bitmap): File? {
-        return try {
-            val dir = CacheJanitor.shareDir(cacheDir)
-            val file = File(dir, "vsg_strain_graph_${System.currentTimeMillis()}.png")
-            FileOutputStream(file).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
-            }
-            file
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Timber.w(e, "Failed to write strain graph PNG")
-            null
-        }
-    }
-
-    private fun sharePng(file: File) {
-        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, file.name)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        startActivity(Intent.createChooser(send, getString(R.string.vsg_lattice_share_graph)))
-    }
-
     private fun selectedStrainComponent(): Int {
         val index = binding.spinnerStrainComponent.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
         return STRAIN_OPTIONS[index].second
@@ -726,6 +585,66 @@ class VsgLatticeActivity : AppCompatActivity() {
     private fun openViewer(frameIndex: Int) {
         startActivity(args.copy(startFrame = frameIndex).toIntent(this))
     }
+}
+
+/** One frame's line-cut profile per strain component: (distance along the line, millistrain) pairs. */
+internal typealias StrainProfiles = Map<Int, List<Pair<Float, Float>>>
+
+/** One node per solved combination of [sweep], in frame order. */
+internal fun solvedLatticeNodes(sweep: ViewerSweepArgs?): List<VsgLatticeView.Node> {
+    if (sweep == null) return emptyList()
+    val count = minOf(sweep.subsets.size, sweep.steps.size, sweep.strainWindows.size)
+    return (0 until count).map { i ->
+        VsgLatticeView.Node(
+            subset = sweep.subsets[i],
+            step = sweep.steps[i],
+            window = VsgStudy.windowPointsFor(sweep.strainWindows[i], sweep.steps[i]),
+            vsg = sweep.strainWindows[i],
+            solved = true,
+            frameIndex = i,
+            failureReason = "",
+            failureCode = null,
+        )
+    }
+}
+
+/**
+ * The combinations [sweep] could not solve, each with the short [reason] for
+ * its engine code; [ViewerArgs.from] has already folded any legacy keys in.
+ */
+internal fun skippedLatticeNodes(sweep: ViewerSweepArgs?, reason: (code: Int) -> String): List<VsgLatticeView.Node> {
+    val nodes = sweep?.let { SkippedNode.decodeJson(it.skippedJson) }.orEmpty()
+    return nodes.map { node ->
+        VsgLatticeView.Node(
+            subset = node.subset,
+            step = node.step,
+            window = VsgStudy.windowPointsFor(node.strainWindow, node.step),
+            vsg = node.strainWindow,
+            solved = false,
+            frameIndex = -1,
+            failureReason = reason(node.code),
+            failureCode = node.code,
+        )
+    }
+}
+
+/**
+ * [sweepFrameProfiles] of every `.dat` in [batchDir], in name order; empty
+ * when the directory is gone or cannot be listed. Blocking file IO.
+ */
+@WorkerThread
+internal fun loadSweepFrameProfiles(
+    batchDir: File,
+    steps: List<Int>,
+    baseStep: Int,
+    components: IntArray,
+    line: VsgStudy.StudyLine,
+): Map<Int, StrainProfiles> {
+    val files = batchDir.takeIf { it.isDirectory }
+        ?.listFiles { file -> file.extension == "dat" }
+        ?.sortedBy { it.name }
+        ?: return emptyMap()
+    return sweepFrameProfiles(files, steps, baseStep, components, line)
 }
 
 /**
@@ -744,8 +663,8 @@ internal fun sweepFrameProfiles(
     baseStep: Int,
     components: IntArray,
     line: VsgStudy.StudyLine,
-): Map<Int, Map<Int, List<Pair<Float, Float>>>> {
-    val out = sortedMapOf<Int, Map<Int, List<Pair<Float, Float>>>>()
+): Map<Int, StrainProfiles> {
+    val out = sortedMapOf<Int, StrainProfiles>()
     files.forEachIndexed { position, file ->
         val frame = SessionPaths.frameIndexOf(file.name) ?: position
         try {
@@ -761,4 +680,112 @@ internal fun sweepFrameProfiles(
         }
     }
     return out
+}
+
+/**
+ * The strain graph as a shareable PNG: a header (study, images, settings), the
+ * plot body rendered from a detached [VsgPlotView] at full fit, and a colour
+ * legend of the curves. Detached so it never disturbs the on-screen (scrolled)
+ * plot.
+ */
+internal class LatticeGraphExport(private val activity: AppCompatActivity) {
+
+    /** Composes the PNG's bitmap for [series], titled by [header] (first line bold). */
+    fun render(series: List<VsgPlotView.Series>, header: List<String>, xLabel: String, yLabel: String): Bitmap {
+        val plotBitmap = VsgPlotView(activity).apply {
+            zoomEnabled = false
+            setData(series, xLabel, yLabel)
+        }.renderToBitmap(EXPORT_PLOT_WIDTH_PX, EXPORT_PLOT_HEIGHT_PX)
+
+        val legendRows = (series.size + EXPORT_LEGEND_COLS - 1) / EXPORT_LEGEND_COLS
+        val headerHeight = EXPORT_MARGIN_PX * 2 + header.size * EXPORT_LINE_PX
+        val legendHeight = EXPORT_MARGIN_PX + legendRows * EXPORT_LINE_PX
+        val total = (headerHeight + EXPORT_PLOT_HEIGHT_PX + legendHeight).toInt()
+
+        val out = createBitmap(EXPORT_PLOT_WIDTH_PX, total)
+        val canvas = Canvas(out)
+        canvas.drawColor(Color.WHITE)
+        drawHeader(canvas, header)
+        canvas.drawBitmap(plotBitmap, 0f, headerHeight, null)
+        plotBitmap.recycle()
+        drawLegend(canvas, series, headerHeight + EXPORT_PLOT_HEIGHT_PX)
+        return out
+    }
+
+    /** Writes [bitmap] as a PNG in the share cache; null when it could not. Blocking file IO. */
+    @WorkerThread
+    fun writePng(bitmap: Bitmap): File? {
+        return try {
+            val dir = CacheJanitor.shareDir(activity.cacheDir)
+            val file = File(dir, "vsg_strain_graph_${System.currentTimeMillis()}.png")
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out)
+            }
+            file
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            Timber.w(e, "Failed to write strain graph PNG")
+            null
+        }
+    }
+
+    /** Opens the share sheet on [file]. */
+    fun share(file: File) {
+        val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, file.name)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        activity.startActivity(Intent.createChooser(send, activity.getString(R.string.vsg_lattice_share_graph)))
+    }
+
+    private fun drawHeader(canvas: Canvas, lines: List<String>) {
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            textSize = EXPORT_TITLE_PX
+            isFakeBoldText = true
+        }
+        val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.DKGRAY
+            textSize = EXPORT_BODY_PX
+        }
+        var y = EXPORT_MARGIN_PX + EXPORT_TITLE_PX
+        lines.forEachIndexed { i, line ->
+            canvas.drawText(line, EXPORT_MARGIN_PX, y, if (i == 0) titlePaint else bodyPaint)
+            y += EXPORT_LINE_PX
+        }
+    }
+
+    /** One colour swatch + param label per curve, laid out in [EXPORT_LEGEND_COLS] columns. */
+    private fun drawLegend(canvas: Canvas, series: List<VsgPlotView.Series>, top: Float) {
+        val swatchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.DKGRAY
+            textSize = EXPORT_BODY_PX
+        }
+        val colWidth = (EXPORT_PLOT_WIDTH_PX - EXPORT_MARGIN_PX * 2) / EXPORT_LEGEND_COLS
+        series.forEachIndexed { i, s ->
+            val x = EXPORT_MARGIN_PX + (i % EXPORT_LEGEND_COLS) * colWidth
+            val y = top + EXPORT_MARGIN_PX + (i / EXPORT_LEGEND_COLS) * EXPORT_LINE_PX
+            swatchPaint.color = s.color
+            canvas.drawRect(x, y - EXPORT_SWATCH_PX, x + EXPORT_SWATCH_PX, y, swatchPaint)
+            canvas.drawText(s.label, x + EXPORT_SWATCH_PX + EXPORT_MARGIN_PX / 2, y, textPaint)
+        }
+    }
+
+    private companion object {
+        const val PNG_QUALITY = 100
+
+        // Exported PNG geometry (px). Plot body kept at a size where SP-sized axis
+        // text stays legible, then header + colour legend are composed around it.
+        const val EXPORT_PLOT_WIDTH_PX = 1600
+        const val EXPORT_PLOT_HEIGHT_PX = 1000
+        const val EXPORT_MARGIN_PX = 44f
+        const val EXPORT_TITLE_PX = 46f
+        const val EXPORT_BODY_PX = 34f
+        const val EXPORT_LINE_PX = 52f
+        const val EXPORT_SWATCH_PX = 30f
+        const val EXPORT_LEGEND_COLS = 1
+    }
 }

@@ -1,7 +1,3 @@
-// ROI drawing/editing: dense gesture hit-testing and canvas math read clearest
-// as cohesive methods, so the structural rules are suppressed for this file.
-@file:Suppress("ComplexCondition", "CyclomaticComplexMethod", "LongMethod")
-
 @file:SuppressLint("SetTextI18n")
 
 package com.indicvision.semper.ui.analysis
@@ -13,6 +9,7 @@ import android.graphics.RectF
 import android.os.Bundle
 import android.view.View
 import androidx.annotation.MainThread
+import androidx.annotation.StringRes
 import androidx.annotation.WorkerThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -50,6 +47,7 @@ import kotlin.math.roundToInt
  * the reference image; optional erase punches exclude regions from the mask.
  */
 @MainThread
+@Suppress("TooManyFunctions") // one small step per toggle, field and button of the editor
 class RoiDrawActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityRoiDrawBinding
@@ -63,6 +61,9 @@ class RoiDrawActivity : AppCompatActivity() {
     /** True from a Save until the editor finishes: the mask is still being written. */
     private var saving = false
 
+    /** True while the Crop/Erase toggle is on Erase. */
+    private val erasing: Boolean get() = binding.rgCropErase.checkedButtonId == R.id.rbErase
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityRoiDrawBinding.inflate(layoutInflater)
@@ -74,57 +75,73 @@ class RoiDrawActivity : AppCompatActivity() {
         // smaller image (StudioOverlayView.updateImageBounds).
         Insets.padBottomAboveIme(binding.bottomToolbar)
 
-        val imageFilePath = intent.getStringExtra(DicKeys.IMAGE_FILE_PATH)
         setImageSize(intent.getRoiEditorImageSize())
+        intent.getStringExtra(DicKeys.IMAGE_FILE_PATH)?.let { loadReference(File(it), savedInstanceState) }
 
-        if (imageFilePath != null) {
-            // Twice the screen, as the beam-edge editor, so a zoomed-in
-            // crop edge still lands on visible speckle.
-            val screen = resources.displayMetrics
-            val maxEdge = PREVIEW_OVERSAMPLE * max(screen.widthPixels, screen.heightPixels)
-            val longEdge = max(imageSize.width, imageSize.height).takeIf { it > 0 } ?: maxEdge
+        wireModeToggles()
+        if (savedInstanceState != null) {
+            restoreModes(savedInstanceState)
+        } else {
+            setEditMode(false)
+            binding.tvHud.text = getString(R.string.roi_hud_zoom_hint)
+        }
+        wireOverlay()
+        wireButtons()
+    }
 
-            lifecycleScope.launch {
-                // The decoded reference: tens of megabytes for a RAW frame.
-                val bytes = withContext(Dispatchers.IO) { readReference(File(imageFilePath)) }
-                if (bytes == null) {
-                    Feedback.toast(this@RoiDrawActivity, R.string.roi_image_not_found)
-                    finish()
-                    return@launch
-                }
-                val loaded = ReferencePreviewLoader.load(
-                    ReferencePreviewLoader.Request(bytes, imageSize.width, imageSize.height, min(longEdge, maxEdge)),
-                )
-                setImageSize(ImageSize(loaded.width, loaded.height))
-                val bitmap = loaded.bitmap
+    /**
+     * Decodes [file] for the canvas, then hands it to the overlay with the
+     * selection [savedInstanceState] kept, if any. A missing file closes the editor.
+     */
+    private fun loadReference(file: File, savedInstanceState: Bundle?) {
+        // Twice the screen, as the beam-edge editor, so a zoomed-in
+        // crop edge still lands on visible speckle.
+        val screen = resources.displayMetrics
+        val maxEdge = PREVIEW_OVERSAMPLE * max(screen.widthPixels, screen.heightPixels)
+        val longEdge = max(imageSize.width, imageSize.height).takeIf { it > 0 } ?: maxEdge
 
-                if (bitmap == null) {
-                    Feedback.toast(this@RoiDrawActivity, R.string.roi_decode_failed, long = true)
-                } else {
-                    binding.imgRoiCanvas.setImageBitmap(bitmap)
-                    binding.imgRoiCanvas.post {
-                        binding.overlayRoi.imageView = binding.imgRoiCanvas
-
-                        savedInstanceState?.getRoiEdges()?.let { saved ->
-                            binding.overlayRoi.restoreRelativeRoi(saved)
-                            fillManualFields(binding.overlayRoi.getRelativeRoi())
-                        }
-                    }
+        lifecycleScope.launch {
+            // The decoded reference: tens of megabytes for a RAW frame.
+            val bytes = withContext(Dispatchers.IO) { readReference(file) }
+            if (bytes == null) {
+                Feedback.toast(this@RoiDrawActivity, R.string.roi_image_not_found)
+                finish()
+                return@launch
+            }
+            val loaded = ReferencePreviewLoader.load(
+                ReferencePreviewLoader.Request(bytes, imageSize.width, imageSize.height, min(longEdge, maxEdge)),
+            )
+            setImageSize(ImageSize(loaded.width, loaded.height))
+            val bitmap = loaded.bitmap
+            if (bitmap == null) {
+                Feedback.toast(this@RoiDrawActivity, R.string.roi_decode_failed, long = true)
+                return@launch
+            }
+            binding.imgRoiCanvas.setImageBitmap(bitmap)
+            binding.imgRoiCanvas.post {
+                binding.overlayRoi.imageView = binding.imgRoiCanvas
+                savedInstanceState?.getRoiEdges()?.let { saved ->
+                    binding.overlayRoi.restoreRelativeRoi(saved)
+                    fillManualFields(binding.overlayRoi.getRelativeRoi())
                 }
             }
         }
+    }
 
-        binding.rgEditMode.onButtonChecked { checkedId ->
-            val manual = checkedId == R.id.rbModeManual
-            setEditMode(manual)
-        }
+    /** The reference size, here and on the overlay that maps view px to image px. */
+    private fun setImageSize(size: ImageSize) {
+        imageSize = size
+        binding.overlayRoi.realImageWidth = size.width
+        binding.overlayRoi.realImageHeight = size.height
+    }
+
+    private fun wireModeToggles() {
+        binding.rgEditMode.onButtonChecked { checkedId -> setEditMode(manual = checkedId == R.id.rbModeManual) }
 
         binding.rgCropErase.onButtonChecked { checkedId ->
             val erase = checkedId == R.id.rbErase
             binding.overlayRoi.isSubtractMode = erase
-            binding.tvHud.text = getString(
-                if (erase) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_crop,
-            )
+            binding.tvHud.text = getString(if (erase) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_crop)
             syncManualFieldsForMode()
         }
 
@@ -135,21 +152,21 @@ class RoiDrawActivity : AppCompatActivity() {
             }
             binding.tvHud.text = getString(R.string.roi_hud_mode_switched, binding.overlayRoi.currentMode)
         }
+    }
 
-        if (savedInstanceState != null) {
-            val modeId = savedInstanceState.getInt(DicKeys.DRAW_MODE, R.id.rbRect)
-            binding.rgDrawMode.check(if (modeId == R.id.rbSquare) R.id.rbSquare else R.id.rbRect)
-            val erase = savedInstanceState.getBoolean(STATE_ERASE, false)
-            binding.rgCropErase.check(if (erase) R.id.rbErase else R.id.rbCrop)
-            binding.overlayRoi.isSubtractMode = erase
-            val editManual = savedInstanceState.getBoolean(STATE_MANUAL, false)
-            binding.rgEditMode.check(if (editManual) R.id.rbModeManual else R.id.rbModeDraw)
-            setEditMode(editManual)
-        } else {
-            setEditMode(false)
-            binding.tvHud.text = getString(R.string.roi_hud_zoom_hint)
-        }
+    /** Puts back the draw shape, Crop/Erase and Draw/Manual toggles [onSaveInstanceState] kept. */
+    private fun restoreModes(state: Bundle) {
+        val modeId = state.getInt(DicKeys.DRAW_MODE, R.id.rbRect)
+        binding.rgDrawMode.check(if (modeId == R.id.rbSquare) R.id.rbSquare else R.id.rbRect)
+        val erase = state.getBoolean(STATE_ERASE, false)
+        binding.rgCropErase.check(if (erase) R.id.rbErase else R.id.rbCrop)
+        binding.overlayRoi.isSubtractMode = erase
+        val editManual = state.getBoolean(STATE_MANUAL, false)
+        binding.rgEditMode.check(if (editManual) R.id.rbModeManual else R.id.rbModeDraw)
+        setEditMode(editManual)
+    }
 
+    private fun wireOverlay() {
         binding.overlayRoi.onZoomChangedListener = { zoom ->
             binding.tvHud.text = if (zoom > 1f) {
                 getString(R.string.roi_hud_zoom, zoom)
@@ -157,59 +174,45 @@ class RoiDrawActivity : AppCompatActivity() {
                 getString(R.string.roi_hud_zoom_fit)
             }
         }
+        binding.overlayRoi.onRoiChangedListener = ::showSelection
+    }
 
+    private fun wireButtons() {
         binding.btnCancelRoi.setOnClickListener { finish() }
-
-        val clearCanvas = {
-            binding.overlayRoi.reset()
-            clearManualFields()
-            binding.tvHud.text = getString(R.string.roi_hud_canvas_cleared)
-        }
         binding.btnResetRoi.setOnClickListener { clearCanvas() }
         binding.btnResetManualRoi.setOnClickListener { clearCanvas() }
-
         binding.btnFullImageRoi.setOnClickListener { saveFullImageAndFinish() }
-
         binding.btnApplyManualRoi.setOnClickListener { applyManualFields() }
-
-        binding.overlayRoi.onRoiChangedListener = { roi ->
-            if (binding.rgCropErase.checkedButtonId == R.id.rbErase) {
-                val hole = binding.overlayRoi.lastHoleRelative()
-                if (hole.width() > 0 && hole.height() > 0) {
-                    binding.tvHud.text = getString(
-                        R.string.roi_hud_dimensions,
-                        hole.width().roundToInt(),
-                        hole.height().roundToInt(),
-                        hole.left.roundToInt(),
-                        hole.top.roundToInt(),
-                    )
-                    fillManualFields(hole)
-                } else {
-                    binding.tvHud.text = getString(R.string.roi_hud_mode_erase)
-                }
-            } else if (roi.width() > 0 && roi.height() > 0) {
-                binding.tvHud.text = getString(
-                    R.string.roi_hud_dimensions,
-                    roi.width().roundToInt(),
-                    roi.height().roundToInt(),
-                    roi.left.roundToInt(),
-                    roi.top.roundToInt(),
-                )
-                fillManualFields(roi)
-            } else {
-                binding.tvHud.text = getString(R.string.roi_hud_select_tool)
-                if (!syncingManualFields) clearManualFields()
-            }
-        }
-
         binding.btnSaveRoi.setOnClickListener { saveAndFinish() }
     }
 
-    /** The reference size, here and on the overlay that maps view px to image px. */
-    private fun setImageSize(size: ImageSize) {
-        imageSize = size
-        binding.overlayRoi.realImageWidth = size.width
-        binding.overlayRoi.realImageHeight = size.height
+    private fun clearCanvas() {
+        binding.overlayRoi.reset()
+        clearManualFields()
+        binding.tvHud.text = getString(R.string.roi_hud_canvas_cleared)
+    }
+
+    /**
+     * The HUD and manual fields after the overlay reports [roi] (image px): the
+     * last hole's size in erase mode, else the crop's; a prompt when there is none.
+     */
+    private fun showSelection(roi: RectF) {
+        val shown = if (erasing) binding.overlayRoi.lastHoleRelative() else roi
+        if (shown.width() > 0 && shown.height() > 0) {
+            binding.tvHud.text = getString(
+                R.string.roi_hud_dimensions,
+                shown.width().roundToInt(),
+                shown.height().roundToInt(),
+                shown.left.roundToInt(),
+                shown.top.roundToInt(),
+            )
+            fillManualFields(shown)
+        } else if (erasing) {
+            binding.tvHud.text = getString(R.string.roi_hud_mode_erase)
+        } else {
+            binding.tvHud.text = getString(R.string.roi_hud_select_tool)
+            if (!syncingManualFields) clearManualFields()
+        }
     }
 
     private fun setEditMode(manual: Boolean) {
@@ -217,22 +220,13 @@ class RoiDrawActivity : AppCompatActivity() {
         // fitCenter image does not jump when switching Draw ↔ Manual.
         binding.drawTools.visibility = if (manual) View.INVISIBLE else View.VISIBLE
         binding.manualTools.visibility = if (manual) View.VISIBLE else View.INVISIBLE
-        if (!manual) {
-            hideSoftKeyboard()
-        }
+        if (!manual) hideSoftKeyboard()
         // Crop/Erase stays visible and keeps its selection in both modes.
-        val erase = binding.rgCropErase.checkedButtonId == R.id.rbErase
+        val erase = erasing
         binding.overlayRoi.isSubtractMode = erase
-        if (manual) {
-            syncManualFieldsForMode()
-            binding.tvHud.text = getString(
-                if (erase) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_manual,
-            )
-        } else {
-            binding.tvHud.text = getString(
-                if (erase) R.string.roi_hud_mode_erase else R.string.roi_hud_mode_crop,
-            )
-        }
+        if (manual) syncManualFieldsForMode()
+        @StringRes val cropHud = if (manual) R.string.roi_hud_mode_manual else R.string.roi_hud_mode_crop
+        binding.tvHud.text = getString(if (erase) R.string.roi_hud_mode_erase else cropHud)
     }
 
     private fun hideSoftKeyboard() {
@@ -243,21 +237,8 @@ class RoiDrawActivity : AppCompatActivity() {
 
     /** Prefill manual fields from the main crop or the last erase rect. */
     private fun syncManualFieldsForMode() {
-        if (binding.rgCropErase.checkedButtonId == R.id.rbErase) {
-            val hole = binding.overlayRoi.lastHoleRelative()
-            if (hole.width() > 0f && hole.height() > 0f) {
-                fillManualFields(hole)
-            } else {
-                clearManualFields()
-            }
-        } else {
-            val roi = binding.overlayRoi.getRelativeRoi()
-            if (roi.width() > 0f && roi.height() > 0f) {
-                fillManualFields(roi)
-            } else {
-                clearManualFields()
-            }
-        }
+        val rect = if (erasing) binding.overlayRoi.lastHoleRelative() else binding.overlayRoi.getRelativeRoi()
+        if (rect.width() > 0f && rect.height() > 0f) fillManualFields(rect) else clearManualFields()
     }
 
     private fun fillManualFields(roi: RectF) {
@@ -279,24 +260,21 @@ class RoiDrawActivity : AppCompatActivity() {
         syncingManualFields = false
     }
 
+    /** The typed X, Y, W, H in image px, or null unless all four are whole numbers and W, H are positive. */
+    private fun typedRoi(): Roi? {
+        val typed = listOf(binding.etRoiX, binding.etRoiY, binding.etRoiW, binding.etRoiH)
+            .map { it.text?.toString()?.toIntOrNull() ?: return null }
+        return Roi.fromXywh(typed.toIntArray())?.takeIf { it.w > 0 && it.h > 0 }
+    }
+
     private fun applyManualFields() {
-        val x = binding.etRoiX.text?.toString()?.toIntOrNull()
-        val y = binding.etRoiY.text?.toString()?.toIntOrNull()
-        val w = binding.etRoiW.text?.toString()?.toIntOrNull()
-        val h = binding.etRoiH.text?.toString()?.toIntOrNull()
-        if (x == null || y == null || w == null || h == null || w <= 0 || h <= 0) {
-            Feedback.toast(this, R.string.roi_invalid_size)
-            return
+        val roi = typedRoi()
+        val ok = when {
+            roi == null -> false
+            erasing -> binding.overlayRoi.applyImageHole(roi.x, roi.y, roi.w, roi.h)
+            else -> binding.overlayRoi.applyImageRoi(roi.x, roi.y, roi.w, roi.h)
         }
-        val erase = binding.rgCropErase.checkedButtonId == R.id.rbErase
-        val ok = if (erase) {
-            binding.overlayRoi.applyImageHole(x, y, w, h)
-        } else {
-            binding.overlayRoi.applyImageRoi(x, y, w, h)
-        }
-        if (!ok) {
-            Feedback.toast(this, R.string.roi_invalid_size)
-        }
+        if (!ok) Feedback.toast(this, R.string.roi_invalid_size)
     }
 
     private fun saveFullImageAndFinish() {
@@ -315,27 +293,21 @@ class RoiDrawActivity : AppCompatActivity() {
     private fun saveAndFinish() {
         if (saving) return
         val overlay = binding.overlayRoi
-        val roi: Roi
-        val buildMask: () -> ByteArray
-
-        if (!overlay.hasValidRoi && overlay.holes.isEmpty()) {
-            roi = Roi.full(imageSize)
-            val pixels = imageSize.width * imageSize.height
-            buildMask = { ByteArray(pixels) { 255.toByte() } }
-            Feedback.toast(this, R.string.roi_full_image_selected)
+        val nothingDrawn = !overlay.hasValidRoi && overlay.holes.isEmpty()
+        val roi = if (overlay.hasValidRoi) {
+            Roi.fromImageRect(overlay.getRelativeRoi(), imageSize)
         } else {
-            roi = if (overlay.hasValidRoi) {
-                Roi.fromImageRect(overlay.getRelativeRoi(), imageSize)
-            } else {
-                Roi.full(imageSize)
-            }
-
-            if (roi.w <= 0 || roi.h <= 0) {
-                Feedback.toast(this, R.string.roi_invalid_size)
-                return
-            }
-            val input = overlay.maskInput()
-            buildMask = { StudioOverlayMaskEncoder.encode(input) }
+            Roi.full(imageSize)
+        }
+        if (!nothingDrawn && (roi.w <= 0 || roi.h <= 0)) {
+            Feedback.toast(this, R.string.roi_invalid_size)
+            return
+        }
+        val buildMask: () -> ByteArray = if (nothingDrawn) {
+            Feedback.toast(this, R.string.roi_full_image_selected)
+            fullMask(imageSize.width * imageSize.height)
+        } else {
+            maskOf(overlay.maskInput())
         }
 
         saving = true
@@ -361,7 +333,7 @@ class RoiDrawActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
         outState.putInt(DicKeys.DRAW_MODE, binding.rgDrawMode.checkedButtonId)
         outState.putBoolean(STATE_MANUAL, binding.rgEditMode.checkedButtonId == R.id.rbModeManual)
-        outState.putBoolean(STATE_ERASE, binding.rgCropErase.checkedButtonId == R.id.rbErase)
+        outState.putBoolean(STATE_ERASE, erasing)
 
         if (binding.overlayRoi.hasValidRoi) {
             outState.putRoiEdges(binding.overlayRoi.getRelativeRoi())
@@ -374,6 +346,15 @@ class RoiDrawActivity : AppCompatActivity() {
         const val PREVIEW_OVERSAMPLE = 2
     }
 }
+
+/** Builds a mask that correlates every one of [pixels]. */
+private fun fullMask(pixels: Int): () -> ByteArray = { ByteArray(pixels) { FULL_MASK } }
+
+/** Builds the mask the overlay's crop and holes describe. */
+private fun maskOf(input: StudioOverlayMaskEncoder.Input): () -> ByteArray = { StudioOverlayMaskEncoder.encode(input) }
+
+/** A mask byte that marks its pixel as correlated. */
+private const val FULL_MASK: Byte = -1 // 0xFF
 
 /** The reference the wizard staged for the ROI editor, or null when it is gone. */
 @WorkerThread

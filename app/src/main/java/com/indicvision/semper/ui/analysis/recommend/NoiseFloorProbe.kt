@@ -57,9 +57,21 @@ object NoiseFloorProbe {
         if (region.width() <= subset || region.height() <= subset) return emptyList()
 
         val step = probeStepFor(region, subset)
-        val strainWindow = strainWindowFor(step)
-        val buffer = allocateFor(region, step)
-        val refWindow = NoiseFloorPixels.grayWindow(refBytes, region)
+        val burst = Burst(
+            refBytes = refBytes,
+            refWindow = NoiseFloorPixels.grayWindow(refBytes, region),
+            region = region,
+            params = SemperEngine.Params(
+                roiX = region.left,
+                roiY = region.top,
+                roiW = region.width(),
+                roiH = region.height(),
+                step = step,
+                subset = subset,
+                strainWindow = strainWindowFor(step),
+            ),
+            buffer = allocateFor(region, step),
+        )
 
         runCatching { SemperNativeLib.initializeReference(refBytes, ByteArray(0), bounds.width, bounds.height) }
             .onFailure {
@@ -67,9 +79,7 @@ object NoiseFloorProbe {
                 return emptyList()
             }
 
-        return frameFiles.mapNotNull { frame ->
-            sampleOf(refBytes, frame, region, subset, step, strainWindow, buffer, refWindow)
-        }
+        return frameFiles.mapNotNull { frame -> sampleOf(burst, frame) }
     }
 
     /**
@@ -109,19 +119,23 @@ object NoiseFloorProbe {
      */
     internal fun strainWindowFor(step: Int): Int = 2 * step + 1
 
-    @Suppress("LongParameterList", "ReturnCount")
-    private fun sampleOf(
-        refBytes: ByteArray,
-        frame: File,
-        region: Rect,
-        subset: Int,
-        step: Int,
-        strainWindow: Int,
-        buffer: ByteBuffer,
-        refWindow: FloatArray?,
-    ): NoiseFloorStats.PairSample? {
+    /**
+     * What every frame of one burst is measured against: the reference, its
+     * pixels over the [region], the solve's settings and the shared output [buffer].
+     */
+    private class Burst(
+        val refBytes: ByteArray,
+        val refWindow: FloatArray?,
+        val region: Rect,
+        val params: SemperEngine.Params,
+        val buffer: ByteBuffer,
+    )
+
+    @Suppress("ReturnCount")
+    private fun sampleOf(burst: Burst, frame: File): NoiseFloorStats.PairSample? {
+        val buffer = burst.buffer
         val defBytes = runCatching { frame.readBytes() }.getOrNull() ?: return null
-        val solved = solve(refBytes, defBytes, region, subset, step, strainWindow, buffer)
+        val solved = solve(burst, defBytes)
         if (solved <= 0 || DicFieldIo.wouldOverrun(solved, buffer)) {
             Timber.w("noise probe: %s solved %d points", frame.name, solved)
             return null
@@ -131,41 +145,25 @@ object NoiseFloorProbe {
         buffer.order(ByteOrder.nativeOrder()).asFloatBuffer().get(points)
 
         val stats = displacementStats(points) ?: return null
-        val defWindow = NoiseFloorPixels.grayWindow(defBytes, region)
+        val defWindow = NoiseFloorPixels.grayWindow(defBytes, burst.region)
         return NoiseFloorStats.PairSample(
             sigmaU = stats.sigmaU,
             sigmaV = stats.sigmaV,
             meanU = stats.meanU,
             meanV = stats.meanV,
-            noiseVariance = NoiseFloorPixels.noiseVarianceOf(refWindow, defWindow),
-            noiseCorrelation = NoiseFloorPixels.noiseCorrelationOf(refWindow, defWindow),
+            noiseVariance = NoiseFloorPixels.noiseVarianceOf(burst.refWindow, defWindow),
+            noiseCorrelation = NoiseFloorPixels.noiseCorrelationOf(burst.refWindow, defWindow),
             meanIntensity = defWindow?.average() ?: Double.NaN,
         )
     }
 
-    @Suppress("LongParameterList")
-    private fun solve(
-        refBytes: ByteArray,
-        defBytes: ByteArray,
-        region: Rect,
-        subset: Int,
-        step: Int,
-        strainWindow: Int,
-        buffer: ByteBuffer,
-    ): Int = runCatching {
+    /** One frame of [burst] solved against its reference: the point count, or -1 if the engine threw. */
+    private fun solve(burst: Burst, defBytes: ByteArray): Int = runCatching {
         SemperEngine.solve(
-            refBytes = refBytes,
+            refBytes = burst.refBytes,
             defBytes = defBytes,
-            params = SemperEngine.Params(
-                roiX = region.left,
-                roiY = region.top,
-                roiW = region.width(),
-                roiH = region.height(),
-                step = step,
-                subset = subset,
-                strainWindow = strainWindow,
-            ),
-            buffer = buffer,
+            params = burst.params,
+            buffer = burst.buffer,
             // Zeroed slots: the probe never reads the telemetry.
             metrics = FloatArray(EngineStats.SLOT_COUNT),
         )

@@ -39,7 +39,7 @@ class RoiTest {
     fun `clampTo matches RoiResolveHelper clipToImage everywhere on the grid`() {
         for (size in sizes) {
             for (roi in rois()) {
-                val expected = legacyClipToImage(roi.x, roi.y, roi.w, roi.h, size.width, size.height)
+                val expected = legacyClipToImage(roi, size)
                 assertEquals("$roi on $size", expected?.toList(), roi.clampTo(size)?.toXywh()?.toList())
             }
         }
@@ -166,8 +166,17 @@ class RoiTest {
 
     // ── The originals the helpers replaced, copied verbatim as oracles ──
 
-    /** `RoiResolveHelper.clipToImage`, as it was before it delegated to [Roi.clampTo]. */
-    private fun legacyClipToImage(x: Int, y: Int, w: Int, h: Int, width: Int, height: Int): IntArray? {
+    /**
+     * `RoiResolveHelper.clipToImage`, as it was before it delegated to [Roi.clampTo]:
+     * the body verbatim, its six Int parameters read off [roi] and [size].
+     */
+    private fun legacyClipToImage(roi: Roi, size: ImageSize): IntArray? {
+        val x = roi.x
+        val y = roi.y
+        val w = roi.w
+        val h = roi.h
+        val width = size.width
+        val height = size.height
         if (width <= 0 || height <= 0) return null
         val left = x.coerceIn(0, width)
         val top = y.coerceIn(0, height)
@@ -179,7 +188,7 @@ class RoiTest {
     /** `RoiResolveHelper.resolve`, as it was before it delegated to [Roi.forSolve]. */
     private fun legacyResolve(subset: Int, hasCustomRoi: Boolean, drawn: Roi, size: ImageSize): IntArray? {
         val roi = if (hasCustomRoi) {
-            legacyClipToImage(drawn.x, drawn.y, drawn.w, drawn.h, size.width, size.height)
+            legacyClipToImage(drawn, size)
         } else {
             val margin = (subset / 2) + 10
             intArrayOf(margin, margin, size.width - (2 * margin), size.height - (2 * margin))

@@ -228,13 +228,13 @@ class ViewportMathTest {
                     // y gets a different window over the same extent, so both axes are exercised.
                     val yLo = fullMin + (1f - startFrac) * extent
                     val yHi = yLo + spanFrac * extent * 0.5f
-                    val (xMin, xMax, yMin, yMax) = rows.next()
+                    val row = rows.next()
 
                     val label = "full=$fullMin..$fullMax start=$startFrac span=$spanFrac"
                     val x = ViewportMath.clampWindow(lo, hi, fullMin, fullMax, fraction)
                     val y = ViewportMath.clampWindow(yLo, yHi, fullMin, fullMax, fraction)
-                    assertEquals(label, ViewportMath.Window(xMin, xMax), x)
-                    assertEquals(label, ViewportMath.Window(yMin, yMax), y)
+                    assertEquals(label, ViewportMath.Window(row[0], row[1]), x)
+                    assertEquals(label, ViewportMath.Window(row[2], row[3]), y)
                     cases++
                 }
             }

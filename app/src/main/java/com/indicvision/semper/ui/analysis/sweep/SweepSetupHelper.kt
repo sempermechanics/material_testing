@@ -1,8 +1,3 @@
-// Sweep setup wires many sliders/fields and seeds suggested values. Per-control
-// methods and literal UI constants are inherent; suppress rather than baseline.
-
-@file:Suppress("TooManyFunctions", "MagicNumber", "LargeClass")
-
 package com.indicvision.semper.ui.analysis.sweep
 
 import android.graphics.Bitmap
@@ -47,8 +42,10 @@ import java.util.Locale
  * Parameter-sweep setup UI for the analysis wizard (§5.4.5 parameter sweep): mode
  * toggle, subset/VSG/sample fields, lattice + line-cut previews, and plan
  * summary. Orchestration ([startVsgSweep], progress, lifecycle) stays in the
- * Activity.
+ * Activity. The range inputs are [SweepRangeFields]; the frame dialog is
+ * [SweepFramePicker].
  */
+@Suppress("TooManyFunctions") // the wizard-facing API StaticAnalysisActivity calls, and its Callbacks
 class SweepSetupHelper(
     private val activity: AppCompatActivity,
     private val viewModel: AnalysisViewModel,
@@ -82,27 +79,14 @@ class SweepSetupHelper(
         const val STRAIN_WIN_MIN_INPUT = VsgStudy.MIN_WINDOW_POINTS
         const val STRAIN_WIN_MAX_INPUT = VsgStudy.MAX_WINDOW_POINTS
 
-        /** Longest edge of a frame thumbnail in the pick dialog. */
-        private const val PREVIEW_MAX_EDGE = 480
-
-        /** A frame row in the pick dialog: vertical padding and touch-target height. */
-        private const val FRAME_ROW_PADDING_DP = 8f
-        private const val FRAME_ROW_MIN_HEIGHT_DP = 48f
+        /** The wizard's settings and sweep pages ([AnalysisViewModel.wizardStep]). */
+        private const val SETTINGS_STEP = 2
+        private const val SWEEP_STEP = 3
     }
 
     private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
     private lateinit var advancedParamsCard: View
     private lateinit var sweepSettingsCard: View
-    private lateinit var rangeSubset: RangeSlider
-    private lateinit var etSubsetMinValue: EditText
-    private lateinit var etSubsetMaxValue: EditText
-    private lateinit var rangeStrainWin: RangeSlider
-    private lateinit var etStrainWinMinValue: EditText
-    private lateinit var etStrainWinMaxValue: EditText
-    private lateinit var etStepDepthValue: EditText
-    private lateinit var tvSweepOverlapValue: EditText
-    private lateinit var etSubsetSamplesValue: EditText
-    private lateinit var etStrainWinSamplesValue: EditText
     private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
     private lateinit var btnPickSweepFrame: Button
     private lateinit var tvSweepPlan: TextView
@@ -113,34 +97,18 @@ class SweepSetupHelper(
         private set
     private lateinit var latticeSamplesBody: View
 
-    /** True while a suggestion/clamp is driving the sweep sliders, not the user. */
-    private var bindingSweep = false
+    /** The subset, window, step and sample inputs; null until [setup]. */
+    private var rangeFields: SweepRangeFields? = null
 
-    /** The frame-pick preview decode; a new pick or closing the dialog cancels it. */
-    private val framePreview = SerialJob()
-
-    /**
-     * Set once the user edits any sweep control. Until then the three sweep
-     * inputs — min subset, max subset, Max VSG — follow the app's suggestions,
-     * which track the SSSIG recommendation. After it, the user is in charge and
-     * the app only clamps their input to safe bounds.
-     */
-    private var sweepUserModified = false
+    private val framePicker = SweepFramePicker(activity, viewModel) { picked ->
+        viewModel.vsgFrameIndex = picked
+        refreshSweepPlan()
+    }
 
     fun setup() {
         rgAnalysisMode = activity.findViewById(R.id.rgAnalysisMode)
         advancedParamsCard = activity.findViewById(R.id.advancedParamsCard)
         sweepSettingsCard = activity.findViewById(R.id.sweepSettingsCard)
-        rangeSubset = activity.findViewById(R.id.rangeSubset)
-        etSubsetMinValue = activity.findViewById(R.id.etSubsetMinValue)
-        etSubsetMaxValue = activity.findViewById(R.id.etSubsetMaxValue)
-        rangeStrainWin = activity.findViewById(R.id.rangeStrainWin)
-        etStrainWinMinValue = activity.findViewById(R.id.etStrainWinMinValue)
-        etStrainWinMaxValue = activity.findViewById(R.id.etStrainWinMaxValue)
-        etStepDepthValue = activity.findViewById(R.id.etStepDepthValue)
-        tvSweepOverlapValue = activity.findViewById(R.id.tvSweepOverlapValue)
-        etSubsetSamplesValue = activity.findViewById(R.id.etSubsetSamplesValue)
-        etStrainWinSamplesValue = activity.findViewById(R.id.etVsgSamplesValue)
         rgLineCutAxis = activity.findViewById(R.id.rgLineCutAxis)
         btnPickSweepFrame = activity.findViewById(R.id.btnPickSweepFrame)
         tvSweepPlan = activity.findViewById(R.id.tvSweepPlan)
@@ -152,13 +120,15 @@ class SweepSetupHelper(
         sweepLatticePreview.compact = true
         btnRunSweep = activity.findViewById(R.id.btnRunSweep)
         latticeSamplesBody = activity.findViewById(R.id.latticeSamplesBody)
+        val fields = SweepRangeFields(activity, viewModel, callbacks, onChanged = ::refreshSweepPlan)
+        rangeFields = fields
 
         rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
         rgAnalysisMode.onButtonChecked { checkedId ->
             viewModel.sweepMode = checkedId == R.id.rbModeSweep
             // Leaving sweep mode while on the sweep page returns to settings.
-            if (!viewModel.sweepMode && viewModel.wizardStep == 3) {
-                callbacks.goToStep(2, animate = true)
+            if (!viewModel.sweepMode && viewModel.wizardStep == SWEEP_STEP) {
+                callbacks.goToStep(SETTINGS_STEP, animate = true)
             } else {
                 applyAnalysisModeUi()
                 refreshSweepPlan()
@@ -171,7 +141,7 @@ class SweepSetupHelper(
             refreshLineCutPreview()
         }
 
-        btnPickSweepFrame.setOnClickListener { pickSweepFrameWithPreview() }
+        btnPickSweepFrame.setOnClickListener { framePicker.show(resolvedSweepFrame()) }
 
         btnRunSweep.setOnClickListener {
             callbacks.commitParamFields()
@@ -183,13 +153,10 @@ class SweepSetupHelper(
             latticeSamplesBody.isVisible = !expanded
         }
 
-        wireControls()
         wireSweepInfoButtons()
 
         applyAnalysisModeUi()
-        callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
-        writeStepDepth(viewModel.stepDenominator)
+        fields.showCountsAndStepDepth()
         seedSweepSuggestions()
     }
 
@@ -208,18 +175,12 @@ class SweepSetupHelper(
 
     /** Clears focus on sweep numeric fields so in-progress typing commits. */
     fun clearSweepFieldFocus() {
-        if (!::etSubsetMinValue.isInitialized) return
-        etSubsetMinValue.clearFocus()
-        etSubsetMaxValue.clearFocus()
-        etStrainWinMinValue.clearFocus()
-        etStrainWinMaxValue.clearFocus()
-        etStepDepthValue.clearFocus()
-        tvSweepOverlapValue.clearFocus()
+        rangeFields?.clearFocus()
     }
 
     /** Hands the sweep back to suggested inputs (e.g. Advanced Reset). */
     fun resetUserModified() {
-        sweepUserModified = false
+        rangeFields?.userModified = false
     }
 
     fun onRecommendationChanged() = seedSweepSuggestions()
@@ -230,26 +191,8 @@ class SweepSetupHelper(
      * Runs until the user edits a sweep control; after that their values stand.
      */
     fun seedSweepSuggestions() {
-        if (!::rangeSubset.isInitialized) return
-        if (sweepUserModified) {
-            // Past this point their values stand -- but an ROI edit can still
-            // shrink what it's physically possible to solve, so the displayed
-            // range must keep up even though the app stops suggesting a fresh
-            // default. Without this, currentPlan() silently clamped subsetMax
-            // for plan generation while the slider kept showing the old value.
-            reclampSubsetRangeToRoi()
-            refreshSweepPlan()
-            return
-        }
-        val ceiling = effectiveSubsetCeiling()
-        val rec = callbacks.currentSubsetSize().coerceIn(SubsetRecommender.MIN_SUBSET, ceiling)
-        val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
-        viewModel.subsetMin = lo
-        viewModel.subsetMax = hi
-        viewModel.strainWinMin = VsgStudy.DEFAULT_SWEEP_WINDOW_MIN
-        viewModel.strainWinMax = VsgStudy.DEFAULT_SWEEP_WINDOW_MAX
-        writeSubsetRange(lo, hi)
-        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+        val fields = rangeFields ?: return
+        fields.seed()
         refreshSweepPlan()
     }
 
@@ -272,9 +215,7 @@ class SweepSetupHelper(
 
     fun refreshSweepPlan() {
         if (!::tvSweepPlan.isInitialized) return
-        callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
-        writeStepDepth(viewModel.stepDenominator)
+        rangeFields?.showCountsAndStepDepth()
         refreshSweepFrameUi()
 
         val plan = currentPlan()
@@ -369,15 +310,94 @@ class SweepSetupHelper(
         btnRunSweep.isEnabled = enabled
     }
 
-    // ------------------------------------------------------------------
-    // Wiring + commits
-    // ------------------------------------------------------------------
+    private fun wireSweepInfoButtons() {
+        fun info(@IdRes button: Int, @StringRes title: Int, @StringRes body: Int) =
+            activity.findViewById<View>(button).bindInfo(activity, title, body)
+        info(R.id.btnSweepInfo, R.string.analysis_mode, R.string.info_analysis_mode)
+        info(R.id.btnSubsetRangeInfo, R.string.subset_range, R.string.info_subset_range)
+        info(R.id.btnVsgMaxInfo, R.string.strain_win_range, R.string.info_strain_win_range)
+        info(R.id.btnSamplesInfo, R.string.subset_samples, R.string.info_subset_samples)
+        info(R.id.btnStepDepthInfo, R.string.step_depth, R.string.info_step_depth)
+        info(R.id.btnSweepOverlapInfo, R.string.subset_overlap, R.string.info_subset_overlap)
+        info(R.id.btnLineCutInfo, R.string.line_cut_axis, R.string.info_line_cut_axis)
+    }
 
-    private fun wireControls() {
+    private fun refreshSweepFrameUi() {
+        if (!::btnPickSweepFrame.isInitialized) return
+        val count = viewModel.defCount
+        if (count <= 1) {
+            btnPickSweepFrame.isVisible = false
+            return
+        }
+        val index = resolvedSweepFrame()
+        btnPickSweepFrame.isVisible = true
+        btnPickSweepFrame.text = activity.getString(
+            R.string.sweep_frame_summary_fmt,
+            framePicker.frameLabel(index),
+            index + 1,
+            count,
+        )
+    }
+
+    private fun refreshLatticePreview(plan: List<VsgStudy.Point>) {
+        if (!::sweepLatticePreview.isInitialized) return
+        sweepLatticePreview.onNodeClick = null
+        sweepLatticePreview.setNodes(
+            plan.map { point ->
+                VsgLatticeView.Node(
+                    subset = point.subset,
+                    step = point.step,
+                    window = point.window,
+                    vsg = point.vsg,
+                    solved = true,
+                )
+            },
+        )
+    }
+}
+
+/**
+ * The sweep's range inputs: the subset and strain-window range sliders with
+ * their min/max fields, the step depth and its linked overlap, and the two
+ * sample counts. Each commit clamps what was typed or slid, writes it to
+ * [viewModel] and back to the controls, then runs [onChanged].
+ *
+ * The values follow the app's suggestions ([seed]) until the user edits one
+ * ([userModified]); after that the user's values stand, only clamped.
+ */
+@Suppress("TooManyFunctions") // one commit and one write per control
+internal class SweepRangeFields(
+    activity: AppCompatActivity,
+    private val viewModel: AnalysisViewModel,
+    private val callbacks: SweepSetupHelper.Callbacks,
+    private val onChanged: () -> Unit,
+) {
+    private val rangeSubset: RangeSlider = activity.findViewById(R.id.rangeSubset)
+    private val etSubsetMinValue: EditText = activity.findViewById(R.id.etSubsetMinValue)
+    private val etSubsetMaxValue: EditText = activity.findViewById(R.id.etSubsetMaxValue)
+    private val rangeStrainWin: RangeSlider = activity.findViewById(R.id.rangeStrainWin)
+    private val etStrainWinMinValue: EditText = activity.findViewById(R.id.etStrainWinMinValue)
+    private val etStrainWinMaxValue: EditText = activity.findViewById(R.id.etStrainWinMaxValue)
+    private val etStepDepthValue: EditText = activity.findViewById(R.id.etStepDepthValue)
+    private val tvSweepOverlapValue: EditText = activity.findViewById(R.id.tvSweepOverlapValue)
+    private val etSubsetSamplesValue: EditText = activity.findViewById(R.id.etSubsetSamplesValue)
+    private val etStrainWinSamplesValue: EditText = activity.findViewById(R.id.etVsgSamplesValue)
+
+    /** True while a suggestion/clamp is driving the sweep sliders, not the user. */
+    private var bindingSweep = false
+
+    /**
+     * Set once the user edits any sweep control. Until then the three sweep
+     * inputs — min subset, max subset, Max VSG — follow the app's suggestions,
+     * which track the SSSIG recommendation. After it, the user is in charge and
+     * the app only clamps their input to safe bounds.
+     */
+    var userModified = false
+
+    init {
         rangeSubset.addOnChangeListener { slider, _, fromUser ->
             onSliderInput(fromUser) { commitSubsetRange(slider.values[0].toInt(), slider.values[1].toInt()) }
         }
-
         wireSweepField(etSubsetMinValue, { viewModel.subsetMin }) { commitSubsetMin(it) }
         wireSweepField(etSubsetMaxValue, { viewModel.subsetMax }) { commitSubsetMax(it) }
         rangeStrainWin.addOnChangeListener { slider, _, fromUser ->
@@ -391,12 +411,54 @@ class SweepSetupHelper(
         wireSweepField(etStrainWinSamplesValue, { viewModel.strainWinSamples }) { commitStrainWinSamples(it) }
     }
 
+    /** Clears focus on the numeric fields so in-progress typing commits. */
+    fun clearFocus() {
+        etSubsetMinValue.clearFocus()
+        etSubsetMaxValue.clearFocus()
+        etStrainWinMinValue.clearFocus()
+        etStrainWinMaxValue.clearFocus()
+        etStepDepthValue.clearFocus()
+        tvSweepOverlapValue.clearFocus()
+    }
+
+    /** Shows the two sample counts and the step depth / overlap pair as the view model holds them. */
+    fun showCountsAndStepDepth() {
+        callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
+        callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
+        writeStepDepth(viewModel.stepDenominator)
+    }
+
+    /**
+     * Writes the app's suggestion — a subset window centred on the
+     * recommendation and the default strain windows — unless the user has
+     * taken over. Then their values stand, but an ROI edit can still shrink
+     * what it's physically possible to solve, so the displayed subset range
+     * keeps up: without this, the plan silently clamped subsetMax while the
+     * slider kept showing the old value.
+     */
+    fun seed() {
+        if (userModified) {
+            reclampSubsetRangeToRoi()
+            return
+        }
+        val ceiling = effectiveSubsetCeiling()
+        val rec = callbacks.currentSubsetSize().coerceIn(SubsetRecommender.MIN_SUBSET, ceiling)
+        val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
+        viewModel.subsetMin = lo
+        viewModel.subsetMax = hi
+        viewModel.strainWinMin = VsgStudy.DEFAULT_SWEEP_WINDOW_MIN
+        viewModel.strainWinMax = VsgStudy.DEFAULT_SWEEP_WINDOW_MAX
+        writeSubsetRange(lo, hi)
+        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+    }
+
     private inline fun onSliderInput(fromUser: Boolean, body: () -> Unit) {
         if (bindingSweep) return
-        if (fromUser) sweepUserModified = true
+        if (fromUser) userModified = true
         body()
     }
 
+    /** Commits a typed value on focus loss (blank or unparseable puts [current] back); Done drops focus. */
     private fun wireSweepField(field: EditText, current: () -> Int, commit: (Int) -> Unit) {
         field.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) return@setOnFocusChangeListener
@@ -404,23 +466,11 @@ class SweepSetupHelper(
             if (typed == null) {
                 callbacks.renderParamField(field, current())
             } else {
-                sweepUserModified = true
+                userModified = true
                 commit(typed)
             }
         }
         field.commitOnDone()
-    }
-
-    private fun wireSweepInfoButtons() {
-        fun info(@IdRes button: Int, @StringRes title: Int, @StringRes body: Int) =
-            activity.findViewById<View>(button).bindInfo(activity, title, body)
-        info(R.id.btnSweepInfo, R.string.analysis_mode, R.string.info_analysis_mode)
-        info(R.id.btnSubsetRangeInfo, R.string.subset_range, R.string.info_subset_range)
-        info(R.id.btnVsgMaxInfo, R.string.strain_win_range, R.string.info_strain_win_range)
-        info(R.id.btnSamplesInfo, R.string.subset_samples, R.string.info_subset_samples)
-        info(R.id.btnStepDepthInfo, R.string.step_depth, R.string.info_step_depth)
-        info(R.id.btnSweepOverlapInfo, R.string.subset_overlap, R.string.info_subset_overlap)
-        info(R.id.btnLineCutInfo, R.string.line_cut_axis, R.string.info_line_cut_axis)
     }
 
     private fun effectiveSubsetCeiling(): Int =
@@ -428,7 +478,7 @@ class SweepSetupHelper(
 
     /**
      * Keeps the user's own subset range inside what the current ROI can
-     * support -- same ceiling, same clamp [currentPlan] already applies when
+     * support -- same ceiling, same clamp the plan already applies when
      * generating nodes, just also written back to [viewModel] and the slider
      * so what's displayed matches what will actually be planned.
      */
@@ -453,21 +503,21 @@ class SweepSetupHelper(
         viewModel.subsetMin = lo
         viewModel.subsetMax = hi
         writeSubsetRange(lo, hi)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun commitSubsetMin(raw: Int) {
         val currentMax = viewModel.subsetMax.takeIf { it > 0 } ?: effectiveSubsetCeiling()
         viewModel.subsetMin = oddSubset(raw).coerceAtMost(currentMax)
         writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun commitSubsetMax(raw: Int) {
         val floor = viewModel.subsetMin.coerceAtLeast(SubsetRecommender.MIN_SUBSET)
         viewModel.subsetMax = oddSubset(raw).coerceIn(floor, effectiveSubsetCeiling())
         writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun oddWindow(raw: Int): Int = VsgStudy.oddWindowPoints(raw)
@@ -478,30 +528,25 @@ class SweepSetupHelper(
         viewModel.strainWinMin = lo
         viewModel.strainWinMax = hi
         writeStrainWinRange(lo, hi)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun commitStrainWinMin(raw: Int) {
-        val currentMax = viewModel.strainWinMax.takeIf { it > 0 } ?: STRAIN_WIN_MAX_INPUT
+        val currentMax = viewModel.strainWinMax.takeIf { it > 0 } ?: SweepSetupHelper.STRAIN_WIN_MAX_INPUT
         viewModel.strainWinMin = oddWindow(raw).coerceAtMost(currentMax)
         writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun commitStrainWinMax(raw: Int) {
-        val floor = viewModel.strainWinMin.coerceAtLeast(STRAIN_WIN_MIN_INPUT)
+        val floor = viewModel.strainWinMin.coerceAtLeast(SweepSetupHelper.STRAIN_WIN_MIN_INPUT)
         viewModel.strainWinMax = oddWindow(raw).coerceAtLeast(floor)
         writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun writeStrainWinRange(lo: Int, hi: Int) {
-        bindingSweep = true
-        rangeStrainWin.values = listOf(
-            lo.toFloat().coerceIn(rangeStrainWin.valueFrom, rangeStrainWin.valueTo),
-            hi.toFloat().coerceIn(rangeStrainWin.valueFrom, rangeStrainWin.valueTo),
-        )
-        bindingSweep = false
+        writeRange(rangeStrainWin, lo, hi)
         callbacks.renderParamField(etStrainWinMinValue, lo)
         callbacks.renderParamField(etStrainWinMaxValue, hi)
     }
@@ -510,7 +555,7 @@ class SweepSetupHelper(
         viewModel.stepDenominator = raw.coerceIn(VsgStudy.STEP_DENOM_MIN, VsgStudy.STEP_DENOM_MAX)
         viewModel.subsetOverlap = VsgStudy.overlapForDenominator(viewModel.stepDenominator)
         writeStepDepth(viewModel.stepDenominator)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun commitOverlap(raw: Double) {
@@ -527,54 +572,56 @@ class SweepSetupHelper(
         tvSweepOverlapValue.showUnlessEditing(String.format(Locale.US, "%.2f", viewModel.subsetOverlap))
     }
 
+    /** The overlap field: a decimal (comma or point) that sets the step depth; unparseable puts it back. */
     private fun wireSweepOverlapField() {
-        val commit = {
+        tvSweepOverlapValue.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) return@setOnFocusChangeListener
             val typed = tvSweepOverlapValue.text.toString().trim().replace(',', '.').toDoubleOrNull()
             if (typed == null) {
                 writeStepDepth(viewModel.stepDenominator)
             } else {
-                sweepUserModified = true
+                userModified = true
                 commitOverlap(typed)
             }
         }
-        bindSweepCommitField(tvSweepOverlapValue, commit)
-    }
-
-    private fun bindSweepCommitField(field: EditText, commit: () -> Unit) {
-        field.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commit() }
-        field.commitOnDone()
+        tvSweepOverlapValue.commitOnDone()
     }
 
     private fun commitSubsetSamples(raw: Int) {
         viewModel.subsetSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
         callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun commitStrainWinSamples(raw: Int) {
         viewModel.strainWinSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
         callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
-        refreshSweepPlan()
+        onChanged()
     }
 
     private fun writeSubsetRange(lo: Int, hi: Int) {
-        bindingSweep = true
-        rangeSubset.values = listOf(
-            lo.toFloat().coerceIn(rangeSubset.valueFrom, rangeSubset.valueTo),
-            hi.toFloat().coerceIn(rangeSubset.valueFrom, rangeSubset.valueTo),
-        )
-        bindingSweep = false
+        writeRange(rangeSubset, lo, hi)
         callbacks.renderParamField(etSubsetMinValue, lo)
         callbacks.renderParamField(etSubsetMaxValue, hi)
     }
 
+    /** Moves [slider]'s thumbs to [lo]..[hi], inside its own range, without it counting as the user's edit. */
+    private fun writeRange(slider: RangeSlider, lo: Int, hi: Int) {
+        bindingSweep = true
+        slider.values = listOf(
+            lo.toFloat().coerceIn(slider.valueFrom, slider.valueTo),
+            hi.toFloat().coerceIn(slider.valueFrom, slider.valueTo),
+        )
+        bindingSweep = false
+    }
+
     /**
-     * A subset window of [SUGGESTED_SUBSET_SPAN] centred on [rec], shifted whole
-     * to fit inside `[MIN_SUBSET, ceiling]` so it never collapses to a single
-     * value unless the valid range itself is that narrow.
+     * A subset window of [SweepSetupHelper.SUGGESTED_SUBSET_SPAN] centred on
+     * [rec], shifted whole to fit inside `[MIN_SUBSET, ceiling]` so it never
+     * collapses to a single value unless the valid range itself is that narrow.
      */
     private fun suggestedSubsetWindow(rec: Int, ceiling: Int): Pair<Int, Int> {
-        val half = SUGGESTED_SUBSET_SPAN / 2
+        val half = SweepSetupHelper.SUGGESTED_SUBSET_SPAN / 2
         var lo = rec - half
         var hi = rec + half
         if (lo < SubsetRecommender.MIN_SUBSET) {
@@ -587,52 +634,43 @@ class SweepSetupHelper(
         }
         return oddSubset(lo.coerceAtLeast(SubsetRecommender.MIN_SUBSET)) to oddSubset(hi)
     }
+}
 
-    private fun frameLabel(index: Int): String =
+/**
+ * The dialog that picks which deformed frame a sweep solves: a scrolling list
+ * of the frames, a typed frame number, and a preview of the one picked.
+ * OK hands the picked index to [onPicked].
+ */
+internal class SweepFramePicker(
+    private val activity: AppCompatActivity,
+    private val viewModel: AnalysisViewModel,
+    private val onPicked: (Int) -> Unit,
+) {
+    /** The frame-pick preview decode; a new pick or closing the dialog cancels it. */
+    private val framePreview = SerialJob()
+
+    /** A frame's file name, or "Frame n" when it has none. */
+    fun frameLabel(index: Int): String =
         viewModel.defOriginalNames.getOrNull(index)?.substringAfterLast('/')
             ?: activity.getString(R.string.sweep_frame_btn_fmt, index + 1)
 
-    private fun pickSweepFrameWithPreview() {
+    /** Opens the dialog on frame [initial]; does nothing for a sequence of one frame. */
+    fun show(initial: Int) {
         val count = viewModel.defCount
         if (count <= 1) return
-        var selected = resolvedSweepFrame().coerceIn(0, count - 1)
+        var selected = initial.coerceIn(0, count - 1)
         val builder = MaterialAlertDialogBuilder(activity)
         // Inflate against the builder's context so the rows pick up the dialog
         // theme overlay rather than the activity's.
         val content = DialogSweepFramePickBinding.inflate(LayoutInflater.from(builder.context))
-        val preview = content.ivSweepFrameDialogPreview
-        val progress = content.progressSweepFramePreview
         val numberField = content.etSweepFrameNumber
         content.tvSweepFrameTotal.text = activity.getString(R.string.sweep_frame_out_of_fmt, count)
 
-        fun bindPreview(index: Int) {
-            val path = viewModel.defFilePaths.getOrNull(index)
-            framePreview.cancel()
-            if (path.isNullOrBlank()) {
-                preview.setImageDrawable(null)
-                progress.isVisible = false
-                return
-            }
-            progress.isVisible = true
-            framePreview.launch(activity.lifecycleScope) {
-                val bmp = decodeFramePreview(path, viewModel.defFrameSizes[path])
-                if (index != selected) {
-                    bmp?.recycle()
-                    return@launch
-                }
-                progress.isVisible = false
-                if (bmp != null) {
-                    preview.setImageBitmap(bmp)
-                } else {
-                    preview.setImageDrawable(null)
-                }
-            }
-        }
-        bindPreview(selected)
+        bindPreview(content, selected) { selected }
         val rows = fillFrameChoices(content, count, selected) { which ->
             selected = which
             numberField.setText(frameNumberText(which + 1))
-            bindPreview(which)
+            bindPreview(content, which) { selected }
         }
         numberField.setText(frameNumberText(selected + 1))
         wireFrameNumberField(numberField, current = { selected + 1 }) { typed ->
@@ -650,12 +688,41 @@ class SweepSetupHelper(
             .setView(content.root)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 framePreview.cancel()
-                viewModel.vsgFrameIndex = selected
-                refreshSweepPlan()
+                onPicked(selected)
             }
             .setNegativeButton(R.string.cancel) { _, _ -> framePreview.cancel() }
             .setOnDismissListener { framePreview.cancel() }
             .show()
+    }
+
+    /**
+     * Decodes frame [index] into the dialog's preview; a result that arrives
+     * after [selected] has moved on is dropped.
+     */
+    private fun bindPreview(content: DialogSweepFramePickBinding, index: Int, selected: () -> Int) {
+        val preview = content.ivSweepFrameDialogPreview
+        val progress = content.progressSweepFramePreview
+        val path = viewModel.defFilePaths.getOrNull(index)
+        framePreview.cancel()
+        if (path.isNullOrBlank()) {
+            preview.setImageDrawable(null)
+            progress.isVisible = false
+            return
+        }
+        progress.isVisible = true
+        framePreview.launch(activity.lifecycleScope) {
+            val bmp = decodeFramePreview(path, viewModel.defFrameSizes[path])
+            if (index != selected()) {
+                bmp?.recycle()
+                return@launch
+            }
+            progress.isVisible = false
+            if (bmp != null) {
+                preview.setImageBitmap(bmp)
+            } else {
+                preview.setImageDrawable(null)
+            }
+        }
     }
 
     /**
@@ -747,36 +814,12 @@ class SweepSetupHelper(
         return RawRgba.preview(bytes, w, h, PREVIEW_MAX_EDGE)
     }
 
-    private fun refreshSweepFrameUi() {
-        if (!::btnPickSweepFrame.isInitialized) return
-        val count = viewModel.defCount
-        if (count <= 1) {
-            btnPickSweepFrame.isVisible = false
-            return
-        }
-        val index = resolvedSweepFrame()
-        btnPickSweepFrame.isVisible = true
-        btnPickSweepFrame.text = activity.getString(
-            R.string.sweep_frame_summary_fmt,
-            frameLabel(index),
-            index + 1,
-            count,
-        )
-    }
+    private companion object {
+        /** Longest edge of a frame thumbnail in the pick dialog. */
+        const val PREVIEW_MAX_EDGE = 480
 
-    private fun refreshLatticePreview(plan: List<VsgStudy.Point>) {
-        if (!::sweepLatticePreview.isInitialized) return
-        sweepLatticePreview.onNodeClick = null
-        sweepLatticePreview.setNodes(
-            plan.map { point ->
-                VsgLatticeView.Node(
-                    subset = point.subset,
-                    step = point.step,
-                    window = point.window,
-                    vsg = point.vsg,
-                    solved = true,
-                )
-            },
-        )
+        /** A frame row in the pick dialog: vertical padding and touch-target height. */
+        const val FRAME_ROW_PADDING_DP = 8f
+        const val FRAME_ROW_MIN_HEIGHT_DP = 48f
     }
 }

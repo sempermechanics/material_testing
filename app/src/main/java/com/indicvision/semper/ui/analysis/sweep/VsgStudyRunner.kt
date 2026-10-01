@@ -153,7 +153,7 @@ object VsgStudyRunner {
             val metrics = EngineStats.newMetrics()
             onProgress(Progress(index, total, index * PERCENT / maxOf(1, total), point, 0, -1f))
 
-            val solved = solve(refBytes, defBytes, params, point, buffer, metrics)
+            val solved = SemperEngine.solve(refBytes, defBytes, params.engineParams(point), buffer, metrics)
             // One bad node says nothing about the rest — a small subset can fail
             // where a larger one solves, and the plan starts at the smallest — so
             // skip and keep sweeping rather than abort. skipCodeFor also rejects a
@@ -254,29 +254,16 @@ object VsgStudyRunner {
         }
     }
 
-    /** One full-field solve of [point]. Returns the engine's point count, negative on failure. */
-    private fun solve(
-        refBytes: ByteArray,
-        defBytes: ByteArray,
-        params: Params,
-        point: VsgStudy.Point,
-        buffer: ByteBuffer,
-        metrics: FloatArray,
-    ): Int = SemperEngine.solve(
-        refBytes = refBytes,
-        defBytes = defBytes,
-        params = SemperEngine.Params(
-            roiX = params.roiX,
-            roiY = params.roiY,
-            roiW = params.roiW,
-            roiH = params.roiH,
-            step = point.step,
-            subset = point.subset,
-            strainWindow = point.vsg,
-            maskData = params.maskData,
-            use6x6 = params.use6x6,
-        ),
-        buffer = buffer,
-        metrics = metrics,
+    /** The engine settings for one full-field solve of [point] over this sweep's ROI and mask. */
+    private fun Params.engineParams(point: VsgStudy.Point) = SemperEngine.Params(
+        roiX = roiX,
+        roiY = roiY,
+        roiW = roiW,
+        roiH = roiH,
+        step = point.step,
+        subset = point.subset,
+        strainWindow = point.vsg,
+        maskData = maskData,
+        use6x6 = use6x6,
     )
 }

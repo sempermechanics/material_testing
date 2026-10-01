@@ -7,6 +7,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -129,7 +130,7 @@ class VsgLatticeView @JvmOverloads constructor(
 
     // Reused every draw — onDraw runs on each lattice interaction.
     private val columnX = HashMap<Int, Float>()
-    private val frame = Frame()
+    private val frame = RectF()
 
     private val gridPaint = PlotStyle.gridPaint(context)
     private val connectorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -180,7 +181,7 @@ class VsgLatticeView @JvmOverloads constructor(
         columns.forEachIndexed { i, subset ->
             columnX[subset] = left + (i + HALF_COLUMN) / columns.size * (right - left)
         }
-        frame.set(left, right, top, bottom)
+        frame.set(left, top, right, bottom)
         fun yFor(win: Int) = bottom - (win - winMin).toFloat() / (winMax - winMin) * (bottom - top)
 
         drawGrid(canvas, columnX, frame)
@@ -259,22 +260,7 @@ class VsgLatticeView @JvmOverloads constructor(
         return if (hypot(hit.x - x, hit.y - y) <= dp(TOUCH_RADIUS_DP)) hit.node else null
     }
 
-    /** Mutable so one instance can serve every draw. */
-    private class Frame(
-        var left: Float = 0f,
-        var right: Float = 0f,
-        var top: Float = 0f,
-        var bottom: Float = 0f,
-    ) {
-        fun set(l: Float, r: Float, t: Float, b: Float) {
-            left = l
-            right = r
-            top = t
-            bottom = b
-        }
-    }
-
-    private fun drawGrid(canvas: Canvas, columnX: Map<Int, Float>, f: Frame) {
+    private fun drawGrid(canvas: Canvas, columnX: Map<Int, Float>, f: RectF) {
         columnX.values.forEach { x -> canvas.drawLine(x, f.top, x, f.bottom, gridPaint) }
         textPaint.textAlign = Paint.Align.RIGHT
         textPaint.color = PlotStyle.ink(context)
@@ -334,7 +320,7 @@ class VsgLatticeView @JvmOverloads constructor(
         }
     }
 
-    private fun drawLabels(canvas: Canvas, columnX: Map<Int, Float>, f: Frame) {
+    private fun drawLabels(canvas: Canvas, columnX: Map<Int, Float>, f: RectF) {
         textPaint.color = PlotStyle.ink(context)
         textPaint.textAlign = Paint.Align.CENTER
         val lastColumn = columns.lastOrNull()
