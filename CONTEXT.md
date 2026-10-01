@@ -157,10 +157,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   steel and PMMA data, on a Pixel 6 too (2026-09-26; steel re-run under ΔL / L₀
   on 2026-09-29, TD-144); a concrete set fails as
   expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
-  Those checks ran on engine `v0.2.2`: under `v0.2.3` both real-data scripts
-  (`scripts/real_data_steel_tensile.py`, `scripts/real_data_pmma_bending.py`) are
-  owed a re-run on the emulator and a Pixel 6, and a Pixel 6 owes a repeat-solve
-  hash check (TD-65's row). The JVM tests use recorded arrays and stay green.
+  Both cases were re-run on `v0.2.3` on the emulator on 2026-10-01 and match
+  `v0.2.2` (steel E 148.853 GPa; PMMA slope 6800.26 N/mm at the same taps);
+  `RealPmmaBendingTest` now holds that run's deflections. The repeat solve is
+  bit-identical on a Pixel 6 (arm64); the real-data re-run there is still owed
+  (TD-65's row).
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
   counts frames off the curve).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and

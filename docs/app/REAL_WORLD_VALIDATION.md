@@ -313,8 +313,9 @@ Over all 33 frames: **RMSE 0.0074 mm**, 0.5% of the 1.396 mm peak; bias
 Both E values are within 1%. The app's Results showed "E from the graph ≈
 2.0 GPa (slope 6777.73 N/mm, R² 0.9993)" and "Average E ≈ 2.1 GPa (31 load
 steps)". One decimal hid the 5% gap between the two, so a modulus under
-10 GPa now shows two ("2.00" and "2.10"; `LabReportFormat.gpa`, TD-81). The
-slope is pinned in `RealPmmaBendingTest`.
+10 GPa now shows two ("2.00" and "2.10"; `LabReportFormat.gpa`, TD-81).
+`RealPmmaBendingTest` pins the slope, now from the engine v0.2.3 run at these
+taps: 6769.6 N/mm, 1.997 and 2.104 GPa ([below](#engine-v023-2026-10-01)).
 
 The handbook E of PMMA is 2.4–3.3 GPa. This beam is deep (span only 2.4
 times the depth), so shear adds to the deflection and W L³ / (48 δ I), which
@@ -497,6 +498,51 @@ The two agree. `compare` prints the same numbers except at frame 33, where
 ΔL / L₀ reads 20.826 mε on the phone and 20.827 on the emulator; the phone kept
 2 fewer of that frame's 21,651 points. Across all 40 `.dat` files no value
 differs by more than 0.001, which is arm64 against x86_64 floating point.
+
+## Engine v0.2.3 (2026-10-01)
+
+Engine v0.2.3 makes Path B deterministic (TD-65), so numbers can move within the
+old run-to-run spread. Cases 1 and 2 were run again on a Pixel_8 AVD (API 37,
+x86_64), debug build of `main` at `bd1e6f9a`, with the settings of the runs above.
+Steel used `steel_loads.csv` (one row per frame), not the timed log; the loads per
+frame are the same. The `.dat` files were read with each script's own functions.
+
+**Case 1, steel** (ROI 1960 × 298 at (20, 69), subset 19, step 5, window 5 points):
+
+| | v0.2.3 | 2026-09-29 run (v0.2.2), same AVD |
+|---|---:|---:|
+| Frames on the curve | 35 of 40 | 35 of 40 |
+| E, frames 1–26, ΔL / L₀ | **148.8530 GPa**, R² 0.99520 | 148.8531 GPa, R² 0.99520 |
+| Rp0.2 | 305.6 MPa at 4.03 mε | 305.6 MPa at 4.03 mε |
+| Peak | 435.50 MPa, frame 38, off the curve | the same |
+
+No `.dat` is bit-identical to the old run's, but the largest change in u is
+0.00085 px and in Exx 6.7 × 10⁻⁵, and frame 33 keeps one more point (21,652).
+ΔL / L₀ moves by at most 0.00057 mε from the values `RealSteelModulusTest`
+holds; that old run reproduces them exactly, so they stay.
+
+**Case 2, PMMA** (ROI 2260 × 510 at (60, 70), subset 27, step 5, window 9 points):
+
+| Taps | Slope | E from the graph | Average E |
+|---|---:|---:|---:|
+| This run's, 572.96 px | 6800.26 N/mm (the app shows 693.43 kg/mm), R² 0.9993 | 2.006 GPa | 2.113 GPa |
+| Pixel 6 run above (v0.2.2), 573 px | 6800.26 N/mm | 2.01 GPa | 2.11 GPa |
+| The 2026-09-24 run's, 570.76 px | 6769.6 N/mm | 1.997 GPa | 2.104 GPa |
+| The same taps, 2026-09-24 run (before v0.2.2) | 6777.7 N/mm | 2.000 GPa | 2.104 GPa |
+
+At the same taps the slope agrees with the v0.2.2 Pixel run. Against the
+2026-09-24 run, which predates v0.2.2's outlier rejection, the probe moves by at
+most 0.16 px, at frames 27–29, and under 0.03 px elsewhere. That shifts the slope
+by 0.12 %, past `RealPmmaBendingTest`'s 0.5 N/mm, so its deflections were replaced
+with this run's at the old taps. Both E values stay within 1 % of the authors'.
+The authors' comparison (deflection RMSE, displacement and strain) needs their
+749 MB archive and was not repeated.
+
+Not repeated on the Pixel 6: it carries a release build of this app, which the
+`.dat` pull (`run-as`) cannot read. The engine's arm64 determinism was checked
+there instead: `EnginePipelineSmokeTest.repeatSolve_bitIdentical`, through
+semperdic-app's debug build of the same engine, gave the same bytes on nine
+solves (TD-65).
 
 ## Case 3 — reinforced concrete beam in 3-point bending: expected to fail
 
