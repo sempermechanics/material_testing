@@ -25,7 +25,7 @@ class BusyTest {
 
     @Test
     fun `busy shows the spinner and disables the controls`() {
-        progress.setBusy(true, agree, decline)
+        progress.setBusy(true, agree, decline, idleVisibility = View.INVISIBLE)
 
         assertEquals(View.VISIBLE, progress.visibility)
         assertFalse(agree.isEnabled)
@@ -33,9 +33,9 @@ class BusyTest {
     }
 
     @Test
-    fun `idle keeps the spinner's space by default`() {
-        progress.setBusy(true, agree)
-        progress.setBusy(false, agree)
+    fun `idle can keep the spinner's space`() {
+        progress.setBusy(true, agree, idleVisibility = View.INVISIBLE)
+        progress.setBusy(false, agree, idleVisibility = View.INVISIBLE)
 
         assertEquals(View.INVISIBLE, progress.visibility)
         assertTrue(agree.isEnabled)

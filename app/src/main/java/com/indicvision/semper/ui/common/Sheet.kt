@@ -1,5 +1,3 @@
-@file:SuppressLint("InflateParams")
-
 package com.indicvision.semper.ui.common
 
 import android.annotation.SuppressLint
@@ -48,6 +46,7 @@ class Sheet internal constructor(
  * The layout is inflated with no parent, as every sheet did: the sheet's
  * container supplies the layout params.
  */
+@SuppressLint("InflateParams") // a sheet's content has no parent until setContentView
 fun inflateSheet(activity: Activity, @LayoutRes layout: Int, @StyleRes theme: Int = 0): Sheet {
     val dialog = BottomSheetDialog(activity, theme)
     val view = activity.layoutInflater.inflate(layout, null)

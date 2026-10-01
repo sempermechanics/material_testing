@@ -93,12 +93,12 @@ class DialogsTest {
         assertEquals(0, confirmed)
         assertFalse(cancel.isShowing)
 
-        val ok = Dialogs.confirm(activity, "Exit?", "Unsaved work is lost.", R.string.exit, R.string.cancel) {
-            confirmed++
-        }
+        val ok = Dialogs.confirm(activity, "Exit?", "Unsaved work is lost.", R.string.exit) { confirmed++ }
         assertEquals("Exit?", ok.title())
         assertEquals("Unsaved work is lost.", ok.body())
-        assertEquals(activity.getString(R.string.cancel), ok.label(DialogInterface.BUTTON_NEGATIVE))
+        assertEquals(activity.getString(R.string.action_cancel), ok.label(DialogInterface.BUTTON_NEGATIVE))
+        // The screens that used R.string.cancel lose no text by moving to action_cancel.
+        assertEquals(activity.getString(R.string.cancel), activity.getString(R.string.action_cancel))
         ok.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
         idle()
         assertEquals(1, confirmed)
@@ -108,7 +108,7 @@ class DialogsTest {
     @Test
     fun `an info button opens its dialog on each tap`() {
         val button = View(activity)
-        button.bindInfo(R.string.setting_max_frames, R.string.setting_max_frames_info)
+        button.bindInfo(activity, R.string.setting_max_frames, R.string.setting_max_frames_info)
 
         button.performClick()
         val first = ShadowDialog.getLatestDialog() as AlertDialog
@@ -125,7 +125,7 @@ class DialogsTest {
     @Test
     fun `sign-out confirm starts the run for this screen only when confirmed`() {
         var signedOut = 0
-        val dialog = AuthRoute.confirmSignOut(activity) { signedOut++ }
+        val dialog = SignOutRun.confirm(activity) { signedOut++ }
         assertEquals(activity.getString(R.string.logout_confirm_title), dialog.title())
         assertEquals(activity.getString(R.string.logout_confirm_body), dialog.body())
         assertEquals(activity.getString(R.string.action_sign_out), dialog.label(DialogInterface.BUTTON_POSITIVE))
@@ -135,7 +135,7 @@ class DialogsTest {
         idle()
         assertSame(SignOutRun.State.Idle, SignOutRun.state.value)
 
-        val again = AuthRoute.confirmSignOut(activity, R.string.action_log_out) { signedOut++ }
+        val again = SignOutRun.confirm(activity, R.string.action_log_out) { signedOut++ }
         assertEquals(activity.getString(R.string.action_log_out), again.label(DialogInterface.BUTTON_POSITIVE))
         again.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
         idle()

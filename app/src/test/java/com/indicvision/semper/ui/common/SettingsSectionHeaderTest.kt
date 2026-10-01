@@ -9,6 +9,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.indicvision.semper.R
+import com.indicvision.semper.databinding.SettingsSectionHeaderBinding
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -82,8 +83,12 @@ class SettingsSectionHeaderTest {
         )
     }
 
-    private fun shared(title: Int): View =
-        SettingsSectionHeader.inflate(LayoutInflater.from(activity), settings, title)
+    /** The shared header, inflated through its generated binding (the route wave 4 takes) and bound. */
+    private fun shared(title: Int): View {
+        val binding = SettingsSectionHeaderBinding.inflate(LayoutInflater.from(activity), settings, false)
+        SettingsSectionHeader.bind(binding, title)
+        return binding.root
+    }
 
     @Test
     fun `matches every 14dp copy`() {
@@ -112,12 +117,12 @@ class SettingsSectionHeaderTest {
     }
 
     @Test
-    fun `bind titles a header and finds its chevron under it`() {
-        val header = LayoutInflater.from(activity).inflate(SettingsSectionHeader.layout, settings, false)
+    fun `bind titles a header and describes its chevron`() {
+        val header = SettingsSectionHeaderBinding.inflate(LayoutInflater.from(activity), settings, false)
         SettingsSectionHeader.bind(header, R.string.storage_section)
 
         val title = activity.getString(R.string.storage_section)
-        assertEquals(title, header.findViewById<TextView>(R.id.tvSectionTitle).text.toString())
-        assertEquals(title, SettingsSectionHeader.chevron(header).contentDescription)
+        assertEquals(title, header.tvSectionTitle.text.toString())
+        assertEquals(title, header.ivSectionChevron.contentDescription)
     }
 }

@@ -152,20 +152,24 @@ class ThumbnailLoaderTest {
     }
 
     @Test
-    fun `the cache is an LRU that recycles what it evicts`() {
+    fun `the cache is an LRU that evicts without recycling`() {
         val loader = loader(maxCached = 2)
-        for (key in listOf("a", "b")) {
-            loader.bind(view(), key)
-            runNext()
-        }
+        val bView = view()
+        loader.bind(view(), "a")
+        runNext()
+        loader.bind(bView, "b")
+        runNext()
         val a = loader.cached("a")!!
         val b = loader.cached("b")!!
         loader.bind(view(), "a") // a is now the most recent
         loader.bind(view(), "c")
         runNext()
 
-        assertTrue(b.isRecycled)
+        // b is evicted, but a live view (a grid holds more than maxCached) may
+        // still draw it, so it stays usable.
         assertNull(loader.cached("b"))
+        assertFalse(b.isRecycled)
+        assertSame(b, bView.bitmap())
         assertFalse(a.isRecycled)
     }
 

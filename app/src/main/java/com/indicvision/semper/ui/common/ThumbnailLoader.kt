@@ -20,12 +20,20 @@ import java.util.concurrent.Executor
  * wave 1 fixed in `SessionListAdapter`). A decode that lands too late is
  * recycled.
  *
+ * **Eviction does not recycle.** An evicted bitmap may still be on screen: a
+ * grid can hold more live views than [maxCached], and RecyclerView reattaches
+ * cached views without rebinding them, so recycling on eviction would make the
+ * next draw throw "trying to use a recycled bitmap". An evicted entry is only
+ * dropped and left to the GC; [clear] is the one place that recycles.
+ *
  * Main thread only for [bind] and [clear].
  *
- * @param maxCached LRU size; an evicted bitmap is recycled. Home uses 24.
+ * @param maxCached LRU size; an evicted bitmap is dropped, not recycled. Home uses 24.
  * @param decode runs on [executor]: a [Decoded.Loaded] bitmap, or why there is none.
- *   It is not wrapped: a decode that can throw catches for itself (the media
- *   grid's `loadThumbnail` does), as each adapter's did.
+ *   The bitmap must be a fresh one the loader then owns — not shared, not
+ *   cached elsewhere — because a result that lands for a view that has moved
+ *   on is recycled. It is not wrapped: a decode that can throw catches for
+ *   itself (the media grid's `loadThumbnail` does), as each adapter's did.
  * @param placeholder what a view shows while it waits and when nothing loads
  *   (null drawable for Home and the media grid).
  * @param onFailed what a view shows when [decode] gave no bitmap; defaults to [placeholder].
@@ -50,11 +58,8 @@ class ThumbnailLoader<K : Any>(
     }
 
     private val cache = object : LinkedHashMap<K, Bitmap>(maxCached + 1, LOAD_FACTOR, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, Bitmap>?): Boolean {
-            if (size <= maxCached) return false
-            eldest?.value?.takeIf { !it.isRecycled }?.recycle()
-            return true
-        }
+        // Dropped, never recycled: the bitmap may still be drawn by a live view.
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, Bitmap>?): Boolean = size > maxCached
     }
 
     /**
@@ -110,7 +115,10 @@ class ThumbnailLoader<K : Any>(
         }
     }
 
-    /** Recycles and drops every cached bitmap (the list's screen is going away). */
+    /**
+     * Recycles and drops every cached bitmap. Only from the screen's
+     * `onDestroy` (or a sheet's dismiss), once no view can draw them again.
+     */
     fun clear() {
         for (bitmap in cache.values) {
             if (!bitmap.isRecycled) bitmap.recycle()

@@ -5,6 +5,8 @@ import android.app.Application
 import android.widget.Toast
 import com.indicvision.semper.R
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -33,6 +35,22 @@ class FeedbackTest {
 
         assertEquals("https://example.com/faq", ShadowToast.getTextOfLatestToast())
         assertEquals(Toast.LENGTH_LONG, ShadowToast.getLatestToast().duration)
+    }
+
+    /** The context the toast was built on; Toast keeps it in a private field. */
+    private fun Toast.builtOn(): Any? =
+        Toast::class.java.getDeclaredField("mContext").apply { isAccessible = true }.get(this)
+
+    @Test
+    fun `the toast is built on the application context, not the Activity`() {
+        Feedback.toast(activity, R.string.save_failed)
+        val fromRes = ShadowToast.getLatestToast().builtOn()
+        Feedback.toast(activity, "text", long = true)
+        val fromText = ShadowToast.getLatestToast().builtOn()
+
+        assertSame(activity.applicationContext, fromRes)
+        assertSame(activity.applicationContext, fromText)
+        assertNotSame(activity, fromRes)
     }
 
     @Test
