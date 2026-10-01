@@ -4,16 +4,20 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
+import com.indicvision.semper.ui.viewer.ResultViewerViewModel
 import com.indicvision.semper.ui.viewer.ShareCenter
 import com.indicvision.semper.ui.viewer.ShareExportBuilder
 import com.indicvision.semper.ui.viewer.ViewerArgs
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -30,6 +34,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
 import java.io.File
 import java.nio.ByteBuffer
@@ -279,6 +284,69 @@ class ShareCenterTest {
         repeat(5) { shadowOf(again.mainLooper).idle() }
         assertEquals(1, ShadowToast.shownToastCount())
         assertTrue("no second export", !dest.exists())
+    }
+
+    /**
+     * Starts a share job on [activity] that waits for [release], then hands
+     * back a staged CSV for the "Send to" sheet. Returns the job's id.
+     */
+    private fun heldShareJob(activity: ResultViewerActivity, release: CompletableDeferred<Unit>): String {
+        val app = activity.applicationContext
+        activity.shareExports.start("csv", "Exporting", destUri = null, direct = false) {
+            release.await()
+            val file = File(ShareExportBuilder.newJobDir(app.cacheDir), "held.csv").apply { writeText("a,b\n1,2\n") }
+            file to "text/csv"
+        }
+        shadowOf(activity.mainLooper).idle()
+        return ViewModelProvider(activity)[ResultViewerViewModel::class.java].exports.running.value.keys.single()
+    }
+
+    /** How many "Send to" sheets (SendToSheet) any viewer has shown in this test. */
+    private fun sendToSheetsShown(): Int =
+        ShadowDialog.getShownDialogs().count { it.findViewById<View>(R.id.rowSendSave) != null }
+
+    /** Releases the held job and waits for its result, then for anything else that follows. */
+    private fun releaseAndSettle(rebuilt: ResultViewerActivity, release: CompletableDeferred<Unit>) {
+        release.complete(Unit)
+        idleUntil(rebuilt) { sendToSheetsShown() > 0 }
+        repeat(5) { shadowOf(rebuilt.mainLooper).idle() }
+    }
+
+    @Test
+    fun `a share watched in its dialog across a rotation is offered once`() {
+        val controller = controller()
+        val activity = controller.get()
+        idleUntil(activity) { activity.buildShareSnapshot() != null }
+        val release = CompletableDeferred<Unit>()
+        heldShareJob(activity, release)
+        assertTrue("progress dialog up", ShadowDialog.getLatestDialog()?.isShowing == true)
+
+        val rebuilt = controller.recreate().get()
+        shadowOf(rebuilt.mainLooper).idle()
+        assertTrue("the rebuilt viewer shows the dialog again", ShadowDialog.getLatestDialog()?.isShowing == true)
+
+        releaseAndSettle(rebuilt, release)
+        assertEquals("the result reaches the Send-to sheet exactly once", 1, sendToSheetsShown())
+    }
+
+    @Test
+    fun `a share sent to the banner across a rotation is offered once`() {
+        val controller = controller()
+        val activity = controller.get()
+        idleUntil(activity) { activity.buildShareSnapshot() != null }
+        val release = CompletableDeferred<Unit>()
+        val id = heldShareJob(activity, release)
+        ViewModelProvider(activity)[ResultViewerViewModel::class.java].exports.sendToBackground(id)
+        shadowOf(activity.mainLooper).idle()
+        assertTrue(activity.shareBanner.contains(id))
+
+        val rebuilt = controller.recreate().get()
+        shadowOf(rebuilt.mainLooper).idle()
+        assertTrue("the rebuilt viewer's banner shows the job", rebuilt.shareBanner.contains(id))
+
+        releaseAndSettle(rebuilt, release)
+        assertEquals("the result reaches the Send-to sheet exactly once", 1, sendToSheetsShown())
+        assertTrue("off the banner once delivered", !rebuilt.shareBanner.contains(id))
     }
 
     @Test
