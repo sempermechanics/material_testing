@@ -461,7 +461,8 @@ object CloudRestore {
     }
 
     /** The on-disk shape of a restored session — where artifacts land. */
-    private data class Layout(val sessionDir: File, val rawDeformedDir: File)
+    @VisibleForTesting
+    internal data class Layout(val sessionDir: File, val rawDeformedDir: File)
 
     /**
      * Whether this backup's `Session.zip` holds only the restore payload.
@@ -759,10 +760,17 @@ object CloudRestore {
 
     /**
      * Where one artifact lands on disk, by role — the single mapping both
-     * restore paths share. Guards against zip-slip: an entry may not escape
-     * the session directory.
+     * restore paths share. Guards against zip-slip: an entry must resolve to a
+     * path strictly **inside** the session directory.
+     *
+     * The containment test compares whole path segments. A plain string-prefix
+     * test let `../<id>X/…` through, since a sibling directory whose name merely
+     * starts with this session's id shares its path as a prefix. An entry that
+     * escapes is a hostile or broken archive, so it fails as a
+     * [CorruptTransferException]: terminal, never retried.
      */
-    private fun destFor(role: String, name: String, layout: Layout): File {
+    @VisibleForTesting
+    internal fun destFor(role: String, name: String, layout: Layout): File {
         val dest = when {
             role == "raw" && name == "Reference.png" -> File(layout.sessionDir, "reference.png")
             role == "raw" -> File(layout.rawDeformedDir, name)
@@ -774,11 +782,14 @@ object CloudRestore {
             // beside the session for export.
             else -> File(layout.sessionDir, name)
         }
-        val canonical = dest.canonicalPath
-        require(
-            canonical.startsWith(layout.sessionDir.canonicalPath) ||
-                canonical.startsWith(layout.rawDeformedDir.canonicalPath),
-        ) { "Artifact path escapes session dir: $role/$name" }
+        // rawDeformedDir sits inside sessionDir, so the session dir is the only bound.
+        val root = layout.sessionDir.canonicalPath
+        if (!dest.canonicalPath.startsWith(root + File.separator)) {
+            throw CorruptTransferException(
+                "artifact_path_escapes_session",
+                IllegalArgumentException("$role/$name"),
+            )
+        }
         dest.parentFile?.mkdirs()
         return dest
     }
