@@ -139,6 +139,65 @@ Results land as `*-benchmarkData.json` under the module's
 `build/outputs/connected_android_test_additional_output/`. A worked before/after
 comparison is in [../perf/round2-main-vs-branch.md](../perf/round2-main-vs-branch.md).
 
+The benchmarks drive `:app`'s `applicationId`: `benchmark/build.gradle.kts` reads it
+from `:app`'s build into `BuildConfig.TARGET_PACKAGE` and the manifest's `<queries>`,
+so the same sources run in material_testing under its own id. CI's micro step and
+`scripts/startup_ab.py` read the same `applicationId` line of `app/build.gradle.kts`.
+
+### Real-device gates
+
+[`benchmark/gates.json`](../../benchmark/gates.json) turns a phone's reference medians
+into gates: a result fails when it is more than `margin` (30 %) over its reference.
+After a run on a phone:
+
+```bash
+python scripts/ci_test_report.py --gates benchmark/gates.json \
+  benchmark/build/outputs/connected_android_test_additional_output \
+  app/build/outputs/connected_android_test_additional_output
+```
+
+It prints `GATE ok …` per reference, an `::error` per breach, and exits 1 if any gate
+is over. Gates are keyed by the device the JSON records (`context.build.device`,
+`oriole` for a Pixel 6); a device the file does not list, CI's emulator included, is
+reported and never gated, and CI does not pass `--gates`. Without `--gates` the script
+only reports and always exits 0. **No device is listed yet:** Semper's Pixel 6
+references are owed (TD-155). material_testing's were taken on its own app and are not
+copied. Microbenchmark times are not gated: debuggable and not AOT-compiled, they are
+relative numbers only.
+
+**The phone's state ([ADR-008](../adr/ADR-008-startup-gates-phone-state.md)).**
+A startup time moves 30–40 % with heat and the charger (material_testing's TD-135),
+so a result is gated only in the state the references assume. `DeviceStateRule` (a
+`@get:Rule` in `StartupBenchmark`, `ScreenBenchmark`, `StartupHeadroomBenchmark` and
+`ViewerScrubBenchmark`) writes `com.indicvision.semper.benchmark-deviceState.json`
+next to the results: per test, the thermal status, battery temperature and level,
+charger, free memory and swap, at its start and end. A result whose test ran above
+`state.maxThermalStatus` (0) or off the charger (`state.requirePlugged`) prints
+`GATE not gated …` with the reason and does not count as a breach. A result with no
+state file (an APK from before the rule) is gated as before and says so. The three
+cold-start cases run `StartupBenchmark.COLD_START_ITERATIONS` = 15 iterations, not 5:
+one run's starts spread 404–478 ms, so a 5-start median moved with one or two slow ones.
+
+To add a phone, run both suites on the charger, at thermal status 0, with known app
+data, and add its codename under `devices` with those medians and the state in its
+`label`.
+
+**When a startup gate trips**, compare with the reference build on the same phone
+before calling it a regression:
+
+```bash
+python scripts/startup_ab.py --a ref/app-benchmark.apk --b new/app-benchmark.apk \
+  --bench benchmark/build/outputs/apk/benchmark/benchmark-benchmark.apk --out ab-run
+```
+
+It runs the three cold starts in A B B A A B B A order, pools each build's runs, and
+exits 1 if the candidate's median is more than `abMargin` (10 %) over the reference
+build's. It backs up the installed app first (`--package`, default `:app`'s
+`applicationId`) and reinstalls it at the end, uses `am instrument` (never the
+connected task), wakes the screen every 10 s, and stops without touching the phone if
+it is locked or another instrumentation is running. `--analyse ab-run` re-reads a
+finished run.
+
 ### Known coverage gaps
 
 Worth knowing before you assume something is protected:

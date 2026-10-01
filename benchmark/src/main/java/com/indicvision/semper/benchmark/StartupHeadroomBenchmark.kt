@@ -38,6 +38,10 @@ class StartupHeadroomBenchmark(private val compilationMode: CompilationMode) {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
+    /** The phone's thermal, charger and memory state around each test (TD-135). */
+    @get:Rule
+    val deviceState = DeviceStateRule()
+
     @Before
     fun onlyWhenAsked() {
         assumeTrue(InstrumentationRegistry.getArguments().getString(ARG) == "true")
@@ -55,7 +59,7 @@ class StartupHeadroomBenchmark(private val compilationMode: CompilationMode) {
     }
 
     companion object {
-        private const val PACKAGE = "com.indicvision.semper"
+        private const val PACKAGE = BuildConfig.TARGET_PACKAGE
         private const val ITERATIONS = 10
         private const val ARG = "startupHeadroom"
 
