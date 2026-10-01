@@ -6,6 +6,7 @@ import com.indicvision.semper.data.account.DevAuth
 import com.indicvision.semper.data.account.DeviceKeyManager
 import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
+import com.indicvision.semper.util.writeVia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -248,13 +249,13 @@ class IndicApi private constructor(context: Context) : CloudApi {
         val resp = signedRequest(idToken, "GET", "/v1/me/export", ByteArray(0))
         resp.use {
             if (it.code != HttpStatus.OK) failSigned(it)
-            val part = AtomicFiles.partOf(dest)
-            it.body.byteStream().use { input ->
-                part.outputStream().buffered().use { output -> input.copyTo(output) }
+            // Promoted only after the whole body landed: a truncated transfer
+            // must not look like a complete export.
+            AtomicFiles.writeVia(dest) { part ->
+                it.body.byteStream().use { input ->
+                    part.outputStream().buffered().use { output -> input.copyTo(output) }
+                }
             }
-            // Rename only after the whole body landed: a truncated transfer must
-            // not look like a complete export.
-            AtomicFiles.promote(part, dest)
         }
     }
 
@@ -709,14 +710,14 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * Resumable upload of [file] to a Drive [uploadUrl], in [chunkSize] chunks
      * (multiple of 256 KiB). Resumes from the server offset on reconnect. Bytes
      * go straight to Drive — not through the backend.
-     * Returns (driveFileId, localMd5Hex) — md5 is always set for `:complete`.
+     * Returns [DriveUpload.toPair]: (driveFileId, localMd5Hex), md5 always set for `:complete`.
      */
     override suspend fun uploadResumable(
         uploadUrl: String,
         file: java.io.File,
         chunkSize: Int,
         onBytes: (Long) -> Unit,
-    ): Pair<String, String> = drive.uploadResumable(uploadUrl, file, chunkSize, onBytes)
+    ): Pair<String, String> = drive.uploadResumable(uploadUrl, file, chunkSize, onBytes).toPair()
 
     companion object {
         // One connection pool + dispatcher shared by every IndicApi instance.

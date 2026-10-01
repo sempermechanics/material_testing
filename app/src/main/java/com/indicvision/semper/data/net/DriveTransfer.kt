@@ -103,7 +103,7 @@ internal class DriveTransfer(
      * (multiple of 256 KiB). Resumes from the server offset on reconnect. Bytes
      * go straight to Drive — not through the backend.
      *
-     * Returns (driveFileId, md5Hex) where md5 is always the local MD5 of [file]
+     * Returns the Drive file id with the local MD5 of [file], always
      * (Drive's completion JSON often omits `md5Checksum` under API v3 partial
      * responses; the backend requires a matching client md5 at `:complete`).
      */
@@ -112,7 +112,7 @@ internal class DriveTransfer(
         file: File,
         chunkSize: Int,
         onBytes: (Long) -> Unit = {},
-    ): Pair<String, String> = withContext(Dispatchers.IO) {
+    ): DriveUpload = withContext(Dispatchers.IO) {
         val total = file.length()
         // The buffer is allocated at chunk size — clamp what the server
         // sent so a misconfigured value can never OOM the app. Drive needs
@@ -128,7 +128,7 @@ internal class DriveTransfer(
         // whether Drive holds this file's bytes.
         val probe = probeStatus(uploadUrl, total)
         probe.result?.let { (driveId, _) ->
-            return@withContext driveId to Digests.md5Hex(file)
+            return@withContext DriveUpload(driveId, Digests.md5Hex(file))
         }
         var offset = probe.offset
 
@@ -161,7 +161,7 @@ internal class DriveTransfer(
                         HttpStatus.OK, HttpStatus.CREATED -> {
                             onBytes(n.toLong())
                             val (driveId, _) = IndicApiHttp.parseDriveResult(resp.body.string())
-                            return@withContext driveId to Digests.toHex(digest.digest())
+                            return@withContext DriveUpload(driveId, Digests.toHex(digest.digest()))
                         }
                         // Drive's resumable endpoint, not the Semper backend, so
                         // there is no X-Request-Id to correlate with.
@@ -177,7 +177,7 @@ internal class DriveTransfer(
         val finalized = probeStatus(uploadUrl, total).result
             ?: throw IOException("upload finished without a final Drive response")
         // Digest already covers the whole file from the prefix+chunk updates.
-        finalized.first to Digests.toHex(digest.digest())
+        DriveUpload(finalized.first, Digests.toHex(digest.digest()))
     }
 
     /** Hash [start, end) of [raf] into [digest] using [buf] as a scratch buffer. */

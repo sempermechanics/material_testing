@@ -16,6 +16,7 @@ object HttpStatus {
     const val CONFLICT = 409
     const val PAYLOAD_TOO_LARGE = 413
     const val RANGE_NOT_SATISFIABLE = 416
+    const val UNPROCESSABLE = 422
     const val TOO_MANY_REQUESTS = 429
     const val INTERNAL_ERROR = 500
     const val BAD_GATEWAY = 502
