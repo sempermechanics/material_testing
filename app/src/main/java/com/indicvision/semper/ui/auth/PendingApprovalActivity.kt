@@ -18,10 +18,10 @@ import com.indicvision.semper.data.AuthRepository
 import com.indicvision.semper.data.DeviceKeyManager
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.SignOutRun
 import com.indicvision.semper.ui.common.SupportMail
 import com.indicvision.semper.ui.home.HomeActivity
 import kotlinx.coroutines.launch
-import timber.log.Timber
 
 /**
  * Holding screen for authenticated accounts whose backend access_status is
@@ -68,6 +68,10 @@ class PendingApprovalActivity : AppCompatActivity() {
 
         tvLogout.setOnClickListener {
             showLogoutConfirmation()
+        }
+
+        SignOutRun.observe(this, onRunning = { setLoadingState(true) }) {
+            routeToLogin(getString(R.string.logout_success))
         }
     }
 
@@ -149,17 +153,13 @@ class PendingApprovalActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Runs in [SignOutRun] so a rotation cannot leave the session half
+     * cleared; [onCreate]'s observer routes to sign-in once it is done.
+     */
     private fun performLogout() {
-        setLoadingState(true)
-        lifecycleScope.launch {
-            try {
-                authRepo.signOut() // clears the local session token
-            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-                Timber.e(e, "Logout cleanup failed, forcing local exit.")
-            } finally {
-                routeToLogin(getString(R.string.logout_success))
-            }
-        }
+        val repo = authRepo
+        SignOutRun.start(PendingApprovalActivity::class.java) { repo.signOut() }
     }
 
     /** Back to sign-in with [message], the back stack cleared ([AuthRoute]). */

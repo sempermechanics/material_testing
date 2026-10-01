@@ -52,6 +52,7 @@ import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeleteChoiceDialog
 import com.indicvision.semper.ui.common.DeleteFeedback
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.SignOutRun
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.home.SessionOpenHelper
 import kotlinx.coroutines.Dispatchers
@@ -757,14 +758,15 @@ class SettingsActivity : AppCompatActivity() {
                 .setTitle(R.string.logout_confirm_title)
                 .setMessage(R.string.logout_confirm_body)
                 .setPositiveButton(R.string.action_sign_out) { _, _ ->
-                    lifecycleScope.launch {
-                        AuthRepository(this@SettingsActivity).signOut()
-                        AuthRoute.toSignIn(this@SettingsActivity)
-                    }
+                    // Outside this screen, so a rotation cannot half sign out;
+                    // the observer below routes once it is done.
+                    val repo = AuthRepository(applicationContext)
+                    SignOutRun.start(SettingsActivity::class.java) { repo.signOut() }
                 }
                 .setNegativeButton(R.string.action_cancel, null)
                 .show()
         }
+        SignOutRun.observe(this) { AuthRoute.toSignIn(this) }
     }
 
     // ── Formatting ───────────────────────────────────────────────────────
