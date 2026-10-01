@@ -299,7 +299,7 @@ class HomeActivity : AppCompatActivity() {
             val localCount = withContext(Dispatchers.IO) {
                 SessionStore.list(this@HomeActivity).size
             }
-            TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
+            QuotaStop.foldLocalCount(this@HomeActivity, localCount)
             if (TokenStore.isSessionLimitReached(this@HomeActivity)) openSessionLimitScreen()
         }
 
@@ -312,8 +312,8 @@ class HomeActivity : AppCompatActivity() {
      * Background uploads run in WorkManager, so a failure would otherwise be
      * silent (only the row badge changed). Watch the "upload" work tag and, when
      * a run ends in a terminal failure carrying a reason, tell the user with a
-     * Retry action. Quota-full is excluded — it has its own persistent screen and
-     * returns no reason.
+     * Retry action. Quota-full returns no reason: it opens the persistent limit
+     * screen instead.
      */
     private fun observeUploadFailures() {
         WorkManager.getInstance(this)
@@ -341,7 +341,13 @@ class HomeActivity : AppCompatActivity() {
                         WorkInfo.State.FAILED -> {
                             if (!shownUploadFailures.add(info.id)) return@forEach
                             val reason = info.outputData.getString(DicKeys.UPLOAD_FAIL_REASON)
-                                ?: return@forEach // no reason = handled elsewhere (e.g. quota)
+                            if (reason == null) {
+                                // No reason: the backend refused the backup for the
+                                // account's limit, and the worker forced the stop.
+                                // The worker no longer opens the limit screen itself.
+                                if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
+                                return@forEach
+                            }
                             showUploadFailure(reason)
                         }
                         else -> Unit
@@ -515,7 +521,7 @@ class HomeActivity : AppCompatActivity() {
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
-            TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
+            QuotaStop.foldLocalCount(this@HomeActivity, sessions.size)
         }
     }
 
