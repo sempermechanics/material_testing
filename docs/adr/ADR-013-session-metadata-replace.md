@@ -70,6 +70,9 @@ Two ways to reach the cloud copy were weighed:
   from semperdic-app only, so this change goes upstream first. Until then the
   app's send gets the gateway's 404 and leaves the row marked. Nothing is
   lost: the next reconcile after the deploy sends it.
+- The tensile curve correction (#111) takes the same path (TD-152, 2026-10-01):
+  `setCurveCorrection` sets the mark, the viewer queues the send, and
+  `clearMetadataStale` compares the curve correction as well as the geometry.
 - A rename still does not reach the cloud copy. It could set the same mark,
   but the name that matters on another phone is the local one after a
   restore, and a cloud-only row is named from `specimen`. Left as it is.
