@@ -159,8 +159,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
   Both cases were re-run on `v0.2.3` on the emulator on 2026-10-01 and match
   `v0.2.2` (steel E 148.853 GPa; PMMA slope 6800.26 N/mm at the same taps);
-  `RealPmmaBendingTest` now holds that run's deflections. A Pixel 6 still owes
-  the same re-run and a repeat-solve hash check (TD-65's row).
+  `RealPmmaBendingTest` now holds that run's deflections. The repeat solve is
+  bit-identical on a Pixel 6 (arm64); the real-data re-run there is still owed
+  (TD-65's row).
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
   counts frames off the curve).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and

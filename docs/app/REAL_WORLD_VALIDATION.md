@@ -539,7 +539,10 @@ The authors' comparison (deflection RMSE, displacement and strain) needs their
 749 MB archive and was not repeated.
 
 Not repeated on the Pixel 6: it carries a release build of this app, which the
-`.dat` pull (`run-as`) cannot read.
+`.dat` pull (`run-as`) cannot read. The engine's arm64 determinism was checked
+there instead: `EnginePipelineSmokeTest.repeatSolve_bitIdentical`, through
+semperdic-app's debug build of the same engine, gave the same bytes on nine
+solves (TD-65).
 
 ## Case 3 — reinforced concrete beam in 3-point bending: expected to fail
 
