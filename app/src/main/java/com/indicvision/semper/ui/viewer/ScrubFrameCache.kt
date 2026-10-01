@@ -26,6 +26,8 @@ class ScrubFrameCache(
         val step: Int,
         val customMin: Float?,
         val customMax: Float?,
+        /** Drawn at the displaced positions, over the frame's own photo. */
+        val displaced: Boolean = false,
     )
 
     data class HeatEntry(

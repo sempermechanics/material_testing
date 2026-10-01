@@ -63,10 +63,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import timber.log.Timber
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Results browser: renders displacement/strain heatmaps over the reference
- * image, with frame scrubbing, tap-to-probe readings, custom color scales,
+ * Results browser: renders each frame's displacement/strain heatmap over that
+ * frame's own photo, drawn where the points moved to (the reference when the
+ * photo is not on disk), with frame scrubbing, tap-to-probe readings, custom color scales,
  * and all exports (PDF/CSV/PNG/ZIP via [ShareCenter]).
  */
 @MainThread
@@ -152,8 +154,23 @@ class ResultViewerActivity : AppCompatActivity() {
     internal var roiW = 0
     internal var roiH = 0
 
+    /** The reference at display size. Exports and the report read it; it is never a frame's photo. */
     internal var cachedBaseImage: Bitmap? = null
     private var cachedHeatmap: Bitmap? = null
+
+    /**
+     * Each frame's own photo by position, looked up off the main thread in
+     * [readFrameDat]; "" when it is not on disk. See [onFramePhoto].
+     */
+    private val framePhotos = ConcurrentHashMap<Int, String>()
+
+    /** The frame photo under the map now, and its path; null while the reference is shown. */
+    private var framePhotoBitmap: Bitmap? = null
+    private var framePhotoPath: String? = null
+    private var framePhotoJob: Job? = null
+
+    /** True once [cachedBaseImage] is the image under the map. */
+    private var referenceShown = false
     internal var currentTypeString: String
         get() = viewerVm.currentTypeString
         set(value) {
@@ -593,6 +610,7 @@ class ResultViewerActivity : AppCompatActivity() {
         visualizationJob?.cancel()
         scrubDebounceJob?.cancel()
         refDecodeJob?.cancel()
+        framePhotoJob?.cancel()
         summary.cancel()
         scrubCache.clear(except = cachedHeatmap)
         inspect.clearSpatialIndex()
@@ -623,7 +641,8 @@ class ResultViewerActivity : AppCompatActivity() {
                         return@withContext
                     }
                     cachedBaseImage = bmp
-                    imgMain.setImageBitmap(bmp)
+                    // A frame already on its own photo keeps it.
+                    if (!onFramePhoto) showReferenceBase()
                 }
             }
         }
@@ -763,6 +782,9 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun readFrameDat(index: Int): FloatArray? {
         Trace.beginSection("Semper.viewer.decodeDat")
         try {
+            // Off the main thread, before the frame can be shown: which photo it
+            // goes on decides how its map is drawn.
+            framePhotos.getOrPut(index) { deformedImagePathAt(index).orEmpty() }
             val file = batchFiles[index]
             val data = DicResult.decodeDatFile(file)
             if (data == null) {
@@ -791,6 +813,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // for the new frame. Scrubbing large frames no longer pays for an unused index.
         inspect.clearSpatialIndex()
         updateHeatmapFitBounds(data)
+        showFrameBase(index)
         val displayName = frameDisplayName(index)
         if (!showingSummary) {
             tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
@@ -806,7 +829,9 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /**
      * Rest-fit the coloured region: custom ROI if set, else accepted-point
-     * bounds for this frame, else the full specimen.
+     * bounds for this frame, else the full specimen. On the frame's own photo
+     * the box also takes in where the points moved to, so the displaced map
+     * stays in view.
      */
     private fun updateHeatmapFitBounds(data: FloatArray?) {
         if (imgW <= 0 || imgH <= 0) return
@@ -819,7 +844,83 @@ class ResultViewerActivity : AppCompatActivity() {
             roiH,
             accepted = data?.let { DicResult.acceptedPointsBounds(it) },
         )
+        val moved = data?.takeIf { onFramePhoto }?.let { DicResult.acceptedPointsBounds(it, displaced = true) }
+        if (moved != null) {
+            box[HeatmapFit.LEFT] = minOf(box[HeatmapFit.LEFT], moved[HeatmapFit.LEFT])
+            box[HeatmapFit.TOP] = minOf(box[HeatmapFit.TOP], moved[HeatmapFit.TOP])
+            box[HeatmapFit.RIGHT] = maxOf(box[HeatmapFit.RIGHT], moved[HeatmapFit.RIGHT])
+            box[HeatmapFit.BOTTOM] = maxOf(box[HeatmapFit.BOTTOM], moved[HeatmapFit.BOTTOM])
+        }
         imgMain.setFitBounds(box[0], box[1], box[2], box[3])
+    }
+
+    /** The photo of the frame at [position] when it is on disk, else null (the reference is shown). */
+    private fun framePhotoPathFor(position: Int): String? = framePhotos[position]?.ifEmpty { null }
+
+    /**
+     * True when the frame on screen is drawn over its own photo, with its map
+     * at the displaced positions. False shows the reference under the
+     * reference-position map: a frame whose photo is gone (a restore without
+     * it, storage reclaim) still lines up.
+     */
+    internal val onFramePhoto: Boolean get() = framePhotoPathFor(currentFrameIndex) != null
+
+    /**
+     * Puts the photo of the frame at [index] under its map — or the reference,
+     * when that frame has none. Decoded off the main thread at display size,
+     * like the reference; a photo that fails to decode drops the frame back to
+     * the reference and its map with it.
+     */
+    private fun showFrameBase(index: Int) {
+        framePhotoJob?.cancel()
+        val path = framePhotoPathFor(index)
+        if (path == null) {
+            showReferenceBase()
+            return
+        }
+        if (path == framePhotoPath) return
+        val reqW = imgMain.width.takeIf { it > 0 }?.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
+            ?: VisualizationEngine.DISPLAY_MAX_EDGE
+        val reqH = imgMain.height.takeIf { it > 0 }?.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
+            ?: VisualizationEngine.DISPLAY_MAX_EDGE
+        framePhotoJob = lifecycleScope.launch {
+            val bmp = withContext(Dispatchers.IO) {
+                BitmapDecode.decodeFileForView(path, reqW, reqH, rawWidth = imgW, rawHeight = imgH)
+            }
+            if (isDestroyed || isFinishing) {
+                bmp?.recycle()
+                return@launch
+            }
+            if (bmp == null) {
+                Timber.w("Frame %d photo did not decode; showing it on the reference", index)
+                framePhotos[index] = ""
+                val data = rawData
+                if (currentFrameIndex == index && data != null) applyLoadedFrame(index, data)
+                return@launch
+            }
+            if (framePhotoPathFor(currentFrameIndex) != path) {
+                bmp.recycle()
+                return@launch
+            }
+            val previous = framePhotoBitmap
+            framePhotoBitmap = bmp
+            framePhotoPath = path
+            imgMain.setImageBitmap(bmp)
+            referenceShown = false
+            previous?.recycle()
+        }
+    }
+
+    /** Puts the reference back under the map, once it is decoded, and frees any frame photo. */
+    private fun showReferenceBase() {
+        val reference = cachedBaseImage ?: return
+        val previous = framePhotoBitmap
+        if (previous == null && framePhotoPath == null && referenceShown) return
+        framePhotoBitmap = null
+        framePhotoPath = null
+        imgMain.setImageBitmap(reference)
+        referenceShown = true
+        previous?.recycle()
     }
 
     /**
@@ -897,12 +998,14 @@ class ResultViewerActivity : AppCompatActivity() {
         val bounds = scaleBoundsFor(index)
         val forceMin = bounds?.first
         val forceMax = bounds?.second
+        val displaced = onFramePhoto
         val heatKey = ScrubFrameCache.HeatKey(
             frame = currentFrameIndex,
             field = index,
             step = step,
             customMin = forceMin,
             customMax = forceMax,
+            displaced = displaced,
         )
 
         val frameAtStart = currentFrameIndex
@@ -921,16 +1024,29 @@ class ResultViewerActivity : AppCompatActivity() {
             // Warm the stats/extrema off the main thread, next to the heatmap render,
             // so the scrub settle never pays the O(n)+sort on the UI thread.
             val metrics = fieldMetricsFor(frameAtStart, index, data)
-            val result = VisualizationEngine.generateHeatmap(
-                data,
-                imgW,
-                imgH,
-                index,
-                step,
-                forceMin,
-                forceMax,
-                maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
-            )
+            val result = if (displaced) {
+                VisualizationEngine.generateDeformedHeatmap(
+                    data,
+                    imgW,
+                    imgH,
+                    index,
+                    step,
+                    forceMin,
+                    forceMax,
+                    maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+                )
+            } else {
+                VisualizationEngine.generateHeatmap(
+                    data,
+                    imgW,
+                    imgH,
+                    index,
+                    step,
+                    forceMin,
+                    forceMax,
+                    maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+                )
+            }
 
             val heatmap = result.first
             val actualMin = result.second
