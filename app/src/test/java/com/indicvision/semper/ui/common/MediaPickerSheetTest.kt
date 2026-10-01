@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.R
+import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -51,6 +52,7 @@ class MediaPickerSheetTest {
             sortOrder: String?,
         ): Cursor {
             lastSelectionArgs = selectionArgs?.toList().orEmpty()
+            queriedOnMain = Looper.myLooper() == Looper.getMainLooper()
             val cursor = MatrixCursor(
                 arrayOf(
                     MediaStore.Files.FileColumns._ID,
@@ -74,6 +76,7 @@ class MediaPickerSheetTest {
         companion object {
             var rows: List<Row> = emptyList()
             var lastSelectionArgs: List<String> = emptyList()
+            var queriedOnMain: Boolean? = null
         }
     }
 
@@ -94,6 +97,7 @@ class MediaPickerSheetTest {
             FakeMediaProvider.Row(13, "clip.mp4", "video/mp4", VIDEO),
         )
         FakeMediaProvider.lastSelectionArgs = emptyList()
+        FakeMediaProvider.queriedOnMain = null
     }
 
     private fun grantGallery() {
@@ -107,6 +111,8 @@ class MediaPickerSheetTest {
             requestPermission = { permissionRequests++ },
             onBrowseSaf = { safBrowses++ },
             onPicked = { picks += it },
+            // Inline, so each test sees the grid as soon as the main thread idles.
+            queryDispatcher = Dispatchers.Unconfined,
         )
         idle()
         return ShadowDialog.getLatestDialog()
@@ -164,7 +170,14 @@ class MediaPickerSheetTest {
 
     @Test
     fun `a granted permission reloads the grid`() {
-        val picker = MediaPickerSheet.show(activity, MediaSourceChooser.Mode.DEFORMED, {}, {}, {})
+        val picker = MediaPickerSheet.show(
+            activity,
+            MediaSourceChooser.Mode.DEFORMED,
+            {},
+            {},
+            {},
+            queryDispatcher = Dispatchers.Unconfined,
+        )
         idle()
         val sheet = ShadowDialog.getLatestDialog()
         assertEquals(0, sheet.adapter().itemCount)
@@ -188,6 +201,23 @@ class MediaPickerSheetTest {
             sheet.findViewById<TextView>(R.id.tvMediaEmpty).text.toString(),
         )
         assertEquals(View.GONE, sheet.findViewById<View>(R.id.btnMediaAllow).visibility)
+    }
+
+    @Test
+    fun `the gallery is queried off the main thread`() {
+        grantGallery()
+        MediaPickerSheet.show(activity, MediaSourceChooser.Mode.HOME_REFERENCE, {}, {}, {})
+        val sheet = ShadowDialog.getLatestDialog()
+
+        val deadline = System.currentTimeMillis() + 10_000L
+        while (sheet.adapter().itemCount == 0) {
+            idle()
+            check(System.currentTimeMillis() < deadline) { "the grid never filled" }
+            Thread.sleep(10)
+        }
+
+        assertEquals(false, FakeMediaProvider.queriedOnMain)
+        assertEquals(3, sheet.adapter().itemCount)
     }
 
     // ── What is listed ───────────────────────────────────────────────────────
