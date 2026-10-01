@@ -24,6 +24,7 @@ build it. This page routes you to the rest.
 | Build, test or bump the engine pin | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | Know why CI is red / how tiers work | [ops/CI.md](ops/CI.md) |
 | Cut a release | [ops/RELEASING.md](ops/RELEASING.md) |
+| Sync material_testing, or port a fix from it | [ops/FORK_SYNC.md](ops/FORK_SYNC.md) |
 | Map GitHub Environments / secrets / main hygiene | [ops/ENVIRONMENTS.md](ops/ENVIRONMENTS.md) |
 | Production launch checklist | [ops/PRODUCTION_READINESS_GATE.md](ops/PRODUCTION_READINESS_GATE.md) |
 | Tech-debt status / deferred gates | [ops/TECH_DEBT.md](ops/TECH_DEBT.md) |

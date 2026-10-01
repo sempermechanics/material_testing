@@ -327,9 +327,14 @@ object VideoFrameExtractor {
         }
     }
 
+    /**
+     * The frame at [timeUs], decoding forward from the sync frame before it;
+     * the sync frame itself only when that fails. Sync-first would return one
+     * I-frame for every sample in a GOP.
+     */
     private fun getFrameHybrid(retriever: MediaMetadataRetriever, timeUs: Long): Bitmap? =
-        retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-            ?: retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+        retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+            ?: retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
 
     private fun compressPngToBytes(frame: Bitmap): ByteArray =
         ByteArrayOutputStream().use { out ->

@@ -320,6 +320,8 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core.ktx)
+    // WorkManagerTestInitHelper: Robolectric tests that launch HomeActivity.
+    testImplementation(libs.androidx.work.testing)
     androidTestImplementation(libs.androidx.junit)
     // 3.6.1 crashes on API 37 (Espresso's InputManagerEventInjectionStrategy
     // calls the hidden InputManager.getInstance, removed in Android 17).

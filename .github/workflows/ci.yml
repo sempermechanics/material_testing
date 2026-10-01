@@ -156,10 +156,18 @@ jobs:
           # ignores `base` and falls back to the Files API (and warns).
           token: ''
           base: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          # A file matches a filter on any of its patterns unless a '!' pattern
+          # excludes it. The default ('some') made app's '!app/src/main/cpp/**'
+          # match every file outside cpp/, so a docs-only PR ran Tier 1
+          # (material_testing TD-96).
+          predicate-quantifier: 'some-with-excludes'
           filters: |
             app:
               - 'app/**'
               - '!app/src/main/cpp/**'
+              # The benchmark module builds with the app; without it a
+              # benchmark-only PR ran nothing once TD-96 was fixed.
+              - 'benchmark/**'
               - 'gradle/**'
               - '*.gradle.kts'
               - 'gradle.properties'
@@ -192,6 +200,8 @@ jobs:
               - 'app/src/main/java/com/indicvision/semper/data/UploadWorkOutcomes.kt'
             ci_workflow:
               - '.github/workflows/ci.yml'
+              # Tier 3 and the benchmark tier run it to report results.
+              - 'scripts/ci_test_report.py'
             android_test:
               - 'app/src/androidTest/**'
             packaging:
@@ -535,6 +545,10 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
+      # versionCode 1, below every release: this APK is signed with the release
+      # key, so with the run number (hundreds, against release.yml's tens) it
+      # installed over a release and Android then refused every real release
+      # until an uninstall (TD-148 in material_testing; docs/ops/RELEASING.md).
       - name: Build signed release APK
         env:
           SIGNING_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' && 'app/release.keystore' || '' }}
@@ -546,7 +560,7 @@ jobs:
           :app:assembleRelease
           -PabiFilters=arm64-v8a
           -PnativeCompilerLauncher=ccache
-          -PversionCode="${{ github.run_number }}"
+          -PversionCode=1
 
       - uses: ./.github/actions/check-arm64-so
 

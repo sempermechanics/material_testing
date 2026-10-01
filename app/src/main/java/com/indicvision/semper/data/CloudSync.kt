@@ -175,6 +175,9 @@ object CloudSync {
             } else if (requeue && record.syncState == SessionRecord.SyncState.PENDING) {
                 // KEEP leaves an upload already queued or running alone.
                 queueUpload(appContext, record.id)
+            } else if (claimsSynced && record.metadataStale) {
+                // Backed up, but changed since: a send that gave up (ADR-013).
+                queueMetadata(appContext, record.id)
             }
         }
         return repaired
@@ -183,6 +186,10 @@ object CloudSync {
     /** How a reconcile queues an upload; tests swap it to see what was queued. */
     @VisibleForTesting
     internal var queueUpload: (Context, String) -> Unit = ::enqueueUpload
+
+    /** How a reconcile queues a metadata send ([SessionMetadataSync]); tests swap it. */
+    @VisibleForTesting
+    internal var queueMetadata: (Context, String) -> Unit = SessionMetadataSync::enqueue
 
     /**
      * Fetch and cache product limits (quota ceiling, frame cap) from cloud config.
