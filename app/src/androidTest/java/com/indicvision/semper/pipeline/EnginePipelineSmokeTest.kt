@@ -229,6 +229,28 @@ class EnginePipelineSmokeTest {
         assertFieldMatchesWarp(res, m, tolPx = 0.4f, minCoverageFrac = 0.10f)
     }
 
+    @Test
+    fun repeatSolve_bitIdentical() {
+        // TD-65: the same inputs solved again on the same device must give the
+        // same bytes. A rotation leaves the border cells outside the AKAZE
+        // mesh to the threaded Path B flood fill, which used to pick each
+        // cell's initial guess by thread timing.
+        val ref = makeReference().toPngBytes()
+        val def = warp(makeReference(), Matrix().apply { setRotate(1.0f, CX, CY) }).toPngBytes()
+        val first = solve(ref, def)
+        repeat(2) { run ->
+            val again = solve(ref, def)
+            assertTrue(
+                "Run ${run + 1}: ${again.validPoints} points vs ${first.validPoints}",
+                again.validPoints == first.validPoints,
+            )
+            assertTrue("Run ${run + 1}: packed field differs", again.data.contentEquals(first.data))
+            // Slots 3 and 4: points solved by Path A and by Path B.
+            assertTrue("Run ${run + 1}: path split differs", again.metrics[3] == first.metrics[3])
+            assertTrue("Run ${run + 1}: path split differs", again.metrics[4] == first.metrics[4])
+        }
+    }
+
     // ── Contract characterization (pins behaviour before any refactor) ────────
 
     /** Bare compute call, returning the raw engine code (may be negative). */
