@@ -43,6 +43,7 @@ object AnalysisVideoExtractHelper {
         tvResult: TextView,
         overlayHelper: ComputeOverlayHelper,
         preferKeyframes: Boolean = true,
+        rotationDegrees: Int? = null,
         onApplied: (AppliedResult) -> Unit,
         onFinished: () -> Unit,
     ): Job {
@@ -60,6 +61,7 @@ object AnalysisVideoExtractHelper {
                     maxFrames = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity)),
                     cacheDir = cacheDir,
                     preferKeyframes = preferKeyframes,
+                    rotationDegrees = rotationDegrees,
                     onProgress = { percent, status ->
                         overlayHelper.update(percent = percent.toFloat(), status = status)
                     },

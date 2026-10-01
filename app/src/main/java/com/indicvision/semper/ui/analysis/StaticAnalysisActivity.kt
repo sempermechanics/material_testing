@@ -935,7 +935,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val preferKeyframes = toggleMode.checkedButtonId == R.id.btnModeKeyframes
             val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
             val (startMs, endMs) = segmentMs()
-            extractVideoFrames(uri, fpsExtract, startMs, endMs, preferKeyframes)
+            extractVideoFrames(uri, fpsExtract, startMs, endMs, preferKeyframes, meta.rotationDegrees)
         }
         sheet.show()
     }
@@ -947,6 +947,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         startMs: Long,
         endMs: Long,
         preferKeyframes: Boolean = true,
+        rotationDegrees: Int? = null,
     ) {
         if (isProcessing) return
         isProcessing = true
@@ -962,6 +963,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             tvResult = tvResult,
             overlayHelper = overlayHelper,
             preferKeyframes = preferKeyframes,
+            rotationDegrees = rotationDegrees,
             onApplied = { applied ->
                 applied.refPreview?.let { refPreviewBmp = it }
                 wizardSlots.refreshRefSlot(refPreviewBmp)
