@@ -23,7 +23,11 @@ data class ImageSize(val width: Int, val height: Int) {
     /** The `width to height` pair the decoders and frame-size maps use. */
     fun toPair(): Pair<Int, Int> = width to height
 
-    /** Writes `imageWidth` / `imageHeight` onto a `metadata.json` engine object, as `engineJson` does. */
+    /**
+     * Writes `imageWidth` / `imageHeight` onto a `metadata.json` engine object.
+     * It appends just these two keys: `engineJson` writes them between
+     * `use6x6` and `roi`, so a caller rebuilding that object must keep its order.
+     */
     fun putInto(engine: JSONObject): JSONObject = engine
         .put(JSON_WIDTH, width)
         .put(JSON_HEIGHT, height)
@@ -50,6 +54,10 @@ data class ImageSize(val width: Int, val height: Int) {
 /**
  * The two Intent-extra pairs an [ImageSize] travels under. The key strings are
  * the existing [DicKeys]; an Intent already in a back stack keeps reading.
+ *
+ * Write-only: the viewer reads its pair through `ViewerArgs.Reader` (extra,
+ * then the session record, then a default, logged), which a plain read cannot
+ * replace. The ROI editor's read is [getRoiEditorImageSize].
  */
 enum class ImageSizeExtras(val widthKey: String, val heightKey: String) {
     /** Viewer launch (`ViewerArgs`): [DicKeys.IMG_W] / [DicKeys.IMG_H]. */
@@ -63,10 +71,13 @@ enum class ImageSizeExtras(val widthKey: String, val heightKey: String) {
     fun put(intent: Intent, size: ImageSize): Intent = intent
         .putExtra(widthKey, size.width)
         .putExtra(heightKey, size.height)
-
-    /** Reads both extras; an absent one reads [default]'s side, as `getIntExtra(key, 0)` does today. */
-    fun get(intent: Intent, default: ImageSize = ImageSize.UNKNOWN): ImageSize = ImageSize(
-        intent.getIntExtra(widthKey, default.width),
-        intent.getIntExtra(heightKey, default.height),
-    )
 }
+
+/**
+ * The reference size the wizard handed the ROI editor; an absent extra reads 0,
+ * as `RoiDrawActivity.onCreate` reads it.
+ */
+fun Intent.getRoiEditorImageSize(): ImageSize = ImageSize(
+    getIntExtra(ImageSizeExtras.ROI_EDITOR.widthKey, 0),
+    getIntExtra(ImageSizeExtras.ROI_EDITOR.heightKey, 0),
+)

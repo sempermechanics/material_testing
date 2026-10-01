@@ -9,8 +9,8 @@ import com.indicvision.semper.field.DicParams
  * points), with the engine's [code]. The construction `AnalysisViewModel` and
  * `StaticAnalysisActivity` each spell out today.
  */
-fun SkippedNode.Companion.of(point: VsgStudy.Point, code: Int): SkippedNode =
-    SkippedNode(subset = point.subset, step = point.step, strainWindow = point.vsg, code = code)
+fun VsgStudy.Point.toSkippedNode(code: Int): SkippedNode =
+    SkippedNode(subset = subset, step = step, strainWindow = vsg, code = code)
 
 /** The engine parameters of this combination: its strain window as the VSG in px the engine is handed. */
 fun VsgStudy.Point.toDicParams(): DicParams = DicParams(subset = subset, step = step, strainWindow = vsg)

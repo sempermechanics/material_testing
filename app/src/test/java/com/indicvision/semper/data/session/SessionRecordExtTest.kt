@@ -10,22 +10,15 @@ import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.fixtures.sessionRecord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.io.File
 
 /** The typed views over a [SessionRecord] read exactly the fields the code reads today. */
 @RunWith(RobolectricTestRunner::class) // org.json for the metadata comparison
 @Config(application = Application::class)
 class SessionRecordExtTest {
-
-    @get:Rule
-    val tmp = TemporaryFolder()
 
     private val sweep = sessionRecord(
         subset = 41,
@@ -74,7 +67,12 @@ class SessionRecordExtTest {
         assertFalse(single.frameParams.isSweep)
     }
 
-    /** Home's `isCloudOnly`: `!hasLocalData && (syncState == SYNCED || cloudSessionId.isNotBlank())`. */
+    /**
+     * A copy of Home's private rule (`SessionSelectionController.isCloudOnly` /
+     * `hasCloudCopy`, inlined again in `HomeActivity.openSession`):
+     * `!hasLocalData && (syncState == SYNCED || cloudSessionId.isNotBlank())`.
+     * Keep it in step with those until wave 4 points them at [isRestorable].
+     */
     private fun homeIsCloudOnly(r: SessionRecord, hasLocal: Boolean) =
         !hasLocal && (r.syncState == SyncState.SYNCED || r.cloudSessionId.isNotBlank())
 
@@ -92,23 +90,14 @@ class SessionRecordExtTest {
     }
 
     @Test
-    fun `hasCloudBackup differs from hasCloudCopy only for pending or failed rows without an id`() {
+    fun `isKnownInCloud differs from hasCloudCopy only for pending or failed rows without an id`() {
         for (state in SyncState.entries) {
             for (id in listOf("", "c1")) {
                 val r = sessionRecord(syncState = state, cloudSessionId = id)
                 val differs = id.isEmpty() && (state == SyncState.PENDING || state == SyncState.FAILED)
-                assertEquals("$state '$id'", differs, r.hasCloudBackup != r.hasCloudCopy)
+                assertEquals("$state '$id'", differs, r.isKnownInCloud != r.hasCloudCopy)
             }
         }
-    }
-
-    @Test
-    fun `isRestorable reads the disk by default`() {
-        val dir = tmp.newFolder("s1")
-        val synced = sessionRecord(sessionDir = dir.path, syncState = SyncState.SYNCED)
-        assertTrue(synced.isRestorable())
-        File(dir, "frame_0000.dat").writeBytes(ByteArray(32))
-        assertFalse(synced.isRestorable())
     }
 
     @Test

@@ -5,8 +5,8 @@ import com.indicvision.semper.data.net.DriveUpload
 import com.indicvision.semper.data.session.SkippedNode
 import com.indicvision.semper.report.BakedHeatmap
 import com.indicvision.semper.ui.analysis.sweep.VsgStudy
-import com.indicvision.semper.ui.analysis.sweep.of
 import com.indicvision.semper.ui.analysis.sweep.toDicParams
+import com.indicvision.semper.ui.analysis.sweep.toSkippedNode
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -76,7 +76,7 @@ class SmallValueTypesTest {
     fun `a skipped node of a sweep point records its VSG in px, as the view model builds it`() {
         val point = VsgStudy.Point(subset = 41, step = 10, window = 5)
         val code = -2
-        assertEquals(SkippedNode(point.subset, point.step, point.vsg, code), SkippedNode.of(point, code))
+        assertEquals(SkippedNode(point.subset, point.step, point.vsg, code), point.toSkippedNode(code))
         assertEquals(41, point.vsg)
         assertEquals(DicParams(41, 10, 41), point.toDicParams())
     }

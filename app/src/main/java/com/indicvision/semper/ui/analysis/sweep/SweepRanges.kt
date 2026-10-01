@@ -21,16 +21,25 @@ data class SweepRanges(
     val stepDenominator: Int = VsgStudy.DEFAULT_STEP_DENOM,
 ) {
 
-    /** The combinations this sweep solves: [VsgStudy.plan] over these axes. */
-    fun plan(): List<VsgStudy.Point> = VsgStudy.plan(
-        subsetMin = subsetMin,
-        subsetMax = subsetMax,
-        subsetSamples = subsetSamples,
-        strainWinMin = strainWinMin,
-        strainWinMax = strainWinMax,
-        strainWinSamples = strainWinSamples,
-        stepDenominator = stepDenominator,
-    )
+    /**
+     * The combinations this sweep solves when the ROI holds subsets up to
+     * [subsetCeiling] (`RoiResolveHelper.maxSubsetForRoi`): none when even
+     * [subsetMin] is over it, else [VsgStudy.plan] with [subsetMax] capped at
+     * it. The rule `SweepSetupHelper.currentPlan` applies.
+     */
+    fun plan(subsetCeiling: Int): List<VsgStudy.Point> = if (subsetMin > subsetCeiling) {
+        emptyList()
+    } else {
+        VsgStudy.plan(
+            subsetMin = subsetMin,
+            subsetMax = subsetMax.coerceAtMost(subsetCeiling),
+            subsetSamples = subsetSamples,
+            strainWinMin = strainWinMin,
+            strainWinMax = strainWinMax,
+            strainWinSamples = strainWinSamples,
+            stepDenominator = stepDenominator,
+        )
+    }
 
     /**
      * The saved-state array, in `WizardState.save`'s order: subset min, max,

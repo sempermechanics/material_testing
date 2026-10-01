@@ -13,13 +13,19 @@ package com.indicvision.semper.field
  * [at] is the lookup each of those sites spells out: the list's value at the
  * index, else the base value. A record's empty list and the viewer's null
  * array both mean "not a sweep" and fall back the same way.
+ *
+ * The lists are copied on construction, so a caller's mutable list cannot
+ * change an instance afterwards.
  */
-data class FrameParams(
+class FrameParams(
     val base: DicParams,
-    val subsets: List<Int> = emptyList(),
-    val steps: List<Int> = emptyList(),
-    val strainWindows: List<Int> = emptyList(),
+    subsets: List<Int> = emptyList(),
+    steps: List<Int> = emptyList(),
+    strainWindows: List<Int> = emptyList(),
 ) {
+    val subsets: List<Int> = subsets.toList()
+    val steps: List<Int> = steps.toList()
+    val strainWindows: List<Int> = strainWindows.toList()
 
     /** True when the frames are parameter combinations; `SessionRecord.isSweep`'s `sweepSteps.isNotEmpty()`. */
     val isSweep: Boolean get() = steps.isNotEmpty()
@@ -34,6 +40,17 @@ data class FrameParams(
         step = steps.getOrElse(index) { base.step },
         strainWindow = strainWindows.getOrElse(index) { base.strainWindow },
     )
+
+    override fun equals(other: Any?): Boolean = other is FrameParams &&
+        base == other.base &&
+        subsets == other.subsets &&
+        steps == other.steps &&
+        strainWindows == other.strainWindows
+
+    override fun hashCode(): Int = listOf(base, subsets, steps, strainWindows).hashCode()
+
+    override fun toString(): String =
+        "FrameParams(base=$base, subsets=$subsets, steps=$steps, strainWindows=$strainWindows)"
 
     companion object {
         /** From the viewer's nullable arrays; null reads as an empty list, which is `getOrNull(i) ?: base`. */

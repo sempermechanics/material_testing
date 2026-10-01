@@ -22,13 +22,22 @@ import org.json.JSONObject
  */
 data class DicParams(val subset: Int, val step: Int, val strainWindow: Int) {
 
-    /** Writes `subset`, `step`, `strainWindow` onto a `metadata.json` object, in `engineJson`'s key order. */
+    /**
+     * Appends `subset`, `step`, `strainWindow` to a `metadata.json` object.
+     * Only these three keys: `engineJson` follows them with `strainMethod`,
+     * `use6x6`, the image size and `roi`, so a caller rebuilding that object
+     * must keep its order to keep its bytes.
+     */
     fun putInto(json: JSONObject): JSONObject = json
         .put(JSON_SUBSET, subset)
         .put(JSON_STEP, step)
         .put(JSON_STRAIN_WINDOW, strainWindow)
 
-    /** Puts the viewer's three extras, [DicKeys.SUBSET_SIZE], [DicKeys.STEP], [DicKeys.STRAIN_WINDOW]. */
+    /**
+     * Puts the viewer's three extras, [DicKeys.SUBSET_SIZE], [DicKeys.STEP],
+     * [DicKeys.STRAIN_WINDOW]. Write-only: the viewer reads them through
+     * `ViewerArgs.Reader`, which falls back to the session record.
+     */
     fun putViewerExtras(intent: Intent): Intent = intent
         .putExtra(DicKeys.SUBSET_SIZE, subset)
         .putExtra(DicKeys.STEP, step)
@@ -64,13 +73,6 @@ data class DicParams(val subset: Int, val step: Int, val strainWindow: Int) {
             json.optInt(JSON_STEP, default.step),
             json.optInt(JSON_STRAIN_WINDOW, default.strainWindow),
         )
-
-        /** Reads the viewer's three extras; an absent one reads [default]'s value. */
-        fun fromViewerExtras(intent: Intent, default: DicParams = DEFAULT): DicParams = DicParams(
-            intent.getIntExtra(DicKeys.SUBSET_SIZE, default.subset),
-            intent.getIntExtra(DicKeys.STEP, default.step),
-            intent.getIntExtra(DicKeys.STRAIN_WINDOW, default.strainWindow),
-        )
     }
 }
 
@@ -90,8 +92,5 @@ enum class StrainMethod(val wireName: String) {
          * other value is kept as is. `SessionUploadBundler`'s `ifBlank { "VSG" }`.
          */
         fun displayName(stored: String?): String = stored?.ifBlank { null } ?: VSG.wireName
-
-        /** The method named [stored], or null for a blank or unknown name. */
-        fun fromWireName(stored: String?): StrainMethod? = entries.firstOrNull { it.wireName == stored }
     }
 }

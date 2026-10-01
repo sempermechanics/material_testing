@@ -125,12 +125,11 @@ class RoiCodecsTest {
         val viewer = ImageSizeExtras.VIEWER.put(Intent(), size)
         assertEquals(640, viewer.getIntExtra(DicKeys.IMG_W, 0))
         assertEquals(480, viewer.getIntExtra(DicKeys.IMG_H, 0))
-        assertEquals(size, ImageSizeExtras.VIEWER.get(viewer))
         val editor = ImageSizeExtras.ROI_EDITOR.put(Intent(), size)
         assertEquals(640, editor.getIntExtra(DicKeys.IMAGE_WIDTH, 0))
         assertEquals(480, editor.getIntExtra(DicKeys.IMAGE_HEIGHT, 0))
-        assertEquals(size, ImageSizeExtras.ROI_EDITOR.get(editor))
-        assertEquals(ImageSize.UNKNOWN, ImageSizeExtras.ROI_EDITOR.get(Intent()))
+        assertEquals(size, editor.getRoiEditorImageSize())
+        assertEquals(ImageSize.UNKNOWN, Intent().getRoiEditorImageSize())
     }
 
     @Test

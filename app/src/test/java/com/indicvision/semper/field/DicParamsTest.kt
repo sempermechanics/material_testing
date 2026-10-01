@@ -11,7 +11,6 @@ import com.indicvision.semper.ui.viewer.ViewerArgs
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -65,19 +64,23 @@ class DicParamsTest {
         assertEquals(31, intent.getIntExtra(DicKeys.SUBSET_SIZE, 0))
         assertEquals(7, intent.getIntExtra(DicKeys.STEP, 0))
         assertEquals(29, intent.getIntExtra(DicKeys.STRAIN_WINDOW, 0))
-        assertEquals(params, DicParams.fromViewerExtras(intent))
 
         val args = ViewerArgs.ofFrames("/b", 100, 100, step = 7).copy(subsetSize = 31, strainWindow = 29)
         val written = args.toIntent(context)
-        assertEquals(params, DicParams.fromViewerExtras(written))
-        val read = ViewerArgs.from(params.putViewerExtras(Intent()))
+        for (key in listOf(DicKeys.SUBSET_SIZE, DicKeys.STEP, DicKeys.STRAIN_WINDOW)) {
+            assertEquals(key, written.getIntExtra(key, -1), intent.getIntExtra(key, -2))
+        }
+        val read = ViewerArgs.from(intent)
         assertEquals(params, DicParams(read.subsetSize, read.step, read.strainWindow))
     }
 
     @Test
-    fun `absent viewer extras read the defaults`() {
-        assertEquals(DicParams.DEFAULT, DicParams.fromViewerExtras(Intent()))
-        assertEquals(params, DicParams.fromViewerExtras(Intent(), default = params))
+    fun `frame params copy the caller's lists`() {
+        val subsets = mutableListOf(31, 51)
+        val fp = FrameParams(DicParams(41, 5, 21), subsets = subsets, steps = listOf(10, 17))
+        subsets[0] = 99
+        assertEquals(31, fp.at(0).subset)
+        assertEquals(FrameParams(DicParams(41, 5, 21), listOf(31, 51), listOf(10, 17)), fp)
     }
 
     @Test
@@ -114,15 +117,12 @@ class DicParamsTest {
     }
 
     @Test
-    fun `strain method display and parse`() {
+    fun `strain method display name`() {
         assertEquals("VSG", StrainMethod.VSG.wireName)
         assertEquals(ViewerArgs.STRAIN_METHOD_VSG, StrainMethod.VSG.wireName)
         assertEquals("VSG", StrainMethod.displayName(""))
         assertEquals("VSG", StrainMethod.displayName(null))
         assertEquals("VSG", StrainMethod.displayName("VSG"))
         assertEquals("Other", StrainMethod.displayName("Other"))
-        assertEquals(StrainMethod.VSG, StrainMethod.fromWireName("VSG"))
-        assertNull(StrainMethod.fromWireName(""))
-        assertNull(StrainMethod.fromWireName("vsg"))
     }
 }

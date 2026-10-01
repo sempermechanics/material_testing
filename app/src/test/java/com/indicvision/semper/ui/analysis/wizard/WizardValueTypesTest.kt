@@ -1,11 +1,15 @@
 package com.indicvision.semper.ui.analysis.wizard
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.widget.EditText
+import androidx.appcompat.app.AppCompatActivity
 import com.indicvision.semper.field.ImageSize
 import com.indicvision.semper.field.Roi
 import com.indicvision.semper.field.getRoi
 import com.indicvision.semper.ui.analysis.frames.DeformedFrame
 import com.indicvision.semper.ui.analysis.sweep.SweepRanges
+import com.indicvision.semper.ui.analysis.sweep.SweepSetupHelper
 import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -78,25 +82,37 @@ class WizardValueTypesTest {
         assertEquals(SweepRanges.UNSEEDED, AnalysisViewModel().sweepRanges())
     }
 
-    @Test
-    fun `plan is VsgStudy plan over the same axes`() {
-        val r = wizard().sweepRanges()
-        assertEquals(
-            VsgStudy.plan(
-                r.subsetMin,
-                r.subsetMax,
-                r.subsetSamples,
-                r.strainWinMin,
-                r.strainWinMax,
-                r.strainWinSamples,
-                r.stepDenominator,
-            ),
-            r.plan(),
-        )
+    /** Only [SweepSetupHelper.Callbacks.maxSubsetForRoi] matters to `currentPlan`. */
+    private class Ceiling(var max: Int) : SweepSetupHelper.Callbacks {
+        override fun goToStep(step: Int, animate: Boolean) = Unit
+        override fun updateWizardChrome() = Unit
+        override fun checkReady() = Unit
+        override fun showInfo(titleRes: Int, bodyRes: Int) = Unit
+        override fun commitParamFields() = Unit
+        override fun startVsgSweep() = Unit
+        override fun currentSubsetSize(): Int = 21
+        override fun maxSubsetForRoi(): Int = max
+        override fun refPreviewBitmap(): Bitmap? = null
+        override fun renderParamField(field: EditText, value: Int) = Unit
+        override fun confirmOpenFaq(url: String) = Unit
     }
 
     @Test
-    fun `deformed frames zip and unzip the view model's parallel lists losslessly`() {
+    fun `plan matches SweepSetupHelper currentPlan for ceilings below, inside and above the range`() {
+        val vm = wizard()
+        val ceiling = Ceiling(0)
+        // currentPlan never touches the views, so the helper is never set up.
+        val helper = SweepSetupHelper(AppCompatActivity(), vm, ceiling)
+        for (max in listOf(1, 20, 21, 22, 41, 60, 61, 62, 101, 301)) {
+            ceiling.max = max
+            assertEquals("ceiling $max", helper.currentPlan(), vm.sweepRanges().plan(subsetCeiling = max))
+        }
+        assertEquals(emptyList<VsgStudy.Point>(), vm.sweepRanges().plan(subsetCeiling = 20))
+        assertEquals(41, vm.sweepRanges().plan(subsetCeiling = 41).maxOf { it.subset })
+    }
+
+    @Test
+    fun `deformed frames zip and unzip index-aligned lists back to the same lists`() {
         val vm = wizard()
         val frames = DeformedFrame.zip(vm.defFilePaths, vm.defOriginalNames, vm.defFrameDates, vm.defFrameSizes)
         assertEquals(

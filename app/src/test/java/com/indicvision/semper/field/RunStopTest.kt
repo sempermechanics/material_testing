@@ -27,33 +27,43 @@ class RunStopTest {
         assertEquals(VsgStudyRunner.ERROR_CANCELLED, RunStop.Cancelled.wireCode)
     }
 
-    @Test
-    fun `every named case round-trips and the codes are distinct`() {
-        for (stop in RunStop.named) {
-            assertEquals(stop, RunStop.fromWireCode(stop.wireCode))
-        }
-        assertEquals(RunStop.named.size, RunStop.named.map { it.wireCode }.toSet().size)
+    private val named = listOf(
+        RunStop.Finished,
+        RunStop.FeaturesUnmatched,
+        RunStop.InvalidRoi,
+        RunStop.InitFailed,
+        RunStop.LowConvergence,
+        RunStop.SweepEngineFailed,
+        RunStop.SessionLimit,
+        RunStop.Cancelled,
+    )
+
+    /** Exhaustive over the sealed cases: a new case fails to compile here until it is listed. */
+    private fun isNamed(stop: RunStop): Boolean = when (stop) {
+        RunStop.Finished,
+        RunStop.FeaturesUnmatched,
+        RunStop.InvalidRoi,
+        RunStop.InitFailed,
+        RunStop.LowConvergence,
+        RunStop.SweepEngineFailed,
+        RunStop.SessionLimit,
+        RunStop.Cancelled,
+        -> true
+        is RunStop.Other -> false
     }
 
     @Test
-    fun `the named list is exhaustive over the sealed cases`() {
-        // A new case fails to compile here until it is handled, and then fails
-        // the size check until it is added to RunStop.named.
-        val handled = RunStop.named.count { stop ->
-            when (stop) {
-                RunStop.Finished,
-                RunStop.FeaturesUnmatched,
-                RunStop.InvalidRoi,
-                RunStop.InitFailed,
-                RunStop.LowConvergence,
-                RunStop.SweepEngineFailed,
-                RunStop.SessionLimit,
-                RunStop.Cancelled,
-                -> true
-                is RunStop.Other -> false
-            }
+    fun `every named case round-trips and the codes are distinct`() {
+        for (stop in named) {
+            assertEquals(stop, RunStop.fromWireCode(stop.wireCode))
         }
-        assertEquals(8, handled)
+        assertEquals(named.size, named.map { it.wireCode }.toSet().size)
+    }
+
+    @Test
+    fun `fromWireCode reaches every named case and nothing else`() {
+        val reached = (-300..300).map(RunStop::fromWireCode).filter(::isNamed).toSet()
+        assertEquals(named.toSet(), reached)
     }
 
     @Test

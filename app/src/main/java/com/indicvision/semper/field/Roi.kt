@@ -1,9 +1,5 @@
 package com.indicvision.semper.field
 
-import android.graphics.Rect
-import android.graphics.RectF
-import kotlin.math.roundToInt
-
 /**
  * A region of interest in reference-image pixels: left [x], top [y], width [w],
  * height [h]. Immutable.
@@ -20,6 +16,9 @@ import kotlin.math.roundToInt
  * No invariant is enforced: a restored record can hold a zero or off-image ROI,
  * and the helpers below say what each caller does with one ([clampTo],
  * [isCustomFor], [orFullFrame]).
+ *
+ * Plain JVM: the `Rect` / `RectF` conversions live in `RoiRects.kt` and the
+ * wire forms in `RoiCodecs.kt`.
  */
 data class Roi(val x: Int, val y: Int, val w: Int, val h: Int) {
 
@@ -65,14 +64,16 @@ data class Roi(val x: Int, val y: Int, val w: Int, val h: Int) {
     fun coversFrameOf(size: ImageSize): Boolean = w == size.width && h == size.height
 
     /**
-     * This ROI when [hasCustomRoi] and non-empty, else the whole frame. The
-     * region the subset recommendation samples (`currentSamplingRoi`).
+     * The region the subset recommendation samples, as
+     * `StaticAnalysisActivity.currentSamplingRoi` picks it: null while the
+     * image size is unknown, else this ROI when [hasCustomRoi] and non-empty,
+     * else the whole frame.
      */
-    fun orFullFrame(hasCustomRoi: Boolean, size: ImageSize): Roi =
-        if (hasCustomRoi && w > 0 && h > 0) this else full(size)
-
-    /** `Rect(x, y, x + w, y + h)`. */
-    fun toRect(): Rect = Rect(x, y, right, bottom)
+    fun orFullFrame(hasCustomRoi: Boolean, size: ImageSize): Roi? = when {
+        !size.isKnown -> null
+        hasCustomRoi && w > 0 && h > 0 -> this
+        else -> full(size)
+    }
 
     /** `[left, top, right, bottom]` as floats: `HeatmapFit.resolve`'s box. */
     fun toLtrb(): FloatArray = floatArrayOf(x.toFloat(), y.toFloat(), right.toFloat(), bottom.toFloat())
@@ -115,22 +116,6 @@ data class Roi(val x: Int, val y: Int, val w: Int, val h: Int) {
 
         /** From `[left, top, right, bottom]` edges. */
         fun fromLtrb(left: Int, top: Int, right: Int, bottom: Int): Roi = Roi(left, top, right - left, bottom - top)
-
-        /** From a [Rect]'s edges. */
-        fun fromRect(rect: Rect): Roi = fromLtrb(rect.left, rect.top, rect.right, rect.bottom)
-
-        /**
-         * From the ROI editor's float selection in image pixels, rounded and
-         * clamped exactly as `RoiDrawActivity.roiPixels` does: the left/top
-         * edges at 0, the right/bottom edges at the image size. The result can
-         * be empty; the editor rejects that itself.
-         */
-        fun fromImageRect(rect: RectF, size: ImageSize): Roi = fromLtrb(
-            rect.left.roundToInt().coerceAtLeast(0),
-            rect.top.roundToInt().coerceAtLeast(0),
-            rect.right.roundToInt().coerceAtMost(size.width),
-            rect.bottom.roundToInt().coerceAtMost(size.height),
-        )
 
         /**
          * From an `[x, y, w, h]` array, or null unless it holds exactly four

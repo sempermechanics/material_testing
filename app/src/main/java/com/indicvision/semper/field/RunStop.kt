@@ -3,22 +3,24 @@ package com.indicvision.semper.field
 /**
  * Why a run ended, as the `Int` stop code the app stores and sends today.
  *
- * The code travels as `SessionRecord.stopCode`, `ViewerArgs.stopCode` and the
- * `STOP_CODE` extra, `metadata.json`'s `metrics.stopCode`,
- * `BatchAnalysisOutcome.engineErrorCode`, the sweep runner's `errorCode` and
- * `SkippedNode.code`. [wireCode] is exactly that value, and [fromWireCode]
- * maps every `Int` back without loss: a code no case names becomes [Other],
- * so a newer engine's code survives a round trip through an older app.
+ * Stop codes travel only as `SessionRecord.stopCode`, `ViewerArgs.stopCode`,
+ * the `STOP_CODE` extra and `metadata.json`'s `metrics.stopCode`. [wireCode]
+ * is exactly that value, and [fromWireCode] maps every `Int` back without
+ * loss: a code no case names becomes [Other], so a newer engine's code
+ * survives a round trip through an older app.
+ *
+ * Engine and skip codes are **not** RunStop: `BatchAnalysisOutcome.engineErrorCode`,
+ * the sweep runner's `errorCode` / `skipCodeFor` and `SkippedNode.code` use 0
+ * for a failure (a frame or combination that kept no points), so reading
+ * them through [fromWireCode] would call that failure [Finished].
  *
  * The named codes come from three places, pinned to them by test:
  * the engine's frozen return codes (`ENGINE_APP_CONTRACT.md` and
  * `full_field_path_c.cpp` for `-1`; `EngineFailure.ENGINE_ERROR_*`),
  * `AnalysisRunCodes`, and `VsgStudyRunner.ERROR_ENGINE_FAILED`.
  *
- * As a *stop* code, 0 is [Finished]. The engine also returns 0 as a point
- * count when a frame kept no points; `EngineFailure` reads that 0 as a
- * strain-window failure. That reading belongs to the point count, not to a
- * stop code, so it is not modelled here.
+ * As a stop code, 0 is [Finished]. `EngineFailure` reads an engine 0 as a
+ * strain-window failure; that reading belongs to engine codes, not here.
  */
 sealed class RunStop(val wireCode: Int) {
 
@@ -76,20 +78,6 @@ sealed class RunStop(val wireCode: Int) {
             SESSION_LIMIT,
             CANCELLED,
         )
-
-        /** Every named case, in wire-code order from 0 down. */
-        val named: List<RunStop> by lazy {
-            listOf(
-                Finished,
-                FeaturesUnmatched,
-                InvalidRoi,
-                InitFailed,
-                LowConvergence,
-                SweepEngineFailed,
-                SessionLimit,
-                Cancelled,
-            )
-        }
 
         /** The case for [code]; [Other] when no named case has it. Inverse of [wireCode]. */
         fun fromWireCode(code: Int): RunStop = when (code) {

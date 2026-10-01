@@ -42,18 +42,19 @@ val SessionRecord.runStop: RunStop get() = RunStop.fromWireCode(stopCode)
  * because a rename must still reach a copy on its way; nor the "Only in
  * cloud" badge, which reads SYNCED alone.
  */
-val SessionRecord.hasCloudBackup: Boolean
+val SessionRecord.isKnownInCloud: Boolean
     get() = syncState == SessionRecord.SyncState.SYNCED || cloudSessionId.isNotBlank()
 
 /**
  * True when Home offers to restore this row: its frames are not on the phone
- * and the cloud holds it ([hasCloudBackup]). `SessionSelectionController.isCloudOnly`.
+ * and the cloud holds it ([isKnownInCloud]). `SessionSelectionController.isCloudOnly`.
  *
- * [hasLocalData] defaults to [SessionRecord.hasLocalData], a disk read; Home
- * passes the list's cached answer instead. Whether the account may restore at
- * all (demo accounts may not) is the caller's gate, as it is today.
+ * The caller says whether the frames are on the phone: Home passes the list's
+ * cached answer; [SessionRecord.hasLocalData] is a disk read, so it is never
+ * taken implicitly. Whether the account may restore at all (demo accounts may
+ * not) is the caller's gate, as it is today.
  */
-fun SessionRecord.isRestorable(hasLocalData: Boolean = hasLocalData()): Boolean = !hasLocalData && hasCloudBackup
+fun SessionRecord.isRestorable(hasLocalData: Boolean): Boolean = !hasLocalData && isKnownInCloud
 
 /** `Roi(roiX, roiY, roiW, roiH)`. */
 val SessionRecordSettings.roi: Roi get() = Roi(roiX, roiY, roiW, roiH)

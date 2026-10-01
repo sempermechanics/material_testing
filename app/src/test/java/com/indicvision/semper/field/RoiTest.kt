@@ -56,7 +56,7 @@ class RoiTest {
         val cases = listOf(1, 21, 41, 101, 301) * listOf(true, false) * sizes
         for ((subsetAndCustom, size) in cases) {
             val (subset, custom) = subsetAndCustom
-            for (roi in rois().filter { it.x % 3 == 0 }) {
+            for (roi in rois().filterIndexed { i, _ -> i % 3 == 0 }) {
                 val expected = RoiResolveHelper.resolve(
                     subset,
                     custom,
@@ -112,13 +112,16 @@ class RoiTest {
     }
 
     @Test
-    fun `orFullFrame keeps a non-empty custom ROI and otherwise is the whole frame`() {
+    fun `orFullFrame is currentSamplingRoi's choice`() {
         val size = ImageSize(640, 480)
         val drawn = Roi(10, 20, 30, 40)
         assertEquals(drawn, drawn.orFullFrame(hasCustomRoi = true, size = size))
         assertEquals(Roi.full(size), drawn.orFullFrame(hasCustomRoi = false, size = size))
         assertEquals(Roi.full(size), Roi(10, 20, 0, 40).orFullFrame(hasCustomRoi = true, size = size))
         assertEquals(Roi.full(size), Roi(10, 20, 30, -1).orFullFrame(hasCustomRoi = true, size = size))
+        // No reference measured yet: nothing to sample, custom or not.
+        assertNull(drawn.orFullFrame(hasCustomRoi = true, size = ImageSize.UNKNOWN))
+        assertNull(drawn.orFullFrame(hasCustomRoi = false, size = ImageSize(640, 0)))
     }
 
     @Test
