@@ -7,7 +7,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.SessionMetadataSync
 import com.indicvision.semper.data.SessionMetadataSync.Outcome
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionRecord.SyncState
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.AppRemoteConfig
@@ -15,6 +14,7 @@ import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.ListSessionsResponse
 import com.indicvision.semper.data.net.QuotaDto
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.After
@@ -222,29 +222,18 @@ class SessionMetadataSyncTest {
     private fun store(id: String, state: SyncState, cloudId: String = "", stale: Boolean = false) = assertTrue(
         SessionStore.upsert(
             context,
-            SessionRecord(
+            sessionRecord(
                 id = id,
-                name = id,
-                createdAt = 1L,
-                updatedAt = 1L,
                 frameCount = 2,
-                subset = 41,
-                step = 5,
                 strainWindow = 9,
                 imgW = 640,
                 imgH = 480,
-                roiX = 0,
-                roiY = 0,
-                roiW = 640,
-                roiH = 480,
                 refPath = "/x/ref.png",
-                refName = "ref.png",
                 sessionDir = "/x",
                 defNames = listOf("d1.png", "d2.png"),
                 cloudSessionId = cloudId,
                 syncState = state,
-                metadataStale = stale,
-            ),
+            ).copy(metadataStale = stale),
         ),
     )
 }

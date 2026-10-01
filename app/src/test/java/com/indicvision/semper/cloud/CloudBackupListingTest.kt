@@ -10,6 +10,7 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.ListSessionsResponse
 import com.indicvision.semper.data.net.QuotaDto
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -210,22 +211,9 @@ class CloudBackupListingTest {
 
     private fun backup(cloudId: String, localId: String) = CloudBackupListing.Backup(cloudId, localId, "", 0L)
 
-    private fun record(id: String, cloudId: String, frames: Int = 1) = SessionRecord(
+    private fun record(id: String, cloudId: String, frames: Int = 1) = sessionRecord(
         id = id,
-        name = id,
-        createdAt = 1L,
-        updatedAt = 1L,
         frameCount = frames,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
-        imgW = 100,
-        imgH = 100,
-        roiX = 0,
-        roiY = 0,
-        roiW = 100,
-        roiH = 100,
-        refPath = "",
         refName = "",
         sessionDir = SessionStore.dirFor(context, id).absolutePath,
         syncState = SessionRecord.SyncState.SYNCED,

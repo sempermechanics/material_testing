@@ -2,6 +2,7 @@ package com.indicvision.semper.data
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.indicvision.semper.fixtures.sessionRecord
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -22,14 +23,16 @@ class RestoredStopReasonTest {
 
     private val context: Application = ApplicationProvider.getApplicationContext()
 
-    private fun record(stopCode: Int, planned: Int) = SessionRecord(
-        id = "s_test", name = "test", createdAt = 0, updatedAt = 0, frameCount = 2,
-        subset = 21, step = 5, strainWindow = 15,
-        imgW = 64, imgH = 64, roiX = 0, roiY = 0, roiW = 64, roiH = 64,
-        refPath = "", refName = "ref.png", sessionDir = "",
+    private fun record(stopCode: Int, planned: Int) = sessionRecord(
+        id = "s_test",
+        name = "test",
+        createdAt = 0,
+        frameCount = 2,
+        subset = 21,
+        imgW = 64,
+        imgH = 64,
         defNames = listOf("a.png", "b.png"),
-        stopCode = stopCode, plannedFrameCount = planned,
-    )
+    ).copy(stopCode = stopCode, plannedFrameCount = planned)
 
     private fun roundTrip(record: SessionRecord): SessionRecord {
         val meta = JSONObject(SessionUploadMetadata.buildMetadataJson(record, context))

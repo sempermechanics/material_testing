@@ -3,6 +3,7 @@ package com.indicvision.semper.data
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -45,12 +46,10 @@ class SessionUploadBundlerTest {
         return buffer.array()
     }
 
-    private fun record(sessionDir: File, vararg names: String, imgW: Int = 64, sweep: Boolean = false) = SessionRecord(
-        id = "s_test", name = "test", createdAt = 0, updatedAt = 0, frameCount = names.size,
-        subset = 21, step = 5, strainWindow = 15,
-        imgW = imgW, imgH = 64, roiX = 0, roiY = 0, roiW = 64, roiH = 64,
-        refPath = "", refName = "ref.png", sessionDir = sessionDir.path,
-        defNames = names.toList(),
+    private fun record(sessionDir: File, vararg names: String, imgW: Int = 64, sweep: Boolean = false) = sessionRecord(
+        id = "s_test", name = "test", createdAt = 0, frameCount = names.size, subset = 21,
+        imgW = imgW, imgH = 64, roiW = 64, roiH = 64, sessionDir = sessionDir.path, defNames = names.toList(),
+    ).copy(
         sweepSubsets = if (sweep) listOf(21, 31) else emptyList(),
         sweepSteps = if (sweep) listOf(5, 7) else emptyList(),
         sweepStrainWindows = if (sweep) listOf(15, 19) else emptyList(),

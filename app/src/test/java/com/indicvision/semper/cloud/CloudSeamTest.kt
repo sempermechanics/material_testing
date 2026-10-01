@@ -14,6 +14,7 @@ import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.ListSessionsResponse
 import com.indicvision.semper.data.net.QuotaDto
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -202,22 +203,8 @@ class CloudSeamTest {
         }
     }
 
-    private fun record(id: String, state: SessionRecord.SyncState, cloudId: String = "") = SessionRecord(
+    private fun record(id: String, state: SessionRecord.SyncState, cloudId: String = "") = sessionRecord(
         id = id,
-        name = id,
-        createdAt = 1L,
-        updatedAt = 1L,
-        frameCount = 1,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
-        imgW = 100,
-        imgH = 100,
-        roiX = 0,
-        roiY = 0,
-        roiW = 100,
-        roiH = 100,
-        refPath = "",
         refName = "reference.png",
         sessionDir = SessionStore.dirFor(context, id).absolutePath,
         syncState = state,

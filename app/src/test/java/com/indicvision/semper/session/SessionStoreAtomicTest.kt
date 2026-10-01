@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.fixtures.sessionRecord
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,23 +40,10 @@ class SessionStoreAtomicTest {
         TokenStore.clear(ctx)
     }
 
-    private fun record(id: String, createdAt: Long = 1L) = SessionRecord(
+    private fun record(id: String, createdAt: Long = 1L) = sessionRecord(
         id = id,
-        name = id,
         createdAt = createdAt,
-        updatedAt = createdAt,
-        frameCount = 1,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
-        imgW = 100,
-        imgH = 100,
-        roiX = 0,
-        roiY = 0,
-        roiW = 100,
-        roiH = 100,
         refPath = "ref.png",
-        refName = "ref.png",
         sessionDir = "/dir/$id",
     )
 

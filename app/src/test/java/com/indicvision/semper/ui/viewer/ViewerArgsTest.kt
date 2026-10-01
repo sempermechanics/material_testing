@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.DicKeys
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SkippedNode
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.VsgLatticeActivity
 import com.indicvision.semper.ui.home.SessionOpenHelper
 import org.junit.Assert.assertEquals
@@ -55,15 +56,11 @@ class ViewerArgsTest {
         sweep = sweep,
     )
 
-    private fun record(sweepSteps: List<Int> = emptyList()) = SessionRecord(
+    private fun record(sweepSteps: List<Int> = emptyList()) = sessionRecord(
         id = "local-1",
         name = "Session 1",
         createdAt = 0L,
-        updatedAt = 0L,
         frameCount = 2,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
         imgW = 1920,
         imgH = 1080,
         roiX = 10,
@@ -71,9 +68,9 @@ class ViewerArgsTest {
         roiW = 300,
         roiH = 400,
         refPath = "/sessions/s1/ref.png",
-        refName = "ref.png",
         sessionDir = "/sessions/s1",
         defNames = listOf("f1.png", "f2.png"),
+    ).copy(
         engineStats = listOf(1f, 2f),
         sweepSubsets = if (sweepSteps.isEmpty()) emptyList() else listOf(41, 51),
         sweepSteps = sweepSteps,

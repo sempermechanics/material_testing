@@ -1,7 +1,7 @@
 package com.indicvision.semper.analysis
 
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionRecordSettings
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.RunSpec
@@ -124,11 +124,9 @@ class RunSpecTest {
         lastPlannedFrames = 2
     }
 
-    private fun savedRecord(settings: SessionRecordSettings) = SessionRecord(
+    private fun savedRecord(settings: SessionRecordSettings) = sessionRecord(
         id = "f0f0406f-8c2",
         name = "steel_24",
-        createdAt = 1L,
-        updatedAt = 1L,
         frameCount = 2,
         subset = settings.subset,
         step = settings.step,
@@ -142,8 +140,7 @@ class RunSpecTest {
         refPath = "/sessions/f0f0406f-8c2/reference.png",
         refName = "steel_24.png",
         sessionDir = "/sessions/f0f0406f-8c2",
-        plannedFrameCount = 2,
-    )
+    ).copy(plannedFrameCount = 2)
 
     @Test
     fun `opening from the run and reopening from Home show the same settings`() {

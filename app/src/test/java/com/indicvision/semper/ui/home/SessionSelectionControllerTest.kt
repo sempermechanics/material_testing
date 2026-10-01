@@ -15,6 +15,7 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.indicvision.semper.R
 import com.indicvision.semper.data.SessionDeletes
 import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.fixtures.sessionRecord
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -111,23 +112,11 @@ class SessionSelectionControllerTest {
     private fun record(id: String, local: Boolean = true, cloud: Boolean = false): SessionRecord {
         val dir = File(temp.root, id).apply { mkdirs() }
         if (local) File(dir, "frame_0000.dat").writeBytes(ByteArray(32))
-        return SessionRecord(
+        return sessionRecord(
             id = id,
             name = "Specimen $id",
             createdAt = 0L,
-            updatedAt = 0L,
-            frameCount = 1,
-            subset = 41,
-            step = 5,
-            strainWindow = 15,
-            imgW = 100,
-            imgH = 100,
-            roiX = 0,
-            roiY = 0,
-            roiW = 100,
-            roiH = 100,
             refPath = File(dir, "ref.png").path,
-            refName = "ref.png",
             sessionDir = dir.path,
             cloudSessionId = if (cloud) "cloud-$id" else "",
             syncState = if (cloud) SessionRecord.SyncState.SYNCED else SessionRecord.SyncState.LOCAL_ONLY,

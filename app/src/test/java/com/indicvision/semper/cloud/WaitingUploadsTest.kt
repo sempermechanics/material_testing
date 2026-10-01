@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.data.DicSettings
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionRecord.SyncState
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.AppConfigDto
@@ -12,6 +11,7 @@ import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.ListSessionsResponse
 import com.indicvision.semper.data.net.QuotaDto
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -131,22 +131,8 @@ class WaitingUploadsTest {
     private fun store(id: String, state: SyncState) = assertTrue(
         SessionStore.upsert(
             context,
-            SessionRecord(
+            sessionRecord(
                 id = id,
-                name = id,
-                createdAt = 1L,
-                updatedAt = 1L,
-                frameCount = 1,
-                subset = 41,
-                step = 5,
-                strainWindow = 15,
-                imgW = 100,
-                imgH = 100,
-                roiX = 0,
-                roiY = 0,
-                roiW = 100,
-                roiH = 100,
-                refPath = "",
                 refName = "",
                 sessionDir = SessionStore.dirFor(context, id).absolutePath,
                 syncState = state,
