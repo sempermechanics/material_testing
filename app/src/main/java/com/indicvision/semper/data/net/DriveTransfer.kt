@@ -127,7 +127,7 @@ internal class DriveTransfer(
         // against Drive's, so echoing Drive's back would prove nothing about
         // whether Drive holds this file's bytes.
         val probe = probeStatus(uploadUrl, total)
-        probe.result?.let { (driveId, _) ->
+        probe.driveFileId?.let { driveId ->
             return@withContext DriveUpload(driveId, Digests.md5Hex(file))
         }
         var offset = probe.offset
@@ -160,7 +160,7 @@ internal class DriveTransfer(
                         }
                         HttpStatus.OK, HttpStatus.CREATED -> {
                             onBytes(n.toLong())
-                            val (driveId, _) = IndicApiHttp.parseDriveResult(resp.body.string())
+                            val driveId = IndicApiHttp.driveFileIdOf(resp.body.string())
                             return@withContext DriveUpload(driveId, Digests.toHex(digest.digest()))
                         }
                         // Drive's resumable endpoint, not the Semper backend, so
@@ -174,10 +174,10 @@ internal class DriveTransfer(
         // Loop reached `total` without a final 200/201 — the last bytes were
         // already on Drive from a previous attempt. Re-probe to finalize and
         // get the resource, rather than failing.
-        val finalized = probeStatus(uploadUrl, total).result
+        val finalized = probeStatus(uploadUrl, total).driveFileId
             ?: throw IOException("upload finished without a final Drive response")
         // Digest already covers the whole file from the prefix+chunk updates.
-        DriveUpload(finalized.first, Digests.toHex(digest.digest()))
+        DriveUpload(finalized, Digests.toHex(digest.digest()))
     }
 
     /** Hash [start, end) of [raf] into [digest] using [buf] as a scratch buffer. */
@@ -198,8 +198,8 @@ internal class DriveTransfer(
         }
     }
 
-    /** Current state of a resumable session: continue at [offset], or already [result]. */
-    private data class UploadProbe(val offset: Long, val result: Pair<String, String?>?)
+    /** Current state of a resumable session: continue at [offset], or already finished as [driveFileId]. */
+    private data class UploadProbe(val offset: Long, val driveFileId: String?)
 
     /**
      * Ask Drive what it already has: PUT `bytes * /total` with an empty body.
@@ -218,10 +218,7 @@ internal class DriveTransfer(
                 HttpStatus.RESUME_INCOMPLETE ->
                     UploadProbe(resp.header("Range")?.substringAfterLast('-')?.toLongOrNull()?.plus(1) ?: 0L, null)
                 // Already complete — the body is the Drive file resource.
-                HttpStatus.OK, HttpStatus.CREATED -> UploadProbe(
-                    total,
-                    IndicApiHttp.parseDriveResult(resp.body.string()),
-                )
+                HttpStatus.OK, HttpStatus.CREATED -> UploadProbe(total, IndicApiHttp.driveFileIdOf(resp.body.string()))
                 HttpStatus.NOT_FOUND, HttpStatus.GONE -> throw IndicApi.UploadLinkExpiredException(resp.code)
                 // Drive's resumable endpoint, not the Semper backend: no X-Request-Id.
                 else -> throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))

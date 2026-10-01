@@ -18,7 +18,13 @@ class PagingTest {
     @Test
     fun `a manifest is every page's files under the first page's session fields`() {
         val pages = mapOf(
-            null to SessionFilesResponse("s1", "local", status = "COMPLETED", files = listOf(file("a")), page = more("t1")),
+            null to SessionFilesResponse(
+                "s1",
+                "local",
+                status = "COMPLETED",
+                files = listOf(file("a")),
+                page = more("t1"),
+            ),
             "t1" to SessionFilesResponse("s1", files = listOf(file("b")), page = more("t2")),
             "t2" to SessionFilesResponse("s1", files = listOf(file("c")), page = PageDto()),
         )
@@ -43,7 +49,12 @@ class PagingTest {
     fun `an upload plan is every page's pending files`() {
         fun pending(id: String) = PendingUploadDto(fileId = id, uploadUrl = "https://drive/$id")
         val pages = mapOf(
-            null to SessionUploadsResponse("s1", status = "UPLOADING", uploads = listOf(pending("a")), page = more("t1")),
+            null to SessionUploadsResponse(
+                "s1",
+                status = "UPLOADING",
+                uploads = listOf(pending("a")),
+                page = more("t1"),
+            ),
             "t1" to SessionUploadsResponse("s1", uploads = listOf(pending("b"))),
         )
 

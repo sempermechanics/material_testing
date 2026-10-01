@@ -24,8 +24,11 @@ internal inline fun <P> fetchAllPages(fetch: (pageToken: String?) -> P, pageOf: 
 }
 
 /** `?page_token=…` for a page after the first, else "" (the first page's URL is the bare route). */
-internal fun pageTokenQuery(pageToken: String?): String =
-    if (pageToken == null) "" else "?page_token=" + URLEncoder.encode(pageToken, Charsets.UTF_8.name())
+internal fun pageTokenQuery(pageToken: String?): String = if (pageToken == null) "" else "?" + pageTokenParam(pageToken)
+
+/** `page_token=…`, the token URL-encoded. */
+internal fun pageTokenParam(pageToken: String): String =
+    "page_token=" + URLEncoder.encode(pageToken, Charsets.UTF_8.name())
 
 /** One manifest from its pages: the first page's session fields, every page's files. */
 @JvmName("mergedFiles")
