@@ -10,7 +10,12 @@ import java.util.zip.ZipException
  * Cloud Run deadline kill often surfaces as HTTP 5xx with an **empty** body
  * (not FastAPI's `{"detail":…}`). Within one download call those are retried
  * with `Range` from the bytes already on disk — same as a mid-stream
- * `IOException`. A later WorkManager attempt starts the file over.
+ * `IOException`. After an attempt that ended normally (success, failure or
+ * retry), the next WorkManager attempt starts the file over: CloudRestore deletes
+ * its temps and their `.part` sidecars on the way out. After process death that
+ * cleanup never ran, so the next attempt's download resumes from the leftover
+ * `.part`; the bundle's sha256 (and a legacy prefix's per-entry CRCs) catch a bad
+ * resume, and `metadata.json` is always fetched fresh.
  */
 object RestoreDownloadOutcomes {
 

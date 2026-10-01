@@ -399,8 +399,10 @@ object CloudRestore {
      *
      * Every attempt starts from nothing: [tmp] and its `.part` / `.full` sidecars are
      * cleared first, since the download resumes from a `.part` beside its destination
-     * and one an earlier attempt left could hold an older body of this file (a rename
-     * rewrites it). The declared sha256 is checked like the bundle's, when the file
+     * and one an earlier attempt left could hold an older body of this file (the
+     * backend's metadata replace route rewrites it when an analysis is edited after
+     * its backup, e.g. a deflection correction). The declared sha256 is checked like
+     * the bundle's, when the file
      * list carries one; a mismatch or a body that is not JSON is corrupt (terminal).
      */
     private suspend fun fetchMetadata(

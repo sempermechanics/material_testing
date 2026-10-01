@@ -92,7 +92,10 @@ class DicRestoreWorker internal constructor(
                 // Any other status (a 5xx the download's own in-call Range-resume
                 // could not ride out, a 429, …). The next attempt starts the files
                 // over: CloudRestore deletes its cache temps and their *.part
-                // sidecars, and the session dir is cleared at the top of doWork.
+                // sidecars on the way out, and the session dir is cleared at the top
+                // of doWork. Only after process death (no way out) does the next
+                // attempt resume the bundle from its leftover .part — see
+                // RestoreDownloadOutcomes; the bundle's sha256 catches a bad resume.
                 Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
                 Result.retry()
             }
@@ -110,8 +113,8 @@ class DicRestoreWorker internal constructor(
                 // logged above, never shown.
                 failWith(applicationContext.getString(R.string.restore_failed_generic))
             } else {
-                // Transient (network, sign-in, storage). Retried from scratch, as above:
-                // nothing of this attempt's download is kept for the next one.
+                // Transient (network, sign-in, storage). Retried from scratch, as above
+                // (a process death mid-download being the one resume case).
                 Timber.w(e, "Restore of %s failed; will retry", cloudSessionId)
                 Result.retry()
             }

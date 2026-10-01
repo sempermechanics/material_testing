@@ -7,6 +7,7 @@ import com.indicvision.semper.data.SessionZip
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -90,6 +91,17 @@ class DatCodecCorruptInputTest {
         // 60 M points = 1.9 GB of floats claimed by a payload of a few bytes: refused
         // before the output buffer is allocated, not by running out of memory.
         assertCorrupt(archive(pointCount = 60_000_000, mode = EXPLICIT) { payload(deflated(ByteArray(8))) })
+    }
+
+    @Test
+    fun `a point count within the deflate ceiling but beyond the heap is corrupt, not an OutOfMemoryError`() {
+        // More than this whole heap, with a payload big enough (well under 1 MB on a
+        // 512 MB test heap) that the deflate-ratio check alone would let it through.
+        val claimed = Runtime.getRuntime().maxMemory() + 64L * 1024 * 1024
+        assumeTrue("heap too large to probe", claimed < Int.MAX_VALUE)
+        val pointCount = (claimed / DicResult.BYTES_PER_POINT).toInt()
+        val payloadBytes = (pointCount.toLong() * DicResult.BYTES_PER_POINT / 1032 + 1).toInt()
+        assertCorrupt(archive(pointCount = pointCount, mode = EXPLICIT) { payload(ByteArray(payloadBytes)) })
     }
 
     @Test

@@ -69,6 +69,14 @@ internal object DatCodec {
     private const val DEFLATE_RATIO_SLACK_BYTES = 1024L
 
     /**
+     * Decode holds roughly four copies of the inflated size at once (inflated,
+     * unshuffled, the field columns, the reassembled `.dat`), so a field larger than
+     * this fraction of the heap could not decode anyway. Refusing it as corrupt keeps
+     * a damaged header from ending in an [OutOfMemoryError], which nothing catches.
+     */
+    private const val MAX_HEAP_FRACTION_DIVISOR = 4L
+
+    /**
      * Encode raw `.dat` bytes — exactly what [DicResult.decodeDatFile] reads, native
      * byte order, [DicResult.BYTES_PER_POINT]-aligned — into the compact archive form.
      */
@@ -129,8 +137,12 @@ internal object DatCodec {
      * [encoded] comes off the network, so every size in its header is checked before
      * it is used. A malformed archive fails with [IllegalArgumentException] (or
      * [IllegalStateException] / [java.io.EOFException] for a short read), which
-     * `SessionZip` reports as a corrupt transfer, never as an allocation failure, an
-     * unchecked zlib exception, or a decode that does not terminate.
+     * `SessionZip` reports as a corrupt transfer, never as a checked zlib exception or
+     * a decode that does not terminate. The inflated size must be reachable from the
+     * payload at deflate's ratio ceiling **and** fit in a quarter of the heap, so a
+     * damaged header is refused before anything that size is allocated. A decode can
+     * still run out of memory when the heap is already mostly in use; that is not a
+     * property of the archive.
      */
     fun decode(encoded: ByteArray): ByteArray {
         val d = DataInputStream(encoded.inputStream())
@@ -262,6 +274,9 @@ internal object DatCodec {
         val expectedLong = fieldCount.toLong() * pointCount * Float.SIZE_BYTES
         require(expectedLong <= payload.size * MAX_DEFLATE_RATIO + DEFLATE_RATIO_SLACK_BYTES) {
             "DatCodec claims $expectedLong bytes from a ${payload.size}-byte payload"
+        }
+        require(expectedLong <= Runtime.getRuntime().maxMemory() / MAX_HEAP_FRACTION_DIVISOR) {
+            "DatCodec claims $expectedLong bytes, more than this heap can decode"
         }
         // Fits: decode bounds pointCount so that fieldCount (<= STRIDE) points do.
         val expected = expectedLong.toInt()
