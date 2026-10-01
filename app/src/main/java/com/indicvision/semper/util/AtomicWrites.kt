@@ -7,9 +7,22 @@ import java.io.File
  * returns is [tmp] promoted onto [dest] ([AtomicFiles.promote]: a rename,
  * else copy and delete). A reader never sees a half-written [dest].
  *
- * If [write] or the promote throws, [tmp] is deleted and the throwable
- * (cancellation included) is rethrown untouched, so no failed write leaves a
- * sidecar behind for the next run to mistake for a finished one.
+ * Unless the promote completes, [tmp] is deleted: when [write] or the promote
+ * throws, the `finally` deletes it and the throwable (cancellation included)
+ * propagates unchanged. No abandoned write leaves a sidecar behind for the next
+ * run to mistake for a finished one (the default `.part` name is the one
+ * [com.indicvision.semper.data.net.DriveTransfer] resumes from).
+ *
+ * [write] is `crossinline`, so a non-local `return` (or `break`/`continue`)
+ * out of it does not compile. It has to be: inlined, such a return leaves
+ * through the caller's own `return` and skips this function's `finally` (the
+ * caller's bytecode had the `areturn` with no cleanup before it), which would
+ * leave the sidecar behind. To stop early, return from the lambda
+ * (`return@writeVia value`, which promotes what was written) or throw.
+ *
+ * No `fd.sync()` happens here. A caller that needs the bytes on disk before
+ * the rename (the session index, `SessionStore`) keeps its own sync inside
+ * [write].
  *
  * [tmp] defaults to [AtomicFiles.partOf]; a caller whose sidecar has another
  * established name (`index.json.tmp`, `Session.zip.tmp`, `<part>.tmp`) passes
@@ -23,20 +36,20 @@ import java.io.File
  *
  * @return what [write] returned (a digest, a count, …).
  */
-@Suppress("TooGenericExceptionCaught") // cleans up on every throwable, then rethrows it unchanged
 inline fun <T> AtomicFiles.writeVia(
     dest: File,
     tmp: File = partOf(dest),
     clearDest: Boolean = false,
-    write: (tmp: File) -> T,
+    crossinline write: (tmp: File) -> T,
 ): T {
+    var promoted = false
     try {
         val result = write(tmp)
         if (clearDest) dest.delete()
         promote(tmp, dest)
+        promoted = true
         return result
-    } catch (e: Throwable) {
-        tmp.delete()
-        throw e
+    } finally {
+        if (!promoted) tmp.delete()
     }
 }

@@ -68,37 +68,53 @@ internal object SemperEngine {
     }
 
     /**
-     * Solves region ([roiX], [roiY], [roiW], [roiH]) of [defBytes] against
-     * [refBytes] into [buffer], which is cleared first. [metrics] receives the
-     * telemetry slots ([EngineStats.fromArray]); the sweep passes
-     * [EngineStats.newMetrics], the probe a plain zeroed array.
+     * What one solve computes: the region, the grid and the solver options.
+     *
+     * Construct it with named arguments, always. The JNI takes `(step, subset,
+     * strainWindow)`, and so does this constructor, but `NoiseFloorProbe`'s own
+     * solve takes `(subset, step, strainWindow)`: a positional port of either
+     * caller can swap two `Int`s without a compile error.
+     */
+    @Suppress("LongParameterList") // the solve's own inputs, named once here
+    class Params(
+        val roiX: Int,
+        val roiY: Int,
+        val roiW: Int,
+        val roiH: Int,
+        val step: Int,
+        val subset: Int,
+        val strainWindow: Int,
+        val maskData: ByteArray = NO_MASK,
+        val use6x6: Boolean = false,
+    ) {
+        override fun toString(): String =
+            "Params(roi=$roiX,$roiY ${roiW}x$roiH, step=$step, subset=$subset, " +
+                "strainWindow=$strainWindow, mask=${maskData.size}B, use6x6=$use6x6)"
+    }
+
+    /**
+     * Solves [params]' region of [defBytes] against [refBytes] into [buffer],
+     * which is cleared first. [metrics] receives the telemetry slots
+     * ([EngineStats.fromArray]); the sweep passes [EngineStats.newMetrics],
+     * the probe a plain zeroed array. Progress goes to [SILENT]: both
+     * callers ignored it, and the batch, which reports it, is not a caller.
      *
      * @return the engine's result: points written, or a negative engine code.
      */
-    @Suppress("LongParameterList") // the solve's own inputs, as the JNI takes them
     fun solve(
         refBytes: ByteArray,
         defBytes: ByteArray,
-        roiX: Int,
-        roiY: Int,
-        roiW: Int,
-        roiH: Int,
-        step: Int,
-        subset: Int,
-        strainWindow: Int,
+        params: Params,
         buffer: ByteBuffer,
         metrics: FloatArray = EngineStats.newMetrics(),
-        maskData: ByteArray = NO_MASK,
-        use6x6: Boolean = false,
-        progress: ProgressCallback = SILENT,
     ): Int {
         buffer.clear()
         return solver.solve(
-            refBytes, defBytes, maskData,
-            roiX, roiY, roiW, roiH,
-            step, subset, strainWindow,
-            use6x6,
-            buffer, progress, metrics,
+            refBytes, defBytes, params.maskData,
+            params.roiX, params.roiY, params.roiW, params.roiH,
+            params.step, params.subset, params.strainWindow,
+            params.use6x6,
+            buffer, SILENT, metrics,
         )
     }
 }

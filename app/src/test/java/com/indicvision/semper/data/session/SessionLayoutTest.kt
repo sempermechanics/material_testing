@@ -81,8 +81,31 @@ class SessionLayoutTest {
         assertEquals(File(s.dir, "Session.zip.sha256"), s.sha256Sidecar(StagingLayout.SESSION_ZIP))
         assertEquals(File(s.dir, "Extras.zip.tmp"), s.tmpOf(StagingLayout.EXTRAS_ZIP))
         assertEquals(
-            listOf(File(s.dir, "Session.zip"), File(s.dir, "Session.zip.tmp"), File(s.dir, "Session.zip.sha256")),
-            s.staleBundleFiles(),
+            listOf(File(s.dir, "Session.zip"), File(s.dir, "Session.zip.sha256"), File(s.dir, "Session.zip.tmp")),
+            s.staleFiles(StagingLayout.SESSION_ZIP),
+        )
+    }
+
+    @Test
+    fun `staleFiles names what the restage and stageArchive delete, for either zip`() {
+        val s = layout.staging
+        s.dir.mkdirs()
+        val names = listOf(StagingLayout.SESSION_ZIP, StagingLayout.EXTRAS_ZIP)
+        for (name in names) {
+            // stageArchive's own names for a zip it rebuilds (DicUploadWorker.stageArchive).
+            val byHand = setOf(File(s.dir, name), File(s.dir, "$name.sha256"), File(s.dir, "$name.tmp"))
+            assertEquals(name, byHand, s.staleFiles(name).toSet())
+            assertEquals(name, 3, s.staleFiles(name).size)
+        }
+        assertEquals(File(s.dir, "Extras.zip"), s.staleFiles(StagingLayout.EXTRAS_ZIP).first())
+        assertEquals(s.extrasZip, s.archive(StagingLayout.EXTRAS_ZIP))
+
+        // Deleting them leaves the other zip's files alone.
+        names.flatMap { s.staleFiles(it) }.forEach { it.writeText("x") }
+        s.staleFiles(StagingLayout.SESSION_ZIP).forEach { it.delete() }
+        assertEquals(
+            s.staleFiles(StagingLayout.EXTRAS_ZIP).toSet(),
+            s.dir.listFiles().orEmpty().toSet(),
         )
     }
 

@@ -80,7 +80,15 @@ data class HttpFailure(val kind: Kind, val cause: Throwable) {
             else -> null
         }
 
-    /** A later attempt may go through: 429, 5xx or no answer (the metadata send's RETRY rule). */
+    /**
+     * The generic rule: 429, 5xx or no answer, where a later attempt of the same
+     * call may go through. It is not any one caller's rule. The metadata send,
+     * for one, also retries [Kind.DEVICE_NOT_ACTIVE], [Kind.DEVICE_IN_USE],
+     * [Kind.NOT_APPROVED], [Kind.NO_SEAT] and [Kind.TERMS_MISMATCH] (they are
+     * [IOException]s it does not name) and waits on one [Kind.CONFLICT]. Each
+     * adopter maps the [Kind]s it needs explicitly and uses this only where the
+     * generic rule is the one it had.
+     */
     val isRetryable: Boolean get() = kind == Kind.RATE_LIMITED || kind == Kind.SERVER || kind == Kind.OFFLINE
 
     /** 404 or 403: the restore and bundle-download workers give up rather than retry. */

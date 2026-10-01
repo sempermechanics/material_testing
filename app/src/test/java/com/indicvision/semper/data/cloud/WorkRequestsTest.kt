@@ -25,6 +25,7 @@ import com.indicvision.semper.data.prefs.DicSettings
 import com.indicvision.semper.navigation.DicKeys
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -231,6 +232,20 @@ class WorkRequestsTest {
         assertEquals(NetworkType.CONNECTED, spec.constraints.requiredNetworkType)
         assertEquals(0L, spec.initialDelay)
         assertEquals(false, spec.expedited)
+    }
+
+    @Test
+    fun `an expedited request with an initial delay is refused up front`() {
+        val e = assertThrows(IllegalArgumentException::class.java) {
+            oneTimeWork<BackupDeleteWorker>(tags = emptyList(), expedited = true, initialDelaySeconds = 5L)
+        }
+        assertTrue(e.message.orEmpty().contains("expedited"))
+        // Either one alone is fine.
+        assertEquals(true, oneTimeWork<BackupDeleteWorker>(tags = emptyList(), expedited = true).workSpec.expedited)
+        assertEquals(
+            5_000L,
+            oneTimeWork<BackupDeleteWorker>(tags = emptyList(), initialDelaySeconds = 5L).workSpec.initialDelay,
+        )
     }
 
     @Test

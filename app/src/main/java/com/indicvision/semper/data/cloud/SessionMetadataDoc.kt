@@ -52,6 +52,17 @@ import java.util.TimeZone
  * back; the restore keeps the downloaded bytes as they came.
  *
  * Key order follows the writer's, so an encoded file reads like an uploaded one.
+ * [encode] is semantically equal to `SessionUploadMetadata.buildMetadataJson`
+ * (the same keys, values and two-space indent) but not byte-identical: Android's
+ * org.json writes an integral float as `50` where this writes `50.0`, and it
+ * escapes `/` as `\/` (the `schema` string contains one) where this does not.
+ * Compare the two as JSON, never as text or by digest.
+ *
+ * [decode] throws [kotlinx.serialization.SerializationException] (an
+ * [IllegalArgumentException]) for text that is not a JSON object or whose
+ * `frames` holds a non-object, where org.json threw `JSONException`. An adopter
+ * in the restore maps it to `CorruptTransferException("metadata_json_invalid")`
+ * as it maps `JSONException` today.
  */
 @Serializable
 data class SessionMetadataDoc(

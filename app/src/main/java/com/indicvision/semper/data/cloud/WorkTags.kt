@@ -83,7 +83,8 @@ const val DEFAULT_BACKOFF_SECONDS = 30L
  * network constraint, exponential backoff from [backoffSeconds], [input], and
  * [tags]. [expedited] asks for expedited execution, run as ordinary work when
  * the quota is spent; [initialDelaySeconds] holds the job back (the delete's
- * undo window). WorkManager refuses a request that is both.
+ * undo window). WorkManager refuses a request that is both, so this does too,
+ * with an [IllegalArgumentException] naming the conflict.
  */
 @Suppress("LongParameterList") // one defaulted, named knob per request property the builders set
 inline fun <reified W : ListenableWorker> oneTimeWork(
@@ -94,6 +95,9 @@ inline fun <reified W : ListenableWorker> oneTimeWork(
     initialDelaySeconds: Long = 0L,
     backoffSeconds: Long = DEFAULT_BACKOFF_SECONDS,
 ): OneTimeWorkRequest {
+    require(!(expedited && initialDelaySeconds > 0L)) {
+        "An expedited request cannot have an initial delay (got ${initialDelaySeconds}s)"
+    }
     val builder = OneTimeWorkRequestBuilder<W>()
     if (expedited) builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
     if (initialDelaySeconds > 0L) builder.setInitialDelay(initialDelaySeconds, TimeUnit.SECONDS)
