@@ -379,7 +379,9 @@ class VsgPlotView @JvmOverloads constructor(
                 true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                onLift(event)
+                onLift()
+                // A lift is a click, so accessibility services can drive the scrub.
+                if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
                 true
             }
             else -> super.onTouchEvent(event)
@@ -421,13 +423,12 @@ class VsgPlotView @JvmOverloads constructor(
         }
     }
 
-    /** The last finger lifting (or the gesture cancelled) clears the scrub; a lift is a click. */
-    private fun onLift(event: MotionEvent) {
+    /** The last finger lifting (or the gesture cancelled) clears the scrub. */
+    private fun onLift() {
         parent?.requestDisallowInterceptTouchEvent(false)
         multiTouchActive = false
         hasPanFocus = false
         clearScrub()
-        if (event.actionMasked == MotionEvent.ACTION_UP) performClick()
     }
 
     private fun panByFocusDelta(dxPx: Float, dyPx: Float) {
