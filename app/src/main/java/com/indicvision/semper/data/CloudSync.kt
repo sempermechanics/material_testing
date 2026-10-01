@@ -21,6 +21,7 @@ import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.util.suspendRunCatching
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -269,6 +270,9 @@ object CloudSync {
             SessionStore.delete(appContext, localSessionId)
             Timber.i("Erased analysis %s locally and in the cloud", localSessionId)
             EraseResult.ERASED_EVERYWHERE
+        } catch (e: CancellationException) {
+            // The caller went away: not "cloud unreachable", and not a non-fatal.
+            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "Cloud erase failed for %s — leaving local copy intact", localSessionId)
             failureOf(e)
@@ -376,6 +380,8 @@ object CloudSync {
             forgetCloudCopy(appContext, localSessionId)
             Timber.i("Deleted cloud backup %s", cloudSessionId)
             EraseResult.ERASED_EVERYWHERE
+        } catch (e: CancellationException) {
+            throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             Timber.e(e, "Cloud backup delete failed for %s", cloudSessionId)
             failureOf(e)

@@ -7,6 +7,7 @@ import com.indicvision.semper.data.CorruptTransferException
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.util.AtomicFiles
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -138,6 +139,15 @@ class CloudRestorePipelineTest {
 
         assertFalse(metaTmp.exists())
         assertFalse(AtomicFiles.partOf(metaTmp).exists())
+    }
+
+    @Test
+    fun `a cancelled backup listing is cancelled, not reported as a failure`() {
+        val fake = FakeCloudApi().apply { onListSessions = { _, _ -> throw CancellationException("screen closed") } }
+
+        assertThrows(CancellationException::class.java) {
+            runBlocking { CloudRestore.listCompleted(context, fake, tokens) }
+        }
     }
 
     private companion object {

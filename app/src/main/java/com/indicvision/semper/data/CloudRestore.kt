@@ -25,6 +25,7 @@ import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import com.indicvision.semper.util.suspendRunCatching
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -218,6 +219,9 @@ object CloudRestore {
                 val sessions = api.listSessions(token).sessions
                     .filter { it.status == "COMPLETED" }
                 if (sessions.isEmpty()) ListResult.Empty else ListResult.Ready(sessions)
+            } catch (e: CancellationException) {
+                // The screen went away: not a failed listing to report.
+                throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "listCompleted sessions failed")
                 ListResult.Failed(e.message ?: e.toString())
