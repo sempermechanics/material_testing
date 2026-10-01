@@ -513,6 +513,11 @@ ROI and mask, or with full-image defaults on cancel.
 | [ ] 6.18 | Tap **Cancel** | Returns with the ROI reset to full image |
 | [ ] 6.19 | Rotate the device mid-edit | The ROI, holes and both toggles survive |
 | [ ] 6.20 | Save an ROI with holes, then run | The masked regions are absent from the result heatmap |
+| [ ] 6.21 | Pinch the photo with an ROI drawn | Zooms about the fingers (up to 10×); the ROI stays on the same specimen pixels and the HUD shows the zoom |
+| [ ] 6.22 | Move two fingers together while zoomed | Pans; the photo never leaves the screen |
+| [ ] 6.23 | Double-tap, then double-tap again | 2× about the tap, then back to fit; the ROI is untouched |
+| [ ] 6.24 | Zoomed in, draw or resize with one finger, then Save | Edges land finer than at fit; X / Y / W / H match what was drawn |
+| [ ] 6.25 | Tap once outside the ROI, or start a pinch with one finger outside it | The ROI and holes stay; only a kept drag replaces them |
 
 ---
 

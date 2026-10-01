@@ -324,6 +324,9 @@ In Settings, not here. 10–500, default 50. Caps frames per analysis.
 **Draw** — pick Rect or Square, drag on the image. Drag inside to move, corners
 to resize. The HUD gives size and position live.
 
+**Zoom** — pinch to zoom (up to 10×) and pan with two fingers; double-tap for
+2× and back to fit. One finger always draws, so edges can be placed finer zoomed in.
+
 **Manual** — type X, Y, W, H and Apply.
 
 **Crop / Erase** — Crop sets the area to correlate. Erase punches holes in it,
