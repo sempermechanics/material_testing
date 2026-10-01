@@ -96,11 +96,34 @@ class RoiEditorGestureTest {
             assertEquals(zoom, zoom(scenario), 0.01f)
             assertEquals(zoomed.left - 200f, photoOnScreen(scenario).left, PAN_TOLERANCE)
 
-            // Far further right than the photo reaches: it stops at the canvas edge.
-            repeat(4) {
-                twoFingers(c.plus(-300f, -50f), c.plus(-300f, 50f), c.plus(300f, -50f), c.plus(300f, 50f))
+            // Far further right than the photo reaches: it stops at the canvas edge. The
+            // fingers go down inside the canvas, clear of its edges: a DOWN off the screen
+            // is refused, and the CI emulator's canvas is narrower than a phone's.
+            val canvas = canvasOnScreen(scenario)
+            val inset = canvas.width() * EDGE_INSET
+            val from = canvas.left + inset
+            val to = canvas.right - inset
+            // As many sweeps as the photo has left to travel, plus two to push past the edge:
+            // the pinch's zoom, and so the distance, depends on the screen.
+            val sweeps = ((canvas.left - photoOnScreen(scenario).left) / (to - from)).toInt() + EXTRA_SWEEPS
+            // Where the canvas, photo and zoom were after each sweep: printed if the photo
+            // does not end on the edge (TD-146).
+            val trace = mutableListOf("start: ${state(scenario)}")
+            repeat(sweeps) { i ->
+                twoFingers(
+                    PointF(from, c.y - 50f),
+                    PointF(from, c.y + 50f),
+                    PointF(to, c.y - 50f),
+                    PointF(to, c.y + 50f),
+                )
+                trace += "sweep ${i + 1}: ${state(scenario)}"
             }
-            assertEquals(canvasOnScreen(scenario).left, photoOnScreen(scenario).left, 1f)
+            assertEquals(
+                trace.joinToString("\n", prefix = "photo left vs canvas left\n"),
+                canvasOnScreen(scenario).left,
+                photoOnScreen(scenario).left,
+                1f,
+            )
             assertRect(before, roi(scenario), ROI_TOLERANCE)
         }
     }
@@ -230,6 +253,11 @@ class RoiEditorGestureTest {
         return rect
     }
 
+    /** Canvas and photo on screen, zoom and ROI, for a failure message. */
+    private fun state(scenario: ActivityScenario<RoiDrawActivity>): String =
+        "canvas=${canvasOnScreen(scenario).toShortString()} photo=${photoOnScreen(scenario).toShortString()} " +
+            "zoom=${zoom(scenario)} roi=${roi(scenario).toShortString()} hud=\"${hud(scenario)}\""
+
     private fun centre(scenario: ActivityScenario<RoiDrawActivity>): PointF {
         val canvas = canvasOnScreen(scenario)
         return PointF(canvas.centerX(), canvas.centerY())
@@ -341,6 +369,11 @@ class RoiEditorGestureTest {
     }
 
     private companion object {
+        /** Share of the canvas width kept clear at each end of the far pan's sweep. */
+        const val EDGE_INSET = 0.15f
+
+        /** Sweeps past the ones the photo needs to reach the canvas edge. */
+        const val EXTRA_SWEEPS = 2
         const val IMG_W = 800
         const val IMG_H = 600
         const val ROI_X = 40
