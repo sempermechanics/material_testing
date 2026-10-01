@@ -165,13 +165,13 @@ class AuthRepository(
      */
     suspend fun reauthenticateWithPassword(password: String): Result<Unit> =
         reauthenticate("Re-authentication failed", { reauthFailure(it, wrongPassword = "Incorrect password.") }) {
-            it.email?.let { email -> EmailAuthProvider.getCredential(email, password) }
+            it.email?.let { email -> ReauthCredentials.password(email, password) }
         }
 
     /** As [reauthenticateWithPassword], for accounts that sign in with Google. */
     suspend fun reauthenticateWithGoogle(googleIdToken: String): Result<Unit> =
         reauthenticate("Google re-authentication failed", { reauthFailure(it) }) {
-            GoogleAuthProvider.getCredential(googleIdToken, null)
+            ReauthCredentials.google(googleIdToken)
         }
 
     /**
@@ -180,8 +180,8 @@ class AuthRepository(
      * it has no password to type and no Google credential to present.
      */
     suspend fun reauthenticateWithEmailLink(link: String): Result<Unit> =
-        reauthenticate("Email-link re-authentication failed", { null }) {
-            it.email?.let { email -> EmailAuthProvider.getCredential(email, link) }
+        reauthenticate("Email-link re-authentication failed", { reauthFailure(it) }) {
+            it.email?.let { email -> ReauthCredentials.emailLink(email, link) }
         }
 
     /**
@@ -203,17 +203,6 @@ class AuthRepository(
             }
         }
     }
-
-    /** A re-authentication that needs the second factor, or (given [wrongPassword]) used the wrong one. */
-    private fun reauthFailure(e: Exception, wrongPassword: String? = null): Result<Unit>? = when {
-        e is FirebaseAuthMultiFactorException -> Result.failure(mfaRequired(e))
-        wrongPassword != null -> wrongSecret(e, wrongPassword)
-        else -> null
-    }
-
-    /** [message] for a credential Firebase rejected; null for any other failure. */
-    private fun <T> wrongSecret(e: Exception, message: String): Result<T>? =
-        if (e is FirebaseAuthInvalidCredentialsException) Result.failure(Exception(message, e)) else null
 
     /**
      * Erase the Firebase identity itself. Only succeeds soon after a
@@ -450,17 +439,6 @@ class AuthRepository(
             user.reload().await()
         }
         return auth.currentUser?.isEmailVerified == false
-    }
-
-    /** Map Firebase's multi-factor exception to a TOTP challenge the UI can run. */
-    private fun mfaRequired(e: FirebaseAuthMultiFactorException): Exception {
-        val enrollmentId = TotpMfa.enrollmentId(e.resolver.hints)
-            ?: return Exception(
-                "This account needs an authenticator app. Open the Semper website, " +
-                    "enrol one, then try again on the phone.",
-                e,
-            )
-        return MfaTotpRequired(e.resolver, enrollmentId)
     }
 
     /**
