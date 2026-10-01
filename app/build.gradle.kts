@@ -155,9 +155,9 @@ android {
 
     buildFeatures {
         buildConfig = true
-        // findViewById is used throughout; generating unused binding classes only
-        // slows compile and confuses contributors into thinking ViewBinding is adopted.
-        viewBinding = false
+        // Screens are moving from findViewById to generated bindings, one screen
+        // per PR; until every screen has moved, both styles coexist.
+        viewBinding = true
     }
 
     signingConfigs {
@@ -322,6 +322,8 @@ dependencies {
     testImplementation(libs.androidx.test.core.ktx)
     // WorkManagerTestInitHelper: Robolectric tests that launch HomeActivity.
     testImplementation(libs.androidx.work.testing)
+    // runTest / virtual time for coroutine code under test.
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     // 3.6.1 crashes on API 37 (Espresso's InputManagerEventInjectionStrategy
     // calls the hidden InputManager.getInstance, removed in Android 17).
@@ -378,6 +380,8 @@ kover {
                     "com.indicvision.semper.ui.*Adapter*",
                     "com.indicvision.semper.ui.*Fragment*",
                     "com.indicvision.semper.ui.*Dialog*",
+                    // Generated ViewBinding classes: no logic of ours to cover.
+                    "com.indicvision.semper.databinding.*",
                 )
             }
         }
