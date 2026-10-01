@@ -23,6 +23,7 @@ import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -297,6 +298,11 @@ object CloudSync {
      *
      * The caller re-authenticates first, which is what lets the identity delete
      * succeed instead of being refused as too stale.
+     *
+     * Runs to the end once started, even if the caller's scope is cancelled (a
+     * screen rotating away mid-delete): see the internal overload. A caller whose
+     * scope died never sees the result, so the next screen must judge by state
+     * (signed out, no local sessions), not by a callback.
      */
     suspend fun deleteAccount(
         context: Context,
@@ -322,19 +328,26 @@ object CloudSync {
      * gone while it still exists. Once the data *is* gone the session must not
      * continue, so the wipe and sign-out run whether or not the identity itself
      * could be deleted.
+     *
+     * The whole sequence is [NonCancellable]. Callers run it from a screen's scope,
+     * which a rotation cancels; cancelled after the erase, the phone kept its local
+     * data and a signed-in session for an account the server no longer has. The
+     * erase is covered too: the server may finish it after the caller has gone, and
+     * a client that stopped waiting would wipe nothing. Each step is local work or
+     * a network call that ends on its own timeouts.
      */
     internal suspend fun deleteAccount(
         eraseCloud: suspend () -> Boolean,
         deleteIdentity: suspend () -> Boolean,
         wipeLocal: () -> Unit,
         signOut: suspend () -> Unit,
-    ): AccountDeletion {
-        if (!eraseCloud()) return AccountDeletion.CLOUD_UNREACHABLE
+    ): AccountDeletion = withContext(NonCancellable) {
+        if (!eraseCloud()) return@withContext AccountDeletion.CLOUD_UNREACHABLE
         val identityGone = deleteIdentity()
         wipeLocal()
         signOut()
         Timber.i("Account erased and local data wiped")
-        return if (identityGone) AccountDeletion.DELETED else AccountDeletion.IDENTITY_KEPT
+        if (identityGone) AccountDeletion.DELETED else AccountDeletion.IDENTITY_KEPT
     }
 
     /** True when the backend copy is gone, or there was never a backend at all. */
