@@ -3,6 +3,7 @@ package com.indicvision.semper.data
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.impl.WorkManagerImpl
@@ -42,7 +43,7 @@ class LicenseConfigWorkerTest {
     private fun queued(): List<WorkInfo> = workManager.getWorkInfosForUniqueWork("license-config-refresh").get()
 
     @Test
-    fun `the refresh is queued once, every four hours, under its stored name and tag`() {
+    fun `the refresh is queued once, every four hours on any network, under its stored name and tag`() {
         LicenseConfigWorker.enqueue(context)
         LicenseConfigWorker.enqueue(context)
 
@@ -50,6 +51,7 @@ class LicenseConfigWorkerTest {
         assertTrue(info.tags.contains("license-config"))
         assertTrue(info.tags.contains(LicenseConfigWorker::class.java.name))
         assertEquals(TimeUnit.HOURS.toMillis(4), info.periodicityInfo?.repeatIntervalMillis)
+        assertEquals(NetworkType.CONNECTED, info.constraints.requiredNetworkType)
     }
 
     @Test
