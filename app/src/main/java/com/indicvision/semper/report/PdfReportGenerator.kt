@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.io.IOException
 import java.io.OutputStream
+import java.util.Locale
 
 /**
  * Renders a [ReportData] into the multi-page PDF report (cover, field
@@ -89,9 +90,13 @@ object PdfReportGenerator {
                 if (telemetrySource == null) telemetrySource = data
                 znssdFrames += ZnssdFrame(data.globalAvgZnssd, data.znssdAcceptedPoints)
 
-                drawCoverPage(layout, data, frameTitle(index), frameCount)
-                drawFieldPages(layout, data)
-                recycleImages(data)
+                try {
+                    drawCoverPage(layout, data, frameTitle(index), frameCount)
+                    drawFieldPages(layout, data)
+                } finally {
+                    // A page that fails to draw still frees this frame's images.
+                    recycleImages(data)
+                }
             }
 
             telemetrySource?.let {
@@ -147,6 +152,10 @@ object PdfReportGenerator {
         } catch (e: Exception) {
             emit(Progress.Error(e))
         } finally {
+            // PdfDocument.close() throws IllegalStateException while a page is
+            // unfinished, so a draw that failed mid-page would otherwise replace
+            // the Error (or a cancellation) with that throw and skip the close.
+            layout.finishCurrentPage()
             pdfDocument.close()
             recycleLogo(brandLogo)
         }
@@ -261,11 +270,7 @@ object PdfReportGenerator {
         layout.drawSectionHeader("2. Optimization & Quality")
         layout.drawTable(
             headers = listOf("Metric", "Value"),
-            rows = listOf(
-                listOf(summary.avgZnssdLabel, "%.5f".format(summary.avgZnssd)),
-                listOf(summary.convergenceLabel, "%.2f %%".format(stats.convergencePercent)),
-                listOf("Average ICGN Iterations", "%.2f".format(stats.avgIcgnIterations)),
-            ),
+            rows = qualityRows(stats, summary),
             colWeights = listOf(0.7f, 0.3f),
         )
 
@@ -281,17 +286,33 @@ object PdfReportGenerator {
         layout.drawSectionHeader("4. Hardware Profiling (Wall Time)")
         layout.drawTable(
             headers = listOf("Execution Phase", "Time (ms)"),
-            rows = listOf(
-                listOf("AKAZE + RANSAC Phase", "%.1f ms".format(stats.akazeRansacMs)),
-                listOf("Hessian Pre-Pass", "%.1f ms".format(stats.hessianPrepassMs)),
-                listOf("Delaunay Mesh Phase", "%.1f ms".format(stats.delaunayMs)),
-                listOf("Strain Calculation Phase", "%.1f ms".format(stats.strainMs)),
-                listOf("TOTAL WALL TIME", "%.1f ms".format(stats.wallTimeMs)),
-                listOf("Average Throughput", "%.2f pts/ms".format(stats.avgThroughputPtsPerMs)),
-            ),
+            rows = timingRows(stats),
             colWeights = listOf(0.6f, 0.4f),
         )
     }
+
+    /**
+     * The telemetry page's quality table. Formatted in [Locale.US], like every
+     * other number in the report: the default locale printed "12,5" on a German
+     * phone beside "0.00123" from [ReportBuilder.formatMetric].
+     */
+    internal fun qualityRows(stats: EngineStats, summary: TelemetrySummary): List<List<String>> = listOf(
+        listOf(summary.avgZnssdLabel, us("%.5f", summary.avgZnssd)),
+        listOf(summary.convergenceLabel, us("%.2f %%", stats.convergencePercent)),
+        listOf("Average ICGN Iterations", us("%.2f", stats.avgIcgnIterations)),
+    )
+
+    /** The telemetry page's wall-time table, in [Locale.US] (see [qualityRows]). */
+    internal fun timingRows(stats: EngineStats): List<List<String>> = listOf(
+        listOf("AKAZE + RANSAC Phase", us("%.1f ms", stats.akazeRansacMs)),
+        listOf("Hessian Pre-Pass", us("%.1f ms", stats.hessianPrepassMs)),
+        listOf("Delaunay Mesh Phase", us("%.1f ms", stats.delaunayMs)),
+        listOf("Strain Calculation Phase", us("%.1f ms", stats.strainMs)),
+        listOf("TOTAL WALL TIME", us("%.1f ms", stats.wallTimeMs)),
+        listOf("Average Throughput", us("%.2f pts/ms", stats.avgThroughputPtsPerMs)),
+    )
+
+    private fun us(format: String, value: Float): String = String.format(Locale.US, format, value)
 
     /**
      * [PdfDocument.writeTo] drops an IOException its stream throws: the native
