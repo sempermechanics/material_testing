@@ -18,7 +18,7 @@ import org.robolectric.annotation.Config
  * they are the user's numbers, not the data's extremes at all.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class SummaryCaptionTest {
 
     private val res = ApplicationProvider.getApplicationContext<Application>().resources

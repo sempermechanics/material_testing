@@ -26,7 +26,7 @@ import org.robolectric.shadows.ShadowDialog
  * something to offer, Restore asks which ones (all ticked), Hide hides them all.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class CloudBackupsCardTest {
 
     private lateinit var activity: AppCompatActivity

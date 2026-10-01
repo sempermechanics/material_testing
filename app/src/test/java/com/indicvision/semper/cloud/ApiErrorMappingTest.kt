@@ -15,7 +15,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * How a backend failure is read on the client: which code it *is* (not which
@@ -25,7 +24,6 @@ import org.robolectric.annotation.Config
  * stub on the plain JVM classpath.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ApiErrorMappingTest {
 
     @Test

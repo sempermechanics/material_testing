@@ -34,7 +34,7 @@ import org.robolectric.annotation.Config
  * strain-window failure whatever the cause; the dialog now says which.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class BatchRunControllerTest {
 
     /** The real gate's rule for this: Compute follows `!isProcessing` at check time. */

@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
  * once tinted every state sky blue, so a disabled Cta read as enabled.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class PrimaryButtonStyleTest {
 
     private val themed = ContextThemeWrapper(

@@ -2,13 +2,12 @@ package com.indicvision.semper.cloud
 
 import com.indicvision.semper.data.net.AppCheckHeader
 import mockwebserver3.MockResponse
-import mockwebserver3.MockWebServer
+import mockwebserver3.junit4.MockWebServerRule
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -23,21 +22,12 @@ import org.junit.Test
  */
 class AppCheckHeaderTest {
 
-    private lateinit var server: MockWebServer
+    @get:Rule
+    val serverRule = MockWebServerRule()
+    private val server get() = serverRule.server
 
     /** The fake backend's host, which is what the interceptor is scoped to. */
     private val apiHost: String get() = server.hostName
-
-    @Before
-    fun setUp() {
-        server = MockWebServer()
-        server.start()
-    }
-
-    @After
-    fun tearDown() {
-        server.close()
-    }
 
     private fun clientWith(token: () -> String?): OkHttpClient =
         OkHttpClient.Builder().addInterceptor(AppCheckHeader(apiHost, token)).build()

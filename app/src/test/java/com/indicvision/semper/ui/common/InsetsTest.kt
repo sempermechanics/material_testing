@@ -21,7 +21,7 @@ import androidx.core.graphics.Insets as GraphicsInsets
  * field back into view once the padding landed.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class InsetsTest {
 
     @Test

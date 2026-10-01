@@ -27,7 +27,7 @@ import java.time.Duration
  * opens the wrong combination in the viewer.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class VsgLatticeViewTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()

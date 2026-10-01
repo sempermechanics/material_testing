@@ -31,6 +31,7 @@ build it. This page routes you to the rest.
 | Know why a structural choice was made | [adr/](adr/README.md) — architecture decision records |
 | See what changed and when (history moved out of CONTEXT.md) | [ops/CHANGELOG.md](ops/CHANGELOG.md) |
 | Pick up a proposed improvement | [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md) |
+| Compare code-quality metrics with the 2026-10 baseline | [ops/QUALITY_BASELINE_2026-10-01.md](ops/QUALITY_BASELINE_2026-10-01.md) |
 | Work on the cloud backend | [backend/CLOUD_ARCHITECTURE_GCP.md](backend/CLOUD_ARCHITECTURE_GCP.md) |
 | Deploy the backend myself | [backend/BACKEND_SETUP_GCP.md](backend/BACKEND_SETUP_GCP.md) (CLI) or [BACKEND_SETUP_CONSOLE.md](backend/BACKEND_SETUP_CONSOLE.md) (browser) |
 | Fix sign-in / set up auth | [backend/AUTH_SETUP.md](backend/AUTH_SETUP.md) |

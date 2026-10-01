@@ -1,7 +1,7 @@
 package com.indicvision.semper.analysis
 
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SessionRecord.SyncState
+import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.afterUnsavedRerun
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -14,13 +14,16 @@ import org.junit.Test
  */
 class UnsavedRerunTest {
 
-    private fun previous(state: SyncState) = SessionRecord(
-        id = "s1", name = "run", createdAt = 0, updatedAt = 0, frameCount = 12,
-        subset = 21, step = 5, strainWindow = 15,
-        imgW = 64, imgH = 64, roiX = 0, roiY = 0, roiW = 64, roiH = 64,
-        refPath = "", refName = "ref.png", sessionDir = "",
-        headline = "εxx 1.2 mε", engineStats = listOf(1f, 2f), syncState = state,
-    )
+    private fun previous(state: SyncState) = sessionRecord(
+        id = "s1",
+        name = "run",
+        createdAt = 0,
+        frameCount = 12,
+        subset = 21,
+        imgW = 64,
+        imgH = 64,
+        syncState = state,
+    ).copy(headline = "εxx 1.2 mε", engineStats = listOf(1f, 2f))
 
     @Test
     fun `nothing on disk and backed up keeps the row, which now opens the cloud copy`() {

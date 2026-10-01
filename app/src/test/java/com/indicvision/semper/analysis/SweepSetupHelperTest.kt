@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
  * cosmetic slip.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class SweepSetupHelperTest {
 
     private class FakeCallbacks(var maxSubset: Int) : SweepSetupHelper.Callbacks {
