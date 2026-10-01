@@ -20,7 +20,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * The quota hard stop at the top of the batch loop: a new session at a full,
@@ -29,7 +28,6 @@ import org.robolectric.annotation.Config
  * with an UnsatisfiedLinkError rather than pass quietly.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class DicBatchRunnerLimitTest {
 
     private lateinit var ctx: Context

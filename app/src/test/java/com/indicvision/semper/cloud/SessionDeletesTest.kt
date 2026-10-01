@@ -12,6 +12,7 @@ import com.indicvision.semper.data.SessionStore
 import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.ListSessionsResponse
+import com.indicvision.semper.fixtures.sessionRecord
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,7 +22,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.IOException
 
 /**
@@ -33,7 +33,6 @@ import java.io.IOException
  * waits instead of failing, and the rows go one at a time.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class SessionDeletesTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
@@ -182,22 +181,8 @@ class SessionDeletesTest {
         assertEquals(setOf("a", "b"), SessionDeletes.rowIdsIn(tags))
     }
 
-    private fun record(id: String, state: SessionRecord.SyncState, cloudId: String = "") = SessionRecord(
+    private fun record(id: String, state: SessionRecord.SyncState, cloudId: String = "") = sessionRecord(
         id = id,
-        name = id,
-        createdAt = 1L,
-        updatedAt = 1L,
-        frameCount = 1,
-        subset = 41,
-        step = 5,
-        strainWindow = 15,
-        imgW = 100,
-        imgH = 100,
-        roiX = 0,
-        roiY = 0,
-        roiW = 100,
-        roiH = 100,
-        refPath = "",
         refName = "reference.png",
         sessionDir = SessionStore.dirFor(context, id).absolutePath,
         syncState = state,

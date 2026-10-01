@@ -1,8 +1,8 @@
 package com.indicvision.semper.cloud
 
-import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.DatCodec
 import com.indicvision.semper.data.SessionZip
+import com.indicvision.semper.fixtures.packDat
 import com.indicvision.semper.util.Digests
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -11,8 +11,6 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -108,17 +106,14 @@ class SessionZipTest {
     }
 
     /** A real (small) DIC point buffer — .dat entries need this shape, not arbitrary bytes. */
-    private fun sampleDatBytes(): ByteArray {
-        val points = listOf(
+    private fun sampleDatBytes(): ByteArray = packDat(
+        listOf(
             floatArrayOf(0f, 0f, 1f, 1f, 0f, 0f, 0f, 0.01f),
             floatArrayOf(4f, 0f, 1f, 1f, 0f, 0f, 0f, 0.01f),
             floatArrayOf(0f, 4f, 1f, 1f, 0f, 0f, 0f, 0.01f),
             floatArrayOf(4f, 4f, 1f, 1f, 0f, 0f, 0f, 0.01f),
-        )
-        val out = ByteBuffer.allocate(points.size * DicResult.BYTES_PER_POINT).order(ByteOrder.nativeOrder())
-        for (p in points) for (v in p) out.putFloat(v)
-        return out.array()
-    }
+        ),
+    )
 
     @Test
     fun `dat entries are stored raw by default (encodeDatEntries=false)`() {

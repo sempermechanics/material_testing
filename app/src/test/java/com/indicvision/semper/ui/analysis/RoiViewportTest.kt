@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
  * bounds, so they must be exact, and the photo must never leave the screen.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class RoiViewportTest {
 
     private val viewport = RoiViewport().apply { layout(200f, 100f, 400f, 400f) }
