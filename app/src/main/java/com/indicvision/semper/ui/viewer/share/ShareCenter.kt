@@ -1,5 +1,5 @@
 // Share sheet UI: one row per export kind, each started through [runJob]; the
-// generators live in ShareExportBuilder. Guard clauses read best as early returns.
+// generators live in ShareExportBuilder.
 
 @file:SuppressLint("InflateParams")
 

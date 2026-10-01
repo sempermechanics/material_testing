@@ -1,5 +1,3 @@
-// Restore worker: literal retry/backoff and buffer constants read clearest inline.
-
 package com.indicvision.semper.data
 
 import android.content.Context

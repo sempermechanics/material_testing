@@ -10,9 +10,9 @@ Baselines stay empty: `app/lint-baseline.xml` and `app/detekt-baseline.xml`.
 
 Size and complexity findings are silenced with targeted `@file:Suppress`
 rather than a baseline — prefer extracting over widening those lists. As of
-2026-09-23 that is not "a few files": 81 main files carry `@file:Suppress`
-(most often `MagicNumber` 55, `ReturnCount` 29, `TooManyFunctions` 27,
-`LongParameterList` 21, `CyclomaticComplexMethod` 19, `LongMethod` 18) and 17
+2026-10-02 that is not "a few files": 77 main files carry `@file:Suppress`
+(most often `MagicNumber` 49, `ReturnCount` 26, `TooManyFunctions` 25,
+`LongParameterList` 19, `CyclomaticComplexMethod` 17, `LongMethod` 16) and 17
 carry `@file:SuppressLint`. Since the baselines are empty, suppression is the
 only thing keeping those findings quiet.
 Catalog version-availability lint IDs are disabled; bump deps in deliberate PRs.

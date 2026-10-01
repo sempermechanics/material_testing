@@ -1,4 +1,5 @@
-// Bundle download worker: literal retry/backoff and percent math read clearest inline.
+// Bundle download worker: doWork is one linear fetch-and-write flow with an early
+// exit or throw per failure mode; its length and branching are inherent.
 @file:Suppress("LongMethod", "ReturnCount", "ThrowsCount", "CyclomaticComplexMethod")
 
 package com.indicvision.semper.data
