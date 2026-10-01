@@ -19,10 +19,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.ImageButton
-import android.widget.Spinner
-import android.widget.TextView
-import android.widget.Toast
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.animation.doOnEnd
@@ -31,10 +27,6 @@ import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.appbar.MaterialToolbar
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.slider.Slider
 import com.indicvision.semper.R
 import com.indicvision.semper.data.prefs.CoachPrefs
 import com.indicvision.semper.data.prefs.ParamClipboard
@@ -42,7 +34,9 @@ import com.indicvision.semper.data.session.CacheJanitor
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.data.session.SkippedNode
+import com.indicvision.semper.databinding.ActivityVsgLatticeBinding
 import com.indicvision.semper.field.DicResult
+import com.indicvision.semper.field.Roi
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.recommend.StrainWindowText
 import com.indicvision.semper.ui.analysis.run.EngineFailure
@@ -52,7 +46,9 @@ import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
+import com.indicvision.semper.ui.common.Feedback
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.onButtonChecked
 import com.indicvision.semper.ui.viewer.ViewerArgs
 import com.indicvision.semper.ui.viewer.ViewerSweepArgs
 import kotlinx.coroutines.Dispatchers
@@ -133,27 +129,14 @@ class VsgLatticeActivity : AppCompatActivity() {
      */
     private var lastStrainComponent: Int? = null
 
-    private lateinit var strainPlotSection: View
-    private lateinit var latticeView: VsgLatticeView
-
     /** The sweep's arguments, parsed once (ADR-003); the record is read only for an Intent missing a key. */
     private val args: ViewerArgs by lazy {
         ViewerArgs.from(intent) {
             intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)?.let { SessionStore.get(this, it) }
         }
     }
-    private lateinit var strainPlot: VsgPlotView
-    private lateinit var strainSpinner: Spinner
-    private lateinit var strainPlotTitle: TextView
-    private lateinit var strainPlotReadout: TextView
-    private lateinit var stepperRow: View
-    private lateinit var chipSelectedParams: MaterialButton
-    private lateinit var btnPrevNode: ImageButton
-    private lateinit var btnNextNode: ImageButton
-    private lateinit var togglePlotMode: MaterialButtonToggleGroup
-    private lateinit var strainSlider: Slider
-    private lateinit var btnSaveGraph: MaterialButton
-    private lateinit var btnView: MaterialButton
+
+    private lateinit var binding: ActivityVsgLatticeBinding
 
     /** Suppresses the slider→plot callback while the plot drives the slider. */
     private var syncingSlider = false
@@ -167,12 +150,13 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_vsg_lattice)
+        binding = ActivityVsgLatticeBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        Insets.padTop(findViewById(R.id.toolbar))
-        Insets.padBottom(findViewById(R.id.actionBarRow))
+        Insets.padTop(binding.toolbar)
+        Insets.padBottom(binding.actionBarRow)
 
-        findViewById<MaterialToolbar>(R.id.toolbar).apply {
+        binding.toolbar.apply {
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationOnClickListener { finish() }
         }
@@ -184,8 +168,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).
         nodeByFrame = solvedNodes.associateBy { it.frameIndex }
 
-        latticeView = findViewById(R.id.latticeView)
-        latticeView.apply {
+        binding.latticeView.apply {
             interactionEnabled = true
             compact = true
             setNodes(nodes)
@@ -203,9 +186,9 @@ class VsgLatticeActivity : AppCompatActivity() {
         if (solvedNodes.isNotEmpty()) {
             selectFocus(solvedNodes.first().frameIndex)
         } else {
-            stepperRow.visibility = View.GONE
-            btnView.isEnabled = false
-            btnSaveGraph.isEnabled = false
+            binding.stepperRow.visibility = View.GONE
+            binding.btnView.isEnabled = false
+            binding.btnSaveGraph.isEnabled = false
         }
 
         loadStrainProfiles()
@@ -214,43 +197,28 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     /** Binds the strain-plot section views and wires their listeners. */
     private fun bindStrainControls() {
-        strainPlotSection = findViewById(R.id.strainPlotSection)
-        strainPlot = findViewById(R.id.plotLatticeStrain)
-        strainPlot.zoomEnabled = true
-        strainPlot.compactAxes = true
-        strainSpinner = findViewById(R.id.spinnerStrainComponent)
-        strainPlotTitle = findViewById(R.id.tvStrainPlotTitle)
-        strainPlotReadout = findViewById(R.id.tvStrainPlotReadout)
-        stepperRow = findViewById(R.id.stepperRow)
-        chipSelectedParams = findViewById(R.id.chipSelectedParams)
-        btnPrevNode = findViewById(R.id.btnPrevNode)
-        btnNextNode = findViewById(R.id.btnNextNode)
-        togglePlotMode = findViewById(R.id.togglePlotMode)
-        findViewById<View>(R.id.togglePlotModeClip).clipToOutline = true
-        strainSlider = findViewById(R.id.sliderScrub)
-        btnSaveGraph = findViewById(R.id.btnSaveGraph)
-        btnView = findViewById(R.id.btnView)
+        binding.plotLatticeStrain.zoomEnabled = true
+        binding.plotLatticeStrain.compactAxes = true
+        binding.togglePlotModeClip.clipToOutline = true
 
-        btnPrevNode.setOnClickListener { stepFocus(-1) }
-        btnNextNode.setOnClickListener { stepFocus(1) }
-        togglePlotMode.addOnButtonCheckedListener { _, _, isChecked ->
-            if (isChecked) redrawStrainPlot()
-        }
-        btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
-        btnSaveGraph.setOnClickListener { saveGraph() }
+        binding.btnPrevNode.setOnClickListener { stepFocus(-1) }
+        binding.btnNextNode.setOnClickListener { stepFocus(1) }
+        binding.togglePlotMode.onButtonChecked { redrawStrainPlot() }
+        binding.btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
+        binding.btnSaveGraph.setOnClickListener { saveGraph() }
 
-        strainPlot.onScrub = { x, samples -> strainPlotReadout.text = scrubReadout(x, samples) }
-        strainPlot.onScrubMove = { fraction ->
+        binding.plotLatticeStrain.onScrub = { x, samples -> binding.tvStrainPlotReadout.text = scrubReadout(x, samples) }
+        binding.plotLatticeStrain.onScrubMove = { fraction ->
             syncingSlider = true
-            strainSlider.value = if (fraction.isNaN()) 0f else fraction.coerceIn(0f, 1f)
+            binding.sliderScrub.value = if (fraction.isNaN()) 0f else fraction.coerceIn(0f, 1f)
             syncingSlider = false
         }
-        strainSlider.addOnChangeListener { _, value, fromUser ->
-            if (fromUser && !syncingSlider) strainPlot.scrubToFraction(value)
+        binding.sliderScrub.addOnChangeListener { _, value, fromUser ->
+            if (fromUser && !syncingSlider) binding.plotLatticeStrain.scrubToFraction(value)
         }
         // The chip is now the only params surface (the readout dropped its params
         // tail, see scrubReadout), so it is the only remaining copy target.
-        bindCopyGestures(chipSelectedParams)
+        bindCopyGestures(binding.chipSelectedParams)
         setupStrainSpinner()
     }
 
@@ -291,16 +259,16 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     private fun maybeCoachTheGraph() {
-        latticeView.post {
+        binding.latticeView.post {
             CoachMarkController(this).maybeShow(
                 CoachPrefs.Screen.SWEEP_LATTICE,
                 listOf(
                     CoachMarkController.Step(
-                        latticeView,
+                        binding.latticeView,
                         getString(R.string.coach_sweep_graph),
                     ),
                     CoachMarkController.Step(
-                        strainPlot,
+                        binding.plotLatticeStrain,
                         getString(R.string.coach_sweep_scrub),
                     ),
                 ),
@@ -310,12 +278,12 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun setupStrainSpinner() {
         val labels = STRAIN_OPTIONS.map { getString(it.first) }
-        strainSpinner.adapter = ArrayAdapter(
+        binding.spinnerStrainComponent.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_dropdown_item,
             labels,
         )
-        strainSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        binding.spinnerStrainComponent.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
                 parent: AdapterView<*>?,
                 view: View?,
@@ -332,7 +300,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     private fun showSummary(nodes: List<VsgLatticeView.Node>, solvedCount: Int, skippedCount: Int) {
         val stepDenom = nodes.firstOrNull()?.takeIf { it.step > 0 }
             ?.let { (it.subset.toDouble() / it.step).roundToInt() } ?: 0
-        val summary = findViewById<TextView>(R.id.tvLatticeSummary)
+        val summary = binding.tvLatticeSummary
         if (solvedCount == 0) {
             summary.text = getString(R.string.vsg_lattice_all_failed)
             summary.isClickable = true
@@ -445,13 +413,8 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     /** The ROI centre line every profile is cut along — fixed for the activity's lifetime. */
-    private fun centreLine(): VsgStudy.StudyLine = VsgStudy.centreLine(
-        args.roiX,
-        args.roiY,
-        args.roiW,
-        args.roiH,
-        lineCutHorizontal(),
-    )
+    private fun centreLine(): VsgStudy.StudyLine =
+        VsgStudy.centreLine(Roi(args.roiX, args.roiY, args.roiW, args.roiH), lineCutHorizontal())
 
     private fun lineCutHorizontal(): Boolean = args.sweep?.lineCutHorizontal ?: true
 
@@ -459,19 +422,19 @@ class VsgLatticeActivity : AppCompatActivity() {
     @Suppress("ReturnCount")
     private fun redrawStrainPlot() {
         if (frameProfiles.isEmpty()) {
-            strainPlotSection.visibility = View.GONE
+            binding.strainPlotSection.visibility = View.GONE
             return
         }
         val component = selectedStrainComponent()
         val horizontal = lineCutHorizontal()
-        val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
+        val isolate = binding.togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         // Keep the zoom across node / mode switches; reset it when the component changes.
         val preserveViewport = component == lastStrainComponent
         lastStrainComponent = component
 
         val seriesByFrame = buildFrameSeries(component)
         if (seriesByFrame.isEmpty()) {
-            strainPlotSection.visibility = View.GONE
+            binding.strainPlotSection.visibility = View.GONE
             return
         }
         if (focusedFrameIndex >= 0 && seriesByFrame.none { it.frameIndex == focusedFrameIndex }) {
@@ -491,15 +454,15 @@ class VsgLatticeActivity : AppCompatActivity() {
             muted + selected
         }
 
-        strainPlotSection.visibility = View.VISIBLE
-        strainPlotTitle.text = getString(
+        binding.strainPlotSection.visibility = View.VISIBLE
+        binding.tvStrainPlotTitle.text = getString(
             R.string.line_cut_title_axis_fmt,
             getString(if (horizontal) R.string.axis_x else R.string.axis_y),
         )
         exportSeries = toShow
         exportXLabel = getString(if (horizontal) R.string.line_cut_axis_x else R.string.line_cut_axis_y)
         exportYLabel = getString(R.string.line_cut_axis_strain)
-        strainPlot.setData(
+        binding.plotLatticeStrain.setData(
             toShow,
             exportXLabel,
             exportYLabel,
@@ -507,9 +470,9 @@ class VsgLatticeActivity : AppCompatActivity() {
             xUnit = getString(R.string.scale_unit_px),
             yUnit = getString(R.string.scale_unit_strain),
         )
-        strainPlotReadout.text = ""
+        binding.tvStrainPlotReadout.text = ""
         syncingSlider = true
-        strainSlider.value = 0f
+        binding.sliderScrub.value = 0f
         syncingSlider = false
     }
 
@@ -541,7 +504,7 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     private fun selectFocus(frameIndex: Int) {
         focusedFrameIndex = frameIndex
-        latticeView.selectedFrameIndex = focusedFrameIndex
+        binding.latticeView.selectedFrameIndex = focusedFrameIndex
         updateChipAndStepper()
         redrawStrainPlot()
     }
@@ -557,22 +520,22 @@ class VsgLatticeActivity : AppCompatActivity() {
     private fun updateChipAndStepper() {
         val node = solvedNodes.find { it.frameIndex == focusedFrameIndex }
         if (node == null) {
-            stepperRow.visibility = View.GONE
-            btnView.isEnabled = false
+            binding.stepperRow.visibility = View.GONE
+            binding.btnView.isEnabled = false
             return
         }
-        stepperRow.visibility = View.VISIBLE
-        chipSelectedParams.text = getString(
+        binding.stepperRow.visibility = View.VISIBLE
+        binding.chipSelectedParams.text = getString(
             R.string.vsg_lattice_param_fmt,
             node.subset,
             node.step,
             windowText(node),
         )
         val idx = solvedNodes.indexOfFirst { it.frameIndex == focusedFrameIndex }
-        btnPrevNode.isEnabled = idx > 0
-        btnNextNode.isEnabled = idx in 0 until solvedNodes.lastIndex
-        btnView.isEnabled = true
-        btnSaveGraph.isEnabled = true
+        binding.btnPrevNode.isEnabled = idx > 0
+        binding.btnNextNode.isEnabled = idx in 0 until solvedNodes.lastIndex
+        binding.btnView.isEnabled = true
+        binding.btnSaveGraph.isEnabled = true
     }
 
     private fun windowText(node: VsgLatticeView.Node): String = StrainWindowText.of(this, node.vsg, node.step)
@@ -620,13 +583,13 @@ class VsgLatticeActivity : AppCompatActivity() {
                 null
             }
             if (bitmap == null) {
-                Toast.makeText(this@VsgLatticeActivity, R.string.save_failed, Toast.LENGTH_SHORT).show()
+                Feedback.toast(this@VsgLatticeActivity, R.string.save_failed)
                 return@launch
             }
             val file = withContext(Dispatchers.IO) { writePng(bitmap) }
             bitmap.recycle()
             if (file == null) {
-                Toast.makeText(this@VsgLatticeActivity, R.string.save_failed, Toast.LENGTH_SHORT).show()
+                Feedback.toast(this@VsgLatticeActivity, R.string.save_failed)
                 return@launch
             }
             sharePng(file)
@@ -665,7 +628,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val lines = mutableListOf<String>()
         val horizontal = lineCutHorizontal()
         val axis = getString(if (horizontal) R.string.axis_x else R.string.axis_y)
-        val index = strainSpinner.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
+        val index = binding.spinnerStrainComponent.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
         lines += getString(
             R.string.vsg_export_title_fmt,
             getString(R.string.setting_vsg),
@@ -688,7 +651,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         if (node != null) {
             lines += getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, windowText(node))
         }
-        val isolate = togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
+        val isolate = binding.togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         if (!isolate) {
             lines += resources.getQuantityString(R.plurals.vsg_export_combos_fmt, series.size, series.size)
         }
@@ -755,7 +718,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     private fun selectedStrainComponent(): Int {
-        val index = strainSpinner.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
+        val index = binding.spinnerStrainComponent.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
         return STRAIN_OPTIONS[index].second
     }
 

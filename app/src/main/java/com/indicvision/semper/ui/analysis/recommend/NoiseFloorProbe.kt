@@ -1,11 +1,11 @@
 package com.indicvision.semper.ui.analysis.recommend
 
 import android.graphics.Rect
-import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.field.DicResult
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.ui.analysis.run.DicFieldIo
+import com.indicvision.semper.ui.analysis.run.SemperEngine
 import timber.log.Timber
 import java.io.File
 import java.nio.ByteBuffer
@@ -52,9 +52,8 @@ object NoiseFloorProbe {
         if (frameFiles.isEmpty()) return emptyList()
         val refBytes = runCatching { refFile.readBytes() }.getOrNull() ?: return emptyList()
         val bounds = NoiseFloorPixels.boundsOf(refBytes) ?: return emptyList()
-        val (imgW, imgH) = bounds
         val region = Rect(roi)
-        if (!region.intersect(Rect(0, 0, imgW, imgH))) return emptyList()
+        if (!region.intersect(Rect(0, 0, bounds.width, bounds.height))) return emptyList()
         if (region.width() <= subset || region.height() <= subset) return emptyList()
 
         val step = probeStepFor(region, subset)
@@ -62,7 +61,7 @@ object NoiseFloorProbe {
         val buffer = allocateFor(region, step)
         val refWindow = NoiseFloorPixels.grayWindow(refBytes, region)
 
-        runCatching { SemperNativeLib.initializeReference(refBytes, ByteArray(0), imgW, imgH) }
+        runCatching { SemperNativeLib.initializeReference(refBytes, ByteArray(0), bounds.width, bounds.height) }
             .onFailure {
                 Timber.w(it, "noise probe: reference init failed")
                 return emptyList()
@@ -153,24 +152,26 @@ object NoiseFloorProbe {
         step: Int,
         strainWindow: Int,
         buffer: ByteBuffer,
-    ): Int {
-        buffer.clear()
-        val silent = object : ProgressCallback {
-            override fun onProgressUpdate(percentage: Int) = Unit
-        }
-        val metrics = FloatArray(EngineStats.SLOT_COUNT)
-        return runCatching {
-            SemperNativeLib.computeFullFieldDirect(
-                refBytes, defBytes, ByteArray(0),
-                region.left, region.top, region.width(), region.height(),
-                step, subset, strainWindow,
-                false,
-                buffer, silent, metrics,
-            )
-        }.getOrElse {
-            Timber.w(it, "noise probe: solve threw")
-            -1
-        }
+    ): Int = runCatching {
+        SemperEngine.solve(
+            refBytes = refBytes,
+            defBytes = defBytes,
+            params = SemperEngine.Params(
+                roiX = region.left,
+                roiY = region.top,
+                roiW = region.width(),
+                roiH = region.height(),
+                step = step,
+                subset = subset,
+                strainWindow = strainWindow,
+            ),
+            buffer = buffer,
+            // Zeroed slots: the probe never reads the telemetry.
+            metrics = FloatArray(EngineStats.SLOT_COUNT),
+        )
+    }.getOrElse {
+        Timber.w(it, "noise probe: solve threw")
+        -1
     }
 
     private class Displacement(

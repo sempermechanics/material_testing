@@ -9,16 +9,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.LayoutInflater
 import android.view.View
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.ProgressBar
-import android.widget.RadioGroup
-import android.widget.ScrollView
 import android.widget.TextView
+import androidx.annotation.IdRes
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -28,13 +23,22 @@ import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.RangeSlider
 import com.indicvision.semper.R
 import com.indicvision.semper.SemperNativeLib
+import com.indicvision.semper.databinding.DialogSweepFramePickBinding
+import com.indicvision.semper.field.ImageSize
+import com.indicvision.semper.field.Roi
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.RawRgba
 import com.indicvision.semper.ui.analysis.recommend.SubsetRecommender
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.common.Dialogs
+import com.indicvision.semper.ui.common.SerialJob
+import com.indicvision.semper.ui.common.WarnChip
+import com.indicvision.semper.ui.common.bindInfo
+import com.indicvision.semper.ui.common.commitOnDone
+import com.indicvision.semper.ui.common.dp
+import com.indicvision.semper.ui.common.onButtonChecked
+import com.indicvision.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
@@ -54,6 +58,12 @@ class SweepSetupHelper(
         fun goToStep(step: Int, animate: Boolean)
         fun updateWizardChrome()
         fun checkReady()
+
+        /**
+         * No longer called: the sweep's "i" buttons open [Dialogs.info]
+         * themselves ([bindInfo]). Kept so the wizard's implementation still
+         * compiles; it goes when the wizard drops it.
+         */
         fun showInfo(titleRes: Int, bodyRes: Int)
         fun commitParamFields()
         fun startVsgSweep()
@@ -74,6 +84,10 @@ class SweepSetupHelper(
 
         /** Longest edge of a frame thumbnail in the pick dialog. */
         private const val PREVIEW_MAX_EDGE = 480
+
+        /** A frame row in the pick dialog: vertical padding and touch-target height. */
+        private const val FRAME_ROW_PADDING_DP = 8f
+        private const val FRAME_ROW_MIN_HEIGHT_DP = 48f
     }
 
     private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
@@ -92,7 +106,7 @@ class SweepSetupHelper(
     private lateinit var rgLineCutAxis: MaterialButtonToggleGroup
     private lateinit var btnPickSweepFrame: Button
     private lateinit var tvSweepPlan: TextView
-    private lateinit var sweepPlanWarnRow: View
+    private lateinit var sweepPlanWarn: WarnChip
     private lateinit var lineCutPreview: LineCutPreviewView
     private lateinit var sweepLatticePreview: VsgLatticeView
     lateinit var btnRunSweep: Button
@@ -102,8 +116,8 @@ class SweepSetupHelper(
     /** True while a suggestion/clamp is driving the sweep sliders, not the user. */
     private var bindingSweep = false
 
-    /** Cancels in-flight frame-pick preview decodes when the selection changes. */
-    private var framePreviewJob: Job? = null
+    /** The frame-pick preview decode; a new pick or closing the dialog cancels it. */
+    private val framePreview = SerialJob()
 
     /**
      * Set once the user edits any sweep control. Until then the three sweep
@@ -130,7 +144,7 @@ class SweepSetupHelper(
         rgLineCutAxis = activity.findViewById(R.id.rgLineCutAxis)
         btnPickSweepFrame = activity.findViewById(R.id.btnPickSweepFrame)
         tvSweepPlan = activity.findViewById(R.id.tvSweepPlan)
-        sweepPlanWarnRow = activity.findViewById(R.id.sweepPlanWarnRow)
+        sweepPlanWarn = WarnChip(activity.findViewById(R.id.sweepPlanWarnRow), callbacks::confirmOpenFaq)
         lineCutPreview = activity.findViewById(R.id.lineCutPreview)
         sweepLatticePreview = activity.findViewById(R.id.sweepLatticePreview)
         // Same compact axes as the result lattice, now that the preview is the
@@ -140,8 +154,7 @@ class SweepSetupHelper(
         latticeSamplesBody = activity.findViewById(R.id.latticeSamplesBody)
 
         rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
-        rgAnalysisMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
+        rgAnalysisMode.onButtonChecked { checkedId ->
             viewModel.sweepMode = checkedId == R.id.rbModeSweep
             // Leaving sweep mode while on the sweep page returns to settings.
             if (!viewModel.sweepMode && viewModel.wizardStep == 3) {
@@ -153,8 +166,7 @@ class SweepSetupHelper(
         }
 
         rgLineCutAxis.check(if (viewModel.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
-        rgLineCutAxis.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
+        rgLineCutAxis.onButtonChecked { checkedId ->
             viewModel.lineCutHorizontal = checkedId == R.id.rbAxisX
             refreshLineCutPreview()
         }
@@ -245,19 +257,18 @@ class SweepSetupHelper(
      * The sweep grid the current inputs describe, capped to the subsets the ROI
      * can hold: x subset sizes × y strain windows, one step per subset.
      */
-    fun currentPlan(): List<VsgStudy.Point> {
-        val ceiling = callbacks.maxSubsetForRoi()
-        if (viewModel.subsetMin > ceiling) return emptyList()
-        return VsgStudy.plan(
-            subsetMin = viewModel.subsetMin,
-            subsetMax = viewModel.subsetMax.coerceAtMost(ceiling),
-            subsetSamples = viewModel.subsetSamples,
-            strainWinMin = viewModel.strainWinMin,
-            strainWinMax = viewModel.strainWinMax,
-            strainWinSamples = viewModel.strainWinSamples,
-            stepDenominator = viewModel.stepDenominator,
-        )
-    }
+    fun currentPlan(): List<VsgStudy.Point> = sweepRanges().plan(callbacks.maxSubsetForRoi())
+
+    /** The view model's seven sweep inputs as one value. */
+    private fun sweepRanges() = SweepRanges(
+        subsetMin = viewModel.subsetMin,
+        subsetMax = viewModel.subsetMax,
+        strainWinMin = viewModel.strainWinMin,
+        strainWinMax = viewModel.strainWinMax,
+        subsetSamples = viewModel.subsetSamples,
+        strainWinSamples = viewModel.strainWinSamples,
+        stepDenominator = viewModel.stepDenominator,
+    )
 
     fun refreshSweepPlan() {
         if (!::tvSweepPlan.isInitialized) return
@@ -270,12 +281,12 @@ class SweepSetupHelper(
         when {
             plan.isNotEmpty() -> {
                 tvSweepPlan.isVisible = true
-                sweepPlanWarnRow.isVisible = false
+                sweepPlanWarn.hide()
                 tvSweepPlan.text = planSummary(plan)
             }
             viewModel.subsetMin > callbacks.maxSubsetForRoi() -> {
                 tvSweepPlan.isVisible = false
-                showSweepPlanWarning(
+                sweepPlanWarn.show(
                     activity.getString(
                         R.string.sweep_plan_subset_too_big_fmt,
                         callbacks.maxSubsetForRoi(),
@@ -285,7 +296,7 @@ class SweepSetupHelper(
             }
             else -> {
                 tvSweepPlan.isVisible = false
-                showSweepPlanWarning(
+                sweepPlanWarn.show(
                     activity.getString(R.string.sweep_plan_empty),
                     activity.getString(R.string.url_faq_sweep_empty_plan),
                 )
@@ -294,14 +305,6 @@ class SweepSetupHelper(
         refreshLatticePreview(plan)
         refreshLineCutPreview()
         callbacks.checkReady()
-    }
-
-    private fun showSweepPlanWarning(message: String, faqUrl: String) {
-        sweepPlanWarnRow.findViewById<TextView>(R.id.tvWarnText).text = message
-        sweepPlanWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
-            callbacks.confirmOpenFaq(faqUrl)
-        }
-        sweepPlanWarnRow.isVisible = true
     }
 
     /** Defaults to the middle of the sequence (1-based frame n/2+1). */
@@ -339,34 +342,23 @@ class SweepSetupHelper(
     /** Centre-line cut over the reference image and current ROI. */
     fun refreshLineCutPreview() {
         if (!::lineCutPreview.isInitialized) return
-        val w = viewModel.realRefWidth
-        val h = viewModel.realRefHeight
-        if (w <= 0 || h <= 0) {
+        val size = ImageSize(viewModel.realRefWidth, viewModel.realRefHeight)
+        val drawn = Roi(viewModel.roiX, viewModel.roiY, viewModel.roiW, viewModel.roiH)
+        val roi = drawn.orFullFrame(viewModel.hasCustomRoi, size)
+        if (roi == null) {
             lineCutPreview.setPreview(
                 bitmap = null,
-                imageW = 1,
-                imageH = 1,
-                roiX = 0,
-                roiY = 0,
-                roiW = 1,
-                roiH = 1,
+                image = ImageSize(1, 1),
+                roi = Roi(0, 0, 1, 1),
                 horizontal = viewModel.lineCutHorizontal,
                 maskBytes = null,
             )
             return
         }
-        val roiX = if (viewModel.hasCustomRoi) viewModel.roiX else 0
-        val roiY = if (viewModel.hasCustomRoi) viewModel.roiY else 0
-        val roiW = if (viewModel.hasCustomRoi && viewModel.roiW > 0) viewModel.roiW else w
-        val roiH = if (viewModel.hasCustomRoi && viewModel.roiH > 0) viewModel.roiH else h
         lineCutPreview.setPreview(
             bitmap = callbacks.refPreviewBitmap(),
-            imageW = w,
-            imageH = h,
-            roiX = roiX,
-            roiY = roiY,
-            roiW = roiW,
-            roiH = roiH,
+            image = size,
+            roi = roi,
             horizontal = viewModel.lineCutHorizontal,
             maskBytes = viewModel.roiMaskBytes,
         )
@@ -416,33 +408,19 @@ class SweepSetupHelper(
                 commit(typed)
             }
         }
-        field.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                field.clearFocus()
-                activity.getSystemService(InputMethodManager::class.java)
-                    ?.hideSoftInputFromWindow(field.windowToken, 0)
-                true
-            } else {
-                false
-            }
-        }
+        field.commitOnDone()
     }
 
     private fun wireSweepInfoButtons() {
-        activity.findViewById<View>(R.id.btnSweepInfo)
-            .setOnClickListener { callbacks.showInfo(R.string.analysis_mode, R.string.info_analysis_mode) }
-        activity.findViewById<View>(R.id.btnSubsetRangeInfo)
-            .setOnClickListener { callbacks.showInfo(R.string.subset_range, R.string.info_subset_range) }
-        activity.findViewById<View>(R.id.btnVsgMaxInfo)
-            .setOnClickListener { callbacks.showInfo(R.string.strain_win_range, R.string.info_strain_win_range) }
-        activity.findViewById<View>(R.id.btnSamplesInfo)
-            .setOnClickListener { callbacks.showInfo(R.string.subset_samples, R.string.info_subset_samples) }
-        activity.findViewById<View>(R.id.btnStepDepthInfo)
-            .setOnClickListener { callbacks.showInfo(R.string.step_depth, R.string.info_step_depth) }
-        activity.findViewById<View>(R.id.btnSweepOverlapInfo)
-            .setOnClickListener { callbacks.showInfo(R.string.subset_overlap, R.string.info_subset_overlap) }
-        activity.findViewById<View>(R.id.btnLineCutInfo)
-            .setOnClickListener { callbacks.showInfo(R.string.line_cut_axis, R.string.info_line_cut_axis) }
+        fun info(@IdRes button: Int, @StringRes title: Int, @StringRes body: Int) =
+            activity.findViewById<View>(button).bindInfo(activity, title, body)
+        info(R.id.btnSweepInfo, R.string.analysis_mode, R.string.info_analysis_mode)
+        info(R.id.btnSubsetRangeInfo, R.string.subset_range, R.string.info_subset_range)
+        info(R.id.btnVsgMaxInfo, R.string.strain_win_range, R.string.info_strain_win_range)
+        info(R.id.btnSamplesInfo, R.string.subset_samples, R.string.info_subset_samples)
+        info(R.id.btnStepDepthInfo, R.string.step_depth, R.string.info_step_depth)
+        info(R.id.btnSweepOverlapInfo, R.string.subset_overlap, R.string.info_subset_overlap)
+        info(R.id.btnLineCutInfo, R.string.line_cut_axis, R.string.info_line_cut_axis)
     }
 
     private fun effectiveSubsetCeiling(): Int =
@@ -546,11 +524,7 @@ class SweepSetupHelper(
         if (!etStepDepthValue.hasFocus()) {
             callbacks.renderParamField(etStepDepthValue, n)
         }
-        if (!tvSweepOverlapValue.hasFocus()) {
-            tvSweepOverlapValue.setText(
-                String.format(Locale.US, "%.2f", viewModel.subsetOverlap),
-            )
-        }
+        tvSweepOverlapValue.showUnlessEditing(String.format(Locale.US, "%.2f", viewModel.subsetOverlap))
     }
 
     private fun wireSweepOverlapField() {
@@ -568,16 +542,7 @@ class SweepSetupHelper(
 
     private fun bindSweepCommitField(field: EditText, commit: () -> Unit) {
         field.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commit() }
-        field.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                field.clearFocus()
-                activity.getSystemService(InputMethodManager::class.java)
-                    ?.hideSoftInputFromWindow(field.windowToken, 0)
-                true
-            } else {
-                false
-            }
-        }
+        field.commitOnDone()
     }
 
     private fun commitSubsetSamples(raw: Int) {
@@ -634,24 +599,22 @@ class SweepSetupHelper(
         val builder = MaterialAlertDialogBuilder(activity)
         // Inflate against the builder's context so the rows pick up the dialog
         // theme overlay rather than the activity's.
-        val content = LayoutInflater.from(builder.context)
-            .inflate(R.layout.dialog_sweep_frame_pick, null)
-        val preview = content.findViewById<ImageView>(R.id.ivSweepFrameDialogPreview)
-        val progress = content.findViewById<ProgressBar>(R.id.progressSweepFramePreview)
-        val numberField = content.findViewById<EditText>(R.id.etSweepFrameNumber)
-        content.findViewById<TextView>(R.id.tvSweepFrameTotal).text =
-            activity.getString(R.string.sweep_frame_out_of_fmt, count)
+        val content = DialogSweepFramePickBinding.inflate(LayoutInflater.from(builder.context))
+        val preview = content.ivSweepFrameDialogPreview
+        val progress = content.progressSweepFramePreview
+        val numberField = content.etSweepFrameNumber
+        content.tvSweepFrameTotal.text = activity.getString(R.string.sweep_frame_out_of_fmt, count)
 
         fun bindPreview(index: Int) {
             val path = viewModel.defFilePaths.getOrNull(index)
-            framePreviewJob?.cancel()
+            framePreview.cancel()
             if (path.isNullOrBlank()) {
                 preview.setImageDrawable(null)
                 progress.isVisible = false
                 return
             }
             progress.isVisible = true
-            framePreviewJob = activity.lifecycleScope.launch {
+            framePreview.launch(activity.lifecycleScope) {
                 val bmp = decodeFramePreview(path, viewModel.defFrameSizes[path])
                 if (index != selected) {
                     bmp?.recycle()
@@ -684,14 +647,14 @@ class SweepSetupHelper(
 
         builder
             .setTitle(R.string.sweep_frame)
-            .setView(content)
+            .setView(content.root)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                framePreviewJob?.cancel()
+                framePreview.cancel()
                 viewModel.vsgFrameIndex = selected
                 refreshSweepPlan()
             }
-            .setNegativeButton(R.string.cancel) { _, _ -> framePreviewJob?.cancel() }
-            .setOnDismissListener { framePreviewJob?.cancel() }
+            .setNegativeButton(R.string.cancel) { _, _ -> framePreview.cancel() }
+            .setOnDismissListener { framePreview.cancel() }
             .show()
     }
 
@@ -701,20 +664,19 @@ class SweepSetupHelper(
      * frame 30 of 50 does not land the user at the top of the list.
      */
     private fun fillFrameChoices(
-        content: View,
+        content: DialogSweepFramePickBinding,
         count: Int,
         selected: Int,
         onPick: (Int) -> Unit,
     ): List<MaterialRadioButton> {
-        val group = content.findViewById<RadioGroup>(R.id.rgSweepFrames)
-        val density = activity.resources.displayMetrics.density
-        val rowPadding = (8 * density).toInt()
+        val group = content.rgSweepFrames
+        val rowPadding = group.dp(FRAME_ROW_PADDING_DP).toInt()
         val rows = List(count) { index ->
             MaterialRadioButton(group.context).apply {
                 id = View.generateViewId()
                 text = frameLabel(index)
                 tag = index
-                minimumHeight = (48 * density).toInt()
+                minimumHeight = group.dp(FRAME_ROW_MIN_HEIGHT_DP).toInt()
                 setPadding(paddingLeft, rowPadding, paddingRight, rowPadding)
                 group.addView(this)
                 isChecked = index == selected
@@ -731,8 +693,8 @@ class SweepSetupHelper(
     /** ASCII digits, so the field round-trips through toIntOrNull() in any locale. */
     private fun frameNumberText(oneBased: Int): String = String.format(Locale.US, "%d", oneBased)
 
-    private fun scrollFrameRowIntoView(content: View, row: View) {
-        val scroll = content.findViewById<ScrollView>(R.id.scrollSweepFrames)
+    private fun scrollFrameRowIntoView(content: DialogSweepFramePickBinding, row: View) {
+        val scroll = content.scrollSweepFrames
         scroll.post { scroll.scrollTo(0, row.top) }
     }
 
@@ -746,16 +708,7 @@ class SweepSetupHelper(
             val typed = field.text.toString().trim().toIntOrNull()
             if (typed == null) field.setText(frameNumberText(current())) else onPick(typed)
         }
-        field.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                field.clearFocus()
-                activity.getSystemService(InputMethodManager::class.java)
-                    ?.hideSoftInputFromWindow(field.windowToken, 0)
-                true
-            } else {
-                false
-            }
-        }
+        field.commitOnDone()
     }
 
     /**

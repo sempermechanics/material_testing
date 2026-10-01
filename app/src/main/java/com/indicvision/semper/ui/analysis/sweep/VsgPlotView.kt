@@ -16,9 +16,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.util.AttributeSet
-import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
@@ -28,6 +26,8 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withClip
 import androidx.core.graphics.withRotation
 import com.indicvision.semper.R
+import com.indicvision.semper.ui.common.PlotStyle
+import com.indicvision.semper.ui.common.ViewportMath
 import com.indicvision.semper.ui.common.dp
 import java.util.Locale
 import kotlin.math.abs
@@ -151,7 +151,7 @@ class VsgPlotView @JvmOverloads constructor(
         fun lineCutColor(context: Context, slot: Int): Int =
             ContextCompat.getColor(context, LINE_CUT_RES[slot.mod(LINE_CUT_RES.size)])
 
-        const val AXIS_LABEL_SP = 11f
+        const val AXIS_LABEL_SP = PlotStyle.AXIS_LABEL_SP
         const val LINE_WIDTH_DP = 2f
         const val MARKER_RADIUS_DP = 3.5f
 
@@ -171,10 +171,10 @@ class VsgPlotView @JvmOverloads constructor(
         const val PAD_RIGHT_DP = 12f
         const val PAD_TOP_DP = 10f
         const val GRID_LINES = 4
-        const val TICK_GAP_DP = 4f
+        const val TICK_GAP_DP = PlotStyle.TICK_GAP_DP
 
         /** Nudge that centres a tick label on its gridline, as a share of text size. */
-        const val TICK_BASELINE = 0.33f
+        const val TICK_BASELINE = PlotStyle.TICK_BASELINE
 
         /** Head-room above/below the data so markers are not clipped. */
         const val Y_MARGIN_FRACTION = 0.08f
@@ -182,10 +182,6 @@ class VsgPlotView @JvmOverloads constructor(
         /** Smallest viewport span as a fraction of the full data extent. */
         const val MIN_SPAN_FRACTION = 0.05f
     }
-
-    /** Axis labels in px, scaled for the user's font-size setting. */
-    private val axisLabelPx =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, AXIS_LABEL_SP, resources.displayMetrics)
 
     /** Reused every draw — onDraw runs on each scrub frame. */
     private val frame = Frame()
@@ -203,22 +199,9 @@ class VsgPlotView @JvmOverloads constructor(
     private val valueDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
     /** The y value drawn on the plot beside the scrub point. */
-    private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = axisLabelPx
-        color = ContextCompat.getColor(context, R.color.viewer_plot_ink_strong)
-        isFakeBoldText = true
-        typeface = Typeface.MONOSPACE
-    }
-    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(1f)
-        color = ContextCompat.getColor(context, R.color.viewer_plot_grid)
-    }
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = axisLabelPx
-        color = ContextCompat.getColor(context, R.color.viewer_plot_ink)
-        typeface = Typeface.MONOSPACE
-    }
+    private val valuePaint = PlotStyle.valueTextPaint(context)
+    private val gridPaint = PlotStyle.gridPaint(context)
+    private val textPaint = PlotStyle.axisTextPaint(context)
     private val path = Path()
 
     private var series: List<Series> = emptyList()
@@ -460,54 +443,12 @@ class VsgPlotView @JvmOverloads constructor(
     }
 
     private fun clampViewport(full: Bounds) {
-        var xmin = viewXMin ?: return
-        var xmax = viewXMax ?: return
-        var ymin = viewYMin ?: return
-        var ymax = viewYMax ?: return
-        val minXSpan = (full.xMax - full.xMin) * MIN_SPAN_FRACTION
-        val minYSpan = (full.yMax - full.yMin) * MIN_SPAN_FRACTION
-        if (xmax - xmin < minXSpan) {
-            val mid = (xmin + xmax) / 2f
-            xmin = mid - minXSpan / 2f
-            xmax = mid + minXSpan / 2f
-        }
-        if (ymax - ymin < minYSpan) {
-            val mid = (ymin + ymax) / 2f
-            ymin = mid - minYSpan / 2f
-            ymax = mid + minYSpan / 2f
-        }
-        val xSpan = xmax - xmin
-        val ySpan = ymax - ymin
-        if (xSpan >= full.xMax - full.xMin) {
-            xmin = full.xMin
-            xmax = full.xMax
-        } else {
-            if (xmin < full.xMin) {
-                xmin = full.xMin
-                xmax = xmin + xSpan
-            }
-            if (xmax > full.xMax) {
-                xmax = full.xMax
-                xmin = xmax - xSpan
-            }
-        }
-        if (ySpan >= full.yMax - full.yMin) {
-            ymin = full.yMin
-            ymax = full.yMax
-        } else {
-            if (ymin < full.yMin) {
-                ymin = full.yMin
-                ymax = ymin + ySpan
-            }
-            if (ymax > full.yMax) {
-                ymax = full.yMax
-                ymin = ymax - ySpan
-            }
-        }
-        viewXMin = xmin
-        viewXMax = xmax
-        viewYMin = ymin
-        viewYMax = ymax
+        val x = ViewportMath.clampWindow(viewXMin ?: return, viewXMax ?: return, full.xMin, full.xMax, MIN_SPAN_FRACTION)
+        val y = ViewportMath.clampWindow(viewYMin ?: return, viewYMax ?: return, full.yMin, full.yMax, MIN_SPAN_FRACTION)
+        viewXMin = x.min
+        viewXMax = x.max
+        viewYMin = y.min
+        viewYMax = y.max
     }
 
     private fun pxToDataX(xPx: Float, b: Bounds): Float {
@@ -549,7 +490,7 @@ class VsgPlotView @JvmOverloads constructor(
             (scrubX ?: highlightX)?.let {
                 gridPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_node_solved)
                 drawLine(sx(it), top, sx(it), bottom, gridPaint)
-                gridPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_grid)
+                gridPaint.color = PlotStyle.grid(context)
             }
 
             // Emphasis (dataviz skill): the focused series keeps its real hue;
@@ -781,7 +722,7 @@ class VsgPlotView @JvmOverloads constructor(
     }
 
     private fun drawGridTicks(canvas: Canvas, b: Bounds, f: Frame) {
-        textPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_ink)
+        textPaint.color = PlotStyle.ink(context)
         textPaint.textAlign = Paint.Align.RIGHT
         for (i in 0..GRID_LINES) {
             val y = f.bottom - (f.bottom - f.top) * i / GRID_LINES
@@ -806,7 +747,7 @@ class VsgPlotView @JvmOverloads constructor(
 
     private fun drawAxisLabels(canvas: Canvas, left: Float, right: Float, top: Float, bottom: Float) {
         textPaint.textAlign = Paint.Align.CENTER
-        textPaint.color = ContextCompat.getColor(context, R.color.viewer_plot_ink_strong)
+        textPaint.color = PlotStyle.inkStrong(context)
         canvas.drawText(
             xLabel,
             (left + right) / 2f,
