@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Looper
 import android.view.View
 import androidx.appcompat.app.AlertDialog
+import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
 import com.indicvision.semper.data.CloudSync
 import com.indicvision.semper.ui.common.AuthRoute
@@ -57,6 +58,10 @@ class AccountDeletionRotationTest {
     @After
     fun tearDown() {
         built.forEach { runCatching { it.pause().stop().destroy() } }
+        // Let a run still waiting on the gate finish, so no coroutine is left
+        // suspended on the process-wide scope for the next test.
+        gate.complete(CloudSync.AccountDeletion.CLOUD_UNREACHABLE)
+        idle()
         AccountDeletionRun.resetForTest()
     }
 
@@ -140,5 +145,37 @@ class AccountDeletionRotationTest {
         assertFalse(AccountDeletionRun.start(activity))
         idle()
         assertEquals(1, deletions)
+    }
+
+    @Test
+    fun `a deletion that throws ends, keeps the user here, and can be retried`() {
+        AccountDeletionRun.delete = { error("boom") }
+        val controller = settings()
+
+        assertTrue(AccountDeletionRun.start(controller.get()))
+        idle()
+
+        assertEquals("never stuck in Running", AccountDeletionRun.State.Idle, AccountDeletionRun.state.value)
+        assertNull("told it failed, not routed", shadowOf(controller.get()).nextStartedActivity)
+        assertFalse(ShadowDialog.getLatestDialog().isShowing)
+
+        AccountDeletionRun.delete = { CloudSync.AccountDeletion.DELETED }
+        assertTrue("a retry starts", AccountDeletionRun.start(controller.get()))
+        idle()
+        assertEquals(signInComponent(controller.get()), shadowOf(controller.get()).nextStartedActivity.component)
+    }
+
+    @Test
+    fun `a throw with no screen to read it still reaches Done`() {
+        AccountDeletionRun.delete = { throw IllegalStateException("boom") }
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+
+        assertTrue(AccountDeletionRun.start(app))
+        idle()
+
+        assertEquals(
+            AccountDeletionRun.State.Done(CloudSync.AccountDeletion.CLOUD_UNREACHABLE),
+            AccountDeletionRun.state.value,
+        )
     }
 }

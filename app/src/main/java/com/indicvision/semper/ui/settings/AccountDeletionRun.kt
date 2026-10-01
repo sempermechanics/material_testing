@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * The one account deletion in flight, held outside any screen.
@@ -50,7 +51,15 @@ object AccountDeletionRun {
         if (!mutableState.compareAndSet(State.Idle, State.Running)) return false
         val app = context.applicationContext
         scope.launch {
-            mutableState.value = State.Done(delete(app))
+            // Never left in Running: a throw would otherwise stick the dialog up
+            // and refuse every later start. [scope] is never cancelled, so what
+            // is caught here is never a cancellation of this work. The outcome
+            // is the one that keeps the user here and lets them try again.
+            val outcome = runCatching { delete(app) }.getOrElse {
+                Timber.e(it, "Account deletion threw %s", it.javaClass.simpleName)
+                CloudSync.AccountDeletion.CLOUD_UNREACHABLE
+            }
+            mutableState.value = State.Done(outcome)
         }
         return true
     }
