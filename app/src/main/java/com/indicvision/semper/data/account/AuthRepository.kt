@@ -25,6 +25,11 @@ import com.indicvision.semper.data.net.MeResponse
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.data.prefs.PrefFiles.EmailLink
+import com.indicvision.semper.data.prefs.get
+import com.indicvision.semper.data.prefs.privatePrefs
+import com.indicvision.semper.data.prefs.put
+import com.indicvision.semper.data.prefs.remove
 import com.indicvision.semper.diagnostics.SemperAnalytics
 import com.indicvision.semper.util.rethrowIfCallerCancelled
 import com.indicvision.semper.util.suspendRunCatching
@@ -258,7 +263,7 @@ class AuthRepository(
             .build()
         try {
             auth.sendSignInLinkToEmail(clean, settings).await()
-            linkPrefs().edit { putString(K_PENDING_EMAIL, clean) }
+            linkPrefs().edit { put(EmailLink.PENDING_EMAIL, clean) }
             Result.success(Unit)
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             e.rethrowIfCallerCancelled()
@@ -326,16 +331,16 @@ class AuthRepository(
     fun isEmailSignInLink(link: String): Boolean = auth.isSignInWithEmailLink(link)
 
     /** The email a link was last sent to (needed to complete the sign-in). */
-    fun pendingLinkEmail(): String? = linkPrefs().getString(K_PENDING_EMAIL, null)
+    fun pendingLinkEmail(): String? = linkPrefs()[EmailLink.PENDING_EMAIL]
 
     /** Finish a passwordless email-link sign-in from the tapped link. */
     suspend fun completeEmailLink(email: String, link: String): Result<String> {
         val result = firebaseThen("email_link") { auth.signInWithEmailLink(email.trim(), link).await() }
-        if (result.isSuccess) linkPrefs().edit { remove(K_PENDING_EMAIL) }
+        if (result.isSuccess) linkPrefs().edit { remove(EmailLink.PENDING_EMAIL) }
         return result
     }
 
-    private fun linkPrefs() = appContext.getSharedPreferences("indic_emaillink", Context.MODE_PRIVATE)
+    private fun linkPrefs() = privatePrefs(appContext, EmailLink.NAME)
 
     /** Re-check the account status for the currently signed-in Firebase user. */
     suspend fun refreshStatus(): Result<String> = withContext(Dispatchers.IO) {
@@ -730,8 +735,6 @@ class AuthRepository(
     private companion object {
         /** Cap server error detail length in user-facing 401 snackbars. */
         const val API_ERROR_HINT_MAX_CHARS = 120
-
-        const val K_PENDING_EMAIL = "pending_email"
 
         /** Email sign-in link continue URL — see [AUTH_HOST]. */
         const val EMAIL_LINK_CONTINUE_URL = "https://$AUTH_HOST/auth/finishSignIn"
