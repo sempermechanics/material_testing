@@ -100,7 +100,7 @@ class SettingsActivity : AppCompatActivity() {
     private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
 
     /** Restore / Save-to-Files download keys currently busy — disables row actions. */
-    private val downloadingKeys = mutableSetOf<String>()
+    private val busy = BusyTransfers()
 
     internal lateinit var transferBanner: TransferBannerController
     private lateinit var yourDataSection: SettingsYourDataSection
@@ -302,7 +302,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun confirmLocalDownload(entry: AnalysisEntry) {
         if (!entry.offersDownload()) return
         val key = entry.downloadKey()
-        if (key in downloadingKeys || isBundleDownloadRunning(key) || isRestoreWorkRunning(key)) {
+        if (busy.isBusy(key)) {
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
@@ -326,7 +326,7 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
         val key = pending.cloudSessionId
-        if (key in downloadingKeys || isBundleDownloadRunning(key)) {
+        if (busy.isBusy(key)) {
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
@@ -361,7 +361,7 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.download_analysis_failed, Toast.LENGTH_LONG).show()
             return
         }
-        markDownloading(key, true)
+        markDownloading(key)
         transferBanner.upsert(
             TransferBannerController.Transfer(
                 id = key,
@@ -375,8 +375,8 @@ class SettingsActivity : AppCompatActivity() {
     private fun confirmCloudRestore(entry: AnalysisEntry) {
         if (!entry.offersRestore()) return
         val key = entry.downloadKey()
-        if (key in downloadingKeys || isBundleDownloadRunning(key) || isRestoreWorkRunning(key)) {
-            markDownloading(key, true)
+        if (busy.isBusy(key)) {
+            markDownloading(key)
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
@@ -393,8 +393,8 @@ class SettingsActivity : AppCompatActivity() {
     private fun restoreBackup(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
         val key = entry.downloadKey()
-        if (isRestoreWorkRunning(cloud.sessionId) || key in downloadingKeys) {
-            markDownloading(key, true)
+        if (busy.isBusy(key)) {
+            markDownloading(key)
             Toast.makeText(this, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
             return
         }
@@ -406,7 +406,7 @@ class SettingsActivity : AppCompatActivity() {
                 RestoreStart.start(this@SettingsActivity, cloud.sessionId, targetLocalId, entry.name)
             }
             if (started == RestoreStart.Result.ALREADY_RUNNING) {
-                markDownloading(key, true)
+                markDownloading(key)
                 Toast.makeText(this@SettingsActivity, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
                 return@launch
             }
@@ -414,7 +414,7 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this@SettingsActivity, R.string.restore_failed_generic, Toast.LENGTH_LONG).show()
                 return@launch
             }
-            markDownloading(key, true)
+            markDownloading(key)
             transferBanner.upsert(
                 TransferBannerController.Transfer(
                     id = key,
@@ -427,32 +427,18 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun isRestoreWorkRunning(cloudSessionId: String): Boolean =
-        RestoreStart.isRunning(this, cloudSessionId)
-
-    private fun isBundleDownloadRunning(cloudSessionId: String): Boolean {
-        if (cloudSessionId.isBlank()) return false
-        val wm = runCatching { WorkManager.getInstance(this) }.getOrNull()
-        return wm != null &&
-            runCatching {
-                wm.getWorkInfosForUniqueWork(CloudRestore.bundleDownloadWorkName(cloudSessionId)).get()
-                    .any { !it.state.isFinished }
-            }.getOrDefault(false)
-    }
-
-    private fun markDownloading(key: String, busy: Boolean) {
-        if (busy) downloadingKeys.add(key) else downloadingKeys.remove(key)
-        analysesAdapter.setDownloadingKeys(downloadingKeys.toSet())
+    private fun markDownloading(key: String) {
+        busy.mark(key)
+        publishBusy()
     }
 
     /** Drop finished restore / download keys. */
     private fun syncDownloadingKeys() {
-        val next = mutableSetOf<String>()
-        downloadingKeys.filter { isRestoreWorkRunning(it) || isBundleDownloadRunning(it) }.forEach { next += it }
-        downloadingKeys.clear()
-        downloadingKeys.addAll(next)
-        analysesAdapter.setDownloadingKeys(downloadingKeys.toSet())
+        busy.settle()
+        publishBusy()
     }
+
+    private fun publishBusy() = analysesAdapter.setDownloadingKeys(busy.keys())
 
     /**
      * A restore runs in [com.indicvision.semper.data.DicRestoreWorker], so without
@@ -470,6 +456,8 @@ class SettingsActivity : AppCompatActivity() {
         workManager
             .getWorkInfosByTagLiveData("restore")
             .observe(this) { infos ->
+                busy.onRestoreWork(infos.orEmpty())
+                publishBusy()
                 infos.orEmpty().forEach { info ->
                     val cloudId = info.tags.firstOrNull { it.startsWith("restore-") }
                         ?.removePrefix("restore-")
@@ -537,6 +525,9 @@ class SettingsActivity : AppCompatActivity() {
         workManager
             .getWorkInfosByTagLiveData(CloudRestore.TAG_BUNDLE_DOWNLOAD)
             .observe(this) { infos ->
+                // Running, queued and blocked rows go busy through this list.
+                busy.onDownloadWork(infos.orEmpty())
+                publishBusy()
                 infos.orEmpty().forEach { info ->
                     val cloudId = info.tags
                         .firstOrNull { it.startsWith("${CloudRestore.TAG_BUNDLE_DOWNLOAD}-") }
@@ -561,7 +552,6 @@ class SettingsActivity : AppCompatActivity() {
                                 } else if (info.state == WorkInfo.State.RUNNING) {
                                     transferBanner.updateProgress(key, pct)
                                 }
-                                markDownloading(key, true)
                             }
                         }
                         WorkInfo.State.FAILED -> {
