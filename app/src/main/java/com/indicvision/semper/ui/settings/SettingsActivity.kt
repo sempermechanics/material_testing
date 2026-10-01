@@ -47,6 +47,7 @@ import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.common.AuthRoute
+import com.indicvision.semper.ui.common.ConflatedRefresh
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeleteChoiceDialog
 import com.indicvision.semper.ui.common.DeleteFeedback
@@ -236,36 +237,47 @@ class SettingsActivity : AppCompatActivity() {
 
     // ── Analyses data management ─────────────────────────────────────────
 
+    /**
+     * The per-analysis list load, one at a time: it lists the cloud over the
+     * network and is asked for from nine places (restore, delete, backup,
+     * storage cleanup, finished work…). Overlapping loads used to land out of
+     * order; now a burst runs at most one more load, after the current one.
+     */
+    private val analysesRefresh by lazy {
+        ConflatedRefresh<Unit>(lifecycleScope, merge = { _, _ -> }) { loadAnalysesData() }
+    }
+
     internal fun wireAnalysesDataSection() {
         // Storage cleanup re-enters here; the section does not exist on demo.
         if (!LicenseEntitlements.cloudBackupEnabled(this)) return
+        analysesRefresh.request(Unit)
+    }
+
+    private suspend fun loadAnalysesData() {
         analysesProgress.isVisible = true
         analysesState.isVisible = false
+        val records = withContext(Dispatchers.IO) { SessionStore.list(this@SettingsActivity) }
+        // Full COMPLETED list (not listRestorable): stubs without local .dat
+        // still need a Download action when the cloud copy exists.
+        val result = CloudRestore.listCompleted(this@SettingsActivity)
+        analysesProgress.isVisible = false
 
-        lifecycleScope.launch {
-            val records = withContext(Dispatchers.IO) { SessionStore.list(this@SettingsActivity) }
-            // Full COMPLETED list (not listRestorable): stubs without local .dat
-            // still need a Download action when the cloud copy exists.
-            val result = CloudRestore.listCompleted(this@SettingsActivity)
-            analysesProgress.isVisible = false
-
-            cloudStateMessage(result)?.let {
-                analysesState.isVisible = true
-                analysesState.text = it
-            }
-            val cloud = (result as? CloudRestore.ListResult.Ready)?.sessions.orEmpty()
-            val entries = withContext(Dispatchers.IO) {
-                AnalysisEntries.merge(records, cloud).map { entry ->
-                    val id = entry.record?.id ?: return@map entry
-                    entry.copy(localBytes = SessionStore.sizeOf(this@SettingsActivity, id))
-                }
-            }
-            if (entries.isEmpty()) {
-                analysesState.isVisible = true
-                analysesState.setText(R.string.analyses_data_empty)
-            }
-            analysesAdapter.submit(entries)
+        cloudStateMessage(result)?.let {
+            analysesState.isVisible = true
+            analysesState.text = it
         }
+        val cloud = (result as? CloudRestore.ListResult.Ready)?.sessions.orEmpty()
+        val entries = withContext(Dispatchers.IO) {
+            AnalysisEntries.merge(records, cloud).map { entry ->
+                val id = entry.record?.id ?: return@map entry
+                entry.copy(localBytes = SessionStore.sizeOf(this@SettingsActivity, id))
+            }
+        }
+        if (entries.isEmpty()) {
+            analysesState.isVisible = true
+            analysesState.setText(R.string.analyses_data_empty)
+        }
+        analysesAdapter.submit(entries)
     }
 
     /**
