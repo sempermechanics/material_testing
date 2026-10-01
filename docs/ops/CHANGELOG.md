@@ -12,6 +12,39 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-01 — Backend and console deploy: cloud sessions tagged by app (#303)
+
+From `9230f444`. Staging first: `deploy-backend.yml` run 36843745324 →
+`semper-api-staging-36843745324-1` (digest `sha256:6db01fb7…`), with
+`semper-gw-staging` going from `v202610010422-79` to `v202610010939-82`. Then
+production: run 36844645753 → image `semper-api-36844645753-1`
+(`sha256:d50fc134…`), with `semper-gw` going from `v202610010433-80` to
+`v202610010948-83`. The previous production image (`semper-api-36819391914-1`,
+`sha256:ec30cc86…`) is pinned as `rollback-prev`.
+
+- Both runs used `gateway_mode: apply`. `/readyz` returned `firestore: ok,
+  drive: ok` on each candidate before the promote. Each gateway's outside check
+  answered 401 on `GET /v1/config` and 200 on the preflight. Both gateway diffs
+  were #303's documentation-level additions alone: the `app` query parameter
+  and 400 on `GET /v1/sessions`, and the 404 on the restore manifest.
+- #303 ([ADR-014](../adr/ADR-014-session-app-tag.md)): a new session is tagged
+  with the app named by `X-App-Id` (no header = `semper`). `GET /v1/sessions`
+  lists the asking app's sessions (`?app=all` for the whole account), and
+  `GET /v1/sessions/{sid}/files` answers only that app. The analyses quota stays
+  account-wide.
+- Backfill before the deploy (`backend/scripts/tag_session_apps.py`, run by
+  hand from #303's branch): 75 sessions tagged, 68 `semper` and 7
+  `materialtesting`. The dry run after the production promote found 0 left to
+  tag.
+- The console went out first, with `scripts/deploy-console.sh` to
+  `indicvision-dic-app-auth` from `9230f444`: the account page asks for
+  `/v1/sessions?app=all` and shows an App column.
+- Merged the same day, not part of the backend image: #297 (CI path filter,
+  CI APK versionCode 1 and releases at 1000 + run number, deploy and Firestore
+  workflows upstream-only, [FORK_SYNC.md](FORK_SYNC.md)), #298, #299, #300,
+  #301, #302 (app fixes and features ported from material_testing, for the next
+  app release) and #304 (benchmark phone-state gates, ADR-008).
+
 ## 2026-10-01 — Backend deploy: Dependabot dependency bumps (#289, #290)
 
 From `615149fd`, production only (staging skipped on request): `deploy-backend.yml`

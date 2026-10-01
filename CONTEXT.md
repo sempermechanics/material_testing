@@ -101,25 +101,20 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-09-26)
+## Current state (2026-10-01)
 
-- **Deployed.** Cloud Run `semper-api` (image `semper-api-36819391914-1` from `615149fd`,
+- **Deployed.** Cloud Run `semper-api` (image `semper-api-36844645753-1` from `9230f444`,
   2026-10-01; scales to zero) behind API Gateway
-  `semper-gw` (config `v202610010433-80`, deployed by CI, ADR-006);
+  `semper-gw` (config `v202610010948-83`, deployed by CI, ADR-006);
   staging `semper-api-staging` behind `semper-gw-staging` (CI since #258); project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing is live, consoles on `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md));
   #240 (cost), the licence desk (backend and console), the device-change fixes (#248, #249,
   #255, #261, #264), pinned serving/rollback images (#263), the staff phone release for
   Demo accounts (#266), compat shims 1–5 retired (#267, TD-45) and the account page's kept
   load error (#271, TD-136) went out 2026-09-26 ([CHANGELOG](docs/ops/CHANGELOG.md)).
-- **Device binding per app** ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)): #279
-  (TD-137) and #280 (TD-138) merged and the backend deployed 2026-09-28 (image
-  `semper-api-36419849032-1`; `rollback-prev` is `semper-api-00029-z72`); consoles
-  deployed from `0c3946f7` the same day. material_testing#90 merged: its builds send
-  `X-App-Id`; its release `v1.2-beta.2` (2026-09-29) signed in licensed on the Pixel 6
-  once that app's device was reset, since a new signing key is a new phone (ADR-010,
-  Consequences). Owed: Material Testing signed in beside a signed-in Semper on one
-  phone, and App Check for it.
+- **Device binding per app** ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md), #279,
+  #280, deployed 2026-09-28). Owed: Material Testing signed in beside a signed-in Semper
+  on one phone, and App Check for it.
 - **App release `v1.2-beta.3`** (beta, private GitHub Release, run 36239577288, from
   `ae05bb87`, versionCode 35): everything the app merged since `v1.2-beta.2`, including
   the wrong-information audit's app half, one delete queue (#227), Restore (#234), the Home
@@ -133,8 +128,14 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (edit/upgrade/convert) and #239 (delete with a 30-day restore): backend, gateway, indexes,
   TTLs and console deployed 2026-09-26 ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)),
   with #251's step-up and #257's edit fixes. Production has no duplicate holders (checked 2026-09-26).
-- **material_testing shares this history** and merges this `main` (last at `1e80954`,
-  material_testing#105); it has its own app id since material_testing#82 (TD-133). Shared
+- **Sessions tagged by app** ([ADR-014](docs/adr/ADR-014-session-app-tag.md), #303):
+  backfill, console and backend deployed 2026-10-01; each app lists only its own backups.
+- **Ported from material_testing, for the next app release:** #298 (first-run dialogs,
+  plot gutter, video fallback), #299 (keyboard insets), #301 (ROI zoom/pan), #300 (a
+  rename re-sends the backup's metadata), #302 (each frame on its own photo, ADR-011).
+  Owed: manual emulator checks of the keyboard, ROI dock and viewer (each PR's test plan).
+- **material_testing shares this history** and merges this `main` (last at `a735582`,
+  material_testing#115); it has its own app id since material_testing#82 (TD-133). Shared
   code and backend changes land here first: [FORK_SYNC.md](docs/ops/FORK_SYNC.md).
 - **Owed.** The public release of `v1.2-beta.3` (website / Play); a licensed-account smoke
   of the paths a Demo account cannot reach (share and PDF, Delete everywhere, Restore, the
