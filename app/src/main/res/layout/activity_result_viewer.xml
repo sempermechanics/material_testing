@@ -85,7 +85,8 @@
                         android:textSize="11sp"
                         android:textStyle="bold" />
 
-                    <!-- Bending: the deflection scale and bias (ViewerDeflectionCorrection).
+                    <!-- The session's correction (ViewerStressStrainHelper.draw): bending's
+                         deflection scale and bias, or the tensile curve's. Label set in code.
                          In the header row: the panel does not scroll. -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnSummaryAdjust"

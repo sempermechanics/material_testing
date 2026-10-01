@@ -4,6 +4,7 @@
 package com.indicvision.semper.report
 
 import com.indicvision.semper.DicResult
+import com.indicvision.semper.data.CurveCorrection
 import com.indicvision.semper.data.SpecimenGeometry
 import com.indicvision.semper.ui.analysis.VsgStudy
 import java.io.File
@@ -48,10 +49,11 @@ object AnalysisCsvWriter {
         val crossSectionMm2: Float = 0f,
         val loadAxisX: Boolean = true,
         val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
+        val curveCorrection: CurveCorrection = CurveCorrection.NONE,
     ) {
         /** How this session's loads become the `stress_MPa` column. */
         val stressModel: StressStrain.Model
-            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry)
+            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
     }
 
     /** One frame: its identity columns plus a lazy provider of its decoded field. */
@@ -187,8 +189,22 @@ object AnalysisCsvWriter {
             w.append("# load_axis,").append(if (metadata.loadAxisX) "x" else "y").append('\n')
             w.append("# load_unit,N\n")
             (model as? StressStrain.Model.Flexural)?.probe?.let { writeLoadPoint(w, it) }
+            (model as? StressStrain.Model.Axial)?.correction?.takeUnless { it.isNone }?.let { writeCorrection(w, it) }
         }
     }
+
+    /**
+     * Tensile's hand-entered scale and bias. `stress_MPa` and the mechanical
+     * results carry them; each point's field strains stay as the camera measured.
+     */
+    private fun writeCorrection(w: Writer, c: CurveCorrection) {
+        w.append("# strain_scale,").append(num(c.strainScale)).append('\n')
+        w.append("# strain_bias_millistrain,").append(num(c.strainBiasMilli)).append('\n')
+        w.append("# stress_scale,").append(num(c.stressScale)).append('\n')
+        w.append("# stress_bias_MPa,").append(num(c.stressBiasMPa)).append('\n')
+    }
+
+    private fun num(value: Float): String = String.format(Locale.US, "%.6f", value)
 
     /** Bending's tapped edges (reference px) and the scale they give. */
     private fun writeLoadPoint(w: Writer, probe: BeamDeflection.Probe) {

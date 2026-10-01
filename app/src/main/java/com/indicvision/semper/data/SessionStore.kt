@@ -140,6 +140,9 @@ data class SessionRecord(
     /** Bending dimensions; [SpecimenGeometry.NONE] on every other session. */
     val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
 
+    /** Tensile scale and bias typed in Results; [CurveCorrection.NONE] until then. */
+    val curveCorrection: CurveCorrection = CurveCorrection.NONE,
+
     /**
      * Signed load in newtons per deformed frame, index-aligned with [defNames].
      * NaN (written as `null`) is a frame the time match found no log row for.
@@ -353,6 +356,20 @@ object SessionStore {
                 } else {
                     it
                 }
+            }
+        }
+    }
+
+    /**
+     * Saves the tensile curve's scale and bias from Results. Like [rename] it
+     * leaves the sync state alone, so a session already backed up keeps the
+     * correction it was uploaded with in the cloud.
+     */
+    @WorkerThread
+    fun setCurveCorrection(context: Context, id: String, correction: CurveCorrection) = synchronized(lock) {
+        mutateIndex(context) { records ->
+            records.map {
+                if (it.id == id) it.copy(curveCorrection = correction, updatedAt = System.currentTimeMillis()) else it
             }
         }
     }

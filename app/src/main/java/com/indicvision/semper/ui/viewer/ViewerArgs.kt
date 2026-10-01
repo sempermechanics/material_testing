@@ -3,6 +3,7 @@ package com.indicvision.semper.ui.viewer
 import android.content.Context
 import android.content.Intent
 import com.indicvision.semper.DicKeys
+import com.indicvision.semper.data.CurveCorrection
 import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.SkippedNode
 import com.indicvision.semper.data.SpecimenGeometry
@@ -72,6 +73,7 @@ data class ViewerArgs(
     val loadAxisX: Boolean = true,
     val loadsN: List<Float> = emptyList(),
     val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
+    val curveCorrection: CurveCorrection = CurveCorrection.NONE,
     /** The frame to open on; null opens a run on its summary. A lattice node sets it. */
     val startFrame: Int? = null,
     val strainMethod: String = STRAIN_METHOD_VSG,
@@ -123,6 +125,7 @@ data class ViewerArgs(
             putExtra(DicKeys.LOAD_AXIS_X, loadAxisX)
             putExtra(DicKeys.LOADS_N, loadsN.toFloatArray())
             putExtra(DicKeys.SPECIMEN_GEOMETRY, geometry.toArray())
+            putExtra(DicKeys.CURVE_CORRECTION, curveCorrection.toArray())
             startFrame?.let { putExtra(DicKeys.START_FRAME, it) }
         }
     }
@@ -269,6 +272,9 @@ data class ViewerArgs(
                 ) { it.getFloatArrayExtra(DicKeys.LOADS_N)?.toList() },
                 geometry = fill(DicKeys.SPECIMEN_GEOMETRY, { it.geometry }, SpecimenGeometry.NONE) {
                     SpecimenGeometry.fromArray(it.getFloatArrayExtra(DicKeys.SPECIMEN_GEOMETRY))
+                },
+                curveCorrection = fill(DicKeys.CURVE_CORRECTION, { it.curveCorrection }, CurveCorrection.NONE) {
+                    CurveCorrection.fromArray(it.getFloatArrayExtra(DicKeys.CURVE_CORRECTION))
                 },
             )
             if (fromRecord.isNotEmpty() || defaulted.isNotEmpty()) {

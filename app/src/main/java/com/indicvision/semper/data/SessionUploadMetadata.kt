@@ -156,6 +156,17 @@ object SessionUploadMetadata {
             .put("loadSource", record.loadSource)
             .put("loadMapping", record.loadMapping)
             .apply { geometryJson(record.geometry)?.let { put("geometry", it) } }
+            .apply { correctionJson(record.curveCorrection)?.let { put("curveCorrection", it) } }
+    }
+
+    /** Tensile's hand-entered scale and bias, or null when none was set, so older metadata stays byte-identical. */
+    private fun correctionJson(c: CurveCorrection): JSONObject? {
+        if (c.isNone) return null
+        return JSONObject()
+            .put("strainScale", c.strainScale.toDouble())
+            .put("strainBiasMilli", c.strainBiasMilli.toDouble())
+            .put("stressScale", c.stressScale.toDouble())
+            .put("stressBiasMPa", c.stressBiasMPa.toDouble())
     }
 
     /** The entered dimensions only, or null when none — every other test stays byte-identical to `/4`. */

@@ -37,6 +37,16 @@
     <string name="cancel">Cancel</string>
     <string name="reset">Reset</string>
     <string name="apply">Apply</string>
+    <string name="curve_adjust">Adjust curve</string>
+    <string name="curve_adjust_title">Match the machine\'s curve</string>
+    <string name="curve_adjust_body">Strain = scale × strain from the camera + bias. Stress = scale × (load ÷ area) + bias. Set for this analysis, to line the curve up with the machine\'s own stress–strain export. The graph, E, yield, peak, the report and the CSV all use it.\n\n1 and 0 leave a value as measured.</string>
+    <string name="curve_strain_scale_hint">Strain scale (×), 1 for none</string>
+    <string name="curve_strain_bias_hint">Strain bias (mε), 0 for none</string>
+    <string name="curve_stress_scale_hint">Stress scale (×), 1 for none</string>
+    <string name="curve_stress_bias_hint">Stress bias (MPa), 0 for none</string>
+    <string name="curve_scale_invalid">Enter a number above 0, e.g. 1.05</string>
+    <string name="curve_bias_invalid">Enter a number, e.g. -0.12</string>
+    <string name="curve_reset">Reset</string>
     <string name="exit">Exit</string>
     <string name="find">Find</string>
     <string name="auto_scale">Auto-Scale</string>

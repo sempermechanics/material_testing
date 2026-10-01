@@ -41,6 +41,9 @@ object DicKeys {
      */
     const val SPECIMEN_GEOMETRY = "SPECIMEN_GEOMETRY"
 
+    /** [com.indicvision.semper.data.CurveCorrection.toArray] — tensile scale and bias. */
+    const val CURVE_CORRECTION = "CURVE_CORRECTION"
+
     // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"

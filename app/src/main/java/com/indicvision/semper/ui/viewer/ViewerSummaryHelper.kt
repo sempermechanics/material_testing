@@ -127,6 +127,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
         resultsPanel.isVisible = showsResults
         if (showsResults) {
             statusPanel.isVisible = false
+            // Only a tensile curve has a scale and bias to match the machine with.
             host.stressStrain.fill(
                 ViewerStressStrainHelper.Views(
                     host.findViewById(R.id.plotSummaryResults),

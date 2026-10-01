@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.TextView
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
@@ -37,14 +38,15 @@ class ViewerStressStrainHelper(
     /**
      * Where a curve is drawn: the Details sheet's section or the summary page.
      * [range] is the Whole test / Elastic region toggle, inside its pill clip;
-     * [adjust] opens bending's deflection correction.
+     * [adjust] opens the session's correction: bending's deflection scale and
+     * bias, or the tensile curve's.
      */
     class Views(
         val plot: VsgPlotView,
         val caption: TextView,
         val result: TextView,
         val range: MaterialButtonToggleGroup,
-        val adjust: View,
+        val adjust: MaterialButton,
     )
 
     private var job: Job? = null
@@ -124,8 +126,12 @@ class ViewerStressStrainHelper(
                     Trace.endSection()
                 }
             }
-            // The correction may have changed while the frames were read.
-            val current = BeamDeflection.Correction.recorrect(built, host.stressModel)
+            // Either correction may have changed while the frames were read. The
+            // tensile one first: it remaps from the model the curve was built with.
+            val current = BeamDeflection.Correction.recorrect(
+                StressStrain.recorrect(built, host.curveCorrection),
+                host.stressModel,
+            )
             vm.stressStrain = current
             waiting.forEach { draw(it, current) }
             waiting.clear()
@@ -147,8 +153,13 @@ class ViewerStressStrainHelper(
         drawn[views.plot] = views
         val plot = views.plot
         val result = views.result
-        views.adjust.isVisible = curve.model.plotsLoadDeflection && !curve.isEmpty
-        views.adjust.setOnClickListener { ViewerDeflectionCorrection.show(host) }
+        // One button for both corrections: bending's deflection, or the tensile curve.
+        val bending = curve.model.plotsLoadDeflection
+        views.adjust.isVisible = (bending || curve.model is StressStrain.Model.Axial) && !curve.isEmpty
+        views.adjust.setText(if (bending) R.string.deflection_adjust else R.string.curve_adjust)
+        views.adjust.setOnClickListener {
+            if (bending) ViewerDeflectionCorrection.show(host) else ViewerCurveCorrection.show(host)
+        }
         if (curve.isEmpty) {
             plot.isVisible = false
             result.isVisible = false
@@ -165,7 +176,6 @@ class ViewerStressStrainHelper(
         val region = modulus?.let { ElasticRegion.of(curve, it) }
         bindRange(views, shown = region != null)
         val zoomed = region?.takeIf { vm.showElasticRegion }
-        val bending = curve.model.plotsLoadDeflection
         plot.setData(
             zoomed?.let { ViewerStressStrainResults.elasticPlotSeries(host, it) } ?: plotSeries(host, curve, modulus),
             xAxis,

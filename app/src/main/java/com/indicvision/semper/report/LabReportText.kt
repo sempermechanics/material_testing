@@ -3,6 +3,7 @@
 
 package com.indicvision.semper.report
 
+import com.indicvision.semper.data.CurveCorrection
 import java.util.Locale
 import kotlin.math.abs
 
@@ -75,6 +76,15 @@ object LabReportText {
             "Stress = L / A = $loadKn × 10³ N / ($areaMm2 × 10⁻⁶ m²) = $stressMPa MPa"
 
         fun strainLine(strain: String) = "Strain = ΔL / L, read by DIC for row 1 = $strain"
+        const val CORRECTION = "Curve matched to the machine by"
+        fun correction(c: CurveCorrection): String {
+            fun n(value: Float) = LabReportFormat.num(value, 4)
+            return "ε = ${n(c.strainScale)} × ε(DIC) + ${n(c.strainBiasMilli)} mε;  " +
+                "σ = ${n(c.stressScale)} × (L / A) + ${n(c.stressBiasMPa)} MPa"
+        }
+        fun correctedLine(stressMPa: String, strain: String) =
+            "With the match above, row 1 reads stress = $stressMPa MPa and strain = $strain"
+
         fun extensionLine(extensionPx: String, gaugePx: String) =
             "Extension ΔL for row 1 = $extensionPx px over a DIC gauge of $gaugePx px"
 
