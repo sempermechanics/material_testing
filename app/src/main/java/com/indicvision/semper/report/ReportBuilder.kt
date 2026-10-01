@@ -424,21 +424,24 @@ object ReportBuilder {
         val barRight = barLeft + barWidth
         val barBottom = barTop + barHeight
 
-        val jetColors = intArrayOf(
-            Color.rgb(127, 0, 0),
-            Color.rgb(255, 0, 0),
-            Color.rgb(255, 255, 0),
-            Color.rgb(0, 255, 255),
-            Color.rgb(0, 0, 255),
-            Color.rgb(0, 0, 127),
-        )
+        // The map's own ramp, lowest value at the bottom. A six-stop jet drawn here
+        // before put pure red at 80 % of the scale where the map has it at 87.5 %,
+        // off by up to 83 levels in a channel, so values read off the bar were wrong.
         canvas.drawRect(
             barLeft,
             barTop,
             barRight,
             barBottom,
             Paint().apply {
-                shader = LinearGradient(0f, barTop, 0f, barBottom, jetColors, null, Shader.TileMode.CLAMP)
+                shader = LinearGradient(
+                    0f,
+                    barBottom,
+                    0f,
+                    barTop,
+                    VisualizationEngine.rampColors(),
+                    null,
+                    Shader.TileMode.CLAMP,
+                )
             },
         )
         canvas.drawRect(
