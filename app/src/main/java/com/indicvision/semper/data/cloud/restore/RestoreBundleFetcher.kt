@@ -212,7 +212,7 @@ internal object RestoreBundleFetcher {
                     gate.withPermit {
                         val dest = RestoreUnpacker.destFor(f.role, f.name, fetch.layout)
                         fetch.api.downloadFile(fetch.token, f.fileId, dest, expectedBytes = f.declaredSize)
-                        if (dest.name == SessionLayout.REFERENCE_PNG) refPath.set(dest.absolutePath)
+                        if (dest == fetch.layout.referencePng) refPath.set(dest.absolutePath)
                         onProgress(done.incrementAndGet().toLong(), total)
                     }
                 }

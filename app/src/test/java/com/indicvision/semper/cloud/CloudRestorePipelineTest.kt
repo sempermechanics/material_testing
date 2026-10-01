@@ -85,6 +85,23 @@ class CloudRestorePipelineTest {
     }
 
     @Test
+    fun `a deformed image named reference_png does not become the restored reference`() {
+        api.files = listOf(
+            metadata(),
+            bundle(
+                "raw/Reference.png" to byteArrayOf(1, 2, 3),
+                "raw/reference.png" to byteArrayOf(4, 5),
+                "dat/frame_0001.dat" to RestoreFakeApi.onePointDat(),
+            ),
+        )
+
+        restore()
+
+        val dir = SessionStore.dirFor(context, LOCAL_ID)
+        assertEquals(File(dir, "reference.png").absolutePath, SessionStore.get(context, LOCAL_ID)?.refPath)
+    }
+
+    @Test
     fun `an entry that climbs into a sibling session directory is refused`() {
         // "<localId>X" shares the session dir's path as a string prefix, which is
         // all a startsWith(canonicalPath) check compared.

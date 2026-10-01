@@ -25,7 +25,7 @@ internal object RestoreUnpacker {
         SessionZip.forEachEntry(zip) { role, name, input ->
             val dest = destFor(role, name, layout)
             dest.outputStream().use { input.copyTo(it) }
-            if (dest.name == SessionLayout.REFERENCE_PNG) refPath = dest.absolutePath
+            if (dest == layout.referencePng) refPath = dest.absolutePath
         }
         return refPath
     }
@@ -52,7 +52,7 @@ internal object RestoreUnpacker {
                 .filterNot { it.isDirectory }
                 .forEach { entry ->
                     val dest = writePrefixEntry(input, entry.name, layout, crcByName[entry.name])
-                    if (dest.name == SessionLayout.REFERENCE_PNG) refPath = dest.absolutePath
+                    if (dest == layout.referencePng) refPath = dest.absolutePath
                     restored++
                 }
         }
