@@ -27,7 +27,7 @@ import java.nio.ByteOrder
  * this test reads.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class SessionUploadBundlerTest {
 
     @get:Rule

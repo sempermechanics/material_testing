@@ -16,7 +16,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * The viewer's Intent contract, which two entry points write and two
@@ -29,7 +28,6 @@ import org.robolectric.annotation.Config
  * is the only thing that fails when they drift.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ViewerArgsTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

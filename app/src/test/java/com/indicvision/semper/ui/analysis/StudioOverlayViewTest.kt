@@ -28,7 +28,7 @@ import org.robolectric.annotation.GraphicsMode
  * are correlated — an off-by-a-scale here is a wrong analysis, not a glitch.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class StudioOverlayViewTest {
 

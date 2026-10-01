@@ -6,14 +6,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Which decoded frames are stretched to full range (TD-134): video unless the
  * stream says otherwise, and the codec's output format before the container's.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ImageLumaRangeTest {
 
     private fun format(range: Int? = null) = MediaFormat().apply {

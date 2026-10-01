@@ -16,7 +16,6 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -24,9 +23,7 @@ import java.io.File
  * the field itself survives rotation in the ViewModel, so a rebuild that trusts
  * the layout comes back showing Exx with a U label.
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ViewerFieldPillsTest {
 
     @get:Rule

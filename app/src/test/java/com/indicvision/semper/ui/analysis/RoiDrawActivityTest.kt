@@ -38,7 +38,7 @@ import java.io.File
  * without the native decoder, so the whole load runs on the JVM.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RoiDrawActivityTest {
 

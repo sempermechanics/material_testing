@@ -17,7 +17,6 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 import java.io.File
 import java.time.Duration
 
@@ -26,9 +25,7 @@ import java.time.Duration
  * taps, so what matters is that a good number lands there and a bad one moves
  * nothing at all.
  */
-// Pinned like the other Robolectric tests: 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class FrameNumberEntryTest {
 
     @get:Rule

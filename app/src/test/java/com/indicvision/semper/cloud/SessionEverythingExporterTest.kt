@@ -18,15 +18,12 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * The local "export everything" archive. Entry names come from user-supplied
  * analysis names, so they are the part that can break an archive.
  */
-// Pinned like UploadResumableTest: Robolectric 4.14 tops out below our targetSdk.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class SessionEverythingExporterTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

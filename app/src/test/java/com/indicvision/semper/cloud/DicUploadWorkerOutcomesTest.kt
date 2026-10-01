@@ -10,7 +10,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 import kotlin.io.path.createTempDirectory
 
@@ -18,7 +17,6 @@ import kotlin.io.path.createTempDirectory
  * Pins [DicUploadWorker] quota / fail / retry seams without WorkManager.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class DicUploadWorkerOutcomesTest {
 
     @Test

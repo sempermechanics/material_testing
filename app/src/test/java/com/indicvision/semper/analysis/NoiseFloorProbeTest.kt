@@ -7,7 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import kotlin.math.ceil
 import kotlin.math.sqrt
 
@@ -23,7 +22,6 @@ import kotlin.math.sqrt
  * and this is the test that would have caught it.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class NoiseFloorProbeTest {
 
     /**

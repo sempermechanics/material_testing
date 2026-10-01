@@ -17,7 +17,7 @@ import java.io.File
  * and a one-combination sweep read "subset 1–1 px".
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class QuantityCopyTest {
 
     private val res = ApplicationProvider.getApplicationContext<Application>().resources

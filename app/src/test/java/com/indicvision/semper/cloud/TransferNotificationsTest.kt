@@ -12,7 +12,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Foreground-service typing for the transfer workers.
@@ -29,7 +28,6 @@ import org.robolectric.annotation.Config
  * SystemForegroundService, which a JVM test cannot observe.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class TransferNotificationsTest {
 
     private lateinit var context: Context

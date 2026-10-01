@@ -24,7 +24,6 @@ import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.IOException
 
 /**
@@ -33,7 +32,6 @@ import java.io.IOException
  * reconcile verdicts, the erase order, and the account export's cancel.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class CloudSeamTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

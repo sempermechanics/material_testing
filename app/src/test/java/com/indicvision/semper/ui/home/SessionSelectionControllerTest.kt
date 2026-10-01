@@ -40,7 +40,7 @@ import java.util.UUID
  * wrong one deletes the wrong copy.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class SessionSelectionControllerTest {
 
     @get:Rule

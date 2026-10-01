@@ -18,7 +18,7 @@ import java.io.File
  * used to come back as a clean run of however many frames it reached.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class RestoredStopReasonTest {
 
     private val context: Application = ApplicationProvider.getApplicationContext()

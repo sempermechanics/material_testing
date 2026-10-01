@@ -9,7 +9,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 
 private const val SERVER_CHUNK = 32 shl 20 // the flat chunkSize in backend/app/repo/sessions.py
 
@@ -21,7 +20,6 @@ private const val SERVER_CHUNK = 32 shl 20 // the flat chunkSize in backend/app/
  * (a big DIC batch still resident) independent of its RAM class.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class UploadChunkSizingTest {
 
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()

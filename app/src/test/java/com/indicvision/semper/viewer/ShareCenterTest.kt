@@ -18,7 +18,6 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
-import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 import java.io.File
 
@@ -29,7 +28,6 @@ import java.io.File
  * on a device (PdfReportDeviceTest).
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class ShareCenterTest {
 
     @get:Rule

@@ -28,7 +28,7 @@ import org.robolectric.annotation.Config
  * whose state did not move.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(application = Application::class)
 class SessionListAdapterTest {
 
     private lateinit var activity: AppCompatActivity

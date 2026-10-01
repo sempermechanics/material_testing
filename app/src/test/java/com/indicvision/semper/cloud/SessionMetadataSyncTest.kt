@@ -25,7 +25,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 import java.io.IOException
 
@@ -34,7 +33,6 @@ import java.io.IOException
  * metadata.json, so a restore on another phone brings back the new name.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class SessionMetadataSyncTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

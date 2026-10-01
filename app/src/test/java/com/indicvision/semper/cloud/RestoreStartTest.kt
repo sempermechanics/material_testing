@@ -16,7 +16,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 import java.util.UUID
 
@@ -27,7 +26,6 @@ import java.util.UUID
  * however many times either screen opens.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class RestoreStartTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

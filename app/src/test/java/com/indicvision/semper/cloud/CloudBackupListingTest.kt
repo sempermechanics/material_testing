@@ -17,7 +17,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.IOException
 
 /**
@@ -26,7 +25,6 @@ import java.io.IOException
  * yet" while the account had backups that only Settings listed.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class CloudBackupListingTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

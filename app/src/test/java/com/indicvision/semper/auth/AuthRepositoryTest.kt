@@ -21,7 +21,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.IOException
 
 /**
@@ -31,7 +30,6 @@ import java.io.IOException
  * network must not throw out someone who was already approved.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class AuthRepositoryTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

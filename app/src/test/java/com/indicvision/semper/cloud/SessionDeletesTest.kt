@@ -22,7 +22,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.IOException
 
 /**
@@ -34,7 +33,6 @@ import java.io.IOException
  * waits instead of failing, and the rows go one at a time.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class SessionDeletesTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

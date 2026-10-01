@@ -13,7 +13,6 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -22,7 +21,6 @@ import java.io.File
  * records (TD-61).
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class RunSpecTest {
 
     private val cacheDir = File("cache")
