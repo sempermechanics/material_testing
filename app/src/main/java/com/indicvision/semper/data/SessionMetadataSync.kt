@@ -76,7 +76,7 @@ object SessionMetadataSync {
         return try {
             api.replaceSessionMetadata(token, record.cloudSessionId, json)
             // A correction made while this was in flight is still to send.
-            if (SessionStore.clearMetadataStale(context, record.id, record.geometry)) Outcome.DONE else Outcome.RETRY
+            if (SessionStore.clearMetadataStale(context, record.id, record)) Outcome.DONE else Outcome.RETRY
         } catch (e: IndicApi.ApiException) {
             refused(record.id, e)
         } catch (e: IndicApi.DeviceConflictException) {

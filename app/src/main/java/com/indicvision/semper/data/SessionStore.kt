@@ -70,8 +70,9 @@ data class SessionRecord(
 
     /**
      * The cloud copy's metadata.json predates a change made here after the
-     * backup (a bending deflection correction), so [SessionMetadataSync] still
-     * has to send it. Cleared once the backend holds the current geometry.
+     * backup (bending's deflection correction or the tensile curve's), so
+     * [SessionMetadataSync] still has to send it. Cleared once the backend
+     * holds the current corrections.
      */
     val metadataStale: Boolean = false,
 
@@ -164,6 +165,13 @@ data class SessionRecord(
     val loadMapping: String = "",
 
 ) {
+
+    /**
+     * True when this analysis has a cloud copy, or one on its way: a change to
+     * what its metadata.json carries then has to reach it ([metadataStale]).
+     */
+    val hasCloudCopy: Boolean
+        get() = syncState != SyncState.LOCAL_ONLY || cloudSessionId.isNotBlank()
 
     /**
      * True when every frame has a load. A count that disagrees with [defNames]
@@ -369,14 +377,24 @@ object SessionStore {
 
     /**
      * Saves the tensile curve's scale and bias from Results. Like [rename] it
-     * leaves the sync state alone, so a session already backed up keeps the
-     * correction it was uploaded with in the cloud.
+     * leaves the sync state alone. A session with a cloud copy, or one on its
+     * way, is marked [SessionRecord.metadataStale] when the correction
+     * changes, so [SessionMetadataSync] re-sends its metadata.json (TD-152).
      */
     @WorkerThread
     fun setCurveCorrection(context: Context, id: String, correction: CurveCorrection) = synchronized(lock) {
         mutateIndex(context) { records ->
             records.map {
-                if (it.id == id) it.copy(curveCorrection = correction, updatedAt = System.currentTimeMillis()) else it
+                if (it.id == id) {
+                    val changed = it.curveCorrection != correction
+                    it.copy(
+                        curveCorrection = correction,
+                        metadataStale = it.metadataStale || (changed && it.hasCloudCopy),
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                } else {
+                    it
+                }
             }
         }
     }
@@ -397,10 +415,9 @@ object SessionStore {
             records.map {
                 if (it.id == id) {
                     val changed = it.geometry.deflectionCorrection != correction
-                    val inCloud = it.syncState != SessionRecord.SyncState.LOCAL_ONLY || it.cloudSessionId.isNotBlank()
                     it.copy(
                         geometry = it.geometry.withCorrection(correction),
-                        metadataStale = it.metadataStale || (changed && inCloud),
+                        metadataStale = it.metadataStale || (changed && it.hasCloudCopy),
                         updatedAt = System.currentTimeMillis(),
                     )
                 } else {
@@ -412,16 +429,18 @@ object SessionStore {
 
     /**
      * The backend now holds metadata built from [sent]. Clears
-     * [SessionRecord.metadataStale] only if the geometry is still [sent], so a
-     * correction made while the send was in flight is sent again. Returns
-     * whether it cleared.
+     * [SessionRecord.metadataStale] only if the corrections the metadata
+     * carries — the geometry (bending's deflection) and the tensile
+     * [SessionRecord.curveCorrection] — are still [sent]'s, so a correction
+     * made while the send was in flight is sent again. Returns whether it
+     * cleared.
      */
     @WorkerThread
-    fun clearMetadataStale(context: Context, id: String, sent: SpecimenGeometry): Boolean = synchronized(lock) {
+    fun clearMetadataStale(context: Context, id: String, sent: SessionRecord): Boolean = synchronized(lock) {
         var cleared = false
         val written = mutateIndex(context) { records ->
             records.map {
-                if (it.id == id && it.geometry == sent) {
+                if (it.id == id && it.geometry == sent.geometry && it.curveCorrection == sent.curveCorrection) {
                     cleared = true
                     it.copy(metadataStale = false)
                 } else {

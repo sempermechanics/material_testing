@@ -5,6 +5,7 @@ package com.indicvision.semper.cloud
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.CloudSync
+import com.indicvision.semper.data.CurveCorrection
 import com.indicvision.semper.data.SessionMetadataSync
 import com.indicvision.semper.data.SessionMetadataSync.Outcome
 import com.indicvision.semper.data.SessionRecord
@@ -32,8 +33,9 @@ import java.io.File
 import java.io.IOException
 
 /**
- * TD-150 / ADR-013: a deflection correction set after the backup reaches the
- * cloud copy's metadata.json, so a restore brings it back.
+ * TD-150, TD-152 / ADR-013: a deflection correction (bending) or a curve
+ * correction (tensile) set after the backup reaches the cloud copy's
+ * metadata.json, so a restore brings it back.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -46,6 +48,7 @@ class SessionMetadataSyncTest {
     private val queued = mutableListOf<String>()
 
     private val corrected = BeamDeflection.Correction(1.05f, -0.12f)
+    private val matched = CurveCorrection(1.25f, 57.5f, 1f, 0f)
 
     @Before
     fun setUp() {
@@ -92,6 +95,27 @@ class SessionMetadataSyncTest {
         assertFalse(SessionStore.get(context, "s1")!!.metadataStale)
     }
 
+    @Test
+    fun `a curve correction on a backed-up tensile session marks its metadata stale`() {
+        storeTensile("t1", SyncState.SYNCED, cloudId = "c1")
+
+        SessionStore.setCurveCorrection(context, "t1", matched)
+
+        assertTrue(SessionStore.get(context, "t1")!!.metadataStale)
+    }
+
+    @Test
+    fun `a curve correction on a session never backed up, or the same one again, marks nothing`() {
+        storeTensile("t1", SyncState.LOCAL_ONLY)
+        storeTensile("t2", SyncState.SYNCED, cloudId = "c2", curve = matched)
+
+        SessionStore.setCurveCorrection(context, "t1", matched)
+        SessionStore.setCurveCorrection(context, "t2", matched)
+
+        assertFalse(SessionStore.get(context, "t1")!!.metadataStale)
+        assertFalse(SessionStore.get(context, "t2")!!.metadataStale)
+    }
+
     // ── Sending ─────────────────────────────────────────────────────────────
 
     @Test
@@ -108,6 +132,35 @@ class SessionMetadataSyncTest {
         assertEquals(1.05, geometry.getDouble("deflectionScale"), 1e-6)
         assertEquals(-0.12, geometry.getDouble("deflectionBiasMm"), 1e-6)
         assertFalse(SessionStore.get(context, "s1")!!.metadataStale)
+    }
+
+    @Test
+    fun `a stale tensile session sends metadata carrying the curve correction, then clears`() {
+        storeTensile("t1", SyncState.SYNCED, cloudId = "c1")
+        SessionStore.setCurveCorrection(context, "t1", matched)
+
+        assertEquals(Outcome.DONE, send("t1"))
+
+        val (sid, json) = sent.single()
+        assertEquals("c1", sid)
+        val curve = json.getJSONObject("test").getJSONObject("curveCorrection")
+        assertEquals(1.25, curve.getDouble("strainScale"), 1e-6)
+        assertEquals(57.5, curve.getDouble("strainBiasMilli"), 1e-6)
+        assertFalse(SessionStore.get(context, "t1")!!.metadataStale)
+    }
+
+    @Test
+    fun `a curve correction made while the send was in flight is sent again`() {
+        storeTensile("t1", SyncState.SYNCED, cloudId = "c1")
+        SessionStore.setCurveCorrection(context, "t1", matched)
+        api.onReplaceSessionMetadata = { _, sid, json ->
+            sent += sid to JSONObject(json)
+            SessionStore.setCurveCorrection(context, "t1", CurveCorrection(1.3f, 0f, 1f, 0f))
+        }
+
+        assertEquals(Outcome.RETRY, send("t1"))
+
+        assertTrue(SessionStore.get(context, "t1")!!.metadataStale)
     }
 
     @Test
@@ -233,4 +286,16 @@ class SessionMetadataSyncTest {
             ),
         ),
     )
+
+    /** A tensile row: [store]'s record, typed tensile and carrying [curve]. */
+    private fun storeTensile(
+        id: String,
+        state: SyncState,
+        cloudId: String = "",
+        curve: CurveCorrection = CurveCorrection.NONE,
+    ) {
+        store(id, state, cloudId)
+        val record = SessionStore.get(context, id)!!
+        assertTrue(SessionStore.upsert(context, record.copy(testType = "tensile", curveCorrection = curve)))
+    }
 }

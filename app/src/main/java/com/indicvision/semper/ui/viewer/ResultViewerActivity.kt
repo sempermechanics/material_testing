@@ -742,7 +742,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * Results' Adjust curve: redraws the cached curve under [correction]
      * without decoding the frames again, on every Results surface on screen,
      * and saves it on the session so the next open, the CSV and the report
-     * read it.
+     * read it. A backed-up session's cloud copy gets the new metadata too.
      */
     internal fun applyCurveCorrection(correction: CurveCorrection) {
         viewerVm.curveCorrection = correction
@@ -750,7 +750,11 @@ class ResultViewerActivity : AppCompatActivity() {
         stressStrain.redraw()
         val id = args.sessionLocalId ?: return
         val appContext = applicationContext
-        lifecycleScope.launch(Dispatchers.IO) { SessionStore.setCurveCorrection(appContext, id, correction) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            SessionStore.setCurveCorrection(appContext, id, correction)
+            // A backed-up session's cloud copy gets the new metadata (ADR-013, TD-152).
+            if (SessionStore.get(appContext, id)?.metadataStale == true) SessionMetadataSync.enqueue(appContext, id)
+        }
     }
 
     /**
