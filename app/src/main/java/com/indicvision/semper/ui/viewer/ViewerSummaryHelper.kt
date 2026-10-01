@@ -59,14 +59,20 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
     var isShowing: Boolean = false
         private set
 
-    /** Shared with the share sheet, so both build into the same cached files. */
+    /**
+     * Shared with the share sheet, so both build into the same cached files.
+     * Holds plain values only: an export job keeps it past a rotation, so it
+     * must not reach back into this viewer.
+     */
     internal val animation: SummaryAnimation by lazy {
+        val sweepSteps = host.sweepSteps
+        val baseStep = host.baseStep
         SummaryAnimation(
             SummaryAnimation.Spec(
                 batchFiles = host.summaryBatchFiles(),
                 imgW = host.imgW,
                 imgH = host.imgH,
-                stepAt = { index -> host.sweepSteps?.getOrNull(index) ?: host.baseStep },
+                stepAt = { index -> sweepSteps?.getOrNull(index) ?: baseStep },
                 outputDir = CacheJanitor.shareDir(host.cacheDir),
                 backgroundColor = ContextCompat.getColor(host, R.color.viewer_canvas),
                 fitBounds = host.summaryFitBounds(),

@@ -52,8 +52,8 @@ import com.indicvision.semper.data.LicenseEntitlements
 import com.indicvision.semper.data.SessionPaths
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.report.ReportBuilder
-import com.indicvision.semper.report.ReportData
 import com.indicvision.semper.report.ReportImageNames
+import com.indicvision.semper.report.RoiData
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
@@ -1199,11 +1199,21 @@ class ResultViewerActivity : AppCompatActivity() {
         isGeneratingHeatmap = false
     }
 
-    private fun buildReportData(): ReportData? =
-        rawData?.let { ViewerReportFactory.buildReportData(this, currentFrameIndex, it) }
-
-    private fun buildReportData(frameIndex: Int, data: FloatArray): ReportData? =
-        ViewerReportFactory.buildReportData(this, frameIndex, data)
+    /** What a report page reads from this viewer, as plain data an export can keep. */
+    private fun reportSource(): ViewerReportFactory.Source = ViewerReportFactory.Source(
+        args = args,
+        imgW = imgW,
+        imgH = imgH,
+        baseStep = baseStep,
+        sweepSteps = sweepSteps,
+        sweepSubsets = sweepSubsets,
+        sweepStrainWins = sweepStrainWins,
+        roi = RoiData(roiX, roiY, roiW, roiH),
+        frameNames = originalDefNames,
+        plannedFrames = plannedFrames,
+        defImagePaths = defImagePaths,
+        displayBase = cachedBaseImage,
+    )
 
     /**
      * The planned frame behind the [position]-th `.dat` on disk. A frame the
@@ -1228,14 +1238,14 @@ class ResultViewerActivity : AppCompatActivity() {
      * keeps the user's own file names and sorts them alphabetically, not in
      * frame order.
      */
-    internal fun deformedImagePathAt(position: Int): String? {
-        if (isSweep) return defImagePaths.firstOrNull()
-        val planned = plannedFrameIndex(position)
-        val rawDir = args.batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
-        val persisted = originalDefNames.getOrNull(planned)?.let { name -> rawDir?.let { File(it, name) } }
-        return persisted?.takeIf { it.isFile }?.absolutePath
-            ?: args.defFilePaths.getOrNull(planned)?.takeIf { File(it).isFile }
-    }
+    internal fun deformedImagePathAt(position: Int): String? =
+        ViewerReportFactory.deformedImagePath(
+            args,
+            isSweep,
+            defImagePaths,
+            originalDefNames,
+            plannedFrameIndex(position),
+        )
 
     /**
      * A filename-safe base for exports, drawn from the specimen/reference name so
@@ -1301,8 +1311,13 @@ class ResultViewerActivity : AppCompatActivity() {
             refImagePath = refImagePath,
             defImagePaths = defImagePaths,
             summary = if (isSweep) null else summaryHelper.animation,
-            summaryBounds = { index -> if (isSweep) null else summaryHelper.boundsFor(index) },
-            buildReportAt = { index, frameData -> buildReportData(index, frameData) },
+            summaryBounds = if (isSweep) {
+                emptyMap()
+            } else {
+                SummaryAnimation.FIELDS.mapNotNull { (_, index) -> summaryHelper.boundsFor(index)?.let { index to it } }
+                    .toMap()
+            },
+            reportSource = reportSource(),
             referenceName = args.refName,
             strainMethod = args.strainMethod,
             subset = args.subsetSize,

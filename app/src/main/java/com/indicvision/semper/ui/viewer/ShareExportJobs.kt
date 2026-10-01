@@ -37,8 +37,11 @@ import java.util.concurrent.atomic.AtomicInteger
  * - **Process death:** running jobs are lost. A save-as picker that was open
  *   still returns to the restored viewer, which starts that export then.
  *
- * Until it finishes, a job holds whatever its build captured from the viewer
- * that started it; it never touches that viewer's views.
+ * A job holds plain data only, never the viewer that started it: the share
+ * snapshot taken on the main thread, the application's resources and cache dir
+ * ([ShareExportBuilder]). So a rotation frees the old viewer at once, even while
+ * a long export runs on, and each job writes into its own directory under
+ * `cacheDir/share`, so two jobs naming the same file cannot overwrite each other.
  */
 internal class ShareExportJobs(
     private val scope: CoroutineScope,

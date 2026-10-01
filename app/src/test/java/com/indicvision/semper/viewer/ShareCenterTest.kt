@@ -1,6 +1,7 @@
 package com.indicvision.semper.viewer
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.view.ViewGroup
@@ -8,11 +9,15 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.DicResult
 import com.indicvision.semper.R
+import com.indicvision.semper.data.CacheJanitor
 import com.indicvision.semper.ui.viewer.ResultViewerActivity
 import com.indicvision.semper.ui.viewer.ShareCenter
+import com.indicvision.semper.ui.viewer.ShareExportBuilder
 import com.indicvision.semper.ui.viewer.ViewerArgs
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -240,6 +245,73 @@ class ShareCenterTest {
 
         assertEquals(activity.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
         assertEquals((1..FRAMES).associate { "Frame_$it" to GRID * GRID }, rowsByImage(dest))
+    }
+
+    @Test
+    fun `two exports of the same file name each keep their own bytes`() {
+        val activity = viewer()
+        val whole = activity.buildShareSnapshot()!!
+        val oneFrame = whole.copy(batchFiles = whole.batchFiles.take(1))
+        val app = activity.applicationContext
+
+        // Same base name, so both write "<base>_data.csv". One shared directory
+        // let the second job truncate the file the first was still handing over.
+        val (first, _) = runBlocking {
+            ShareExportBuilder(whole, app.resources, ShareExportBuilder.newJobDir(app.cacheDir))
+                .produce("csv") { _, _ -> }
+        }
+        val (second, _) = runBlocking {
+            ShareExportBuilder(oneFrame, app.resources, ShareExportBuilder.newJobDir(app.cacheDir))
+                .produce("csv") { _, _ -> }
+        }
+
+        assertEquals(first.name, second.name)
+        assertNotEquals(first.absolutePath, second.absolutePath)
+        // Inside cacheDir/share, which the FileProvider serves and CacheJanitor sweeps.
+        val shareDir = CacheJanitor.shareDir(app.cacheDir).canonicalFile
+        assertTrue(first.canonicalPath.startsWith(shareDir.path + File.separator))
+        assertEquals((1..FRAMES).associate { "Frame_$it" to GRID * GRID }, rowsByImage(first))
+        assertEquals(mapOf("Frame_1" to GRID * GRID), rowsByImage(second))
+    }
+
+    @Test
+    fun `an export's snapshot does not reach the viewer`() {
+        val activity = viewer()
+        val snapshot = activity.buildShareSnapshot()!!
+
+        // A job keeps its snapshot until it ends, past a rotation; anything in it
+        // that reaches the Activity keeps the destroyed viewer (and its views) alive.
+        val leak = reachableFrom(snapshot).firstOrNull { it is Context }
+        assertNull("snapshot reaches $leak", leak)
+    }
+
+    /** Every object [root]'s instance fields lead to, java.* and android.* internals aside. */
+    private fun reachableFrom(root: Any): Sequence<Any> = sequence {
+        val seen = java.util.IdentityHashMap<Any, Unit>()
+        val queue = ArrayDeque<Any>().apply { add(root) }
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (seen.put(node, Unit) == null) {
+                yield(node)
+                queue.addAll(referencesOf(node))
+            }
+        }
+    }
+
+    /** What [node] points at: a container's elements, else its own instance fields. */
+    private fun referencesOf(node: Any): List<Any> = when (node) {
+        is Array<*> -> node.filterNotNull()
+        is Collection<*> -> node.filterNotNull()
+        is Map<*, *> -> node.keys.filterNotNull() + node.values.filterNotNull()
+        else -> generateSequence<Class<*>>(node.javaClass) { it.superclass }
+            .takeWhile { !it.name.startsWith("java.") && !it.name.startsWith("android.") }
+            .flatMap { it.declaredFields.asSequence() }
+            .filter { !java.lang.reflect.Modifier.isStatic(it.modifiers) && !it.type.isPrimitive }
+            .mapNotNull { field ->
+                field.isAccessible = true
+                field.get(node)
+            }
+            .toList()
     }
 
     @Test
