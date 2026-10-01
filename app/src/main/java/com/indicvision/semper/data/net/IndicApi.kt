@@ -462,6 +462,20 @@ class IndicApi private constructor(context: Context) : CloudApi {
         resp.use { if (it.code != HttpStatus.OK) failSigned(it) }
     }
 
+    /**
+     * PUT /v1/sessions/{sid}/metadata — replace a backed-up analysis's
+     * metadata.json with [metadataJson], for a change made after the backup
+     * (ADR-013). Device-signed; any non-200 throws [ApiException].
+     */
+    override suspend fun replaceSessionMetadata(
+        idToken: String,
+        sessionId: String,
+        metadataJson: String,
+    ) = withContext(Dispatchers.IO) {
+        val resp = signedRequest(idToken, "PUT", "/v1/sessions/$sessionId/metadata", metadataJson.toByteArray())
+        resp.use { if (it.code != HttpStatus.OK) failSigned(it) }
+    }
+
     // ----------------------------------------------------------------- restore
 
     /** GET /v1/sessions/{sid}/files — the manifest for one cloud analysis. */

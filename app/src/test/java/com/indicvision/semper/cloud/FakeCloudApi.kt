@@ -39,6 +39,8 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     var onListSessions: suspend (String, Boolean) -> ListSessionsResponse = { _, _ -> unscripted("listSessions") }
     var onDeleteAccount: suspend (String) -> Unit = { unscripted("deleteAccount") }
     var onDeleteSession: suspend (String, String) -> Unit = { _, _ -> unscripted("deleteSession") }
+    var onReplaceSessionMetadata: suspend (String, String, String) -> Unit =
+        { _, _, _ -> unscripted("replaceSessionMetadata") }
 
     override suspend fun me(idToken: String) = record("me") { onMe(idToken) }
 
@@ -69,6 +71,9 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
 
     override suspend fun deleteSession(idToken: String, sessionId: String) =
         record("deleteSession") { onDeleteSession(idToken, sessionId) }
+
+    override suspend fun replaceSessionMetadata(idToken: String, sessionId: String, metadataJson: String) =
+        record("replaceSessionMetadata") { onReplaceSessionMetadata(idToken, sessionId, metadataJson) }
 
     // The upload and restore paths are not driven through this fake yet.
     override suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse =
