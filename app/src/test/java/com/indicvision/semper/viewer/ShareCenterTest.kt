@@ -248,6 +248,40 @@ class ShareCenterTest {
     }
 
     @Test
+    fun `a save-as waiting on the frames survives a rotation and starts once`() {
+        val intent = ViewerArgs.ofFrames(batchDir.absolutePath, GRID * STEP, GRID * STEP, STEP, startFrame = 0)
+            .toIntent(ApplicationProvider.getApplicationContext())
+        val controller = Robolectric.buildActivity(ResultViewerActivity::class.java, intent)
+        val held = mutableListOf<Runnable>()
+        controller.get().frameSetDispatcher = Executor { held += it }.asCoroutineDispatcher()
+        val activity = controller.setup().get()
+        activity.pickShareDocument("csv", "text/csv", "picked.csv")
+        val picker = shadowOf(activity).nextStartedActivityForResult
+        val dest = File(temp.root, "picked.csv")
+        activity.activityResultRegistry.dispatchResult(
+            picker.requestCode,
+            Activity.RESULT_OK,
+            Intent().setData(Uri.fromFile(dest)),
+        )
+
+        // Rotated before the frames were listed: the rebuilt viewer, which
+        // reads them, starts the export the old one was waiting to.
+        val rebuilt = controller.recreate().get()
+        idleUntil(rebuilt) { ShadowToast.getLatestToast() != null || pillText(rebuilt) != null }
+        assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
+        assertEquals((1..FRAMES).associate { "Frame_$it" to GRID * GRID }, rowsByImage(dest))
+
+        // The save was handed out once: neither a later rotation nor the old
+        // viewer's frame listing finishing starts a second export.
+        dest.delete()
+        held.toList().forEach { it.run() }
+        val again = controller.recreate().get()
+        repeat(5) { shadowOf(again.mainLooper).idle() }
+        assertEquals(1, ShadowToast.shownToastCount())
+        assertTrue("no second export", !dest.exists())
+    }
+
+    @Test
     fun `two exports of the same file name each keep their own bytes`() {
         val activity = viewer()
         val whole = activity.buildShareSnapshot()!!

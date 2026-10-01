@@ -21,7 +21,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.net.Uri
 import android.os.Bundle
 import android.os.Trace
 import android.view.View
@@ -40,7 +39,6 @@ import androidx.activity.viewModels
 import androidx.annotation.MainThread
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.os.BundleCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -119,13 +117,6 @@ class ResultViewerActivity : AppCompatActivity() {
     /** Stashed while the SAF save-as picker is open for a slow share export. */
     internal var pendingShareKind: String? = null
 
-    /**
-     * A picked save-as document whose export has not started yet: the answer can
-     * reach a recreated viewer before its frames are listed. Kept in the saved
-     * state until the export starts.
-     */
-    private var pendingSave: Pair<String, Uri>? = null
-
     /** Run once the frame set is read; see [whenFrameSetLoaded]. */
     private val afterFrameSet = mutableListOf<() -> Unit>()
 
@@ -136,14 +127,17 @@ class ResultViewerActivity : AppCompatActivity() {
         pendingShareKind = null
         val uri = result.data?.data
         if (result.resultCode != RESULT_OK || uri == null || kind == null) return@registerForActivityResult
-        pendingSave = kind to uri
+        viewerVm.setPendingSave(kind, uri)
         startPendingSave()
     }
 
-    /** Starts [pendingSave]'s export once the frames it covers are known. */
+    /**
+     * Starts the ViewModel's pending save-as export once the frames it covers
+     * are known. Taking it clears it, so a viewer recreated after the export
+     * started does not start it again.
+     */
     private fun startPendingSave() = whenFrameSetLoaded {
-        val (kind, uri) = pendingSave ?: return@whenFrameSetLoaded
-        pendingSave = null
+        val (kind, uri) = viewerVm.takePendingSave() ?: return@whenFrameSetLoaded
         ShareCenter(this).writeKindToUri(kind, uri)
     }
 
@@ -344,12 +338,6 @@ class ResultViewerActivity : AppCompatActivity() {
             currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
             showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
             pendingShareKind = savedInstanceState.getString(STATE_SHARE_KIND)
-            val saveKind = savedInstanceState.getString(STATE_SAVE_KIND)
-            val saveUri = BundleCompat.getParcelable(savedInstanceState, STATE_SAVE_URI, Uri::class.java)
-            if (saveKind != null && saveUri != null) {
-                pendingSave = saveKind to saveUri
-                startPendingSave()
-            }
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
@@ -359,6 +347,9 @@ class ResultViewerActivity : AppCompatActivity() {
             // Sweeps never use the summary slot (combinations are not a time series).
             showingSummary = args.startFrame == null
         }
+        // A save-as picked before the last viewer had listed its frames (a
+        // rotation, or process death) waits in the ViewModel for this one.
+        if (viewerVm.hasPendingSave) startPendingSave()
 
         imgW = args.imgW
         imgH = args.imgH
@@ -783,10 +774,6 @@ class ResultViewerActivity : AppCompatActivity() {
         outState.putInt("CURRENT_FRAME", currentFrameIndex)
         outState.putBoolean("SHOWING_SUMMARY", showingSummary)
         pendingShareKind?.let { outState.putString(STATE_SHARE_KIND, it) }
-        pendingSave?.let { (kind, uri) ->
-            outState.putString(STATE_SAVE_KIND, kind)
-            outState.putParcelable(STATE_SAVE_URI, uri)
-        }
     }
 
     private fun loadFrameData(index: Int) {
@@ -1565,7 +1552,5 @@ class ResultViewerActivity : AppCompatActivity() {
         const val FIELD_METRICS_CACHE_MAX = 64
 
         const val STATE_SHARE_KIND = "PENDING_SHARE_KIND"
-        const val STATE_SAVE_KIND = "PENDING_SAVE_KIND"
-        const val STATE_SAVE_URI = "PENDING_SAVE_URI"
     }
 }
