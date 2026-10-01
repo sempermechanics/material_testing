@@ -11,8 +11,8 @@ import com.indicvision.semper.data.cloud.TransferNotifications
 import com.indicvision.semper.data.cloud.restore.CloudRestore
 import com.indicvision.semper.data.cloud.restore.DownloadProgress
 import com.indicvision.semper.data.cloud.restore.RestoreDownloadOutcomes
-import com.indicvision.semper.data.net.HttpStatus
-import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.ApiException
+import com.indicvision.semper.data.net.HttpFailure
 import com.indicvision.semper.diagnostics.SemperAnalytics
 import com.indicvision.semper.navigation.DicKeys
 import kotlinx.coroutines.CancellationException
@@ -79,9 +79,9 @@ class DicRestoreWorker internal constructor(
         } catch (e: CancellationException) {
             clearPartialArtifacts(targetLocalId)
             throw e
-        } catch (e: IndicApi.ApiException) {
+        } catch (e: ApiException) {
             // 404 = the backup is gone; 403 = not ours. Retrying can't fix either.
-            if (e.code == HttpStatus.NOT_FOUND || e.code == HttpStatus.FORBIDDEN) {
+            if (HttpFailure.classify(e).isGoneOrNotOurs) {
                 clearPartialArtifacts(targetLocalId)
                 Timber.e(e, "Restore of %s rejected — giving up", cloudSessionId)
                 SemperAnalytics.event(

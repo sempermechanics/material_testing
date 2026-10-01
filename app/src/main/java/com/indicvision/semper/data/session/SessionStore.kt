@@ -10,6 +10,7 @@ import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.cloud.SessionMetadataSync
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.util.AtomicFiles
+import com.indicvision.semper.util.writeVia
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -132,7 +133,7 @@ data class SessionRecord(
         get() = syncState != SyncState.LOCAL_ONLY || cloudSessionId.isNotBlank()
 
     /** True when the run stopped itself before working through every frame. */
-    val stoppedEarly: Boolean get() = stopCode != 0
+    val stoppedEarly: Boolean get() = runStop.stoppedEarly
 
     /** True when the frames are parameter combinations rather than images. */
     val isSweep: Boolean get() = sweepSteps.isNotEmpty()
@@ -197,7 +198,7 @@ data class SessionRecord(
  *
  * Sync accessors take the lock on the calling thread and are marked
  * [WorkerThread]; UI code calls the `suspend` variants ([listAsync],
- * [upsertAsync], …) so disk+JSON never block Main. The annotation is half a
+ * [setSyncStateAsync]) so disk+JSON never block Main. The annotation is half a
  * pair: Android Lint's `WrongThread` fires only when the *calling* method
  * carries a conflicting one, and nothing in this app is `@MainThread` yet, so
  * today it documents the contract for the IDE rather than failing a build.
@@ -215,13 +216,13 @@ object SessionStore {
     @Volatile
     private var indexCorrupt = false
 
-    private fun root(context: Context): File = File(context.filesDir, "sessions").apply { mkdirs() }
+    private fun root(context: Context): File = File(context.filesDir, SessionPaths.SESSIONS_ROOT).apply { mkdirs() }
 
-    private fun indexFile(context: Context): File = File(root(context), "index.json")
+    private fun indexFile(context: Context): File = File(root(context), SessionPaths.INDEX_JSON)
 
-    private fun indexBakFile(context: Context): File = File(root(context), "index.json.bak")
+    private fun indexBakFile(context: Context): File = File(root(context), SessionPaths.INDEX_JSON + ".bak")
 
-    private fun indexTmpFile(context: Context): File = File(root(context), "index.json.tmp")
+    private fun indexTmpFile(context: Context): File = File(root(context), SessionPaths.INDEX_JSON + ".tmp")
 
     /** Directory holding a session's .dat frames and reference copy. */
     fun dirFor(context: Context, id: String): File = File(root(context), id).apply { mkdirs() }
@@ -291,12 +292,6 @@ object SessionStore {
         TokenStore.refreshSessionLimit(context, next.size)
         true
     }
-
-    suspend fun upsertAsync(
-        context: Context,
-        record: SessionRecord,
-        allowOverLimit: Boolean = false,
-    ): Boolean = withContext(Dispatchers.IO) { upsert(context, record, allowOverLimit) }
 
     /**
      * Rename an analysis. The name is in metadata.json, which a restore reads
@@ -494,7 +489,6 @@ object SessionStore {
     private fun write(context: Context, records: List<SessionRecord>): Boolean {
         val target = indexFile(context)
         val bak = indexBakFile(context)
-        val tmp = indexTmpFile(context)
         try {
             root(context).mkdirs()
             // Only promote a *parseable* primary to .bak — never overwrite a good
@@ -503,16 +497,16 @@ object SessionStore {
                 target.copyTo(bak, overwrite = true)
             }
             val payload = json.encodeToString(records)
-            FileOutputStream(tmp).use { out ->
-                out.write(payload.toByteArray(Charsets.UTF_8))
-                out.fd.sync()
+            AtomicFiles.writeVia(target, tmp = indexTmpFile(context)) { tmp ->
+                FileOutputStream(tmp).use { out ->
+                    out.write(payload.toByteArray(Charsets.UTF_8))
+                    out.fd.sync()
+                }
             }
-            AtomicFiles.promote(tmp, target)
             indexCorrupt = false
             return true
         } catch (e: Exception) {
             Timber.e(e, "Failed to write session index")
-            tmp.delete()
             return false
         }
     }

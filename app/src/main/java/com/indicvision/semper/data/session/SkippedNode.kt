@@ -80,37 +80,6 @@ data class SkippedNode(
             codes = nodes.map { it.code },
         )
 
-        /** Cloud metadata `engine.sweep.skipped` — `nodes` array or legacy lists. */
-        fun fromMetadata(skipped: JSONObject?): List<SkippedNode> {
-            val fromNodes = skipped?.optJSONArray("nodes")
-                ?.takeIf { it.length() > 0 }
-                ?.let { arr ->
-                    buildList {
-                        for (i in 0 until arr.length()) {
-                            val entry = arr.optJSONObject(i) ?: continue
-                            add(
-                                SkippedNode(
-                                    subset = entry.optInt("subset"),
-                                    step = entry.optInt("step"),
-                                    strainWindow = entry.optInt("strainWindow"),
-                                    code = entry.optInt("code"),
-                                ),
-                            )
-                        }
-                    }
-                }
-            return fromNodes
-                ?: skipped?.let {
-                    fromLegacyArrays(
-                        jsonIntList(it.optJSONArray("subsets")),
-                        jsonIntList(it.optJSONArray("steps")),
-                        jsonIntList(it.optJSONArray("strainWindows")),
-                        jsonIntList(it.optJSONArray("codes")),
-                    )
-                }
-                    .orEmpty()
-        }
-
         fun toMetadataJsonArray(nodes: List<SkippedNode>): JSONArray {
             val arr = JSONArray()
             for (node in nodes) {
@@ -123,11 +92,6 @@ data class SkippedNode(
                 )
             }
             return arr
-        }
-
-        private fun jsonIntList(arr: JSONArray?): List<Int> = buildList {
-            if (arr == null) return@buildList
-            for (i in 0 until arr.length()) add(arr.optInt(i))
         }
 
         data class LegacyLists(

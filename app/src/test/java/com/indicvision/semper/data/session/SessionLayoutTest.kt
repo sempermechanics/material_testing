@@ -44,7 +44,7 @@ class SessionLayoutTest {
 
     @Test
     fun `restore lands each role where the layout says`() {
-        val restore = CloudRestore.Layout(sessionDir, layout.rawDeformedDir.apply { mkdirs() })
+        val restore = layout.apply { rawDeformedDir.mkdirs() }
 
         assertEquals(layout.referencePng, CloudRestore.destFor("raw", SessionZip.REFERENCE_NAME, restore))
         assertEquals(layout.rawDeformed("def_1.png"), CloudRestore.destFor("raw", "def_1.png", restore))

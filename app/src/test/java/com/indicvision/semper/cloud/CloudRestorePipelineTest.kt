@@ -121,6 +121,19 @@ class CloudRestorePipelineTest {
     }
 
     @Test
+    fun `metadata whose frame is not an object is corrupt before the bundle is fetched`() {
+        api.files = listOf(
+            metadata("""{"schema":"indic.session.metadata/3","frames":["def.png"]}""".toByteArray()),
+            bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
+        )
+
+        val thrown = assertThrows(CorruptTransferException::class.java) { restore() }
+
+        assertEquals("metadata_json_invalid", thrown.message)
+        assertFalse(api.calls.contains("downloadFile:bundle-1"))
+    }
+
+    @Test
     fun `metadata without a declared sha256 still restores`() {
         api.files = listOf(
             api.file("meta-1", "metadata", RestoreFakeApi.metadataJson(), sha256 = null),

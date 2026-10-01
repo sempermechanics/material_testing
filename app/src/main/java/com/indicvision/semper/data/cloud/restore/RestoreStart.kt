@@ -5,6 +5,10 @@ import androidx.annotation.WorkerThread
 import androidx.core.content.edit
 import androidx.work.WorkManager
 import com.indicvision.semper.data.DicRestoreWorker
+import com.indicvision.semper.data.prefs.PrefFiles
+import com.indicvision.semper.data.prefs.get
+import com.indicvision.semper.data.prefs.privatePrefs
+import com.indicvision.semper.data.prefs.put
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionStore
 import timber.log.Timber
@@ -131,21 +135,19 @@ object RestoreStart {
  */
 object RestoreFailureLedger {
 
-    private const val PREFS = "indic_restore_outcomes"
-    private const val KEY = "announced"
-
     /** Well past the number of restore jobs WorkManager can still be holding. */
     private const val MAX_REMEMBERED = 64
 
     /** True the first time [workId] is claimed, on any screen; false after that. */
     @Synchronized
     fun claim(context: Context, workId: UUID): Boolean {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val seen = prefs.getString(KEY, "").orEmpty().split(',').filter { it.isNotBlank() }
+        val prefs = privatePrefs(context, PrefFiles.RestoreOutcomes.NAME)
+        val announced = PrefFiles.RestoreOutcomes.ANNOUNCED
+        val seen = prefs[announced].split(',').filter { it.isNotBlank() }
         val id = workId.toString()
         if (id in seen) return false
         val next = (seen + id).takeLast(MAX_REMEMBERED)
-        prefs.edit { putString(KEY, next.joinToString(",")) }
+        prefs.edit { put(announced, next.joinToString(",")) }
         return true
     }
 }

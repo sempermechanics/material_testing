@@ -31,7 +31,7 @@ class SessionRepository {
         width: Int = 0,
         height: Int = 0,
     ): String {
-        val refPngFile = File(sessionDir, "reference.png")
+        val refPngFile = SessionLayout(sessionDir).referencePng
         var refBmp: Bitmap? = null
         try {
             // DNG/RAW imports are stored as headerless RGBA. OpenCV and

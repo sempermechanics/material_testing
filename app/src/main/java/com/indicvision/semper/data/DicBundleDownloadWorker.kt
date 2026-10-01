@@ -17,8 +17,8 @@ import com.indicvision.semper.data.cloud.TransferNotifications
 import com.indicvision.semper.data.cloud.restore.CloudRestore
 import com.indicvision.semper.data.cloud.restore.DownloadProgress
 import com.indicvision.semper.data.cloud.restore.RestoreDownloadOutcomes
-import com.indicvision.semper.data.net.HttpStatus
-import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.data.net.ApiException
+import com.indicvision.semper.data.net.HttpFailure
 import com.indicvision.semper.data.session.SessionEverythingExporter
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.diagnostics.SemperAnalytics
@@ -113,8 +113,8 @@ class DicBundleDownloadWorker internal constructor(
         } catch (e: CancellationException) {
             deleteDestDocument(destUri)
             throw e
-        } catch (e: IndicApi.ApiException) {
-            if (e.code == HttpStatus.NOT_FOUND || e.code == HttpStatus.FORBIDDEN) {
+        } catch (e: ApiException) {
+            if (HttpFailure.classify(e).isGoneOrNotOurs) {
                 Timber.e(e, "Bundle download rejected — giving up")
                 TransferLog.phase(
                     TransferLog.PhaseFields(
@@ -204,7 +204,7 @@ class DicBundleDownloadWorker internal constructor(
             ) { done, total -> publishProgress(done, total) }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: IndicApi.ApiException) {
+        } catch (e: ApiException) {
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             if (RestoreDownloadOutcomes.isTerminalCorruptFailure(e)) throw e
