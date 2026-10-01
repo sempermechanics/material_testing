@@ -286,9 +286,9 @@ fastapi==0.141.1 \
     --hash=sha256:bfb91aa2d334c61cb35ba9a116fc123b3d3df31640b801cf57a7a78ec3f603b3 \
     --hash=sha256:e8822fc40db1e1858054d7a949a888695bc9bdce70139178e33bd2871a453ca1
     # via -r requirements.txt
-firebase-admin==7.6.0 \
-    --hash=sha256:2ec5a05eb53f3010e94179ba11c03d9db2679791c06762b70f10a0fcf86de88d \
-    --hash=sha256:a7d3ecbc7f0c94557f01c872b83d4e9a0e49bbc6e45a662702c67b5d7148ee8a
+firebase-admin==7.7.0 \
+    --hash=sha256:0a341ebbd1f80301fa11034f5e86ab0d0f00dde19253d2ee50cf98be2a7a2f33 \
+    --hash=sha256:2e823cc1d2c8b74f41346fb33298b2e01fc8ad208ea144cd099938c32367f169
     # via -r requirements.txt
 google-api-core[grpc]==2.33.0 \
     --hash=sha256:3a36bcc3e319783f4c97da41f6f45ea6ffcaa55848e341de16e09cb70243c2bb \
@@ -299,9 +299,9 @@ google-api-core[grpc]==2.33.0 \
     #   google-cloud-firestore
     #   google-cloud-storage
     #   google-cloud-tasks
-google-auth==2.58.0 \
-    --hash=sha256:55e30cf15e737de92c5323d78cda8a83fcd57e7ffbaf900c4600039fd60a80fd \
-    --hash=sha256:8a9c4645bb4c8e91668fb1934b95ae6a8687084232753639220ba9bf04a1610d
+google-auth==2.58.1 \
+    --hash=sha256:1480461d8b2347e679af758f4003700ea79a59b603c9134e18bfa95e8004ee70 \
+    --hash=sha256:66a63572d0ab629554768544df04018d79178c0bd7439ba31683ac576b79024d
     # via
     #   -r requirements.txt
     #   google-api-core
@@ -315,9 +315,9 @@ google-cloud-core==2.6.0 \
     # via
     #   google-cloud-firestore
     #   google-cloud-storage
-google-cloud-firestore==2.31.0 \
-    --hash=sha256:4101b832b666481c51c6828790afccdc8f71c64542556bcc89ff995be9f62ec7 \
-    --hash=sha256:f1e0f1352edbab3d327d3926fbd6f499eeecf41258b1d5edc3459c2c781bd5e5
+google-cloud-firestore==2.32.0 \
+    --hash=sha256:554ca59a9bbbeb4c14d3025797e4010835db9a681d6fc1dd1c0c4af900569d7e \
+    --hash=sha256:97e793d47c4e0c4ca1d70e56658ce50c3da48f9d3ddaff90d6a337639faf404e
     # via
     #   -r requirements.txt
     #   firebase-admin
@@ -325,9 +325,9 @@ google-cloud-storage==3.13.0 \
     --hash=sha256:648af3ef8a6acc674e1359d3c920c67eb89a7a5ab66b336bd3ac43fed6b5ab84 \
     --hash=sha256:d11d8706ea1520fba0f21043bcb7897caf7015d76ce1ad9a4f60237e4d7a9f6c
     # via firebase-admin
-google-cloud-tasks==2.24.0 \
-    --hash=sha256:1c82007a252d47efb4006eae5a5a0d9f6d375f917ab1c5cd80ce4a6f0ea4690d \
-    --hash=sha256:aa4f8764e5b157cbab81af619cc4fd9f14ebece8b69e5394a657c328a8366228
+google-cloud-tasks==2.25.0 \
+    --hash=sha256:51e1b91818925124c3ef728019b140f0d4a5068d871f0f27a17c6da80332f1e4 \
+    --hash=sha256:8f078ec92d4974bcdc1763a3d1496efabccbf33924afaec0e823a11491fd7a02
     # via -r requirements.txt
 google-crc32c==1.8.0 \
     --hash=sha256:014a7e68d623e9a4222d663931febc3033c5c7c9730785727de2a81f87d5bab8 \
@@ -879,9 +879,9 @@ urllib3==2.7.0 \
     --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
     --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
     # via requests
-uvicorn[standard]==0.53.0 \
-    --hash=sha256:a9356f0cb89b3b8621529c5d5eebd69bfe154f4c3f68b4cf2de47e45fa855c2e \
-    --hash=sha256:e8dca71ec86dce5f04e333f0d56cdedf942446e6643b9cea1af0d6d3a02cb03e
+uvicorn[standard]==0.54.0 \
+    --hash=sha256:505bdb0f318731d45f1f712071fc781a8981f6847a31c902c9f5e652d4f67faf \
+    --hash=sha256:a2e33cbfaa0306f8e6b0c13e0cb89d7d7a2da3e62b90c66e18c33d9807b28620
     # via -r requirements.txt
 uvloop==0.22.1 \
     --hash=sha256:017bd46f9e7b78e81606329d07141d3da446f8798c6baeec124260e22c262772 \
