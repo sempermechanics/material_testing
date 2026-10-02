@@ -2,8 +2,6 @@ package com.indicvision.semper.ui.analysis.wizard
 
 import android.app.Activity
 import android.view.View
-import android.widget.EditText
-import com.google.android.material.slider.Slider
 import com.indicvision.semper.R
 import com.indicvision.semper.data.prefs.ParamClipboard
 import com.indicvision.semper.databinding.WizardStepSettingsContentBinding
@@ -17,20 +15,32 @@ import kotlin.math.roundToInt
 
 /**
  * Wires the analysis settings sheet listeners (param fields, info buttons,
- * slider label sync). Reset / paste / recommendation logic stays in the Activity
- * so it can touch ViewModel + sweep state without putting disk or network on Main.
+ * slider label sync). Reset / paste / recommendation logic stays with the
+ * [Listener], which can touch ViewModel + sweep state.
  */
-@Suppress("LongParameterList") // the sheet's callbacks, each a different Activity action
 class AnalysisSettingsSheetHelper(
     private val activity: Activity,
     private val settings: WizardStepSettingsContentBinding,
-    private val bindParamField: (EditText, Slider, (() -> Unit)?) -> Unit,
-    private val onSubsetUserModified: () -> Unit,
-    private val onSubsetRecommendationRefresh: () -> Unit,
-    private val onAdvancedReset: () -> Unit,
-    private val onPasteParams: () -> Unit,
-    private val onParamsChanged: () -> Unit = {},
+    private val listener: Listener,
 ) {
+    /** What the sheet's controls ask of the wizard. */
+    interface Listener {
+        /** The user set a subset size of their own. */
+        fun onSubsetUserModified()
+
+        /** The subset moved under the user's hand: the sweep's suggestions follow it. */
+        fun onSweepInputsChanged()
+
+        /** The advanced card's Reset. */
+        fun onReset()
+
+        /** The advanced card's Paste. */
+        fun onPaste()
+
+        /** Any parameter changed. */
+        fun onParamsChanged()
+    }
+
     private val subset = settings.etSubsetSize
     private val step = settings.etStepSize
     private val overlap = settings.etOverlap
@@ -57,16 +67,16 @@ class AnalysisSettingsSheetHelper(
         syncOverlapFromStep()
         updateLabels()
 
-        bindParamField(subsetValue, subset) {
-            onSubsetUserModified()
-            onParamsChanged()
+        subsetValue.bindToSlider(subset) {
+            listener.onSubsetUserModified()
+            listener.onParamsChanged()
         }
-        bindParamField(stepValue, step) { onParamsChanged() }
-        bindParamField(strainValue, strain) { onParamsChanged() }
+        stepValue.bindToSlider(step) { listener.onParamsChanged() }
+        strainValue.bindToSlider(strain) { listener.onParamsChanged() }
         bindOverlapField()
 
-        settings.btnAdvancedReset.setOnClickListener { onAdvancedReset() }
-        settings.btnPasteParams.setOnClickListener { onPasteParams() }
+        settings.btnAdvancedReset.setOnClickListener { listener.onReset() }
+        settings.btnPasteParams.setOnClickListener { listener.onPaste() }
         refreshPasteVisibility()
         settings.btnSubsetInfo.bindInfo(activity, R.string.subset_size, R.string.info_subset)
         settings.btnStepInfo.bindInfo(activity, R.string.step_size_density, R.string.info_step)
@@ -76,15 +86,15 @@ class AnalysisSettingsSheetHelper(
         subset.addOnChangeListener { _, _, fromUser ->
             if (!bindingOverlap) applyStepRangeForSubset()
             if (fromUser) {
-                onSubsetUserModified()
-                onSubsetRecommendationRefresh()
-                onParamsChanged()
+                listener.onSubsetUserModified()
+                listener.onSweepInputsChanged()
+                listener.onParamsChanged()
             }
             if (!bindingOverlap) syncOverlapFromStep()
             updateLabels()
         }
         step.addOnChangeListener { _, _, fromUser ->
-            if (fromUser) onParamsChanged()
+            if (fromUser) listener.onParamsChanged()
             if (!bindingOverlap) syncOverlapFromStep()
             updateLabels()
         }
@@ -92,12 +102,12 @@ class AnalysisSettingsSheetHelper(
             if (bindingOverlap) return@addOnChangeListener
             if (fromUser) {
                 applyOverlapToStep(overlapFromSlider(value))
-                onParamsChanged()
+                listener.onParamsChanged()
             }
             renderOverlapField()
         }
         strain.addOnChangeListener { _, _, fromUser ->
-            if (fromUser) onParamsChanged()
+            if (fromUser) listener.onParamsChanged()
             updateLabels()
         }
     }
@@ -148,7 +158,7 @@ class AnalysisSettingsSheetHelper(
             val typed = overlapValue.text.toString().trim().replace(',', '.').toDoubleOrNull()
             val value = typed ?: overlap.value.toDouble()
             applyOverlapToStep(value)
-            onParamsChanged()
+            listener.onParamsChanged()
         }
         overlapValue.commitOnDone(onDone = commit)
         overlapValue.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commit() }
