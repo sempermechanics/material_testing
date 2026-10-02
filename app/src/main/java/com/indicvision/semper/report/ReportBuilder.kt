@@ -15,6 +15,7 @@ import android.graphics.Rect
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
+import androidx.annotation.VisibleForTesting
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import com.indicvision.semper.BuildConfig
@@ -212,171 +213,193 @@ object ReportBuilder {
         return FieldExtrema(maxIdx, minIdx)
     }
 
-    fun buildReport(params: ReportBuildParams): ReportData {
+    fun buildReport(params: ReportBuildParams): ReportData = buildReport(params) {}
+
+    /**
+     * [buildReport], showing [onBitmap] each bitmap the report will own as it
+     * is made. Those bitmaps belong to the caller only once the report is
+     * returned: a build that throws part-way (a later field's render, the
+     * cover) recycles the ones made so far.
+     */
+    @VisibleForTesting
+    internal fun buildReport(params: ReportBuildParams, onBitmap: (Bitmap) -> Unit): ReportData {
         val data = params.data
         val baseImg = params.baseImg
         val fieldResults = mutableListOf<FieldResult>()
         var correlationHeatmap: Bitmap? = null
 
-        // One primitive buffer reused across all fields: filled once per field with
-        // this field's signed accepted values (for both mean/std and the extrema sort),
-        // so the build walks `data` once per field to collect, not twice. Sized to the
-        // point count, it is the only per-point allocation alive during the build.
-        val scratch = FloatArray(data.size / DicResult.STRIDE)
-
-        for (fieldIndex in FIELD_NAMES.indices) {
-            val dataIndex = fieldIndex + DicResult.IDX_U
-            val isStrain = DicResult.isStrainFieldIndex(dataIndex)
-            val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
-            val multiplier = DicResult.strainMultiplier(dataIndex)
-            val unit = when {
-                isStrain -> "mε"
-                isCorrelation -> ""
-                else -> "px"
-            }
-            val meanTypeString = if (isStrain) "Mean Absolute" else "Simple Mean"
-
-            // One collect pass: store signed values (what computeFieldExtrema's
-            // absoluteStrainValues=false path needs) and accumulate the abs-mean sum in
-            // the same walk. mean/std keep the exact same Double accumulation and
-            // iteration order — abs is applied to the accumulator, not the stored value,
-            // so the numbers match the previous two-pass code bit-for-bit.
-            var count = 0
-            var sum = 0.0
-            for (i in data.indices step DicResult.STRIDE) {
-                val corr = data[i + DicResult.IDX_ZNSSD]
-                if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
-                    val rawVal = data[i + dataIndex]
-                    scratch[count++] = rawVal
-                    sum += if (isStrain) abs(rawVal) else rawVal
-                }
-            }
-            if (count == 0) continue
-
-            val mean = (sum / count).toFloat()
-            var sumSq = 0.0
-            for (j in 0 until count) {
-                val v = if (isStrain) abs(scratch[j]) else scratch[j]
-                val d = v - mean
-                sumSq += d * d
-            }
-            val stdDev = sqrt(sumSq / count).toFloat()
-
-            // scratch already holds this field's signed accepted values in order, so the
-            // extrema step sorts them in place — no second collect walk of `data`.
-            val extrema = extremaFromScratch(data, dataIndex, absoluteStrainValues = false, scratch, count)
-
-            // Bound the intermediate render to REPORT_MAX_EDGE. Every output here is
-            // downscaled to 600 px by compressForPdf(), so this is invisible — but it
-            // stops the full-resolution ARGB_8888 bitmaps (heatmap + composite, up to
-            // ~100 MB each on a 26 MP reference) from OOMing.
-            val longest = maxOf(params.imgW, params.imgH).coerceAtLeast(1)
-            val renderScale = if (longest > VisualizationEngine.REPORT_MAX_EDGE) {
-                VisualizationEngine.REPORT_MAX_EDGE.toFloat() / longest
-            } else {
-                1f
-            }
-            val renderW = (params.imgW * renderScale).toInt().coerceAtLeast(1)
-            val renderH = (params.imgH * renderScale).toInt().coerceAtLeast(1)
-
-            val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
-                data,
-                params.imgW,
-                params.imgH,
-                dataIndex,
-                params.step,
-                null,
-                null,
-                maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
-            )
-
-            // Compose at the capped size, then downscale for the PDF. The composite is
-            // a throwaway — compressForPdf() returns a *new* small bitmap, so the
-            // original must be recycled here or we leak one ARGB_8888 bitmap per field.
-            // Both full-size bitmaps are freed in finally: a draw that throws must not
-            // strand them (up to ~100 MB each before REPORT_MAX_EDGE capped them).
-            val bakedHeatmap = try {
-                val composite = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
-                try {
-                    val tempCanvas = Canvas(composite)
-                    // baseImg may be larger than the capped composite; scale it in.
-                    tempCanvas.drawBitmap(
-                        baseImg,
-                        null,
-                        Rect(0, 0, renderW, renderH),
-                        Paint(Paint.FILTER_BITMAP_FLAG),
-                    )
-                    tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
-                    bakeAnnotationsToCanvas(
-                        tempCanvas,
-                        renderW,
-                        renderH,
-                        ValueRange(actualMin, actualMax),
-                        extrema,
-                        data,
-                        FieldAnnotation(
-                            typeString = FIELD_KEYS[fieldIndex],
-                            unit = unit,
-                            dataIndex = dataIndex,
-                            imageName = params.deformedImageName,
-                            drawMinMarker = params.drawMinMarker,
-                        ),
-                        coordScale = renderScale,
-                    )
-                    composite.compressForPdf()
-                } finally {
-                    composite.recycle()
-                }
-            } finally {
-                heatmapBmp.recycle()
-            }
-
-            if (isCorrelation) {
-                correlationHeatmap = bakedHeatmap
-            } else {
-                fieldResults.add(
-                    FieldResult(
-                        fieldName = FIELD_NAMES[fieldIndex],
-                        fieldKey = FIELD_KEYS[fieldIndex],
-                        unit = unit,
-                        minValue = extrema.minValue(data, dataIndex) ?: (actualMin * multiplier),
-                        maxValue = extrema.maxValue(data, dataIndex) ?: (actualMax * multiplier),
-                        meanValue = mean * multiplier,
-                        stdDevValue = stdDev * multiplier,
-                        meanType = meanTypeString,
-                        minCoordX = data[extrema.minIdx].toInt(),
-                        minCoordY = data[extrema.minIdx + 1].toInt(),
-                        maxCoordX = data[extrema.maxIdx].toInt(),
-                        maxCoordY = data[extrema.maxIdx + 1].toInt(),
-                        bakedHeatmap = bakedHeatmap,
-                    ),
-                )
-            }
+        val owned = mutableListOf<Bitmap>()
+        fun own(bitmap: Bitmap): Bitmap {
+            owned += bitmap
+            onBitmap(bitmap)
+            return bitmap
         }
+        var complete = false
+        try {
+            // One primitive buffer reused across all fields: filled once per field with
+            // this field's signed accepted values (for both mean/std and the extrema sort),
+            // so the build walks `data` once per field to collect, not twice. Sized to the
+            // point count, it is the only per-point allocation alive during the build.
+            val scratch = FloatArray(data.size / DicResult.STRIDE)
 
-        val znssd = ZnssdFrame.of(data)
-        return ReportData(
-            sessionId = params.sessionId,
-            specimenName = params.specimenName,
-            analysisDate = params.analysisDate,
-            subsetSize = params.subsetSize,
-            stepSize = params.step,
-            strainWindow = params.strainWindow,
-            strainMethod = params.strainMethod,
-            roiData = params.roiData,
-            referenceImage = baseImg.compressForPdf(),
-            deformedImage = params.defImgForCover.compressForPdf(),
-            referenceImageName = params.referenceImageName,
-            deformedImageName = params.deformedImageName,
-            fieldResults = fieldResults,
-            engineStats = params.engineStats,
-            znssdHeatmap = correlationHeatmap ?: createBitmap(1, 1, Bitmap.Config.ARGB_8888),
-            solverPathMap = createBitmap(1, 1, Bitmap.Config.ARGB_8888),
-            globalAvgZnssd = znssd.mean,
-            znssdAcceptedPoints = znssd.points,
-            appBuild = appBuildLabel(),
-            rigidBody = RigidBodyFit.fit(data),
-        )
+            for (fieldIndex in FIELD_NAMES.indices) {
+                val dataIndex = fieldIndex + DicResult.IDX_U
+                val isStrain = DicResult.isStrainFieldIndex(dataIndex)
+                val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
+                val multiplier = DicResult.strainMultiplier(dataIndex)
+                val unit = when {
+                    isStrain -> "mε"
+                    isCorrelation -> ""
+                    else -> "px"
+                }
+                val meanTypeString = if (isStrain) "Mean Absolute" else "Simple Mean"
+
+                // One collect pass: store signed values (what computeFieldExtrema's
+                // absoluteStrainValues=false path needs) and accumulate the abs-mean sum in
+                // the same walk. mean/std keep the exact same Double accumulation and
+                // iteration order — abs is applied to the accumulator, not the stored value,
+                // so the numbers match the previous two-pass code bit-for-bit.
+                var count = 0
+                var sum = 0.0
+                for (i in data.indices step DicResult.STRIDE) {
+                    val corr = data[i + DicResult.IDX_ZNSSD]
+                    if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
+                        val rawVal = data[i + dataIndex]
+                        scratch[count++] = rawVal
+                        sum += if (isStrain) abs(rawVal) else rawVal
+                    }
+                }
+                if (count == 0) continue
+
+                val mean = (sum / count).toFloat()
+                var sumSq = 0.0
+                for (j in 0 until count) {
+                    val v = if (isStrain) abs(scratch[j]) else scratch[j]
+                    val d = v - mean
+                    sumSq += d * d
+                }
+                val stdDev = sqrt(sumSq / count).toFloat()
+
+                // scratch already holds this field's signed accepted values in order, so the
+                // extrema step sorts them in place — no second collect walk of `data`.
+                val extrema = extremaFromScratch(data, dataIndex, absoluteStrainValues = false, scratch, count)
+
+                // Bound the intermediate render to REPORT_MAX_EDGE. Every output here is
+                // downscaled to 600 px by compressForPdf(), so this is invisible — but it
+                // stops the full-resolution ARGB_8888 bitmaps (heatmap + composite, up to
+                // ~100 MB each on a 26 MP reference) from OOMing.
+                val longest = maxOf(params.imgW, params.imgH).coerceAtLeast(1)
+                val renderScale = if (longest > VisualizationEngine.REPORT_MAX_EDGE) {
+                    VisualizationEngine.REPORT_MAX_EDGE.toFloat() / longest
+                } else {
+                    1f
+                }
+                val renderW = (params.imgW * renderScale).toInt().coerceAtLeast(1)
+                val renderH = (params.imgH * renderScale).toInt().coerceAtLeast(1)
+
+                val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
+                    data,
+                    params.imgW,
+                    params.imgH,
+                    dataIndex,
+                    params.step,
+                    null,
+                    null,
+                    maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
+                )
+
+                // Compose at the capped size, then downscale for the PDF. The composite is
+                // a throwaway — compressForPdf() returns a *new* small bitmap, so the
+                // original must be recycled here or we leak one ARGB_8888 bitmap per field.
+                // Both full-size bitmaps are freed in finally: a draw that throws must not
+                // strand them (up to ~100 MB each before REPORT_MAX_EDGE capped them).
+                val bakedHeatmap = own(
+                    try {
+                        val composite = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
+                        try {
+                            val tempCanvas = Canvas(composite)
+                            // baseImg may be larger than the capped composite; scale it in.
+                            tempCanvas.drawBitmap(
+                                baseImg,
+                                null,
+                                Rect(0, 0, renderW, renderH),
+                                Paint(Paint.FILTER_BITMAP_FLAG),
+                            )
+                            tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
+                            bakeAnnotationsToCanvas(
+                                tempCanvas,
+                                renderW,
+                                renderH,
+                                ValueRange(actualMin, actualMax),
+                                extrema,
+                                data,
+                                FieldAnnotation(
+                                    typeString = FIELD_KEYS[fieldIndex],
+                                    unit = unit,
+                                    dataIndex = dataIndex,
+                                    imageName = params.deformedImageName,
+                                    drawMinMarker = params.drawMinMarker,
+                                ),
+                                coordScale = renderScale,
+                            )
+                            composite.compressForPdf()
+                        } finally {
+                            composite.recycle()
+                        }
+                    } finally {
+                        heatmapBmp.recycle()
+                    },
+                )
+
+                if (isCorrelation) {
+                    correlationHeatmap = bakedHeatmap
+                } else {
+                    fieldResults.add(
+                        FieldResult(
+                            fieldName = FIELD_NAMES[fieldIndex],
+                            fieldKey = FIELD_KEYS[fieldIndex],
+                            unit = unit,
+                            minValue = extrema.minValue(data, dataIndex) ?: (actualMin * multiplier),
+                            maxValue = extrema.maxValue(data, dataIndex) ?: (actualMax * multiplier),
+                            meanValue = mean * multiplier,
+                            stdDevValue = stdDev * multiplier,
+                            meanType = meanTypeString,
+                            minCoordX = data[extrema.minIdx].toInt(),
+                            minCoordY = data[extrema.minIdx + 1].toInt(),
+                            maxCoordX = data[extrema.maxIdx].toInt(),
+                            maxCoordY = data[extrema.maxIdx + 1].toInt(),
+                            bakedHeatmap = bakedHeatmap,
+                        ),
+                    )
+                }
+            }
+
+            val znssd = ZnssdFrame.of(data)
+            return ReportData(
+                sessionId = params.sessionId,
+                specimenName = params.specimenName,
+                analysisDate = params.analysisDate,
+                subsetSize = params.subsetSize,
+                stepSize = params.step,
+                strainWindow = params.strainWindow,
+                strainMethod = params.strainMethod,
+                roiData = params.roiData,
+                referenceImage = own(baseImg.compressForPdf()),
+                deformedImage = own(params.defImgForCover.compressForPdf()),
+                referenceImageName = params.referenceImageName,
+                deformedImageName = params.deformedImageName,
+                fieldResults = fieldResults,
+                engineStats = params.engineStats,
+                znssdHeatmap = correlationHeatmap ?: own(createBitmap(1, 1, Bitmap.Config.ARGB_8888)),
+                solverPathMap = own(createBitmap(1, 1, Bitmap.Config.ARGB_8888)),
+                globalAvgZnssd = znssd.mean,
+                znssdAcceptedPoints = znssd.points,
+                appBuild = appBuildLabel(),
+                rigidBody = RigidBodyFit.fit(data),
+            ).also { complete = true }
+        } finally {
+            if (!complete) owned.forEach { it.recycle() }
+        }
     }
 
     fun currentAnalysisDate(): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
