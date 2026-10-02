@@ -487,6 +487,185 @@ class DicUploadWorkerTest {
         assertFalse(File(staging, "metadata.json.part").exists())
     }
 
+    // ── the paths doWork's steps must keep ──────────────────────────────────
+
+    private fun failReason(result: ListenableWorker.Result): String? =
+        (result as? ListenableWorker.Result.Failure)?.outputData?.getString(DicKeys.UPLOAD_FAIL_REASON)
+
+    private fun string(id: Int) = context.getString(id)
+
+    @Test
+    fun `a build with no backend settles the waiting rows and succeeds`() {
+        seed()
+        api.base.enabled = false
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        assertEquals(SessionRecord.SyncState.LOCAL_ONLY, row().syncState)
+        assertTrue(api.calls.isEmpty())
+    }
+
+    @Test
+    fun `no usable token retries without touching the staging`() {
+        seed(cloudSessionId = "cs1")
+        DicUploadSeams.tokens = FakeTokens(null)
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertTrue(api.calls.isEmpty())
+        assertTrue(File(staging, "Session.zip").isFile)
+    }
+
+    @Test
+    fun `an unknown analysis fails`() {
+        val result = runBlocking {
+            TestListenableWorkerBuilder<DicUploadWorker>(context)
+                .setInputData(workDataOf(DicKeys.SESSION_LOCAL_ID to "nobody"))
+                .build()
+                .doWork()
+        }
+        assertEquals(ListenableWorker.Result.failure(), result)
+    }
+
+    @Test
+    fun `a new session declares the staged files, stores its pointer and uploads into it`() {
+        seed()
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs9", status = "UPLOADING") }
+        api.onSessionUploads = { uploading(it) }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        val declared = api.created!!.files.associateBy { it.name }
+        assertEquals(setOf("metadata.json", "Session.zip", "Extras.zip"), declared.keys)
+        assertEquals(ID, api.created!!.localSessionId)
+        assertEquals(listOf("metadata", "bundle", "extras"), api.created!!.files.map { it.role })
+        assertEquals("cs9", row().cloudSessionId)
+        assertEquals(setOf("cs9"), api.completed.map { it.sessionId }.toSet())
+        assertEquals(SessionRecord.SyncState.SYNCED, row().syncState)
+    }
+
+    @Test
+    fun `the staged bytes and their declared sha stay the same across attempts`() {
+        seed()
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs9", status = "UPLOADING") }
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw apiError(503, "firestore_unreachable") }
+        assertEquals(ListenableWorker.Result.retry(), run())
+        val zip = File(staging, "Session.zip")
+        val first = zip.readBytes()
+        val declared = api.created!!.files.single { it.name == "Session.zip" }
+        assertEquals(Digests.sha256Hex(zip), declared.sha256)
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertTrue("a retry must reuse the declared bytes", first.contentEquals(zip.readBytes()))
+        assertEquals(listOf("createSession"), api.calls.filter { it == "createSession" })
+    }
+
+    @Test
+    fun `a session the backend could not provision is deleted and the backup fails`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { SessionUploadsResponse(sessionId = it, status = "PROVISION_FAILED") }
+
+        val result = run()
+
+        assertEquals(string(com.indicvision.semper.R.string.cloud_backup_failed_provision), failReason(result))
+        assertEquals(listOf("cs1"), api.deleted)
+        assertEquals("", row().cloudSessionId)
+        assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
+    }
+
+    @Test
+    fun `a device the server no longer knows is registered again and retried`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw IndicApi.DeviceNotActiveException("r1") }
+        api.base.onRegisterDevice = { }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertTrue("registerDevice" in api.base.calls)
+        assertTrue(TokenStore.isDeviceRegistered(context))
+        assertTrue(File(staging, "Session.zip").isFile)
+    }
+
+    @Test
+    fun `an account bound to another phone fails the backup and drops the staging`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw IndicApi.DeviceConflictException("r1") }
+
+        val result = run()
+
+        assertTrue(failReason(result)!!.startsWith(string(com.indicvision.semper.R.string.cloud_backup_failed_device)))
+        assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
+        assertFalse(staging.exists())
+    }
+
+    @Test
+    fun `running out of memory fails the backup with its own reason`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onUpload = { throw OutOfMemoryError("zip") }
+
+        val result = run()
+
+        assertEquals(string(com.indicvision.semper.R.string.cloud_backup_failed_oom), failReason(result))
+        assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
+        assertFalse(staging.exists())
+    }
+
+    /** Empties the staging, so the run has to prepare it again. */
+    private fun unstage() {
+        staging.deleteRecursively()
+    }
+
+    @Test
+    fun `a prepare pass that bakes no reports retries while the inputs are on disk`() {
+        seed()
+        unstage()
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertTrue(api.calls.isEmpty())
+        assertFalse("no zip is built from an incomplete bundle", File(staging, "Session.zip").exists())
+        assertEquals(SessionRecord.SyncState.PENDING, row().syncState)
+    }
+
+    @Test
+    fun `inputs gone for good fail the backup instead of retrying forever`() {
+        seed()
+        unstage()
+        File(sessionDir, "reference.png").delete()
+        SessionPaths.frameDat(sessionDir, 0).delete()
+        // Seen missing since just after the row was saved: long past every grace period.
+        File(sessionDir, "upload_inputs_missing_since").writeText("2")
+
+        val result = run()
+
+        assertEquals(string(com.indicvision.semper.R.string.cloud_backup_failed_missing_files), failReason(result))
+        assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
+        assertFalse(staging.exists())
+        assertTrue(api.calls.isEmpty())
+    }
+
+    @Test
+    fun `a stale file record mid-upload deletes the whole session, not half of it`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { fileId, req ->
+            if (fileId == "f_bundle") throw apiError(409, "size_or_state_mismatch")
+            api.completed += req
+        }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertEquals(listOf("cs1"), api.deleted)
+        assertEquals("", row().cloudSessionId)
+        assertEquals(SessionRecord.SyncState.PENDING, row().syncState)
+        assertTrue("the recreate reuses the staging", File(staging, "Session.zip").isFile)
+    }
+
     private companion object {
         const val ID = "s_upload"
     }
