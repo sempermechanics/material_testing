@@ -1,7 +1,7 @@
 // The public face of the heatmap renders: each entry point takes the field,
 // the grid and its optional bounds and cap, and there is one per render the
 // viewer, the report, the GIF and the tests call.
-@file:Suppress("LongParameterList", "TooManyFunctions")
+@file:Suppress("LongParameterList")
 
 package com.indicvision.semper.report
 
