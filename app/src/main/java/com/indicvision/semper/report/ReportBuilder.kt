@@ -1,6 +1,6 @@
-// Report rendering: literal page/table coordinates, paint sizes and long draw
-// calls are inherent to layout code and read clearest inline, so the structural
-// and magic-number rules are suppressed for this whole file.
+// Report assembly: the fusion pass (buildReport) stays one function, whole,
+// so the structural rules are suppressed for this file, as are its literal
+// render and composite sizes.
 
 @file:Suppress("CyclomaticComplexMethod", "LongMethod", "LongParameterList", "MagicNumber", "NestedBlockDepth")
 
@@ -8,12 +8,8 @@ package com.indicvision.semper.report
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Rect
-import android.graphics.Shader
-import android.graphics.Typeface
 import android.os.Build
 import androidx.annotation.VisibleForTesting
 import androidx.core.graphics.createBitmap
@@ -115,103 +111,15 @@ object ReportBuilder {
         data: FloatArray,
         dataIndex: Int,
         absoluteStrainValues: Boolean = true,
-    ): FieldExtrema =
-        computeFieldExtrema(data, dataIndex, absoluteStrainValues, FloatArray(data.size / DicResult.STRIDE))
+    ): FieldExtrema = ReportFieldExtrema.computeFieldExtrema(data, dataIndex, absoluteStrainValues)
 
-    /**
-     * As [computeFieldExtrema], but collects accepted values into the caller-supplied
-     * [scratch] (must hold at least the accepted-point count) instead of a boxed
-     * `List<Float>`, so a report build can reuse a single primitive buffer across
-     * fields. Sorting a primitive `FloatArray` uses the same total order as
-     * `List<Float>.sort()` (`-0.0 < 0.0`, NaN greatest), so the p02/p98 picks — and
-     * therefore the returned indices — are identical to the boxed path.
-     */
+    /** [computeFieldExtrema] collecting into the caller's [scratch]; see [ReportFieldExtrema]. */
     fun computeFieldExtrema(
         data: FloatArray,
         dataIndex: Int,
         absoluteStrainValues: Boolean,
         scratch: FloatArray,
-    ): FieldExtrema {
-        val isStrain = DicResult.isStrainFieldIndex(dataIndex)
-        val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
-
-        var count = 0
-        for (i in data.indices step DicResult.STRIDE) {
-            val corr = data[i + DicResult.IDX_ZNSSD]
-            if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
-                val rawVal = data[i + dataIndex]
-                scratch[count++] = if (isStrain && absoluteStrainValues) abs(rawVal) else rawVal
-            }
-        }
-        return extremaFromScratch(data, dataIndex, absoluteStrainValues, scratch, count)
-    }
-
-    /**
-     * The sort + percentile + index passes of [computeFieldExtrema], given a [scratch]
-     * already filled with the first [count] accepted field values (in the same
-     * `absoluteStrainValues` convention). Split out so [buildReport] can fill the buffer
-     * once — for both mean/std and extrema — instead of walking `data` twice per field.
-     */
-    private fun extremaFromScratch(
-        data: FloatArray,
-        dataIndex: Int,
-        absoluteStrainValues: Boolean,
-        scratch: FloatArray,
-        count: Int,
-    ): FieldExtrema {
-        if (count == 0) return FieldExtrema(-1, -1)
-        val isStrain = DicResult.isStrainFieldIndex(dataIndex)
-        val isCorrelation = dataIndex == DicResult.IDX_ZNSSD
-        fun fieldValue(rawVal: Float): Float = if (isStrain && absoluteStrainValues) abs(rawVal) else rawVal
-
-        // Only two order statistics are needed out of scratch — quickSelect finds
-        // each in expected O(n) instead of paying O(n log n) to fully sort it (same
-        // change, same reasoning, as VisualizationEngine.computeSigmaClampedRange).
-        val p02Index = (count * 0.02).toInt().coerceIn(0, count - 1)
-        val p98Index = (count * 0.98).toInt().coerceIn(0, count - 1)
-        val p02 = VisualizationEngine.quickSelect(scratch, p02Index, 0, count)
-        val p98 = VisualizationEngine.quickSelect(scratch, p98Index, p02Index, count)
-
-        var maxV = -Float.MAX_VALUE
-        var minV = Float.MAX_VALUE
-        var maxIdx = -1
-        var minIdx = -1
-        for (i in data.indices step DicResult.STRIDE) {
-            val corr = data[i + DicResult.IDX_ZNSSD]
-            if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
-                val valToCheck = fieldValue(data[i + dataIndex])
-                if (valToCheck in p02..p98) {
-                    if (valToCheck > maxV) {
-                        maxV = valToCheck
-                        maxIdx = i
-                    }
-                    if (valToCheck < minV) {
-                        minV = valToCheck
-                        minIdx = i
-                    }
-                }
-            }
-        }
-
-        if (maxIdx == -1 || minIdx == -1) {
-            for (i in data.indices step DicResult.STRIDE) {
-                val corr = data[i + DicResult.IDX_ZNSSD]
-                if (DicResult.isAcceptedPoint(corr, isCorrelation)) {
-                    val valToCheck = fieldValue(data[i + dataIndex])
-                    if (valToCheck > maxV) {
-                        maxV = valToCheck
-                        maxIdx = i
-                    }
-                    if (valToCheck < minV) {
-                        minV = valToCheck
-                        minIdx = i
-                    }
-                }
-            }
-        }
-
-        return FieldExtrema(maxIdx, minIdx)
-    }
+    ): FieldExtrema = ReportFieldExtrema.computeFieldExtrema(data, dataIndex, absoluteStrainValues, scratch)
 
     fun buildReport(params: ReportBuildParams): ReportData = buildReport(params) {}
 
@@ -282,7 +190,8 @@ object ReportBuilder {
 
                 // scratch already holds this field's signed accepted values in order, so the
                 // extrema step sorts them in place — no second collect walk of `data`.
-                val extrema = extremaFromScratch(data, dataIndex, absoluteStrainValues = false, scratch, count)
+                val extrema =
+                    ReportFieldExtrema.extremaFromScratch(data, dataIndex, absoluteStrainValues = false, scratch, count)
 
                 // Bound the intermediate render to REPORT_MAX_EDGE. Every output here is
                 // downscaled to 600 px by compressForPdf(), so this is invisible — but it
@@ -422,6 +331,7 @@ object ReportBuilder {
      * Draws the info box, the colour bar for [range] (stored units) and the
      * MAX / MIN markers at [extrema] onto a field image [width] × [height].
      * [data] coordinates are scaled by [coordScale] to land on a capped canvas.
+     * See [ReportAnnotations].
      */
     fun bakeAnnotationsToCanvas(
         canvas: Canvas,
@@ -432,148 +342,5 @@ object ReportBuilder {
         data: FloatArray,
         annotation: FieldAnnotation,
         coordScale: Float = 1f,
-    ) {
-        val unit = annotation.unit
-        val dataIndex = annotation.dataIndex
-        val multiplier = if (unit == "mε") DicResult.STRAIN_TO_MILLISTRAIN else 1f
-        val maxVal = range.max * multiplier
-        val minVal = range.min * multiplier
-        val maxIdx = extrema.maxIdx
-        val minIdx = extrema.minIdx
-
-        val textSize = width * 0.025f
-        val padding = width * 0.02f
-
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            this.textSize = textSize
-            typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(4f, 2f, 2f, Color.BLACK)
-        }
-        val bgPaint = Paint().apply { color = Color.argb(160, 0, 0, 0) }
-
-        val infoText = listOfNotNull(
-            "Semper Analysis Report",
-            annotation.imageName?.takeIf { it.isNotBlank() }?.let { "Image: $it" },
-            "Field: ${annotation.typeString} [$unit]",
-            // The marked points' values; the colour bar below keeps the scale's ends.
-            "Max: ${formatMetric(dataIndex?.let { extrema.maxValue(data, it) } ?: maxVal)}",
-            "Min: ${formatMetric(dataIndex?.let { extrema.minValue(data, it) } ?: minVal)}",
-        )
-        var maxTextWidth = 0f
-        for (line in infoText) {
-            val w = textPaint.measureText(line)
-            if (w > maxTextWidth) maxTextWidth = w
-        }
-
-        canvas.drawRect(
-            padding * 0.5f,
-            padding * 0.5f,
-            padding * 1.5f + maxTextWidth,
-            padding + (infoText.size * (textSize * 1.4f)) + padding,
-            bgPaint,
-        )
-        var currentY = padding + textSize
-        for (line in infoText) {
-            canvas.drawText(line, padding, currentY, textPaint)
-            currentY += textSize * 1.4f
-        }
-
-        val barWidth = width * 0.03f
-        val barHeight = height * 0.5f
-        val barLeft = width - padding - barWidth - (textSize * 4.5f)
-        val barTop = (height - barHeight) / 2f
-        val barRight = barLeft + barWidth
-        val barBottom = barTop + barHeight
-
-        // The map's own ramp, lowest value at the bottom. A six-stop jet drawn here
-        // before put pure red at 80 % of the scale where the map has it at 87.5 %,
-        // off by up to 83 levels in a channel, so values read off the bar were wrong.
-        canvas.drawRect(
-            barLeft,
-            barTop,
-            barRight,
-            barBottom,
-            Paint().apply {
-                shader = LinearGradient(
-                    0f,
-                    barBottom,
-                    0f,
-                    barTop,
-                    VisualizationEngine.rampColors(),
-                    null,
-                    Shader.TileMode.CLAMP,
-                )
-            },
-        )
-        canvas.drawRect(
-            barLeft,
-            barTop,
-            barRight,
-            barBottom,
-            Paint().apply {
-                color = Color.BLACK
-                style = Paint.Style.STROKE
-                strokeWidth = 3f
-            },
-        )
-
-        val scaleTextPaint = Paint(textPaint).apply {
-            textAlign = Paint.Align.LEFT
-            clearShadowLayer()
-            color = Color.BLACK
-        }
-        val whiteBgPaint = Paint().apply { color = Color.argb(200, 255, 255, 255) }
-        fun drawScaleLabel(text: String, y: Float) {
-            val w = scaleTextPaint.measureText(text)
-            canvas.drawRect(
-                barRight + padding * 0.5f - 5f,
-                y - textSize,
-                barRight + padding * 0.5f + w + 5f,
-                y + (textSize * 0.3f),
-                whiteBgPaint,
-            )
-            canvas.drawText(text, barRight + padding * 0.5f, y, scaleTextPaint)
-        }
-
-        drawScaleLabel(formatMetric(maxVal), barTop + (textSize * 0.3f))
-        drawScaleLabel(formatMetric((maxVal + minVal) / 2f), barTop + (barHeight / 2f) + (textSize * 0.3f))
-        drawScaleLabel(formatMetric(minVal), barBottom)
-
-        if (maxIdx != -1 && minIdx != -1) {
-            // Data coords are in full-resolution image space; scale them to the
-            // (possibly capped) canvas so markers land correctly.
-            val maxX = data[maxIdx] * coordScale
-            val maxY = data[maxIdx + 1] * coordScale
-            val minX = data[minIdx] * coordScale
-            val minY = data[minIdx + 1] * coordScale
-            val targetRadius = width * 0.015f
-            val crosshairLen = targetRadius * 1.5f
-            val whiteOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.WHITE
-                style = Paint.Style.STROKE
-                strokeWidth = 6f
-            }
-            val markerTextPaint = Paint(textPaint).apply { this.textSize = width * 0.018f }
-
-            fun drawTarget(x: Float, y: Float, label: String, coreColor: Int) {
-                canvas.drawCircle(x, y, targetRadius, whiteOutline)
-                canvas.drawLine(x - crosshairLen, y, x + crosshairLen, y, whiteOutline)
-                canvas.drawLine(x, y - crosshairLen, x, y + crosshairLen, whiteOutline)
-                val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = coreColor
-                    style = Paint.Style.STROKE
-                    strokeWidth = 3f
-                }
-                canvas.drawCircle(x, y, targetRadius, corePaint)
-                canvas.drawLine(x - crosshairLen, y, x + crosshairLen, y, corePaint)
-                canvas.drawLine(x, y - crosshairLen, x, y + crosshairLen, corePaint)
-                canvas.drawText(label, x + targetRadius + 5f, y - targetRadius - 5f, markerTextPaint)
-            }
-            drawTarget(maxX, maxY, "MAX", Color.RED)
-            if (annotation.drawMinMarker) {
-                drawTarget(minX, minY, "MIN", Color.BLUE)
-            }
-        }
-    }
+    ) = ReportAnnotations.bakeAnnotationsToCanvas(canvas, width, height, range, extrema, data, annotation, coordScale)
 }
