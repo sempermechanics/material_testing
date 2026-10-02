@@ -60,12 +60,12 @@ cd native && ./scripts/sparse-opencv.sh && cd ..   # Windows: .\scripts\sparse-o
 
 Open in Android Studio → **Run**. First build compiles OpenCV once (`app/.cxx/`
 cache). **No API keys required** for local analysis; without them cloud sync
-stays off. Release builds require HTTPS `INDIC_API_BASE_URL` in
+stays off. Release builds require HTTPS `SEMPER_API_BASE_URL` in
 `local.properties` (cloud cannot ship silently disabled).
 
 **Emulator (x86_64):** `./gradlew :app:installDebug -PabiFilters=x86_64` — debug
 boots straight to Home as a local dev account (no backend). Set
-`INDIC_DEV_AUTH_BYPASS=false` in `local.properties` to exercise real sign-in.
+`SEMPER_DEV_AUTH_BYPASS=false` in `local.properties` to exercise real sign-in.
 
 Full commands, engine bumps, disk hygiene, and backend setup:
 [CONTRIBUTING.md](CONTRIBUTING.md).

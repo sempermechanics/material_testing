@@ -107,7 +107,7 @@ three things the merge will not do on its own.
    Then steps 3 and 4 above (`--compile`, `--kdoc`, `--docs`,
    `check_doc_paths.py`) once, after both.
 2. **Watch one collision.** The second mapping moves
-   `com.indicvision.semper.ui.analysis.VideoSamplingSheet` to
+   `com.sempermechanics.semper.ui.analysis.VideoSamplingSheet` to
    `ui/analysis/frames/`. The fork has its own `ui/analysis/VideoSamplingSheet`
    (step 2 above suggests the same package), and this repository now has
    `ui/analysis/frames/VideoSamplingSheet.kt` as well. Decide which one the
@@ -126,7 +126,7 @@ three things the merge will not do on its own.
    | `originalNameOr` in `ui/analysis/run` (`DicFieldIo.kt`) | `List<String>.originalNameOr(index, fallback)` in `data/session/SessionNaming.kt`. It is **not** in either mapping, so add the import by hand |
    | `VisualizationEngine` results as `Pair` / `Triple` | `ImageSize` and `BakedHeatmap` |
    | `AnalysisRunCodes`, `BatchAnalysisParams` | Removed; the run's codes are `RunStop` (`field/RunStop.kt`) and its inputs `RunSpec` |
-   | `IndicApiHttp.apiException`, `Refusal` | `ApiAnswer` (`data/net/IndicApiHttp.kt`) |
+   | `SemperApiHttp.apiException`, `Refusal` | `ApiAnswer` (`data/net/SemperApiHttp.kt`) |
    | `CloudRestore.recordFrom`, `SkippedNode.fromMetadata`, `SkippedNode.toMetadataJsonArray` | `SessionMetadataDoc` (`data/cloud/SessionMetadataDoc.kt`) reads and writes a backup's `metadata.json` |
    | `SessionStore.upsertAsync` | Removed; call `SessionStore.save` / `upsert` off the main thread |
    | `ZipDirectory.centralDirectoryOffset` | Removed |

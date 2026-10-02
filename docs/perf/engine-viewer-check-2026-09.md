@@ -82,4 +82,4 @@ run on the same device, back to back.
 
 `./gradlew :app:installDebug` installs on **every** connected device and
 emulator. Set `ANDROID_SERIAL` to the phone's serial before running it when
-emulators that belong to other work are attached. Afterwards, uninstall `com.indicvision.semper.test`.
+emulators that belong to other work are attached. Afterwards, uninstall `com.sempermechanics.semper.test`.

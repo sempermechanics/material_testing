@@ -90,16 +90,16 @@ rm -rf app/.cxx app/build
 ./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug
 
 # Per-chunk tests — see docs/app/TESTING.md for what each chunk owns
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.auth.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.session.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.analysis.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.results.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.cloud.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.settings.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.viewer.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.auth.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.session.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.analysis.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.results.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.cloud.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.settings.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.viewer.*"
 
 # Emulator smoke (needs an x86_64 emulator running)
-./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.indicvision.semper.benchmark"
+./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.sempermechanics.semper.benchmark"
 
 # Performance benchmarks — not part of the push gate; they need a device and are
 # label-gated in CI. See docs/app/TESTING.md#performance-benchmarks before running.
@@ -140,7 +140,7 @@ links them as its real user-facing policy. Edit the markdown, re-run the script
 without `--check`, and commit both. See
 [firebase-hosting/README.md](firebase-hosting/README.md).
 
-Cloud features need `INDIC_API_BASE_URL` in `local.properties` and Firebase
+Cloud features need `SEMPER_API_BASE_URL` in `local.properties` and Firebase
 setup — see [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md). Local
 analysis works fine without it. Note that a **release** build is stricter: it
 fails outright if that URL is missing or not HTTPS, so cloud sync cannot ship
