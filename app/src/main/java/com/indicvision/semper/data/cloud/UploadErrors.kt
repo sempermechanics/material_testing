@@ -95,16 +95,31 @@ internal object UploadErrors {
     /** Integrity rebuilds allowed before the backup fails instead. */
     const val MAX_INTEGRITY_REBUILDS = 2
 
+    /**
+     * Session-dir file counting the sessions rebuilt because Drive no longer
+     * knew an upload link (`IndicApi.UploadLinkExpiredException`) since the last
+     * successful upload. Beside [INTEGRITY_REBUILDS_MARKER], for the same reason.
+     */
+    const val LINK_EXPIRED_REBUILDS_MARKER = "link_expired_rebuilds"
+
+    /** Link-expired rebuilds allowed before the backup fails instead. */
+    const val MAX_LINK_EXPIRED_REBUILDS = 3
+
     /** Count one more integrity rebuild for [sessionDir]; returns the new total. */
-    fun recordIntegrityRebuild(sessionDir: File): Int {
-        val marker = SessionLayout(sessionDir).integrityRebuildsMarker
+    fun recordIntegrityRebuild(sessionDir: File): Int = bump(SessionLayout(sessionDir).integrityRebuildsMarker)
+
+    /** Count one more link-expired rebuild for [sessionDir]; returns the new total. */
+    fun recordLinkExpiredRebuild(sessionDir: File): Int = bump(File(sessionDir, LINK_EXPIRED_REBUILDS_MARKER))
+
+    /** A finished upload, or a backup given up, starts both rebuild counts afresh. */
+    fun clearRebuildCounts(sessionDir: File) {
+        SessionLayout(sessionDir).integrityRebuildsMarker.delete()
+        File(sessionDir, LINK_EXPIRED_REBUILDS_MARKER).delete()
+    }
+
+    private fun bump(marker: File): Int {
         val count = (runCatching { marker.readText().trim().toInt() }.getOrNull() ?: 0) + 1
         runCatching { marker.writeText(count.toString()) }
         return count
-    }
-
-    /** A finished upload starts the integrity count afresh. */
-    fun clearIntegrityRebuilds(sessionDir: File) {
-        SessionLayout(sessionDir).integrityRebuildsMarker.delete()
     }
 }

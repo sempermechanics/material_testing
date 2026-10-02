@@ -43,6 +43,7 @@ import org.robolectric.annotation.Config
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
 /**
@@ -413,16 +414,20 @@ class DicUploadWorkerTest {
     fun `a terminal failure or a completed session resets the integrity count`() {
         seed(cloudSessionId = "cs1")
         val marker = File(sessionDir, UploadErrors.INTEGRITY_REBUILDS_MARKER).apply { writeText("2") }
+        val linkMarker = File(sessionDir, UploadErrors.LINK_EXPIRED_REBUILDS_MARKER).apply { writeText("2") }
         api.onSessionUploads = { uploading(it) }
         api.onComplete = { _, _ -> throw apiError(413, "too_many_files") }
         assertTrue(run() is ListenableWorker.Result.Failure)
         assertFalse(marker.exists())
+        assertFalse(linkMarker.exists())
 
         seed(cloudSessionId = "cs2")
         marker.writeText("2")
+        linkMarker.writeText("2")
         api.onSessionUploads = { SessionUploadsResponse(sessionId = it, status = "COMPLETED") }
         assertEquals(ListenableWorker.Result.success(), run())
         assertFalse(marker.exists())
+        assertFalse(linkMarker.exists())
     }
 
     @Test
@@ -692,6 +697,110 @@ class DicUploadWorkerTest {
 
         assertEquals("cs1", row().cloudSessionId)
         assertTrue(File(staging, "Session.zip").isFile)
+        assertFalse(
+            "a recreate that never happened is not counted",
+            File(sessionDir, UploadErrors.LINK_EXPIRED_REBUILDS_MARKER).exists(),
+        )
+    }
+
+    @Test
+    fun `an upload link that keeps expiring fails the backup after a bounded number of recreates`() {
+        api.onSessionUploads = { uploading(it) }
+        api.onUpload = { throw IndicApi.UploadLinkExpiredException(410) }
+
+        repeat(UploadErrors.MAX_LINK_EXPIRED_REBUILDS) {
+            seed(cloudSessionId = "cs$it")
+            assertEquals(ListenableWorker.Result.retry(), run())
+            assertEquals("cs$it", api.deleted.last())
+            assertEquals("", row().cloudSessionId)
+            assertTrue("each recreate reuses the staging", File(staging, "Session.zip").isFile)
+        }
+
+        seed(cloudSessionId = "csLast")
+        val last = run()
+
+        assertEquals(string(com.indicvision.semper.R.string.cloud_backup_failed_generic), failReason(last))
+        assertEquals("csLast", api.deleted.last())
+        assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
+        assertFalse(staging.exists())
+        assertFalse(File(sessionDir, UploadErrors.LINK_EXPIRED_REBUILDS_MARKER).exists())
+    }
+
+    // ── archives built on one run, reused on the next ───────────────────────
+
+    /** Drops the staged archive [name] and its sidecar, so the run has to build it. */
+    private fun dropArchive(name: String) {
+        File(staging, name).delete()
+        File(staging, "$name.sha256").delete()
+    }
+
+    private fun entries(zip: File): List<String> = ZipFile(zip).use { z -> z.entries().toList().map { it.name } }
+
+    private fun staged(name: String) = File(staging, name).readBytes()
+
+    @Test
+    fun `archives built on one run are reused byte for byte and declared once`() {
+        seed(cloudSessionId = "gone")
+        dropArchive("Session.zip")
+        dropArchive("Extras.zip")
+        api.onSessionUploads = { sid ->
+            if (sid == "gone") throw apiError(404, "session_not_found")
+            uploading(sid)
+        }
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs9", status = "UPLOADING") }
+        api.onComplete = { _, _ -> throw apiError(503, "firestore_unreachable") }
+
+        // Run 1 builds both archives from the staged files, then finds its old
+        // session gone and drops the pointer.
+        assertEquals(ListenableWorker.Result.retry(), run())
+        assertEquals(listOf("gone"), api.deleted)
+        val names = listOf("Session.zip", "Extras.zip")
+        val built = names.associateWith { staged(it) }
+        for (name in names) {
+            assertEquals(name, Digests.sha256Hex(File(staging, name)), File(staging, "$name.sha256").readText())
+        }
+        val restore = entries(File(staging, "Session.zip"))
+        assertTrue(restore.toString(), restore.any { it.startsWith("raw/") } && restore.any { it.startsWith("dat/") })
+        val extras = entries(File(staging, "Extras.zip"))
+        for (role in listOf("csv/", "reports/", "processed/")) {
+            assertTrue("$role in $extras", extras.any { it.startsWith(role) })
+        }
+
+        // Run 2 declares the archives run 1 built; run 3 resumes the same session.
+        assertEquals(ListenableWorker.Result.retry(), run())
+        val declared = api.created!!.files.associateBy { it.name }
+        for (name in names) {
+            assertTrue("$name reused as built", built.getValue(name).contentEquals(staged(name)))
+            assertEquals(name, Digests.sha256Hex(File(staging, name)), declared.getValue(name).sha256)
+            assertEquals(name, File(staging, name).length(), declared.getValue(name).bytes)
+        }
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        for (name in names) assertTrue("$name unchanged", built.getValue(name).contentEquals(staged(name)))
+        assertEquals(listOf("createSession"), api.calls.filter { it == "createSession" })
+    }
+
+    @Test
+    fun `a staging with only Extras zip rebuilds both archives from the staged files`() {
+        seed(cloudSessionId = "cs1")
+        dropArchive("Session.zip")
+        val seeded = staged("Extras.zip")
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw apiError(503, "firestore_unreachable") }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        // Not reusable without Session.zip, so Extras.zip is packed again from
+        // what is staged, with a sidecar that matches it.
+        val extras = File(staging, "Extras.zip")
+        assertFalse(seeded.contentEquals(extras.readBytes()))
+        assertTrue(entries(extras).any { it.startsWith("reports/") })
+        assertEquals(Digests.sha256Hex(extras), File(staging, "Extras.zip.sha256").readText())
+        val built = listOf("Session.zip", "Extras.zip").associateWith { staged(it) }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        for ((name, bytes) in built) assertTrue("$name reused as built", bytes.contentEquals(staged(name)))
     }
 
     private companion object {

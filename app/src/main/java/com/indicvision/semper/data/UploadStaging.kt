@@ -32,7 +32,7 @@ internal sealed interface StagingResult {
     /** The report bundle is not ready yet; end this run with a retry. */
     data class Retry(val reason: String) : StagingResult
 
-    /** The bundle's inputs are gone for good: the row is FAILED and the staging dropped. */
+    /** The bundle's inputs are gone for good: fail the backup ([UploadFailures.inputsGone]). */
     data object InputsGone : StagingResult
 }
 
@@ -53,24 +53,27 @@ internal sealed interface StagingResult {
  */
 internal class UploadStaging(private val context: Context, private val record: SessionRecord) {
 
-    private val layout = SessionLayout(File(record.sessionDir))
+    private val session = SessionLayout(File(record.sessionDir))
 
-    val staging: StagingLayout = layout.staging
+    val layout: StagingLayout = session.staging
+
+    /** Whether a finished staging is reused as it is; [prepare] decides. */
+    var reuse: Boolean = false
+        private set
 
     /**
-     * Ready the staging dir for this run; returns whether a finished staging can
-     * be reused as it is.
+     * Ready the staging dir for this run, and decide [reuse].
      *
      * Only incomplete staging is wiped. A blank cloudSessionId after Rebuild /
      * provision failure must NOT destroy a finished Session.zip — that was
      * forcing a full prepare loop on every WorkManager retry.
      */
-    fun prepare(): Boolean {
-        if (record.cloudSessionId.isBlank() && !UploadWorkOutcomes.stagingReusable(staging.dir)) {
-            staging.dir.deleteRecursively()
+    fun prepare() {
+        if (record.cloudSessionId.isBlank() && !UploadWorkOutcomes.stagingReusable(layout.dir)) {
+            layout.dir.deleteRecursively()
         }
-        staging.dir.mkdirs()
-        return UploadWorkOutcomes.stagingReusable(staging.dir)
+        layout.dir.mkdirs()
+        reuse = UploadWorkOutcomes.stagingReusable(layout.dir)
     }
 
     /**
@@ -78,16 +81,16 @@ internal class UploadStaging(private val context: Context, private val record: S
      * and `.dat`, the CSV and report bundle, then the two archives. [progress]
      * follows the report pass by frame and the archives by source byte.
      */
-    suspend fun stage(reuse: Boolean, progress: UploadProgressSampler): StagingResult {
+    suspend fun stage(progress: UploadProgressSampler): StagingResult {
         val sources = sourceArtifacts()
         val incomplete = stageReports(progress)
         if (incomplete != null) return incomplete
-        return StagingResult.Ready(archive(sources + derivedArtifacts(), reuse, progress))
+        return StagingResult.Ready(archive(sources + derivedArtifacts(), progress))
     }
 
     /** Session-level metadata (generated once, then reused), the reference, and every frame's files. */
     private fun sourceArtifacts(): List<UploadArtifact> {
-        val metaFile = staging.metadataJson
+        val metaFile = layout.metadataJson
         UploadWorkOutcomes.stageMetadataJson(metaFile) {
             SessionUploadMetadata.buildMetadataJson(record, context)
         }
@@ -115,14 +118,14 @@ internal class UploadStaging(private val context: Context, private val record: S
      */
     private fun stageFrame(index: Int, defName: String, addedRaw: MutableSet<String>): List<UploadArtifact> {
         val frameName = "Frame_${index + 1}"
-        val original = layout.rawDeformed(defName)
+        val original = session.rawDeformed(defName)
         val raw = if (original.exists() && original.length() > 0) {
             UploadArtifact(ArtifactRoles.RAW, defName, original).takeIf { addedRaw.add(defName) }
         } else {
             Timber.w("Deformed image missing for %s", frameName)
             null
         }
-        val datFile = layout.frameDat(index)
+        val datFile = session.frameDat(index)
         val dat = if (datFile.exists()) {
             UploadArtifact(ArtifactRoles.DAT, datFile.name, datFile)
         } else {
@@ -142,22 +145,22 @@ internal class UploadStaging(private val context: Context, private val record: S
      * mistaken for done.
      */
     private suspend fun stageReports(progress: UploadProgressSampler): StagingResult? {
-        val needCsv = !staging.analysisCsv.exists() || staging.analysisCsv.length() == 0L
-        val needBundles = record.defNames.isNotEmpty() && !UploadWorkOutcomes.bundleArtifactsReady(staging.dir)
+        val needCsv = !layout.analysisCsv.exists() || layout.analysisCsv.length() == 0L
+        val needBundles = record.defNames.isNotEmpty() && !UploadWorkOutcomes.bundleArtifactsReady(layout.dir)
         if (!needCsv && !needBundles) return null
 
         // Restaging invalidates any prior Session.zip — it was built without the
         // artifacts we are about to (re)generate.
-        staging.staleFiles(StagingLayout.SESSION_ZIP).forEach { it.delete() }
-        if (needBundles) staging.bundlesDone.delete()
+        layout.staleFiles(StagingLayout.SESSION_ZIP).forEach { it.delete() }
+        if (needBundles) layout.bundlesDone.delete()
         SessionUploadBundler.stageCsvAndBundles(
             context,
             record,
-            layout.dir,
+            session.dir,
             File(record.refPath),
-            layout.rawDeformedDir,
-            staging.dir,
-            csvFile = if (needCsv) staging.analysisCsv else null,
+            session.rawDeformedDir,
+            layout.dir,
+            csvFile = if (needCsv) layout.analysisCsv else null,
             writeReports = needBundles,
             onFrame = { d, t ->
                 progress.done.set(d.toLong())
@@ -166,8 +169,8 @@ internal class UploadStaging(private val context: Context, private val record: S
         )
         return when {
             record.defNames.isEmpty() -> null
-            UploadWorkOutcomes.bundleArtifactsReady(staging.dir) -> {
-                staging.bundlesDone.createNewFile()
+            UploadWorkOutcomes.bundleArtifactsReady(layout.dir) -> {
+                layout.bundlesDone.createNewFile()
                 null
             }
             needBundles -> incompleteBundles()
@@ -182,8 +185,8 @@ internal class UploadStaging(private val context: Context, private val record: S
      * fail so Home shows why instead of "pending" forever.
      */
     private fun incompleteBundles(): StagingResult {
-        Timber.e("Bundle staging incomplete (csv=%dB, reports/processed missing)", staging.analysisCsv.length())
-        return if (abandonIfInputsGone()) {
+        Timber.e("Bundle staging incomplete (csv=%dB, reports/processed missing)", layout.analysisCsv.length())
+        return if (inputsGoneForGood()) {
             StagingResult.InputsGone
         } else {
             StagingResult.Retry("bundle staging incomplete — reports/csv/processed not ready")
@@ -191,13 +194,12 @@ internal class UploadStaging(private val context: Context, private val record: S
     }
 
     /**
-     * After a prepare pass left the report bundle incomplete: decide with
-     * [UploadWorkOutcomes.classifyIncompleteStaging] whether the record's inputs
-     * are gone for good. If so, mark the row FAILED, drop its staging and return
-     * true; false means retry.
+     * After a prepare pass left the report bundle incomplete: whether the
+     * record's inputs are gone for good
+     * ([UploadWorkOutcomes.classifyIncompleteStaging]); false means retry.
      */
-    private fun abandonIfInputsGone(): Boolean {
-        val sessionDir = layout.dir
+    private fun inputsGoneForGood(): Boolean {
+        val sessionDir = session.dir
         val now = System.currentTimeMillis()
         val onDisk = UploadWorkOutcomes.stagingInputsOnDisk(sessionDir, record.defNames.size, File(record.refPath))
         val verdict = UploadWorkOutcomes.classifyIncompleteStaging(
@@ -207,22 +209,19 @@ internal class UploadStaging(private val context: Context, private val record: S
         )
         if (verdict == UploadWorkOutcomes.IncompleteStaging.RETRY) return false
         Timber.e("Session files missing on disk — failing backup (no retry loop)")
-        UploadLog.phase("inputs_missing")
-        staging.dir.deleteRecursively()
-        markBackupFailed(context, record.id, analyticsReason = "inputs_missing")
         return true
     }
 
     /** The CSV, the frame reports and the heatmaps the report pass left in the staging. */
     private fun derivedArtifacts(): List<UploadArtifact> {
         val artifacts = mutableListOf<UploadArtifact>()
-        val csv = staging.analysisCsv
+        val csv = layout.analysisCsv
         if (csv.length() > 0) artifacts += UploadArtifact(ArtifactRoles.CSV, StagingLayout.ANALYSIS_CSV, csv)
         if (record.defNames.isEmpty()) {
             Timber.e("Skipping reports — no frames in the record")
             return artifacts
         }
-        val pdfs = staging.reportsDir.listFiles()
+        val pdfs = layout.reportsDir.listFiles()
             ?.filter { it.isFile }
             ?.sortedBy { it.name }
             .orEmpty()
@@ -230,7 +229,7 @@ internal class UploadStaging(private val context: Context, private val record: S
         // Heatmaps sit in per-frame subfolders; keep the "<frame>/<field>.png"
         // relative path as the artifact name, so the bundle entry becomes
         // processed/<frame>/<field>.png.
-        val processedDir = staging.processedDir
+        val processedDir = layout.processedDir
         val pngs = processedDir.walkTopDown().filter { it.isFile }.sortedBy { it.path }.toList()
         pngs.forEach {
             val name = it.relativeTo(processedDir).invariantSeparatorsPath
@@ -254,7 +253,6 @@ internal class UploadStaging(private val context: Context, private val record: S
      */
     private fun archive(
         artifacts: List<UploadArtifact>,
-        reuse: Boolean,
         progress: UploadProgressSampler,
     ): List<UploadArtifact> {
         val payload = artifacts.filter { it.role != ArtifactRoles.METADATA }
@@ -264,8 +262,8 @@ internal class UploadStaging(private val context: Context, private val record: S
         progress.begin(TransferPhase.PREPARE, payload.sumOf { it.file.length().coerceAtLeast(1L) }.coerceAtLeast(1L))
         val onZipBytes: (Long) -> Unit = { n -> progress.done.addAndGet(n) }
         val (essential, derived) = payload.partition { SessionZip.isRestoreEssential(it.role) }
-        val restoreZip = stageArchive(StagingLayout.SESSION_ZIP, essential, reuse, onZipBytes)
-        val extrasZip = stageArchive(StagingLayout.EXTRAS_ZIP, derived, reuse, onZipBytes)
+        val restoreZip = stageArchive(StagingLayout.SESSION_ZIP, essential, onZipBytes)
+        val extrasZip = stageArchive(StagingLayout.EXTRAS_ZIP, derived, onZipBytes)
         return artifacts.filter { it.role == ArtifactRoles.METADATA } +
             listOfNotNull(
                 restoreZip?.let { UploadArtifact(ArtifactRoles.BUNDLE, StagingLayout.SESSION_ZIP, it.file, it.sha256) },
@@ -297,16 +295,15 @@ internal class UploadStaging(private val context: Context, private val record: S
     private fun stageArchive(
         zipName: String,
         members: List<UploadArtifact>,
-        reuse: Boolean,
         onBytes: (Long) -> Unit,
     ): StagedArchive? {
         if (members.isEmpty()) return null
-        val zip = staging.archive(zipName)
-        val sidecar = staging.sha256Sidecar(zipName)
+        val zip = layout.archive(zipName)
+        val sidecar = layout.sha256Sidecar(zipName)
         val sha = UploadWorkOutcomes.verifiedBundleSha256(zip, sidecar)
             ?.takeIf { reuse }
             ?: run {
-                staging.staleFiles(zipName).forEach { it.delete() }
+                layout.staleFiles(zipName).forEach { it.delete() }
                 val hex = SessionZip.build(
                     members.map { SessionZip.Member(it.role, it.name, it.file) },
                     zip,

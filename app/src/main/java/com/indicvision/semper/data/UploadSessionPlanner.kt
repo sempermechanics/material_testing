@@ -275,18 +275,19 @@ internal class UploadSessionPlanner(
             pendingCount = work?.size ?: state.uploads.size,
             allPendingMatchArtifacts = work != null,
         )
+        if (kind == UploadWorkOutcomes.ResumeKind.CONTINUE && work != null) {
+            UploadLog.phase("resume_continue", count = work.size)
+            return Resume.Continue(work)
+        }
         return when (kind) {
             UploadWorkOutcomes.ResumeKind.DONE -> {
                 UploadLog.phase("resume_done")
                 Resume.Done
             }
-            UploadWorkOutcomes.ResumeKind.REBUILD -> {
+            // CONTINUE needs every pending file matched, so it is handled above.
+            UploadWorkOutcomes.ResumeKind.REBUILD, UploadWorkOutcomes.ResumeKind.CONTINUE -> {
                 UploadLog.phase("resume_rebuild")
                 Resume.Rebuild
-            }
-            UploadWorkOutcomes.ResumeKind.CONTINUE -> {
-                UploadLog.phase("resume_continue", count = work.orEmpty().size)
-                Resume.Continue(work.orEmpty())
             }
             UploadWorkOutcomes.ResumeKind.WAIT -> {
                 UploadLog.phase("resume_wait")
