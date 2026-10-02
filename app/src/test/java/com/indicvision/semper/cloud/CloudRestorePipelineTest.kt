@@ -63,6 +63,12 @@ class CloudRestorePipelineTest {
             api.file("meta-1", "metadata", bytes, sha256)
         }
 
+    /** A split-layout sweep whose `engine.sweep.skipped` block is [skipped]. */
+    private fun sweepMetadata(skipped: String) = """
+        {"schema":"indic.session.metadata/3","frameCount":1,"frames":[{"image":"def.png"}],
+         "engine":{"subset":21,"sweep":{"subsets":[21],"steps":[5],"strainWindows":[41],"skipped":{$skipped}}}}
+    """.trimIndent().toByteArray()
+
     @Test
     fun `a split bundle restores into the local session layout`() {
         api.files = listOf(
@@ -99,6 +105,35 @@ class CloudRestorePipelineTest {
 
         val dir = SessionStore.dirFor(context, LOCAL_ID)
         assertEquals(File(dir, "reference.png").absolutePath, SessionStore.get(context, LOCAL_ID)?.refPath)
+    }
+
+    @Test
+    fun `a per-file backup's deformed image named reference_png does not become the reference`() {
+        // Pre-bundle backups list each artifact on its own; the fake names a file by its id.
+        api.files = listOf(
+            metadata(),
+            api.file("Reference.png", "raw", byteArrayOf(1, 2, 3)),
+            api.file("reference.png", "raw", byteArrayOf(4, 5)),
+            api.file("frame_0001.dat", "dat", RestoreFakeApi.onePointDat()),
+        )
+        val dir = SessionStore.dirFor(context, LOCAL_ID)
+        // The downloads run concurrently: finish the deformed image last, the order
+        // in which a name-only check took it for the reference.
+        api.beforeDownload = { fileId, _ ->
+            if (fileId == "reference.png") awaitFile(File(dir, "reference.png"))
+        }
+
+        restore()
+
+        assertEquals(File(dir, "reference.png").absolutePath, SessionStore.get(context, LOCAL_ID)?.refPath)
+        val deformed = File(dir, "${SessionPaths.RAW_DEFORMED_SUBDIR}/reference.png")
+        assertEquals(listOf<Byte>(4, 5), deformed.readBytes().toList())
+    }
+
+    /** Block (briefly) until [file] has been written by a sibling download. */
+    private fun awaitFile(file: File) {
+        val deadline = System.currentTimeMillis() + AWAIT_FILE_MS
+        while (!file.isFile && System.currentTimeMillis() < deadline) Thread.yield()
     }
 
     @Test
@@ -142,6 +177,33 @@ class CloudRestorePipelineTest {
     fun `metadata whose frame is not an object is corrupt before the bundle is fetched`() {
         api.files = listOf(
             metadata("""{"schema":"indic.session.metadata/3","frames":["def.png"]}""".toByteArray()),
+            bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
+        )
+
+        val thrown = assertThrows(CorruptTransferException::class.java) { restore() }
+
+        assertEquals("metadata_json_invalid", thrown.message)
+        assertFalse(api.calls.contains("downloadFile:bundle-1"))
+    }
+
+    @Test
+    fun `a sweep backed up before skip codes were kept restores`() {
+        api.files = listOf(
+            metadata(sweepMetadata(""""subsets":[41,51],"steps":[9,9],"strainWindows":[121,121]""")),
+            bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
+        )
+
+        assertEquals(LOCAL_ID, restore())
+
+        val row = SessionStore.get(context, LOCAL_ID)
+        assertEquals(listOf(41, 51), row?.sweepSkippedNodes?.map { it.subset })
+        assertEquals(listOf(0, 0), row?.sweepSkippedNodes?.map { it.code })
+    }
+
+    @Test
+    fun `skip lists that disagree in length are corrupt before the bundle is fetched`() {
+        api.files = listOf(
+            metadata(sweepMetadata(""""subsets":[41,51],"steps":[9],"strainWindows":[121],"codes":[-12]""")),
             bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
         )
 
@@ -228,8 +290,30 @@ class CloudRestorePipelineTest {
         assertEquals(emptyList<String>(), left)
     }
 
+    @Test
+    fun `a failed download never deletes another backup's archive of the same name`() {
+        val bundle = bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat())
+        api.files = listOf(bundle)
+        val first = runBlocking {
+            CloudRestore.downloadBundleZip(context, CLOUD_ID, "Specimen", api = api, tokens = tokens)
+        }
+        val extrasBytes = RestoreFakeApi.zipOf(listOf("csv/analysis_data.csv" to "a,b".toByteArray()))
+        val staleSha = RestoreFakeApi.sha256Of("an older extras body".toByteArray())
+        api.files = listOf(bundle, api.file("extras-1", "extras", extrasBytes, staleSha))
+
+        assertThrows(CorruptTransferException::class.java) {
+            runBlocking {
+                CloudRestore.downloadBundleZip(context, "cloud-other", "Specimen", api = api, tokens = tokens)
+            }
+        }
+
+        assertTrue("the first backup's archive was deleted by the second's failure", first.isFile)
+        assertTrue(first.name.endsWith("_Specimen_Session.zip"))
+    }
+
     private companion object {
         const val CLOUD_ID = "cloud-abc"
         const val LOCAL_ID = "local-1"
+        const val AWAIT_FILE_MS = 5_000L
     }
 }

@@ -311,8 +311,8 @@ class VsgPlotView @JvmOverloads constructor(
      * Each series as a polyline, with its markers. Emphasis (dataviz skill):
      * the focused series keeps its real hue; every muted one shares a single
      * neutral instead of its own dimmed hue, so at most one categorical colour
-     * is ever on screen at once -- see PALETTE_RES's per-slot (not pairwise)
-     * validation above.
+     * is ever on screen at once -- see [VsgPlotPalette]'s per-slot (not
+     * pairwise) validation.
      */
     private fun drawSeries(canvas: Canvas, b: PlotBounds) {
         val mutedColor = ContextCompat.getColor(context, R.color.viewer_plot_muted)

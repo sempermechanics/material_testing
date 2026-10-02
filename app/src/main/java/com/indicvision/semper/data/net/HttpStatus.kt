@@ -19,6 +19,10 @@ object HttpStatus {
     const val RANGE_NOT_SATISFIABLE = 416
     const val UNPROCESSABLE = 422
     const val TOO_MANY_REQUESTS = 429
+
+    /** Google's "Client Closed Request": a resumable upload session that was cancelled. */
+    const val CLIENT_CLOSED = 499
+
     const val INTERNAL_ERROR = 500
     const val BAD_GATEWAY = 502
     const val SERVICE_UNAVAILABLE = 503

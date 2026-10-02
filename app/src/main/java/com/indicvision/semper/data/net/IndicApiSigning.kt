@@ -11,6 +11,12 @@ import timber.log.Timber
 /** Enough of a 401 body to read its `detail` code. */
 private const val REFUSAL_PEEK_BYTES = 4096L
 
+/** The nonce the signature covers (`backend/app/deps.py`). */
+private const val NONCE_HEADER = "X-Nonce"
+
+/** The device's ECDSA signature over nonce, method, path and body hash. */
+private const val SIGNATURE_HEADER = "X-Signature"
+
 /**
  * Whether [resp] is the server refusing a client nonce. Finding out reads the
  * body, which can fail (a connection reset mid-body); [resp] is closed then,
@@ -90,7 +96,7 @@ internal class IndicApiSigning(
             .bearer(idToken, deviceId())
             .post(ByteArray(0).toRequestBody(IndicApiHttp.JSON_MEDIA)).build()
         client.newCall(req).execute().use { resp ->
-            if (resp.code != HttpStatus.OK) throw IndicApiHttp.apiException(resp)
+            if (resp.code != HttpStatus.OK) throw ApiAnswer.of(resp).exception()
             return IndicApiHttp.json.decodeFromString<ChallengeResponse>(resp.body.string()).nonce
         }
     }
@@ -108,8 +114,8 @@ internal class IndicApiSigning(
         return Headers.Builder()
             .add(IndicApiHttp.AUTHORIZATION, "Bearer $idToken")
             .add(IndicApiHttp.DEVICE_ID, deviceId())
-            .add("X-Nonce", nonce)
-            .add("X-Signature", sign(msg))
+            .add(NONCE_HEADER, nonce)
+            .add(SIGNATURE_HEADER, sign(msg))
             .build()
     }
 }

@@ -281,11 +281,15 @@ class VsgLatticeActivity : AppCompatActivity() {
      * one has none.
      */
     private fun redrawStrainPlot() {
+        if (frameProfiles.isEmpty()) {
+            binding.strainPlotSection.visibility = View.GONE
+            return
+        }
         val component = selectedStrainComponent()
-        val seriesByFrame = if (frameProfiles.isEmpty()) emptyList() else buildFrameSeries(component)
         // Keep the zoom across node / mode switches; reset it when the component changes.
         val preserveViewport = component == lastStrainComponent
-        if (frameProfiles.isNotEmpty()) lastStrainComponent = component
+        lastStrainComponent = component
+        val seriesByFrame = buildFrameSeries(component)
         when {
             seriesByFrame.isEmpty() -> binding.strainPlotSection.visibility = View.GONE
             focusedFrameIndex >= 0 && seriesByFrame.none { it.frameIndex == focusedFrameIndex } ->
