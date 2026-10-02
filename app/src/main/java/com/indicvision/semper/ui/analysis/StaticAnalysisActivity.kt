@@ -341,16 +341,14 @@ class StaticAnalysisActivity :
     // ------------------------------------------------------------------
     // Wizard navigation: page 1 (images) → page 2 (settings) → page 3 (sweep)
     // ------------------------------------------------------------------
-    /** The sweep setup's way to the settings page; also how the smoke test moves the wizard. */
-    override fun goToStep(step: Int, animate: Boolean) = goToStep(WizardStep.of(step), animate)
-
     override fun updateWizardChrome() = wizardChrome.updateBottomNav(viewModel.step, viewModel.sweepMode)
 
     override fun refPreviewBitmap(): Bitmap? = refPreviewBmp
 
     override fun renderParamField(field: EditText, value: Int) = field.showUnlessEditing(value.toString())
 
-    private fun goToStep(step: WizardStep, animate: Boolean) {
+    /** Shows page [step]: also the sweep setup's way back to settings, and how the smoke test moves the wizard. */
+    override fun goToStep(step: WizardStep, animate: Boolean) {
         val target = wizardChrome.applyStep(
             previous = viewModel.step,
             requested = step,
