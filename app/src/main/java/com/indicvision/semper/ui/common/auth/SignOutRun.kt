@@ -1,6 +1,6 @@
 package com.indicvision.semper.ui.common.auth
 
-import android.content.Context
+import android.app.Application
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
@@ -59,7 +59,7 @@ object SignOutRun {
     val state: StateFlow<State> = mutableState.asStateFlow()
 
     /** The application, once any screen has observed; what routes when no screen can. */
-    private var app: Context? = null
+    private var app: Application? = null
 
     /** How many created, not yet destroyed, screens of each class [observe] this run. */
     private val liveScreens = mutableMapOf<Class<*>, Int>()
@@ -122,7 +122,7 @@ object SignOutRun {
      * screen's class started has finished. [onDone] routes to sign-in.
      */
     fun observe(activity: AppCompatActivity, onRunning: () -> Unit = {}, onDone: () -> Unit) {
-        app = activity.applicationContext
+        app = activity.application
         val screen = activity.javaClass
         liveScreens[screen] = (liveScreens[screen] ?: 0) + 1
         activity.lifecycle.addObserver(
