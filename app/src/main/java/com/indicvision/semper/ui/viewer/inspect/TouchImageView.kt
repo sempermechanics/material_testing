@@ -1,7 +1,7 @@
-// Pan/zoom gesture view: literal touch thresholds, matrix math, and the
-// gesture API surface read clearest inline, so MagicNumber / ComplexCondition /
-// TooManyFunctions are suppressed for this whole file.
-@file:Suppress("MagicNumber", "ComplexCondition", "TooManyFunctions")
+// Pan/zoom gesture view: the gesture conditions and the gesture API surface
+// read clearest whole, so ComplexCondition / TooManyFunctions are suppressed
+// for this whole file.
+@file:Suppress("ComplexCondition", "TooManyFunctions")
 
 @file:SuppressLint("ClickableViewAccessibility")
 
@@ -41,9 +41,9 @@ class TouchImageView @JvmOverloads constructor(
 
     /** Rest pose: heatmap / ROI contained in the chrome-safe box. */
     private var restScale = 1f
-    private var maxScale = 10f
+    private var maxScale = MAX_ZOOM
     private var currentScale = 1f
-    private var m: FloatArray = FloatArray(9)
+    private var m: FloatArray = FloatArray(MATRIX_VALUES)
     private var viewWidth = 0
     private var viewHeight = 0
 
@@ -320,7 +320,8 @@ class TouchImageView @JvmOverloads constructor(
         publishMatrix()
     }
 
-    private fun isAtRestScale(): Boolean = currentScale <= restScale * 1.02f && currentScale >= restScale * 0.98f
+    private fun isAtRestScale(): Boolean =
+        currentScale <= restScale * (1f + REST_TOLERANCE) && currentScale >= restScale * (1f - REST_TOLERANCE)
 
     private fun toggleZoom(focusX: Float, focusY: Float) {
         if (!isAtRestScale()) {
@@ -425,6 +426,13 @@ class TouchImageView @JvmOverloads constructor(
     }
 
     private companion object {
+        const val MAX_ZOOM = 10f
+
+        /** A [Matrix]'s values, as [Matrix.getValues] fills them. */
+        const val MATRIX_VALUES = 9
+
+        /** How near the rest scale still counts as at rest, as a fraction of it. */
+        const val REST_TOLERANCE = 0.02f
         const val FLING_MIN_VELOCITY = 400f
         const val SWIPE_DISTANCE = 80f
         const val CENTER_FRACTION = 0.34f

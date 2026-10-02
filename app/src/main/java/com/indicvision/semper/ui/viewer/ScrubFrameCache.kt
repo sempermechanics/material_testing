@@ -1,5 +1,5 @@
-// Frame cache: literal cache sizes and early-return guards read clearest inline.
-@file:Suppress("MagicNumber", "ReturnCount")
+// Frame cache: one early return per kind of miss reads clearest.
+@file:Suppress("ReturnCount")
 
 package com.indicvision.semper.ui.viewer
 
@@ -35,13 +35,13 @@ class ScrubFrameCache(
     // accessOrder = true, so iteration runs least-recently-used first — which is the
     // order evictData() drops from. Eviction is manual rather than via
     // removeEldestEntry so it can honour the byte ceiling as well as the count.
-    private val dataByFrame = LinkedHashMap<Int, FloatArray>(maxFrames + 1, 0.75f, true)
+    private val dataByFrame = LinkedHashMap<Int, FloatArray>(maxFrames + 1, LOAD_FACTOR, true)
 
     /** Bytes currently held in [dataByFrame]; kept in step with every insert/evict. */
     private var dataBytes = 0L
 
     private val heatByKey =
-        object : LinkedHashMap<HeatKey, BakedHeatmap>(maxHeatmaps + 1, 0.75f, true) {
+        object : LinkedHashMap<HeatKey, BakedHeatmap>(maxHeatmaps + 1, LOAD_FACTOR, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<HeatKey, BakedHeatmap>?): Boolean {
                 // Drop the entry only — do not recycle here. The ImageView may still
                 // be displaying this bitmap; clear() recycles when the viewer exits.
@@ -116,6 +116,9 @@ class ScrubFrameCache(
         // growing with frame size - heavy frames hold fewer slots.
         const val DEFAULT_MAX_FRAMES = 6
         const val DEFAULT_MAX_HEATMAPS = 3
+
+        /** [LinkedHashMap]'s default, spelled out because access order is not. */
+        private const val LOAD_FACTOR = 0.75f
 
         /**
          * Byte ceiling for cached frame data — an eighth of the heap (64 MB of a 512 MB
