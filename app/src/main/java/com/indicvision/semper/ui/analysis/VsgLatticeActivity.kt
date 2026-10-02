@@ -134,7 +134,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
 
         val solved = solvedLatticeNodes(args.sweep)
-        val skipped = skippedLatticeNodes(args.sweep) { code -> getString(EngineFailure.shortReasonRes(code)) }
+        val skipped = skippedLatticeNodes(args.sweep) { code -> EngineFailure.shortReason(this, code) }
         val nodes = (solved + skipped).sortedWith(compareBy({ it.subset }, { it.vsg }))
         solvedNodes = nodes.filter { it.solved }
         // Frame-index lookup, so per-frame loops don't scan solvedNodes (was O(F²)).

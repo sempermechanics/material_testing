@@ -138,7 +138,7 @@ class SessionListAdapter(
         }
         if (r.stoppedEarly) {
             append(" · ")
-            append(ctx.getString(EngineFailure.shortReasonRes(r.stopCode)))
+            append(EngineFailure.shortReason(ctx, r.stopCode))
         }
     }
 

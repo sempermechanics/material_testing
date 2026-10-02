@@ -45,7 +45,7 @@ object ViewerSettingsSheet {
         return buildList {
             add(
                 host.getString(R.string.setting_stopped_early) to
-                    host.getString(EngineFailure.shortReasonRes(stopCode)),
+                    EngineFailure.shortReason(host, stopCode),
             )
             if (planned > 0) {
                 add(
