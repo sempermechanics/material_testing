@@ -142,8 +142,9 @@ its lab files to the same flat directories.
 
 ## Trade-off analysis
 
-A leaves `data/` with just six workers, which reads oddly but states the
-constraint. B's shims would sit in the code forever: nobody can prove that
+A leaves `data/` with only the workers (six files at first; 11 once #327
+put the backup's steps beside `DicUploadWorker`), which reads oddly but
+states the constraint. B's shims would sit in the code forever: nobody can prove that
 no phone still has a job queued under an old name. Moves touch every import
 block once, so open branches will conflict. Git's rename detection carries
 edits to moved files across a merge, but a new file in an old package needs
@@ -189,7 +190,7 @@ imports by hand. `scripts/move_kotlin_packages.py` makes that repeatable.
 
 **2026-10-03, after the quality program (#317–#331).**
 
-- **The layout table is current, not as first built.** The lanes that split
+- **The layout table is current, not as first built.** The PRs that split
   the large files (#323–#330) added files in the same package as the file they
   came from, and #331 then moved them into feature subpackages. The first
   table said `data/` held only the six workers, `data/net/` was unchanged and
@@ -198,6 +199,6 @@ imports by hand. `scripts/move_kotlin_packages.py` makes that repeatable.
 - **`data/` holds more than the workers.** `DicUploadWorker.doWork` became
   four named steps (#327), and the split rule kept them beside the worker.
   Moving them to `data/cloud/` is allowed (they are not pinned), but not done.
-- **Added: the file-size target and the split rule** (Decision), which the
-  lanes followed but this record did not state.
+- **Added: the file-size target and the split rule** (Decision), which those
+  PRs followed but this record did not state.
 - **Added: the merge-commit rule** (Consequences).

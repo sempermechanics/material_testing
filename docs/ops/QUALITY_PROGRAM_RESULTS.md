@@ -7,9 +7,11 @@ no main source file over about 500 lines. This page compares the result with
 the [baseline](QUALITY_BASELINE_2026-10-01.md) taken before any of it
 (`main` @ `ff0cfc3d`, 2026-10-01).
 
-The "after" numbers are measured on the second package move's branch (#331),
-which carries every code PR of the program, with the same script:
-`python scripts/quality_metrics.py <checkout> <out_prefix>`. Its counts are
+The "after" numbers are measured on the second package move's branch (#331)
+at `d81aa1f1`, which carries every code PR of the program, with the same
+script: `python scripts/quality_metrics.py <checkout> <out_prefix>`. Coverage
+was measured one commit earlier, at `2bb72a45`; the commit between them
+changed one sweep function and its test. Its counts are
 approximate (regex and brace counting), so compare its runs with each other
 only. As of 2026-10-03 only #310 and #315 are merged; the rest are open, in
 the order of [§8](#8-the-prs-and-their-merge-order).
@@ -19,11 +21,15 @@ the order of [§8](#8-the-prs-and-their-merge-order).
 - Main source files over 500 lines: **20 → 0**. The largest file went from
   `StaticAnalysisActivity.kt` at 1,834 lines to `SubsetRecommender.kt` at 497.
 - The largest package went from **54 files to 23**.
-- `findViewById` calls: **416 → 46**; `Toast.makeText`: **65 → 2**;
+- `findViewById` calls: **416 → 46**; `Toast.makeText`: **65 → 2** (one call,
+  inside `Feedback.toast`, and one KDoc mention);
   `lateinit var`: **183 → 56**; `!!`: **4 → 0**.
 - Duplicated code (6-line blocks): **2.51 % → 1.33 %** of normalised lines.
-- Functions over 100 lines: **15 → 4**. Three of the four hold fused hot loops
-  that stay whole on purpose ([ADR-015](../adr/ADR-015-package-layout.md)); the
+- Functions over 100 lines: **15 → 4**. Three of the four hold *fused hot
+  loops*: the performance-critical loops (the JNI batch loop, the heatmap
+  pixel loops, the report's fusion pass, GIF compression, `.dat` decoding)
+  whose body stays whole in one function, so a split cannot add calls or
+  allocations per iteration ([ADR-015](../adr/ADR-015-package-layout.md)). The
   fourth is `ResultViewerActivity.onCreate` (121 lines).
 - Files with `@file:Suppress`: **80 → 58**.
 - Unit tests (`@Test`): **1,125 → 1,861**; JVM line coverage **57.8 % → 75.1 %**
@@ -45,8 +51,8 @@ The decisions the program made are ADR-015 (as amended) to ADR-018:
 | Metric | Before | After | Change |
 |---|---:|---:|---|
 | Main Kotlin files | 223 | 374 | +151: the splits made more, smaller files |
-| Main Kotlin lines | 43,037 | 49,847 | +16 %: each new file adds a package line, imports and a KDoc header |
-| Normalised code lines (no blanks, comments or imports) | 23,271 | 23,735 | +2 % |
+| Main Kotlin lines | 43,037 | 49,854 | +16 %: each new file adds a package line, imports and a KDoc header |
+| Normalised code lines (no blanks, comments or imports) | 23,271 | 23,739 | +2 % |
 | Mean lines per file | 193.0 | 133.3 | −31 % |
 | Files over 300 lines | 39 | 38 | −1 |
 | Files over 500 lines | 20 | 0 | −20 |
@@ -54,7 +60,7 @@ The decisions the program made are ADR-015 (as amended) to ADR-018:
 | Largest file | `StaticAnalysisActivity.kt`, 1,834 | `SubsetRecommender.kt`, 497 | −73 % |
 | Largest package (files) | 54 (`ui/analysis`) | 23 (`data/net`) | −57 % |
 | Functions | 1,843 | 2,430 | +587 |
-| Functions over 60 lines | 47 | 15 | −32 |
+| Functions over 60 lines | 47 | 14 | −33 |
 | Functions over 100 lines | 15 | 4 | −11 |
 | Functions with 7 or more parameters | 37 | 42 | +5 |
 | Duplicated 6-line blocks | 83 | 40 | −52 % |
@@ -62,7 +68,7 @@ The decisions the program made are ADR-015 (as amended) to ADR-018:
 | Duplication | 2.51 % | 1.33 % | −1.18 points |
 
 The longer total comes from file overhead, not new logic: normalised code grew
-by 464 lines while the program added value types, helpers and typed outcomes.
+by 468 lines while the program added value types, helpers and typed outcomes.
 Functions with 7 or more parameters rose by 5 overall, though the worst ones
 shrank: `bakeAnnotationsToCanvas` went from 14 parameters to 8, and
 `buildSessionRecord` from 17 to 4 (its inputs grouped as `RunInput` and
@@ -102,7 +108,7 @@ shrank: `bakeAnnotationsToCanvas` went from 14 parameters to 8, and
 |---|---:|---:|---|
 | `findViewById` | 416 | 46 | −89 %: ViewBinding ([ADR-017](../adr/ADR-017-viewbinding-and-ui-kit.md)) |
 | `lateinit var` | 183 | 56 | −69 % |
-| `Toast.makeText` | 65 | 2 | −97 %: `Feedback.toast` |
+| `Toast.makeText` | 65 | 2 | −97 %: `Feedback.toast`; the 2 are its one call and a KDoc mention |
 | `CrispToast.show` | 13 | 14 | +1 |
 | `AlertDialog.Builder` / `MaterialAlertDialogBuilder` | 31 | 15 | −52 %: `Dialogs.info` / `confirm` |
 | Generic `catch (Exception/Throwable)` | 59 | 46 | −13 |
@@ -153,7 +159,7 @@ place of copied header XML.
 | Source set | Files | Lines | `@Test` | `Thread.sleep` | `@Config(sdk` |
 |---|---|---|---|---|---|
 | Unit, before | 142 | 20,301 | 1,125 | 5 | 72 |
-| Unit, after | 271 | 36,767 | 1,861 | 4 | 0 |
+| Unit, after | 271 | 36,825 | 1,861 | 4 | 0 |
 | Instrumented, before | 17 | 3,199 | 65 | 13 | 0 |
 | Instrumented, after | 18 | 3,249 | 65 | 13 | 0 |
 
@@ -371,7 +377,7 @@ bitmaps, work moved off Main) came without a test of their own.
 | Medium | Deleting a downloaded analysis in Settings could bring its row back | #329 | `AnalysisDataAdapterTest` |
 | Medium | Every failed save was reported as the session limit; an unreadable index is now "Analysis not saved" | #330 | `RunRecordSaveTest`, `BatchRunControllerTest`, `AfterSaveTest` |
 | Medium | A cancelled run was shown as a strain-window failure | #330 | `EngineFailureTest` |
-| Medium | A sweep whose save was refused said nothing; it now opens the limit screen or "Analysis not saved", as a batch run does | #331 | `SweepSaveTest`, `BatchRunControllerTest` |
+| Medium | A sweep whose save was refused said nothing; it now opens the limit screen or "Analysis not saved", as a batch run does | #331 | `SweepSessionSaveTest`, `BatchRunControllerTest` |
 | Medium | A blank frame name targeted the `raw_deformed` folder itself | #330, #331 | `OriginalNameTest`, `LocalStorageFootprintTest`, `SweepFramePickerTest` |
 | Medium | The report leaked earlier fields' bitmaps when a later field threw | #328 | `ReportBuilderBitmapOwnershipTest` |
 | Medium | The viewer's colour bar did not match the heatmap's colours | #328 | `ViewerColorScaleBarTest` |
@@ -400,7 +406,7 @@ over one area at a time. The counts are the sites each one replaced.
 | `Authed`, `HttpFailure` | `data/net/` | token-plus-try/catch blocks (7 sites in sync, more in seat lease and restore) | #321; #323, #326, #327 |
 | `SessionMetadataDoc` | `data/cloud/` | `CloudRestore.recordFrom` and about 110 lines of org.json in the upload metadata | #321; #326, #327 |
 | `ReportSource`, `SemperEngine.solve` | `report/`, `ui/analysis/run/` | duplicate report-parameter builders; the two single-shot JNI callers | #321; #325, #327, #328 |
-| `Feedback.toast` | `ui/common/dialog/` | 66 `Toast.makeText` sites | #319; #325, #328, #329, #330 |
+| `Feedback.toast` | `ui/common/dialog/` | 65 `Toast.makeText` call sites (66 counted in #319's survey) | #319; #325, #328, #329, #330 |
 | `Dialogs.info` / `confirm`, `bindInfo` | `ui/common/dialog/` | 6 info, 12 confirm and 15 ⓘ-button sites | #319; #325, #329, #330 |
 | `WarnChip`, `Sheet` / `inflateSheet` | `ui/common/dialog/` | 12 warning-chip sites; 5 bottom-sheet setups and 8 rows | #319; #325, #328, #330 |
 | `SerialJob`, `ConflatedRefresh` | `ui/common/` | 11 cancel-then-relaunch and 8 cancel-only sites; overlapping refreshes | #319, #316; #325, #328, #329, #330 |
@@ -452,7 +458,10 @@ fused hot loop always moved whole with its function.
 ## 6. Deferred
 
 Each item is a row in [TECH_DEBT.md](TECH_DEBT.md#new-deferred-by-the-2026-10-quality-program),
-with its evidence and priority.
+with its evidence and priority. "Found in" names the PR whose work or review
+found the item; "the program's review" means it came from checking the PRs
+against each other while this page and the TECH_DEBT rows were written, not
+from any one PR.
 
 | Row | What was left | Next step | Found in |
 |---|---|---|---|
@@ -535,8 +544,9 @@ must not touch a loop body. The faster "after" times come from machine load
 and 181 ms, inside the ±15 % spread between runs, and a mechanical diff
 shows the loop bodies are identical.
 
-The `.dat` and GIF oracle tests were left unedited by the splits and pass on
-the #331 branch.
+The `.dat` and GIF oracle tests (byte-exact golden-output tests: they compare
+the bytes the code writes with stored reference files) were left unedited by
+the splits and pass on the #331 branch.
 
 ## 8. The PRs and their merge order
 

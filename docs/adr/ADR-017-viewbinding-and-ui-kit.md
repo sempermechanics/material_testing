@@ -47,7 +47,7 @@ Conventions:
 
 | Job | Use | Not |
 |---|---|---|
-| A short message | `Feedback.toast` (`ui/common/dialog/Feedback.kt:19`); a placed pill is `CrispToast` | `Toast.makeText` (2 calls left, both inside `Feedback`) |
+| A short message | `Feedback.toast` (`ui/common/dialog/Feedback.kt:19`); a placed pill is `CrispToast` | `Toast.makeText` (one call left, inside `Feedback`, `ui/common/dialog/Feedback.kt:28`) |
 | An info or yes/no dialog; an "i" button | `Dialogs.info` / `Dialogs.confirm`, `View.bindInfo` (`ui/common/dialog/Dialogs.kt:23`, `:71`) | A hand-built `MaterialAlertDialogBuilder` |
 | Latest request wins | `SerialJob` (`ui/common/SerialJob.kt:21`), main thread only | `job?.cancel(); job = launch { … }` |
 | A list thumbnail | `ThumbnailLoader<K>` (`ui/common/media/ThumbnailLoader.kt:41`): tags every bind, so a late decode never lands on a recycled row | A per-adapter cache |
@@ -130,5 +130,5 @@ spinner visibility, the thumbnail tag bug).
    (#323–#330); the kit sorted into subpackages (#331).
 2. [ ] Pass the sweep page's binding into `SweepSetupHelper` and
    `SweepRangeFields` and drop their 23 lookups.
-3. [ ] Update the `viewBinding` comment in `app/build.gradle.kts:157-158`,
+3. [ ] Update the `viewBinding` comment in `app/build.gradle.kts:158-159`,
    which still says screens are moving one per PR.

@@ -119,7 +119,7 @@ three things the merge will not do on its own.
    | Was | Now |
    |---|---|
    | `WizardDraft.discard()` | Removed. The wizard's draft is dropped through `AnalysisViewModel.discardDraft()` → `WizardDraftBinding.discard()`, which queues `WizardDraft.clear()` only while this wizard still owns the draft |
-   | `RoiResolveHelper.resolve(...)` | Removed; use `Roi.forSolve(subset, hasCustomRoi, drawn, size)` (`field/Roi.kt`). `RoiResolveHelper.clipToImage` / `roiPixels` are gone too |
+   | `RoiResolveHelper.resolve(...)` | Removed; use `Roi.forSolve(subset, hasCustomRoi, drawn, size)` (`field/Roi.kt`). `RoiResolveHelper.clipToImage` and the top-level `roiPixels` in `RoiDrawActivity.kt` are gone too |
    | `SessionRepository.saveSession(...)` | Removed; build the row with `SessionRepository.buildSessionRecord` and save it with `saveRunRecord` (`ui/analysis/run/RunRecordSave.kt`), which returns a `SessionStore.UpsertResult` |
    | `SweepSetupHelper.Callbacks.goToStep(Int, Boolean)` | `goToStep(WizardStep, Boolean)`; the page numbers are the `WizardStep` enum (`ui/analysis/wizard/WizardStep.kt`) |
    | `VisualizationEngine.quickSelect` | `HeatmapColorScale.quickSelect` (`report/HeatmapColorScale.kt`) |
