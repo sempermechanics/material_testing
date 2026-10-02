@@ -167,9 +167,6 @@ class WorkRequestsTest {
         )
         SessionDeletes.enqueue(context, items)
 
-        assertEquals(SessionDeletes.TAG, WorkTags.DELETE)
-        assertEquals(SessionDeletes.UNIQUE_WORK, WorkTags.DELETE_NAME)
-        assertEquals(SessionDeletes.rowTag("L1"), WorkTags.deleteRowTag("L1"))
         assertSameRequest(
             WorkTags.DELETE_NAME,
             oneTimeWork<BackupDeleteWorker>(

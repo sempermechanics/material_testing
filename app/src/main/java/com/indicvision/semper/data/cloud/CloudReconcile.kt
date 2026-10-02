@@ -38,8 +38,9 @@ internal object CloudReconcile {
                 Outcome.Failed("server returned HTTP $code")
             }
             failure.kind == HttpFailure.Kind.UNEXPECTED -> {
-                Timber.e(failure.cause, "Cloud reconcile failed unexpectedly")
-                Outcome.Failed("unexpected ${failure.cause.javaClass.simpleName}")
+                // The class name is for the log only: Home shows the reason to the user.
+                Timber.e(failure.cause, "Cloud reconcile failed unexpectedly (%s)", failure.cause.javaClass.simpleName)
+                Outcome.Failed("unexpected error")
             }
             else -> {
                 Timber.w(failure.cause, "Cloud reconcile skipped — offline")

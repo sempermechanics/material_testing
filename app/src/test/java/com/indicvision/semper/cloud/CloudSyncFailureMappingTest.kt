@@ -83,7 +83,8 @@ class CloudSyncFailureMappingTest {
         configDown()
         api.onListSessions = { _, _ -> throw IllegalStateException("bad state") }
 
-        assertEquals(CloudSync.Outcome.Failed("unexpected IllegalStateException"), reconcile())
+        // Home shows the reason, so it carries no class name; the log keeps that.
+        assertEquals(CloudSync.Outcome.Failed("unexpected error"), reconcile())
     }
 
     @Test

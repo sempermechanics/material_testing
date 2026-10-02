@@ -57,7 +57,7 @@ internal object UploadWorkOutcomes {
 
     /**
      * Resume planner outcome when comparing pending uploads to local artifacts.
-     * Mirrors [DicUploadWorker.resumeSession] without the network call.
+     * Mirrors [com.indicvision.semper.data.UploadSessionPlanner]'s resume without the network call.
      *
      * [ResumeKind.WAIT] exists because the backend now opens Drive resumable
      * sessions in a Cloud Task rather than inside POST /v1/sessions: an empty
@@ -186,7 +186,7 @@ internal object UploadWorkOutcomes {
      * must not be treated as done.
      *
      * Also requires a **verified** Session.zip: matching `.sha256` sidecar and a
-     * readable central directory. A kill mid-[DicUploadWorker.buildSessionBundle]
+     * readable central directory. A kill mid-build ([com.indicvision.semper.data.UploadStaging])
      * leaves a truncated file that still starts with `PK` and has length > 0 —
      * hashing that truncate and uploading it produced Drive objects that restore
      * as `ZipException: invalid distance too far back` while size/sha256 "matched".

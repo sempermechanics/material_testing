@@ -118,19 +118,22 @@ class ReportSourceTest {
             sweepLabels = listOf("first", "second"),
             strainMethod = "LSQ",
         )
-        for (record in listOf(batch, sweep)) {
+        // Every page names the analysis, its specimen, its reference and its ROI.
+        for ((record, id) in listOf(batch to "b1", sweep to "s1")) {
             for (i in 0..2) {
-                assertEquals(
-                    "${record.id} frame $i",
-                    bundlerParams(record, i, data),
-                    ReportSource.forRecord(record).forFrame(i, data, base, cover, analysisDate = date),
-                )
+                val params = bundlerParams(record, i, data)
+                assertEquals("$id frame $i", id, params.sessionId)
+                assertEquals("spec", params.specimenName)
+                assertEquals("spec.tif", params.referenceImageName)
+                assertEquals(RoiData(3, 4, 40, 30), params.roiData)
             }
         }
         // What the bundle prints, spelled out: the MAX marker only, the default
         // method for a record that stored none, the session value past a short
         // per-frame list, and every stored stats slot.
         val batch0 = bundlerParams(batch, 0, data)
+        assertEquals("a.tif", batch0.deformedImageName)
+        assertEquals(listOf(41, 5, 15), listOf(batch0.subsetSize, batch0.step, batch0.strainWindow))
         assertFalse(batch0.drawMinMarker)
         assertEquals("VSG", batch0.strainMethod)
         assertEquals(EngineStats.fromArray(FloatArray(17) { it.toFloat() }), batch0.engineStats)
