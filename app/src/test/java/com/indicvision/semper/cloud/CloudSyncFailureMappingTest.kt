@@ -2,7 +2,6 @@ package com.indicvision.semper.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import androidx.work.testing.WorkManagerTestInitHelper
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.cloud.CloudSync.EraseResult
 import com.indicvision.semper.data.cloud.SessionDeletes
@@ -23,7 +22,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -41,14 +39,8 @@ class CloudSyncFailureMappingTest {
     private val api = FakeCloudApi()
     private val tokens = FakeTokens()
 
-    @Before
-    fun setUp() = WorkManagerTestInitHelper.initializeTestWorkManager(context)
-
     @After
-    fun tearDown() {
-        WorkManagerTestInitHelper.closeWorkDatabase()
-        AppRemoteConfig.clear(context)
-    }
+    fun tearDown() = AppRemoteConfig.clear(context)
 
     private fun reconcile(deep: Boolean = true) = runBlocking {
         CloudSync.reconcile(context, reupload = false, deep = deep, api = api, tokens = tokens)
