@@ -17,12 +17,15 @@ import com.indicvision.semper.data.LicenseConfigWorker
 import com.indicvision.semper.data.account.AuthRepository
 import com.indicvision.semper.data.account.LicenseEntitlements
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.Authed
 import com.indicvision.semper.data.net.CloudApi
+import com.indicvision.semper.data.net.HttpFailure
 import com.indicvision.semper.data.net.HttpStatus
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.data.net.authed
 import com.indicvision.semper.data.prefs.DicSettings
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionStore
@@ -318,7 +321,7 @@ object CloudSync {
         val appContext = context.applicationContext
         val auth = AuthRepository(appContext, api, tokens)
         deleteAccount(
-            eraseCloud = { eraseAccountInCloud(api, tokens) },
+            eraseCloud = { eraseAccountInCloud(api, tokens).accountGone },
             deleteIdentity = { auth.deleteIdentity().isSuccess },
             wipeLocal = { SessionStore.deleteAll(appContext) },
             signOut = { auth.signOut() },
@@ -364,15 +367,29 @@ object CloudSync {
         if (identityGone) AccountDeletion.DELETED else AccountDeletion.IDENTITY_KEPT
     }
 
-    /** True when the backend copy is gone, or there was never a backend at all. */
-    private suspend fun eraseAccountInCloud(api: CloudApi, tokens: TokenSource): Boolean {
-        if (!api.enabled) return true
-        val token = tokens.usableIdToken()
-        return token != null &&
-            suspendRunCatching { api.deleteAccount(token) }
-                .onFailure { Timber.e(it, "Account erasure failed — local data left intact") }
-                .isSuccess
+    /**
+     * Erase the account in the cloud, saying how it went: [Authed.Ok] (erased),
+     * [Authed.Disabled] (no backend, so nothing to erase), [Authed.NoToken], or
+     * [Authed.Failed] with the failure's [HttpFailure.Kind] (a refused token, a
+     * server error, no answer). [deleteAccount] reads only [accountGone]; the
+     * kind is there for a screen that wants to say which it was.
+     */
+    internal suspend fun eraseAccountInCloud(api: CloudApi, tokens: TokenSource): Authed<Unit> {
+        val erased = api.authed(tokens) { token -> this.deleteAccount(token) }
+        when (erased) {
+            is Authed.Failed -> Timber.e(
+                erased.failure.cause,
+                "Account erasure failed (%s) — local data left intact",
+                erased.failure.kind,
+            )
+            Authed.NoToken -> Timber.w("Account erasure not sent: no usable token — local data left intact")
+            else -> Unit
+        }
+        return erased
     }
+
+    /** The account's cloud data is gone: erased, or there was never a backend. */
+    internal val Authed<Unit>.accountGone: Boolean get() = this is Authed.Ok || this == Authed.Disabled
 
     /** Delete only this device's heavy artifacts; the cloud backup and index row stay. */
     suspend fun eraseLocalOnly(context: Context, localSessionId: String) = withContext(Dispatchers.IO) {
