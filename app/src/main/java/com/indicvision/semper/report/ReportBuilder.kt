@@ -20,6 +20,7 @@ import androidx.core.graphics.scale
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.data.DicUploadWorker
 import com.indicvision.semper.field.DicResult
+import com.indicvision.semper.field.ValueRange
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -307,12 +308,20 @@ object ReportBuilder {
                     )
                     tempCanvas.drawBitmap(heatmapBmp, 0f, 0f, Paint().apply { alpha = 180 })
                     bakeAnnotationsToCanvas(
-                        tempCanvas, renderW, renderH, actualMin, actualMax,
-                        FIELD_KEYS[fieldIndex], unit, extrema.maxIdx, extrema.minIdx, data,
-                        dataIndex = dataIndex,
-                        drawMinMarker = params.drawMinMarker,
+                        tempCanvas,
+                        renderW,
+                        renderH,
+                        ValueRange(actualMin, actualMax),
+                        extrema,
+                        data,
+                        FieldAnnotation(
+                            typeString = FIELD_KEYS[fieldIndex],
+                            unit = unit,
+                            dataIndex = dataIndex,
+                            imageName = params.deformedImageName,
+                            drawMinMarker = params.drawMinMarker,
+                        ),
                         coordScale = renderScale,
-                        imageName = params.deformedImageName,
                     )
                     composite.compressForPdf()
                 } finally {
@@ -372,26 +381,42 @@ object ReportBuilder {
 
     fun currentAnalysisDate(): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
 
+    /**
+     * What a baked field image says about itself: the field's name and unit,
+     * the data column the MAX / MIN values are read from (null shows the
+     * scale's ends instead), the image it was drawn on, and whether MIN is
+     * marked as well as MAX.
+     */
+    data class FieldAnnotation(
+        val typeString: String,
+        val unit: String,
+        val dataIndex: Int? = null,
+        val imageName: String? = null,
+        val drawMinMarker: Boolean = true,
+    )
+
+    /**
+     * Draws the info box, the colour bar for [range] (stored units) and the
+     * MAX / MIN markers at [extrema] onto a field image [width] × [height].
+     * [data] coordinates are scaled by [coordScale] to land on a capped canvas.
+     */
     fun bakeAnnotationsToCanvas(
         canvas: Canvas,
         width: Int,
         height: Int,
-        minValRaw: Float,
-        maxValRaw: Float,
-        typeString: String,
-        unit: String,
-        maxIdx: Int,
-        minIdx: Int,
-        dataArray: FloatArray,
-        dataIndex: Int? = null,
-        drawMinMarker: Boolean = true,
+        range: ValueRange,
+        extrema: FieldExtrema,
+        data: FloatArray,
+        annotation: FieldAnnotation,
         coordScale: Float = 1f,
-        imageName: String? = null,
     ) {
+        val unit = annotation.unit
+        val dataIndex = annotation.dataIndex
         val multiplier = if (unit == "mε") DicResult.STRAIN_TO_MILLISTRAIN else 1f
-        val maxVal = maxValRaw * multiplier
-        val minVal = minValRaw * multiplier
-        val marked = FieldExtrema(maxIdx, minIdx)
+        val maxVal = range.max * multiplier
+        val minVal = range.min * multiplier
+        val maxIdx = extrema.maxIdx
+        val minIdx = extrema.minIdx
 
         val textSize = width * 0.025f
         val padding = width * 0.02f
@@ -406,11 +431,11 @@ object ReportBuilder {
 
         val infoText = listOfNotNull(
             "Semper Analysis Report",
-            imageName?.takeIf { it.isNotBlank() }?.let { "Image: $it" },
-            "Field: $typeString [$unit]",
+            annotation.imageName?.takeIf { it.isNotBlank() }?.let { "Image: $it" },
+            "Field: ${annotation.typeString} [$unit]",
             // The marked points' values; the colour bar below keeps the scale's ends.
-            "Max: ${formatMetric(dataIndex?.let { marked.maxValue(dataArray, it) } ?: maxVal)}",
-            "Min: ${formatMetric(dataIndex?.let { marked.minValue(dataArray, it) } ?: minVal)}",
+            "Max: ${formatMetric(dataIndex?.let { extrema.maxValue(data, it) } ?: maxVal)}",
+            "Min: ${formatMetric(dataIndex?.let { extrema.minValue(data, it) } ?: minVal)}",
         )
         var maxTextWidth = 0f
         for (line in infoText) {
@@ -495,10 +520,10 @@ object ReportBuilder {
         if (maxIdx != -1 && minIdx != -1) {
             // Data coords are in full-resolution image space; scale them to the
             // (possibly capped) canvas so markers land correctly.
-            val maxX = dataArray[maxIdx] * coordScale
-            val maxY = dataArray[maxIdx + 1] * coordScale
-            val minX = dataArray[minIdx] * coordScale
-            val minY = dataArray[minIdx + 1] * coordScale
+            val maxX = data[maxIdx] * coordScale
+            val maxY = data[maxIdx + 1] * coordScale
+            val minX = data[minIdx] * coordScale
+            val minY = data[minIdx + 1] * coordScale
             val targetRadius = width * 0.015f
             val crosshairLen = targetRadius * 1.5f
             val whiteOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -523,7 +548,7 @@ object ReportBuilder {
                 canvas.drawText(label, x + targetRadius + 5f, y - targetRadius - 5f, markerTextPaint)
             }
             drawTarget(maxX, maxY, "MAX", Color.RED)
-            if (drawMinMarker) {
+            if (annotation.drawMinMarker) {
                 drawTarget(minX, minY, "MIN", Color.BLUE)
             }
         }

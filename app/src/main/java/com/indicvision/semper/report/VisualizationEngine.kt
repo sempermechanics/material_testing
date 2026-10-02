@@ -17,6 +17,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.core.graphics.createBitmap
 import com.indicvision.semper.field.DicResult
+import com.indicvision.semper.field.ImageSize
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -55,9 +56,9 @@ object VisualizationEngine {
     }
 
     /** [w]×[h] shrunk so its longest edge is ≤ [maxEdge]; unchanged if already within. */
-    fun cappedDims(w: Int, h: Int, maxEdge: Int): Pair<Int, Int> {
+    fun cappedDims(w: Int, h: Int, maxEdge: Int): ImageSize {
         val scale = cappedRenderScale(w, h, maxEdge)
-        return (w * scale).toInt().coerceAtLeast(1) to (h * scale).toInt().coerceAtLeast(1)
+        return ImageSize((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1))
     }
 
     /**
@@ -299,9 +300,9 @@ object VisualizationEngine {
         customMin: Float? = null, // Optional Custom Bounds
         customMax: Float? = null,
         maxLongEdge: Int? = null,
-    ): Triple<Bitmap, Float, Float> {
+    ): BakedHeatmap {
         val plane = generateHeatmapIndices(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
-        return Triple(toBitmap(plane), plane.min, plane.max)
+        return BakedHeatmap(toBitmap(plane), plane.min, plane.max)
     }
 
     /** [plane] in [JET_LUT] colours, [TRANSPARENT_INDEX] left fully transparent. */
@@ -469,9 +470,9 @@ object VisualizationEngine {
         customMin: Float? = null,
         customMax: Float? = null,
         maxLongEdge: Int? = null,
-    ): Triple<Bitmap, Float, Float> {
+    ): BakedHeatmap {
         val plane = generateDeformedHeatmapIndices(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
-        return Triple(toBitmap(plane), plane.min, plane.max)
+        return BakedHeatmap(toBitmap(plane), plane.min, plane.max)
     }
 
     /**

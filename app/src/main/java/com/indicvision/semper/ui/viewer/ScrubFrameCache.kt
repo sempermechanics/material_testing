@@ -4,6 +4,8 @@
 package com.indicvision.semper.ui.viewer
 
 import android.graphics.Bitmap
+import com.indicvision.semper.field.ValueRange
+import com.indicvision.semper.report.BakedHeatmap
 
 /**
  * Small LRU for result-viewer scrubbing: recent decoded `.dat` frames plus
@@ -24,16 +26,10 @@ class ScrubFrameCache(
         val frame: Int,
         val field: Int,
         val step: Int,
-        val customMin: Float?,
-        val customMax: Float?,
+        /** The fixed colour scale it was drawn against; null for the frame's own. */
+        val custom: ValueRange?,
         /** Drawn at the displaced positions, over the frame's own photo. */
         val displaced: Boolean = false,
-    )
-
-    data class HeatEntry(
-        val bitmap: Bitmap,
-        val minV: Float,
-        val maxV: Float,
     )
 
     // accessOrder = true, so iteration runs least-recently-used first — which is the
@@ -45,8 +41,8 @@ class ScrubFrameCache(
     private var dataBytes = 0L
 
     private val heatByKey =
-        object : LinkedHashMap<HeatKey, HeatEntry>(maxHeatmaps + 1, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<HeatKey, HeatEntry>?): Boolean {
+        object : LinkedHashMap<HeatKey, BakedHeatmap>(maxHeatmaps + 1, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<HeatKey, BakedHeatmap>?): Boolean {
                 // Drop the entry only — do not recycle here. The ImageView may still
                 // be displaying this bitmap; clear() recycles when the viewer exits.
                 return size > maxHeatmaps
@@ -88,7 +84,7 @@ class ScrubFrameCache(
     }
 
     @Synchronized
-    fun getHeat(key: HeatKey): HeatEntry? {
+    fun getHeat(key: HeatKey): BakedHeatmap? {
         val entry = heatByKey[key] ?: return null
         if (entry.bitmap.isRecycled) {
             heatByKey.remove(key)
@@ -98,7 +94,7 @@ class ScrubFrameCache(
     }
 
     @Synchronized
-    fun putHeat(key: HeatKey, entry: HeatEntry) {
+    fun putHeat(key: HeatKey, entry: BakedHeatmap) {
         // Overwrite without recycling — the previous bitmap may still be on screen.
         heatByKey[key] = entry
     }

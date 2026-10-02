@@ -20,9 +20,9 @@ import com.indicvision.semper.ui.viewer.ResultViewerActivity
  */
 class ViewerInspectHelper(private val host: ResultViewerActivity) {
 
-    private val imgMain: TouchImageView get() = host.imgMain
-    private val glassShield: InspectOverlayView get() = host.glassShield
-    private val tvProbeReadout: TextView get() = host.tvProbeReadout
+    private val imgMain: TouchImageView get() = host.binding.imgBaseResult
+    private val glassShield: InspectOverlayView get() = host.binding.glassShield
+    private val tvProbeReadout: TextView get() = host.binding.tvProbeReadout
 
     var lastClosestIdx = -1
     private var probeVisible = false

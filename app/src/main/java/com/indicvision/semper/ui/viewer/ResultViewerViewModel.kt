@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.indicvision.semper.field.ValueRange
 import com.indicvision.semper.ui.viewer.share.ShareExportJobs
 import java.util.concurrent.ConcurrentHashMap
 
@@ -26,7 +27,7 @@ class ResultViewerViewModel(
      * Concurrent: an export reads them off the main thread (the GIF bounds)
      * while the dialog may change them.
      */
-    val customBounds: MutableMap<Int, Pair<Float, Float>> = ConcurrentHashMap()
+    val customBounds: MutableMap<Int, ValueRange> = ConcurrentHashMap()
 
     /** Share/export jobs; in [viewModelScope], so a rotation does not cancel them. */
     internal val exports = ShareExportJobs(viewModelScope, app.contentResolver)

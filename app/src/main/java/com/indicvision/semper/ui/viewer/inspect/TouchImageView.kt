@@ -21,6 +21,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.ViewConfiguration
 import androidx.appcompat.widget.AppCompatImageView
+import com.indicvision.semper.ui.common.ViewportMath
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
@@ -371,67 +372,30 @@ class TouchImageView @JvmOverloads constructor(
             return true
         }
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            var scaleFactor = detector.scaleFactor
-            val origScale = currentScale
-            currentScale *= scaleFactor
-
-            if (currentScale > maxScale) {
-                currentScale = maxScale
-                scaleFactor = maxScale / origScale
-            } else if (currentScale < minScale) {
-                currentScale = minScale
-                scaleFactor = minScale / origScale
-            }
-
-            matrix.postScale(scaleFactor, scaleFactor, detector.focusX, detector.focusY)
+            val step = ViewportMath.clampScale(currentScale, detector.scaleFactor, minScale, maxScale)
+            currentScale = step.scale
+            matrix.postScale(step.factor, step.factor, detector.focusX, detector.focusY)
             limitPan()
             return true
         }
     }
 
+    /** Keeps the image covering the chrome-safe box, or centred in it when it fits. */
     private fun limitPan() {
         matrix.getValues(m)
-        val transX = m[Matrix.MTRANS_X]
-        val transY = m[Matrix.MTRANS_Y]
-        val scaleX = m[Matrix.MSCALE_X]
-        val scaleY = m[Matrix.MSCALE_Y]
-
-        // Use the mathematically guaranteed dimensions!
-        val contentW = trueImageWidth * scaleX
-        val contentH = trueImageHeight * scaleY
-
-        val safeLeft = contentInsetLeft.toFloat()
-        val safeTop = contentInsetTop.toFloat()
-        val safeRight = (viewWidth - contentInsetRight).toFloat()
-        val safeBottom = (viewHeight - contentInsetBottom).toFloat()
-        val safeW = safeRight - safeLeft
-        val safeH = safeBottom - safeTop
-
-        var deltaX = 0f
-        var deltaY = 0f
-
-        if (contentW <= safeW) {
-            val targetX = safeLeft + (safeW - contentW) / 2f
-            deltaX = targetX - transX
-        } else {
-            if (transX > safeLeft) {
-                deltaX = safeLeft - transX
-            } else if (transX + contentW < safeRight) {
-                deltaX = safeRight - (transX + contentW)
-            }
-        }
-
-        if (contentH <= safeH) {
-            val targetY = safeTop + (safeH - contentH) / 2f
-            deltaY = targetY - transY
-        } else {
-            if (transY > safeTop) {
-                deltaY = safeTop - transY
-            } else if (transY + contentH < safeBottom) {
-                deltaY = safeBottom - (transY + contentH)
-            }
-        }
-
+        // The true image size, not the (possibly downsampled) drawable's.
+        val deltaX = ViewportMath.panCorrection(
+            trans = m[Matrix.MTRANS_X],
+            content = trueImageWidth * m[Matrix.MSCALE_X],
+            safeStart = contentInsetLeft.toFloat(),
+            safeEnd = (viewWidth - contentInsetRight).toFloat(),
+        )
+        val deltaY = ViewportMath.panCorrection(
+            trans = m[Matrix.MTRANS_Y],
+            content = trueImageHeight * m[Matrix.MSCALE_Y],
+            safeStart = contentInsetTop.toFloat(),
+            safeEnd = (viewHeight - contentInsetBottom).toFloat(),
+        )
         if (deltaX != 0f || deltaY != 0f) {
             matrix.postTranslate(deltaX, deltaY)
         }

@@ -16,7 +16,6 @@
 package com.indicvision.semper.ui.viewer
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -27,13 +26,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
-import android.widget.EditText
-import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.PopupWindow
-import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.MainThread
@@ -42,32 +36,45 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.textfield.TextInputEditText
 import com.indicvision.semper.R
 import com.indicvision.semper.data.account.LicenseEntitlements
 import com.indicvision.semper.data.session.SessionPaths
+import com.indicvision.semper.data.session.SessionRecord
+import com.indicvision.semper.data.session.SessionStore
+import com.indicvision.semper.databinding.ActivityResultViewerBinding
+import com.indicvision.semper.databinding.DialogCustomScaleBinding
+import com.indicvision.semper.databinding.PopupFieldOptionsBinding
 import com.indicvision.semper.field.DicResult
+import com.indicvision.semper.field.FieldStats
+import com.indicvision.semper.field.FrameParams
+import com.indicvision.semper.field.ImageSize
+import com.indicvision.semper.field.Roi
+import com.indicvision.semper.field.ValueRange
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.navigation.DicKeys
+import com.indicvision.semper.report.BakedHeatmap
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportImageNames
-import com.indicvision.semper.report.RoiData
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
-import com.indicvision.semper.ui.viewer.inspect.InspectOverlayView
-import com.indicvision.semper.ui.viewer.inspect.TouchImageView
+import com.indicvision.semper.ui.common.SerialJob
+import com.indicvision.semper.ui.common.TransferBannerController
+import com.indicvision.semper.ui.common.commitOnDone
+import com.indicvision.semper.ui.common.hideKeyboard
+import com.indicvision.semper.ui.home.HomeActivity
 import com.indicvision.semper.ui.viewer.inspect.ViewerInspectHelper
 import com.indicvision.semper.ui.viewer.share.ShareCenter
 import com.indicvision.semper.ui.viewer.share.ShareExportUi
+import com.indicvision.semper.ui.viewer.share.ShareKind
 import com.indicvision.semper.ui.viewer.share.ViewerReportFactory
 import com.indicvision.semper.ui.viewer.summary.SummaryAnimation
 import com.indicvision.semper.ui.viewer.summary.SummaryCaption
 import com.indicvision.semper.ui.viewer.summary.ViewerSummaryHelper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,25 +94,9 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private val viewerVm: ResultViewerViewModel by viewModels()
 
-    internal lateinit var imgMain: TouchImageView
-    private lateinit var imgHeatmap: ImageView
+    internal lateinit var binding: ActivityResultViewerBinding
 
-    private lateinit var btnPrevFrame: ImageButton
-    private lateinit var btnNextFrame: ImageButton
-    private lateinit var tvFrameCounter: TextView
-    private lateinit var tvFinding: TextView
-    private lateinit var tvStatsCaption: TextView
-
-    private lateinit var layoutColorScale: LinearLayout
-    private lateinit var tvScaleMax: TextView
-    private lateinit var tvScaleMin: TextView
-    private lateinit var chromeTop: View
-    private lateinit var layoutScrubber: View
-    private lateinit var btnFieldFab: MaterialButton
     private var chromeVisible = true
-
-    internal lateinit var tvProbeReadout: TextView
-    internal lateinit var glassShield: InspectOverlayView
 
     /** Max / min (with coordinates) / mean for the info peek sheet. */
     private var detailStats: String = ""
@@ -114,17 +105,17 @@ class ResultViewerActivity : AppCompatActivity() {
     // field's focus, which commits it and closes the keyboard mid-number. The
     // commit on focus loss bumps the chrome, so the hide is rescheduled then.
     private val hideChromeRunnable = Runnable {
-        if (!etFrameNumber.hasFocus()) fadeChrome(visible = false)
+        if (!binding.etFrameNumber.hasFocus()) fadeChrome(visible = false)
     }
 
-    internal lateinit var shareBanner: com.indicvision.semper.ui.common.TransferBannerController
+    internal lateinit var shareBanner: TransferBannerController
     private val chromeHideDelayMs = 2_500L
 
     /** Shows the running exports, which live in [viewerVm] and outlive this screen's rotations. */
     internal lateinit var shareExports: ShareExportUi
 
     /** Stashed while the SAF save-as picker is open for a slow share export. */
-    internal var pendingShareKind: String? = null
+    private var pendingShareKind: ShareKind? = null
 
     /** Run once the frame set is read; see [whenFrameSetLoaded]. */
     private val afterFrameSet = mutableListOf<() -> Unit>()
@@ -136,7 +127,7 @@ class ResultViewerActivity : AppCompatActivity() {
         pendingShareKind = null
         val uri = result.data?.data
         if (result.resultCode != RESULT_OK || uri == null || kind == null) return@registerForActivityResult
-        viewerVm.setPendingSave(kind, uri)
+        viewerVm.setPendingSave(kind.wire, uri)
         startPendingSave()
     }
 
@@ -158,8 +149,13 @@ class ResultViewerActivity : AppCompatActivity() {
     private lateinit var inspect: ViewerInspectHelper
 
     internal var rawData: FloatArray? = null
-    internal var imgW = 0
-    internal var imgH = 0
+
+    /** The reference's true size: from the Intent, else read from its header off the main thread. */
+    internal var imageSize: ImageSize = ImageSize.UNKNOWN
+        private set
+
+    /** Every frame's solver parameters; a sweep varies them frame by frame. */
+    internal val frameParams: FrameParams by lazy { args.frameParams }
 
     /**
      * Step size of the frame on screen. A parameter sweep varies it from frame
@@ -168,24 +164,14 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     internal var step = 5
 
-    /** Step size for an ordinary analysis, where every frame shares one. */
-    internal var baseStep = 5
-
-    // A sweep hands over one setting triple per frame; null for a normal run.
-    internal var sweepSubsets: IntArray? = null
-    internal var sweepSteps: IntArray? = null
-    internal var sweepStrainWins: IntArray? = null
-
     /** Axis of the study's line cut through the ROI centre. */
-    internal var lineCutHorizontal = true
+    internal val lineCutHorizontal: Boolean get() = args.sweep?.lineCutHorizontal ?: true
 
     /** True when the frames are parameter combinations rather than images. */
-    internal val isSweep: Boolean get() = sweepSteps != null
+    internal val isSweep: Boolean get() = args.sweep != null
 
-    internal var roiX = 0
-    internal var roiY = 0
-    internal var roiW = 0
-    internal var roiH = 0
+    /** The ROI the run solved over. */
+    internal val roi: Roi by lazy { args.roi }
 
     /** The reference at display size. Exports and the report read it; it is never a frame's photo. */
     internal var cachedBaseImage: Bitmap? = null
@@ -200,7 +186,7 @@ class ResultViewerActivity : AppCompatActivity() {
     /** The frame photo under the map now, and its path; null while the reference is shown. */
     private var framePhotoBitmap: Bitmap? = null
     private var framePhotoPath: String? = null
-    private var framePhotoJob: Job? = null
+    private val framePhotoJob = SerialJob()
 
     /** True once [cachedBaseImage] is the image under the map. */
     private var referenceShown = false
@@ -222,7 +208,6 @@ class ResultViewerActivity : AppCompatActivity() {
      * scrub step); the file set never changes after onCreate, so one scan suffices.
      */
     private var maxDatBytes: Long = 0L
-    internal var originalDefNames: List<String> = emptyList()
 
     private var refImagePath: String? = null
     private var defImagePaths: List<String> = emptyList()
@@ -231,16 +216,16 @@ class ResultViewerActivity : AppCompatActivity() {
         set(value) {
             viewerVm.currentFrameIndex = value
         }
-    private var loadFrameJob: Job? = null
+    private val loadFrameJob = SerialJob()
 
     /** The single in-flight look-ahead worker; see [prefetchAround]. */
-    private var prefetchJob: Job? = null
+    private val prefetchJob = SerialJob()
 
     /** Previous look-ahead centre, used to infer scrub direction. */
     private var lastPrefetchCenter = 0
-    private var visualizationJob: Job? = null
-    private var scrubDebounceJob: Job? = null
-    private var refDecodeJob: Job? = null
+    private val visualizationJob = SerialJob()
+    private val scrubDebounceJob = SerialJob()
+    private val refDecodeJob = SerialJob()
 
     private val scrubCache = ScrubFrameCache()
 
@@ -250,15 +235,12 @@ class ResultViewerActivity : AppCompatActivity() {
             viewerVm.currentDataIndex = value
         }
 
-    private var currentHeatmapMin = 0f
-    private var currentHeatmapMax = 0f
+    /** The range of the heatmap on screen; null until one is shown. */
+    private var shownRange: ValueRange? = null
 
     /** Fixed colour scales per field; in the ViewModel so a rotation keeps them. */
-    private val customBoundsMap: MutableMap<Int, Pair<Float, Float>> get() = viewerVm.customBounds
+    private val customBoundsMap: MutableMap<Int, ValueRange> get() = viewerVm.customBounds
 
-    private lateinit var etFrameNumber: EditText
-    private lateinit var tvFrameTotal: TextView
-    private lateinit var layoutFrameJump: View
     private lateinit var summary: ViewerSummaryHelper
 
     /**
@@ -275,16 +257,12 @@ class ResultViewerActivity : AppCompatActivity() {
     /** How many frames this analysis actually holds. */
     internal fun frameCount(): Int = batchFiles.size
 
-    internal fun customBoundsFor(dataIndex: Int): Pair<Float, Float>? = customBoundsMap[dataIndex]
-
     /**
-     * Colour-scale bounds for the heatmap: custom override, else the current
-     * frame's own min/max (engine Auto). Sequence-global scale is reserved for
-     * the summary GIF / share animations, not the on-screen frame.
+     * The fixed colour scale of field [dataIndex], or null for the engine's
+     * auto scale (the frame's own clamped range). Sequence-global scale is
+     * reserved for the summary GIF / share animations, not the on-screen frame.
      */
-    private fun scaleBoundsFor(dataIndex: Int): Pair<Float, Float>? {
-        return customBoundsMap[dataIndex]
-    }
+    internal fun customBoundsFor(dataIndex: Int): ValueRange? = customBoundsMap[dataIndex]
 
     /** Called when [ViewerSummaryHelper] finishes the whole-sequence range pass. */
     internal fun onSequenceRangesReady() {
@@ -298,41 +276,20 @@ class ResultViewerActivity : AppCompatActivity() {
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_result_viewer)
+        binding = ActivityResultViewerBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        imgMain = findViewById(R.id.imgBaseResult)
-        imgHeatmap = findViewById(R.id.imgHeatmapOverlay)
-        imgHeatmap.setOnTouchListener { _, event -> imgMain.dispatchTouchEvent(event) }
+        binding.imgHeatmapOverlay.setOnTouchListener { _, event -> binding.imgBaseResult.dispatchTouchEvent(event) }
 
-        btnPrevFrame = findViewById(R.id.btnPrevFrame)
-        btnNextFrame = findViewById(R.id.btnNextFrame)
-        tvFrameCounter = findViewById(R.id.tvFrameCounter)
-        tvFinding = findViewById(R.id.tvFinding)
-        tvStatsCaption = findViewById(R.id.tvStatsCaption)
-        etFrameNumber = findViewById(R.id.etFrameNumber)
-        tvFrameTotal = findViewById(R.id.tvFrameTotal)
-        layoutFrameJump = findViewById(R.id.layoutFrameJump)
-
-        layoutColorScale = findViewById(R.id.layoutColorScale)
-        tvScaleMax = findViewById(R.id.tvScaleMax)
-        tvScaleMin = findViewById(R.id.tvScaleMin)
-        chromeTop = findViewById(R.id.chromeTop)
-        layoutScrubber = findViewById(R.id.layoutScrubber)
-        btnFieldFab = findViewById(R.id.btnFieldFab)
-        shareBanner = com.indicvision.semper.ui.common.TransferBannerController(
-            findViewById(R.id.transferBannerRoot),
-        )
+        shareBanner = TransferBannerController(binding.transferBannerRoot.root)
         // Re-attaches any export a rotation left running.
         shareExports = ShareExportUi(this, viewerVm.exports).also { it.attach() }
 
-        Insets.padTop(findViewById(R.id.viewerTopStack))
+        Insets.padTop(binding.viewerTopStack)
         // Lifted, not padded, above the keyboard: the image is fitted to the
         // scrubber's height (wireContentInsets), so growing it would refit the frame.
-        Insets.padBottomLiftAboveIme(layoutScrubber)
+        Insets.padBottomLiftAboveIme(binding.layoutScrubber)
         wireContentInsets()
-
-        tvProbeReadout = findViewById(R.id.tvProbeReadout)
-        glassShield = findViewById(R.id.glassShield)
 
         inspect = ViewerInspectHelper(this)
         // Warm [sessionRecord] here rather than at the share tap that needs it:
@@ -342,11 +299,11 @@ class ResultViewerActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) { sessionRecord }
 
         if (savedInstanceState != null) {
-            val savedProbe = savedInstanceState.getInt("LAST_CLOSEST_IDX", -1)
+            val savedProbe = savedInstanceState.getInt(STATE_PROBE_INDEX, -1)
             inspect.restoreProbe(savedProbe)
-            currentFrameIndex = savedInstanceState.getInt("CURRENT_FRAME", 0)
-            showingSummary = savedInstanceState.getBoolean("SHOWING_SUMMARY", false)
-            pendingShareKind = savedInstanceState.getString(STATE_SHARE_KIND)
+            currentFrameIndex = savedInstanceState.getInt(STATE_FRAME, 0)
+            showingSummary = savedInstanceState.getBoolean(STATE_SHOWING_SUMMARY, false)
+            pendingShareKind = ShareKind.fromWire(savedInstanceState.getString(STATE_SHARE_KIND))
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
@@ -360,28 +317,16 @@ class ResultViewerActivity : AppCompatActivity() {
         // rotation, or process death) waits in the ViewModel for this one.
         if (viewerVm.hasPendingSave) startPendingSave()
 
-        imgW = args.imgW
-        imgH = args.imgH
-        baseStep = args.step
-        step = baseStep
-        sweepSubsets = args.sweep?.subsets?.toIntArray()
-        sweepSteps = args.sweep?.steps?.toIntArray()
-        sweepStrainWins = args.sweep?.strainWindows?.toIntArray()
-        lineCutHorizontal = args.sweep?.lineCutHorizontal ?: true
+        imageSize = args.imageSize
+        step = frameParams.base.step
         // Sweep extras are available now; drop any restored summary flag.
         if (isSweep) showingSummary = false
 
-        roiX = args.roiX
-        roiY = args.roiY
-        roiW = args.roiW
-        roiH = args.roiH
-
         val refPath = args.refPath.ifBlank { null }
-        originalDefNames = args.frameNames
         refImagePath = refPath
         // Every writer puts the image size on the Intent; only an old one makes
         // the reference's header be read for it, off the main thread below.
-        val dimsKnown = imgW > 0 && imgH > 0
+        val dimsKnown = imageSize.isKnown
         if (dimsKnown) showReference(refPath)
 
         summary = ViewerSummaryHelper(this)
@@ -389,25 +334,24 @@ class ResultViewerActivity : AppCompatActivity() {
         // The directory listings, and a stat per frame, used to run here on the
         // main thread on every open. The first frame (and, with it, everything
         // the batch drives) starts once they are read, as it did before.
-        val knownW = imgW
-        val knownH = imgH
+        val knownSize = imageSize
         lifecycleScope.launch {
-            val set = withContext(frameSetDispatcher) { readFrameSet(refPath, knownW, knownH) }
+            val set = withContext(frameSetDispatcher) { readFrameSet(refPath, knownSize) }
             onFrameSetRead(set, refPath, dimsKnown)
         }
 
-        btnPrevFrame.setOnClickListener {
+        binding.btnPrevFrame.setOnClickListener {
             bumpChrome()
             stepFrame(-1)
         }
-        btnNextFrame.setOnClickListener {
+        binding.btnNextFrame.setOnClickListener {
             bumpChrome()
             stepFrame(1)
         }
 
         wireFrameJump()
 
-        imgMain.onMatrixChangedListener = {
+        binding.imgBaseResult.onMatrixChangedListener = {
             applyHeatmapMatrix()
             inspect.refreshCrosshairs()
             bumpChrome()
@@ -417,37 +361,36 @@ class ResultViewerActivity : AppCompatActivity() {
         // five with the live field checked. The live field comes back from the
         // ViewModel after a rotation, so re-derive the label or it disagrees
         // with the heatmap.
-        btnFieldFab.text = ViewerFieldPills.BY_ID[ViewerFieldPills.idFor(currentDataIndex)]?.first ?: "U"
-        btnFieldFab.setOnClickListener {
+        binding.btnFieldFab.text = ViewerFieldPills.BY_ID[ViewerFieldPills.idFor(currentDataIndex)]?.first ?: "U"
+        binding.btnFieldFab.setOnClickListener {
             bumpChrome()
             showFieldPopup(it)
         }
 
-        findViewById<View>(R.id.btnViewerBack).setOnClickListener { finish() }
-        val shareBtn = findViewById<View>(R.id.btnViewerShare)
+        binding.btnViewerBack.setOnClickListener { finish() }
         val canShare = LicenseEntitlements.shareEnabled(this)
-        shareBtn.alpha = if (canShare) 1f else LicenseEntitlements.BLOCKED_ALPHA
-        shareBtn.setOnClickListener {
+        binding.btnViewerShare.alpha = if (canShare) 1f else LicenseEntitlements.BLOCKED_ALPHA
+        binding.btnViewerShare.setOnClickListener {
             if (!LicenseEntitlements.shareEnabled(this)) {
                 CrispToast.show(this, getString(R.string.share_licensed_only), long = true)
                 return@setOnClickListener
             }
             showShareSheet()
         }
-        findViewById<View>(R.id.btnViewerHome).setOnClickListener { goHome() }
-        findViewById<View>(R.id.btnViewerSettingsInfo).setOnClickListener {
+        binding.btnViewerHome.setOnClickListener { goHome() }
+        binding.btnViewerSettingsInfo.setOnClickListener {
             bumpChrome()
             ViewerSettingsSheet.show(this)
         }
 
-        layoutColorScale.setOnClickListener {
+        binding.layoutColorScale.setOnClickListener {
             bumpChrome()
             showCustomScaleDialog()
         }
         inspect.wireTapHandling()
         wireSummaryGestures()
 
-        imgMain.post {
+        binding.imgBaseResult.post {
             inspect.refreshCrosshairs()
             bumpChrome()
         }
@@ -455,8 +398,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** What [onCreate] needs from disk before the first frame can load; see [readFrameSet]. */
     private class FrameSet(
-        val imgW: Int,
-        val imgH: Int,
+        val imageSize: ImageSize,
         val defImagePaths: List<String>,
         val batchFiles: List<File>,
         val plannedFrames: List<Int>,
@@ -476,15 +418,13 @@ class ResultViewerActivity : AppCompatActivity() {
      * Intent without it) the reference's dimensions. Disk only — call it off the
      * main thread.
      */
-    private fun readFrameSet(refPath: String?, knownW: Int, knownH: Int): FrameSet {
-        var w = knownW
-        var h = knownH
-        if ((w <= 0 || h <= 0) && refPath != null) {
+    private fun readFrameSet(refPath: String?, knownSize: ImageSize): FrameSet {
+        var size = knownSize
+        if (!size.isKnown && refPath != null) {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(refPath, bounds)
             if (bounds.outWidth > 0 && bounds.outHeight > 0) {
-                w = bounds.outWidth
-                h = bounds.outHeight
+                size = ImageSize(bounds.outWidth, bounds.outHeight)
             }
         }
         val batchDirPath = args.batchDirPath
@@ -497,8 +437,7 @@ class ResultViewerActivity : AppCompatActivity() {
         val dir = batchDirPath?.let { File(it) }?.takeIf { it.isDirectory }
         val files = dir?.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name }.orEmpty()
         return FrameSet(
-            imgW = w,
-            imgH = h,
+            imageSize = size,
             defImagePaths = defPaths,
             batchFiles = files,
             plannedFrames = SessionPaths.plannedFrameIndices(files),
@@ -511,7 +450,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun showReference(refPath: String?) {
         // True sensor dims stay on the intent for math / probe / export; the
         // on-screen bitmap is decoded off-main at ImageView scale.
-        imgMain.setTrueImageDimensions(imgW, imgH)
+        binding.imgBaseResult.setTrueImageDimensions(imageSize.width, imageSize.height)
         updateHeatmapFitBounds(data = null)
         if (refPath != null) {
             decodeReferenceForDisplay(refPath)
@@ -520,8 +459,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** The rest of [onCreate], once [readFrameSet] is back: open the batch on its first frame or summary. */
     private fun onFrameSetRead(set: FrameSet, refPath: String?, referenceShownAlready: Boolean) {
-        imgW = set.imgW
-        imgH = set.imgH
+        imageSize = set.imageSize
         if (!referenceShownAlready) showReference(refPath)
         defImagePaths = set.defImagePaths
         batchFiles = set.batchFiles
@@ -532,7 +470,7 @@ class ResultViewerActivity : AppCompatActivity() {
         if (batchFiles.isNotEmpty()) {
             // A START_FRAME (or restored index) past the batch would load nothing.
             currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
-            tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
+            binding.tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
             loadFrameData(currentFrameIndex)
             // Summary GIF / share animations are single-setting only.
             if (!isSweep && batchFiles.size > 1) summary.start()
@@ -554,7 +492,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /**
      * Measures the top bar and scrub bar once they've laid out and feeds those
-     * sizes to [imgMain] as content insets, so the heatmap's fit-to-screen view
+     * sizes to the image as content insets, so the heatmap's fit-to-screen view
      * fills the space between them (full width). The colour scale is a sibling
      * overlay on the right — it may cover the image; it is not a reserved inset.
      * Inset values only change on a real layout event (initial layout, rotation)
@@ -563,13 +501,13 @@ class ResultViewerActivity : AppCompatActivity() {
      * auto-hide animation.
      */
     private fun wireContentInsets() {
-        imgMain.viewTreeObserver.addOnGlobalLayoutListener(
+        binding.imgBaseResult.viewTreeObserver.addOnGlobalLayoutListener(
             object : ViewTreeObserver.OnGlobalLayoutListener {
                 override fun onGlobalLayout() {
-                    val top = chromeTop.height
-                    val bottom = layoutScrubber.height
+                    val top = binding.chromeTop.height
+                    val bottom = binding.layoutScrubber.height
                     if (top > 0 && bottom > 0) {
-                        imgMain.setContentInsets(top = top, bottom = bottom)
+                        binding.imgBaseResult.setContentInsets(top = top, bottom = bottom)
                     }
                 }
             },
@@ -578,10 +516,9 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Glass-pill popup listing every field; the live field is checked. */
     private fun showFieldPopup(anchor: View) {
-        @SuppressLint("InflateParams")
-        val popupView = layoutInflater.inflate(R.layout.popup_field_options, null)
+        val popup = PopupFieldOptionsBinding.inflate(layoutInflater)
         val window = PopupWindow(
-            popupView,
+            popup.root,
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
             true,
@@ -589,7 +526,8 @@ class ResultViewerActivity : AppCompatActivity() {
         window.isOutsideTouchable = true
         ViewerFieldPills.BY_ID.forEach { (id, pair) ->
             val (label, index) = pair
-            val button = popupView.findViewById<MaterialButton>(id)
+            // Looked up by id: the pills' id ↔ field map is ViewerFieldPills'.
+            val button = popup.root.findViewById<MaterialButton>(id)
             button.text = label
             button.isCheckable = true
             button.isChecked = index == currentDataIndex
@@ -600,12 +538,12 @@ class ResultViewerActivity : AppCompatActivity() {
                 }
                 currentTypeString = label
                 currentDataIndex = index
-                btnFieldFab.text = label
+                binding.btnFieldFab.text = label
                 // Caption + probe value are refreshed by updateVisualization once the
                 // new field's metrics are computed off the main thread.
                 updateVisualization(currentDataIndex)
                 summary.onFieldChanged()
-                if (showingSummary) tvFrameCounter.text = summary.counterText()
+                if (showingSummary) binding.tvFrameCounter.text = summary.counterText()
                 inspect.refreshCrosshairs()
                 bumpChrome()
                 window.dismiss()
@@ -616,7 +554,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Clears the back stack to Home. Used by the top-bar Home action. */
     internal fun goHome() {
-        val home = Intent(this, com.indicvision.semper.ui.home.HomeActivity::class.java)
+        val home = Intent(this, HomeActivity::class.java)
         home.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         startActivity(home)
         finish()
@@ -628,13 +566,13 @@ class ResultViewerActivity : AppCompatActivity() {
     /** Bring edge chrome back, then schedule auto-hide. */
     internal fun bumpChrome() {
         if (chromeVisible) {
-            chromeTop.removeCallbacks(hideChromeRunnable)
-            chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
+            binding.chromeTop.removeCallbacks(hideChromeRunnable)
+            binding.chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
             return
         }
         fadeChrome(visible = true)
-        chromeTop.removeCallbacks(hideChromeRunnable)
-        chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
+        binding.chromeTop.removeCallbacks(hideChromeRunnable)
+        binding.chromeTop.postDelayed(hideChromeRunnable, chromeHideDelayMs)
     }
 
     /**
@@ -649,7 +587,8 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun fadeChrome(visible: Boolean) {
         chromeVisible = visible
-        listOf(chromeTop, layoutScrubber, btnFieldFab, layoutColorScale).forEach { bar ->
+        val bars = with(binding) { listOf(chromeTop, layoutScrubber, btnFieldFab, layoutColorScale) }
+        bars.forEach { bar ->
             bar.animate().cancel()
             if (visible) {
                 bar.visibility = View.VISIBLE
@@ -695,20 +634,20 @@ class ResultViewerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::chromeTop.isInitialized) {
-            chromeTop.removeCallbacks(hideChromeRunnable)
-            chromeTop.animate().cancel()
-            layoutScrubber.animate().cancel()
-            btnFieldFab.animate().cancel()
-            layoutColorScale.animate().cancel()
+        if (::binding.isInitialized) {
+            binding.chromeTop.removeCallbacks(hideChromeRunnable)
+            binding.chromeTop.animate().cancel()
+            binding.layoutScrubber.animate().cancel()
+            binding.btnFieldFab.animate().cancel()
+            binding.layoutColorScale.animate().cancel()
         }
         // The exports themselves run on in the ViewModel; only their dialogs go.
         if (::shareExports.isInitialized) shareExports.detach()
-        loadFrameJob?.cancel()
-        visualizationJob?.cancel()
-        scrubDebounceJob?.cancel()
-        refDecodeJob?.cancel()
-        framePhotoJob?.cancel()
+        loadFrameJob.cancel()
+        visualizationJob.cancel()
+        scrubDebounceJob.cancel()
+        refDecodeJob.cancel()
+        framePhotoJob.cancel()
         summary.cancel()
         scrubCache.clear(except = cachedHeatmap)
         inspect.clearSpatialIndex()
@@ -719,19 +658,19 @@ class ResultViewerActivity : AppCompatActivity() {
      * sized to the ImageView (capped by [VisualizationEngine.DISPLAY_MAX_EDGE]).
      */
     private fun decodeReferenceForDisplay(refPath: String) {
-        imgMain.post {
-            val viewW = imgMain.width.coerceAtLeast(1)
-            val viewH = imgMain.height.coerceAtLeast(1)
+        val image = binding.imgBaseResult
+        image.post {
+            val viewW = image.width.coerceAtLeast(1)
+            val viewH = image.height.coerceAtLeast(1)
             val reqW = viewW.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
             val reqH = viewH.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
-            refDecodeJob?.cancel()
-            refDecodeJob = lifecycleScope.launch(Dispatchers.IO) {
+            refDecodeJob.launch(lifecycleScope, Dispatchers.IO) {
                 val bmp = BitmapDecode.decodeFileForView(
                     refPath,
                     reqW,
                     reqH,
-                    rawWidth = imgW,
-                    rawHeight = imgH,
+                    rawWidth = imageSize.width,
+                    rawHeight = imageSize.height,
                 )
                 withContext(Dispatchers.Main) {
                     if (isDestroyed || isFinishing) {
@@ -748,12 +687,12 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Debounce rapid Next/Prev so only the settled frame is decoded. */
     private fun requestFrameLoad(debounced: Boolean) {
-        scrubDebounceJob?.cancel()
+        scrubDebounceJob.cancel()
         if (!debounced) {
             loadFrameData(currentFrameIndex)
             return
         }
-        scrubDebounceJob = lifecycleScope.launch {
+        scrubDebounceJob.launch(lifecycleScope) {
             delay(SCRUB_DEBOUNCE_MS)
             loadFrameData(currentFrameIndex)
         }
@@ -761,23 +700,24 @@ class ResultViewerActivity : AppCompatActivity() {
 
     private fun applyHeatmapMatrix() {
         val hm = cachedHeatmap
-        val zoom = imgMain.getZoomMatrix()
-        if (hm == null || hm.isRecycled || hm.width <= 0 || imgW <= 0) {
-            imgHeatmap.imageMatrix = zoom
+        val zoom = binding.imgBaseResult.getZoomMatrix()
+        val overlay = binding.imgHeatmapOverlay
+        if (hm == null || hm.isRecycled || hm.width <= 0 || imageSize.width <= 0) {
+            overlay.imageMatrix = zoom
         } else {
             val m = Matrix(zoom)
-            m.preScale(imgW.toFloat() / hm.width, imgH.toFloat() / hm.height)
-            imgHeatmap.imageMatrix = m
+            m.preScale(imageSize.width.toFloat() / hm.width, imageSize.height.toFloat() / hm.height)
+            overlay.imageMatrix = m
         }
-        imgHeatmap.invalidate()
+        overlay.invalidate()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putInt("LAST_CLOSEST_IDX", inspect.lastClosestIdx)
-        outState.putInt("CURRENT_FRAME", currentFrameIndex)
-        outState.putBoolean("SHOWING_SUMMARY", showingSummary)
-        pendingShareKind?.let { outState.putString(STATE_SHARE_KIND, it) }
+        outState.putInt(STATE_PROBE_INDEX, inspect.lastClosestIdx)
+        outState.putInt(STATE_FRAME, currentFrameIndex)
+        outState.putBoolean(STATE_SHOWING_SUMMARY, showingSummary)
+        pendingShareKind?.let { outState.putString(STATE_SHARE_KIND, it.wire) }
     }
 
     private fun loadFrameData(index: Int) {
@@ -789,8 +729,7 @@ class ResultViewerActivity : AppCompatActivity() {
             return
         }
 
-        loadFrameJob?.cancel()
-        loadFrameJob = lifecycleScope.launch(Dispatchers.IO) {
+        loadFrameJob.launch(lifecycleScope, Dispatchers.IO) {
             try {
                 val data = readFrameDat(index) ?: return@launch
                 scrubCache.putData(index, data)
@@ -800,7 +739,7 @@ class ResultViewerActivity : AppCompatActivity() {
                     applyLoadedFrame(index, data)
                 }
                 prefetchAround(index)
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 throw e // never swallow coroutine cancellation
             } catch (e: OutOfMemoryError) {
                 // Error, not Exception — must be caught explicitly or the process dies.
@@ -835,11 +774,11 @@ class ResultViewerActivity : AppCompatActivity() {
      * stays flat.
      */
     private fun prefetchAround(center: Int) {
-        prefetchJob?.cancel()
+        prefetchJob.cancel()
         val direction = if (center >= lastPrefetchCenter) 1 else -1
         lastPrefetchCenter = center
 
-        prefetchJob = lifecycleScope.launch(Dispatchers.IO) {
+        prefetchJob.launch(lifecycleScope, Dispatchers.IO) {
             try {
                 for (offset in lookAheadOffsets(direction)) {
                     val index = center + offset
@@ -853,7 +792,7 @@ class ResultViewerActivity : AppCompatActivity() {
                     scrubCache.putData(index, data)
                     yield() // stay promptly cancellable between frames
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 throw e // never swallow coroutine cancellation
             } catch (e: OutOfMemoryError) {
                 Timber.w(e, "Prefetch around frame %d OOM — clearing scrub cache", center)
@@ -905,7 +844,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun applyLoadedFrame(index: Int, data: FloatArray) {
         rawData = data
         // A sweep's frames each have their own grid pitch.
-        step = sweepSteps?.getOrNull(index) ?: baseStep
+        step = frameParams.at(index).step
         // Invalidate rather than rebuild: the O(n) bucket map is only needed for
         // probe nearest-point taps, and findNearestDataPoint builds it lazily
         // for the new frame. Scrubbing large frames no longer pays for an unused index.
@@ -914,7 +853,7 @@ class ResultViewerActivity : AppCompatActivity() {
         showFrameBase(index)
         val displayName = frameDisplayName(index)
         if (!showingSummary) {
-            tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
+            binding.tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
         }
         syncFrameNumber()
         // updateVisualization warms this frame's stats off the main thread
@@ -932,16 +871,8 @@ class ResultViewerActivity : AppCompatActivity() {
      * stays in view.
      */
     private fun updateHeatmapFitBounds(data: FloatArray?) {
-        if (imgW <= 0 || imgH <= 0) return
-        val box = HeatmapFit.resolve(
-            imgW,
-            imgH,
-            roiX,
-            roiY,
-            roiW,
-            roiH,
-            accepted = data?.let { DicResult.acceptedPointsBounds(it) },
-        )
+        if (!imageSize.isKnown) return
+        val box = HeatmapFit.resolve(imageSize, roi, accepted = data?.let { DicResult.acceptedPointsBounds(it) })
         val moved = data?.takeIf { onFramePhoto }?.let { DicResult.acceptedPointsBounds(it, displaced = true) }
         if (moved != null) {
             box[HeatmapFit.LEFT] = minOf(box[HeatmapFit.LEFT], moved[HeatmapFit.LEFT])
@@ -949,7 +880,7 @@ class ResultViewerActivity : AppCompatActivity() {
             box[HeatmapFit.RIGHT] = maxOf(box[HeatmapFit.RIGHT], moved[HeatmapFit.RIGHT])
             box[HeatmapFit.BOTTOM] = maxOf(box[HeatmapFit.BOTTOM], moved[HeatmapFit.BOTTOM])
         }
-        imgMain.setFitBounds(box[0], box[1], box[2], box[3])
+        binding.imgBaseResult.setFitBounds(box[0], box[1], box[2], box[3])
     }
 
     /** The photo of the frame at [position] when it is on disk, else null (the reference is shown). */
@@ -970,20 +901,27 @@ class ResultViewerActivity : AppCompatActivity() {
      * the reference and its map with it.
      */
     private fun showFrameBase(index: Int) {
-        framePhotoJob?.cancel()
+        framePhotoJob.cancel()
         val path = framePhotoPathFor(index)
         if (path == null) {
             showReferenceBase()
             return
         }
         if (path == framePhotoPath) return
-        val reqW = imgMain.width.takeIf { it > 0 }?.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
+        val image = binding.imgBaseResult
+        val reqW = image.width.takeIf { it > 0 }?.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
             ?: VisualizationEngine.DISPLAY_MAX_EDGE
-        val reqH = imgMain.height.takeIf { it > 0 }?.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
+        val reqH = image.height.takeIf { it > 0 }?.coerceAtMost(VisualizationEngine.DISPLAY_MAX_EDGE)
             ?: VisualizationEngine.DISPLAY_MAX_EDGE
-        framePhotoJob = lifecycleScope.launch {
+        framePhotoJob.launch(lifecycleScope) {
             val bmp = withContext(Dispatchers.IO) {
-                BitmapDecode.decodeFileForView(path, reqW, reqH, rawWidth = imgW, rawHeight = imgH)
+                BitmapDecode.decodeFileForView(
+                    path,
+                    reqW,
+                    reqH,
+                    rawWidth = imageSize.width,
+                    rawHeight = imageSize.height,
+                )
             }
             if (isDestroyed || isFinishing) {
                 bmp?.recycle()
@@ -1003,7 +941,7 @@ class ResultViewerActivity : AppCompatActivity() {
             val previous = framePhotoBitmap
             framePhotoBitmap = bmp
             framePhotoPath = path
-            imgMain.setImageBitmap(bmp)
+            image.setImageBitmap(bmp)
             referenceShown = false
             previous?.recycle()
         }
@@ -1016,7 +954,7 @@ class ResultViewerActivity : AppCompatActivity() {
         if (previous == null && framePhotoPath == null && referenceShown) return
         framePhotoBitmap = null
         framePhotoPath = null
-        imgMain.setImageBitmap(reference)
+        binding.imgBaseResult.setImageBitmap(reference)
         referenceShown = true
         previous?.recycle()
     }
@@ -1026,50 +964,37 @@ class ResultViewerActivity : AppCompatActivity() {
      * otherwise null so [SummaryAnimation] discovers accepted points from the
      * first readable frame.
      */
-    internal fun summaryFitBounds(): FloatArray? {
-        if (!HeatmapFit.isCustomRoi(imgW, imgH, roiX, roiY, roiW, roiH)) return null
-        return floatArrayOf(
-            roiX.toFloat(),
-            roiY.toFloat(),
-            (roiX + roiW).toFloat(),
-            (roiY + roiH).toFloat(),
-        )
-    }
+    internal fun summaryFitBounds(): FloatArray? = roi.takeIf { it.isCustomFor(imageSize) }?.toLtrb()
 
     private fun showCustomScaleDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_custom_scale, null)
-        val etMax = dialogView.findViewById<TextInputEditText>(R.id.etScaleMax)
-        val etMin = dialogView.findViewById<TextInputEditText>(R.id.etScaleMin)
+        val dialog = DialogCustomScaleBinding.inflate(layoutInflater)
 
         val isStrain = DicResult.isStrainFieldIndex(currentDataIndex)
         val multiplier = DicResult.strainMultiplier(currentDataIndex)
         val unit = getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
 
-        dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilScaleMax).hint =
-            getString(R.string.scale_max_value, unit)
-        dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.tilScaleMin).hint =
-            getString(R.string.scale_min_value, unit)
+        dialog.tilScaleMax.hint = getString(R.string.scale_max_value, unit)
+        dialog.tilScaleMin.hint = getString(R.string.scale_min_value, unit)
 
-        val shown = cachedHeatmap != null && !showingSummary && !isGeneratingHeatmap
+        val shown = shownRange.takeIf { cachedHeatmap != null && !showingSummary && !isGeneratingHeatmap }
         CustomScalePrefill.text(
-            custom = scaleBoundsFor(currentDataIndex),
-            shownMin = currentHeatmapMin.takeIf { shown },
-            shownMax = currentHeatmapMax.takeIf { shown },
+            custom = customBoundsFor(currentDataIndex),
+            shown = shown,
             multiplier = multiplier,
         )?.let { (min, max) ->
-            etMin.setText(min)
-            etMax.setText(max)
+            dialog.etScaleMin.setText(min)
+            dialog.etScaleMax.setText(max)
         }
 
         MaterialAlertDialogBuilder(this)
             .setTitle(getString(R.string.scale_dialog_title, currentTypeString))
-            .setView(dialogView)
+            .setView(dialog.root)
             .setPositiveButton(R.string.apply) { _, _ ->
-                val maxVal = etMax.text?.toString()?.toFloatOrNull()
-                val minVal = etMin.text?.toString()?.toFloatOrNull()
+                val maxVal = dialog.etScaleMax.text?.toString()?.toFloatOrNull()
+                val minVal = dialog.etScaleMin.text?.toString()?.toFloatOrNull()
 
                 if (maxVal != null && minVal != null && maxVal > minVal) {
-                    customBoundsMap[currentDataIndex] = Pair(minVal / multiplier, maxVal / multiplier)
+                    customBoundsMap[currentDataIndex] = ValueRange(minVal / multiplier, maxVal / multiplier)
                     updateVisualization(currentDataIndex)
                     summary.onScaleChanged(currentDataIndex)
                 } else {
@@ -1093,83 +1018,73 @@ class ResultViewerActivity : AppCompatActivity() {
         val data = rawData ?: return
         isGeneratingHeatmap = true
 
-        val bounds = scaleBoundsFor(index)
-        val forceMin = bounds?.first
-        val forceMax = bounds?.second
+        val custom = customBoundsFor(index)
         val displaced = onFramePhoto
         val heatKey = ScrubFrameCache.HeatKey(
             frame = currentFrameIndex,
             field = index,
             step = step,
-            customMin = forceMin,
-            customMax = forceMax,
+            custom = custom,
             displaced = displaced,
         )
 
         val frameAtStart = currentFrameIndex
 
         scrubCache.getHeat(heatKey)?.let { hit ->
-            visualizationJob?.cancel()
-            showHeatmap(hit.bitmap, hit.minV, hit.maxV, index)
+            visualizationJob.cancel()
+            showHeatmap(hit, index)
             // A heatmap hit means this (frame,field) was visited before, so its
             // metrics are already cached — this read is O(1) on the main thread.
             applyFieldMetrics(fieldMetricsFor(frameAtStart, index, data), index)
             return
         }
 
-        visualizationJob?.cancel()
-        visualizationJob = lifecycleScope.launch(Dispatchers.Default) {
+        val size = imageSize
+        val frameStep = step
+        visualizationJob.launch(lifecycleScope, Dispatchers.Default) {
             // Warm the stats/extrema off the main thread, next to the heatmap render,
             // so the scrub settle never pays the O(n)+sort on the UI thread.
             val metrics = fieldMetricsFor(frameAtStart, index, data)
-            val result = if (displaced) {
+            val heatmap = if (displaced) {
                 VisualizationEngine.generateDeformedHeatmap(
                     data,
-                    imgW,
-                    imgH,
+                    size.width,
+                    size.height,
                     index,
-                    step,
-                    forceMin,
-                    forceMax,
+                    frameStep,
+                    custom?.min,
+                    custom?.max,
                     maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
                 )
             } else {
                 VisualizationEngine.generateHeatmap(
                     data,
-                    imgW,
-                    imgH,
+                    size.width,
+                    size.height,
                     index,
-                    step,
-                    forceMin,
-                    forceMax,
+                    frameStep,
+                    custom?.min,
+                    custom?.max,
                     maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
                 )
             }
-
-            val heatmap = result.first
-            val actualMin = result.second
-            val actualMax = result.third
-            scrubCache.putHeat(
-                heatKey,
-                ScrubFrameCache.HeatEntry(heatmap, actualMin, actualMax),
-            )
+            scrubCache.putHeat(heatKey, heatmap)
 
             withContext(Dispatchers.Main) {
                 if (currentDataIndex != index || currentFrameIndex != frameAtStart) return@withContext
-                showHeatmap(heatmap, actualMin, actualMax, index)
+                showHeatmap(heatmap, index)
                 applyFieldMetrics(metrics, index)
             }
         }
     }
 
-    private fun showHeatmap(heatmap: Bitmap, actualMin: Float, actualMax: Float, index: Int) {
-        cachedHeatmap = heatmap
-        imgHeatmap.scaleType = ImageView.ScaleType.MATRIX
-        imgHeatmap.setImageBitmap(heatmap)
+    private fun showHeatmap(heatmap: BakedHeatmap, index: Int) {
+        cachedHeatmap = heatmap.bitmap
+        binding.imgHeatmapOverlay.scaleType = ImageView.ScaleType.MATRIX
+        binding.imgHeatmapOverlay.setImageBitmap(heatmap.bitmap)
         applyHeatmapMatrix()
 
-        currentHeatmapMin = actualMin
-        currentHeatmapMax = actualMax
+        shownRange = heatmap.range
 
         // While the summary is up the labels belong to its whole-sequence scale,
         // not to whichever frame happens to be loaded behind it.
@@ -1182,10 +1097,10 @@ class ResultViewerActivity : AppCompatActivity() {
             // not the field's true extrema -- the ⓘ details sheet shows those,
             // via DicResult.fieldStats. Same wording as the summary-mode scale
             // (ViewerSummaryHelper) so the two paths agree.
-            val minText = ReportBuilder.formatMetric(actualMin * multiplier)
-            val maxText = ReportBuilder.formatMetric(actualMax * multiplier)
-            tvScaleMin.text = getString(R.string.scale_min_fmt, minText, unit)
-            tvScaleMax.text = getString(R.string.scale_max_fmt, maxText, unit)
+            val minText = ReportBuilder.formatMetric(heatmap.min * multiplier)
+            val maxText = ReportBuilder.formatMetric(heatmap.max * multiplier)
+            binding.tvScaleMin.text = getString(R.string.scale_min_fmt, minText, unit)
+            binding.tvScaleMax.text = getString(R.string.scale_max_fmt, maxText, unit)
         }
         isGeneratingHeatmap = false
     }
@@ -1193,14 +1108,7 @@ class ResultViewerActivity : AppCompatActivity() {
     /** What a report page reads from this viewer, as plain data an export can keep. */
     private fun reportSource(): ViewerReportFactory.Source = ViewerReportFactory.Source(
         args = args,
-        imgW = imgW,
-        imgH = imgH,
-        baseStep = baseStep,
-        sweepSteps = sweepSteps,
-        sweepSubsets = sweepSubsets,
-        sweepStrainWins = sweepStrainWins,
-        roi = RoiData(roiX, roiY, roiW, roiH),
-        frameNames = originalDefNames,
+        imageSize = imageSize,
         plannedFrames = plannedFrames,
         defImagePaths = defImagePaths,
         displayBase = cachedBaseImage,
@@ -1219,7 +1127,7 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     internal fun frameDisplayName(position: Int): String {
         val planned = plannedFrameIndex(position)
-        return ReportImageNames.frameName(originalDefNames, planned) ?: "Frame ${planned + 1}"
+        return ReportImageNames.frameName(args.frameNames, planned) ?: "Frame ${planned + 1}"
     }
 
     /**
@@ -1234,7 +1142,7 @@ class ResultViewerActivity : AppCompatActivity() {
             args,
             isSweep,
             defImagePaths,
-            originalDefNames,
+            args.frameNames,
             plannedFrameIndex(position),
         )
 
@@ -1247,7 +1155,7 @@ class ResultViewerActivity : AppCompatActivity() {
         val record = sessionRecord
         val raw = record?.refName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
             ?: record?.name?.takeIf { it.isNotBlank() }
-            ?: originalDefNames.firstOrNull()?.substringBeforeLast('.')
+            ?: args.frameNames.firstOrNull()?.substringBeforeLast('.')
             ?: "analysis"
         return raw.replace(Regex("[^A-Za-z0-9._-]+"), "_").trim('_').take(60).ifBlank { "analysis" }
     }
@@ -1260,9 +1168,9 @@ class ResultViewerActivity : AppCompatActivity() {
      * all-frames report want the same few fields off it, and re-reading the
      * session index per report page would be a file read per page.
      */
-    internal val sessionRecord: com.indicvision.semper.data.session.SessionRecord? by lazy {
+    internal val sessionRecord: SessionRecord? by lazy {
         intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
-            ?.let { runCatching { com.indicvision.semper.data.session.SessionStore.get(this, it) }.getOrNull() }
+            ?.let { runCatching { SessionStore.get(this, it) }.getOrNull() }
     }
 
     /**
@@ -1279,44 +1187,21 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     internal fun buildShareSnapshot(): ShareCenter.Snapshot? {
         if (!frameSetLoaded || batchFiles.isEmpty()) return null
-        val data = rawData
-        // Snapshot can open with ref path alone while display decode is still in flight.
-        val base = cachedBaseImage
-        val summaryHelper = summary
         return ShareCenter.Snapshot(
-            data = data,
+            data = rawData,
             batchFiles = batchFiles,
-            defNames = originalDefNames,
-            plannedFrames = plannedFrames,
             baseName = shareBaseName(),
             frameIndex = currentFrameIndex,
-            imgW = imgW,
-            imgH = imgH,
-            step = step,
-            stepPerFrame = sweepSteps,
-            subsetPerFrame = sweepSubsets,
-            strainWindowPerFrame = sweepStrainWins,
             dataIndex = currentDataIndex,
             typeString = currentTypeString,
-            baseImage = base,
-            refImagePath = refImagePath,
-            defImagePaths = defImagePaths,
-            summary = if (isSweep) null else summaryHelper.animation,
+            summary = if (isSweep) null else summary.animation,
             summaryBounds = if (isSweep) {
                 emptyMap()
             } else {
-                SummaryAnimation.FIELDS.mapNotNull { (_, index) -> summaryHelper.boundsFor(index)?.let { index to it } }
+                SummaryAnimation.FIELDS.mapNotNull { (_, index) -> summary.boundsFor(index)?.let { index to it } }
                     .toMap()
             },
             reportSource = reportSource(),
-            referenceName = args.refName,
-            strainMethod = args.strainMethod,
-            subset = args.subsetSize,
-            strainWindow = args.strainWindow,
-            roiX = roiX,
-            roiY = roiY,
-            roiW = roiW,
-            roiH = roiH,
         )
     }
 
@@ -1326,12 +1211,12 @@ class ResultViewerActivity : AppCompatActivity() {
     }
 
     /** SAF CreateDocument for a slow export; generation starts only after a URI returns. */
-    internal fun pickShareDocument(kind: String, mime: String, filename: String) {
+    internal fun pickShareDocument(kind: ShareKind, filename: String) {
         pendingShareKind = kind
         createShareDocument.launch(
             Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
-                type = mime
+                type = kind.saveMime
                 putExtra(Intent.EXTRA_TITLE, filename)
             },
         )
@@ -1339,29 +1224,29 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. */
     private fun updateCaptionsFrom(metrics: FieldMetrics, index: Int) {
-        val unit = if (DicResult.isStrainFieldIndex(index)) "m\u03b5" else "px"
+        val unit = if (DicResult.isStrainFieldIndex(index)) "mε" else "px"
         val frameBit = if (showingSummary) {
             getString(R.string.summary_title)
         } else {
             "${currentFrameIndex + 1} / ${batchFiles.size.coerceAtLeast(1)}"
         }
-        tvFinding.text = getString(R.string.viewer_edge_title_fmt, currentTypeString, frameBit)
+        binding.tvFinding.text = getString(R.string.viewer_edge_title_fmt, currentTypeString, frameBit)
 
         if (showingSummary) {
             detailStats = SummaryCaption.text(resources, summary.boundsFor(index), index, unit)
-            tvStatsCaption.text = detailStats
+            binding.tvStatsCaption.text = detailStats
             return
         }
 
         val stats = metrics.stats
         if (stats == null) {
             detailStats = getString(R.string.stat_empty)
-            tvStatsCaption.text = detailStats
+            binding.tvStatsCaption.text = detailStats
             return
         }
-        val maxText = ReportBuilder.formatMetric(stats[0])
-        val minText = ReportBuilder.formatMetric(stats[1])
-        val meanText = ReportBuilder.formatMetric(stats[2])
+        val maxText = ReportBuilder.formatMetric(stats.max)
+        val minText = ReportBuilder.formatMetric(stats.min)
+        val meanText = ReportBuilder.formatMetric(stats.mean)
         val data = rawData
         detailStats = if (
             data != null &&
@@ -1382,19 +1267,21 @@ class ResultViewerActivity : AppCompatActivity() {
         } else {
             getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
         }
-        tvStatsCaption.text = detailStats
+        binding.tvStatsCaption.text = detailStats
     }
 
     private fun updateNavButtons() {
+        val prev = binding.btnPrevFrame
+        val next = binding.btnNextFrame
         // Sweep: no summary slot, so Prev is inert on the first combination.
-        btnPrevFrame.isEnabled =
+        prev.isEnabled =
             !showingSummary &&
             batchFiles.isNotEmpty() &&
             (currentFrameIndex > 0 || !isSweep)
-        btnNextFrame.isEnabled = showingSummary || currentFrameIndex < batchFiles.size - 1
+        next.isEnabled = showingSummary || currentFrameIndex < batchFiles.size - 1
 
-        btnPrevFrame.alpha = if (btnPrevFrame.isEnabled) 1.0f else 0.5f
-        btnNextFrame.alpha = if (btnNextFrame.isEnabled) 1.0f else 0.5f
+        prev.alpha = if (prev.isEnabled) 1.0f else 0.5f
+        next.alpha = if (next.isEnabled) 1.0f else 0.5f
         // The number tracks the buttons, not the decode: a debounced scrub would
         // otherwise leave it a frame behind for as long as the load takes.
         syncFrameNumber()
@@ -1403,7 +1290,7 @@ class ResultViewerActivity : AppCompatActivity() {
     // ── Summary slot ─────────────────────────────────────────────────────
 
     private fun wireSummaryGestures() {
-        val gif = findViewById<TouchImageView>(R.id.imgSummary)
+        val gif = binding.imgSummary
         gif.onScrubListener = { stepFrame(it) }
         gif.onCenterDoubleTapShowChrome = { showChromeIfHidden() }
         gif.onChromeSwipeListener = { show -> if (show) bumpChrome() }
@@ -1415,9 +1302,9 @@ class ResultViewerActivity : AppCompatActivity() {
         showingSummary = true
         inspect.dismissProbe()
         summary.show()
-        tvFrameCounter.text = summary.counterText()
-        layoutFrameJump.visibility = View.GONE
-        tvFinding.text = getString(
+        binding.tvFrameCounter.text = summary.counterText()
+        binding.layoutFrameJump.visibility = View.GONE
+        binding.tvFinding.text = getString(
             R.string.viewer_edge_title_fmt,
             currentTypeString,
             getString(R.string.summary_title),
@@ -1429,7 +1316,7 @@ class ResultViewerActivity : AppCompatActivity() {
     private fun leaveSummary() {
         showingSummary = false
         summary.hide()
-        layoutFrameJump.visibility = View.VISIBLE
+        binding.layoutFrameJump.visibility = View.VISIBLE
         updateNavButtons()
         // Re-apply the frame's own labels and heatmap after the summary's.
         requestFrameLoad(debounced = false)
@@ -1439,15 +1326,9 @@ class ResultViewerActivity : AppCompatActivity() {
     // ── Typed frame jump ─────────────────────────────────────────────────
 
     private fun wireFrameJump() {
-        etFrameNumber.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_GO) {
-                commitFrameJump()
-                true
-            } else {
-                false
-            }
-        }
-        etFrameNumber.setOnFocusChangeListener { _, hasFocus ->
+        val field = binding.etFrameNumber
+        field.commitOnDone(EditorInfo.IME_ACTION_GO) { commitFrameJump() }
+        field.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) commitFrameJump()
         }
     }
@@ -1459,7 +1340,8 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     private fun commitFrameJump() {
         bumpChrome()
-        val typed = etFrameNumber.text?.toString()?.trim()?.toIntOrNull()
+        val field = binding.etFrameNumber
+        val typed = field.text?.toString()?.trim()?.toIntOrNull()
         val target = typed?.minus(1)?.takeIf { it in batchFiles.indices }
         if (target == null) {
             syncFrameNumber()
@@ -1470,24 +1352,20 @@ class ResultViewerActivity : AppCompatActivity() {
             // A typed number is a settled destination, unlike a Next/Prev burst.
             requestFrameLoad(debounced = false)
         }
-        dismissFrameJumpKeyboard()
-    }
-
-    private fun dismissFrameJumpKeyboard() {
-        etFrameNumber.clearFocus()
-        val ime = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        ime?.hideSoftInputFromWindow(etFrameNumber.windowToken, 0)
+        field.clearFocus()
+        field.hideKeyboard()
     }
 
     private fun syncFrameNumber() {
         val shown = if (showingSummary) "" else (currentFrameIndex + 1).toString()
-        if (etFrameNumber.text?.toString() != shown) etFrameNumber.setText(shown)
+        val field = binding.etFrameNumber
+        if (field.text?.toString() != shown) field.setText(shown)
     }
 
     // ── Field metrics cache (caption + peek-sheet extrema) ───────────────────
 
-    /** Immutable per-(frame,field) result: `[max,min,mean]` stats and extrema indices. */
-    internal class FieldMetrics(val stats: FloatArray?, val maxIdx: Int, val minIdx: Int)
+    /** Immutable per-(frame,field) result: its stats and the indices of its extrema. */
+    internal class FieldMetrics(val stats: FieldStats?, val maxIdx: Int, val minIdx: Int)
 
     /**
      * Memoised [FieldMetrics] keyed by (frameIndex, dataIndex). A decoded frame is
@@ -1502,7 +1380,7 @@ class ResultViewerActivity : AppCompatActivity() {
     internal fun fieldMetricsFor(frameIndex: Int, dataIndex: Int, data: FloatArray): FieldMetrics {
         val key = (frameIndex.toLong() shl Int.SIZE_BITS) or (dataIndex.toLong() and 0xFFFF_FFFFL)
         synchronized(fieldMetricsCache) { fieldMetricsCache[key]?.let { return it } }
-        val stats = DicResult.fieldStats(data, dataIndex)
+        val stats = FieldStats.fromArray(DicResult.fieldStats(data, dataIndex))
         val (maxIdx, minIdx) = trueExtremaIndices(data, dataIndex)
         val metrics = FieldMetrics(stats, maxIdx, minIdx)
         synchronized(fieldMetricsCache) {
@@ -1555,6 +1433,10 @@ class ResultViewerActivity : AppCompatActivity() {
         /** Field metrics are tiny (5 floats + 2 ints); keep plenty across frames/fields. */
         const val FIELD_METRICS_CACHE_MAX = 64
 
+        // Saved-state keys; their strings are what a restored viewer reads back.
+        const val STATE_PROBE_INDEX = "LAST_CLOSEST_IDX"
+        const val STATE_FRAME = "CURRENT_FRAME"
+        const val STATE_SHOWING_SUMMARY = "SHOWING_SUMMARY"
         const val STATE_SHARE_KIND = "PENDING_SHARE_KIND"
     }
 }

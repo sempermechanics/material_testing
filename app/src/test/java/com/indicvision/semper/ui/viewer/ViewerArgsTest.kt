@@ -5,6 +5,9 @@ import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SkippedNode
+import com.indicvision.semper.field.DicParams
+import com.indicvision.semper.field.ImageSize
+import com.indicvision.semper.field.Roi
 import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.VsgLatticeActivity
@@ -232,5 +235,70 @@ class ViewerArgsTest {
         // No ROI recorded means the whole image, for every reader alike.
         assertEquals(listOf(0, 0, 800, 600), listOf(read.roiX, read.roiY, read.roiW, read.roiH))
         assertNull(read.startFrame)
+    }
+
+    // ------------------------------------------------------ wire format
+
+    /** Every extra on [intent], arrays and lists as lists, so the map compares by value. */
+    private fun extrasOf(intent: Intent): Map<String, Any?> {
+        val extras = intent.extras!!
+        return extras.keySet().associateWith { key ->
+            @Suppress("DEPRECATION") // a plain read of whatever was put, for comparison only
+            when (val value = extras.get(key)) {
+                is IntArray -> value.toList()
+                is FloatArray -> value.toList()
+                else -> value
+            }
+        }
+    }
+
+    @Test
+    fun `the Intent carries the keys and values the base build wrote`() {
+        // Written out by hand: an Intent already in a back stack must keep
+        // opening, so neither a key's spelling nor its value's type may move.
+        val expected = mapOf(
+            "IMG_W" to 1920,
+            "IMG_H" to 1080,
+            "STEP" to 5,
+            "REF_NAME" to "ref.png",
+            "REF_PATH" to "/sessions/s1/ref.png",
+            "DEF_PATH" to "/tmp/def.png",
+            "BATCH_DIR_PATH" to "/sessions/s1",
+            "DEF_FILE_NAMES" to arrayListOf("f1.png", "f2.png"),
+            "DEF_FILE_PATHS" to arrayListOf("/tmp/f1.png"),
+            "SWEEP_SUBSETS" to listOf(41, 51),
+            "SWEEP_STEPS" to listOf(5, 7),
+            "SWEEP_STRAIN_WINS" to listOf(15, 21),
+            "LINE_CUT_HORIZONTAL" to false,
+            "SWEEP_SKIPPED" to sweepArgs.skippedJson,
+            "STOP_CODE" to 0,
+            "PLANNED_FRAMES" to 2,
+            "SESSION_ID" to "cloud-1",
+            "SESSION_LOCAL_ID" to "local-1",
+            "SUBSET_SIZE" to 41,
+            "STRAIN_WINDOW" to 15,
+            "STRAIN_METHOD" to "VSG",
+            "ENGINE_STATS" to listOf(1f, 2f),
+            "ROI_X" to 10,
+            "ROI_Y" to 20,
+            "ROI_W" to 300,
+            "ROI_H" to 400,
+            "START_FRAME" to 1,
+        )
+        val sent = args(sweepArgs).copy(defPath = "/tmp/def.png", defFilePaths = listOf("/tmp/f1.png"), startFrame = 1)
+
+        assertEquals(expected, extrasOf(sent.toIntent(context)))
+    }
+
+    @Test
+    fun `the typed views read the same fields`() {
+        val read = args(sweepArgs)
+
+        assertEquals(ImageSize(1920, 1080), read.imageSize)
+        assertEquals(Roi(10, 20, 300, 400), read.roi)
+        assertEquals(DicParams(subset = 41, step = 5, strainWindow = 15), read.frameParams.base)
+        assertEquals(DicParams(subset = 51, step = 7, strainWindow = 21), read.frameParams.at(1))
+        assertEquals("past a sweep's lists, the run's own", read.frameParams.base, read.frameParams.at(2))
+        assertEquals(DicParams(41, 5, 15), args().frameParams.at(1))
     }
 }

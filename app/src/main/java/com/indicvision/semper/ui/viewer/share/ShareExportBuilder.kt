@@ -24,6 +24,8 @@ import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.ReportImageNames
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.viewer.summary.SummaryAnimation
+import com.indicvision.semper.util.Mime
+import com.indicvision.semper.util.Zips
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
@@ -54,7 +56,7 @@ internal class ShareExportBuilder(
      * The file for job [kind] and its MIME type. Throws when the generator
      * produced nothing usable, which the job reports as "share failed".
      */
-    suspend fun produce(kind: String, report: (Int, String) -> Unit): Pair<File, String> {
+    suspend fun produce(kind: ShareKind, report: (Int, String) -> Unit): Pair<File, String> {
         val (files, mime) = buildKind(kind, report)
         // Safety: never hand an empty or missing file to the share sheet —
         // a generator that silently produced nothing would otherwise share
@@ -66,37 +68,32 @@ internal class ShareExportBuilder(
         val handoff = if (files.size == 1) {
             files[0] to mime
         } else {
-            zipInto(files, "${s.baseName}_export.zip") to "application/zip"
+            zipInto(files, "${s.baseName}_export.zip") to Mime.ZIP
         }
         check(handoff.first.exists() && handoff.first.length() > 0L) { "Bundled export was empty" }
         return handoff
     }
 
     private suspend fun buildKind(
-        kind: String,
+        kind: ShareKind,
         report: (Int, String) -> Unit,
     ): Pair<List<File>, String> = when (kind) {
-        KIND_PHOTO -> listOf(currentPhoto()) to "image/png"
-        KIND_PDF -> listOf(allFramesPdf(report)) to "application/pdf"
-        KIND_ZIP -> listOf(everythingZip(report)) to "application/zip"
-        KIND_CSV -> listOf(batchCsv()) to "text/csv"
-        KIND_PHOTOS -> allFieldPhotos() to "image/png"
-        KIND_GIFS -> {
-            check(s.stepPerFrame == null) { "Animations are not offered for sweeps" }
-            fieldAnimations() to "image/gif"
+        ShareKind.PHOTO -> listOf(currentPhoto()) to Mime.PNG
+        ShareKind.PDF -> listOf(allFramesPdf(report)) to Mime.PDF
+        ShareKind.ZIP -> listOf(everythingZip(report)) to Mime.ZIP
+        ShareKind.CSV -> listOf(batchCsv()) to Mime.CSV
+        ShareKind.PHOTOS -> allFieldPhotos() to Mime.PNG
+        ShareKind.GIFS -> {
+            check(!s.isSweep) { "Animations are not offered for sweeps" }
+            fieldAnimations() to Mime.GIF
         }
-        else -> error("Unknown share kind $kind")
     }
 
     /** Bundle several files into a single zip — the SAF picker saves one document. */
     private fun zipInto(files: List<File>, zipName: String): File {
         val out = File(outDir, zipName)
         ZipOutputStream(out.outputStream().buffered()).use { zip ->
-            for (file in files) {
-                zip.putNextEntry(ZipEntry(file.name))
-                file.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
-            }
+            for (file in files) Zips.putFile(zip, file.name, file)
         }
         return out
     }
@@ -118,14 +115,16 @@ internal class ShareExportBuilder(
         baseCache: MutableMap<Pair<Int, Int>, Bitmap>? = null,
     ): Bitmap {
         // Optional cache: multi-field export reuses one decoded reference bitmap.
-        val renderScale = VisualizationEngine.cappedRenderScale(s.imgW, s.imgH, VisualizationEngine.REPORT_MAX_EDGE)
-        val renderW = (s.imgW * renderScale).toInt().coerceAtLeast(1)
-        val renderH = (s.imgH * renderScale).toInt().coerceAtLeast(1)
+        val size = s.imageSize
+        val renderScale =
+            VisualizationEngine.cappedRenderScale(size.width, size.height, VisualizationEngine.REPORT_MAX_EDGE)
+        val renderW = (size.width * renderScale).toInt().coerceAtLeast(1)
+        val renderH = (size.height * renderScale).toInt().coerceAtLeast(1)
 
-        val (heatmap, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
+        val heatmap = VisualizationEngine.generateHeatmap(
             data,
-            s.imgW,
-            s.imgH,
+            size.width,
+            size.height,
             dataIndex,
             s.stepAt(frameIndex),
             null,
@@ -142,22 +141,30 @@ internal class ShareExportBuilder(
             out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(out)
             canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
-            canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
+            canvas.drawBitmap(heatmap.bitmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
             // Signed, as the PDF does: with absolute values "MIN" marked the strain
             // nearest zero under a label giving the most negative.
             val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
             val unit = if (DicResult.isStrainFieldIndex(dataIndex)) "mε" else "px"
             ReportBuilder.bakeAnnotationsToCanvas(
-                canvas, renderW, renderH, actualMin, actualMax,
-                typeString, unit, extrema.maxIdx, extrema.minIdx, data,
-                dataIndex = dataIndex,
+                canvas,
+                renderW,
+                renderH,
+                heatmap.range,
+                extrema,
+                data,
+                ReportBuilder.FieldAnnotation(
+                    typeString = typeString,
+                    unit = unit,
+                    dataIndex = dataIndex,
+                    imageName = s.sourceImageName(frameIndex),
+                ),
                 coordScale = renderScale,
-                imageName = s.sourceImageName(frameIndex),
             )
             done = true
             return out
         } finally {
-            heatmap.recycle()
+            heatmap.bitmap.recycle()
             // A cached base belongs to the cache; the display bitmap to the viewer.
             if (baseCache == null && base != null && base !== s.baseImage) base.recycle()
             if (!done) out?.recycle()
@@ -183,8 +190,8 @@ internal class ShareExportBuilder(
                 renderW,
                 renderH,
                 VisualizationEngine.REPORT_MAX_EDGE,
-                rawWidth = s.imgW,
-                rawHeight = s.imgH,
+                rawWidth = s.imageSize.width,
+                rawHeight = s.imageSize.height,
             )?.let { decoded ->
                 cache?.put(key, decoded)
                 return decoded
@@ -276,29 +283,32 @@ internal class ShareExportBuilder(
      * its settings columns; an ordinary analysis leads with the image name.
      */
     private fun batchCsv(): File {
-        val sweep = s.stepPerFrame != null
+        val sweep = s.isSweep
         // A sweep ran every combination against the one image; a batch has one
         // image per frame.
         val sweepImage = s.defImagePaths.firstOrNull()?.let { File(it).name } ?: "image"
+        val source = s.reportSource
         val frames = s.batchFiles.mapIndexed { index, file ->
+            val params = s.frameParams.at(index)
             AnalysisCsvWriter.Frame(
                 // Named as the cloud bundle's CSV names it, by the planned frame.
-                image = if (sweep) sweepImage else ReportImageNames.deformed(s.defNames, s.plannedAt(index)),
-                subset = s.subsetPerFrame?.getOrNull(index) ?: s.subset,
-                step = s.stepPerFrame?.getOrNull(index) ?: s.step,
-                strainWindow = s.strainWindowPerFrame?.getOrNull(index) ?: s.strainWindow,
+                image = if (sweep) sweepImage else ReportImageNames.deformed(source.frameNames, s.plannedAt(index)),
+                subset = params.subset,
+                step = params.step,
+                strainWindow = params.strainWindow,
                 data = { DicResult.decodeDatFile(file) },
             )
         }
+        val roi = source.roi
         val metadata = AnalysisCsvWriter.Metadata(
-            referenceName = s.referenceName.ifBlank { s.baseName },
-            strainMethod = s.strainMethod,
-            imgW = s.imgW,
-            imgH = s.imgH,
-            roiX = s.roiX,
-            roiY = s.roiY,
-            roiW = s.roiW,
-            roiH = s.roiH,
+            referenceName = source.args.refName.ifBlank { s.baseName },
+            strainMethod = source.args.strainMethod,
+            imgW = s.imageSize.width,
+            imgH = s.imageSize.height,
+            roiX = roi.x,
+            roiY = roi.y,
+            roiW = roi.w,
+            roiH = roi.h,
         )
         val f = File(outDir, "${s.baseName}_data.csv")
         AnalysisCsvWriter.write(f, sweep, frames, metadata)
@@ -367,27 +377,19 @@ internal class ShareExportBuilder(
         // per-frame result images the last 40%.
         val pdf = allFramesPdf { pct, label -> report(pct * 60 / 100, label) }
         val csv = batchCsv()
-        val animations = if (s.stepPerFrame != null) emptyList() else fieldAnimations()
+        val animations = if (s.isSweep) emptyList() else fieldAnimations()
         report(62, "Bundling files…")
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val f = File(outDir, "${s.baseName}_everything_$ts.zip")
         ZipOutputStream(f.outputStream().buffered()).use { zip ->
             addRawPhotos(zip, s, ts)
-            for (gif in animations) {
-                zip.putNextEntry(ZipEntry("photos_$ts/animations/${gif.name}"))
-                gif.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
-            }
+            for (gif in animations) Zips.putFile(zip, "photos_$ts/animations/${gif.name}", gif)
             addResultImages(zip, s, ts) { done, total ->
                 report(70 + (if (total > 0) done * 30 / total else 0), "Adding result images…")
             }
             // Home of the archive: the data table and the full report.
-            zip.putNextEntry(ZipEntry("${s.baseName}_data.csv"))
-            csv.inputStream().use { it.copyTo(zip) }
-            zip.closeEntry()
-            zip.putNextEntry(ZipEntry("${s.baseName}_report.pdf"))
-            pdf.inputStream().use { it.copyTo(zip) }
-            zip.closeEntry()
+            Zips.putFile(zip, "${s.baseName}_data.csv", csv)
+            Zips.putFile(zip, "${s.baseName}_report.pdf", pdf)
         }
         report(100, "Bundling files…")
         return f
@@ -399,9 +401,7 @@ internal class ShareExportBuilder(
 
         val refFile = s.refImagePath?.let { File(it) }?.takeIf { it.exists() }
         if (refFile != null) {
-            zip.putNextEntry(ZipEntry("$dir/reference_${refFile.name}"))
-            refFile.inputStream().use { it.copyTo(zip) }
-            zip.closeEntry()
+            Zips.putFile(zip, "$dir/reference_${refFile.name}", refFile)
         } else {
             // No persisted reference file (shouldn't happen) — fall back to the
             // in-memory base image so the folder is never empty.
@@ -419,10 +419,7 @@ internal class ShareExportBuilder(
         // sortable NNNN_ prefix. Guarded so a missing file can't abort the export.
         for (path in s.defImagePaths) {
             val df = File(path)
-            if (!df.exists()) continue
-            zip.putNextEntry(ZipEntry("$dir/${df.name}"))
-            df.inputStream().use { it.copyTo(zip) }
-            zip.closeEntry()
+            if (df.exists()) Zips.putFile(zip, "$dir/${df.name}", df)
         }
     }
 
@@ -484,15 +481,6 @@ internal class ShareExportBuilder(
             "Eyy" to DicResult.IDX_EYY,
             "Exy" to DicResult.IDX_EXY,
         )
-
-        const val KIND_PDF = "pdf"
-        const val KIND_ZIP = "zip"
-        const val KIND_CSV = "csv"
-        const val KIND_PHOTOS = "photos"
-        const val KIND_GIFS = "gifs"
-
-        /** The current frame's photo; shared straight away, never saved-as. */
-        const val KIND_PHOTO = "photo"
 
         /**
          * A fresh directory for one job's files under the share dir. The FileProvider
