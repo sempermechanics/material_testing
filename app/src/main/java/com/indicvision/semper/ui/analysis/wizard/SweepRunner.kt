@@ -17,6 +17,7 @@ import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.ui.analysis.run.RunSpec
 import com.indicvision.semper.ui.analysis.run.baseName
+import com.indicvision.semper.ui.analysis.run.originalNameOr
 import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.sweep.toSkippedNode
 import kotlinx.coroutines.withContext
@@ -182,7 +183,7 @@ private fun AnalysisViewModel.persistSweepSession(appContext: Context, run: Swee
     val cloudEnabled = CloudSync.uploadsEnabled(appContext)
     val first = result.runs.first().point
     val defDisplay = rawName.ifBlank {
-        defOriginalNames.getOrNull(frameIndex) ?: File(defFilePaths[frameIndex]).name
+        defOriginalNames.originalNameOr(frameIndex, File(defFilePaths[frameIndex]).name)
     }.baseName()
     val summary = sweepSummary(appContext, run.localSessionId, result, sweep, defDisplay)
     val input = RunInput(
@@ -214,7 +215,8 @@ private fun AnalysisViewModel.persistSweepSession(appContext: Context, run: Swee
         sweepStrainWindows = result.runs.map { it.point.vsg },
         sweepLabels = summary.solvedLabels,
         lineCutHorizontal = sweep.lineCutHorizontal,
-        sweepSkippedNodes = result.skippedNodes(),
+        // Built once in solveSweep, before this runs.
+        sweepSkippedNodes = this.sweepSkippedNodes,
         headline = summary.headline,
     )
     sessions.saveSession(appContext, record, enqueueCloudIfSaved = cloudEnabled)

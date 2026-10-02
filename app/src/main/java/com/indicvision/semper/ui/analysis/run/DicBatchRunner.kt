@@ -181,7 +181,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             try {
                 // Persist the untouched original under the user's own filename
                 // so exports keep default names.
-                val rawName = (defOriginalNames.getOrNull(frameIndex) ?: source.name).baseName()
+                val rawName = defOriginalNames.originalNameOr(frameIndex, source.name).baseName()
                 // Keep the default name; only index-prefix if it would collide.
                 val target = File(rawDeformedDir, rawName).let {
                     if (it.exists()) {
@@ -328,10 +328,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // The names actually on disk in raw_deformed/ — reopening a session,
     // exporting and cloud upload resolve images by these.
     val defNames = persistedRawNames.mapIndexed { i, persisted ->
-        persisted.ifBlank {
-            (defOriginalNames.getOrNull(i) ?: resolvedDefPaths[i])
-                .baseName()
-        }
+        persisted.ifBlank { defOriginalNames.originalNameOr(i, resolvedDefPaths[i]).baseName() }
     }
 
     // A cancelled first run saves nothing. A cancelled re-run is saved like a
