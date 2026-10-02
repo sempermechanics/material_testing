@@ -50,7 +50,8 @@ object FrameOrderHelper {
             FrameOrderMode.PICKER -> frames
             FrameOrderMode.MANUAL -> manualOrder?.takeIf { it.size == frames.size }?.map { frames[it] } ?: frames
             FrameOrderMode.NAME -> frames.sortedWith(byName).facing(direction)
-            FrameOrderMode.DATE -> frames.sortedWith(compareBy<DeformedFrame> { it.date }.then(byName)).facing(direction)
+            FrameOrderMode.DATE ->
+                frames.sortedWith(compareBy<DeformedFrame> { it.date }.then(byName)).facing(direction)
         }
     }
 

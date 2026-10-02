@@ -67,7 +67,10 @@ class RestoreAndImportSafetyTest {
         val committedFrame = File(committed, "0000_new.png")
         assertTrue(committedFrame.exists())
         assertEquals(listOf(committedFrame.absolutePath), result?.filePaths)
-        assertEquals(DeformedFrame(committedFrame.absolutePath, "new.png", size = ImageSize(10, 20)), result?.frames?.single())
+        assertEquals(
+            DeformedFrame(committedFrame.absolutePath, "new.png", size = ImageSize(10, 20)),
+            result?.frames?.single(),
+        )
     }
 
     @Test

@@ -13,6 +13,7 @@ import android.os.SystemClock
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
+import com.indicvision.semper.databinding.ActivityStaticAnalysisBinding
 import com.indicvision.semper.util.OverlayFormats
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -35,6 +36,19 @@ class ComputeOverlayHelper(
     private val runConvergence: TextView? = null,
     private val runTilesRow: View? = null,
 ) {
+    /** The wizard's overlay, with its run tiles. */
+    constructor(wizard: ActivityStaticAnalysisBinding) : this(
+        overlay = wizard.computeOverlay,
+        title = wizard.overlayTitle,
+        progress = wizard.overlayProgress,
+        percent = wizard.overlayPercent,
+        status = wizard.overlayStatus,
+        elapsed = wizard.overlayElapsed,
+        runPoints = wizard.tvRunPoints,
+        runConvergence = wizard.tvRunConvergence,
+        runTilesRow = wizard.runTilesRow,
+    )
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val elapsedTicker = object : Runnable {
         override fun run() {

@@ -29,7 +29,6 @@ class SweepSetupHelperTest {
         override fun goToStep(step: Int, animate: Boolean) = Unit
         override fun updateWizardChrome() = Unit
         override fun checkReady() = Unit
-        override fun showInfo(titleRes: Int, bodyRes: Int) = Unit
         override fun commitParamFields() = Unit
         override fun startVsgSweep() = Unit
         override fun currentSubsetSize(): Int = 21

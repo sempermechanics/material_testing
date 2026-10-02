@@ -11,7 +11,7 @@
     "ReturnCount",
     "TooGenericExceptionCaught",
 )
-@file:SuppressLint("InflateParams", "PrivateResource", "SetTextI18n", "MissingInflatedId")
+@file:SuppressLint("PrivateResource", "SetTextI18n")
 
 package com.indicvision.semper.ui.analysis
 import android.annotation.SuppressLint
@@ -23,15 +23,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.View
-import android.view.ViewStub
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
-import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,8 +36,6 @@ import androidx.core.net.toUri
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.google.android.material.snackbar.Snackbar
@@ -57,6 +47,11 @@ import com.indicvision.semper.data.prefs.ParamClipboard
 import com.indicvision.semper.data.prefs.WizardDraft
 import com.indicvision.semper.data.session.CacheJanitor
 import com.indicvision.semper.data.session.SkippedNode
+import com.indicvision.semper.databinding.ActivityStaticAnalysisBinding
+import com.indicvision.semper.databinding.DialogVideoSamplingBinding
+import com.indicvision.semper.databinding.WizardStepSettingsBinding
+import com.indicvision.semper.databinding.WizardStepSettingsContentBinding
+import com.indicvision.semper.databinding.WizardStepSweepBinding
 import com.indicvision.semper.diagnostics.EngineDebug
 import com.indicvision.semper.field.DicParams
 import com.indicvision.semper.field.ImageSize
@@ -97,11 +92,18 @@ import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardCoach
 import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardSlots
 import com.indicvision.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.indicvision.semper.ui.common.CoachMarkController
+import com.indicvision.semper.ui.common.Dialogs
 import com.indicvision.semper.ui.common.FaqRedirect
+import com.indicvision.semper.ui.common.Feedback
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.Motion
+import com.indicvision.semper.ui.common.SerialJob
+import com.indicvision.semper.ui.common.WarnChip
+import com.indicvision.semper.ui.common.commitOnDone
+import com.indicvision.semper.ui.common.onButtonChecked
+import com.indicvision.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -127,66 +129,29 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private val viewModel: AnalysisViewModel by viewModels()
     private lateinit var coach: CoachMarkController
 
-    // UI Components
-    private lateinit var btnDefineRoi: Button
-    private lateinit var tvResult: TextView
-    private lateinit var btnEngineFailFaq: ImageButton
-    private lateinit var tvInstruction: TextView
-    private lateinit var tvRefName: TextView
-    private lateinit var tvDefName: TextView
-    private lateinit var etSubsetSize: Slider
-    private lateinit var etStepSize: Slider
-    private lateinit var etOverlap: Slider
-    private lateinit var etStrainWindow: Slider
+    // The wizard's three pages: the host layout (page 1, the bottom nav and the
+    // run overlay), and the settings and sweep pages inflated from their stubs.
+    private lateinit var binding: ActivityStaticAnalysisBinding
+    private lateinit var settingsPage: WizardStepSettingsBinding
+    private lateinit var settings: WizardStepSettingsContentBinding
+    private lateinit var sweepPage: WizardStepSweepBinding
 
-    // Wireframe slots (load-frames page + confirm-settings page)
-    private lateinit var refDropzone: View
-    private lateinit var refCard: View
-    private lateinit var ivRefThumb: ImageView
-    private lateinit var tvRefMeta: TextView
-    private lateinit var defDropzone: View
-    private lateinit var defCard: View
-    private lateinit var ivDefIcon: ImageView
-    private lateinit var tvDefMeta: TextView
-    private lateinit var tvDefDropHint: TextView
-    private lateinit var formatWarnRow: View
-    private lateinit var rvFrameOrder: RecyclerView
-    private lateinit var btnFrameOrderSort: ImageView
     private lateinit var frameOrderAdapter: FrameOrderAdapter
 
-    /** Inline speckle-quality warning from the SSSIG measurement. */
-    private lateinit var lowTextureWarnRow: View
+    // Inline warnings: lossy formats, low texture and speckle size on page 1;
+    // speckle span and frame sizes on page 2.
+    private lateinit var formatChip: WarnChip
+    private lateinit var lowTextureChip: WarnChip
+    private lateinit var speckleChip: WarnChip
+    private lateinit var speckleSpanChip: WarnChip
+    private lateinit var frameSizeChip: WarnChip
 
-    /** Inline speckle-*size* warning: the measured dot diameter against the iDICs band. */
-    private lateinit var speckleWarnRow: View
-    private lateinit var speckleSpanWarnRow: View
-
-    /** The measured speckle diameter, shown under the subset slider whether or not it is a problem. */
-    private lateinit var tvSpeckleReadout: TextView
-    private lateinit var frameSizeWarnRow: View
-    private lateinit var tvNextReason: TextView
     private var refPreviewBmp: android.graphics.Bitmap? = null
-    private lateinit var btnCalculateFullField: Button
 
     // Prominent progress overlay (compute + video extraction)
     private lateinit var overlayHelper: ComputeOverlayHelper
-    private lateinit var tvRunPoints: TextView
-    private lateinit var tvRunConvergence: TextView
-    private lateinit var rgInterpolator: MaterialButtonToggleGroup
 
-    // Editable value fields for the parameter sliders (typing and dragging
-    // both drive the same slider value)
-    private lateinit var tvSubsetValue: EditText
-    private lateinit var tvStepValue: EditText
-    private lateinit var tvOverlapValue: EditText
-    private lateinit var tvStrainValue: EditText
-
-    // Three-step wizard: images → settings → (sweep setup when Parameter sweep)
-    private lateinit var scrollStepImages: View
-    private lateinit var scrollStepSettings: View
-    private lateinit var scrollStepSweep: View
-    private lateinit var btnNext: Button
-    private lateinit var btnBack: Button
+    private lateinit var readyGate: AnalysisReadyGate
     private lateinit var wizardChrome: AnalysisWizardChrome
     private lateinit var wizardSlots: AnalysisWizardSlots
     private lateinit var wizardCoach: AnalysisWizardCoach
@@ -198,7 +163,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private var importJob: Job? = null
 
     /** The reference pick still loading; a newer pick cancels it. */
-    private var refJob: Job? = null
+    private val refJob = SerialJob()
 
     private data class CancelRunConfig(
         @StringRes val titleRes: Int,
@@ -210,14 +175,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_static_analysis)
+        binding = ActivityStaticAnalysisBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         viewModel.attachDraft(WizardDraft(applicationContext))
         // Later wizard pages live in ViewStubs so the host layout stays under
-        // lint's TooManyViews cap. Inflate before any findViewById of those IDs.
-        // MissingInflatedId is suppressed at file level: those IDs live in the
-        // stub layouts, not in activity_static_analysis.xml.
-        findViewById<ViewStub>(R.id.stubStepSettings).inflate()
-        findViewById<ViewStub>(R.id.stubStepSweep).inflate()
+        // lint's TooManyViews cap.
+        settingsPage = WizardStepSettingsBinding.bind(binding.stubStepSettings.inflate())
+        settings = settingsPage.settingsColumn.binding
+        sweepPage = WizardStepSweepBinding.bind(binding.stubStepSweep.inflate())
         coach = CoachMarkController(this)
         onBackPressedDispatcher.addCallback(
             this,
@@ -227,11 +192,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                         if (cancelRun != null) {
                             showCancelRunDialog()
                         } else {
-                            Toast.makeText(
-                                this@StaticAnalysisActivity,
-                                R.string.analysis_running_back_blocked,
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                            Feedback.toast(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked)
                         }
                     } else if (viewModel.wizardStep > 1) {
                         goToStep(viewModel.wizardStep - 1, animate = true)
@@ -244,98 +205,28 @@ class StaticAnalysisActivity : AppCompatActivity() {
             },
         )
 
-        tvRunPoints = findViewById(R.id.tvRunPoints)
-        tvRunConvergence = findViewById(R.id.tvRunConvergence)
-        overlayHelper = ComputeOverlayHelper(
-            overlay = findViewById(R.id.computeOverlay),
-            title = findViewById(R.id.overlayTitle),
-            progress = findViewById(R.id.overlayProgress),
-            percent = findViewById(R.id.overlayPercent),
-            status = findViewById(R.id.overlayStatus),
-            elapsed = findViewById(R.id.overlayElapsed),
-            runPoints = tvRunPoints,
-            runConvergence = tvRunConvergence,
-            runTilesRow = findViewById(R.id.runTilesRow),
-        )
-        btnDefineRoi = findViewById(R.id.btnDefineRoi)
-        tvResult = findViewById(R.id.tvStaticResult)
-        btnEngineFailFaq = findViewById(R.id.btnEngineFailFaq)
+        overlayHelper = ComputeOverlayHelper(binding)
         clearRunStatus()
-        frameSizeWarnRow = findViewById(R.id.frameSizeWarnRow)
-        frameSizeWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
-            confirmOpenFaq(getString(R.string.url_faq_frame_size))
-        }
-        refDropzone = findViewById(R.id.refDropzone)
-        refCard = findViewById(R.id.refCard)
-        ivRefThumb = findViewById(R.id.ivRefThumb)
-        tvRefMeta = findViewById(R.id.tvRefMeta)
-        defDropzone = findViewById(R.id.defDropzone)
-        defCard = findViewById(R.id.defCard)
-        ivDefIcon = findViewById(R.id.ivDefIcon)
-        tvDefMeta = findViewById(R.id.tvDefMeta)
-        tvDefDropHint = findViewById(R.id.tvDefDropHint)
-        formatWarnRow = findViewById(R.id.formatWarnRow)
+        frameSizeChip = WarnChip(settings.frameSizeWarnRow.root, ::confirmOpenFaq)
+            .apply { setFaq(getString(R.string.url_faq_frame_size)) }
+        readyGate = AnalysisReadyGate(viewModel, binding, settings, frameSizeChip)
         // Text is set per-refresh by AnalysisWizardSlots.updateFormatChip: it
         // names the formats actually loaded, so it cannot be fixed here.
-        formatWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
-            confirmOpenFaq(getString(R.string.url_faq_jpeg))
-        }
-        rvFrameOrder = findViewById(R.id.rvFrameOrder)
-        btnFrameOrderSort = findViewById(R.id.btnFrameOrderSort)
+        formatChip = WarnChip(binding.formatWarnRow.root, ::confirmOpenFaq)
+            .apply { setFaq(getString(R.string.url_faq_jpeg)) }
         setupFrameOrderStrip()
-        lowTextureWarnRow = findViewById(R.id.lowTextureWarnRow)
-        lowTextureWarnRow.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
-            confirmOpenFaq(getString(R.string.url_faq_speckle))
-        }
-        speckleWarnRow = findViewById(R.id.speckleWarnRow)
-        speckleSpanWarnRow = findViewById(R.id.speckleSpanWarnRow)
-        tvSpeckleReadout = findViewById(R.id.tvSpeckleReadout)
-        tvNextReason = findViewById(R.id.tvNextReason)
-        tvInstruction = findViewById(R.id.tvInstruction)
-        tvRefName = findViewById(R.id.tvRefName)
-        tvDefName = findViewById(R.id.tvDefName)
-        etSubsetSize = findViewById(R.id.etSubsetSize)
-        etStepSize = findViewById(R.id.etStepSize)
-        etOverlap = findViewById(R.id.etOverlap)
-        etStrainWindow = findViewById(R.id.etStrainWindow)
-        btnCalculateFullField = findViewById(R.id.btnCalculateFullField)
-        rgInterpolator = findViewById(R.id.rgInterpolator)
-        rgInterpolator.addOnButtonCheckedListener { _, _, isChecked ->
-            if (isChecked) clearRunStatus()
-        }
+        lowTextureChip = WarnChip(binding.lowTextureWarnRow.root, ::confirmOpenFaq)
+            .apply { setFaq(getString(R.string.url_faq_speckle)) }
+        speckleChip = WarnChip(binding.speckleWarnRow.root, ::confirmOpenFaq)
+        speckleSpanChip = WarnChip(settings.speckleSpanWarnRow.root, ::confirmOpenFaq)
+        settings.rgInterpolator.onButtonChecked { clearRunStatus() }
 
         // --- Parameter sliders: live value labels ---
-        tvSubsetValue = findViewById(R.id.tvSubsetValue)
-        tvStepValue = findViewById(R.id.tvStepValue)
-        tvOverlapValue = findViewById(R.id.tvOverlapValue)
-        tvStrainValue = findViewById(R.id.tvStrainValue)
         setupParameterControls()
 
         // --- Wizard wiring: images → settings → optional sweep page ---
-        scrollStepImages = findViewById(R.id.scrollStepImages)
-        scrollStepSettings = findViewById(R.id.scrollStepSettings)
-        scrollStepSweep = findViewById(R.id.scrollStepSweep)
-        btnNext = findViewById(R.id.btnNext)
-        btnBack = findViewById(R.id.btnBack)
-
-        wizardChrome = AnalysisWizardChrome(
-            activity = this,
-            scrollStepImages = scrollStepImages,
-            scrollStepSettings = scrollStepSettings,
-            scrollStepSweep = scrollStepSweep,
-            btnNext = btnNext,
-            btnBack = btnBack,
-            btnCalculateFullField = btnCalculateFullField,
-            btnRunSweep = findViewById(R.id.btnRunSweep),
-            toolbar = findViewById(R.id.toolbar),
-        )
-        wizardCoach = AnalysisWizardCoach(
-            activity = this,
-            coach = coach,
-            refDropzone = refDropzone,
-            defDropzone = defDropzone,
-            btnDefineRoi = btnDefineRoi,
-        )
+        wizardChrome = AnalysisWizardChrome(this, binding, settingsPage, sweepPage)
+        wizardCoach = AnalysisWizardCoach(this, coach, binding, settings, sweepPage)
 
         sweepHelper = SweepSetupHelper(
             activity = this,
@@ -346,8 +237,6 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 override fun updateWizardChrome() =
                     wizardChrome.updateBottomNav(viewModel.wizardStep, viewModel.sweepMode)
                 override fun checkReady() = this@StaticAnalysisActivity.checkReady()
-                override fun showInfo(titleRes: Int, bodyRes: Int) =
-                    this@StaticAnalysisActivity.showInfo(titleRes, bodyRes)
                 override fun commitParamFields() =
                     this@StaticAnalysisActivity.commitParamFields()
                 override fun startVsgSweep() = this@StaticAnalysisActivity.startVsgSweep()
@@ -355,7 +244,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 override fun maxSubsetForRoi() = this@StaticAnalysisActivity.maxSubsetForRoi()
                 override fun refPreviewBitmap() = refPreviewBmp
                 override fun renderParamField(field: EditText, value: Int) =
-                    this@StaticAnalysisActivity.renderParamField(field, value)
+                    field.showUnlessEditing(value.toString())
                 override fun confirmOpenFaq(url: String) =
                     this@StaticAnalysisActivity.confirmOpenFaq(url)
             },
@@ -363,33 +252,21 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // After the wizard views exist: the sweep controls call checkReady().
         sweepHelper.setup()
         wizardSlots = AnalysisWizardSlots(
-            activity = this,
             viewModel = viewModel,
-            refDropzone = refDropzone,
-            refCard = refCard,
-            ivRefThumb = ivRefThumb,
-            tvRefName = tvRefName,
-            tvRefMeta = tvRefMeta,
-            defDropzone = defDropzone,
-            defCard = defCard,
-            ivDefIcon = ivDefIcon,
-            tvDefName = tvDefName,
-            tvDefMeta = tvDefMeta,
-            formatWarnRow = formatWarnRow,
-            rvFrameOrder = rvFrameOrder,
-            btnFrameOrderSort = btnFrameOrderSort,
+            binding = binding,
+            settings = settings,
+            formatChip = formatChip,
             frameOrderAdapter = frameOrderAdapter,
-            tvInstruction = tvInstruction,
             onLineCutPreview = { sweepHelper.refreshLineCutPreview() },
         )
 
-        btnNext.setOnClickListener {
+        binding.btnNext.setOnClickListener {
             when (viewModel.wizardStep) {
                 1 -> goToStep(2, animate = true)
                 2 -> if (viewModel.sweepMode) goToStep(3, animate = true)
             }
         }
-        btnBack.setOnClickListener {
+        binding.btnBack.setOnClickListener {
             if (viewModel.wizardStep > 1) goToStep(viewModel.wizardStep - 1, animate = true)
         }
         goToStep(viewModel.wizardStep, animate = false)
@@ -402,26 +279,26 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Edge-to-edge (targetSdk 36): push the app bar below the status bar
         // and keep the wizard nav above the nav-bar gesture area so the top
         // controls aren't in the system swipe-down zone.
-        Insets.padTop(findViewById(R.id.toolbar))
-        findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar).apply {
+        Insets.padTop(binding.toolbar)
+        binding.toolbar.apply {
             title = getString(R.string.new_analysis_title)
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         }
         val maxFrames = DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
-        tvDefDropHint.text =
+        binding.tvDefDropHint.text =
             resources.getQuantityString(R.plurals.def_formats_hint_fmt, maxFrames, maxFrames)
-        Insets.padBottom(findViewById(R.id.bottomNav))
+        Insets.padBottom(binding.bottomNav)
 
         // Keyboard: the settings/sweep pages hold number fields; pad their scroll
         // viewports by the part of the IME above the nav bar, and scroll the
         // focused field clear of the keyboard.
-        Insets.padImeBottom(findViewById(R.id.scrollStepSettings))
-        Insets.padImeBottom(findViewById(R.id.scrollStepSweep))
+        Insets.padImeBottom(settingsPage.root)
+        Insets.padImeBottom(sweepPage.root)
 
         // Gentle entrance: cards cascade in on first show only (not on rotation)
         if (savedInstanceState == null) {
-            Motion.enterStaggered(findViewById(R.id.contentColumn))
+            Motion.enterStaggered(binding.contentColumn)
         }
 
         restoreUiFromViewModel()
@@ -429,7 +306,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             activity = this,
             viewModel = viewModel,
             overlayHelper = overlayHelper,
-            tvResult = tvResult,
+            tvResult = settings.tvStaticResult,
             setProcessing = { isProcessing = it },
             checkReady = ::checkReady,
             onPartialRun = ::onPartialRun,
@@ -480,8 +357,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 onPicked = { uris -> uris.firstOrNull()?.let { handleReferenceImage(it) } },
             )
         }
-        refDropzone.setOnClickListener { launchRefPicker() }
-        findViewById<View>(R.id.btnRefChange).setOnClickListener { launchRefPicker() }
+        binding.refDropzone.setOnClickListener { launchRefPicker() }
+        binding.btnRefChange.setOnClickListener { launchRefPicker() }
 
         val launchDefPicker = {
             mediaPicker = MediaSourceChooser.show(
@@ -496,19 +373,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 onPicked = { uris -> onDeformedPicked(uris) },
             )
         }
-        defDropzone.setOnClickListener { launchDefPicker() }
-        findViewById<View>(R.id.btnDefChange).setOnClickListener { launchDefPicker() }
+        binding.defDropzone.setOnClickListener { launchDefPicker() }
+        binding.btnDefChange.setOnClickListener { launchDefPicker() }
 
-        btnDefineRoi.setOnClickListener {
+        settings.btnDefineRoi.setOnClickListener {
             val bytes = viewModel.refBytes
             if (bytes == null) {
-                Toast.makeText(this, R.string.load_image_first, Toast.LENGTH_SHORT).show()
+                Feedback.toast(this, R.string.load_image_first)
             } else {
                 openRoiStudio(bytes, roiStudioLauncher)
             }
         }
 
-        btnCalculateFullField.setOnClickListener {
+        binding.btnCalculateFullField.setOnClickListener {
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
             if (!viewModel.sweepMode) startBatchAnalysis()
@@ -538,11 +415,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                 }
             }
             if (!written) {
-                Toast.makeText(
-                    this@StaticAnalysisActivity,
-                    R.string.failed_save_temp_file,
-                    Toast.LENGTH_SHORT,
-                ).show()
+                Feedback.toast(this@StaticAnalysisActivity, R.string.failed_save_temp_file)
                 return@launch
             }
             val intent = Intent(this@StaticAnalysisActivity, RoiDrawActivity::class.java)
@@ -602,11 +475,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancelGate
         importJob?.cancel()
         importJob = null
-        refJob?.cancel()
-        refJob = null
+        refJob.cancel()
         // VsgStudyRunner observes the same gate — no separate flag.
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::overlayHelper.isInitialized) overlayHelper.release()
+        if (::frameOrderAdapter.isInitialized) frameOrderAdapter.release()
         // Reclaim the retained reference thumbnail deterministically on close. The
         // thumbnail ImageViews won't be drawn again after onDestroy, so this is
         // safe. (Replace sites intentionally don't recycle: the prior bitmap may
@@ -630,8 +503,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * decoding.
      */
     private fun handleReferenceImage(uri: Uri) {
-        refJob?.cancel()
-        refJob = lifecycleScope.launch {
+        refJob.launch(lifecycleScope) {
             try {
                 val name = withContext(Dispatchers.IO) { getFileName(uri) }
                 val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
@@ -699,7 +571,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (uris.isNotEmpty()) {
             handleDeformedBatch(uris)
         } else {
-            Toast.makeText(this, R.string.no_images_selected, Toast.LENGTH_SHORT).show()
+            Feedback.toast(this, R.string.no_images_selected)
         }
     }
 
@@ -713,7 +585,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             rawUris = rawUris,
             cacheDir = cacheDir,
             displayName = ::getFileName,
-            tvResult = tvResult,
+            tvResult = settings.tvStaticResult,
             overlayHelper = overlayHelper,
             onApplied = {
                 wizardSlots.refreshDefSlot()
@@ -731,15 +603,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun setupFrameOrderStrip() {
-        rvFrameOrder.layoutManager =
+        binding.rvFrameOrder.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         frameOrderAdapter = FrameOrderAdapter { orderedPaths ->
             applyManualFrameOrder(orderedPaths)
         }
-        rvFrameOrder.adapter = frameOrderAdapter
-        FrameOrderAdapter.attachDrag(rvFrameOrder, frameOrderAdapter)
+        binding.rvFrameOrder.adapter = frameOrderAdapter
+        FrameOrderAdapter.attachDrag(binding.rvFrameOrder, frameOrderAdapter)
 
-        btnFrameOrderSort.setOnClickListener { anchor ->
+        binding.btnFrameOrderSort.setOnClickListener { anchor ->
             showFrameOrderMenu(anchor)
         }
     }
@@ -763,7 +635,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         viewModel.defOrderDirection = direction
         frameOrderAdapter.dragEnabled = mode == FrameOrderMode.MANUAL
         if (mode == FrameOrderMode.MANUAL) {
-            Toast.makeText(this, R.string.frame_order_manual_hint, Toast.LENGTH_SHORT).show()
+            Feedback.toast(this, R.string.frame_order_manual_hint)
             return
         }
         // Import no longer probes URI dates (kept the overlay at 0% on PLC).
@@ -838,15 +710,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Sampling by extraction frame rate + time segment, with a metadata summary. */
     private fun showVideoSamplingDialog(uri: Uri, meta: VideoMeta) {
-        val view = layoutInflater.inflate(R.layout.dialog_video_sampling, null)
-        val tvInfo = view.findViewById<TextView>(R.id.tvVideoInfo)
-        val toggleMode = view.findViewById<MaterialButtonToggleGroup>(R.id.toggleExtractMode)
-        val layoutFps = view.findViewById<View>(R.id.layoutFps)
-        val sliderFps = view.findViewById<com.google.android.material.slider.Slider>(R.id.sliderFps)
-        val tvFps = view.findViewById<TextView>(R.id.tvFpsValue)
-        val range = view.findViewById<com.google.android.material.slider.RangeSlider>(R.id.rangeSegment)
-        val tvSegment = view.findViewById<TextView>(R.id.tvSegmentValue)
-        val tvEstimate = view.findViewById<TextView>(R.id.tvEstimate)
+        val sheetBinding = DialogVideoSamplingBinding.inflate(layoutInflater)
+        val tvInfo = sheetBinding.tvVideoInfo
+        val toggleMode = sheetBinding.toggleExtractMode
+        val layoutFps = sheetBinding.layoutFps
+        val sliderFps = sheetBinding.sliderFps
+        val tvFps = sheetBinding.tvFpsValue
+        val range = sheetBinding.rangeSegment
+        val tvSegment = sheetBinding.tvSegmentValue
+        val tvEstimate = sheetBinding.tvEstimate
 
         // --- Metadata summary: only show parts the file actually reported ---
         val info = mutableListOf<String>()
@@ -885,7 +757,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             val fps = sliderFps.value.toDouble()
             return VideoKeyframeHelper.uniformTimestampsUs(startMs, endMs, fps, maxFrames).size
         }
-        val btnExtract = view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnExtractFrames)
+        val btnExtract = sheetBinding.btnExtractFrames
         fun refreshEstimate() {
             val isKeyframeMode = toggleMode.checkedButtonId == R.id.btnModeKeyframes
             if (isKeyframeMode) {
@@ -899,8 +771,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
         }
 
-        toggleMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
+        toggleMode.onButtonChecked { checkedId ->
             val isKeyframeMode = checkedId == R.id.btnModeKeyframes
             layoutFps.visibility = if (isKeyframeMode) View.GONE else View.VISIBLE
             refreshEstimate()
@@ -920,7 +791,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
         // Bottom sheet (wireframe 05b): the primary button states the outcome.
         val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(this)
-        sheet.setContentView(view)
+        sheet.setContentView(sheetBinding.root)
         btnExtract.setOnClickListener {
             sheet.dismiss()
             val preferKeyframes = toggleMode.checkedButtonId == R.id.btnModeKeyframes
@@ -942,7 +813,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         isProcessing = true
         // The video's first frame becomes the reference; an image pick still
         // decoding must not land on top of it.
-        refJob?.cancel()
+        refJob.cancel()
         checkReady()
         val job = AnalysisVideoExtractHelper.extract(
             activity = this,
@@ -952,7 +823,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             startMs = segmentMs.first,
             endMs = segmentMs.second,
             cacheDir = cacheDir,
-            tvResult = tvResult,
+            tvResult = settings.tvStaticResult,
             overlayHelper = overlayHelper,
             preferKeyframes = preferKeyframes,
             rotationDegrees = rotationDegrees,
@@ -977,12 +848,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         ) { job.cancel() }
     }
 
-    private fun currentSubsetSize(): Int = etSubsetSize.value.toInt()
-    private fun currentStepSize(): Int = etStepSize.value.toInt()
+    private fun currentSubsetSize(): Int = settings.etSubsetSize.value.toInt()
+    private fun currentStepSize(): Int = settings.etStepSize.value.toInt()
 
     /** The VSG in px handed to the engine: the slider's window is in data points. */
-    private fun currentStrainWindow(): Int = VsgStudy.vsgFor(etStrainWindow.value.toInt(), currentStepSize())
-    private fun currentUseKeysInterpolator(): Boolean = rgInterpolator.checkedButtonId == R.id.rbKeys
+    private fun currentStrainWindow(): Int = VsgStudy.vsgFor(settings.etStrainWindow.value.toInt(), currentStepSize())
+    private fun currentUseKeysInterpolator(): Boolean = settings.rgInterpolator.checkedButtonId == R.id.rbKeys
 
     // ------------------------------------------------------------------
     // Initial subset size from the SSSIG criterion (Pan et al., Opt. Express
@@ -1034,8 +905,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     /** Drop a previous run's ❌ / success line when the user changes inputs. */
     private fun clearRunStatus() {
         if (isProcessing) return
-        if (::tvResult.isInitialized) tvResult.text = ""
-        if (::btnEngineFailFaq.isInitialized) setEngineFailFaq(null)
+        settings.tvStaticResult.text = ""
+        setEngineFailFaq(null)
     }
 
     /**
@@ -1043,14 +914,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * hop as that dialog's **Why?**, still reachable once the alert is gone.
      */
     private fun setEngineFailFaq(@StringRes faqUrlRes: Int?) {
-        if (!::btnEngineFailFaq.isInitialized) return
+        val faq = settings.btnEngineFailFaq
         if (faqUrlRes == null) {
-            btnEngineFailFaq.isVisible = false
-            btnEngineFailFaq.setOnClickListener(null)
+            faq.isVisible = false
+            faq.setOnClickListener(null)
             return
         }
-        btnEngineFailFaq.isVisible = true
-        btnEngineFailFaq.setOnClickListener { FaqRedirect.confirm(this, faqUrlRes) }
+        faq.isVisible = true
+        faq.setOnClickListener { FaqRedirect.confirm(this, faqUrlRes) }
     }
 
     /** Region the recommendation samples: the ROI when set, else the frame. */
@@ -1072,7 +943,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         // Read off the slider here: the measurement runs on the native thread,
         // which must not touch views.
         val tuning = SubsetRecommender.Tuning(
-            sizes = etSubsetSize.valueFrom.toInt()..etSubsetSize.valueTo.toInt(),
+            sizes = settings.etSubsetSize.valueFrom.toInt()..settings.etSubsetSize.valueTo.toInt(),
         )
 
         lifecycleScope.launch(SemperNativeLib.nativeDispatcher) {
@@ -1101,33 +972,26 @@ class StaticAnalysisActivity : AppCompatActivity() {
      */
     private fun defaultSubsetSize(): Int {
         val rec = viewModel.subsetRecommendation ?: return FALLBACK_SUBSET_SIZE
-        return snapToSlider(etSubsetSize, rec.subsetSize)
+        return snapToSlider(settings.etSubsetSize, rec.subsetSize)
     }
 
     /** Seeds the slider with the recommendation, until the user overrides it. */
     private fun applySubsetRecommendation() {
         val rec = viewModel.subsetRecommendation ?: run {
-            lowTextureWarnRow.isVisible = false
-            speckleWarnRow.isVisible = false
-            speckleSpanWarnRow.isVisible = false
-            tvSpeckleReadout.isVisible = false
+            lowTextureChip.hide()
+            speckleChip.hide()
+            speckleSpanChip.hide()
+            settings.tvSpeckleReadout.isVisible = false
             return
         }
         // The one thing the measurement knows that the slider cannot show: even
         // the largest allowed subset misses the accuracy target on this pattern.
-        lowTextureWarnRow.visibility = if (rec.lowTexture) View.VISIBLE else View.GONE
-        if (rec.lowTexture) {
-            wireWarningChip(
-                lowTextureWarnRow,
-                getString(R.string.subset_low_texture_fmt),
-                getString(R.string.url_faq_speckle),
-            )
-        }
+        lowTextureChip.showOrHide(getString(R.string.subset_low_texture_fmt).takeIf { rec.lowTexture })
         if (!viewModel.subsetUserModified) {
-            val snapped = snapToSlider(etSubsetSize, rec.subsetSize)
-            if (etSubsetSize.value.toInt() != snapped) {
+            val snapped = snapToSlider(settings.etSubsetSize, rec.subsetSize)
+            if (settings.etSubsetSize.value.toInt() != snapped) {
                 commitParamFields()
-                etSubsetSize.value = snapped.toFloat()
+                settings.etSubsetSize.value = snapped.toFloat()
             }
         }
         // A new recommendation re-seeds the sweep's suggested inputs (unless the
@@ -1162,19 +1026,19 @@ class StaticAnalysisActivity : AppCompatActivity() {
             // No measurable pattern in any sample patch. The low-texture chip
             // already covers the case where that is the user's problem; saying
             // nothing here is better than reporting a number we do not have.
-            speckleWarnRow.isVisible = false
-            speckleSpanWarnRow.isVisible = false
-            tvSpeckleReadout.isVisible = false
+            speckleChip.hide()
+            speckleSpanChip.hide()
+            settings.tvSpeckleReadout.isVisible = false
             return
         }
 
-        tvSpeckleReadout.text = getString(
+        settings.tvSpeckleReadout.text = getString(
             R.string.speckle_readout_fmt,
             diameter,
             DicGoodPractice.MIN_SPECKLE_PX.toInt(),
             DicGoodPractice.MAX_SPECKLE_PX.toInt(),
         )
-        tvSpeckleReadout.isVisible = true
+        settings.tvSpeckleReadout.isVisible = true
 
         val sizeMessage = when (DicGoodPractice.verdictFor(diameter)) {
             DicGoodPractice.Verdict.UNDER_RESOLVED -> getString(
@@ -1197,7 +1061,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val spanMessage = if (sizeMessage != null) {
             null
         } else {
-            val inUse = etSubsetSize.value.toInt()
+            val inUse = settings.etSubsetSize.value.toInt()
             val wanted = viewModel.subsetRecommendation?.subsetSpanningSpeckles
             if (wanted != null && wanted > inUse) {
                 getString(R.string.speckle_subset_span_fmt, inUse, wanted)
@@ -1207,16 +1071,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         val faqUrl = getString(R.string.url_faq_speckle)
-        if (sizeMessage == null) {
-            speckleWarnRow.isVisible = false
-        } else {
-            wireWarningChip(speckleWarnRow, sizeMessage, faqUrl)
-        }
-        if (spanMessage == null) {
-            speckleSpanWarnRow.isVisible = false
-        } else {
-            wireWarningChip(speckleSpanWarnRow, spanMessage, faqUrl)
-        }
+        speckleChip.showOrHide(sizeMessage, faqUrl)
+        speckleSpanChip.showOrHide(spanMessage, faqUrl)
     }
 
     /**
@@ -1283,7 +1139,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
         val kept = outcome.totalFrames
         val planned = viewModel.defFilePaths.size
-        tvResult.text = getString(R.string.run_stopped_early_fmt, outcome.stoppedAtFrame, planned)
+        settings.tvStaticResult.text = getString(R.string.run_stopped_early_fmt, outcome.stoppedAtFrame, planned)
         viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
         viewModel.lastBatchDirPath = outcome.batchDirPath
         checkReady()
@@ -1353,17 +1209,12 @@ class StaticAnalysisActivity : AppCompatActivity() {
         return (from + (offset + step / 2) / step * step).coerceIn(from, to)
     }
 
-    /** Shows [value] in [field], unless the user is mid-edit in it. */
-    private fun renderParamField(field: EditText, value: Int) {
-        if (!field.hasFocus()) field.setText(value.toString())
-    }
-
     /** Flushes any in-progress typing into the sliders (focus loss commits). */
     private fun commitParamFields() {
-        tvSubsetValue.clearFocus()
-        tvStepValue.clearFocus()
-        tvOverlapValue.clearFocus()
-        tvStrainValue.clearFocus()
+        settings.tvSubsetValue.clearFocus()
+        settings.tvStepValue.clearFocus()
+        settings.tvOverlapValue.clearFocus()
+        settings.tvStrainValue.clearFocus()
         if (::sweepHelper.isInitialized) sweepHelper.clearSweepFieldFocus()
     }
 
@@ -1382,17 +1233,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             field.setSelection(field.text.length)
             if (value != previous) onUserChange?.invoke()
         }
-        field.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                commit()
-                field.clearFocus()
-                getSystemService(InputMethodManager::class.java)
-                    ?.hideSoftInputFromWindow(field.windowToken, 0)
-                true
-            } else {
-                false
-            }
-        }
+        field.commitOnDone(onDone = commit)
         field.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) commit() }
     }
 
@@ -1403,19 +1244,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
     // ------------------------------------------------------------------
     private fun setupParameterControls() {
         settingsSheetHelper = AnalysisSettingsSheetHelper(
-            root = findViewById(android.R.id.content),
-            subset = etSubsetSize,
-            step = etStepSize,
-            overlap = etOverlap,
-            strain = etStrainWindow,
-            subsetValue = tvSubsetValue,
-            stepValue = tvStepValue,
-            overlapValue = tvOverlapValue,
-            strainValue = tvStrainValue,
-            strainVsg = findViewById(R.id.tvStrainVsg),
-            renderParamField = ::renderParamField,
+            activity = this,
+            settings = settings,
             bindParamField = { field, slider, onUser -> bindParamField(field, slider, onUser) },
-            showInfo = ::showInfo,
             onSubsetUserModified = {
                 viewModel.subsetUserModified = true
                 showSpeckleFeedback()
@@ -1426,10 +1257,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             onAdvancedReset = {
                 commitParamFields()
                 viewModel.subsetUserModified = false
-                etSubsetSize.value = defaultSubsetSize().toFloat()
-                etStepSize.value = 5f
-                etStrainWindow.value = VsgStudy.DEFAULT_WINDOW_POINTS.toFloat()
-                rgInterpolator.check(R.id.rbBicubic)
+                settings.etSubsetSize.value = defaultSubsetSize().toFloat()
+                settings.etStepSize.value = 5f
+                settings.etStrainWindow.value = VsgStudy.DEFAULT_WINDOW_POINTS.toFloat()
+                settings.rgInterpolator.check(R.id.rbBicubic)
                 settingsSheetHelper.syncFromStep()
                 showSpeckleFeedback()
                 if (::sweepHelper.isInitialized) {
@@ -1450,16 +1281,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val params = ParamClipboard.peek(this) ?: return
         commitParamFields()
         viewModel.subsetUserModified = true
-        etSubsetSize.value = snapToSlider(etSubsetSize, params.subset).toFloat()
-        etStepSize.value = snapToSlider(etStepSize, params.step).toFloat()
+        settings.etSubsetSize.value = snapToSlider(settings.etSubsetSize, params.subset).toFloat()
+        settings.etStepSize.value = snapToSlider(settings.etStepSize, params.step).toFloat()
         // The clipboard holds a VSG in px; the slider takes points at the pasted step.
-        etStrainWindow.value = VsgStudy.nearestWindowPoints(params.vsg, currentStepSize()).toFloat()
+        settings.etStrainWindow.value = VsgStudy.nearestWindowPoints(params.vsg, currentStepSize()).toFloat()
         settingsSheetHelper.syncFromStep()
         showSpeckleFeedback()
         if (::sweepHelper.isInitialized) sweepHelper.onRecommendationChanged()
         clearRunStatus()
         // Bring the advanced-params card into view so the pasted values are visible.
-        val card = findViewById<View>(R.id.advancedParamsCard)
+        val card = settings.advancedParamsCard
         card.post { card.requestRectangleOnScreen(Rect(0, 0, card.width, card.height), false) }
     }
 
@@ -1526,7 +1357,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     @Suppress("ReturnCount") // one branch per way a sweep can end
     private fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?) {
         if (outcome == null) {
-            Toast.makeText(this, R.string.sweep_failed, Toast.LENGTH_LONG).show()
+            Feedback.toast(this, R.string.sweep_failed, long = true)
             return
         }
         if (outcome.stop == RunStop.SessionLimit) {
@@ -1549,7 +1380,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val skipped = viewModel.sweepSkippedNodes.size
         if (skipped > 0) {
             // Partial sweeps are still worth browsing; say what was dropped.
-            Toast.makeText(
+            Feedback.toast(
                 this,
                 resources.getQuantityString(
                     R.plurals.sweep_partial_fmt,
@@ -1557,8 +1388,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     skipped,
                     skipped + outcome.totalFrames,
                 ),
-                Toast.LENGTH_LONG,
-            ).show()
+                long = true,
+            )
         }
 
         val sweepFrame = viewModel.runResult.value.spec?.sweep?.frameIndex ?: sweepHelper.resolvedSweepFrame()
@@ -1601,7 +1432,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         onConfirm: () -> Unit,
     ) {
         cancelRun = CancelRunConfig(titleRes, bodyRes, onConfirm)
-        findViewById<View>(R.id.btnRunCancel).apply {
+        binding.btnRunCancel.apply {
             isEnabled = true
             setOnClickListener { showCancelRunDialog() }
         }
@@ -1614,19 +1445,14 @@ class StaticAnalysisActivity : AppCompatActivity() {
             .setMessage(config.bodyRes)
             .setPositiveButton(R.string.action_cancel) { _, _ ->
                 config.onConfirm()
-                findViewById<View>(R.id.btnRunCancel).isEnabled = false
+                binding.btnRunCancel.isEnabled = false
             }
             .setNegativeButton(R.string.keep_running, null)
             .show()
     }
 
     private fun showLeaveAnalysisDialog() {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.exit_analysis_title)
-            .setMessage(R.string.exit_analysis_message)
-            .setPositiveButton(R.string.exit) { _, _ -> finish() }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+        Dialogs.confirm(this, R.string.exit_analysis_title, R.string.exit_analysis_message, R.string.exit) { finish() }
     }
 
     private fun finishImportOperation() {
@@ -1638,26 +1464,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun clearCancelButton() {
         cancelRun = null
-        findViewById<View>(R.id.btnRunCancel).apply {
+        binding.btnRunCancel.apply {
             isEnabled = false
             setOnClickListener(null)
         }
-    }
-
-    private fun showInfo(titleRes: Int, bodyRes: Int) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(titleRes)
-            .setMessage(bodyRes)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
-    }
-
-    private fun wireWarningChip(row: View, message: String, faqUrl: String) {
-        row.findViewById<TextView>(R.id.tvWarnText).text = message
-        row.findViewById<ImageButton>(R.id.btnWarnFaq).setOnClickListener {
-            confirmOpenFaq(faqUrl)
-        }
-        row.isVisible = true
     }
 
     private fun confirmOpenFaq(url: String) {
@@ -1696,18 +1506,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun checkReady() {
-        AnalysisReadyGate.apply(
-            activity = this,
-            viewModel = viewModel,
-            isProcessing = isProcessing,
-            btnNext = btnNext,
-            tvNextReason = tvNextReason,
-            frameSizeWarnRow = frameSizeWarnRow,
-            btnCalculateFullField = btnCalculateFullField,
-            btnDefineRoi = btnDefineRoi,
-            btnBack = btnBack,
-            sweepHelper = if (::sweepHelper.isInitialized) sweepHelper else null,
-        )
+        readyGate.apply(isProcessing, sweepHelper = if (::sweepHelper.isInitialized) sweepHelper else null)
     }
 
     private fun consumePickerHandOff() {
@@ -1757,7 +1556,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     goToStep(1, animate = false)
                     val lost = getString(R.string.wizard_draft_lost)
                     Snackbar.make(findViewById(android.R.id.content), lost, FaqRedirect.durationFor(lost))
-                        .setAnchorView(R.id.bottomNav)
+                        .setAnchorView(binding.bottomNav)
                         .show()
                 }
                 AnalysisViewModel.DraftRestore.NONE -> Unit

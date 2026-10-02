@@ -47,7 +47,8 @@ class RunRecordSaveTest {
         WorkManagerImpl.setDelegate(null)
     }
 
-    private fun record(id: String) = sessionRecord(id = id, createdAt = 1L, refPath = "ref.png", sessionDir = "/dir/$id")
+    private fun record(id: String) =
+        sessionRecord(id = id, createdAt = 1L, refPath = "ref.png", sessionDir = "/dir/$id")
 
     private fun uploadsQueuedFor(id: String) =
         WorkManager.getInstance(ctx).getWorkInfosForUniqueWork("upload-$id").get().size

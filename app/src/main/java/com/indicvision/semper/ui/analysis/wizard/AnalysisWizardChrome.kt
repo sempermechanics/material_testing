@@ -1,15 +1,14 @@
-// Wizard chrome wires a fixed set of named views and animates page transitions;
-// the constructor list and small UI/animation constants read clearest passed and
-// inlined directly, so LongParameterList / MagicNumber are suppressed here.
-@file:Suppress("LongParameterList", "MagicNumber")
+// Small UI/animation constants read clearest inlined directly.
+@file:Suppress("MagicNumber")
 
 package com.indicvision.semper.ui.analysis.wizard
 
 import android.view.View
-import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.appbar.MaterialToolbar
 import com.indicvision.semper.R
+import com.indicvision.semper.databinding.ActivityStaticAnalysisBinding
+import com.indicvision.semper.databinding.WizardStepSettingsBinding
+import com.indicvision.semper.databinding.WizardStepSweepBinding
 
 /**
  * Wizard page visibility, toolbar subtitle, and bottom-nav labels for the
@@ -20,15 +19,18 @@ import com.indicvision.semper.R
  */
 class AnalysisWizardChrome(
     private val activity: AppCompatActivity,
-    private val scrollStepImages: View,
-    private val scrollStepSettings: View,
-    private val scrollStepSweep: View,
-    private val btnNext: Button,
-    private val btnBack: Button,
-    private val btnCalculateFullField: Button,
-    private val btnRunSweep: Button,
-    private val toolbar: MaterialToolbar,
+    wizard: ActivityStaticAnalysisBinding,
+    settingsPage: WizardStepSettingsBinding,
+    sweepPage: WizardStepSweepBinding,
 ) {
+    private val scrollStepImages: View = wizard.scrollStepImages
+    private val scrollStepSettings: View = settingsPage.root
+    private val scrollStepSweep: View = sweepPage.root
+    private val btnNext = wizard.btnNext
+    private val btnBack = wizard.btnBack
+    private val btnCalculateFullField = wizard.btnCalculateFullField
+    private val btnRunSweep = wizard.btnRunSweep
+    private val toolbar = wizard.toolbar
 
     /**
      * Sets page visibility, toolbar subtitle, and bottom-nav labels.

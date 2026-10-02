@@ -225,7 +225,9 @@ class BatchRunControllerTest {
         val line = TextView(ApplicationProvider.getApplicationContext<Application>())
         val gate = Gate()
         controller(gate, resultLine = line).handleBatchOutcome(
-            Result.success(outcome(code = 0, validPoints = 500, frames = 3).copy(saved = false, indexUnavailable = true)),
+            Result.success(
+                outcome(code = 0, validPoints = 500, frames = 3).copy(saved = false, indexUnavailable = true),
+            ),
         )
 
         assertNull("no session-limit screen", shadowOf(activity).nextStartedActivity)

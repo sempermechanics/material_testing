@@ -98,7 +98,6 @@ class WizardValueTypesTest {
         override fun goToStep(step: Int, animate: Boolean) = Unit
         override fun updateWizardChrome() = Unit
         override fun checkReady() = Unit
-        override fun showInfo(titleRes: Int, bodyRes: Int) = Unit
         override fun commitParamFields() = Unit
         override fun startVsgSweep() = Unit
         override fun currentSubsetSize(): Int = 21
@@ -145,7 +144,12 @@ class WizardValueTypesTest {
 
     @Test
     fun `a draft frame list with short or unmeasured entries pads rather than drops frames`() {
-        val draft = WizardState.Frames(paths = listOf("a", "b"), names = listOf("A"), widths = listOf(0, 5), heights = listOf(3, 5))
+        val draft = WizardState.Frames(
+            paths = listOf("a", "b"),
+            names = listOf("A"),
+            widths = listOf(0, 5),
+            heights = listOf(3, 5),
+        )
         val frames = draft.toDeformedFrames()
         assertEquals(listOf("A", ""), frames.map { it.name })
         assertEquals(listOf(DeformedFrame.UNKNOWN_DATE, DeformedFrame.UNKNOWN_DATE), frames.map { it.date })
