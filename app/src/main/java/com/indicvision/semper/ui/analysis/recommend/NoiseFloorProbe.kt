@@ -56,21 +56,13 @@ object NoiseFloorProbe {
         if (!region.intersect(Rect(0, 0, bounds.width, bounds.height))) return emptyList()
         if (region.width() <= subset || region.height() <= subset) return emptyList()
 
-        val step = probeStepFor(region, subset)
+        val params = probeParams(region, subset)
         val burst = Burst(
             refBytes = refBytes,
             refWindow = NoiseFloorPixels.grayWindow(refBytes, region),
             region = region,
-            params = SemperEngine.Params(
-                roiX = region.left,
-                roiY = region.top,
-                roiW = region.width(),
-                roiH = region.height(),
-                step = step,
-                subset = subset,
-                strainWindow = strainWindowFor(step),
-            ),
-            buffer = allocateFor(region, step),
+            params = params,
+            buffer = allocateFor(region, params.step),
         )
 
         runCatching { SemperNativeLib.initializeReference(refBytes, ByteArray(0), bounds.width, bounds.height) }
@@ -80,6 +72,24 @@ object NoiseFloorProbe {
             }
 
         return frameFiles.mapNotNull { frame -> sampleOf(burst, frame) }
+    }
+
+    /**
+     * The engine settings for a probe solve over [region] with [subset]: the
+     * probe's own coarse [probeStepFor] grid and [strainWindowFor] window, no
+     * mask and the default interpolator.
+     */
+    internal fun probeParams(region: Rect, subset: Int): SemperEngine.Params {
+        val step = probeStepFor(region, subset)
+        return SemperEngine.Params(
+            roiX = region.left,
+            roiY = region.top,
+            roiW = region.width(),
+            roiH = region.height(),
+            step = step,
+            subset = subset,
+            strainWindow = strainWindowFor(step),
+        )
     }
 
     /**

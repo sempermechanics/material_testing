@@ -1,6 +1,7 @@
 package com.indicvision.semper.data.session
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -30,5 +31,15 @@ class SessionNamingTest {
         assertEquals("My_Sample_Session.zip", SessionNaming.bundleFileName("My Sample"))
         assertEquals("analysis_Session.zip", SessionNaming.bundleFileName("!!!"))
         assertEquals("session_abcdefgh", SessionNaming.exportEntryName("", "abcdefghij"))
+    }
+
+    @Test
+    fun `two backups with one display name get their own cache file`() {
+        val a = SessionNaming.bundleCacheFileName("My Sample", "cloud-a")
+        val b = SessionNaming.bundleCacheFileName("My Sample", "cloud-b")
+
+        assertTrue(a != b)
+        assertEquals(a, SessionNaming.bundleCacheFileName("My Sample", "cloud-a"))
+        assertTrue(a, Regex("[0-9a-f]{12}_My_Sample_Session\\.zip").matches(a))
     }
 }

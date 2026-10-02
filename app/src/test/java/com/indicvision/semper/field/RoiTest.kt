@@ -67,8 +67,9 @@ class RoiTest {
     }
 
     @Test
-    fun `the full-frame slack is RoiResolveHelper's`() {
-        assertEquals(RoiResolveHelper.ROI_MARGIN_SLACK_PX, Roi.FULL_FRAME_SLACK_PX)
+    fun `the full-frame slack is 10 px, as RoiResolveHelper's always was`() {
+        assertEquals(10, Roi.FULL_FRAME_SLACK_PX)
+        assertEquals(10, RoiResolveHelper.ROI_MARGIN_SLACK_PX)
     }
 
     @Test

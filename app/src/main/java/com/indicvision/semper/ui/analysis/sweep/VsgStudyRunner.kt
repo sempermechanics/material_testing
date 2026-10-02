@@ -254,8 +254,11 @@ object VsgStudyRunner {
         }
     }
 
-    /** The engine settings for one full-field solve of [point] over this sweep's ROI and mask. */
-    private fun Params.engineParams(point: VsgStudy.Point) = SemperEngine.Params(
+    /**
+     * The engine settings for one full-field solve of [point] over this sweep's
+     * ROI and mask: the point's step, subset and VSG (in px) as the strain window.
+     */
+    internal fun Params.engineParams(point: VsgStudy.Point) = SemperEngine.Params(
         roiX = roiX,
         roiY = roiY,
         roiW = roiW,

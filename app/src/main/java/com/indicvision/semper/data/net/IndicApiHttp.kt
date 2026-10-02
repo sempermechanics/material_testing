@@ -46,14 +46,6 @@ internal object IndicApiHttp {
         if (requestId.isNullOrBlank()) text else "$text (ref: $requestId)"
 
     /**
-     * The generic failure for a Semper-backend call: status, body and the
-     * correlation id that joins it to the backend access log.
-     *
-     * Reads the body, so the caller must not have consumed it.
-     */
-    fun apiException(resp: Response): IndicApi.ApiException = Refusal.of(resp).exception()
-
-    /**
      * [base] + [path] for a backend call. With no backend configured the URL
      * would be the bare [path], which OkHttp rejects with an unchecked
      * IllegalArgumentException that killed the process wherever a caller only
@@ -79,10 +71,11 @@ internal fun Request.Builder.bearer(idToken: String, deviceId: String): Request.
     header(IndicApiHttp.AUTHORIZATION, "Bearer $idToken").header(IndicApiHttp.DEVICE_ID, deviceId)
 
 /**
- * A backend answer other than the one a call wanted, read once: its status,
- * body and the request id that joins it to the backend access log.
+ * A backend answer other than the one a call wanted (a 4xx, a 5xx, or a 2xx it
+ * did not expect), read once: its status, body and the request id that joins
+ * it to the backend access log.
  */
-internal class Refusal(val code: Int, val body: String, val requestId: String?) {
+internal class ApiAnswer(val code: Int, val body: String, val requestId: String?) {
 
     /** The generic failure: an [IndicApi.ApiException] carrying all three. */
     fun exception(): IndicApi.ApiException = IndicApi.ApiException(code, body, requestId)
@@ -94,7 +87,7 @@ internal class Refusal(val code: Int, val body: String, val requestId: String?) 
 
     companion object {
         /** Reads [resp]'s body, so the caller must not have consumed it. */
-        fun of(resp: Response): Refusal =
-            Refusal(resp.code, IndicApiHttp.bodyText(resp), IndicApiHttp.requestIdOf(resp))
+        fun of(resp: Response): ApiAnswer =
+            ApiAnswer(resp.code, IndicApiHttp.bodyText(resp), IndicApiHttp.requestIdOf(resp))
     }
 }

@@ -2,6 +2,7 @@ package com.indicvision.semper.data.net
 
 import com.indicvision.semper.data.cloud.restore.RestoreDownloadOutcomes
 import com.indicvision.semper.util.AtomicFiles
+import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Headers
@@ -28,6 +29,9 @@ private const val DOWNLOAD_COPY_BUFFER = 1 shl 16
 /** Log/exception preview length for non-success download bodies. */
 private const val DOWNLOAD_ERROR_BODY_PREVIEW = 120
 
+/** Hex characters of the fileId hash in [DriveDownload.label]. */
+private const val LABEL_HEX_CHARS = 8
+
 /**
  * Bounded Range window for each proxied GET — never open-ended (the `/content`
  * route's Cloud Run + gateway deadline is 300s; see `backend/gateway/openapi.yaml`
@@ -49,13 +53,21 @@ private const val DOWNLOAD_ERROR_BODY_PREVIEW = 120
  * ever risking the gateway deadline.
  */
 private const val MIN_DOWNLOAD_WINDOW_BYTES = 1 shl 20 // 1 MiB
-private const val MAX_DOWNLOAD_WINDOW_BYTES = 16 shl 20 // 16 MiB — ~40s at the ~420 KB/s
 
-// measured on-device rate; the 300s deadline still leaves a >7x margin at that rate.
-private const val INITIAL_DOWNLOAD_WINDOW_BYTES = 4 shl 20 // 4 MiB — a mid-range starting
+/**
+ * 16 MiB: about 40 s at the ~420 KB/s measured on a device, which still leaves
+ * more than a 7x margin under the 300 s deadline.
+ */
+private const val MAX_DOWNLOAD_WINDOW_BYTES = 16 shl 20
 
-// guess so a fast link converges up and a slow one converges down within a couple windows.
-private const val TARGET_WINDOW_SECONDS = 30.0 // ~10x margin under the 300s gateway deadline
+/**
+ * 4 MiB: a mid-range first guess, so a fast link grows and a slow one shrinks
+ * to its size within a couple of windows.
+ */
+private const val INITIAL_DOWNLOAD_WINDOW_BYTES = 4 shl 20
+
+/** About a 10x margin under the 300 s gateway deadline. */
+private const val TARGET_WINDOW_SECONDS = 30.0
 private const val MILLIS_PER_SECOND = 1000.0
 
 /**
@@ -79,47 +91,55 @@ internal fun nextWindowBytes(bytesInWindow: Long, elapsedMs: Long): Int {
 /** The attested, windowed restore download behind [DriveTransfer.downloadFile]. */
 internal class DriveDownloader(private val downloadClient: OkHttpClient) {
 
-    /** Runs [download], signing each window's GET with [signedGetHeaders] ([DriveTransfer.downloadFile]). */
-    suspend fun download(download: DriveDownload, signedGetHeaders: (path: String) -> Headers) =
+    /** Runs [job], signing each window's GET with [signedGetHeaders] ([DriveTransfer.downloadFile]). */
+    suspend fun download(job: DriveDownload, signedGetHeaders: (path: String) -> Headers) =
         withContext(Dispatchers.IO) {
-            download.dest.parentFile?.mkdirs()
+            job.dest.parentFile?.mkdirs()
             // Stale complete from a prior corrupt finalize — always rebuild.
-            if (download.dest.exists()) download.dest.delete()
+            if (job.dest.exists()) job.dest.delete()
             while (true) {
-                download.attempt++
-                val offset = download.haveBytes()
-                if (download.finishIfComplete(offset)) return@withContext
+                job.attempt++
+                val offset = job.haveBytes()
+                if (job.finishIfComplete(offset)) return@withContext
                 try {
                     // Fresh challenge per window so a resumed Range never replays a nonce.
-                    if (fetchWindow(download, offset, signedGetHeaders(download.path))) return@withContext
+                    if (fetchWindow(job, offset, signedGetHeaders(job.path))) return@withContext
                 } catch (e: IndicApi.ApiException) {
                     throw e
+                } catch (e: DownloadWindowException) {
+                    // Our own message, which names the download only by its label.
+                    resumeOrThrow(job, e, e.message.orEmpty())
                 } catch (e: IOException) {
-                    if (download.attempt >= DOWNLOAD_MAX_ATTEMPTS) throw e
-                    // Class name, not the exception: a file error's message is the
-                    // local path, and WARN reaches Crashlytics.
-                    Timber.w(
-                        "download %s interrupted at %d bytes (attempt %d, %s); resuming",
-                        download.fileId,
-                        download.haveBytes(),
-                        download.attempt,
-                        e.javaClass.simpleName,
-                    )
+                    // By class: a file error's message is the local path, and
+                    // WARN reaches Crashlytics.
+                    resumeOrThrow(job, e, e.javaClass.simpleName)
                 }
             }
         }
 
+    /** Logs a failed window for another attempt, or throws [e] once the attempts are spent. */
+    private fun resumeOrThrow(job: DriveDownload, e: IOException, reason: String) {
+        if (job.attempt >= DOWNLOAD_MAX_ATTEMPTS) throw e
+        Timber.w(
+            "download %s interrupted at %d bytes (attempt %d: %s); resuming",
+            job.label,
+            job.haveBytes(),
+            job.attempt,
+            reason,
+        )
+    }
+
     /** GETs the next window after [offset] bytes on disk. True when the download is done. */
-    private suspend fun fetchWindow(d: DriveDownload, offset: Long, headers: Headers): Boolean {
+    private suspend fun fetchWindow(job: DriveDownload, offset: Long, headers: Headers): Boolean {
         // `offset` is a position within the window; `remoteOffset` is the absolute
         // position in the remote object, which the Range header and the
         // Content-Range answer must agree on. They differ for a windowed fetch
         // (rangeStart > 0), where a window-relative Range asked for `bytes=0-…`.
-        val remoteOffset = d.rangeStart + offset
-        val windowEnd = if (d.expectedBytes > 0L) d.rangeStart + d.expectedBytes - 1 else Long.MAX_VALUE
-        val end = minOf(remoteOffset + d.windowBytes - 1, windowEnd)
+        val remoteOffset = job.rangeStart + offset
+        val windowEnd = if (job.expectedBytes > 0L) job.rangeStart + job.expectedBytes - 1 else Long.MAX_VALUE
+        val end = minOf(remoteOffset + job.windowBytes - 1, windowEnd)
         val request = Request.Builder()
-            .url(d.baseUrl + d.path)
+            .url(job.baseUrl + job.path)
             .headers(headers)
             // identity: OkHttp's default Accept-Encoding: gzip + Range
             // can corrupt binary zips (partial gzip windows inflate to
@@ -132,12 +152,12 @@ internal class DriveDownloader(private val downloadClient: OkHttpClient) {
         downloadClient.newCall(request).execute().use { resp ->
             return when (resp.code) {
                 HttpStatus.OK -> {
-                    acceptFullBody(d, resp)
+                    acceptFullBody(job, resp)
                     true
                 }
-                HttpStatus.PARTIAL_CONTENT -> appendPartial(d, resp, offset, startedMs)
-                HttpStatus.RANGE_NOT_SATISFIABLE -> finishUnsatisfiableRange(d, resp, offset)
-                else -> failWindow(d, resp)
+                HttpStatus.PARTIAL_CONTENT -> appendPartial(job, resp, offset, startedMs)
+                HttpStatus.RANGE_NOT_SATISFIABLE -> finishUnsatisfiableRange(job, resp, offset)
+                else -> failWindow(job, resp)
             }
         }
     }
@@ -147,83 +167,90 @@ internal class DriveDownloader(private val downloadClient: OkHttpClient) {
      * file first — a truncated 200 must not wipe a good partial `.part` — and
      * becomes the whole download once its length checks out.
      */
-    private suspend fun acceptFullBody(d: DriveDownload, resp: Response) {
-        val scratch = AtomicFiles.fullOf(d.dest)
+    private suspend fun acceptFullBody(job: DriveDownload, resp: Response) {
+        val scratch = AtomicFiles.fullOf(job.dest)
         scratch.delete()
         FileOutputStream(scratch, false).use { out ->
-            resp.body.byteStream().use { input -> copyWithProgress(input, out, d.onBytes) }
+            resp.body.byteStream().use { input -> copyWithProgress(input, out, job.onBytes) }
         }
-        d.sliceToWindow(scratch)
+        job.sliceToWindow(scratch)
         val got = scratch.length()
         val problem = when {
-            d.expectedBytes > 0L && got != d.expectedBytes ->
-                "truncated full-body download for ${d.fileId}: got $got, expected ${d.expectedBytes}"
-            got <= 0L -> "empty full-body download for ${d.fileId}"
+            job.expectedBytes > 0L && got != job.expectedBytes ->
+                "truncated full-body download for ${job.label}: got $got, expected ${job.expectedBytes}"
+            got <= 0L -> "empty full-body download for ${job.label}"
             else -> null
         }
         if (problem != null) {
             scratch.delete()
-            throw IOException(problem)
+            throw DownloadWindowException(problem)
         }
-        d.part.delete()
-        AtomicFiles.promote(scratch, d.part)
-        d.promoteToDest()
-        d.onBytes(d.dest.length())
+        job.part.delete()
+        AtomicFiles.promote(scratch, job.part)
+        job.promoteToDest()
+        job.onBytes(job.dest.length())
     }
 
     /** Appends a 206 window to the `.part` file. True when that completed the download. */
-    private suspend fun appendPartial(d: DriveDownload, resp: Response, offset: Long, startedMs: Long): Boolean {
-        val range = d.contentRangeAt(resp, offset)
+    private suspend fun appendPartial(job: DriveDownload, resp: Response, offset: Long, startedMs: Long): Boolean {
+        val range = job.contentRangeAt(resp, offset)
         // For a windowed fetch the object's total says nothing about the target
         // length; expectedBytes is authoritative.
-        if (d.rangeStart == 0L) range.total?.let { d.reportedTotal = it }
-        val wrote = d.appendWindow(resp, offset, range)
-        d.attempt = 0
+        if (job.rangeStart == 0L) range.total?.let { job.reportedTotal = it }
+        val wrote = job.appendWindow(resp, offset, range)
+        job.attempt = 0
         // Size the next window from this one's throughput. A short or failed
         // window never gets here, so a stall doesn't shrink it on bad data.
-        d.windowBytes = nextWindowBytes(wrote, System.currentTimeMillis() - startedMs)
-        return d.finishIfComplete(d.part.length())
+        job.windowBytes = nextWindowBytes(wrote, System.currentTimeMillis() - startedMs)
+        return job.finishIfComplete(job.part.length())
     }
 
     /** A 416: done if what is on disk is the whole target, else restart from zero (or give up). */
-    private fun finishUnsatisfiableRange(d: DriveDownload, resp: Response, offset: Long): Boolean {
-        if (d.isComplete(offset)) {
-            d.promoteToDest()
+    private fun finishUnsatisfiableRange(job: DriveDownload, resp: Response, offset: Long): Boolean {
+        if (job.isComplete(offset)) {
+            job.promoteToDest()
             return true
         }
-        if (offset > 0L && d.attempt < DOWNLOAD_MAX_ATTEMPTS) {
-            d.part.delete()
-            d.reportedTotal = -1L
-            throw IOException("range_not_satisfiable; restarting ${d.fileId}")
+        if (offset > 0L && job.attempt < DOWNLOAD_MAX_ATTEMPTS) {
+            job.part.delete()
+            job.reportedTotal = -1L
+            throw DownloadWindowException("range_not_satisfiable; restarting ${job.label}")
         }
-        throw IndicApiHttp.apiException(resp)
+        throw ApiAnswer.of(resp).exception()
     }
 
     /**
      * Any other status. A refused client nonce and a transient proxy failure
      * are [IOException]s, which [download] resumes; the rest is final.
      */
-    private fun failWindow(d: DriveDownload, resp: Response): Nothing {
-        val body = IndicApiHttp.bodyText(resp)
+    private fun failWindow(job: DriveDownload, resp: Response): Nothing {
+        val answer = ApiAnswer.of(resp)
         // Signed with a client nonce the server would not take: go back to
         // challenges and re-sign this window.
-        val nonceRefused = ClientNonce.isRefusal(resp.code, body) && ClientNonce.usable()
+        val nonceRefused = ClientNonce.isRefusal(answer.code, answer.body) && ClientNonce.usable()
         if (nonceRefused) ClientNonce.markRefused()
         val transient = RestoreDownloadOutcomes.shouldResumeAfterHttp(
-            code = resp.code,
-            attempt = d.attempt,
+            code = answer.code,
+            attempt = job.attempt,
             maxAttempts = DOWNLOAD_MAX_ATTEMPTS,
         )
         throw when {
-            nonceRefused -> IOException("client nonce refused downloading ${d.fileId}")
-            transient -> IOException(
-                "transient HTTP ${resp.code} downloading ${d.fileId}" +
-                    body.take(DOWNLOAD_ERROR_BODY_PREVIEW).let { if (it.isNotBlank()) ": $it" else "" },
+            nonceRefused -> DownloadWindowException("client nonce refused downloading ${job.label}")
+            transient -> DownloadWindowException(
+                "transient HTTP ${answer.code} downloading ${job.label}" +
+                    answer.body.take(DOWNLOAD_ERROR_BODY_PREVIEW).let { if (it.isNotBlank()) ": $it" else "" },
             )
-            else -> IndicApi.ApiException(resp.code, body, IndicApiHttp.requestIdOf(resp))
+            else -> answer.exception()
         }
     }
 }
+
+/**
+ * A window that failed in a way this file checks for itself (short, empty,
+ * misplaced, transient). Its message names the download only by
+ * [DriveDownload.label], so unlike a file error's it is safe to log.
+ */
+private class DownloadWindowException(message: String) : IOException(message)
 
 /** One [DriveTransfer.downloadFile] call: what it fetches, where the bytes go, and how far it got. */
 internal class DriveDownload(
@@ -242,6 +269,14 @@ internal class DriveDownload(
     }
 
     val path = "/v1/files/$fileId/content"
+
+    /**
+     * How logs and messages name this download. Not [fileId]: that is
+     * `{session}_{role}_{name}`, and a legacy backup's name is the user's own
+     * image name. A short hash still tells two downloads apart.
+     */
+    val label: String = "file " + Digests.toHex(Digests.sha256(fileId.toByteArray())).take(LABEL_HEX_CHARS)
+
     val part: File = AtomicFiles.partOf(dest)
     var attempt = 0
 
@@ -288,8 +323,8 @@ internal class DriveDownload(
         if (rangeStart == 0L && expectedBytes !in 1 until got) return
         if (got < rangeStart + expectedBytes) {
             scratch.delete()
-            throw IOException(
-                "full-body download for $fileId is $got B, too short for window $rangeStart+$expectedBytes",
+            throw DownloadWindowException(
+                "full-body download for $label is $got B, too short for window $rangeStart+$expectedBytes",
             )
         }
         sliceInPlace(scratch, rangeStart, expectedBytes)
@@ -301,10 +336,10 @@ internal class DriveDownload(
      */
     fun contentRangeAt(resp: Response, offset: Long): RestoreDownloadOutcomes.ContentRange {
         val range = RestoreDownloadOutcomes.parseContentRange(resp.header("Content-Range"))
-            ?: throw IOException("206 without Content-Range at offset $offset for $fileId")
+            ?: throw DownloadWindowException("206 without Content-Range at offset $offset for $label")
         val remoteOffset = rangeStart + offset
         if (range.start != remoteOffset) {
-            throw IOException("Content-Range start ${range.start} != offset $remoteOffset for $fileId")
+            throw DownloadWindowException("Content-Range start ${range.start} != offset $remoteOffset for $label")
         }
         return range
     }
@@ -321,11 +356,11 @@ internal class DriveDownload(
         val expectedWrote = range.end - range.start + 1
         if (wrote == expectedWrote) return wrote
         if (wrote > 0L) RandomAccessFile(part, "rw").use { it.setLength(offset) }
-        throw IOException(
+        throw DownloadWindowException(
             if (wrote <= 0L) {
-                "empty 206 body at offset $offset for $fileId"
+                "empty 206 body at offset $offset for $label"
             } else {
-                "short 206 for $fileId: wrote $wrote, Content-Range expected $expectedWrote"
+                "short 206 for $label: wrote $wrote, Content-Range expected $expectedWrote"
             },
         )
     }

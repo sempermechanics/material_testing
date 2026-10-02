@@ -197,7 +197,7 @@ object CloudRestore {
             ?: throw UnrestorableBackupException("backup_no_bundle")
 
         val outDir = CacheJanitor.shareDir(context.applicationContext.cacheDir)
-        val dest = File(outDir, SessionNaming.bundleFileName(displayName))
+        val dest = File(outDir, SessionNaming.bundleCacheFileName(displayName, sessionId))
         discard(dest)
         var complete = false
         try {
@@ -292,8 +292,9 @@ object CloudRestore {
      * and one an earlier attempt left could hold an older body of this file (the
      * backend's metadata replace route rewrites it when an analysis is edited after
      * its backup, e.g. a deflection correction). The declared sha256 is checked like
-     * the bundle's, when the file list carries one; a mismatch, or a body that is not
-     * a JSON object (or holds a frame that is not one), is corrupt (terminal).
+     * the bundle's, when the file list carries one; a mismatch, a body that is not
+     * a JSON object (or holds a frame that is not one), or one that will not build
+     * an index row, is corrupt (terminal).
      */
     private suspend fun fetchMetadata(api: CloudApi, token: String, entry: CloudFileDto, tmp: File): FetchedMetadata {
         discard(tmp)
@@ -302,7 +303,12 @@ object CloudRestore {
             val bytes = tmp.readBytes()
             RestoreZipVerifier.verifyMetadata(bytes, entry.sha256)
             val doc = try {
-                SessionMetadataDoc.decode(String(bytes, Charsets.UTF_8))
+                SessionMetadataDoc.decode(String(bytes, Charsets.UTF_8)).also { doc ->
+                    // Build the index row once now, so a blueprint no restore can turn
+                    // into one (legacy skip lists that disagree) fails before the bundle
+                    // is downloaded, and as corrupt rather than a retry that downloads it again.
+                    doc.toRecord(localId = "", cloudSessionId = "", sessionDir = tmp, refPath = "", existing = null)
+                }
             } catch (e: IllegalArgumentException) {
                 // SerializationException is one: what org.json's parse used to throw as JSONException.
                 throw CorruptTransferException("metadata_json_invalid", e)
