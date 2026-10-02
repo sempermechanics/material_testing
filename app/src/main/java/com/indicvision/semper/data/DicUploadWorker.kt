@@ -34,10 +34,11 @@ import com.indicvision.semper.data.net.SessionCreateRequest
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
 import com.indicvision.semper.data.net.TokenStore
-import com.indicvision.semper.data.session.SessionPaths
+import com.indicvision.semper.data.session.SessionLayout
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.data.session.SessionZip
+import com.indicvision.semper.data.session.StagingLayout
 import com.indicvision.semper.data.session.StorageBudget
 import com.indicvision.semper.diagnostics.SemperAnalytics
 import com.indicvision.semper.navigation.AppIntents
@@ -516,7 +517,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         )
 
         val sessionDir = File(record.sessionDir)
-        val rawDeformedDir = File(sessionDir, SessionPaths.RAW_DEFORMED_SUBDIR)
+        val layout = SessionLayout(sessionDir)
+        val rawDeformedDir = layout.rawDeformedDir
 
         // Generated artifacts live in a PERSISTENT staging dir, not cache. They
         // must be byte-identical across a resumed upload: createSession declared
@@ -524,7 +526,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         // timestamps) would no longer match, so Drive's resumable URI and the
         // completeFile size check would never reconcile. Generating once and
         // reusing also skips the expensive report/zip work on every retry.
-        val stagingDir = File(sessionDir, SessionPaths.UPLOAD_STAGING_SUBDIR)
+        val staging = layout.staging
+        val stagingDir = staging.dir
         // Only wipe incomplete staging. A blank cloudSessionId after Rebuild /
         // provision failure must NOT destroy a finished Session.zip — that was
         // forcing a full prepare loop on every WorkManager retry.
@@ -560,11 +563,11 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val artifacts = mutableListOf<Artifact>()
 
             // ── session-level metadata (generated once, then reused) ────────
-            val metaFile = File(stagingDir, "metadata.json")
+            val metaFile = staging.metadataJson
             UploadWorkOutcomes.stageMetadataJson(metaFile) {
                 SessionUploadMetadata.buildMetadataJson(record, applicationContext)
             }
-            artifacts += Artifact(ArtifactRoles.METADATA, "metadata.json", metaFile)
+            artifacts += Artifact(ArtifactRoles.METADATA, SessionLayout.METADATA_JSON, metaFile)
 
             // ── reference image (already stable on disk) ────────────────────
             val refFile = File(record.refPath)
@@ -592,7 +595,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 // The .dat is bundled so a restored session is fully viewable in
                 // the app (the heatmap viewer reads it); it also feeds the CSV
                 // and reports. The CSV is one combined file (below), not per frame.
-                val datFile = SessionPaths.frameDat(sessionDir, index)
+                val datFile = layout.frameDat(index)
                 if (datFile.exists()) {
                     artifacts += Artifact(ArtifactRoles.DAT, datFile.name, datFile)
                 } else {
@@ -603,22 +606,20 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             // ── combined CSV + per-frame reports/heatmaps in ONE .dat decode
             //    pass (same writer the share/export uses for CSV; Session.zip
             //    compresses the staged plain files, so no nested archives) ────
-            val analysisCsv = File(stagingDir, "analysis_data.csv")
-            val reportsDir = File(stagingDir, "reports")
-            val processedDir = File(stagingDir, SessionPaths.PROCESSED_SUBDIR)
+            val analysisCsv = staging.analysisCsv
+            val reportsDir = staging.reportsDir
+            val processedDir = staging.processedDir
             // Marker written only after a COMPLETE report generation pass — a
             // dir half-filled by a killed run, or a pass that skipped every
             // PDF/heatmap, must not be mistaken for done.
-            val bundlesDone = File(stagingDir, ".bundles_done")
+            val bundlesDone = staging.bundlesDone
             val needCsv = !analysisCsv.exists() || analysisCsv.length() == 0L
             val needBundles = record.defNames.isNotEmpty() &&
                 !UploadWorkOutcomes.bundleArtifactsReady(stagingDir)
             if (needCsv || needBundles) {
                 // Restaging invalidates any prior Session.zip — it was built
                 // without the artifacts we are about to (re)generate.
-                File(stagingDir, "Session.zip").delete()
-                File(stagingDir, "Session.zip.tmp").delete()
-                File(stagingDir, "Session.zip.sha256").delete()
+                staging.staleFiles(StagingLayout.SESSION_ZIP).forEach { it.delete() }
                 if (needBundles) bundlesDone.delete()
                 SessionUploadBundler.stageCsvAndBundles(
                     applicationContext,
@@ -658,7 +659,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     }
                 }
             }
-            if (analysisCsv.length() > 0) artifacts += Artifact(ArtifactRoles.CSV, "analysis_data.csv", analysisCsv)
+            if (analysisCsv.length() > 0) {
+                artifacts += Artifact(ArtifactRoles.CSV, StagingLayout.ANALYSIS_CSV, analysisCsv)
+            }
 
             if (record.defNames.isNotEmpty()) {
                 val pdfs = reportsDir.listFiles()
@@ -714,15 +717,15 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 val onZipBytes: (Long) -> Unit = { n -> progDone.addAndGet(n) }
 
                 val restoreZip = stageArchive(
-                    stagingDir,
-                    BUNDLE_NAME,
+                    staging,
+                    StagingLayout.SESSION_ZIP,
                     payload.filter { SessionZip.isRestoreEssential(it.role) },
                     reuseStaging,
                     onZipBytes,
                 )
                 val extrasZip = stageArchive(
-                    stagingDir,
-                    EXTRAS_NAME,
+                    staging,
+                    StagingLayout.EXTRAS_ZIP,
                     payload.filterNot { SessionZip.isRestoreEssential(it.role) },
                     reuseStaging,
                     onZipBytes,
@@ -730,8 +733,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
 
                 artifacts.filter { it.role == ArtifactRoles.METADATA } +
                     listOfNotNull(
-                        restoreZip?.let { Artifact(ArtifactRoles.BUNDLE, BUNDLE_NAME, it.file, it.sha256) },
-                        extrasZip?.let { Artifact(ArtifactRoles.EXTRAS, EXTRAS_NAME, it.file, it.sha256) },
+                        restoreZip?.let {
+                            Artifact(ArtifactRoles.BUNDLE, StagingLayout.SESSION_ZIP, it.file, it.sha256)
+                        },
+                        extrasZip?.let {
+                            Artifact(ArtifactRoles.EXTRAS, StagingLayout.EXTRAS_ZIP, it.file, it.sha256)
+                        },
                     )
             }
 
@@ -985,7 +992,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     private data class StagedArchive(val file: File, val sha256: String)
 
     /**
-     * Build (or reuse) one archive named [zipName] from [members] in [stagingDir].
+     * Build (or reuse) one archive named [zipName] from [members] in [staging].
      *
      * Returns null when [members] is empty — a session with no derived artifacts
      * must not declare an empty Extras.zip, both because [SessionZip.build] rejects
@@ -997,21 +1004,19 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
      * bit-identical corrupt Drive objects.
      */
     private fun stageArchive(
-        stagingDir: File,
+        staging: StagingLayout,
         zipName: String,
         members: List<Artifact>,
         reuseStaging: Boolean,
         onBytes: (Long) -> Unit,
     ): StagedArchive? {
         if (members.isEmpty()) return null
-        val zip = File(stagingDir, zipName)
-        val sidecar = File(stagingDir, "$zipName.sha256")
+        val zip = staging.archive(zipName)
+        val sidecar = staging.sha256Sidecar(zipName)
         val sha = UploadWorkOutcomes.verifiedBundleSha256(zip, sidecar)
             ?.takeIf { reuseStaging }
             ?: run {
-                zip.delete()
-                sidecar.delete()
-                File(stagingDir, "$zipName.tmp").delete()
+                staging.staleFiles(zipName).forEach { it.delete() }
                 val hex = buildSessionBundle(members, zip, onBytes)
                 sidecar.writeText(hex)
                 hex
@@ -1048,12 +1053,6 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     private companion object {
         /** Cap on a retry reason, which is only ever logged. */
         const val RETRY_REASON_MAX_LEN = 200
-
-        /** Restore-essential archive: everything needed to rebuild a working session. */
-        const val BUNDLE_NAME = "Session.zip"
-
-        /** Derived deliverables a restore never reads; fetched only on demand. */
-        const val EXTRAS_NAME = "Extras.zip"
 
         /** How often the progress sampler pushes phase+percent to WorkManager. */
         const val PROGRESS_SAMPLE_MS = 700L

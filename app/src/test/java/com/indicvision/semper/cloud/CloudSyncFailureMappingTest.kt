@@ -79,6 +79,14 @@ class CloudSyncFailureMappingTest {
     }
 
     @Test
+    fun `a failure that is not I O is reported, not thrown at the screen`() {
+        configDown()
+        api.onListSessions = { _, _ -> throw IllegalStateException("bad state") }
+
+        assertEquals(CloudSync.Outcome.Failed("unexpected IllegalStateException"), reconcile())
+    }
+
+    @Test
     fun `no token is offline and asks the backend nothing`() {
         tokens.token = null
 

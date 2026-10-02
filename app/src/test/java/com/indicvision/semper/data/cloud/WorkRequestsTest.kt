@@ -272,7 +272,6 @@ class WorkRequestsTest {
     fun `the licence refresh keeps its tag and unique name`() {
         LicenseConfigWorker.enqueue(context)
 
-        assertEquals(LicenseConfigWorker.UNIQUE_NAME, WorkTags.LICENSE_CONFIG_NAME)
         assertTrue(WorkTags.LICENSE_CONFIG in queued(WorkTags.LICENSE_CONFIG_NAME).tags)
     }
 

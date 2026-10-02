@@ -10,19 +10,20 @@ import android.graphics.Bitmap
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.scale
 import com.indicvision.semper.R
+import com.indicvision.semper.data.session.SessionLayout
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SessionRecord
+import com.indicvision.semper.data.session.StagingLayout
+import com.indicvision.semper.data.session.imageSize
+import com.indicvision.semper.data.session.paramsAt
 import com.indicvision.semper.field.DicResult
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.ImageEncode
 import com.indicvision.semper.report.AnalysisCsvWriter
-import com.indicvision.semper.report.EngineStats
-import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.FieldResult
 import com.indicvision.semper.report.PdfReportGenerator
 import com.indicvision.semper.report.ReportBuilder
-import com.indicvision.semper.report.ReportImageNames
-import com.indicvision.semper.report.RoiData
+import com.indicvision.semper.report.ReportSource
 import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.ui.viewer.HeatmapFit
 import com.indicvision.semper.ui.viewer.summary.SummaryAnimation
@@ -72,12 +73,13 @@ object SessionUploadBundler {
         writeReports: Boolean,
         onFrame: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BundleCounts = withContext(Dispatchers.Default) {
-        val reportsDir = File(stagingDir, "reports").apply { if (writeReports) mkdirs() }
-        val processedDir = File(stagingDir, SessionPaths.PROCESSED_SUBDIR).apply { if (writeReports) mkdirs() }
+        val staging = StagingLayout(stagingDir)
+        val reportsDir = staging.reportsDir.apply { if (writeReports) mkdirs() }
+        val processedDir = staging.processedDir.apply { if (writeReports) mkdirs() }
         var reports = 0
         var processed = 0
 
-        val canReport = writeReports && record.imgW > 0 && record.imgH > 0
+        val canReport = writeReports && record.imageSize.isKnown
         if (writeReports && !canReport) {
             Timber.e("Bad image dimensions for %s — skipping reports", record.id)
         }
@@ -129,7 +131,7 @@ object SessionUploadBundler {
         val sweepImage = record.defNames.firstOrNull().orEmpty()
         val csvMetadata = AnalysisCsvWriter.Metadata(
             referenceName = record.refName,
-            strainMethod = record.strainMethod.ifBlank { "VSG" },
+            strainMethod = record.strainMethod.ifBlank { ReportSource.DEFAULT_STRAIN_METHOD },
             imgW = record.imgW,
             imgH = record.imgH,
             roiX = record.roiX,
@@ -154,15 +156,16 @@ object SessionUploadBundler {
                     return@forEachIndexed
                 }
 
+                val params = record.paramsAt(index)
                 val frame = AnalysisCsvWriter.Frame(
                     image = if (record.isSweep) {
                         sweepImage
                     } else {
                         record.defNames.getOrElse(index) { "Frame_${index + 1}" }
                     },
-                    subset = record.sweepSubsets.getOrElse(index) { record.subset },
-                    step = record.sweepSteps.getOrElse(index) { record.step },
-                    strainWindow = record.sweepStrainWindows.getOrElse(index) { record.strainWindow },
+                    subset = params.subset,
+                    step = params.step,
+                    strainWindow = params.strainWindow,
                     data = { data },
                 )
                 csvAppender?.appendFieldStats(frame, data)
@@ -249,8 +252,8 @@ object SessionUploadBundler {
                 batchFiles = batchFiles,
                 imgW = record.imgW,
                 imgH = record.imgH,
-                stepAt = { i -> record.sweepSteps.getOrElse(i) { record.step } },
-                outputDir = File(processedDir, "animations").apply { mkdirs() },
+                stepAt = { i -> record.paramsAt(i).step },
+                outputDir = File(processedDir, StagingLayout.ANIMATIONS_SUBDIR).apply { mkdirs() },
                 backgroundColor = ContextCompat.getColor(context, R.color.viewer_canvas),
                 fitBounds = HeatmapFit.resolve(
                     record.imgW,
@@ -262,8 +265,7 @@ object SessionUploadBundler {
                 ),
             ),
         )
-        val rangesFile = File(sessionDir, FieldRangesStore.FILE_NAME)
-        val ranges = SummaryAnimation.globalRanges(batchFiles, rangesFile)
+        val ranges = SummaryAnimation.globalRanges(batchFiles, SessionLayout(sessionDir).fieldRanges)
         var gifs = 0
         for ((label, dataIndex) in SummaryAnimation.FIELDS) {
             currentCoroutineContext().ensureActive() // one GIF per check, like the frame loop
@@ -326,32 +328,7 @@ object SessionUploadBundler {
             ctx.baseImg
         }
 
-        val frameSubset = record.sweepSubsets.getOrElse(frameIndex) { record.subset }
-        val frameStep = record.sweepSteps.getOrElse(frameIndex) { record.step }
-        val frameWindow = record.sweepStrainWindows.getOrElse(frameIndex) { record.strainWindow }
-        val reportData = ReportBuilder.buildReport(
-            ReportBuilder.ReportBuildParams(
-                data = data,
-                baseImg = ctx.baseImg,
-                defImgForCover = defImg,
-                imgW = record.imgW,
-                imgH = record.imgH,
-                step = frameStep,
-                sessionId = record.id,
-                specimenName = ReportImageNames.specimen(record.refName),
-                analysisDate = ReportBuilder.currentAnalysisDate(),
-                subsetSize = frameSubset,
-                strainWindow = frameWindow,
-                strainMethod = record.strainMethod.ifBlank { "VSG" },
-                roiData = RoiData(record.roiX, record.roiY, record.roiW, record.roiH),
-                engineStats = reportEngineStats(record.engineStats),
-                // The names the on-device report prints (ViewerReportFactory),
-                // not the bundle's folder names.
-                referenceImageName = ReportImageNames.reference(record.refName),
-                deformedImageName = ReportImageNames.deformed(record.frameNames, frameIndex),
-                drawMinMarker = false,
-            ),
-        )
+        val reportData = ReportBuilder.buildReport(reportParams(record, frameIndex, data, ctx.baseImg, defImg))
 
         var ok = true
         try {
@@ -374,17 +351,17 @@ object SessionUploadBundler {
     }
 
     /**
-     * [stats] as the report reads them. Every slot the run stored is kept — the
-     * engine writes [EngineStats.SLOT_COUNT], and cutting that to the 16 core
-     * slots printed "Unknown" for mesh seeding and 0 ms for simplex / ICGN in
-     * every cloud PDF. Never padded past what was stored: a legacy 16-slot
-     * record read as 17 would claim mesh quality 0 ("Fallback") instead of
-     * unknown. Shorter (or empty) records are padded to the core slots, as before.
+     * Frame [frameIndex]'s report inputs: [ReportSource.forRecord], so the PDF
+     * prints the names, settings and engine stats the on-device report prints
+     * (not the bundle's folder names), and marks the MAX only.
      */
-    internal fun reportEngineStats(stats: List<Float>): EngineStats {
-        val size = stats.size.coerceIn(EngineStats.CORE_SLOT_COUNT, EngineStats.SLOT_COUNT)
-        return EngineStats.fromArray(FloatArray(size) { stats.getOrElse(it) { 0f } })
-    }
+    internal fun reportParams(
+        record: SessionRecord,
+        frameIndex: Int,
+        data: FloatArray,
+        baseImg: Bitmap,
+        coverImg: Bitmap,
+    ): ReportBuilder.ReportBuildParams = ReportSource.forRecord(record).forFrame(frameIndex, data, baseImg, coverImg)
 
     /**
      * The base image for a session's reports: the reference, or a deformed frame

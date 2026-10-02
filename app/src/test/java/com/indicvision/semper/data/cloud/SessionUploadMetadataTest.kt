@@ -39,7 +39,8 @@ class SessionUploadMetadataTest {
     fun `each record writes what the org json writer wrote`() {
         TokenStore.saveIdentity(context, UploadMetadataFixtures.UID, UploadMetadataFixtures.EMAIL)
         for (record in UploadMetadataFixtures.all) {
-            assertSameJson(record.id, GOLDEN.getValue(record.id), SessionUploadMetadata.buildMetadataJson(record, context))
+            val written = SessionUploadMetadata.buildMetadataJson(record, context)
+            assertSameJson(record.id, GOLDEN.getValue(record.id), written)
         }
     }
 
