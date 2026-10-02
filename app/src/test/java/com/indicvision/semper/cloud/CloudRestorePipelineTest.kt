@@ -63,6 +63,12 @@ class CloudRestorePipelineTest {
             api.file("meta-1", "metadata", bytes, sha256)
         }
 
+    /** A split-layout sweep whose `engine.sweep.skipped` block is [skipped]. */
+    private fun sweepMetadata(skipped: String) = """
+        {"schema":"indic.session.metadata/3","frameCount":1,"frames":[{"image":"def.png"}],
+         "engine":{"subset":21,"sweep":{"subsets":[21],"steps":[5],"strainWindows":[41],"skipped":{$skipped}}}}
+    """.trimIndent().toByteArray()
+
     @Test
     fun `a split bundle restores into the local session layout`() {
         api.files = listOf(
@@ -142,6 +148,33 @@ class CloudRestorePipelineTest {
     fun `metadata whose frame is not an object is corrupt before the bundle is fetched`() {
         api.files = listOf(
             metadata("""{"schema":"indic.session.metadata/3","frames":["def.png"]}""".toByteArray()),
+            bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
+        )
+
+        val thrown = assertThrows(CorruptTransferException::class.java) { restore() }
+
+        assertEquals("metadata_json_invalid", thrown.message)
+        assertFalse(api.calls.contains("downloadFile:bundle-1"))
+    }
+
+    @Test
+    fun `a sweep backed up before skip codes were kept restores`() {
+        api.files = listOf(
+            metadata(sweepMetadata(""""subsets":[41,51],"steps":[9,9],"strainWindows":[121,121]""")),
+            bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
+        )
+
+        assertEquals(LOCAL_ID, restore())
+
+        val row = SessionStore.get(context, LOCAL_ID)
+        assertEquals(listOf(41, 51), row?.sweepSkippedNodes?.map { it.subset })
+        assertEquals(listOf(0, 0), row?.sweepSkippedNodes?.map { it.code })
+    }
+
+    @Test
+    fun `skip lists that disagree in length are corrupt before the bundle is fetched`() {
+        api.files = listOf(
+            metadata(sweepMetadata(""""subsets":[41,51],"steps":[9],"strainWindows":[121],"codes":[-12]""")),
             bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()),
         )
 
