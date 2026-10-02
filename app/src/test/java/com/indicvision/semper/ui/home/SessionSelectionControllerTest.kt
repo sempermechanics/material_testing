@@ -15,6 +15,7 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.indicvision.semper.R
 import com.indicvision.semper.data.cloud.SessionDeletes
 import com.indicvision.semper.data.session.SessionRecord
+import com.indicvision.semper.data.session.isRestorable
 import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.fixtures.sessionRecord
 import org.junit.Assert.assertEquals
@@ -452,6 +453,23 @@ class SessionSelectionControllerTest {
         controller.startSelection(both)
 
         assertEquals(View.GONE, restore.visibility)
+    }
+
+    @Test
+    fun `Restore follows isRestorable for every sync state, cloud id and phone presence`() {
+        for (state in SessionRecord.SyncState.entries) {
+            for (cloudId in listOf("", "c1")) {
+                for (local in listOf(true, false)) {
+                    val row = record("x").copy(syncState = state, cloudSessionId = cloudId)
+                    adapter.submit(listOf(row), if (local) emptySet() else setOf(row.id))
+                    controller.startSelection(row)
+
+                    val label = "$state '$cloudId' local=$local"
+                    assertEquals(label, row.isRestorable(hasLocalData = local), restore.visibility == View.VISIBLE)
+                    controller.clearSelection()
+                }
+            }
+        }
     }
 
     @Test

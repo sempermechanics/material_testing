@@ -7,10 +7,6 @@ package com.indicvision.semper.ui.home
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
-import android.view.View
-import android.widget.ImageButton
-import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
@@ -18,8 +14,6 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -37,6 +31,8 @@ import com.indicvision.semper.data.prefs.CoachPrefs
 import com.indicvision.semper.data.prefs.DicSettings
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionStore
+import com.indicvision.semper.data.session.isRestorable
+import com.indicvision.semper.databinding.ActivityHomeBinding
 import com.indicvision.semper.diagnostics.Diagnostics
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
@@ -45,13 +41,15 @@ import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.ConflatedRefresh
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeleteFeedback
+import com.indicvision.semper.ui.common.Dialogs
+import com.indicvision.semper.ui.common.Feedback
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
+import com.indicvision.semper.ui.common.SerialJob
 import com.indicvision.semper.ui.limit.SessionLimitActivity
 import com.indicvision.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -64,15 +62,9 @@ import kotlinx.coroutines.withContext
 @MainThread
 class HomeActivity : AppCompatActivity() {
 
-    private lateinit var list: RecyclerView
-    private lateinit var emptyState: android.view.View
-    private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var binding: ActivityHomeBinding
     private lateinit var adapter: SessionListAdapter
     private lateinit var selection: SessionSelectionController
-    private lateinit var fab: ImageButton
-    private lateinit var tvHomeQuota: TextView
-    private lateinit var tvHomeLicense: TextView
-    private lateinit var tvEmptyTitle: TextView
     private lateinit var cloudBackups: CloudBackupsCard
 
     /** Upload WorkInfo ids already surfaced, so one failure isn't snackbar-spammed. */
@@ -94,8 +86,11 @@ class HomeActivity : AppCompatActivity() {
     private var activeUploadProgress: Map<String, SessionListAdapter.RowProgress> = emptyMap()
     private var activeRestoreProgress: Map<String, SessionListAdapter.RowProgress> = emptyMap()
 
-    /** The phone-list read in flight ([refreshList]). */
-    private var listRefresh: Job? = null
+    /** The phone-list read in flight ([refreshList]); a newer one replaces it. */
+    private val listRefresh = SerialJob()
+
+    /** The backups-card read in flight ([updateCloudBackups]); a newer one replaces it. */
+    private val backupsRefresh = SerialJob()
 
     /**
      * The cloud check, one at a time: a burst of requests runs it at most once
@@ -106,7 +101,7 @@ class HomeActivity : AppCompatActivity() {
         ConflatedRefresh<Boolean>(lifecycleScope, merge = { a, b -> a || b }) { deep ->
             var completed = false
             try {
-                listRefresh?.join()
+                listRefresh.join()
                 reconcileWithCloud(deep)
                 completed = true
             } finally {
@@ -114,7 +109,7 @@ class HomeActivity : AppCompatActivity() {
                 // that's the part worth waiting for. After a check that ended
                 // normally it stays while a pull-to-refresh waits its turn; a
                 // check that threw or was cancelled takes the queue with it.
-                if (!completed || !cloudCheck.hasPending) swipeRefresh.isRefreshing = false
+                if (!completed || !cloudCheck.hasPending) binding.swipeRefresh.isRefreshing = false
             }
         }
     }
@@ -126,12 +121,9 @@ class HomeActivity : AppCompatActivity() {
     /** Confirm before leaving Home (and the app). Selection-mode back is separate. */
     private val exitAppCallback = object : androidx.activity.OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
-            MaterialAlertDialogBuilder(this@HomeActivity)
-                .setTitle(R.string.exit_indic_title)
-                .setMessage(R.string.exit_indic_message)
-                .setPositiveButton(R.string.exit) { _, _ -> finish() }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
+            Dialogs.confirm(this@HomeActivity, R.string.exit_indic_title, R.string.exit_indic_message, R.string.exit) {
+                finish()
+            }
         }
     }
 
@@ -167,36 +159,31 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_home)
+        binding = ActivityHomeBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         window.decorView.post { reportFullyDrawn() }
 
         // Edge-to-edge (enforced on API 35+): drop the header below the status
         // bar, otherwise the bar swallows taps on the settings gear. The
         // selection bar replaces the title row, so it needs the same inset.
-        Insets.padTop(findViewById(R.id.homeTopBar))
-        Insets.padTop(findViewById(R.id.homeSelectionBar))
+        Insets.padTop(binding.homeTopBar)
+        Insets.padTop(binding.homeSelectionBar)
 
-        list = findViewById(R.id.sessionList)
-        emptyState = findViewById(R.id.emptyState)
-        swipeRefresh = findViewById(R.id.swipeRefresh)
-        tvHomeQuota = findViewById(R.id.tvHomeQuota)
-        tvHomeLicense = findViewById(R.id.tvHomeLicense)
-        tvEmptyTitle = findViewById(R.id.tvEmptyTitle)
         cloudBackups = CloudBackupsCard(
-            card = findViewById(R.id.homeCloudBackups),
-            text = findViewById(R.id.tvCloudBackups),
-            restoreButton = findViewById(R.id.btnCloudBackupsRestore),
-            hideButton = findViewById(R.id.btnCloudBackupsHide),
+            card = binding.homeCloudBackups,
+            text = binding.tvCloudBackups,
+            restoreButton = binding.btnCloudBackupsRestore,
+            hideButton = binding.btnCloudBackupsHide,
             onRestore = { targets -> queueRestores { targets } },
             onHide = { backups -> hideCloudBackups(backups) },
         )
-        swipeRefresh.setColorSchemeResources(R.color.sky_primary)
+        binding.swipeRefresh.setColorSchemeResources(R.color.sky_primary)
         // Pull down = deep re-check: verify the blobs really exist in Drive,
         // not just that the backend's index says so.
-        swipeRefresh.setOnRefreshListener { refresh(deep = true) }
-        list.layoutManager = LinearLayoutManager(this)
+        binding.swipeRefresh.setOnRefreshListener { refresh(deep = true) }
+        binding.sessionList.layoutManager = LinearLayoutManager(this)
 
-        fab = findViewById(R.id.fabNewAnalysis)
+        val fab = binding.fabNewAnalysis
         positionFabAtNineTenths()
         fab.setOnClickListener {
             // Two independent reasons new work cannot start. The seat check is
@@ -216,10 +203,10 @@ class HomeActivity : AppCompatActivity() {
             }
             showSourceChooser()
         }
-        findViewById<ImageButton>(R.id.btnHomeSettings).setOnClickListener {
+        binding.btnHomeSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
-        findViewById<View>(R.id.btnEmptyRestore).setOnClickListener {
+        binding.btnEmptyRestore.setOnClickListener {
             fab.performClick()
         }
 
@@ -264,12 +251,12 @@ class HomeActivity : AppCompatActivity() {
         selection = SessionSelectionController(
             activity = this,
             adapter = adapter,
-            topBar = findViewById(R.id.homeTopBar),
-            selectionBar = findViewById(R.id.homeSelectionBar),
-            selectionCount = findViewById(R.id.tvSelectionCount),
-            btnSelectionRename = findViewById(R.id.btnSelectionRename),
-            btnSelectionRestore = findViewById(R.id.btnSelectionRestore),
-            selectAllBox = findViewById(R.id.cbSelectionAll),
+            topBar = binding.homeTopBar,
+            selectionBar = binding.homeSelectionBar,
+            selectionCount = binding.tvSelectionCount,
+            btnSelectionRename = binding.btnSelectionRename,
+            btnSelectionRestore = binding.btnSelectionRestore,
+            selectAllBox = binding.cbSelectionAll,
             fab = fab,
             backCallback = backCallback,
             onRefresh = { refresh() },
@@ -282,15 +269,15 @@ class HomeActivity : AppCompatActivity() {
                 refresh(reconcile = false)
             },
         )
-        deleteFeedback = DeleteFeedback(this, findViewById(R.id.homeRoot)) {
+        deleteFeedback = DeleteFeedback(this, binding.homeRoot) {
             justQueuedDeletes.clear()
             refresh(reconcile = false)
         }
         selection.bindBarActions(
-            btnClose = findViewById(R.id.btnSelectionClose),
-            btnDelete = findViewById(R.id.btnSelectionDelete),
+            btnClose = binding.btnSelectionClose,
+            btnDelete = binding.btnSelectionDelete,
         )
-        list.adapter = adapter
+        binding.sessionList.adapter = adapter
 
         // Exit confirm is always registered; selection back is layered on top and
         // enabled only while something is selected (LIFO: last added runs first).
@@ -511,14 +498,13 @@ class HomeActivity : AppCompatActivity() {
      * and restore, often several within a second).
      */
     private fun refreshList() {
-        listRefresh?.cancel()
-        listRefresh = lifecycleScope.launch {
+        listRefresh.launch(lifecycleScope) {
             val sessions = visibleSessions()
             submitSessions(sessions)
             // Demo: analyses are recorded silently and there is no restore, so
             // the list carries no sync badge, bar or "only in cloud" state.
             adapter.setSyncVisible(showsCloudState())
-            emptyState.isVisible = sessions.isEmpty()
+            binding.emptyState.isVisible = sessions.isEmpty()
             updateCloudBackups()
             updateQuotaIndicator(sessions.size)
             updateLicenseNotice()
@@ -542,6 +528,7 @@ class HomeActivity : AppCompatActivity() {
      * cannot show up here as a false alarm.
      */
     private fun updateLicenseNotice() {
+        val tvHomeLicense = binding.tvHomeLicense
         val days = LicenseEntitlements.expiryNoticeDays(this)
         if (days == null) {
             tvHomeLicense.isVisible = false
@@ -573,6 +560,7 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun updateQuotaIndicator(localSessionCount: Int) {
+        val tvHomeQuota = binding.tvHomeQuota
         val max = TokenStore.quotaMax(this)
         val used = TokenStore.quotaUsed(this).coerceAtLeast(localSessionCount)
         if (max <= 0) {
@@ -595,7 +583,7 @@ class HomeActivity : AppCompatActivity() {
             if (TokenStore.isSessionLimitReached(this)) {
                 openSessionLimitScreen()
             } else {
-                findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
+                binding.btnHomeSettings.performClick()
             }
         }
     }
@@ -629,19 +617,13 @@ class HomeActivity : AppCompatActivity() {
                     // The rows changed underneath us — show the corrected state.
                     refreshList()
                     if (!showsCloudState()) return
-                    Toast.makeText(
-                        this,
-                        resources.getQuantityString(R.plurals.cloud_resync_fmt, outcome.repaired, outcome.repaired),
-                        Toast.LENGTH_LONG,
-                    ).show()
+                    val repaired = outcome.repaired
+                    val text = resources.getQuantityString(R.plurals.cloud_resync_fmt, repaired, repaired)
+                    Feedback.toast(this, text, long = true)
                 }
             }
             is CloudSync.Outcome.Failed -> if (showsCloudState()) {
-                Toast.makeText(
-                    this,
-                    getString(R.string.cloud_check_failed_fmt, outcome.reason),
-                    Toast.LENGTH_LONG,
-                ).show()
+                Feedback.toast(this, getString(R.string.cloud_check_failed_fmt, outcome.reason), long = true)
             }
             // Normal for an offline-first app — don't nag. Skipped = checked
             // recently (reconcile is throttled to protect the Firestore budget).
@@ -660,26 +642,18 @@ class HomeActivity : AppCompatActivity() {
 
     private fun openSession(record: SessionRecord) {
         val hasLocal = adapter.hasLocalData(record.id)
-        if (hasLocal) {
-            startActivity(SessionOpenHelper.intentFor(this, record))
-            return
+        when {
+            hasLocal -> startActivity(SessionOpenHelper.intentFor(this, record))
+            // A demo account cannot pull its recorded copy back, so a row with
+            // no local data is simply unopenable — no download offer.
+            record.isRestorable(hasLocal) && showsCloudState() -> Dialogs.confirm(
+                this,
+                R.string.download_analysis_title,
+                R.string.download_analysis_body,
+                R.string.restore_action,
+            ) { startRestore(listOf(record)) }
+            else -> SessionOpenHelper.openOrExplain(this, record, hasLocal)
         }
-        val hasCloud = record.syncState == SessionRecord.SyncState.SYNCED ||
-            record.cloudSessionId.isNotBlank()
-        // A demo account cannot pull its recorded copy back, so a row with
-        // no local data is simply unopenable — no download offer.
-        if (!hasCloud || !showsCloudState()) {
-            SessionOpenHelper.openOrExplain(this, record, hasLocal)
-            return
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.download_analysis_title)
-            .setMessage(R.string.download_analysis_body)
-            .setPositiveButton(R.string.restore_action) { _, _ ->
-                startRestore(listOf(record))
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
     }
 
     /**
@@ -707,8 +681,7 @@ class HomeActivity : AppCompatActivity() {
             val counts = withContext(Dispatchers.IO) { RestoreStart.startAll(this@HomeActivity, batch) }
             refresh(reconcile = false)
             val summary = RestoreSummary.of(resources, batch.size, counts.started, counts.alreadyRunning)
-            val length = if (summary.failed) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
-            Toast.makeText(this@HomeActivity, summary.text, length).show()
+            Feedback.toast(this@HomeActivity, summary.text, long = summary.failed)
         }
     }
 
@@ -717,21 +690,22 @@ class HomeActivity : AppCompatActivity() {
      * reconcile saved. Demo accounts have no restore, so they are offered nothing.
      */
     private fun updateCloudBackups() {
-        lifecycleScope.launch {
+        backupsRefresh.launch(lifecycleScope) {
             val offered = if (showsCloudState()) {
                 withContext(Dispatchers.IO) { CloudBackupListing.offered(this@HomeActivity) }
             } else {
                 emptyList()
             }
             cloudBackups.show(offered)
-            tvEmptyTitle.setText(if (offered.isEmpty()) R.string.home_empty_title else R.string.home_empty_title_cloud)
+            val emptyTitle = if (offered.isEmpty()) R.string.home_empty_title else R.string.home_empty_title_cloud
+            binding.tvEmptyTitle.setText(emptyTitle)
         }
     }
 
     private fun hideCloudBackups(backups: List<CloudBackupListing.Backup>) {
         CloudBackupListing.hide(this, backups.map { it.cloudId })
         updateCloudBackups()
-        Toast.makeText(this, R.string.cloud_backups_hidden, Toast.LENGTH_LONG).show()
+        Feedback.toast(this, R.string.cloud_backups_hidden, long = true)
     }
 
     /** Retry a failed/pending upload, or back up a local-only session when cloud is on. */
@@ -745,15 +719,15 @@ class HomeActivity : AppCompatActivity() {
             SessionRecord.SyncState.LOCAL_ONLY -> if (DicSettings.saveToCloud(this)) {
                 enqueueBackup(record, R.string.cloud_backup_now)
             } else {
-                findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
+                binding.btnHomeSettings.performClick()
             }
-            SessionRecord.SyncState.SYNCED -> findViewById<ImageButton>(R.id.btnHomeSettings).performClick()
+            SessionRecord.SyncState.SYNCED -> binding.btnHomeSettings.performClick()
         }
     }
 
     private fun enqueueBackup(record: SessionRecord, toastRes: Int) {
         if (!IndicApi.get(this).enabled) {
-            Toast.makeText(this, R.string.cloud_backup_no_backend, Toast.LENGTH_LONG).show()
+            Feedback.toast(this, R.string.cloud_backup_no_backend, long = true)
             return
         }
         // The index write is a file read-modify-write, and this runs from a tap.
@@ -764,21 +738,19 @@ class HomeActivity : AppCompatActivity() {
             SessionStore.setSyncStateAsync(this@HomeActivity, record.id, SessionRecord.SyncState.PENDING)
             CloudSync.enqueueUpload(this@HomeActivity, record.id)
             adapter.rebindRow(record.id)
-            Toast.makeText(this@HomeActivity, toastRes, Toast.LENGTH_SHORT).show()
+            Feedback.toast(this@HomeActivity, toastRes)
         }
     }
 
     private fun showFailedBackupDialog(record: SessionRecord) {
         lifecycleScope.launch {
             val reason = withContext(Dispatchers.IO) { lastUploadFailureReason(record.id) }
-            MaterialAlertDialogBuilder(this@HomeActivity)
-                .setTitle(R.string.cloud_backup_failed_title)
-                .setMessage(reason ?: getString(R.string.cloud_backup_failed_generic))
-                .setPositiveButton(R.string.cloud_backup_retry_action) { _, _ ->
-                    enqueueBackup(record, R.string.cloud_retry_backup)
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
+            Dialogs.confirm(
+                this@HomeActivity,
+                getText(R.string.cloud_backup_failed_title),
+                reason ?: getString(R.string.cloud_backup_failed_generic),
+                R.string.cloud_backup_retry_action,
+            ) { enqueueBackup(record, R.string.cloud_retry_backup) }
         }
     }
 
@@ -816,7 +788,8 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun positionFabAtNineTenths() {
-        val root = findViewById<View>(R.id.homeRoot)
+        val root = binding.homeRoot
+        val fab = binding.fabNewAnalysis
         // Only assign layoutParams when margins actually change. Setting them on
         // every layout pass retriggers layout (and with the FAB menu overlay on
         // homeRoot that becomes an infinite requestLayout loop).

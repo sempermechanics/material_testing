@@ -95,6 +95,13 @@ class SessionListAdapterTest {
     private fun bind(position: Int): SessionListAdapter.Holder =
         adapter.createViewHolder(parent, 0).also { adapter.bindViewHolder(it, position) }
 
+    private val SessionListAdapter.Holder.badge get() = row.sessionBadge
+    private val SessionListAdapter.Holder.subtitle get() = row.sessionSubtitle
+    private val SessionListAdapter.Holder.thumb get() = row.sessionThumb
+    private val SessionListAdapter.Holder.card get() = row.sessionCard
+    private val SessionListAdapter.Holder.check get() = row.sessionCheck
+    private val SessionListAdapter.Holder.progressBar get() = row.sessionProgress
+
     private fun submit(vararg records: SessionRecord, withoutLocalData: Set<String> = emptySet()) {
         adapter.submit(records.toList(), withoutLocalData)
         changed.clear()

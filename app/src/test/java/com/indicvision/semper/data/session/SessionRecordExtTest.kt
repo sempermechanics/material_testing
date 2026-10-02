@@ -68,12 +68,12 @@ class SessionRecordExtTest {
     }
 
     /**
-     * A copy of Home's private rule (`SessionSelectionController.isCloudOnly` /
-     * `hasCloudCopy`, inlined again in `HomeActivity.openSession`):
+     * The cloud-only rule as Home had it before it called [isRestorable]:
      * `!hasLocalData && (syncState == SYNCED || cloudSessionId.isNotBlank())`.
-     * Keep it in step with those until wave 4 points them at [isRestorable].
+     * Home now asks [isRestorable] itself (SessionSelectionControllerTest
+     * checks its Restore action against it), so this pins the rule's meaning.
      */
-    private fun homeIsCloudOnly(r: SessionRecord, hasLocal: Boolean) =
+    private fun cloudOnly(r: SessionRecord, hasLocal: Boolean) =
         !hasLocal && (r.syncState == SyncState.SYNCED || r.cloudSessionId.isNotBlank())
 
     @Test
@@ -83,7 +83,7 @@ class SessionRecordExtTest {
                 for (local in listOf(true, false)) {
                     val r = sessionRecord(syncState = state, cloudSessionId = id)
                     val label = "$state '$id' local=$local"
-                    assertEquals(label, homeIsCloudOnly(r, local), r.isRestorable(hasLocalData = local))
+                    assertEquals(label, cloudOnly(r, local), r.isRestorable(hasLocalData = local))
                 }
             }
         }
