@@ -282,22 +282,15 @@ object CloudSync {
             return@withContext EraseResult.ERASED_EVERYWHERE
         }
 
-        val erased = api.authed(tokens) { token ->
+        api.authed(tokens) { token ->
             val cloudId = resolveCloudId(this, token, record)
             if (cloudId != null) {
                 this.deleteSession(token, cloudId)
                 CloudBackupListing.forget(appContext, cloudId)
             }
             SessionStore.delete(appContext, localSessionId)
-        }
-        if (erased is Authed.Ok) {
             Timber.i("Erased analysis %s locally and in the cloud", localSessionId)
-            return@withContext EraseResult.ERASED_EVERYWHERE
-        }
-        if (erased is Authed.Failed) {
-            Timber.e(erased.failure.cause, "Cloud erase failed for %s — leaving local copy intact", localSessionId)
-        }
-        eraseFailure(erased)
+        }.toEraseResult { Timber.e(it, "Cloud erase failed for %s — leaving local copy intact", localSessionId) }
     }
 
     /** What actually happened, so the caller can tell the user the truth. */
@@ -427,17 +420,12 @@ object CloudSync {
         tokens: TokenSource = TokenProvider,
     ): EraseResult = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
-        val erased = api.authed(tokens) { token ->
+        api.authed(tokens) { token ->
             this.deleteSession(token, cloudSessionId)
             CloudBackupListing.forget(appContext, cloudSessionId)
             forgetCloudCopy(appContext, localSessionId)
-        }
-        if (erased is Authed.Ok) {
             Timber.i("Deleted cloud backup %s", cloudSessionId)
-            return@withContext EraseResult.ERASED_EVERYWHERE
-        }
-        if (erased is Authed.Failed) Timber.e(erased.failure.cause, "Cloud backup delete failed for %s", cloudSessionId)
-        eraseFailure(erased)
+        }.toEraseResult { Timber.e(it, "Cloud backup delete failed for %s", cloudSessionId) }
     }
 
     /** The local row no longer has a cloud copy: LOCAL_ONLY, and no link to follow. */
@@ -448,13 +436,23 @@ object CloudSync {
         }
     }
 
-    /** An erase that did not go through: a 429 is worth waiting out; anything else leaves the cloud copy. */
-    private fun eraseFailure(erased: Authed<*>): EraseResult =
-        if ((erased as? Authed.Failed)?.failure?.kind == HttpFailure.Kind.RATE_LIMITED) {
-            EraseResult.RATE_LIMITED
-        } else {
-            EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+    /**
+     * What an erase came to for the user. A call that failed is passed to
+     * [logFailure]; a 429 is worth waiting out, and anything else that did not
+     * go through leaves the cloud copy.
+     */
+    private inline fun Authed<Unit>.toEraseResult(logFailure: (Throwable) -> Unit): EraseResult = when (this) {
+        is Authed.Ok -> EraseResult.ERASED_EVERYWHERE
+        is Authed.Failed -> {
+            logFailure(failure.cause)
+            if (failure.kind == HttpFailure.Kind.RATE_LIMITED) {
+                EraseResult.RATE_LIMITED
+            } else {
+                EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+            }
         }
+        Authed.Disabled, Authed.NoToken -> EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
+    }
 
     /**
      * Backend session id for a local analysis, or null if none is known. A
