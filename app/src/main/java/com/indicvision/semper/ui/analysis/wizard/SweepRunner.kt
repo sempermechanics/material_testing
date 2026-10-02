@@ -12,12 +12,12 @@ import com.indicvision.semper.data.session.RunReference
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.data.session.SkippedNode
+import com.indicvision.semper.data.session.originalNameOr
 import com.indicvision.semper.diagnostics.SemperAnalytics
 import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.ui.analysis.run.RunSpec
 import com.indicvision.semper.ui.analysis.run.baseName
-import com.indicvision.semper.ui.analysis.run.originalNameOr
 import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.sweep.toSkippedNode
 import kotlinx.coroutines.withContext
