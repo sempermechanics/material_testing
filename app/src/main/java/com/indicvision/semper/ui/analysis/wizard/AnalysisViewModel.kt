@@ -67,6 +67,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -94,6 +95,12 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
 
         /** [roi] before a reference is picked. */
         val NO_ROI = Roi.full(ImageSize.UNKNOWN)
+
+        /**
+         * Which wizard owns the process's one [WizardDraft]: bumped by each
+         * [attachDraft], so a wizard that is going can tell its draft was taken.
+         */
+        private val draftOwner = AtomicInteger()
     }
 
     internal val sessions = SessionRepository()
@@ -960,19 +967,33 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     /** The Bundle a process death left, until [restoreDraft] reads the draft behind it. */
     private var pendingRestore: Bundle? = null
 
-    /** Queues [write] on the draft's lane; it outlives this view model (see [WizardDraft.queue]). */
+    /** This wizard's claim on the draft: the [draftOwner] value [attachDraft] took. */
+    private var draftGeneration = 0
+
+    /** Set by [discardDraft]; read on the draft's lane, where a write still queued checks it. */
+    @Volatile
+    private var draftDiscarded = false
+
+    /**
+     * Queues [write] on the draft's lane; it outlives this view model (see
+     * [WizardDraft.queue]). It runs only while this wizard still owns the
+     * draft: there is one draft per process, and a wizard opened since owns it.
+     */
     private fun stage(write: (WizardDraft) -> Unit) {
-        val target = draft?.takeIf { mirrorToDraft } ?: return
-        WizardDraft.queue(target, write)
+        val target = draft?.takeIf { mirrorToDraft && !draftDiscarded } ?: return
+        val mine = draftGeneration
+        WizardDraft.queue(target) { if (!draftDiscarded && draftOwner.get() == mine) write(it) }
     }
 
     /**
-     * Starts mirroring the inputs into [target]. A wizard that is not being
-     * restored empties it first: whatever is there belongs to one that is gone.
+     * Starts mirroring the inputs into [target], and takes the draft from any
+     * wizard that had it. A wizard that is not being restored empties it
+     * first: whatever is there belongs to one that is gone.
      */
     fun attachDraft(target: WizardDraft) {
         if (draft != null) return
         draft = target
+        draftGeneration = draftOwner.incrementAndGet()
         if (pendingRestore == null) stage(WizardDraft::clear)
     }
 
@@ -1002,9 +1023,18 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         }
     }
 
-    /** The wizard was left for good: nothing will restore from the draft. Returns at once. */
+    /**
+     * The wizard was left for good: nothing will restore from the draft.
+     * Returns at once, and stops any write this wizard still has queued. The
+     * files are deleted on the draft's lane, unless a wizard opened since
+     * (whose `onCreate` can run before this one's `onDestroy`) has taken the
+     * draft: then they are that wizard's.
+     */
     fun discardDraft() {
-        draft?.discard()
+        val target = draft ?: return
+        draftDiscarded = true
+        val mine = draftGeneration
+        WizardDraft.queue(target) { if (draftOwner.get() == mine) it.clear() }
     }
 
     /** Back to an empty wizard. Sweep ranges and the line-cut choice stay. */

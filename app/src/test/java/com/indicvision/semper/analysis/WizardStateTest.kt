@@ -274,6 +274,45 @@ class WizardStateTest {
         assertFalse(WizardDraft.dirIn(ctx.filesDir).exists())
     }
 
+    @Test
+    fun `leaving the wizard deletes its draft`() {
+        val vm = AnalysisViewModel().also { it.attachDraft(draft) }
+        vm.refBytes = REF
+        drainDraftLane()
+        assertArrayEquals(REF, draft.readReference())
+
+        vm.discardDraft()
+        vm.roiMaskBytes = MASK
+        drainDraftLane()
+        assertFalse(WizardDraft.dirIn(ctx.filesDir).exists())
+    }
+
+    @Test
+    fun `a wizard left after the next one opened does not delete the next one's draft`() {
+        // The next wizard's onCreate runs before the old one's onDestroy.
+        val gone = AnalysisViewModel().also { it.attachDraft(draft) }
+        val next = AnalysisViewModel().also { it.attachDraft(WizardDraft(ctx)) }
+        next.refBytes = REF
+        gone.discardDraft()
+        drainDraftLane()
+
+        assertArrayEquals(REF, draft.readReference())
+    }
+
+    @Test
+    fun `the old wizard's last stop does not overwrite the next one's frame list`() {
+        val gone = editedWizard().also { it.attachDraft(draft) }
+        val next = AnalysisViewModel().also { it.attachDraft(WizardDraft(ctx)) }
+        next.deformedFrames = listOf(DeformedFrame(File(frames, "next.png").path, "NEXT.png"))
+        next.saveWizardState()
+        // The old Activity stops after the new one is up, then is destroyed.
+        gone.saveWizardState()
+        gone.discardDraft()
+        drainDraftLane()
+
+        assertEquals(WizardState.encodeFrames(WizardState.frames(next)), draft.readFrames())
+    }
+
     /** Waits for every draft write and delete queued so far. */
     private fun drainDraftLane() = runBlocking { withContext(WizardDraft.io) {} }
 
