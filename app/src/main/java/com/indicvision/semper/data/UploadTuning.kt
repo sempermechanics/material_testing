@@ -32,7 +32,7 @@ private const val CHUNK_MEMORY_BUDGET_FRACTION = 0.10
  * own value, clamped.
  *
  * Top-level so it is directly unit-testable — mirrors
- * [com.indicvision.semper.data.net.drive.nextWindowBytes] in `DriveTransfer.kt`.
+ * [com.indicvision.semper.data.net.drive.nextWindowBytes] in `DriveDownloader.kt`.
  */
 internal fun uploadChunkBytes(context: Context, serverChunkSize: Int, concurrency: Int): Int {
     val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
