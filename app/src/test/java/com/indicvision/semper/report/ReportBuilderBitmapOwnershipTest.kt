@@ -70,11 +70,18 @@ class ReportBuilderBitmapOwnershipTest {
 
     private class LaterFieldFailed : RuntimeException()
 
+    /** The images the caller passed in are the caller's: a failed build leaves them alone. */
+    private fun assertCallerImagesKept(params: ReportBuilder.ReportBuildParams) {
+        assertFalse("the reference passed in", params.baseImg.isRecycled)
+        assertFalse("the cover's deformed image passed in", params.defImgForCover.isRecycled)
+    }
+
     @Test
     fun `a field that fails recycles the fields baked before it`() {
         val made = mutableListOf<Bitmap>()
+        val params = params()
         try {
-            ReportBuilder.buildReport(params()) { bitmap ->
+            ReportBuilder.buildReport(params) { bitmap ->
                 made += bitmap
                 // The third field's render fails after U and V are baked.
                 if (made.size == 3) throw LaterFieldFailed()
@@ -86,15 +93,17 @@ class ReportBuilderBitmapOwnershipTest {
 
         assertEquals(3, made.size)
         made.forEachIndexed { i, bitmap -> assertTrue("bitmap $i recycled", bitmap.isRecycled) }
+        assertCallerImagesKept(params)
     }
 
     @Test
     fun `a cover that fails recycles every baked field`() {
         val made = mutableListOf<Bitmap>()
+        val params = params()
         // The six fields, then the reference cover: fail on the deformed cover.
         val fieldsAndReference = 7
         try {
-            ReportBuilder.buildReport(params()) { bitmap ->
+            ReportBuilder.buildReport(params) { bitmap ->
                 made += bitmap
                 if (made.size == fieldsAndReference + 1) throw LaterFieldFailed()
             }
@@ -104,6 +113,7 @@ class ReportBuilderBitmapOwnershipTest {
         }
 
         assertTrue(made.all { it.isRecycled })
+        assertCallerImagesKept(params)
     }
 
     @Test

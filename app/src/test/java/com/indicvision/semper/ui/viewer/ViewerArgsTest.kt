@@ -270,7 +270,7 @@ class ViewerArgsTest {
             "SWEEP_STEPS" to listOf(5, 7),
             "SWEEP_STRAIN_WINS" to listOf(15, 21),
             "LINE_CUT_HORIZONTAL" to false,
-            "SWEEP_SKIPPED" to sweepArgs.skippedJson,
+            "SWEEP_SKIPPED" to """[{"subset":61,"step":9,"strainWindow":27,"code":-3}]""",
             "STOP_CODE" to 0,
             "PLANNED_FRAMES" to 2,
             "SESSION_ID" to "cloud-1",
@@ -288,6 +288,66 @@ class ViewerArgsTest {
         val sent = args(sweepArgs).copy(defPath = "/tmp/def.png", defFilePaths = listOf("/tmp/f1.png"), startFrame = 1)
 
         assertEquals(expected, extrasOf(sent.toIntent(context)))
+    }
+
+    @Test
+    fun `an Intent the base build wrote reads back field by field`() {
+        // Built by hand with the base build's keys and value types, not through
+        // toIntent: what an Intent already in a back stack carries must still read.
+        val sent = Intent(context, ResultViewerActivity::class.java)
+            .putExtra("IMG_W", 1920)
+            .putExtra("IMG_H", 1080)
+            .putExtra("STEP", 7)
+            .putExtra("REF_NAME", "ref.png")
+            .putExtra("REF_PATH", "/sessions/s1/ref.png")
+            .putExtra("DEF_PATH", "/tmp/def.png")
+            .putExtra("BATCH_DIR_PATH", "/sessions/s1")
+            .putStringArrayListExtra("DEF_FILE_NAMES", arrayListOf("f1.png", "f2.png"))
+            .putStringArrayListExtra("DEF_FILE_PATHS", arrayListOf("/tmp/f1.png"))
+            .putExtra("SWEEP_SUBSETS", intArrayOf(41, 51))
+            .putExtra("SWEEP_STEPS", intArrayOf(5, 7))
+            .putExtra("SWEEP_STRAIN_WINS", intArrayOf(15, 21))
+            .putExtra("LINE_CUT_HORIZONTAL", false)
+            .putExtra("SWEEP_SKIPPED", """[{"subset":61,"step":9,"strainWindow":27,"code":-3}]""")
+            .putExtra("STOP_CODE", 3)
+            .putExtra("PLANNED_FRAMES", 4)
+            .putExtra("SESSION_ID", "cloud-1")
+            .putExtra("SESSION_LOCAL_ID", "local-1")
+            .putExtra("SUBSET_SIZE", 31)
+            .putExtra("STRAIN_WINDOW", 21)
+            .putExtra("STRAIN_METHOD", "VSG")
+            .putExtra("ENGINE_STATS", floatArrayOf(1f, 2f))
+            .putExtra("ROI_X", 10)
+            .putExtra("ROI_Y", 20)
+            .putExtra("ROI_W", 300)
+            .putExtra("ROI_H", 400)
+            .putExtra("START_FRAME", 1)
+
+        val read = ViewerArgs.from(sent, ::noRecord)
+
+        assertEquals(ImageSize(1920, 1080), read.imageSize)
+        assertEquals(7, read.step)
+        assertEquals("ref.png", read.refName)
+        assertEquals("/sessions/s1/ref.png", read.refPath)
+        assertEquals("/tmp/def.png", read.defPath)
+        assertEquals("/sessions/s1", read.batchDirPath)
+        assertEquals(listOf("f1.png", "f2.png"), read.frameNames)
+        assertEquals(listOf("/tmp/f1.png"), read.defFilePaths)
+        assertEquals(listOf(41, 51), read.sweep!!.subsets)
+        assertEquals(listOf(5, 7), read.sweep!!.steps)
+        assertEquals(listOf(15, 21), read.sweep!!.strainWindows)
+        assertFalse(read.sweep!!.lineCutHorizontal)
+        assertEquals(listOf(SkippedNode(61, 9, 27, -3)), SkippedNode.decodeJson(read.sweep!!.skippedJson))
+        assertEquals(3, read.stopCode)
+        assertEquals(4, read.plannedFrames)
+        assertEquals("cloud-1", read.sessionId)
+        assertEquals("local-1", read.sessionLocalId)
+        assertEquals(31, read.subsetSize)
+        assertEquals(21, read.strainWindow)
+        assertEquals("VSG", read.strainMethod)
+        assertEquals(listOf(1f, 2f), read.engineStats)
+        assertEquals(Roi(10, 20, 300, 400), read.roi)
+        assertEquals(1, read.startFrame)
     }
 
     @Test
