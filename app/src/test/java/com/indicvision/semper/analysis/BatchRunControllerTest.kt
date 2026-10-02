@@ -247,6 +247,24 @@ class BatchRunControllerTest {
     }
 
     @Test
+    fun `a cancelled re-run whose save missed the index still says it was not saved`() {
+        val line = TextView(ApplicationProvider.getApplicationContext<Application>())
+        controller(Gate(), resultLine = line).handleBatchOutcome(
+            Result.success(
+                outcome(RunStop.Cancelled.wireCode, validPoints = 500, frames = 2)
+                    .copy(saved = false, indexUnavailable = true),
+            ),
+        )
+
+        assertEquals(activity.getString(R.string.analysis_not_saved_title), line.text.toString())
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        assertEquals(
+            activity.getString(R.string.analysis_index_unavailable_body),
+            dialog.findViewById<TextView>(android.R.id.message)?.text.toString(),
+        )
+    }
+
+    @Test
     fun `a full quota at save time still opens the session-limit screen`() {
         controller(Gate()).handleBatchOutcome(
             Result.success(outcome(RunStop.SessionLimit.wireCode, validPoints = 500, frames = 3).copy(saved = false)),

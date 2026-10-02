@@ -15,6 +15,7 @@ import com.indicvision.semper.databinding.WizardStepSettingsContentBinding
 import com.indicvision.semper.ui.analysis.run.ComputeOverlayHelper
 import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.common.showUnlessEditing
 import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 
@@ -38,6 +39,7 @@ internal class WizardTestBed(resumed: Boolean = true) {
     init {
         activity.setContentView(binding.root)
         settings = WizardStepSettingsBinding.bind(binding.stubStepSettings.inflate()).settingsColumn.binding
+        host.settings = settings
     }
 
     /** A run chrome over throwaway views. */
@@ -56,9 +58,16 @@ internal class WizardTestBed(resumed: Boolean = true) {
     fun idle() = shadowOf(Looper.getMainLooper()).idle()
 }
 
-/** Counts what the wizard's parts ask of their host. */
+/**
+ * Counts what the wizard's parts ask of their host, and does what the real
+ * host does where a part can see it: committing the fields clears their
+ * focus, and a rendered field is left alone while it is being typed in.
+ */
 internal class FakeWizardHost : AnalysisWizardHost {
     val calls = mutableListOf<String>()
+
+    /** The settings page whose fields [commitParamFields] commits; none until the bed sets it. */
+    var settings: WizardStepSettingsContentBinding? = null
 
     fun count(call: String) = calls.count { it == call }
 
@@ -88,6 +97,12 @@ internal class FakeWizardHost : AnalysisWizardHost {
 
     override fun commitParamFields() {
         calls += "commitParamFields"
+        settings?.run {
+            tvSubsetValue.clearFocus()
+            tvStepValue.clearFocus()
+            tvOverlapValue.clearFocus()
+            tvStrainValue.clearFocus()
+        }
     }
 
     override fun startVsgSweep() {
@@ -100,7 +115,7 @@ internal class FakeWizardHost : AnalysisWizardHost {
 
     override fun refPreviewBitmap(): Bitmap? = null
 
-    override fun renderParamField(field: EditText, value: Int) = field.setText(value.toString())
+    override fun renderParamField(field: EditText, value: Int) = field.showUnlessEditing(value.toString())
 
     override fun confirmOpenFaq(url: String) {
         calls += "confirmOpenFaq $url"

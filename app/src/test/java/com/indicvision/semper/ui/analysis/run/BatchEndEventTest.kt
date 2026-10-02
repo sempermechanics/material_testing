@@ -76,6 +76,13 @@ class BatchEndEventTest {
         assertTrue(recorded.isEmpty())
     }
 
+    @Test
+    fun `a cancelled re-run whose save missed the index reports it`() {
+        batchEndEvent(context, outcome(points = 10, indexUnavailable = true), RunStop.Cancelled)
+        assertEquals(listOf(SemperAnalytics.ANALYSIS_FAILED), recorded.map { it.first })
+        assertEquals("index_unavailable", recorded.single().second["reason"])
+    }
+
     private companion object {
         const val ENGINE_FAILURE = -3
     }
