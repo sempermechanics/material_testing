@@ -3,6 +3,8 @@ package com.indicvision.semper.ui.settings
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import com.indicvision.semper.data.cloud.CloudSync
+import com.indicvision.semper.data.net.CloudApi
+import com.indicvision.semper.data.net.IndicApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,12 +31,27 @@ import timber.log.Timber
  */
 object AccountDeletionRun {
 
+    /** How far the deletion got, which is what the user is told. */
+    enum class Outcome {
+        /** Cloud, phone and sign-in identity are all gone. */
+        DELETED,
+
+        /** Cloud and phone are wiped; the sign-in identity outlived them. */
+        IDENTITY_KEPT,
+
+        /** The cloud erase did not go through, so nothing was touched. */
+        CLOUD_NOT_REACHED,
+
+        /** The cloud erase went through, then clearing this phone failed. */
+        PHONE_NOT_CLEARED,
+    }
+
     sealed interface State {
         data object Idle : State
 
         data object Running : State
 
-        data class Done(val outcome: CloudSync.AccountDeletion) : State
+        data class Done(val outcome: Outcome) : State
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -44,20 +61,26 @@ object AccountDeletionRun {
 
     /** Seam for tests: the JVM has no Firebase or backend to delete from. */
     @VisibleForTesting
-    internal var delete: suspend (Context) -> CloudSync.AccountDeletion = { CloudSync.deleteAccount(it) }
+    internal var delete: suspend (Context, CloudApi) -> CloudSync.AccountDeletion =
+        { context, api -> CloudSync.deleteAccount(context, api) }
+
+    /** Seam for tests: the backend the deletion erases the account from. */
+    @VisibleForTesting
+    internal var cloudApi: (Context) -> CloudApi = { IndicApi.get(it) }
 
     /** Starts the deletion; false (and nothing started) when one is already running or unread. */
     fun start(context: Context): Boolean {
         if (!mutableState.compareAndSet(State.Idle, State.Running)) return false
         val app = context.applicationContext
+        val api = ErasureWatch(cloudApi(app))
         scope.launch {
             // Never left in Running: a throw would otherwise stick the dialog up
             // and refuse every later start. [scope] is never cancelled, so what
-            // is caught here is never a cancellation of this work. The outcome
-            // is the one that keeps the user here and lets them try again.
-            val outcome = runCatching { delete(app) }.getOrElse {
+            // is caught here is never a cancellation of this work. What the user
+            // is told depends on whether the cloud erase had gone through.
+            val outcome = runCatching { delete(app, api).toOutcome() }.getOrElse {
                 Timber.e(it, "Account deletion threw %s", it.javaClass.simpleName)
-                CloudSync.AccountDeletion.CLOUD_UNREACHABLE
+                if (api.cloudErased) Outcome.PHONE_NOT_CLEARED else Outcome.CLOUD_NOT_REACHED
             }
             mutableState.value = State.Done(outcome)
         }
@@ -65,14 +88,38 @@ object AccountDeletionRun {
     }
 
     /** The finished outcome, handed out once; the next reader sees [State.Idle]. */
-    fun consume(): CloudSync.AccountDeletion? {
+    fun consume(): Outcome? {
         val done = mutableState.value as? State.Done ?: return null
         return if (mutableState.compareAndSet(done, State.Idle)) done.outcome else null
+    }
+
+    private fun CloudSync.AccountDeletion.toOutcome(): Outcome = when (this) {
+        CloudSync.AccountDeletion.DELETED -> Outcome.DELETED
+        CloudSync.AccountDeletion.IDENTITY_KEPT -> Outcome.IDENTITY_KEPT
+        CloudSync.AccountDeletion.CLOUD_UNREACHABLE -> Outcome.CLOUD_NOT_REACHED
+    }
+
+    /**
+     * [api], unchanged, except that it notes when the account erase answers:
+     * from then on the cloud copy is gone, whatever fails after it. With no
+     * backend nothing is noted, so a throw there still reads as nothing
+     * deleted: it cannot be told apart from one before the deletion began.
+     */
+    private class ErasureWatch(private val api: CloudApi) : CloudApi by api {
+        @Volatile
+        var cloudErased: Boolean = false
+            private set
+
+        override suspend fun deleteAccount(idToken: String) {
+            api.deleteAccount(idToken)
+            cloudErased = true
+        }
     }
 
     @VisibleForTesting
     internal fun resetForTest() {
         mutableState.value = State.Idle
-        delete = { CloudSync.deleteAccount(it) }
+        delete = { context, api -> CloudSync.deleteAccount(context, api) }
+        cloudApi = { IndicApi.get(it) }
     }
 }
