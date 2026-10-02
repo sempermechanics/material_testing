@@ -111,7 +111,7 @@ object AnalysisNavHelper {
             refPath = run.refPath ?: "",
             batchDirPath = run.batchDirPath,
             frameNames = frameNames,
-            stopCode = run.stopCode,
+            stopCode = run.stop.wireCode,
             plannedFrames = run.plannedFrames,
             sessionId = viewModel.workingLocalId,
             sessionLocalId = viewModel.workingLocalId,

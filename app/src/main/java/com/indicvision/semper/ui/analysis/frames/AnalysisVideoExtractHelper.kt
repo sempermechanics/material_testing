@@ -5,17 +5,18 @@ package com.indicvision.semper.ui.analysis.frames
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.prefs.DicSettings
+import com.indicvision.semper.field.ImageSize
 import com.indicvision.semper.imaging.video.VideoFrameExtractor
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.run.ComputeOverlayHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.common.FaqRedirect
+import com.indicvision.semper.ui.common.Feedback
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,11 +84,12 @@ object AnalysisVideoExtractHelper {
                         return@withContext
                     }
 
-                    viewModel.applyNewReference(result.refPng, result.refName, result.refWidth, result.refHeight)
-                    viewModel.defFilePaths = result.batch.filePaths
-                    viewModel.defOriginalNames = result.batch.originalNames
-                    viewModel.defFrameSizes = result.batch.frameSizes
-                    viewModel.defFrameDates = emptyList()
+                    viewModel.applyNewReference(
+                        result.refPng,
+                        result.refName,
+                        ImageSize(result.refWidth, result.refHeight),
+                    )
+                    viewModel.deformedFrames = result.batch.frames
                     viewModel.defOrderMode = FrameOrderMode.PICKER
                     viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
                     viewModel.defFromVideo = result.batch.fromVideo
@@ -95,18 +97,18 @@ object AnalysisVideoExtractHelper {
                     onApplied(
                         AppliedResult(
                             refPreview = result.refPreview,
-                            frameCount = result.batch.filePaths.size,
+                            frameCount = result.batch.frames.size,
                         ),
                     )
-                    Toast.makeText(
+                    Feedback.toast(
                         activity,
                         activity.resources.getQuantityString(
                             R.plurals.video_loaded_frames,
-                            result.batch.filePaths.size,
-                            result.batch.filePaths.size,
+                            result.batch.frames.size,
+                            result.batch.frames.size,
                         ),
-                        Toast.LENGTH_LONG,
-                    ).show()
+                        long = true,
+                    )
                 }
             } catch (e: CancellationException) {
                 throw e

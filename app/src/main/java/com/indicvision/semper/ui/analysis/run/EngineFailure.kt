@@ -3,18 +3,19 @@ package com.indicvision.semper.ui.analysis.run
 import android.content.Context
 import androidx.annotation.StringRes
 import com.indicvision.semper.R
+import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 
 /** Maps engine error codes to the same user-facing strings on every screen. */
 object EngineFailure {
 
-    /** AKAZE could not match the pair. */
+    /** AKAZE could not match the pair; [RunStop.FeaturesUnmatched] as a stop code. */
     const val ENGINE_ERROR_FEATURES = -1
 
-    /** The ROI held no valid points. */
+    /** The ROI held no valid points; [RunStop.InvalidRoi] as a stop code. */
     const val ENGINE_ERROR_ROI = -2
 
-    /** An image failed to decode, or the engine could not start. */
+    /** An image failed to decode, or the engine could not start; [RunStop.InitFailed] as a stop code. */
     const val ENGINE_ERROR_INIT = -3
 
     private enum class Cause {
@@ -30,7 +31,7 @@ object EngineFailure {
         ENGINE_ERROR_FEATURES -> Cause.FEATURES
         ENGINE_ERROR_ROI -> Cause.ROI
         ENGINE_ERROR_INIT -> Cause.INIT
-        AnalysisRunCodes.ERROR_LOW_CONVERGENCE -> Cause.CONVERGENCE
+        RunStop.LowConvergence.wireCode -> Cause.CONVERGENCE
         0 -> Cause.VSG
         in 1..Int.MAX_VALUE -> Cause.UNKNOWN
         else -> Cause.VSG
@@ -93,8 +94,8 @@ object EngineFailure {
                     R.plurals.run_fail_strain_window_fmt,
                     correlatedPoints,
                     correlatedPoints,
-                    spec.strainWindow,
-                    spec.step,
+                    spec.params.strainWindow,
+                    spec.params.step,
                 )
             } else {
                 context.getString(reasonRes(0), 0)

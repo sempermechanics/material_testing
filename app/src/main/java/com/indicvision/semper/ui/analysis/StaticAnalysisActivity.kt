@@ -58,6 +58,13 @@ import com.indicvision.semper.data.prefs.WizardDraft
 import com.indicvision.semper.data.session.CacheJanitor
 import com.indicvision.semper.data.session.SkippedNode
 import com.indicvision.semper.diagnostics.EngineDebug
+import com.indicvision.semper.field.DicParams
+import com.indicvision.semper.field.ImageSize
+import com.indicvision.semper.field.ImageSizeExtras
+import com.indicvision.semper.field.Roi
+import com.indicvision.semper.field.RunStop
+import com.indicvision.semper.field.getRoiExtras
+import com.indicvision.semper.field.toRect
 import com.indicvision.semper.imaging.video.VideoFrameExtractor
 import com.indicvision.semper.imaging.video.VideoKeyframeHelper
 import com.indicvision.semper.imaging.video.VideoMeta
@@ -65,6 +72,7 @@ import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.frames.AnalysisDeformedBatchHelper
 import com.indicvision.semper.ui.analysis.frames.AnalysisFrameOrderMenuHelper
 import com.indicvision.semper.ui.analysis.frames.AnalysisVideoExtractHelper
+import com.indicvision.semper.ui.analysis.frames.DeformedFrame
 import com.indicvision.semper.ui.analysis.frames.FrameOrderAdapter
 import com.indicvision.semper.ui.analysis.frames.FrameOrderDirection
 import com.indicvision.semper.ui.analysis.frames.FrameOrderHelper
@@ -72,7 +80,6 @@ import com.indicvision.semper.ui.analysis.frames.FrameOrderMode
 import com.indicvision.semper.ui.analysis.recommend.DicGoodPractice
 import com.indicvision.semper.ui.analysis.recommend.SubsetRecommender
 import com.indicvision.semper.ui.analysis.roi.RoiResolveHelper
-import com.indicvision.semper.ui.analysis.run.AnalysisRunCodes
 import com.indicvision.semper.ui.analysis.run.BatchRunController
 import com.indicvision.semper.ui.analysis.run.ComputeOverlayHelper
 import com.indicvision.semper.ui.analysis.run.EngineFailure
@@ -80,6 +87,7 @@ import com.indicvision.semper.ui.analysis.run.RunSpec
 import com.indicvision.semper.ui.analysis.sweep.SweepSetupHelper
 import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
+import com.indicvision.semper.ui.analysis.sweep.toSkippedNode
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisReadyGate
 import com.indicvision.semper.ui.analysis.wizard.AnalysisSettingsSheetHelper
@@ -539,8 +547,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             }
             val intent = Intent(this@StaticAnalysisActivity, RoiDrawActivity::class.java)
             intent.putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
-            intent.putExtra(DicKeys.IMAGE_WIDTH, viewModel.realRefWidth)
-            intent.putExtra(DicKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
+            ImageSizeExtras.ROI_EDITOR.put(intent, viewModel.refSize)
             launcher.launch(intent)
         }
     }
@@ -560,14 +567,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
             Timber.w("ROI result with no reference; ignored")
             return
         }
-        viewModel.roiX = data.getIntExtra(DicKeys.ROI_X, 0)
-        viewModel.roiY = data.getIntExtra(DicKeys.ROI_Y, 0)
-        viewModel.roiW = data.getIntExtra(DicKeys.ROI_W, viewModel.realRefWidth)
-        viewModel.roiH = data.getIntExtra(DicKeys.ROI_H, viewModel.realRefHeight)
-
+        val drawn = data.getRoiExtras(default = Roi.full(viewModel.refSize))
+        viewModel.roi = drawn
         // A selection covering the whole image counts as no custom ROI.
-        viewModel.hasCustomRoi =
-            !(viewModel.roiW == viewModel.realRefWidth && viewModel.roiH == viewModel.realRefHeight)
+        viewModel.hasCustomRoi = !drawn.coversFrameOf(viewModel.refSize)
 
         val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
         lifecycleScope.launch {
@@ -644,7 +647,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                viewModel.applyNewReference(loaded.bytes, name, loaded.width, loaded.height)
+                viewModel.applyNewReference(loaded.bytes, name, loaded.size)
                 refPreviewBmp = loaded.preview
                 wizardSlots.refreshRefSlot(refPreviewBmp)
                 wizardSlots.updateRoiSummary()
@@ -668,12 +671,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
-    private data class LoadedReference(
-        val bytes: ByteArray,
-        val width: Int,
-        val height: Int,
-        val preview: Bitmap?,
-    )
+    private class LoadedReference(val bytes: ByteArray, val size: ImageSize, val preview: Bitmap?)
 
     /** Decode / dimension / preview work for a reference pick. Null when it cannot be decoded. */
     @WorkerThread
@@ -684,7 +682,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (isRaw) {
             val decoded = com.indicvision.semper.imaging.BitmapDecode.rgbaAndPreviewFromStream(stream)
                 ?: return null
-            return LoadedReference(decoded.rgba, decoded.width, decoded.height, decoded.preview)
+            return LoadedReference(decoded.rgba, ImageSize(decoded.width, decoded.height), decoded.preview)
         }
 
         val bytes = stream.readBytes()
@@ -693,7 +691,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
             ReferencePreviewLoader.Request(bytes, 0, 0, com.indicvision.semper.imaging.BitmapDecode.PREVIEW_MAX_EDGE),
         )
         if (loaded.width <= 0 || loaded.height <= 0) return null
-        return LoadedReference(bytes, loaded.width, loaded.height, loaded.bitmap)
+        return LoadedReference(bytes, ImageSize(loaded.width, loaded.height), loaded.bitmap)
     }
 
     /** Shared result path for the deformed-frame pickers (Photos and Files). */
@@ -770,44 +768,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
         // Import no longer probes URI dates (kept the overlay at 0% on PLC).
         // Resolve from the cached files the first time the user sorts by date.
-        val pathsSnapshot = viewModel.defFilePaths.toList()
-        val namesSnapshot = viewModel.defOriginalNames.toList()
-        val datesSnapshot = viewModel.defFrameDates.toList()
-        val sizesSnapshot = viewModel.defFrameSizes.toMap()
+        val snapshot = viewModel.deformedFrames
         lifecycleScope.launch {
-            val dates = withContext(Dispatchers.IO) {
-                if (mode == FrameOrderMode.DATE &&
-                    (
-                        datesSnapshot.size != pathsSnapshot.size ||
-                            datesSnapshot.all { it == Long.MAX_VALUE }
-                        )
-                ) {
-                    pathsSnapshot.map { FrameOrderHelper.resolveDateMs(File(it)) }
+            val dated = withContext(Dispatchers.IO) {
+                if (mode == FrameOrderMode.DATE && snapshot.all { it.date == DeformedFrame.UNKNOWN_DATE }) {
+                    snapshot.map { it.copy(date = FrameOrderHelper.resolveDateMs(File(it.path))) }
                 } else {
-                    datesSnapshot
+                    snapshot
                 }
             }
-            val ordered = withContext(Dispatchers.Default) {
-                FrameOrderHelper.reorder(
-                    paths = pathsSnapshot,
-                    names = namesSnapshot,
-                    dates = dates,
-                    sizes = sizesSnapshot,
-                    mode = mode,
-                    direction = direction,
-                )
-            }
-            val (paths, sizes) = withContext(Dispatchers.IO) {
-                FrameOrderHelper.reprefixTempFiles(
-                    ordered.paths,
-                    ordered.names,
-                    ordered.sizes,
-                )
-            }
-            viewModel.defFilePaths = paths
-            viewModel.defOriginalNames = ordered.names
-            viewModel.defFrameDates = ordered.dates
-            viewModel.defFrameSizes = sizes
+            val ordered = withContext(Dispatchers.Default) { FrameOrderHelper.reorder(dated, mode, direction) }
+            viewModel.deformedFrames = withContext(Dispatchers.IO) { FrameOrderHelper.reprefixTempFiles(ordered) }
             wizardSlots.refreshDefSlot()
             validateFrameSizes()
         }
@@ -818,19 +789,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         val indexOf = viewModel.defFilePaths.withIndex().associate { it.value to it.index }
         val order = orderedPaths.mapNotNull { indexOf[it] }
         if (order.size != orderedPaths.size) return
-        val ordered = FrameOrderHelper.reorder(
-            paths = viewModel.defFilePaths,
-            names = viewModel.defOriginalNames,
-            dates = viewModel.defFrameDates,
-            sizes = viewModel.defFrameSizes,
-            mode = FrameOrderMode.MANUAL,
-            manualOrder = order,
-        )
         // Keep file names as-is during drag; analysis uses list order, not path sort.
-        viewModel.defFilePaths = ordered.paths
-        viewModel.defOriginalNames = ordered.names
-        viewModel.defFrameDates = ordered.dates
-        viewModel.defFrameSizes = ordered.sizes
+        viewModel.deformedFrames =
+            FrameOrderHelper.reorder(viewModel.deformedFrames, FrameOrderMode.MANUAL, manualOrder = order)
         viewModel.defOrderMode = FrameOrderMode.MANUAL
         validateFrameSizes()
     }
@@ -1040,33 +1001,20 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * Costs nothing: the sizes were measured during import.
      */
     private fun validateFrameSizes() {
-        val refW = viewModel.realRefWidth
-        val refH = viewModel.realRefHeight
-        val sizes = viewModel.defFrameSizes
-        viewModel.frameSizeError = if (refW <= 0 || refH <= 0 || sizes.isEmpty()) {
+        val ref = viewModel.refSize
+        val badNames = viewModel.deformedFrames
+            .filter { it.size != null && it.size != ref }
+            .map { frame -> frame.name.ifEmpty { File(frame.path).name } }
+        viewModel.frameSizeError = if (!ref.isKnown || badNames.isEmpty()) {
             null
         } else {
-            val badNames = mutableListOf<String>()
-            viewModel.defFilePaths.forEachIndexed { index, path ->
-                val size = sizes[path]
-                if (size != null && size != (refW to refH)) {
-                    val name = viewModel.defOriginalNames.getOrNull(index)
-                        ?: java.io.File(path).name
-                    badNames.add(name)
-                }
-            }
-            if (badNames.isEmpty()) {
-                null
-            } else {
-                val listed = formatMismatchNames(badNames)
-                resources.getQuantityString(
-                    R.plurals.frames_size_mismatch_fmt,
-                    badNames.size,
-                    refW,
-                    refH,
-                    listed,
-                )
-            }
+            resources.getQuantityString(
+                R.plurals.frames_size_mismatch_fmt,
+                badNames.size,
+                ref.width,
+                ref.height,
+                formatMismatchNames(badNames),
+            )
         }
     }
 
@@ -1106,21 +1054,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     /** Region the recommendation samples: the ROI when set, else the frame. */
-    private fun currentSamplingRoi(): android.graphics.Rect? {
-        val w = viewModel.realRefWidth
-        val h = viewModel.realRefHeight
-        if (w <= 0 || h <= 0) return null
-        return if (viewModel.hasCustomRoi && viewModel.roiW > 0 && viewModel.roiH > 0) {
-            android.graphics.Rect(
-                viewModel.roiX,
-                viewModel.roiY,
-                viewModel.roiX + viewModel.roiW,
-                viewModel.roiY + viewModel.roiH,
-            )
-        } else {
-            android.graphics.Rect(0, 0, w, h)
-        }
-    }
+    private fun currentSamplingRoi(): Rect? =
+        viewModel.roi.orFullFrame(viewModel.hasCustomRoi, viewModel.refSize)?.toRect()
 
     @Suppress("ReturnCount")
     private fun requestSubsetRecommendation() {
@@ -1290,17 +1225,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * off the edge. Null — with the user told why — when it cannot hold one
      * subset.
      */
-    private fun resolveRoi(subset: Int): IntArray? {
-        val roi = RoiResolveHelper.resolve(
-            subset = subset,
-            hasCustomRoi = viewModel.hasCustomRoi,
-            roiX = viewModel.roiX,
-            roiY = viewModel.roiY,
-            roiW = viewModel.roiW,
-            roiH = viewModel.roiH,
-            realRefWidth = viewModel.realRefWidth,
-            realRefHeight = viewModel.realRefHeight,
-        )
+    private fun resolveRoi(subset: Int): Roi? {
+        val roi = Roi.forSolve(subset, viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
         if (roi == null) {
             FaqRedirect.snackbar(
                 this,
@@ -1312,29 +1238,17 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     /** Largest odd subset the loaded image and ROI can hold. */
-    private fun maxSubsetForRoi(): Int = RoiResolveHelper.maxSubsetForRoi(
-        hasCustomRoi = viewModel.hasCustomRoi,
-        roiX = viewModel.roiX,
-        roiY = viewModel.roiY,
-        roiW = viewModel.roiW,
-        roiH = viewModel.roiH,
-        realRefWidth = viewModel.realRefWidth,
-        realRefHeight = viewModel.realRefHeight,
-    )
+    private fun maxSubsetForRoi(): Int =
+        RoiResolveHelper.maxSubsetForRoi(viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
 
     private fun startBatchAnalysis() {
         if (!viewModel.isReadyToCompute()) return
 
-        val subset = currentSubsetSize()
-        val step = currentStepSize()
-        val strainWin = currentStrainWindow()
-
-        val roi = resolveRoi(subset) ?: return
+        val params = DicParams(currentSubsetSize(), currentStepSize(), currentStrainWindow())
+        val roi = resolveRoi(params.subset) ?: return
         // Frozen here: everything after Compute reads the run's spec, not the sliders.
         val spec = RunSpec.of(
-            subset = subset,
-            step = step,
-            strainWindow = strainWin,
+            params = params,
             roi = roi,
             mask = viewModel.roiMaskBytes,
             use6x6 = currentUseKeysInterpolator(),
@@ -1615,25 +1529,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.sweep_failed, Toast.LENGTH_LONG).show()
             return
         }
-        if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT) {
+        if (outcome.stop == RunStop.SessionLimit) {
             AnalysisNavHelper.openSessionLimit(this)
             return
         }
         if (outcome.totalFrames == 0) {
-            if (outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED) return
+            if (outcome.stop == RunStop.Cancelled) return
             // Route to lattice with all-failed nodes so the user can tap each for details.
             // Each node keeps its own reason; they used to all show the last one's.
             viewModel.sweepPlan = emptyList()
             viewModel.sweepSkippedNodes = SkippedNode.forFailedSweep(viewModel.sweepSkippedNodes) {
                 val plan = viewModel.runResult.value.spec?.sweep?.plan ?: sweepHelper.currentPlan()
-                plan.map { point ->
-                    SkippedNode(
-                        subset = point.subset,
-                        step = point.step,
-                        strainWindow = point.vsg,
-                        code = outcome.engineErrorCode,
-                    )
-                }
+                plan.map { it.toSkippedNode(outcome.engineErrorCode) }
             }
             viewModel.lastBatchDirPath = outcome.batchDirPath
             openResultViewer(sweep = true)
@@ -1865,10 +1772,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (viewModel.realRefWidth > 0) {
             viewModel.hasCustomRoi = false
             viewModel.roiMaskBytes = null
-            viewModel.roiX = 0
-            viewModel.roiY = 0
-            viewModel.roiW = viewModel.realRefWidth
-            viewModel.roiH = viewModel.realRefHeight
+            viewModel.roi = Roi.full(viewModel.refSize)
         }
         wizardSlots.updateRoiSummary()
         checkReady()

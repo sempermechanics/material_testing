@@ -8,12 +8,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
+import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.common.Dialogs
 import kotlinx.coroutines.launch
 
 /**
@@ -103,19 +104,23 @@ class BatchRunController(
             clearEngineFailFaq()
             val detail = e.message ?: e::class.java.simpleName
             tvResult.text = activity.getString(R.string.analysis_unexpected_title)
-            MaterialAlertDialogBuilder(activity)
-                .setTitle(R.string.analysis_unexpected_title)
-                .setMessage(activity.getString(R.string.analysis_unexpected_fmt, detail))
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
+            Dialogs.info(
+                activity,
+                activity.getText(R.string.analysis_unexpected_title),
+                activity.getString(R.string.analysis_unexpected_fmt, detail),
+            )
             return
         }
 
         val outcome = result.getOrThrow()
         when {
-            outcome.engineErrorCode == AnalysisRunCodes.ERROR_CANCELLED -> Unit
-            outcome.engineErrorCode == AnalysisRunCodes.ERROR_SESSION_LIMIT ->
-                AnalysisNavHelper.openSessionLimit(activity)
+            outcome.stop == RunStop.Cancelled -> Unit
+            outcome.stop == RunStop.SessionLimit -> AnalysisNavHelper.openSessionLimit(activity)
+            outcome.indexUnavailable -> {
+                clearEngineFailFaq()
+                tvResult.setText(R.string.analysis_not_saved_title)
+                Dialogs.info(activity, R.string.analysis_not_saved_title, R.string.analysis_index_unavailable_body)
+            }
             // Stopped early (low convergence included) with frames kept. Only a
             // run that saved them may say so: a first frame that kept no points
             // saves nothing, however many frames solved after it.

@@ -18,6 +18,10 @@ import androidx.annotation.WorkerThread
 import com.indicvision.semper.ProgressCallback
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.cloud.CloudSync
+import com.indicvision.semper.data.session.RunInput
+import com.indicvision.semper.data.session.RunMetrics
+import com.indicvision.semper.data.session.RunOutcome
+import com.indicvision.semper.data.session.RunReference
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionRecordSettings
@@ -25,9 +29,11 @@ import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.diagnostics.EngineDebug
 import com.indicvision.semper.diagnostics.SemperAnalytics
 import com.indicvision.semper.field.DicResult
+import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.FieldRangesStore
 import com.indicvision.semper.report.VisualizationEngine
+import com.indicvision.semper.report.newMetrics
 import com.indicvision.semper.ui.analysis.frames.FrameImportHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import kotlinx.coroutines.ensureActive
@@ -37,6 +43,18 @@ import java.util.Locale
 import kotlin.coroutines.CoroutineContext
 
 /**
+ * One batch run: what it solves ([spec]), the import cache its frames came
+ * from ([cacheDir]), when it started, and the [job] whose cancel it checks
+ * between frames.
+ */
+internal class BatchRun(
+    val spec: RunSpec,
+    val cacheDir: File,
+    val startedAtMs: Long,
+    val job: CoroutineContext,
+)
+
+/**
  * The batch DIC run loop, moved as one unit from [AnalysisViewModel].
  * JNI [SemperNativeLib.computeFullFieldDirect] stays in this loop — do not
  * fragment it. Buffer allocate / overrun / `.dat` write are [DicFieldIo].
@@ -44,11 +62,10 @@ import kotlin.coroutines.CoroutineContext
 @WorkerThread
 internal fun AnalysisViewModel.runBatchAnalysisBody(
     appContext: Context,
-    spec: RunSpec,
-    params: AnalysisViewModel.BatchAnalysisParams,
+    run: BatchRun,
     onProgress: (AnalysisViewModel.BatchProgressUpdate) -> Unit,
-    jobContext: CoroutineContext,
 ): AnalysisViewModel.BatchAnalysisOutcome {
+    val spec = run.spec
     val limited = sessionLimitOutcome(appContext, defFilePaths.size)
     if (limited != null) {
         SemperAnalytics.event(
@@ -73,7 +90,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // would otherwise keep the PREVIOUS run's numbers — the stale-results bug.
     resetRunResult(batchDir.absolutePath, spec)
 
-    EngineDebug.attach(params.debugDir)
+    EngineDebug.attach(spec.debugDir)
 
     val plannedFrames = defFilePaths.size
     val refBytes = refBytes ?: error("Reference missing")
@@ -81,7 +98,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     var firstFrameValidPoints = 0
     var firstFrameCorrelatedPoints = -1
     var firstFrameAvgIters = 0f
-    var engineErrorCode = 0
+    var stop: RunStop = RunStop.Finished
 
     onProgress(
         AnalysisViewModel.BatchProgressUpdate(
@@ -92,13 +109,15 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     )
     SemperNativeLib.initializeReference(
         refBytes,
-        params.maskData,
+        spec.mask,
         realRefWidth,
         realRefHeight,
     )
 
-    val gridW = params.finalRectW / params.step
-    val gridH = params.finalRectH / params.step
+    val roi = spec.roi
+    val dic = spec.params
+    val gridW = roi.w / dic.step
+    val gridH = roi.h / dic.step
     val maxPoints = gridW * gridH
     val outputBuffer = DicFieldIo.allocateDirect(maxPoints)
 
@@ -140,9 +159,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val perFrameSummaryRanges = mutableListOf<Map<Int, Pair<Float, Float>?>>()
 
     for ((frameIndex, defPath) in defFilePaths.withIndex()) {
-        jobContext.ensureActive()
+        run.job.ensureActive()
         if (cancelRequested) {
-            engineErrorCode = AnalysisViewModel.ERROR_CANCELLED
+            stop = RunStop.Cancelled
             break
         }
         val frameLabel = "Processing Frame ${frameIndex + 1}/$plannedFrames..."
@@ -216,21 +235,17 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         }
 
         outputBuffer.clear()
-        // 16 core metrics + optional mesh-seeding slot, pre-set to "unknown"
-        // so an engine that only writes the core slots leaves it valid.
-        val metricsCatcher = FloatArray(EngineStats.SLOT_COUNT).also {
-            it[EngineStats.SLOT_MESH_SEEDING] = EngineStats.MESH_SEEDING_UNKNOWN.toFloat()
-        }
+        val metricsCatcher = EngineStats.newMetrics()
 
         val validPointsCount = SemperNativeLib.computeFullFieldDirect(
-            refBytes, defBytes, params.maskData,
-            params.finalRectX, params.finalRectY, params.finalRectW, params.finalRectH,
-            params.step, params.subset, params.strainWin, params.use6x6,
+            refBytes, defBytes, spec.mask,
+            roi.x, roi.y, roi.w, roi.h,
+            dic.step, dic.subset, dic.strainWindow, spec.use6x6,
             outputBuffer, callback, metricsCatcher,
         )
 
         if (validPointsCount < 0) {
-            engineErrorCode = validPointsCount
+            stop = RunStop.fromWireCode(validPointsCount)
             failedFrameIndex = frameIndex
             break
         }
@@ -250,7 +265,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 DicFieldIo.capacityPoints(outputBuffer),
                 frameIndex,
             )
-            engineErrorCode = EngineFailure.ENGINE_ERROR_INIT
+            stop = RunStop.InitFailed
             failedFrameIndex = frameIndex
             break
         }
@@ -281,7 +296,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         totalPointsSolved += validPointsCount
         lastConvergence = metricsCatcher[EngineStats.SLOT_CONVERGENCE]
         if (convergenceGate.record(lastConvergence)) {
-            engineErrorCode = AnalysisRunCodes.ERROR_LOW_CONVERGENCE
+            stop = RunStop.LowConvergence
             failedFrameIndex = frameIndex
             break
         }
@@ -324,12 +339,13 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // With every frame moved out, the committed import is dead weight that
     // would otherwise survive until the next import. A partial run leaves it
     // for CacheJanitor, since the un-processed frames are still only there.
-    File(params.cacheDir, FrameImportHelper.COMMITTED_DIR_NAME)
+    File(run.cacheDir, FrameImportHelper.COMMITTED_DIR_NAME)
         .takeIf { it.isDirectory && it.list()?.isEmpty() == true }
         ?.delete()
 
-    val executionTimeMs = (System.currentTimeMillis() - params.processingStartTime).toInt()
+    val executionTimeMs = (System.currentTimeMillis() - run.startedAtMs).toInt()
     var recordSaved = false
+    var indexUnavailable = false
     // The names actually on disk in raw_deformed/ — reopening a session,
     // exporting and cloud upload resolve images by these.
     val defNames = persistedRawNames.mapIndexed { i, persisted ->
@@ -342,47 +358,44 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // A cancelled first run saves nothing. A cancelled re-run is saved like a
     // partial one: the previous run's frames are already gone, so its row
     // would otherwise go on describing them.
-    if (firstFrameValidPoints > 0 && (engineErrorCode != AnalysisViewModel.ERROR_CANCELLED || previous != null)) {
+    if (firstFrameValidPoints > 0 && (stop != RunStop.Cancelled || previous != null)) {
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
         lastRefPath = refPngPath
 
         val cloudEnabled = CloudSync.uploadsEnabled(appContext)
-        recordSaved = sessions.saveSession(
-            appContext,
-            sessions.buildSessionRecord(
-                appContext = appContext,
-                localSessionId = localSessionId,
-                batchDir = batchDir,
-                refPngPath = refPngPath,
-                refName = refName,
-                realRefWidth = realRefWidth,
-                realRefHeight = realRefHeight,
-                settings = spec.recordSettings().also { recordRunSettings(it) },
-                cloudEnabled = cloudEnabled,
+        val input = RunInput(
+            localSessionId = localSessionId,
+            dir = batchDir,
+            reference = RunReference(refPngPath, refName, refSize),
+            settings = spec.recordSettings().also { recordRunSettings(it) },
+        )
+        val outcome = RunOutcome(
+            frameCount = solvedFrames,
+            defNames = defNames,
+            metrics = RunMetrics(
                 pointsConverged = firstFrameValidPoints,
                 avgIterations = firstFrameAvgIters,
                 executionTimeMs = executionTimeMs,
-                frameCount = solvedFrames,
-                stopCode = engineErrorCode.also { lastStopCode = it },
-                plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
-                defNames = defNames,
-                engineStatsArray = engineStatsArray,
+                engineStats = engineStatsArray?.toList().orEmpty(),
             ),
-            enqueueCloudIfSaved = cloudEnabled,
+            stopCode = stop.wireCode.also { lastStop = stop },
+            plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
         )
-        if (!recordSaved) {
-            // Race: limit filled between the pre-check and persist.
-            engineErrorCode = AnalysisViewModel.ERROR_SESSION_LIMIT
-        } else if (!cloudEnabled) {
-            Timber.d("Save to cloud is off — session %s stays local only", localSessionId)
+        val record = sessions.buildSessionRecord(appContext, input, outcome, cloudEnabled)
+        when (saveRunRecord(appContext, record, cloudEnabled)) {
+            SessionStore.UpsertResult.SAVED -> recordSaved = true
+            // Race: the limit filled between the pre-check and persist.
+            SessionStore.UpsertResult.QUOTA_FULL -> stop = RunStop.SessionLimit
+            // Not the quota: the index could not be read, or not written.
+            SessionStore.UpsertResult.INDEX_UNAVAILABLE -> indexUnavailable = true
         }
     } else if (previous != null) {
         val framesOnDisk = batchDir.listFiles { f -> f.extension == "dat" }?.size ?: 0
         val after = afterUnsavedRerun(
             previous,
-            UnsavedRerun(framesOnDisk, engineErrorCode, plannedFrames, spec.recordSettings(), defNames),
+            UnsavedRerun(framesOnDisk, stop.wireCode, plannedFrames, spec.recordSettings(), defNames),
         )
         when {
             after == null -> SessionStore.forget(appContext, localSessionId)
@@ -399,7 +412,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     }
 
     val outcome = AnalysisViewModel.BatchAnalysisOutcome(
-        engineErrorCode = engineErrorCode,
+        engineErrorCode = stop.wireCode,
         firstFrameValidPoints = firstFrameValidPoints,
         totalFrames = solvedFrames,
         executionTimeMs = executionTimeMs,
@@ -410,11 +423,13 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             ?.let { resolvedDefPaths.getOrNull(it)?.substringAfterLast('/') },
         firstFrameCorrelatedPoints = firstFrameCorrelatedPoints,
         saved = recordSaved,
+        indexUnavailable = indexUnavailable,
     )
-    if (firstFrameValidPoints > 0 &&
-        engineErrorCode != AnalysisViewModel.ERROR_CANCELLED &&
-        engineErrorCode != AnalysisViewModel.ERROR_SESSION_LIMIT
-    ) {
+    val completed = firstFrameValidPoints > 0 &&
+        !indexUnavailable &&
+        stop != RunStop.Cancelled &&
+        stop != RunStop.SessionLimit
+    if (completed) {
         SemperAnalytics.event(
             appContext,
             SemperAnalytics.ANALYSIS_COMPLETED,
@@ -424,15 +439,16 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 "duration" to SemperAnalytics.durationBucket(executionTimeMs.toLong()),
             ),
         )
-    } else if (engineErrorCode != AnalysisViewModel.ERROR_CANCELLED) {
+    } else if (stop != RunStop.Cancelled) {
         SemperAnalytics.event(
             appContext,
             SemperAnalytics.ANALYSIS_FAILED,
             mapOf(
                 "mode" to "batch",
-                "reason" to when (engineErrorCode) {
-                    AnalysisViewModel.ERROR_SESSION_LIMIT -> "session_limit"
-                    0 -> "no_points"
+                "reason" to when {
+                    indexUnavailable -> "index_unavailable"
+                    stop == RunStop.SessionLimit -> "session_limit"
+                    stop == RunStop.Finished -> "no_points"
                     else -> "engine"
                 },
                 "duration" to SemperAnalytics.durationBucket(executionTimeMs.toLong()),

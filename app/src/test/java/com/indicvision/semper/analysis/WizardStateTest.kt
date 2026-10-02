@@ -9,6 +9,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.prefs.WizardDraft
 import com.indicvision.semper.data.session.CacheJanitor
+import com.indicvision.semper.field.ImageSize
+import com.indicvision.semper.ui.analysis.frames.DeformedFrame
 import com.indicvision.semper.ui.analysis.frames.FrameImportHelper
 import com.indicvision.semper.ui.analysis.frames.FrameOrderDirection
 import com.indicvision.semper.ui.analysis.frames.FrameOrderMode
@@ -75,10 +77,10 @@ class WizardStateTest {
         roiW = 300
         roiH = 200
         val paths = listOf("f1.png", "f2.png").map { File(frames, it).apply { writeBytes(byteArrayOf(1)) }.path }
-        defFilePaths = paths
-        defOriginalNames = listOf("IMG_1.png", "IMG_2.png")
-        defFrameDates = listOf(100L, Long.MAX_VALUE)
-        defFrameSizes = mapOf(paths[0] to (400 to 300))
+        deformedFrames = listOf(
+            DeformedFrame(paths[0], "IMG_1.png", 100L, ImageSize(400, 300)),
+            DeformedFrame(paths[1], "IMG_2.png", Long.MAX_VALUE),
+        )
         defOrderMode = FrameOrderMode.DATE
         defOrderDirection = FrameOrderDirection.DESCENDING
         wizardStep = 3
@@ -190,9 +192,7 @@ class WizardStateTest {
         draft.writeMask(MASK)
         draft.writeFrames(WizardState.encodeFrames(WizardState.frames(before)))
         // Reordered since: same frames, same count, other order.
-        before.defFilePaths = before.defFilePaths.reversed()
-        before.defOriginalNames = before.defOriginalNames.reversed()
-        before.defFrameDates = before.defFrameDates.reversed()
+        before.deformedFrames = before.deformedFrames.reversed()
         // No draft attached to before: this stop's frame-list write never lands.
         val saved = before.saveWizardState()
         val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }

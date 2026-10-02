@@ -83,6 +83,8 @@
     <string name="roi_too_small">ROI is too small. It must be larger than the subset size.</string>
     <string name="analysis_failed_title">Analysis failed</string>
     <string name="analysis_unexpected_title">Analysis stopped unexpectedly</string>
+    <string name="analysis_not_saved_title">Analysis not saved</string>
+    <string name="analysis_index_unavailable_body">The analysis ran, but this phone\'s list of analyses could not be read or updated, so the result was not saved. Check that the phone has free storage, then run it again.</string>
     <string name="analysis_unexpected_fmt">The run ended with an error it could not describe:
 
 %1$s

@@ -13,8 +13,8 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
- * [SessionRepository.buildSessionRecord]: the grouped inputs land in the same
- * row fields the one-value-per-parameter form fills.
+ * [SessionRepository.buildSessionRecord]: the grouped inputs land in the row's
+ * fields.
  */
 @RunWith(RobolectricTestRunner::class)
 class SessionRecordBuildTest {
@@ -60,34 +60,6 @@ class SessionRecordBuildTest {
         assertEquals("97.5% converged on frame 1", record.headline)
         assertEquals(SessionRecord.SyncState.PENDING, record.syncState)
         assertEquals(SessionNaming.defaultSessionName("plate.tif", record.createdAt), record.name)
-    }
-
-    @Test
-    fun `the one-value-per-parameter form builds the same row`() {
-        val grouped = repository.buildSessionRecord(context, input, outcome, cloudEnabled = false)
-        val flat = repository.buildSessionRecord(
-            appContext = context,
-            localSessionId = "s1",
-            batchDir = File("sessions/s1"),
-            refPngPath = "/ref.png",
-            refName = "plate.tif",
-            realRefWidth = 4000,
-            realRefHeight = 3000,
-            settings = settings,
-            cloudEnabled = false,
-            pointsConverged = 1180,
-            avgIterations = 2.3f,
-            executionTimeMs = 812,
-            frameCount = 2,
-            defNames = listOf("a.tif", "b.tif", "c.tif"),
-            engineStatsArray = stats.toFloatArray(),
-            stopCode = -3,
-            plannedFrameCount = 3,
-        )
-
-        // Only the clock differs between the two calls.
-        val sameClock = flat.copy(createdAt = grouped.createdAt, updatedAt = grouped.updatedAt, name = grouped.name)
-        assertEquals(grouped, sameClock)
     }
 
     @Test

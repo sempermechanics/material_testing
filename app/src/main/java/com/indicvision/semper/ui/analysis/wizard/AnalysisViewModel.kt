@@ -19,24 +19,34 @@ import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.data.prefs.WizardDraft
+import com.indicvision.semper.data.session.RunInput
+import com.indicvision.semper.data.session.RunMetrics
+import com.indicvision.semper.data.session.RunOutcome
+import com.indicvision.semper.data.session.RunReference
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionRecordSettings
 import com.indicvision.semper.data.session.SessionRepository
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.data.session.SkippedNode
+import com.indicvision.semper.data.session.runStop
 import com.indicvision.semper.diagnostics.SemperAnalytics
+import com.indicvision.semper.field.ImageSize
+import com.indicvision.semper.field.Roi
+import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.report.EngineStats
+import com.indicvision.semper.ui.analysis.frames.DeformedFrame
 import com.indicvision.semper.ui.analysis.frames.FrameOrderDirection
 import com.indicvision.semper.ui.analysis.frames.FrameOrderMode
 import com.indicvision.semper.ui.analysis.recommend.SubsetRecommender
-import com.indicvision.semper.ui.analysis.roi.RoiResolveHelper
-import com.indicvision.semper.ui.analysis.run.AnalysisRunCodes
+import com.indicvision.semper.ui.analysis.run.BatchRun
 import com.indicvision.semper.ui.analysis.run.RunSpec
 import com.indicvision.semper.ui.analysis.run.baseName
 import com.indicvision.semper.ui.analysis.run.runBatchAnalysisBody
+import com.indicvision.semper.ui.analysis.sweep.SweepRanges
 import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
+import com.indicvision.semper.ui.analysis.sweep.toSkippedNode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -69,12 +79,6 @@ import kotlin.coroutines.coroutineContext
 class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()) : ViewModel() {
 
     companion object {
-        /** @see AnalysisRunCodes.ERROR_CANCELLED */
-        const val ERROR_CANCELLED = AnalysisRunCodes.ERROR_CANCELLED
-
-        /** @see AnalysisRunCodes.ERROR_SESSION_LIMIT */
-        const val ERROR_SESSION_LIMIT = AnalysisRunCodes.ERROR_SESSION_LIMIT
-
         /** Below this, the correlation has effectively lost the speckle. */
         const val MIN_CONVERGENCE_PERCENT = 50f
 
@@ -87,6 +91,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
 
         /** [refName] before a reference is picked. */
         const val NO_REFERENCE_NAME = "No image selected"
+
+        /** [roi] before a reference is picked. */
+        val NO_ROI = Roi.full(ImageSize.UNKNOWN)
     }
 
     internal val sessions = SessionRepository()
@@ -107,29 +114,42 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
             field = value
             stage { it.writeMask(value) }
         }
-    var defFilePaths: List<String> = emptyList()
-
-    /** Original picked filenames, index-aligned with [defFilePaths]. */
-    var defOriginalNames: List<String> = emptyList()
 
     /**
-     * Pixel size of each deformed frame, keyed by its path in [defFilePaths].
-     * Measured once at import (the bytes are already in hand there) so the
-     * match against the reference costs nothing to re-check later.
+     * The deformed frames, in the order the run solves them: each one's staged
+     * path, the name the user picked it as, its capture date and its pixel size.
      *
-     * The engine clamps its AKAZE search window to the *reference* size and
-     * then applies that same window to the deformed image, so a frame of a
+     * The size is measured once at import (the bytes are already in hand
+     * there) so the match against the reference costs nothing to re-check
+     * later. The engine clamps its AKAZE search window to the *reference* size
+     * and then applies that same window to the deformed image, so a frame of a
      * different size makes OpenCV throw — swallowed by a `catch (...)` in the
      * JNI layer, which silently degrades seeding. [frameSizeError] is what
      * stops such a batch from ever reaching the engine.
      */
-    var defFrameSizes: Map<String, Pair<Int, Int>> = emptyMap()
+    var deformedFrames: List<DeformedFrame> = emptyList()
+        set(value) {
+            field = value
+            frameLists = DeformedFrame.unzip(value)
+        }
+
+    /** [deformedFrames] as parallel lists, kept in step with it for the readers below. */
+    private var frameLists = DeformedFrame.unzip(emptyList())
+
+    /** The staged path of each of [deformedFrames]. */
+    val defFilePaths: List<String> get() = frameLists.paths
+
+    /** Original picked filenames, index-aligned with [defFilePaths]. */
+    val defOriginalNames: List<String> get() = frameLists.names
+
+    /** Pixel size of each measured frame, keyed by its path in [defFilePaths]. */
+    val defFrameSizes: Map<String, Pair<Int, Int>> get() = frameLists.sizes
 
     /**
      * Best-effort capture/creation time per deformed frame, index-aligned with
-     * [defFilePaths]. [Long.MAX_VALUE] means unknown (sorts last by date).
+     * [defFilePaths]. [DeformedFrame.UNKNOWN_DATE] sorts last by date.
      */
-    var defFrameDates: List<Long> = emptyList()
+    val defFrameDates: List<Long> get() = frameLists.dates
 
     /** How the user wants deformed frames ordered (image batches only). */
     var defOrderMode: FrameOrderMode = FrameOrderMode.NAME
@@ -148,17 +168,49 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      */
     var defFromVideo: Boolean = false
 
-    var realRefWidth: Int = 0
-    var realRefHeight: Int = 0
+    /** The reference's true pixel size, as the engine measures it; [ImageSize.UNKNOWN] before one is picked. */
+    var refSize: ImageSize = ImageSize.UNKNOWN
+
+    var realRefWidth: Int
+        get() = refSize.width
+        set(value) {
+            refSize = refSize.copy(width = value)
+        }
+    var realRefHeight: Int
+        get() = refSize.height
+        set(value) {
+            refSize = refSize.copy(height = value)
+        }
     var refName: String = NO_REFERENCE_NAME
 
-    val defCount: Int get() = defFilePaths.size
+    val defCount: Int get() = deformedFrames.size
 
+    /** True when [roi] is one the user drew, rather than the whole frame. */
     var hasCustomRoi: Boolean = false
-    var roiX: Int = 0
-    var roiY: Int = 0
-    var roiW: Int = 0
-    var roiH: Int = 0
+
+    /** The ROI as drawn, in reference pixels; the run solves [Roi.forSolve] of it. */
+    var roi: Roi = NO_ROI
+
+    var roiX: Int
+        get() = roi.x
+        set(value) {
+            roi = roi.copy(x = value)
+        }
+    var roiY: Int
+        get() = roi.y
+        set(value) {
+            roi = roi.copy(y = value)
+        }
+    var roiW: Int
+        get() = roi.w
+        set(value) {
+            roi = roi.copy(w = value)
+        }
+    var roiH: Int
+        get() = roi.h
+        set(value) {
+            roi = roi.copy(h = value)
+        }
 
     /**
      * The result of the last (or in-progress) run, as ONE immutable snapshot.
@@ -183,7 +235,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         val batchDirPath: String? = null,
         val refPath: String? = null,
         val defPath: String? = null,
-        val stopCode: Int = 0,
+        val stop: RunStop = RunStop.Finished,
         val plannedFrames: Int = 0,
         val engineStats: FloatArray? = null,
         val spec: RunSpec? = null,
@@ -192,6 +244,10 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         /** The settings the viewer shows: the saved session's, else the spec's (a sweep that solved nothing). */
         fun viewerSettings(): SessionRecordSettings? = settings ?: spec?.recordSettings()
     }
+
+    /** One [SkippedNode] per combination the engine could not solve, in plan order. */
+    private fun VsgStudyRunner.Result.skippedNodes(): List<SkippedNode> =
+        skipped.mapIndexed { index, point -> point.toSkippedNode(skippedCodes[index]) }
 
     private val _runResult = MutableStateFlow(RunResult())
     val runResult: StateFlow<RunResult> = _runResult.asStateFlow()
@@ -213,7 +269,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         _runResult.update {
             it.copy(
                 refPath = row.refPath,
-                stopCode = row.stopCode,
+                stop = row.runStop,
                 plannedFrames = row.plannedFrameCount,
                 settings = SessionRecordSettings(
                     subset = row.subset,
@@ -253,7 +309,6 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      * [progress]; completion (or failure) on [batchOutcome].
      */
     fun launchBatchAnalysis(appContext: Context, spec: RunSpec, cacheDir: File, processingStartTime: Long) {
-        val params = spec.batchParams(cacheDir, processingStartTime)
         if (batchJob?.isActive == true) return
         batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
             _progress.tryEmit(null)
@@ -266,7 +321,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
                 ),
             )
             try {
-                val outcome = runBatchAnalysis(appContext, spec, params) { update ->
+                val outcome = runBatchAnalysis(appContext, spec, cacheDir, processingStartTime) { update ->
                     if (isActive) _progress.tryEmit(update)
                 }
                 _batchOutcome.emit(Result.success(outcome))
@@ -298,10 +353,10 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         get() = _runResult.value.defPath
         set(v) = _runResult.update { it.copy(defPath = v) }
 
-    /** Why the last run stopped early (0 = ran to completion), and its planned size. */
-    var lastStopCode: Int
-        get() = _runResult.value.stopCode
-        set(v) = _runResult.update { it.copy(stopCode = v) }
+    /** Why the last run stopped ([RunStop.Finished] when it ran to completion), and its planned size. */
+    var lastStop: RunStop
+        get() = _runResult.value.stop
+        set(v) = _runResult.update { it.copy(stop = v) }
 
     var lastPlannedFrames: Int
         get() = _runResult.value.plannedFrames
@@ -334,29 +389,64 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     /** True when Run should sweep the parameter space instead of solving once. */
     var sweepMode: Boolean = false
 
+    /**
+     * The sweep's axes as the user set them; [SweepRanges.UNSEEDED] until a
+     * recommendation or default seeds the ranges. The seven properties below
+     * read and write one axis each.
+     */
+    var sweepRanges: SweepRanges = SweepRanges.UNSEEDED
+
     /** Smallest subset size of the sweep; 0 until a recommendation seeds it. */
-    var subsetMin: Int = 0
+    var subsetMin: Int
+        get() = sweepRanges.subsetMin
+        set(value) {
+            sweepRanges = sweepRanges.copy(subsetMin = value)
+        }
 
     /** Largest subset size of the sweep; 0 until a recommendation seeds it. */
-    var subsetMax: Int = 0
+    var subsetMax: Int
+        get() = sweepRanges.subsetMax
+        set(value) {
+            sweepRanges = sweepRanges.copy(subsetMax = value)
+        }
 
     /** Smallest strain window of the sweep; 0 until a default seeds it. */
-    var strainWinMin: Int = 0
+    var strainWinMin: Int
+        get() = sweepRanges.strainWinMin
+        set(value) {
+            sweepRanges = sweepRanges.copy(strainWinMin = value)
+        }
 
     /** Largest strain window of the sweep; 0 until a default seeds it. */
-    var strainWinMax: Int = 0
+    var strainWinMax: Int
+        get() = sweepRanges.strainWinMax
+        set(value) {
+            sweepRanges = sweepRanges.copy(strainWinMax = value)
+        }
 
     /** How many subset sizes the sweep samples across the subset range (x axis). */
-    var subsetSamples: Int = VsgStudy.DEFAULT_SUBSET_SAMPLES
+    var subsetSamples: Int
+        get() = sweepRanges.subsetSamples
+        set(value) {
+            sweepRanges = sweepRanges.copy(subsetSamples = value)
+        }
 
     /** How many strain window sizes the sweep samples up to [strainWinMax] (y axis). */
-    var strainWinSamples: Int = VsgStudy.DEFAULT_VSG_SAMPLES
+    var strainWinSamples: Int
+        get() = sweepRanges.strainWinSamples
+        set(value) {
+            sweepRanges = sweepRanges.copy(strainWinSamples = value)
+        }
 
     /**
      * Step-depth denominator: one N for every subset, `step = round(subset / N)`.
      * 2 = half the subset (coarsest); 9 is the finest. Default 3.
      */
-    var stepDenominator: Int = VsgStudy.DEFAULT_STEP_DENOM
+    var stepDenominator: Int
+        get() = sweepRanges.stepDenominator
+        set(value) {
+            sweepRanges = sweepRanges.copy(stepDenominator = value)
+        }
 
     /**
      * Subset overlap shared by every combination in a sweep (`1 − step/subset`).
@@ -479,10 +569,10 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
             VsgStudyRunner.Params(
                 plan = plan,
                 defFramePath = defFilePaths[sweep.frameIndex],
-                roiX = spec.roiX,
-                roiY = spec.roiY,
-                roiW = spec.roiW,
-                roiH = spec.roiH,
+                roiX = spec.roi.x,
+                roiY = spec.roi.y,
+                roiW = spec.roi.w,
+                roiH = spec.roi.h,
                 maskData = spec.mask,
                 use6x6 = spec.use6x6,
                 debugDir = spec.debugDir,
@@ -492,11 +582,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         )
 
         sweepPlan = result.runs.map { it.point }
-        sweepSkippedNodes = result.skipped.mapIndexed { index, point ->
-            SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
-        }
+        sweepSkippedNodes = result.skippedNodes()
         engineStatsArray = result.firstMetrics
-        lastStopCode = result.engineErrorCode
+        lastStop = RunStop.fromWireCode(result.engineErrorCode)
         // The plan, not what was reached: runs + skipped leaves out combinations
         // a cancel never got to, and a cancelled sweep then read as complete.
         lastPlannedFrames = sweep.plan.size
@@ -553,11 +641,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      */
     @MainThread
     internal fun repointDeformedPaths(resolved: List<String>) {
-        val previous = defFilePaths
-        defFrameSizes = defFrameSizes.mapKeys { (path, _) ->
-            resolved.getOrNull(previous.indexOf(path)) ?: path
+        deformedFrames = deformedFrames.mapIndexed { i, frame ->
+            frame.copy(path = resolved.getOrElse(i) { frame.path })
         }
-        defFilePaths = resolved
     }
 
     /**
@@ -606,27 +692,28 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         val defDisplay = rawName.ifBlank {
             defOriginalNames.getOrNull(frameIndex) ?: File(defFilePaths[frameIndex]).name
         }.baseName()
-        val skipped = result.skipped
         val summary = sweepSummary(appContext, localSessionId, result, sweep, defDisplay)
-        val record = sessions.buildSessionRecord(
-            appContext = appContext,
+        val input = RunInput(
             localSessionId = localSessionId,
-            batchDir = batchDir,
-            refPngPath = refPngPath,
-            refName = refName,
-            realRefWidth = realRefWidth,
-            realRefHeight = realRefHeight,
+            dir = batchDir,
+            reference = RunReference(refPngPath, refName, refSize),
             settings = spec.recordSettings()
                 .copy(subset = first.subset, step = first.step, strainWin = first.vsg)
                 .also { recordRunSettings(it) },
-            cloudEnabled = cloudEnabled,
-            pointsConverged = result.runs.first().pointsSolved,
-            avgIterations = result.firstMetrics?.getOrNull(EngineStats.SLOT_AVG_ITERS) ?: 0f,
-            executionTimeMs = executionTimeMs,
+        )
+        val outcome = RunOutcome(
             frameCount = result.runs.size,
             defNames = result.runs.map { rawName },
-            engineStatsArray = engineStatsArray,
-        ).copy(
+            metrics = RunMetrics(
+                pointsConverged = result.runs.first().pointsSolved,
+                avgIterations = result.firstMetrics?.getOrNull(EngineStats.SLOT_AVG_ITERS) ?: 0f,
+                executionTimeMs = executionTimeMs,
+                engineStats = engineStatsArray?.toList().orEmpty(),
+            ),
+            stopCode = result.engineErrorCode,
+            plannedFrameCount = sweep.plan.size,
+        )
+        val record = sessions.buildSessionRecord(appContext, input, outcome, cloudEnabled).copy(
             name = summary.name,
             // What makes a reopened session a sweep again: without these the
             // viewer would render every frame at the first frame's step size.
@@ -635,11 +722,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
             sweepStrainWindows = result.runs.map { it.point.vsg },
             sweepLabels = summary.solvedLabels,
             lineCutHorizontal = sweep.lineCutHorizontal,
-            sweepSkippedNodes = skipped.mapIndexed { index, point ->
-                SkippedNode(point.subset, point.step, point.vsg, result.skippedCodes[index])
-            },
-            stopCode = result.engineErrorCode,
-            plannedFrameCount = sweep.plan.size,
+            sweepSkippedNodes = result.skippedNodes(),
             headline = summary.headline,
         )
         sessions.saveSession(appContext, record, enqueueCloudIfSaved = cloudEnabled)
@@ -712,25 +795,19 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
      *   reference of a different size drops them and goes back to the full
      *   frame. One of the same size keeps them: that is another shot of the
      *   same set-up, and the user's crop still lands where they drew it.
-     *   [RoiResolveHelper.resolve] clips whatever is kept to the image anyway.
+     *   [Roi.forSolve] clips whatever is kept to the image anyway.
      */
-    fun applyNewReference(bytes: ByteArray, name: String, width: Int, height: Int) {
-        val sameSize = width == realRefWidth && height == realRefHeight
+    fun applyNewReference(bytes: ByteArray, name: String, size: ImageSize) {
+        val sameSize = size == refSize
         clearPreviousResults()
         if (!sameSize) {
             hasCustomRoi = false
             roiMaskBytes = null
         }
-        realRefWidth = width
-        realRefHeight = height
+        refSize = size
         refName = name
         refBytes = bytes
-        if (!hasCustomRoi) {
-            roiX = 0
-            roiY = 0
-            roiW = width
-            roiH = height
-        }
+        if (!hasCustomRoi) roi = Roi.full(size)
     }
 
     /**
@@ -758,7 +835,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         if (!TokenStore.isSessionLimitReached(appContext)) return null
         Timber.w("Hard stop: analysis blocked at session limit")
         return BatchAnalysisOutcome(
-            engineErrorCode = ERROR_SESSION_LIMIT,
+            engineErrorCode = RunStop.SessionLimit.wireCode,
             firstFrameValidPoints = 0,
             totalFrames = plannedFrames,
             executionTimeMs = 0,
@@ -772,22 +849,6 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     /** The "MMM d, HH:mm:ss" stamp used in default session names / sweep labels. */
     private fun timestamp(millis: Long): String =
         SimpleDateFormat("MMM d, HH:mm:ss", Locale.US).format(Date(millis))
-
-    data class BatchAnalysisParams(
-        val cacheDir: File,
-        val subset: Int,
-        val step: Int,
-        val strainWin: Int,
-        val finalRectX: Int,
-        val finalRectY: Int,
-        val finalRectW: Int,
-        val finalRectH: Int,
-        val use6x6: Boolean,
-        val maskData: ByteArray,
-        /** Engine debug-export target; null in release, where the export is off. */
-        val debugDir: File?,
-        val processingStartTime: Long,
-    )
 
     /**
      * Cooperative cancel: checked between frames here, and forwarded to the
@@ -844,7 +905,19 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
          * saved; only a saved run may be told its frames are kept.
          */
         val saved: Boolean = false,
+        /**
+         * True when the run's record could not be saved because the session
+         * index could not be read or written: not the quota, which stops the
+         * run as [RunStop.SessionLimit].
+         */
+        val indexUnavailable: Boolean = false,
     ) {
+        /**
+         * [engineErrorCode] as the batch's stop code: [RunStop.Finished] when
+         * the loop ran through every frame, whatever they kept.
+         */
+        val stop: RunStop get() = RunStop.fromWireCode(engineErrorCode)
+
         /**
          * The 1-based frame the run stopped at, numbered as the error below it
          * numbers it. The kept count is not that: a frame the engine failed on
@@ -859,12 +932,13 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     suspend fun runBatchAnalysis(
         appContext: Context,
         spec: RunSpec,
-        params: BatchAnalysisParams,
+        cacheDir: File,
+        startedAtMs: Long,
         onProgress: (BatchProgressUpdate) -> Unit,
     ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
-        val jobContext = coroutineContext
+        val run = BatchRun(spec, cacheDir, startedAtMs, coroutineContext)
         traceSection("Semper.analysis.batch") {
-            runBatchAnalysisBody(appContext, spec, params, onProgress, jobContext)
+            runBatchAnalysisBody(appContext, run, onProgress)
         }
     }
 
@@ -923,7 +997,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
             refBytes = inputs.reference
             roiMaskBytes = inputs.mask
             mirrorToDraft = true
-            WizardState.applyFrames(this, inputs.frames)
+            deformedFrames = inputs.frames.toDeformedFrames()
             DraftRestore.RESTORED
         }
     }
@@ -937,17 +1011,13 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     private fun clearInputs() {
         refBytes = null
         roiMaskBytes = null
-        WizardState.applyFrames(this, WizardState.Frames())
+        deformedFrames = emptyList()
         frameSizeError = null
         defFromVideo = false
-        realRefWidth = 0
-        realRefHeight = 0
+        refSize = ImageSize.UNKNOWN
         refName = NO_REFERENCE_NAME
         hasCustomRoi = false
-        roiX = 0
-        roiY = 0
-        roiW = 0
-        roiH = 0
+        roi = NO_ROI
         wizardStep = 1
         settingsReviewed = false
         subsetRecommendation = null

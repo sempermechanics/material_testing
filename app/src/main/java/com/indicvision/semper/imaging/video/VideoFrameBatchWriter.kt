@@ -7,8 +7,10 @@ package com.indicvision.semper.imaging.video
 import android.content.Context
 import android.graphics.Bitmap
 import com.indicvision.semper.R
+import com.indicvision.semper.field.ImageSize
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.imaging.GrayPngEncoder
+import com.indicvision.semper.ui.analysis.frames.DeformedFrame
 import com.indicvision.semper.ui.analysis.frames.FrameImportHelper
 import com.indicvision.semper.ui.analysis.frames.ImportedBatch
 import kotlinx.coroutines.currentCoroutineContext
@@ -97,14 +99,15 @@ internal object VideoFrameBatchWriter {
         startMs: Long,
         defPaths: List<String>,
     ): VideoFrameExtractor.ExtractionResult {
-        val sortedDefPaths = defPaths.sorted()
-        val videoFrameSize = refWidth to refHeight
+        val videoFrameSize = ImageSize(refWidth, refHeight)
         val stagedBatch = ImportedBatch(
-            filePaths = sortedDefPaths,
-            originalNames = sortedDefPaths.mapIndexed { idx, _ ->
-                String.format(Locale.US, "frame_%04d.png", idx + 1)
+            frames = defPaths.sorted().mapIndexed { idx, path ->
+                DeformedFrame(
+                    path = path,
+                    name = String.format(Locale.US, "frame_%04d.png", idx + 1),
+                    size = videoFrameSize,
+                )
             },
-            frameSizes = sortedDefPaths.associateWith { videoFrameSize },
             fromVideo = true,
         )
         currentCoroutineContext().ensureActive()

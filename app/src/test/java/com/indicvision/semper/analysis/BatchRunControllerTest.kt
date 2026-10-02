@@ -4,10 +4,11 @@ import android.app.Application
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
-import com.indicvision.semper.ui.analysis.run.AnalysisRunCodes
+import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.ui.analysis.run.BatchRunController
 import com.indicvision.semper.ui.analysis.run.ComputeOverlayHelper
 import com.indicvision.semper.ui.analysis.run.EngineFailure
@@ -21,7 +22,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
 
 /**
  * Compute is disabled while a run is in flight, and only a `checkReady()`
@@ -189,7 +192,7 @@ class BatchRunControllerTest {
     @Test
     fun `frames that solved after a first frame that kept nothing are not called saved`() {
         // Frame 1 kept no points, frames 2-3 solved, frame 4 failed: no record.
-        listOf(EngineFailure.ENGINE_ERROR_FEATURES, AnalysisRunCodes.ERROR_LOW_CONVERGENCE).forEach { code ->
+        listOf(EngineFailure.ENGINE_ERROR_FEATURES, RunStop.LowConvergence.wireCode).forEach { code ->
             val (partial, shown) = route(
                 outcome(code, validPoints = 0, frames = 2, correlated = 0).copy(failedFrameIndex = 3),
             )
@@ -203,18 +206,45 @@ class BatchRunControllerTest {
     fun `the other endings leave Compute usable too`() {
         assertComputeUsableAfter(
             "cancel",
-            Result.success(outcome(AnalysisRunCodes.ERROR_CANCELLED, validPoints = 0, frames = 0)),
+            Result.success(outcome(RunStop.Cancelled.wireCode, validPoints = 0, frames = 0)),
         )
         assertComputeUsableAfter(
             "session limit",
-            Result.success(outcome(AnalysisRunCodes.ERROR_SESSION_LIMIT, validPoints = 0, frames = 0)),
+            Result.success(outcome(RunStop.SessionLimit.wireCode, validPoints = 0, frames = 0)),
         )
         assertComputeUsableAfter(
             "partial run",
-            Result.success(outcome(AnalysisRunCodes.ERROR_LOW_CONVERGENCE, validPoints = 500, frames = 2)),
+            Result.success(outcome(RunStop.LowConvergence.wireCode, validPoints = 500, frames = 2)),
         )
         assertComputeUsableAfter("success", Result.success(outcome(code = 0, validPoints = 500, frames = 3)))
         assertComputeUsableAfter("exception", Result.failure(IllegalStateException("boom")))
+    }
+
+    @Test
+    fun `an index that could not be written says the run was not saved, not that the limit is reached`() {
+        val line = TextView(ApplicationProvider.getApplicationContext<Application>())
+        val gate = Gate()
+        controller(gate, resultLine = line).handleBatchOutcome(
+            Result.success(outcome(code = 0, validPoints = 500, frames = 3).copy(saved = false, indexUnavailable = true)),
+        )
+
+        assertNull("no session-limit screen", shadowOf(activity).nextStartedActivity)
+        assertEquals(activity.getString(R.string.analysis_not_saved_title), line.text.toString())
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        assertTrue(dialog.isShowing)
+        assertEquals(
+            activity.getString(R.string.analysis_index_unavailable_body),
+            dialog.findViewById<TextView>(android.R.id.message)?.text.toString(),
+        )
+        assertTrue(gate.computeEnabled)
+    }
+
+    @Test
+    fun `a full quota at save time still opens the session-limit screen`() {
+        controller(Gate()).handleBatchOutcome(
+            Result.success(outcome(RunStop.SessionLimit.wireCode, validPoints = 500, frames = 3).copy(saved = false)),
+        )
+        assertTrue(shadowOf(activity).nextStartedActivity != null)
     }
 
     /** The status line a finished run leaves, with [planned] frames recorded by the runner. */

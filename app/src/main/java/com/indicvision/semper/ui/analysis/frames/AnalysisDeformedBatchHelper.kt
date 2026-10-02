@@ -4,7 +4,6 @@ package com.indicvision.semper.ui.analysis.frames
 
 import android.net.Uri
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.indicvision.semper.R
@@ -14,6 +13,7 @@ import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.run.ComputeOverlayHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.common.FaqRedirect
+import com.indicvision.semper.ui.common.Feedback
 import com.indicvision.semper.util.ProgressCount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -44,11 +44,11 @@ object AnalysisDeformedBatchHelper {
     ): Job {
         val cap = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity))
         val capped = if (rawUris.size > cap) {
-            Toast.makeText(
+            Feedback.toast(
                 activity,
                 activity.resources.getQuantityString(R.plurals.frames_capped_fmt, cap, cap),
-                Toast.LENGTH_LONG,
-            ).show()
+                long = true,
+            )
             FrameImportHelper.cappedUris(rawUris, cap)
         } else {
             rawUris
@@ -70,7 +70,6 @@ object AnalysisDeformedBatchHelper {
                 // stuck at 0% on large PLC picks). Dates resolve when the user
                 // sorts by date.
                 val uris = capped
-                val datesByIndex = List(uris.size) { Long.MAX_VALUE }
                 withContext(Dispatchers.Main) {
                     overlayHelper.update(
                         percent = 0f,
@@ -102,46 +101,21 @@ object AnalysisDeformedBatchHelper {
                         )
                     },
                 )
-                val frameDates = batch?.filePaths?.map { path ->
-                    val name = File(path).name
-                    val idx = name.take(4).toIntOrNull()
-                    if (idx != null && idx in datesByIndex.indices) datesByIndex[idx] else Long.MAX_VALUE
-                }
 
                 // The staged directory is already committed. Apply matching
                 // ViewModel paths even if lifecycle cancellation lands now.
                 withContext(NonCancellable + Dispatchers.Main) {
                     viewModel.clearPreviousResults()
                     viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
+                    viewModel.defOrderMode = FrameOrderMode.NAME
                     if (batch != null) {
-                        val dates = frameDates.orEmpty()
-                        val ordered = FrameOrderHelper.reorder(
-                            paths = batch.filePaths,
-                            names = batch.originalNames,
-                            dates = dates,
-                            sizes = batch.frameSizes,
-                            mode = FrameOrderMode.NAME,
-                            direction = FrameOrderDirection.ASCENDING,
-                        )
-                        val (paths, sizes) = withContext(Dispatchers.IO) {
-                            FrameOrderHelper.reprefixTempFiles(
-                                ordered.paths,
-                                ordered.names,
-                                ordered.sizes,
-                            )
+                        val ordered = FrameOrderHelper.reorder(batch.frames, FrameOrderMode.NAME)
+                        viewModel.deformedFrames = withContext(Dispatchers.IO) {
+                            FrameOrderHelper.reprefixTempFiles(ordered)
                         }
-                        viewModel.defFilePaths = paths
-                        viewModel.defOriginalNames = ordered.names
-                        viewModel.defFrameDates = ordered.dates
-                        viewModel.defFrameSizes = sizes
                         viewModel.defFromVideo = batch.fromVideo
-                        viewModel.defOrderMode = FrameOrderMode.NAME
                     } else {
-                        viewModel.defOrderMode = FrameOrderMode.NAME
-                        viewModel.defFilePaths = emptyList()
-                        viewModel.defOriginalNames = emptyList()
-                        viewModel.defFrameSizes = emptyMap()
-                        viewModel.defFrameDates = emptyList()
+                        viewModel.deformedFrames = emptyList()
                         viewModel.defFromVideo = false
                     }
                     tvResult.text = ""
