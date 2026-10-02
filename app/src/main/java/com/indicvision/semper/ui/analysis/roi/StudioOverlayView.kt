@@ -352,7 +352,7 @@ class StudioOverlayView @JvmOverloads constructor(
                 endY = y
             }
             else -> {
-                // DYNAMIC TARGET: Modifies either the grabbed hole OR the main ROI
+                // The grab moves whichever it holds: a hole, or the main ROI.
                 dragRect(grabTarget, touchState, x - lastX, y - lastY, bounds, MIN_SIZE, isSquareMode())
                 lastX = x
                 lastY = y
@@ -376,7 +376,7 @@ class StudioOverlayView @JvmOverloads constructor(
     private fun keepDrawnRect(rect: RectF) {
         if (rect.width() <= MIN_KEPT && rect.height() <= MIN_KEPT) return
         if (isSubtractMode) {
-            // ARCHITECTURE FIX: Removed 'hasValidRoi' so you can punch holes in the Full Image
+            // No crop needed: a hole can be punched in the full image.
             holes.add(Hole(currentMode, rect))
         } else {
             holes.clear()
@@ -410,7 +410,7 @@ class StudioOverlayView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // BUG FIX: Don't return early if we have holes but no main ROI!
+        // Holes with no crop still draw: they cut into the full image.
         if (!isDrawing && !hasValidRoi && holes.isEmpty()) return
 
         val layerId = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
@@ -463,7 +463,7 @@ class StudioOverlayView @JvmOverloads constructor(
 
     fun getRelativeRoi(): RectF = viewRectToImage(roiRect)
 
-    // OOM FIX: Generate Raw ALPHA_8 bytes
+    /** The mask as raw ALPHA_8 bytes: one byte per reference pixel, a quarter of an ARGB mask's memory. */
     fun generateMaskBytes(): ByteArray = StudioOverlayMaskEncoder.encode(maskInput())
 
     /**
