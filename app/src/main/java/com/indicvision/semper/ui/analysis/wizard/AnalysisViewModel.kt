@@ -986,15 +986,22 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
     }
 
     /**
-     * Starts mirroring the inputs into [target], and takes the draft from any
-     * wizard that had it. A wizard that is not being restored empties it
-     * first: whatever is there belongs to one that is gone.
+     * Starts mirroring the inputs into [target].
+     *
+     * A wizard that is not being restored takes the draft from any wizard
+     * that had it, and empties it: whatever is there belongs to one that is
+     * gone. A restored wizard carries on the draft of the one whose state it
+     * was handed, so that wizard's last writes, still queued, land for it.
      */
     fun attachDraft(target: WizardDraft) {
         if (draft != null) return
         draft = target
-        draftGeneration = draftOwner.incrementAndGet()
-        if (pendingRestore == null) stage(WizardDraft::clear)
+        if (pendingRestore == null) {
+            draftGeneration = draftOwner.incrementAndGet()
+            stage(WizardDraft::clear)
+        } else {
+            draftGeneration = draftOwner.get()
+        }
     }
 
     /**

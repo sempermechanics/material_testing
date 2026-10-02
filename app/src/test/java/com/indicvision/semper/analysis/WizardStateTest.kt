@@ -300,17 +300,39 @@ class WizardStateTest {
     }
 
     @Test
-    fun `the old wizard's last stop does not overwrite the next one's frame list`() {
-        val gone = editedWizard().also { it.attachDraft(draft) }
+    fun `an import that lands in the old wizard does not overwrite the next one's reference`() {
+        val gone = AnalysisViewModel().also { it.attachDraft(draft) }
         val next = AnalysisViewModel().also { it.attachDraft(WizardDraft(ctx)) }
-        next.deformedFrames = listOf(DeformedFrame(File(frames, "next.png").path, "NEXT.png"))
-        next.saveWizardState()
-        // The old Activity stops after the new one is up, then is destroyed.
-        gone.saveWizardState()
+        next.refBytes = REF
+        // A video import's result is applied even after its screen is gone.
+        gone.refBytes = MASK
         gone.discardDraft()
         drainDraftLane()
 
-        assertEquals(WizardState.encodeFrames(WizardState.frames(next)), draft.readFrames())
+        assertArrayEquals(REF, draft.readReference())
+    }
+
+    @Test
+    fun `a wizard restored in the same process gets the frame list its predecessor's stop queued`() {
+        val before = editedWizard().also { it.attachDraft(draft) }
+        drainDraftLane()
+        draft.writeReference(before.refBytes)
+        draft.writeMask(before.roiMaskBytes)
+        // Keep the lane busy, so the stop's write is still queued when the
+        // rebuilt view model attaches ("Don't keep activities").
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        CoroutineScope(WizardDraft.io).launch {
+            started.countDown()
+            release.await()
+        }
+        started.await()
+        val saved = before.saveWizardState()
+        val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }
+        release.countDown()
+
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(before.defFilePaths, after.defFilePaths)
     }
 
     /** Waits for every draft write and delete queued so far. */
