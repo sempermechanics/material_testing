@@ -60,6 +60,7 @@ import com.indicvision.semper.field.Roi
 import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.field.getRoiExtras
 import com.indicvision.semper.field.toRect
+import com.indicvision.semper.imaging.video.ExtractionRequest
 import com.indicvision.semper.imaging.video.VideoFrameExtractor
 import com.indicvision.semper.imaging.video.VideoKeyframeHelper
 import com.indicvision.semper.imaging.video.VideoMeta
@@ -579,14 +580,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
         if (isProcessing) return
         isProcessing = true
         checkReady()
-        val job = AnalysisDeformedBatchHelper.handle(
-            activity = this,
-            viewModel = viewModel,
+        val job = AnalysisDeformedBatchHelper(this, viewModel, overlayHelper, settings.tvStaticResult).handle(
             rawUris = rawUris,
-            cacheDir = cacheDir,
             displayName = ::getFileName,
-            tvResult = settings.tvStaticResult,
-            overlayHelper = overlayHelper,
             onApplied = {
                 wizardSlots.refreshDefSlot()
                 validateFrameSizes()
@@ -794,39 +790,32 @@ class StaticAnalysisActivity : AppCompatActivity() {
         sheet.setContentView(sheetBinding.root)
         btnExtract.setOnClickListener {
             sheet.dismiss()
-            val preferKeyframes = toggleMode.checkedButtonId == R.id.btnModeKeyframes
-            val fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1)
-            extractVideoFrames(uri, fpsExtract, segmentMs(), preferKeyframes, meta.rotationDegrees)
+            val (startMs, endMs) = segmentMs()
+            extractVideoFrames(
+                ExtractionRequest(
+                    uri = uri,
+                    fpsExtract = sliderFps.value.toDouble().coerceAtLeast(0.1),
+                    startMs = startMs,
+                    endMs = endMs,
+                    maxFrames = maxFrames,
+                    preferKeyframes = toggleMode.checkedButtonId == R.id.btnModeKeyframes,
+                    rotationDegrees = meta.rotationDegrees,
+                ),
+            )
         }
         sheet.show()
     }
 
-    /** Extracts frames at [fpsExtract] over [segmentMs] (start to end) with the progress overlay. */
-    private fun extractVideoFrames(
-        uri: Uri,
-        fpsExtract: Double,
-        segmentMs: Pair<Long, Long>,
-        preferKeyframes: Boolean = true,
-        rotationDegrees: Int? = null,
-    ) {
+    /** Extracts the frames [request] samples, with the progress overlay. */
+    private fun extractVideoFrames(request: ExtractionRequest) {
         if (isProcessing) return
         isProcessing = true
         // The video's first frame becomes the reference; an image pick still
         // decoding must not land on top of it.
         refJob.cancel()
         checkReady()
-        val job = AnalysisVideoExtractHelper.extract(
-            activity = this,
-            viewModel = viewModel,
-            uri = uri,
-            fpsExtract = fpsExtract,
-            startMs = segmentMs.first,
-            endMs = segmentMs.second,
-            cacheDir = cacheDir,
-            tvResult = settings.tvStaticResult,
-            overlayHelper = overlayHelper,
-            preferKeyframes = preferKeyframes,
-            rotationDegrees = rotationDegrees,
+        val job = AnalysisVideoExtractHelper(this, viewModel, overlayHelper, settings.tvStaticResult).extract(
+            request = request,
             onApplied = { applied ->
                 applied.refPreview?.let { refPreviewBmp = it }
                 wizardSlots.refreshRefSlot(refPreviewBmp)
