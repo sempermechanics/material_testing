@@ -22,6 +22,7 @@ import com.indicvision.semper.data.cloud.CloudBackupListing
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.cloud.SessionDeletes
 import com.indicvision.semper.data.cloud.TransferWork
+import com.indicvision.semper.data.cloud.UploadErrors
 import com.indicvision.semper.data.cloud.WorkTags
 import com.indicvision.semper.data.cloud.restore.RestoreFailureLedger
 import com.indicvision.semper.data.cloud.restore.RestoreStart
@@ -307,23 +308,26 @@ class HomeActivity : AppCompatActivity() {
                 when (val state = job.state) {
                     // A finished backup — flip the row's badge to "synced".
                     TransferWork.State.Succeeded -> refresh()
-                    is TransferWork.State.Failed -> {
-                        val reason = state.reason
-                        if (reason == null) {
-                            // No reason: a refusal at the account's limit, which
-                            // forces the stop. Open the limit screen from here so
-                            // it shows whether or not the worker also opens it
-                            // (it is singleTop, so the two cannot stack).
-                            if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
-                        } else {
-                            showUploadFailure(reason)
-                        }
+                    is TransferWork.State.Failed -> when {
+                        // A refusal at the account's limit, which forces the
+                        // stop. Open the limit screen from here so it shows
+                        // whether or not the worker also opens it (it is
+                        // singleTop, so the two cannot stack). Only the
+                        // worker's quota kind says so: other failures carry
+                        // no reason either (an analysis deleted before its
+                        // backup ran), and the limit can be held from before.
+                        job.isQuotaStop() -> if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
+                        state.reason != null -> showUploadFailure(state.reason)
                     }
                     else -> Unit
                 }
             }
         }
     }
+
+    /** Whether this failed backup was the worker's quota refusal ([UploadErrors.UPLOAD_FAIL_KIND]). */
+    private fun TransferWorkObserver.Job.isQuotaStop(): Boolean =
+        info.outputData.getString(UploadErrors.UPLOAD_FAIL_KIND) == UploadErrors.FAIL_KIND_QUOTA
 
     private fun observeRestoreProgress() {
         TransferWorkObserver(TransferWork.Kind.RESTORE).observe(this, WorkManager.getInstance(this)) { update ->

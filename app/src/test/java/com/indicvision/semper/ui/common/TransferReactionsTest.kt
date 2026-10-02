@@ -30,6 +30,7 @@ import com.indicvision.semper.ui.limit.SessionLimitActivity
 import com.indicvision.semper.ui.settings.SettingsActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -169,6 +170,25 @@ class TransferReactionsTest {
             shadowOf(home).peekNextStartedActivity()?.component?.className == SessionLimitActivity::class.java.name
         }
         assertEquals("a quota stop is not told as a failure", emptyList<String>(), pills)
+    }
+
+    @Test
+    fun `a backup that fails without a reason for another cause leaves the limit screen shut`() {
+        val home = launch(HomeActivity::class.java)
+        do {
+            val started = shadowOf(home).nextStartedActivity
+        } while (started != null)
+        // Held at the limit from earlier; this backup then fails for a reason
+        // of its own: its analysis was deleted before it ran.
+        TokenStore.setSessionLimitReached(context, true)
+        run(setOf("upload", "upload-gone"), fail = true)
+
+        // A later failure that is told: by then Home has read the first one.
+        val later = "Device conflict (ref r3)"
+        run(setOf("upload", "upload-b"), workDataOf(DicKeys.UPLOAD_FAIL_REASON to later), fail = true)
+        idleUntil("the later failure") { pills.isNotEmpty() }
+
+        assertNull("only a quota stop opens the limit screen", shadowOf(home).nextStartedActivity)
     }
 
     @Test
