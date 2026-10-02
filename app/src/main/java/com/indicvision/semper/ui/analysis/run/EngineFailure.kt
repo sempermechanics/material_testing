@@ -23,6 +23,7 @@ object EngineFailure {
         ROI,
         INIT,
         CONVERGENCE,
+        CANCELLED,
         VSG,
         UNKNOWN,
     }
@@ -32,6 +33,9 @@ object EngineFailure {
         ENGINE_ERROR_ROI -> Cause.ROI
         ENGINE_ERROR_INIT -> Cause.INIT
         RunStop.LowConvergence.wireCode -> Cause.CONVERGENCE
+        // A cancelled re-run is saved with this stop code, so Home and the
+        // viewer read it back here; it is no strain-window failure.
+        RunStop.Cancelled.wireCode -> Cause.CANCELLED
         0 -> Cause.VSG
         in 1..Int.MAX_VALUE -> Cause.UNKNOWN
         else -> Cause.VSG
@@ -44,6 +48,7 @@ object EngineFailure {
         Cause.ROI -> R.string.sweep_fail_roi
         Cause.INIT -> R.string.sweep_fail_init
         Cause.CONVERGENCE -> R.string.error_low_convergence
+        Cause.CANCELLED -> R.string.run_fail_cancelled
         Cause.UNKNOWN -> R.string.sweep_fail_unknown
         Cause.VSG -> R.string.sweep_reason_vsg
     }
@@ -55,6 +60,7 @@ object EngineFailure {
         Cause.ROI -> R.string.sweep_reason_subset_too_big
         Cause.INIT -> R.string.sweep_reason_decode
         Cause.CONVERGENCE -> R.string.sweep_reason_low_convergence
+        Cause.CANCELLED -> R.string.run_reason_cancelled
         Cause.UNKNOWN -> R.string.sweep_reason_unknown
         Cause.VSG -> R.string.sweep_reason_vsg
     }
@@ -117,7 +123,7 @@ object EngineFailure {
         Cause.ROI -> R.string.url_faq_engine_roi
         Cause.INIT -> R.string.url_faq_engine_init
         Cause.CONVERGENCE -> R.string.url_faq_engine_convergence
-        Cause.UNKNOWN -> R.string.url_faq_engine_vsg
-        Cause.VSG -> R.string.url_faq_engine_vsg
+        // No FAQ covers a cancel, and no screen links one for it.
+        Cause.CANCELLED, Cause.UNKNOWN, Cause.VSG -> R.string.url_faq_engine_vsg
     }
 }

@@ -56,6 +56,12 @@ class EngineFailureTest {
     }
 
     @Test
+    fun `a saved cancelled run reads as cancelled, not as a strain-window failure`() {
+        assertEquals(R.string.run_reason_cancelled, EngineFailure.shortReasonRes(RunStop.Cancelled.wireCode))
+        assertEquals(R.string.run_fail_cancelled, EngineFailure.reasonRes(RunStop.Cancelled.wireCode))
+    }
+
+    @Test
     fun `each cause maps to its own FAQ URL resource`() {
         assertEquals(
             R.string.url_faq_engine_features,

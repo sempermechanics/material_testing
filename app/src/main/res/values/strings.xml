@@ -476,6 +476,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_decode">Image could not be decoded</string>
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
+    <string name="run_reason_cancelled">Cancelled before every frame was solved</string>
+    <string name="run_fail_cancelled">The analysis was cancelled before every frame was solved. The frames solved before the cancel are kept.</string>
     <!-- A single run whose first frame kept no points (engine code 0), split by how many points ICGN accepted there. -->
     <plurals name="run_fail_strain_window_fmt">
         <item quantity="one">%1$d point correlated, but it did not have enough solved neighbours to fill the strain window (VSG %2$d px at step %3$d px), so no strain could be fitted. Use a smaller strain window, a smaller step, or a larger region of interest.</item>
