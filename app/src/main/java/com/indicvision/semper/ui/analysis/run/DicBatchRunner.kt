@@ -36,6 +36,11 @@ import com.indicvision.semper.report.VisualizationEngine
 import com.indicvision.semper.report.newMetrics
 import com.indicvision.semper.ui.analysis.frames.FrameImportHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
+import com.indicvision.semper.ui.analysis.wizard.BatchProgressUpdate
+import com.indicvision.semper.ui.analysis.wizard.repointDeformedPathsOnMain
+import com.indicvision.semper.ui.analysis.wizard.resolveLocalSessionId
+import com.indicvision.semper.ui.analysis.wizard.sessionLimitOutcome
 import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 import java.io.File
@@ -63,8 +68,8 @@ internal class BatchRun(
 internal fun AnalysisViewModel.runBatchAnalysisBody(
     appContext: Context,
     run: BatchRun,
-    onProgress: (AnalysisViewModel.BatchProgressUpdate) -> Unit,
-): AnalysisViewModel.BatchAnalysisOutcome {
+    onProgress: (BatchProgressUpdate) -> Unit,
+): BatchAnalysisOutcome {
     val spec = run.spec
     val limited = sessionLimitOutcome(appContext, defFilePaths.size)
     if (limited != null) {
@@ -101,7 +106,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     var stop: RunStop = RunStop.Finished
 
     onProgress(
-        AnalysisViewModel.BatchProgressUpdate(
+        BatchProgressUpdate(
             0f,
             "Caching reference in engine…",
             "Caching Reference in Native Engine...",
@@ -166,7 +171,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         }
         val frameLabel = "Processing Frame ${frameIndex + 1}/$plannedFrames..."
         onProgress(
-            AnalysisViewModel.BatchProgressUpdate(
+            BatchProgressUpdate(
                 percent = (frameIndex.toFloat() / plannedFrames) * 100,
                 status = if (plannedFrames > 1) {
                     "Processing frame ${frameIndex + 1} of $plannedFrames"
@@ -221,7 +226,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 val frameProgress = (frameIndex.toFloat() / plannedFrames) * 100
                 val overallProgress = frameProgress + (percentage.toFloat() / plannedFrames)
                 onProgress(
-                    AnalysisViewModel.BatchProgressUpdate(
+                    BatchProgressUpdate(
                         percent = overallProgress,
                         status = if (plannedFrames > 1) {
                             "Processing frame ${frameIndex + 1} of $plannedFrames"
@@ -301,7 +306,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             break
         }
         onProgress(
-            AnalysisViewModel.BatchProgressUpdate(
+            BatchProgressUpdate(
                 percent = ((frameIndex + 1).toFloat() / plannedFrames) * 100,
                 status = "Processing frame ${frameIndex + 1} of $plannedFrames",
                 timerText = frameLabel,
@@ -411,7 +416,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         }
     }
 
-    val outcome = AnalysisViewModel.BatchAnalysisOutcome(
+    val outcome = BatchAnalysisOutcome(
         engineErrorCode = stop.wireCode,
         firstFrameValidPoints = firstFrameValidPoints,
         totalFrames = solvedFrames,

@@ -5,6 +5,7 @@ import com.indicvision.semper.field.ImageSize
 import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.ui.analysis.frames.DeformedFrame
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.repointDeformedPathsOnMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

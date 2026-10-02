@@ -14,6 +14,7 @@ import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.sweep.toSkippedNode
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Feedback
 
@@ -41,7 +42,7 @@ class WizardRunOutcomes(
      * session appearing on Home that the user had just been told was a failure,
      * with no route to it from here.
      */
-    override fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
+    override fun onPartialRun(outcome: BatchAnalysisOutcome) {
         val kept = outcome.totalFrames
         val planned = viewModel.defFilePaths.size
         status.show(activity.getString(R.string.run_stopped_early_fmt, outcome.stoppedAtFrame, planned))
@@ -110,7 +111,7 @@ class WizardRunOutcomes(
      * A finished sweep is an ordinary session whose frames happen to be
      * settings rather than images, so it opens in the normal result viewer.
      */
-    override fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?) {
+    override fun onSweepFinished(outcome: BatchAnalysisOutcome?) {
         when {
             outcome == null -> Feedback.toast(activity, R.string.sweep_failed, long = true)
             outcome.stop == RunStop.SessionLimit -> AnalysisNavHelper.openSessionLimit(activity)
@@ -120,7 +121,7 @@ class WizardRunOutcomes(
     }
 
     /** Routes to the lattice with all-failed nodes so the user can tap each for details. */
-    private fun openFailedSweep(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
+    private fun openFailedSweep(outcome: BatchAnalysisOutcome) {
         // Each node keeps its own reason; they used to all show the last one's.
         viewModel.sweepPlan = emptyList()
         viewModel.sweepSkippedNodes = SkippedNode.forFailedSweep(viewModel.sweepSkippedNodes) {
@@ -131,7 +132,7 @@ class WizardRunOutcomes(
         openResults(activity, viewModel, sweep, sweep = true)
     }
 
-    private fun openSweep(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
+    private fun openSweep(outcome: BatchAnalysisOutcome) {
         val skipped = viewModel.sweepSkippedNodes.size
         if (skipped > 0) {
             // Partial sweeps are still worth browsing; say what was dropped.

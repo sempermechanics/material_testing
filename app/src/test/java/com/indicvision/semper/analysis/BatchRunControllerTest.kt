@@ -16,6 +16,7 @@ import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.run.RunSpec
 import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -77,7 +78,7 @@ class BatchRunControllerTest {
                 gate.computeEnabled = !chrome.isBusy
             }
 
-            override fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) = onPartial()
+            override fun onPartialRun(outcome: BatchAnalysisOutcome) = onPartial()
             override fun openResultViewer() = Unit
             override fun engineFailureMessage(code: Int, frameIndex: Int, frameName: String?) = ""
             override fun showEngineFailureDialog(message: String, titleRes: Int, faqUrlRes: Int) =
@@ -85,14 +86,14 @@ class BatchRunControllerTest {
 
             override fun clearEngineFailFaq() = Unit
             override fun onSweepProgress(progress: VsgStudyRunner.Progress) = Unit
-            override fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?) = Unit
+            override fun onSweepFinished(outcome: BatchAnalysisOutcome?) = Unit
         }
         return BatchRunController(activity, viewModel, chrome, resultLine ?: TextView(activity), host)
     }
 
     /** A run is saved when its first frame kept points; [route]'s tests override that. */
     private fun outcome(code: Int, validPoints: Int, frames: Int, correlated: Int = -1) =
-        AnalysisViewModel.BatchAnalysisOutcome(
+        BatchAnalysisOutcome(
             engineErrorCode = code,
             firstFrameValidPoints = validPoints,
             totalFrames = frames,
@@ -104,7 +105,7 @@ class BatchRunControllerTest {
         )
 
     /** Whether [outcome] opened the "stopped early, frames kept" dialog, and any failure dialog it raised. */
-    private fun route(outcome: AnalysisViewModel.BatchAnalysisOutcome): Pair<Boolean, Shown?> {
+    private fun route(outcome: BatchAnalysisOutcome): Pair<Boolean, Shown?> {
         val viewModel = AnalysisViewModel()
         viewModel.resetRunResult("", strainFailSpec)
         var partial = false
@@ -134,7 +135,7 @@ class BatchRunControllerTest {
         debugDir = null,
     )
 
-    private fun assertComputeUsableAfter(name: String, result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {
+    private fun assertComputeUsableAfter(name: String, result: Result<BatchAnalysisOutcome>) {
         val gate = Gate()
         controller(gate).handleBatchOutcome(result)
         assertTrue("Compute stayed disabled after: $name", gate.computeEnabled)

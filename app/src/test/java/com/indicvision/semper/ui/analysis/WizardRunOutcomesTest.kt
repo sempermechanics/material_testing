@@ -7,7 +7,7 @@ import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.ui.analysis.run.EngineFailure
 import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.sweep.SweepSetupHelper
-import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -44,7 +44,7 @@ class WizardRunOutcomesTest {
         outcomes = WizardRunOutcomes(bed.activity, bed.viewModel, chrome, status, sweep) { checks++ }
     }
 
-    private fun outcome(frames: Int, code: Int) = AnalysisViewModel.BatchAnalysisOutcome(
+    private fun outcome(frames: Int, code: Int) = BatchAnalysisOutcome(
         engineErrorCode = code,
         firstFrameValidPoints = 0,
         totalFrames = frames,

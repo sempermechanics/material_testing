@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.annotation.StringRes
 import com.indicvision.semper.R
 import com.indicvision.semper.field.RunStop
-import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
 
 /** Maps engine error codes to the same user-facing strings on every screen. */
 object EngineFailure {
@@ -69,7 +69,7 @@ object EngineFailure {
      * Why a single run's first frame kept no points (engine code 0). Code 0
      * alone reads as a strain-window failure, but it is also what a frame
      * where nothing correlated returns; the points ICGN accepted there
-     * ([AnalysisViewModel.BatchAnalysisOutcome.firstFrameCorrelatedPoints])
+     * ([BatchAnalysisOutcome.firstFrameCorrelatedPoints])
      * tell the two apart.
      */
     enum class ZeroPoints {

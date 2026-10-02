@@ -15,6 +15,9 @@ import com.indicvision.semper.ui.analysis.run.BatchRun
 import com.indicvision.semper.ui.analysis.run.RunSpec
 import com.indicvision.semper.ui.analysis.run.runBatchAnalysisBody
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
+import com.indicvision.semper.ui.analysis.wizard.BatchProgressUpdate
+import com.indicvision.semper.ui.analysis.wizard.sessionLimitOutcome
 import kotlinx.coroutines.Job
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -58,8 +61,8 @@ class DicBatchRunnerLimitTest {
         TokenStore.clear(ctx)
     }
 
-    private fun run(): AnalysisViewModel.BatchAnalysisOutcome {
-        val progress = mutableListOf<AnalysisViewModel.BatchProgressUpdate>()
+    private fun run(): BatchAnalysisOutcome {
+        val progress = mutableListOf<BatchProgressUpdate>()
         val outcome = vm.runBatchAnalysisBody(ctx, BatchRun(spec, ctx.cacheDir, 0L, Job())) { progress += it }
         assertTrue("a blocked run reports no progress", progress.isEmpty())
         return outcome

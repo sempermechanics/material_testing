@@ -13,6 +13,7 @@ import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.indicvision.semper.ui.common.Dialogs
 import kotlinx.coroutines.launch
 
@@ -38,7 +39,7 @@ class BatchRunController(
         fun checkReady()
 
         /** A run that stopped partway with its frames saved. */
-        fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome)
+        fun onPartialRun(outcome: BatchAnalysisOutcome)
 
         fun openResultViewer()
 
@@ -52,7 +53,7 @@ class BatchRunController(
         fun onSweepProgress(progress: VsgStudyRunner.Progress)
 
         /** A sweep's end; null when it failed. */
-        fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?)
+        fun onSweepFinished(outcome: BatchAnalysisOutcome?)
     }
 
     private val overlayHelper get() = chrome.overlay
@@ -97,14 +98,14 @@ class BatchRunController(
      * opens. A failure is reported as a null outcome, which is the shape
      * [Host.onSweepFinished] already branched on.
      */
-    private fun handleSweepOutcome(result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {
+    private fun handleSweepOutcome(result: Result<BatchAnalysisOutcome>) {
         chrome.end()
         host.checkReady()
         host.onSweepFinished(result.getOrNull())
     }
 
     @VisibleForTesting
-    internal fun handleBatchOutcome(result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {
+    internal fun handleBatchOutcome(result: Result<BatchAnalysisOutcome>) {
         chrome.end()
         // Once, before any branch: Compute was disabled for the run, and a branch
         // that forgot to re-check left it disabled — a failed run could not be
@@ -158,7 +159,7 @@ class BatchRunController(
         }
     }
 
-    private fun showNamedEngineFailure(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
+    private fun showNamedEngineFailure(outcome: BatchAnalysisOutcome) {
         // Code 0 is "the first frame kept no points", which is not always the
         // strain window's fault: say which it was, with the run's own VSG and step.
         // A run that went on past such a frame and stopped later saved nothing

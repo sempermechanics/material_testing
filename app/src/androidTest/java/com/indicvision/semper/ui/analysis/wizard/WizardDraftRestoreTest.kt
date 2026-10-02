@@ -90,7 +90,7 @@ class WizardDraftRestoreTest {
         val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved)))
         after.attachDraft(WizardDraft(context))
 
-        assertEquals(AnalysisViewModel.DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertArrayEquals(REF, after.refBytes)
         assertArrayEquals(MASK, after.roiMaskBytes)
         assertEquals(paths, after.defFilePaths)

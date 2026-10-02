@@ -38,6 +38,7 @@ import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardChrome
 import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardCoach
 import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardSlots
+import com.indicvision.semper.ui.analysis.wizard.DraftRestore
 import com.indicvision.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.indicvision.semper.ui.analysis.wizard.WizardStep
 import com.indicvision.semper.ui.common.CoachMarkController
@@ -399,15 +400,15 @@ class StaticAnalysisActivity :
             wizardSlots.refreshDefSlot()
             when (restore) {
                 // Re-enter the page so it re-measures what it shows.
-                AnalysisViewModel.DraftRestore.RESTORED -> goToStep(viewModel.step, animate = false)
-                AnalysisViewModel.DraftRestore.LOST -> {
+                DraftRestore.RESTORED -> goToStep(viewModel.step, animate = false)
+                DraftRestore.LOST -> {
                     goToStep(WizardStep.IMAGES, animate = false)
                     val lost = getString(R.string.wizard_draft_lost)
                     Snackbar.make(findViewById(android.R.id.content), lost, FaqRedirect.durationFor(lost))
                         .setAnchorView(binding.bottomNav)
                         .show()
                 }
-                AnalysisViewModel.DraftRestore.NONE -> Unit
+                DraftRestore.NONE -> Unit
             }
             checkReady()
             subsets.apply()

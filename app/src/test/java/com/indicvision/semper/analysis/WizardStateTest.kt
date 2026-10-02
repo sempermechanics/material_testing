@@ -15,8 +15,9 @@ import com.indicvision.semper.ui.analysis.frames.FrameImportHelper
 import com.indicvision.semper.ui.analysis.frames.FrameOrderDirection
 import com.indicvision.semper.ui.analysis.frames.FrameOrderMode
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
-import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel.DraftRestore
+import com.indicvision.semper.ui.analysis.wizard.DraftRestore
 import com.indicvision.semper.ui.analysis.wizard.WizardState
+import com.indicvision.semper.ui.analysis.wizard.saveWizardState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
