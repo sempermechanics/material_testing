@@ -3,6 +3,7 @@ package com.indicvision.semper.ui.analysis.wizard
 import android.widget.EditText
 import com.google.android.material.slider.Slider
 import com.indicvision.semper.ui.common.commitOnDone
+import java.util.Locale
 
 /**
  * Snaps [raw] into [slider]'s range and onto its step grid. Subset size and
@@ -28,7 +29,7 @@ internal fun EditText.bindToSlider(slider: Slider, onUserChange: () -> Unit) {
         val typed = text.toString().trim().toIntOrNull()
         val value = if (typed == null) previous else snapToSlider(slider, typed)
         slider.value = value.toFloat()
-        setText(value.toString())
+        setText(String.format(Locale.ROOT, "%d", value))
         setSelection(text.length)
         if (value != previous) onUserChange()
     }

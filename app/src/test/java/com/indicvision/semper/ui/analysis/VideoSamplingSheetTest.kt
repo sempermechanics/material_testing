@@ -3,6 +3,7 @@ package com.indicvision.semper.ui.analysis
 import android.app.Application
 import android.net.Uri
 import android.widget.TextView
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.R
 import com.indicvision.semper.imaging.video.ExtractionRequest
 import com.indicvision.semper.imaging.video.VideoFrameExtractor
@@ -66,11 +67,16 @@ class VideoSamplingSheetTest {
         val segment = "${VideoFrameExtractor.formatClock(0)} – ${VideoFrameExtractor.formatClock(4_000L)}"
         assertEquals(segment, sheet.findViewById<TextView>(R.id.tvSegmentValue)!!.text.toString())
 
+        sheet.findViewById<MaterialButtonToggleGroup>(R.id.toggleExtractMode)!!.check(R.id.btnModeUniform)
+        val estimate = sheet.findViewById<TextView>(R.id.tvEstimate)!!.text.toString()
+        assertTrue(estimate, estimate.startsWith("≈ 40 frames: 1 reference + 39 deformed"))
+
         sheet.findViewById<android.view.View>(R.id.btnExtractFrames)!!.performClick()
         val sent = request!!
         assertEquals(10.0, sent.fpsExtract, 0.0)
         assertEquals(0L, sent.startMs)
         assertEquals(90, sent.rotationDegrees)
+        assertEquals(false, sent.preferKeyframes)
         assertTrue(sent.maxFrames > 0)
     }
 }

@@ -798,7 +798,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="video_resolution_fmt">%1$d×%2$d</string>
     <string name="video_info_separator">"   ·   "</string>
     <string name="video_segment_fmt">%1$s – %2$s</string>
-    <string name="video_estimate_fmt">≈ %1$d frame(s): 1 reference + %2$d deformed%3$s</string>
+    <plurals name="video_estimate_fmt">
+        <item quantity="one">≈ %1$d frame: 1 reference + %2$d deformed%3$s</item>
+        <item quantity="other">≈ %1$d frames: 1 reference + %2$d deformed%3$s</item>
+    </plurals>
     <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients.</string>
     <string name="info_step">Spacing between tracked points, in pixels. Smaller means denser results but longer analysis time. Linked to subset overlap: overlap = 1 − step / subset.</string>
     <string name="info_strain_window">How many data points across each strain value averages over. The virtual strain gauge (VSG) it gives, in pixels, is (window − 1) × step + 1, shown under the slider. Bigger means smoother strain but less local detail.</string>

@@ -137,7 +137,9 @@ class VideoSamplingSheet(
         } else {
             val n = sampling.estimate(form.rangeSegment.values, form.sliderFps.value.toDouble())
             val capped = if (n >= sampling.maxFrames) activity.getString(R.string.video_capped_suffix) else ""
-            form.tvEstimate.text = activity.getString(R.string.video_estimate_fmt, n, (n - 1).coerceAtLeast(0), capped)
+            val deformed = (n - 1).coerceAtLeast(0)
+            form.tvEstimate.text =
+                activity.resources.getQuantityString(R.plurals.video_estimate_fmt, n, n, deformed, capped)
             form.btnExtractFrames.text = activity.resources.getQuantityString(R.plurals.extract_n_frames_fmt, n, n)
         }
     }
