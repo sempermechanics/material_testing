@@ -18,6 +18,7 @@ import com.indicvision.semper.data.account.DevAuth
 import com.indicvision.semper.databinding.ActivitySplashBinding
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.common.Feedback
+import com.indicvision.semper.ui.common.SignOutRun
 import com.indicvision.semper.ui.home.HomeActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -37,6 +38,8 @@ class SplashActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Opened after a sign-out no screen was left to route: the routing below takes it.
+        SignOutRun.claimUnclaimed()
         val binding = ActivitySplashBinding.inflate(layoutInflater)
         setContentView(binding.root)
 

@@ -1,6 +1,5 @@
-// Home screen wires many list/menu/callback bindings in onCreate; kept together
-// for locality, so LongMethod / TooManyFunctions are suppressed.
-@file:Suppress("LongMethod", "TooManyFunctions")
+// Home owns its row actions, refreshes and pickers as small private steps.
+@file:Suppress("TooManyFunctions")
 
 package com.indicvision.semper.ui.home
 
@@ -26,6 +25,7 @@ import com.indicvision.semper.databinding.ActivityHomeBinding
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
+import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.ConflatedRefresh
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeleteFeedback
@@ -35,6 +35,7 @@ import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.SerialJob
+import com.indicvision.semper.ui.common.SignOutRun
 import com.indicvision.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,9 +67,6 @@ class HomeActivity : AppCompatActivity() {
 
     /** The phone-list read in flight ([refreshList]); a newer one replaces it. */
     private val listRefresh = SerialJob()
-
-    /** The backups-card read in flight ([updateCloudBackups]); a newer one replaces it. */
-    private val backupsRefresh = SerialJob()
 
     /**
      * The cloud check, one at a time: a burst of requests runs it at most once
@@ -147,26 +145,51 @@ class HomeActivity : AppCompatActivity() {
         Insets.padTop(binding.homeTopBar)
         Insets.padTop(binding.homeSelectionBar)
 
-        cloudBackups = CloudBackupsCard(
-            card = binding.homeCloudBackups,
-            text = binding.tvCloudBackups,
-            restoreButton = binding.btnCloudBackupsRestore,
-            hideButton = binding.btnCloudBackupsHide,
-            onRestore = { targets -> queueRestores { targets } },
-            onHide = { backups -> hideCloudBackups(backups) },
-        )
-        binding.swipeRefresh.setColorSchemeResources(R.color.sky_primary)
-        // Pull down = deep re-check: verify the blobs really exist in Drive,
-        // not just that the backend's index says so.
-        binding.swipeRefresh.setOnRefreshListener { refresh(deep = true) }
-        binding.sessionList.layoutManager = LinearLayoutManager(this)
+        cloudBackups = cloudBackupsCard()
+        wirePullToRefresh()
         quotaCard = HomeQuotaCard(
             activity = this,
             quotaView = binding.tvHomeQuota,
             licenseView = binding.tvHomeLicense,
             openSettings = { binding.btnHomeSettings.performClick() },
         )
+        wireButtons()
 
+        // Beta notice, then consent, then the coach mark: one overlay at a time,
+        // and the diagnostics choice must be made before anything is collected.
+        FirstRunPrompts(this).show(binding.fabNewAnalysis)
+
+        wireSessionList()
+
+        // Exit confirm is always registered; selection back is layered on top and
+        // enabled only while something is selected (LIFO: last added runs first).
+        onBackPressedDispatcher.addCallback(this, exitAppCallback)
+        onBackPressedDispatcher.addCallback(this, backCallback)
+
+        openLimitScreenIfFull()
+        HomeTransferWatch(this, adapter, quotaCard, ::showsCloudState) { refresh() }.observe()
+        deleteFeedback.observe()
+    }
+
+    private fun cloudBackupsCard() = CloudBackupsCard(
+        card = binding.homeCloudBackups,
+        text = binding.tvCloudBackups,
+        restoreButton = binding.btnCloudBackupsRestore,
+        hideButton = binding.btnCloudBackupsHide,
+        onRestore = { targets -> queueRestores { targets } },
+        onHide = { backups -> hideCloudBackups(backups) },
+    )
+
+    private fun wirePullToRefresh() {
+        binding.swipeRefresh.setColorSchemeResources(R.color.sky_primary)
+        // Pull down = deep re-check: verify the blobs really exist in Drive,
+        // not just that the backend's index says so.
+        binding.swipeRefresh.setOnRefreshListener { refresh(deep = true) }
+        binding.sessionList.layoutManager = LinearLayoutManager(this)
+    }
+
+    /** The + button, the gear, and the empty state's button (which is the + button). */
+    private fun wireButtons() {
         val fab = binding.fabNewAnalysis
         HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab)
         fab.setOnClickListener {
@@ -189,53 +212,17 @@ class HomeActivity : AppCompatActivity() {
         binding.btnEmptyRestore.setOnClickListener {
             fab.performClick()
         }
+    }
 
-        // Beta notice, then consent, then the coach mark: one overlay at a time,
-        // and the diagnostics choice must be made before anything is collected.
-        FirstRunPrompts(this).show(fab)
-
-        // Adapter callbacks close over selection; both must exist before the
-        // list attaches so a early bind cannot hit an uninitialized controller.
-        adapter = SessionListAdapter(
-            isSelected = { id -> selection.isSelected(id) },
-            onClick = { record ->
-                if (selection.inSelectionMode) {
-                    selection.toggleSelection(record)
-                } else {
-                    openSession(record)
-                }
-            },
-            onLongClick = { record ->
-                if (selection.inSelectionMode) {
-                    selection.toggleSelection(record)
-                } else {
-                    selection.startSelection(record)
-                }
-            },
-            onBadgeClick = { record -> backupBadge.retryOrBackup(record) },
-        )
+    /**
+     * The list, its selection and its delete feedback. Adapter callbacks close
+     * over selection; both must exist before the list attaches so an early
+     * bind cannot hit an uninitialized controller.
+     */
+    private fun wireSessionList() {
+        adapter = sessionListAdapter()
         backupBadge = BackupBadgeActions(this, adapter) { binding.btnHomeSettings.performClick() }
-        selection = SessionSelectionController(
-            activity = this,
-            adapter = adapter,
-            topBar = binding.homeTopBar,
-            selectionBar = binding.homeSelectionBar,
-            selectionCount = binding.tvSelectionCount,
-            btnSelectionRename = binding.btnSelectionRename,
-            btnSelectionRestore = binding.btnSelectionRestore,
-            selectAllBox = binding.cbSelectionAll,
-            fab = fab,
-            backCallback = backCallback,
-            onRefresh = { refresh() },
-            onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
-            restoreEnabled = { showsCloudState() },
-            onRestore = { records -> startRestore(records) },
-            onDeleteQueued = { workId, items ->
-                justQueuedDeletes += items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId }
-                deleteFeedback.queued(workId, items.size)
-                refresh(reconcile = false)
-            },
-        )
+        selection = selectionController()
         deleteFeedback = DeleteFeedback(this, binding.homeRoot) {
             justQueuedDeletes.clear()
             refresh(reconcile = false)
@@ -245,13 +232,51 @@ class HomeActivity : AppCompatActivity() {
             btnDelete = binding.btnSelectionDelete,
         )
         binding.sessionList.adapter = adapter
+    }
 
-        // Exit confirm is always registered; selection back is layered on top and
-        // enabled only while something is selected (LIFO: last added runs first).
-        onBackPressedDispatcher.addCallback(this, exitAppCallback)
-        onBackPressedDispatcher.addCallback(this, backCallback)
+    private fun sessionListAdapter() = SessionListAdapter(
+        isSelected = { id -> selection.isSelected(id) },
+        onClick = { record ->
+            if (selection.inSelectionMode) {
+                selection.toggleSelection(record)
+            } else {
+                openSession(record)
+            }
+        },
+        onLongClick = { record ->
+            if (selection.inSelectionMode) {
+                selection.toggleSelection(record)
+            } else {
+                selection.startSelection(record)
+            }
+        },
+        onBadgeClick = { record -> backupBadge.retryOrBackup(record) },
+    )
 
-        // Cold start / return with an already-full quota → persistent support screen.
+    private fun selectionController() = SessionSelectionController(
+        activity = this,
+        adapter = adapter,
+        topBar = binding.homeTopBar,
+        selectionBar = binding.homeSelectionBar,
+        selectionCount = binding.tvSelectionCount,
+        btnSelectionRename = binding.btnSelectionRename,
+        btnSelectionRestore = binding.btnSelectionRestore,
+        selectAllBox = binding.cbSelectionAll,
+        fab = binding.fabNewAnalysis,
+        backCallback = backCallback,
+        onRefresh = { refresh() },
+        onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
+        restoreEnabled = { showsCloudState() },
+        onRestore = { records -> startRestore(records) },
+        onDeleteQueued = { workId, items ->
+            justQueuedDeletes += items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId }
+            deleteFeedback.queued(workId, items.size)
+            refresh(reconcile = false)
+        },
+    )
+
+    /** Cold start / return with an already-full quota → persistent support screen. */
+    private fun openLimitScreenIfFull() {
         lifecycleScope.launch {
             val localCount = withContext(Dispatchers.IO) {
                 SessionStore.list(this@HomeActivity).size
@@ -259,9 +284,13 @@ class HomeActivity : AppCompatActivity() {
             TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
             quotaCard.openLimitScreenIfReached()
         }
+    }
 
-        HomeTransferWatch(this, adapter, quotaCard, ::showsCloudState) { refresh() }.observe()
-        deleteFeedback.observe()
+    override fun onStart() {
+        super.onStart()
+        // A sign-out finished with no screen left to route, and Android
+        // refused the background start to sign-in: route from here.
+        if (SignOutRun.claimUnclaimed()) AuthRoute.toSignIn(this)
     }
 
     override fun onResume() {
@@ -414,16 +443,16 @@ class HomeActivity : AppCompatActivity() {
      * reconcile saved. Demo accounts have no restore, so they are offered nothing.
      */
     private fun updateCloudBackups() {
-        backupsRefresh.launch(lifecycleScope) {
-            val offered = if (showsCloudState()) {
-                withContext(Dispatchers.IO) { CloudBackupListing.offered(this@HomeActivity) }
-            } else {
-                emptyList()
-            }
-            cloudBackups.show(offered)
+        cloudBackups.refresh(lifecycleScope, read = ::offeredBackups) { offered ->
             val emptyTitle = if (offered.isEmpty()) R.string.home_empty_title else R.string.home_empty_title_cloud
             binding.tvEmptyTitle.setText(emptyTitle)
         }
+    }
+
+    private suspend fun offeredBackups(): List<CloudBackupListing.Backup> = if (showsCloudState()) {
+        withContext(Dispatchers.IO) { CloudBackupListing.offered(this@HomeActivity) }
+    } else {
+        emptyList()
     }
 
     private fun hideCloudBackups(backups: List<CloudBackupListing.Backup>) {

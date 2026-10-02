@@ -309,13 +309,13 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    internal fun deleteBackup(entry: AnalysisEntry, row: View) {
+    internal fun deleteBackup(entry: AnalysisEntry) {
         val cloud = entry.cloud ?: return
         val record = entry.record
         if (record != null) {
-            showDeleteBackupChoice(record, cloud, row)
+            showDeleteBackupChoice(record, cloud, entry)
         } else {
-            confirmDeleteCloudBackup(cloud, entry.name, row)
+            confirmDeleteCloudBackup(cloud, entry)
         }
     }
 
@@ -325,16 +325,16 @@ class SettingsActivity : AppCompatActivity() {
      * Deleting a cloud backup is irreversible — there is no trash on the
      * backend — so the confirm spells that out before anything is scheduled.
      */
-    private fun confirmDeleteCloudBackup(session: CloudSessionDto, name: String, row: View) {
+    private fun confirmDeleteCloudBackup(session: CloudSessionDto, entry: AnalysisEntry) {
         Dialogs.confirm(
             this,
             getText(R.string.cloud_delete_forever_title),
-            getString(R.string.cloud_delete_forever_body, name),
+            getString(R.string.cloud_delete_forever_body, entry.name),
             R.string.cloud_delete_forever_confirm,
-        ) { scheduleDelete(row, session.localSessionId, session.sessionId, SessionDeletes.Mode.CLOUD) }
+        ) { scheduleDelete(entry, session.localSessionId, session.sessionId, SessionDeletes.Mode.CLOUD) }
     }
 
-    private fun showDeleteBackupChoice(record: SessionRecord, cloud: CloudSessionDto, row: View) {
+    private fun showDeleteBackupChoice(record: SessionRecord, cloud: CloudSessionDto, entry: AnalysisEntry) {
         DeleteChoiceDialog.show(
             activity = this,
             title = getString(R.string.delete_confirm_title),
@@ -348,10 +348,10 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 },
                 DeleteChoiceDialog.Choice(getString(R.string.delete_choice_cloud)) {
-                    scheduleDelete(row, record.id, cloud.sessionId, SessionDeletes.Mode.CLOUD)
+                    scheduleDelete(entry, record.id, cloud.sessionId, SessionDeletes.Mode.CLOUD)
                 },
                 DeleteChoiceDialog.Choice(getString(R.string.delete_choice_everywhere)) {
-                    scheduleDelete(row, record.id, cloud.sessionId, SessionDeletes.Mode.EVERYWHERE)
+                    scheduleDelete(entry, record.id, cloud.sessionId, SessionDeletes.Mode.EVERYWHERE)
                 },
             ),
         )
@@ -364,8 +364,13 @@ class SettingsActivity : AppCompatActivity() {
      * recoverable. Leaving the page (or the app) does not abandon it: the user
      * confirmed, and the worker retries if the network is down.
      */
-    private fun scheduleDelete(row: View, localSessionId: String, cloudSessionId: String, mode: SessionDeletes.Mode) {
-        analyses.removeRow(row)
+    private fun scheduleDelete(
+        entry: AnalysisEntry,
+        localSessionId: String,
+        cloudSessionId: String,
+        mode: SessionDeletes.Mode,
+    ) {
+        analyses.removeRow(entry)
         val workId = SessionDeletes.enqueue(this, listOf(SessionDeletes.Item(localSessionId, cloudSessionId, mode)))
         deleteFeedback.queued(workId, 1)
     }
