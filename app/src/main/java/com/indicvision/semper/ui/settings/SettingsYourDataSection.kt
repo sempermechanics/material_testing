@@ -13,7 +13,6 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.account.AuthRepository
 import com.indicvision.semper.data.account.DevAuth
 import com.indicvision.semper.data.cloud.CloudAccountExport
-import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.data.prefs.DicSettings
@@ -260,17 +259,22 @@ class SettingsYourDataSection(
         deletionProgress = null
     }
 
-    private fun onAccountDeletion(outcome: CloudSync.AccountDeletion) {
+    private fun onAccountDeletion(outcome: AccountDeletionRun.Outcome) {
         when (outcome) {
-            CloudSync.AccountDeletion.DELETED -> {
+            AccountDeletionRun.Outcome.DELETED -> {
                 activity.toast(activity.getString(R.string.delete_account_done))
                 AuthRoute.toSignIn(activity)
             }
-            CloudSync.AccountDeletion.IDENTITY_KEPT -> {
+            AccountDeletionRun.Outcome.IDENTITY_KEPT -> {
                 activity.toast(activity.getString(R.string.delete_account_identity_kept))
                 AuthRoute.toSignIn(activity)
             }
-            CloudSync.AccountDeletion.CLOUD_UNREACHABLE ->
+            // The account is gone, so the session must not continue here.
+            AccountDeletionRun.Outcome.PHONE_NOT_CLEARED -> {
+                activity.toast(activity.getString(R.string.delete_account_phone_not_cleared))
+                AuthRoute.toSignIn(activity)
+            }
+            AccountDeletionRun.Outcome.CLOUD_NOT_REACHED ->
                 activity.toast(activity.getString(R.string.delete_account_failed))
         }
     }
