@@ -1,45 +1,31 @@
 // Home screen wires many list/menu/callback bindings in onCreate; kept together
-// for locality, so LongMethod / TooManyFunctions / MagicNumber are suppressed.
-@file:Suppress("LongMethod", "TooManyFunctions", "MagicNumber")
+// for locality, so LongMethod / TooManyFunctions are suppressed.
+@file:Suppress("LongMethod", "TooManyFunctions")
 
 package com.indicvision.semper.ui.home
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.Gravity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
-import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.work.WorkManager
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
 import com.indicvision.semper.data.account.LicenseEntitlements
 import com.indicvision.semper.data.cloud.CloudBackupListing
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.cloud.SessionDeletes
-import com.indicvision.semper.data.cloud.TransferWork
-import com.indicvision.semper.data.cloud.UploadErrors
-import com.indicvision.semper.data.cloud.WorkTags
-import com.indicvision.semper.data.cloud.restore.RestoreFailureLedger
 import com.indicvision.semper.data.cloud.restore.RestoreStart
-import com.indicvision.semper.data.net.AppRemoteConfig
-import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
-import com.indicvision.semper.data.prefs.CoachPrefs
-import com.indicvision.semper.data.prefs.DicSettings
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.data.session.isRestorable
 import com.indicvision.semper.databinding.ActivityHomeBinding
-import com.indicvision.semper.diagnostics.Diagnostics
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
-import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.ConflatedRefresh
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeleteFeedback
@@ -49,8 +35,6 @@ import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.SerialJob
-import com.indicvision.semper.ui.common.TransferWorkObserver
-import com.indicvision.semper.ui.limit.SessionLimitActivity
 import com.indicvision.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,6 +53,8 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var adapter: SessionListAdapter
     private lateinit var selection: SessionSelectionController
     private lateinit var cloudBackups: CloudBackupsCard
+    private lateinit var quotaCard: HomeQuotaCard
+    private lateinit var backupBadge: BackupBadgeActions
 
     private lateinit var deleteFeedback: DeleteFeedback
 
@@ -77,8 +63,6 @@ class HomeActivity : AppCompatActivity() {
      * (the enqueue lands asynchronously) or it ends.
      */
     private val justQueuedDeletes = mutableSetOf<String>()
-    private var activeUploadProgress: Map<String, TransferWorkObserver.RowProgress> = emptyMap()
-    private var activeRestoreProgress: Map<String, TransferWorkObserver.RowProgress> = emptyMap()
 
     /** The phone-list read in flight ([refreshList]); a newer one replaces it. */
     private val listRefresh = SerialJob()
@@ -176,9 +160,15 @@ class HomeActivity : AppCompatActivity() {
         // not just that the backend's index says so.
         binding.swipeRefresh.setOnRefreshListener { refresh(deep = true) }
         binding.sessionList.layoutManager = LinearLayoutManager(this)
+        quotaCard = HomeQuotaCard(
+            activity = this,
+            quotaView = binding.tvHomeQuota,
+            licenseView = binding.tvHomeLicense,
+            openSettings = { binding.btnHomeSettings.performClick() },
+        )
 
         val fab = binding.fabNewAnalysis
-        positionFabAtNineTenths()
+        HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab)
         fab.setOnClickListener {
             // Two independent reasons new work cannot start. The seat check is
             // first because an institution member is licensed, so the quota
@@ -191,7 +181,7 @@ class HomeActivity : AppCompatActivity() {
             }
             // At the account's analysis limit, block new work behind the persistent
             // limit screen (email support) instead of letting it fail on upload.
-            if (!openLimitScreenIfReached()) showSourceChooser()
+            if (!quotaCard.openLimitScreenIfReached()) showSourceChooser()
         }
         binding.btnHomeSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -202,21 +192,7 @@ class HomeActivity : AppCompatActivity() {
 
         // Beta notice, then consent, then the coach mark: one overlay at a time,
         // and the diagnostics choice must be made before anything is collected.
-        maybeShowBetaNotice {
-            maybeAskDiagnostics {
-                fab.post {
-                    CoachMarkController(this).maybeShow(
-                        CoachPrefs.Screen.HOME,
-                        listOf(
-                            CoachMarkController.Step(
-                                fab,
-                                getString(R.string.coach_home_fab),
-                            ),
-                        ),
-                    )
-                }
-            }
-        }
+        FirstRunPrompts(this).show(fab)
 
         // Adapter callbacks close over selection; both must exist before the
         // list attaches so a early bind cannot hit an uninitialized controller.
@@ -236,8 +212,9 @@ class HomeActivity : AppCompatActivity() {
                     selection.startSelection(record)
                 }
             },
-            onBadgeClick = { record -> retryOrBackup(record) },
+            onBadgeClick = { record -> backupBadge.retryOrBackup(record) },
         )
+        backupBadge = BackupBadgeActions(this, adapter) { binding.btnHomeSettings.performClick() }
         selection = SessionSelectionController(
             activity = this,
             adapter = adapter,
@@ -280,148 +257,16 @@ class HomeActivity : AppCompatActivity() {
                 SessionStore.list(this@HomeActivity).size
             }
             TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
-            openLimitScreenIfReached()
+            quotaCard.openLimitScreenIfReached()
         }
 
-        observeUploadFailures()
-        observeRestoreProgress()
+        HomeTransferWatch(this, adapter, quotaCard, ::showsCloudState) { refresh() }.observe()
         deleteFeedback.observe()
-    }
-
-    /**
-     * Background uploads run in WorkManager, so a failure would otherwise be
-     * silent (only the row badge changed). Watch the upload jobs and, when one
-     * ends in a terminal failure carrying a reason, tell the user. Quota-full
-     * returns no reason: it opens the persistent limit screen instead.
-     */
-    private fun observeUploadFailures() {
-        TransferWorkObserver(TransferWork.Kind.UPLOAD).observe(this, WorkManager.getInstance(this)) { update ->
-            // Live per-row progress from every running backup.
-            activeUploadProgress = update.rowProgress()
-            publishRowProgress()
-
-            update.newlyFinished.forEach { job ->
-                when (val state = job.state) {
-                    // A finished backup — flip the row's badge to "synced".
-                    TransferWork.State.Succeeded -> refresh()
-                    is TransferWork.State.Failed -> when {
-                        // A refusal at the account's limit, which forces the
-                        // stop. Open the limit screen from here so it shows
-                        // whether or not the worker also opens it (it is
-                        // singleTop, so the two cannot stack). Only the
-                        // worker's quota kind says so: other failures carry
-                        // no reason either (an analysis deleted before its
-                        // backup ran), and the limit can be held from before.
-                        job.isQuotaStop() -> openLimitScreenIfReached()
-                        state.reason != null -> showUploadFailure(state.reason)
-                    }
-                    else -> Unit
-                }
-            }
-        }
-    }
-
-    /** Whether this failed backup was the worker's quota refusal ([UploadErrors.UPLOAD_FAIL_KIND]). */
-    private fun TransferWorkObserver.Job.isQuotaStop(): Boolean =
-        info.outputData.getString(UploadErrors.UPLOAD_FAIL_KIND) == UploadErrors.FAIL_KIND_QUOTA
-
-    private fun observeRestoreProgress() {
-        TransferWorkObserver(TransferWork.Kind.RESTORE).observe(this, WorkManager.getInstance(this)) { update ->
-            activeRestoreProgress = update.rowProgress()
-            publishRowProgress()
-
-            update.newlyFinished.forEach { job ->
-                refresh()
-                val state = job.state as? TransferWork.State.Failed ?: return@forEach
-                // Once per failure across Home and Settings, not once per screen open.
-                if (!RestoreFailureLedger.claim(this@HomeActivity, job.id)) return@forEach
-                CrispToast.show(
-                    this@HomeActivity,
-                    state.reason ?: getString(R.string.restore_failed_generic),
-                    long = true,
-                )
-            }
-        }
-    }
-
-    private fun publishRowProgress() {
-        adapter.setUploadProgress(activeUploadProgress + activeRestoreProgress)
-    }
-
-    /**
-     * Informative only — every reason that reaches here is terminal (device
-     * conflict, too large, render OOM), so a one-tap Retry would just re-fail.
-     * The badge remains the place to deliberately re-attempt (see [retryOrBackup]).
-     */
-    private fun showUploadFailure(reason: String) {
-        if (!showsCloudState()) return
-        CrispToast.show(
-            this,
-            getString(R.string.cloud_backup_failed_fmt, reason),
-            long = true,
-        )
     }
 
     override fun onResume() {
         super.onResume()
         refresh()
-    }
-
-    /**
-     * One-time beta / data-use declaration after the account first reaches Home,
-     * then [next]. The only way out is "I understand", so [next] runs from there.
-     */
-    private fun maybeShowBetaNotice(next: () -> Unit) {
-        if (TokenStore.hasAckedBetaNotice(this)) {
-            next()
-            return
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.beta_notice_title)
-            .setMessage(R.string.beta_notice_body)
-            .setCancelable(false)
-            .setPositiveButton(R.string.beta_notice_ack) { _, _ ->
-                TokenStore.setBetaNoticeAcked(this)
-                next()
-            }
-            .show()
-    }
-
-    /**
-     * First-run diagnostics choice, then [next].
-     *
-     * Crashlytics and Analytics are disabled in the manifest, so nothing has been
-     * collected before this point — the app previously started reporting on first
-     * launch with no notice and no way to decline. Asked once: a "Not now" is
-     * recorded, so this does not nag, and the toggle stays in Settings.
-     */
-    private fun maybeAskDiagnostics(next: () -> Unit) {
-        if (DicSettings.diagnosticsAsked(this)) {
-            next()
-            return
-        }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.diagnostics_prompt_title)
-            .setMessage(R.string.diagnostics_prompt_body)
-            .setPositiveButton(R.string.diagnostics_prompt_accept) { _, _ ->
-                Diagnostics.setEnabled(this, true)
-            }
-            .setNegativeButton(R.string.diagnostics_prompt_decline) { _, _ ->
-                Diagnostics.setEnabled(this, false)
-            }
-            .setCancelable(false)
-            .setOnDismissListener { next() }
-            .show()
-    }
-
-    /**
-     * At the account's analysis limit, opens the persistent limit screen
-     * (email support) and says so; Home's every quota gate goes through here.
-     */
-    private fun openLimitScreenIfReached(): Boolean {
-        val reached = TokenStore.isSessionLimitReached(this)
-        if (reached) startActivity(Intent(this, SessionLimitActivity::class.java))
-        return reached
     }
 
     /**
@@ -467,81 +312,11 @@ class HomeActivity : AppCompatActivity() {
             adapter.setSyncVisible(showsCloudState())
             binding.emptyState.isVisible = sessions.isEmpty()
             updateCloudBackups()
-            updateQuotaIndicator(sessions.size)
-            updateLicenseNotice()
+            quotaCard.render(sessions.size)
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
             TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
-        }
-    }
-
-    /**
-     * Warn that a timed license is running out, or has run out and is inside
-     * its grace window.
-     *
-     * Its own view rather than [tvHomeQuota]: a licensed account always has a
-     * known quota, so it never reaches that view's unknown-quota hint branch.
-     *
-     * Advisory only. Entitlement is decided by the backend and arrives as
-     * `mode`; this notice is suppressed entirely when the cached config is too
-     * old to trust, so a renewal that landed while the device was offline
-     * cannot show up here as a false alarm.
-     */
-    private fun updateLicenseNotice() {
-        val tvHomeLicense = binding.tvHomeLicense
-        val days = LicenseEntitlements.expiryNoticeDays(this)
-        if (days == null) {
-            tvHomeLicense.isVisible = false
-            return
-        }
-        val support = getString(R.string.support_email)
-        tvHomeLicense.isVisible = true
-        tvHomeLicense.text = when {
-            LicenseEntitlements.inGrace(this) -> getString(R.string.license_grace, support)
-            // Past its day on a config fetched before it ended: the cache
-            // cannot say whether grace applies, only that the day has gone.
-            days < 0L -> getString(R.string.license_expired, support)
-            days == 0L -> getString(R.string.license_expiring_today, support)
-            else -> resources.getQuantityString(
-                R.plurals.license_expiring_fmt,
-                days.toInt(),
-                days.toInt(),
-            )
-        }
-        tvHomeLicense.setTextColor(
-            getColor(
-                if (LicenseEntitlements.inGrace(this)) {
-                    R.color.semantic_danger
-                } else {
-                    R.color.text_secondary
-                },
-            ),
-        )
-    }
-
-    private fun updateQuotaIndicator(localSessionCount: Int) {
-        val tvHomeQuota = binding.tvHomeQuota
-        val max = TokenStore.quotaMax(this)
-        val used = TokenStore.quotaUsed(this).coerceAtLeast(localSessionCount)
-        if (max <= 0) {
-            if (AppRemoteConfig.shouldHintSyncBlocked(this) && IndicApi.get(this).enabled) {
-                tvHomeQuota.isVisible = true
-                tvHomeQuota.text = getString(R.string.home_sync_config_unavailable)
-            } else {
-                tvHomeQuota.isVisible = false
-            }
-            return
-        }
-        tvHomeQuota.isVisible = true
-        tvHomeQuota.text = resources.getQuantityString(R.plurals.home_quota_fmt, used, used, max)
-        tvHomeQuota.setTextColor(
-            getColor(
-                if (used >= max) R.color.semantic_danger else R.color.text_secondary,
-            ),
-        )
-        tvHomeQuota.setOnClickListener {
-            if (!openLimitScreenIfReached()) binding.btnHomeSettings.performClick()
         }
     }
 
@@ -557,15 +332,9 @@ class HomeActivity : AppCompatActivity() {
     private suspend fun reconcileWithCloud(deep: Boolean) {
         when (val outcome = CloudSync.reconcile(this@HomeActivity, deep = deep)) {
             is CloudSync.Outcome.Ok -> {
-                // Record the account's quota so the new-analysis gate and the
-                // limit screen reflect the latest server truth.
-                val wasLimited = TokenStore.isSessionLimitReached(this)
-                val localCount = withContext(Dispatchers.IO) { SessionStore.list(this@HomeActivity).size }
-                // Ceiling is owned by AppRemoteConfig (refreshed by the same
-                // reconcile's config fetch); only the used count is stored here.
-                TokenStore.setQuota(this, outcome.quotaUsed, localCount)
-                // Newly at the cap → open the persistent "email support" screen.
-                if (!wasLimited) openLimitScreenIfReached()
+                // Record the account's quota; newly at the cap → open the
+                // persistent "email support" screen.
+                quotaCard.recordReconciled(outcome.quotaUsed)
                 // This check saved a fresh listing of the account's backups.
                 updateCloudBackups()
                 if (outcome.repaired > 0) {
@@ -613,7 +382,7 @@ class HomeActivity : AppCompatActivity() {
 
     /**
      * Queue background restores and stay on Home. Row progress comes from
-     * [observeRestoreProgress] (same badge/bar as uploads) so the list stays
+     * [HomeTransferWatch] (same badge/bar as uploads) so the list stays
      * interactive — no blocking "Downloading…" dialog. Rows go through
      * [RestoreStart], the same path Settings uses.
      */
@@ -663,62 +432,6 @@ class HomeActivity : AppCompatActivity() {
         Feedback.toast(this, R.string.cloud_backups_hidden, long = true)
     }
 
-    /** Retry a failed/pending upload, or back up a local-only session when cloud is on. */
-    private fun retryOrBackup(record: SessionRecord) {
-        when (record.syncState) {
-            // A terminal failure: explain why (from the retained WorkInfo) before
-            // offering a deliberate retry, instead of silently re-queuing a doomed
-            // upload every tap.
-            SessionRecord.SyncState.FAILED -> showFailedBackupDialog(record)
-            SessionRecord.SyncState.PENDING -> enqueueBackup(record, R.string.cloud_retry_backup)
-            SessionRecord.SyncState.LOCAL_ONLY -> if (DicSettings.saveToCloud(this)) {
-                enqueueBackup(record, R.string.cloud_backup_now)
-            } else {
-                binding.btnHomeSettings.performClick()
-            }
-            SessionRecord.SyncState.SYNCED -> binding.btnHomeSettings.performClick()
-        }
-    }
-
-    private fun enqueueBackup(record: SessionRecord, toastRes: Int) {
-        if (!IndicApi.get(this).enabled) {
-            Feedback.toast(this, R.string.cloud_backup_no_backend, long = true)
-            return
-        }
-        // The index write is a file read-modify-write, and this runs from a tap.
-        // Order is preserved rather than made optimistic: the PENDING stamp has
-        // to land before the worker is queued, or an upload that finishes first
-        // would have its SYNCED stamp overwritten by this one.
-        lifecycleScope.launch {
-            SessionStore.setSyncStateAsync(this@HomeActivity, record.id, SessionRecord.SyncState.PENDING)
-            CloudSync.enqueueUpload(this@HomeActivity, record.id)
-            adapter.rebindRow(record.id)
-            Feedback.toast(this@HomeActivity, toastRes)
-        }
-    }
-
-    private fun showFailedBackupDialog(record: SessionRecord) {
-        lifecycleScope.launch {
-            val reason = withContext(Dispatchers.IO) { lastUploadFailureReason(record.id) }
-            Dialogs.confirm(
-                this@HomeActivity,
-                getText(R.string.cloud_backup_failed_title),
-                reason ?: getString(R.string.cloud_backup_failed_generic),
-                R.string.cloud_backup_retry_action,
-            ) { enqueueBackup(record, R.string.cloud_retry_backup) }
-        }
-    }
-
-    /** The reason attached to the last terminal upload failure for [localId], if still retained. */
-    private fun lastUploadFailureReason(localId: String): String? = runCatching {
-        WorkManager.getInstance(this)
-            .getWorkInfosForUniqueWork(WorkTags.uploadName(localId))
-            .get()
-            .map { TransferWork.classify(it, TransferWork.Kind.UPLOAD) }
-            .firstNotNullOfOrNull { it as? TransferWork.State.Failed }
-            ?.reason
-    }.getOrNull()
-
     /**
      * Shows [sessions] with which of them still have frames on this phone,
      * read here on IO so binding, selecting and opening a row never do.
@@ -741,31 +454,6 @@ class HomeActivity : AppCompatActivity() {
 
     private fun showDeviceOnlyKeptSnackbar() {
         CrispToast.show(this, getString(R.string.delete_device_only_done), long = true)
-    }
-
-    private fun positionFabAtNineTenths() {
-        val root = binding.homeRoot
-        val fab = binding.fabNewAnalysis
-        // Only assign layoutParams when margins actually change. Setting them on
-        // every layout pass retriggers layout (and with the FAB menu overlay on
-        // homeRoot that becomes an infinite requestLayout loop).
-        root.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-            if (fab.width == 0 || view.width == 0) return@addOnLayoutChangeListener
-            val params = fab.layoutParams as CoordinatorLayout.LayoutParams
-            val left = (view.width / 2) - fab.width / 2
-            val top = (view.height * 9 / 10) - fab.height / 2
-            val gravity = Gravity.TOP or Gravity.START
-            if (params.gravity == gravity &&
-                params.leftMargin == left &&
-                params.topMargin == top
-            ) {
-                return@addOnLayoutChangeListener
-            }
-            params.gravity = gravity
-            params.leftMargin = left
-            params.topMargin = top
-            fab.layoutParams = params
-        }
     }
 
     override fun onDestroy() {
