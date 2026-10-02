@@ -51,6 +51,16 @@ internal class WizardDraftBinding {
      * that had it, and empties it: whatever is there belongs to one that is
      * gone. A restored wizard carries on the draft of the one whose state it
      * was handed, so that wizard's last writes, still queued, land for it.
+     *
+     * The restored wizard does that by taking `owner.get()`, the current
+     * generation, rather than the next one. That is the predecessor's
+     * generation only while no fresh wizard attached in between, which holds
+     * because one screen launches the wizard: HomeActivity (the only
+     * `StaticAnalysisActivity` intent), one at a time, from under the wizard
+     * it would replace. A restore recreates that wizard before Home can be
+     * reached again. A second launcher, or a wizard opened over another,
+     * would let the restored one share a newer wizard's generation; it would
+     * then need the generation in its saved state instead.
      */
     fun attach(target: WizardDraft) {
         if (draft != null) return
