@@ -15,7 +15,6 @@ import androidx.core.view.isVisible
 import androidx.credentials.CreatePasswordRequest
 import androidx.credentials.CredentialManager
 import androidx.lifecycle.lifecycleScope
-import com.google.firebase.auth.MultiFactorResolver
 import com.indicvision.semper.R
 import com.indicvision.semper.data.account.AuthRepository
 import com.indicvision.semper.data.account.isTrustedAuthLink
@@ -42,25 +41,23 @@ import timber.log.Timber
 @MainThread
 class AuthActivity : AppCompatActivity() {
 
-    private val authRepo by lazy { AuthRepository(applicationContext) }
+    internal val authRepo by lazy { AuthRepository(applicationContext) }
     private lateinit var binding: ActivityAuthBinding
-    private var mode = AuthMode.SIGN_IN
-    private var resetOobCode: String? = null
+    internal var mode = AuthMode.SIGN_IN
 
     /** The email/password just submitted, pending the outcome that validates it. */
-    private var pendingCredential: Pair<String, String>? = null
+    internal var pendingCredential: Pair<String, String>? = null
 
-    /**
-     * Open TOTP challenge after first factor. Null until Firebase reports MFA.
-     * Cleared when the challenge succeeds or the user backs to first-factor form.
-     */
-    private var pendingTotp: Pair<MultiFactorResolver, String>? = null
+    private lateinit var totp: AuthTotpUi
+    private lateinit var passwordReset: AuthPasswordReset
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityAuthBinding.inflate(layoutInflater)
         setContentView(binding.root)
         window.decorView.post { reportFullyDrawn() }
+        totp = AuthTotpUi(this, binding)
+        passwordReset = AuthPasswordReset(this, binding)
 
         binding.btnGeneratePassword.setOnClickListener {
             val generated = PasswordPolicy.generate()
@@ -86,7 +83,7 @@ class AuthActivity : AppCompatActivity() {
             mode = if (mode == AuthMode.REGISTER) AuthMode.SIGN_IN else AuthMode.REGISTER
             updateMode()
         }
-        binding.tvForgotPassword.setOnClickListener { onForgotPassword() }
+        binding.tvForgotPassword.setOnClickListener { passwordReset.sendResetMail() }
         binding.tvEmailLink.setOnClickListener { onSendEmailLink() }
         binding.btnGoogleSignIn.setOnClickListener { onGoogleSignIn() }
         updateMode()
@@ -97,7 +94,7 @@ class AuthActivity : AppCompatActivity() {
 
         // Arriving via a tapped email sign-in or password-reset link?
         maybeCompleteEmailLink(intent)
-        maybeHandlePasswordReset(intent)
+        passwordReset.handleLink(intent)
 
         intent.getStringExtra(DicKeys.ROUTING_ERROR)?.let { showMessage(it) }
     }
@@ -107,7 +104,7 @@ class AuthActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         maybeCompleteEmailLink(intent)
-        maybeHandlePasswordReset(intent)
+        passwordReset.handleLink(intent)
     }
 
     /**
@@ -120,7 +117,7 @@ class AuthActivity : AppCompatActivity() {
      * cannot actually reset anything; the check is so we never hand a code from
      * an unrelated host to Firebase, nor show a reset form a stranger opened.
      */
-    private fun isTrustedAuthLink(data: Uri): Boolean = isTrustedAuthLink(data.scheme, data.host)
+    internal fun isTrustedAuthLink(data: Uri): Boolean = isTrustedAuthLink(data.scheme, data.host)
 
     private fun maybeCompleteEmailLink(intent: Intent?) {
         val data = intent?.data ?: return
@@ -129,38 +126,7 @@ class AuthActivity : AppCompatActivity() {
         if (authRepo.isEmailSignInLink(link)) completeEmailLink(link)
     }
 
-    /**
-     * Password-reset App Link: `…/finishReset?mode=resetPassword&oobCode=…`.
-     * Verifies the code, then switches the form into reset-password mode.
-     */
-    private fun maybeHandlePasswordReset(intent: Intent?) {
-        val data = intent?.data ?: return
-        if (!isTrustedAuthLink(data)) return
-        if (data.getQueryParameter("mode") != "resetPassword") return
-        val oobCode = data.getQueryParameter("oobCode") ?: return
-        setLoading(true)
-        lifecycleScope.launch {
-            val result = authRepo.verifyPasswordResetCode(oobCode)
-            setLoading(false)
-            result.fold(
-                onSuccess = { email -> enterResetPasswordMode(email, oobCode) },
-                onFailure = {
-                    showMessage(it.message ?: getString(R.string.auth_reset_link_invalid))
-                },
-            )
-        }
-    }
-
-    private fun enterResetPasswordMode(email: String, oobCode: String) {
-        mode = AuthMode.RESET_PASSWORD
-        resetOobCode = oobCode
-        binding.etEmail.setText(email)
-        binding.etPassword.setText("")
-        binding.etConfirmPassword.setText("")
-        updateMode()
-    }
-
-    private fun updateMode() {
+    internal fun updateMode() {
         binding.tvSubtitle.setText(mode.subtitle)
         binding.layoutEmail.isVisible = mode.showsEmail
         binding.layoutConfirmPassword.isVisible = mode.choosesPassword
@@ -182,12 +148,12 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun onMainAction() {
-        if (pendingTotp != null) {
-            onSubmitTotp()
+        if (totp.isOpen) {
+            totp.submit()
             return
         }
         if (mode == AuthMode.RESET_PASSWORD) {
-            onConfirmPasswordReset()
+            passwordReset.confirm()
             return
         }
         val email = binding.etEmail.text.toString().trim()
@@ -222,50 +188,6 @@ class AuthActivity : AppCompatActivity() {
             } else {
                 authRepo.signInWithPassword(email, password)
             }
-        }
-    }
-
-    private fun onConfirmPasswordReset() {
-        val oobCode = resetOobCode ?: return
-        val email = binding.etEmail.text.toString().trim()
-        val password = binding.etPassword.text.toString()
-        val failure = PasswordPolicy.validate(password)
-        if (failure != null) {
-            showMessage(passwordFailureText(failure))
-            return
-        }
-        if (password != binding.etConfirmPassword.text.toString()) {
-            showMessage(getString(R.string.error_passwords_mismatch))
-            return
-        }
-        setLoading(true)
-        lifecycleScope.launch {
-            val confirmed = authRepo.confirmPasswordReset(oobCode, password)
-            if (confirmed.isFailure) {
-                setLoading(false)
-                showMessage(confirmed.exceptionOrNull()?.message ?: getString(R.string.auth_reset_failed))
-                return@launch
-            }
-            pendingCredential = email to password
-            mode = AuthMode.SIGN_IN
-            resetOobCode = null
-            routeResult(authRepo.signInWithPassword(email, password))
-        }
-    }
-
-    private fun onForgotPassword() {
-        val email = binding.etEmail.text.toString().trim()
-        if (!validEmail(email)) return
-        setLoading(true)
-        lifecycleScope.launch {
-            val result = authRepo.sendPasswordReset(email)
-            setLoading(false)
-            result.fold(
-                onSuccess = { showMessage(getString(R.string.auth_reset_sent, email)) },
-                onFailure = {
-                    showMessage(it.message ?: getString(R.string.auth_reset_failed))
-                },
-            )
         }
     }
 
@@ -353,7 +275,7 @@ class AuthActivity : AppCompatActivity() {
         lifecycleScope.launch { finishReauth(call()) }
     }
 
-    private fun finishReauth(result: Result<Unit>) {
+    internal fun finishReauth(result: Result<Unit>) {
         setLoading(false)
         result.fold(
             onSuccess = {
@@ -362,7 +284,7 @@ class AuthActivity : AppCompatActivity() {
             },
             onFailure = { error ->
                 if (error is AuthRepository.MfaTotpRequired) {
-                    onTotpRequired(error)
+                    totp.onRequired(error)
                 } else {
                     showMessage(error.message ?: getString(R.string.reauth_failed))
                 }
@@ -371,14 +293,14 @@ class AuthActivity : AppCompatActivity() {
     }
 
     /** Run an auth call that resolves to an access status, and route on the result. */
-    private fun runAuth(call: suspend () -> Result<String>) {
+    internal fun runAuth(call: suspend () -> Result<String>) {
         setLoading(true)
         lifecycleScope.launch {
             routeResult(call())
         }
     }
 
-    private suspend fun routeResult(result: Result<String>) {
+    internal suspend fun routeResult(result: Result<String>) {
         setLoading(false)
         result.fold(
             onSuccess = { status ->
@@ -386,7 +308,7 @@ class AuthActivity : AppCompatActivity() {
                 // this Activity, so navigating away first cancels it out from
                 // under the user — which is exactly what it reported.
                 pendingCredential?.let { (email, password) -> offerToSavePassword(email, password) }
-                pendingTotp = null
+                totp.clear()
                 // Through the router so the Terms gate runs before Pending/Home
                 // for every provider: password, Google, email link alike.
                 startActivity(AccessRouter.intentFor(this, AccessRouter.afterSignIn(status)))
@@ -395,60 +317,15 @@ class AuthActivity : AppCompatActivity() {
             onFailure = { error ->
                 when (error) {
                     is AuthRepository.EmailVerificationRequired -> onVerificationPending(error)
-                    is AuthRepository.MfaTotpRequired -> onTotpRequired(error)
+                    is AuthRepository.MfaTotpRequired -> totp.onRequired(error)
                     else -> showMessage(error.message ?: getString(R.string.auth_sign_in_failed))
                 }
             },
         )
     }
 
-    /**
-     * First factor succeeded; show the authenticator field. Enrolment stays on
-     * the websites — the phone only completes a challenge already set up there.
-     */
-    internal fun onTotpRequired(error: AuthRepository.MfaTotpRequired) {
-        pendingTotp = error.resolver to error.enrollmentId
-        enterTotpChallengeUi()
-        binding.etTotp.requestFocus()
-    }
-
-    private fun onSubmitTotp() {
-        val pending = pendingTotp
-        if (pending == null) {
-            showMessage(getString(R.string.auth_sign_in_failed))
-            return
-        }
-        val code = binding.etTotp.text.toString().trim()
-        if (code.isEmpty()) {
-            showMessage(getString(R.string.auth_totp_empty))
-            return
-        }
-        val (resolver, enrollmentId) = pending
-        if (mode == AuthMode.REAUTH) {
-            setLoading(true)
-            lifecycleScope.launch {
-                finishReauth(authRepo.resolveTotpChallenge(resolver, enrollmentId, code))
-            }
-            return
-        }
-        runAuth { authRepo.completeTotpChallenge(resolver, enrollmentId, code) }
-    }
-
-    /**
-     * Show the authenticator form without a live Firebase resolver. Used by
-     * unit tests that prove the prompt appears; a real [onTotpRequired] still
-     * supplies the resolver before submit can succeed.
-     */
-    internal fun enterTotpChallengeUi() {
-        binding.cardCredentials.isVisible = false
-        binding.cardTotp.isVisible = true
-        binding.btnGoogleSignIn.isVisible = false
-        binding.googleOrDivider.isVisible = false
-        binding.tvToggleMode.isVisible = false
-        binding.tvSubtitle.setText(R.string.auth_totp_subtitle)
-        binding.btnMainAction.setText(R.string.auth_totp_verify)
-        binding.etTotp.setText("")
-    }
+    /** Shows the authenticator form with no live resolver; for tests ([AuthTotpUi.enterChallengeUi]). */
+    internal fun enterTotpChallengeUi() = totp.enterChallengeUi()
 
     /**
      * The account was created and its verification mail sent; there is no
@@ -475,7 +352,7 @@ class AuthActivity : AppCompatActivity() {
     }
 
     /** The bound is part of the message for the length rules, so they format it in. */
-    private fun passwordFailureText(failure: PasswordPolicy.Failure): String = when (failure) {
+    internal fun passwordFailureText(failure: PasswordPolicy.Failure): String = when (failure) {
         is PasswordPolicy.Failure.TooShort ->
             resources.getQuantityString(R.plurals.password_too_short, failure.minLength, failure.minLength)
         is PasswordPolicy.Failure.TooLong ->
@@ -483,7 +360,7 @@ class AuthActivity : AppCompatActivity() {
         is PasswordPolicy.Failure.Missing -> getString(failure.message)
     }
 
-    private fun validEmail(email: String): Boolean {
+    internal fun validEmail(email: String): Boolean {
         if (email.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             showMessage(getString(R.string.error_email_invalid))
             return false
@@ -491,7 +368,7 @@ class AuthActivity : AppCompatActivity() {
         return true
     }
 
-    private fun setLoading(loading: Boolean) {
+    internal fun setLoading(loading: Boolean) {
         binding.progressBar.setBusy(
             loading,
             binding.btnMainAction,
@@ -503,7 +380,7 @@ class AuthActivity : AppCompatActivity() {
     }
 
     /** Errors and confirmations alike: a crisp toast, long unless [long] says otherwise. */
-    private fun showMessage(message: String, long: Boolean = true) {
+    internal fun showMessage(message: String, long: Boolean = true) {
         CrispToast.show(this, message, long = long)
     }
 
