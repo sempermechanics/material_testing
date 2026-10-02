@@ -1,5 +1,6 @@
 package com.indicvision.semper.cloud
 
+import com.indicvision.semper.data.cloud.CloudErase
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.net.Authed
 import com.indicvision.semper.data.net.HttpFailure
@@ -29,7 +30,7 @@ class AccountDeletionTest {
         cloudErased: Boolean,
         identityErased: Boolean,
     ): CloudSync.AccountDeletion = runBlocking {
-        CloudSync.deleteAccount(
+        CloudErase.deleteAccount(
             eraseCloud = {
                 steps.add("cloud")
                 cloudErased
@@ -94,7 +95,7 @@ class AccountDeletionTest {
             }
         }
         val job = launch(Dispatchers.Default) {
-            CloudSync.deleteAccount(
+            CloudErase.deleteAccount(
                 eraseCloud = {
                     synchronized(steps) { steps.add("cloud") }
                     pauseAt("cloud")
@@ -138,7 +139,7 @@ class AccountDeletionTest {
         // caller is active. After the erase that must read as "identity kept", not
         // abort the wipe and sign-out.
         val result = runBlocking {
-            CloudSync.deleteAccount(
+            CloudErase.deleteAccount(
                 eraseCloud = {
                     steps.add("cloud")
                     true
@@ -168,7 +169,7 @@ class AccountDeletionTest {
     private val api = FakeCloudApi()
     private val tokens = FakeTokens()
 
-    private fun erase(): Authed<Unit> = runBlocking { CloudSync.eraseAccountInCloud(api, tokens) }
+    private fun erase(): Authed<Unit> = runBlocking { CloudErase.eraseAccountInCloud(api, tokens) }
 
     private fun failingWith(error: Throwable): Authed<Unit> {
         api.onDeleteAccount = { throw error }
@@ -178,7 +179,7 @@ class AccountDeletionTest {
     private fun kindOf(outcome: Authed<Unit>): HttpFailure.Kind? = (outcome as? Authed.Failed)?.failure?.kind
 
     @Test
-    fun `an erased account is gone`() = with(CloudSync) {
+    fun `an erased account is gone`() = with(CloudErase) {
         api.onDeleteAccount = { }
         val outcome = erase()
         assertEquals(Authed.Ok(Unit), outcome)
@@ -186,7 +187,7 @@ class AccountDeletionTest {
     }
 
     @Test
-    fun `no backend means nothing to erase, and nothing is asked`() = with(CloudSync) {
+    fun `no backend means nothing to erase, and nothing is asked`() = with(CloudErase) {
         api.enabled = false
         val outcome = erase()
         assertEquals(Authed.Disabled, outcome)
@@ -195,7 +196,7 @@ class AccountDeletionTest {
     }
 
     @Test
-    fun `no token is told apart from a failed call`() = with(CloudSync) {
+    fun `no token is told apart from a failed call`() = with(CloudErase) {
         tokens.token = null
         val outcome = erase()
         assertEquals(Authed.NoToken, outcome)
@@ -204,7 +205,7 @@ class AccountDeletionTest {
     }
 
     @Test
-    fun `a refused token, a server error and no answer each keep their kind`() = with(CloudSync) {
+    fun `a refused token, a server error and no answer each keep their kind`() = with(CloudErase) {
         val cases = listOf(
             IndicApi.ApiException(401, "") to HttpFailure.Kind.UNAUTHORIZED,
             IndicApi.ApiException(503, "") to HttpFailure.Kind.SERVER,

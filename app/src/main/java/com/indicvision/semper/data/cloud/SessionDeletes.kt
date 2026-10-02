@@ -149,7 +149,7 @@ object SessionDeletes {
             }
             if (cloudId.isBlank()) {
                 // The batch lookup found no backup: nothing to erase, only the badge to correct.
-                CloudSync.forgetCloudCopy(appContext, item.localId)
+                CloudErase.forgetCloudCopy(appContext, item.localId)
                 CloudSync.EraseResult.ERASED_EVERYWHERE
             } else {
                 CloudSync.eraseCloudBackup(appContext, cloudId, item.localId, api, tokens)
@@ -179,7 +179,7 @@ object SessionDeletes {
         for (record in unlinked) {
             val cloudId = byLocalId[record.id]
             if (cloudId.isNullOrBlank()) {
-                CloudSync.forgetCloudCopy(appContext, record.id)
+                CloudErase.forgetCloudCopy(appContext, record.id)
             } else {
                 SessionStore.setCloudSessionId(appContext, record.id, cloudId)
             }

@@ -8,13 +8,12 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.workDataOf
 import com.indicvision.semper.data.DicUploadWorker
-import com.indicvision.semper.data.LicenseConfigWorker
 import com.indicvision.semper.data.account.AuthRepository
 import com.indicvision.semper.data.account.LicenseEntitlements
-import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.cloud.CloudErase.accountGone
+import com.indicvision.semper.data.cloud.CloudErase.toEraseResult
 import com.indicvision.semper.data.net.Authed
 import com.indicvision.semper.data.net.CloudApi
-import com.indicvision.semper.data.net.HttpFailure
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenProvider
 import com.indicvision.semper.data.net.TokenSource
@@ -29,9 +28,7 @@ import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.diagnostics.SemperAnalytics
 import com.indicvision.semper.navigation.DicKeys
-import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -46,7 +43,6 @@ import timber.log.Timber
  * [reconcile] asks the backend what actually exists and repairs the difference,
  * re-queueing uploads for anything that went missing.
  */
-@Suppress("TooManyFunctions") // reconcile, erase variants, upload enqueue — one cloud facade
 object CloudSync {
 
     private val reconcileLock = Mutex()
@@ -122,7 +118,7 @@ object CloudSync {
                 val throttled = !deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS
 
                 val listed = api.authed(tokens) { token ->
-                    refreshRemoteConfig(appContext, this, token, throttled)
+                    CloudReconcile.refreshRemoteConfig(appContext, this, token, throttled)
                     // The expensive per-session reconcile below is throttled; the cheap
                     // config fetch above is not, so quota still recovers between reconciles.
                     if (throttled) null else this.listSessions(token, verify = deep)
@@ -135,7 +131,7 @@ object CloudSync {
                     // Checked above, before the lock.
                     Authed.Disabled -> return@withContext Outcome.Disabled
                     Authed.NoToken -> return@withContext Outcome.Offline
-                    is Authed.Failed -> return@withContext reconcileFailure(listed.failure)
+                    is Authed.Failed -> return@withContext CloudReconcile.reconcileFailure(listed.failure)
                 }
 
                 // Home offers the backups this phone has no row for from this.
@@ -149,68 +145,16 @@ object CloudSync {
 
                 // Waiting rows respect the save-to-cloud toggle; a repair does not,
                 // because it restores a backup the user already had.
-                val repaired = repairRows(appContext, backedUp, reupload, reupload && uploadsEnabled(appContext, api))
+                val repaired = CloudReconcile.repairRows(
+                    appContext,
+                    backedUp,
+                    reupload,
+                    requeue = reupload && uploadsEnabled(appContext, api),
+                )
                 prefs.edit { put(PrefFiles.CloudSync.LAST_RECONCILE_AT, System.currentTimeMillis()) }
                 Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
             }
         }
-    }
-
-    /**
-     * What a listing that failed means for the reconcile. Anything the server
-     * answered with a status, or a refusal of the account, is a fault the user
-     * must see ([Outcome.Failed]); no answer at all is [Outcome.Offline]. A
-     * failure that is not I/O at all is logged as an error and reported, not
-     * retried.
-     */
-    private fun reconcileFailure(failure: HttpFailure): Outcome {
-        val code = failure.code
-        return when {
-            failure.kind == HttpFailure.Kind.NOT_APPROVED -> {
-                Timber.w(failure.cause, "Cloud reconcile refused — account not approved")
-                Outcome.Failed("your account isn't approved for cloud backup")
-            }
-            // The server responded — so this is a real fault (404 = route not
-            // published on the gateway, 5xx = backend broken), not bad signal.
-            code != null -> {
-                Timber.e(failure.cause, "Cloud reconcile FAILED with HTTP %d", code)
-                Outcome.Failed("server returned HTTP $code")
-            }
-            failure.kind == HttpFailure.Kind.UNEXPECTED -> {
-                Timber.e(failure.cause, "Cloud reconcile failed unexpectedly")
-                Outcome.Failed("unexpected ${failure.cause.javaClass.simpleName}")
-            }
-            else -> {
-                Timber.w(failure.cause, "Cloud reconcile skipped — offline")
-                Outcome.Offline
-            }
-        }
-    }
-
-    /**
-     * Mark SYNCED rows whose backup is not in [backedUp] PENDING, and queue them
-     * when [reupload]. With [requeue], queue the rows already PENDING too.
-     * Returns how many rows were repaired.
-     */
-    private fun repairRows(appContext: Context, backedUp: Set<String>, reupload: Boolean, requeue: Boolean): Int {
-        var repaired = 0
-        SessionStore.list(appContext).forEach { record ->
-            val claimsSynced = record.syncState == SessionRecord.SyncState.SYNCED
-            if (claimsSynced && record.id !in backedUp) {
-                // The cloud copy is gone (deleted) or never completed.
-                Timber.i("Session %s claims SYNCED but is not in the cloud — repairing", record.id)
-                SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.PENDING)
-                repaired++
-                if (reupload) queueUpload(appContext, record.id)
-            } else if (requeue && record.syncState == SessionRecord.SyncState.PENDING) {
-                // KEEP leaves an upload already queued or running alone.
-                queueUpload(appContext, record.id)
-            } else if (claimsSynced && record.metadataStale) {
-                // Backed up, but changed since: a send that gave up (ADR-013).
-                queueMetadata(appContext, record.id)
-            }
-        }
-        return repaired
     }
 
     /** How a reconcile queues an upload; tests swap it to see what was queued. */
@@ -220,25 +164,6 @@ object CloudSync {
     /** How a reconcile queues a metadata send ([SessionMetadataSync]); tests swap it. */
     @VisibleForTesting
     internal var queueMetadata: (Context, String) -> Unit = SessionMetadataSync::enqueue
-
-    /**
-     * Fetch and cache product limits (quota ceiling, frame cap) from cloud config.
-     * Runs on every full reconcile, and additionally whenever config is still
-     * unknown — even on a throttled resume. Analysis runs on-device with its
-     * upload gated until config lands, so the reconcile throttle must never be the
-     * reason quota stays unknown. Best-effort: a failure just leaves it unknown.
-     */
-    private suspend fun refreshRemoteConfig(
-        appContext: Context,
-        api: CloudApi,
-        token: String,
-        throttled: Boolean,
-    ) {
-        if (throttled && AppRemoteConfig.isKnown(appContext)) return
-        if (AppRemoteConfig.record(appContext, suspendRunCatching { api.getConfig(token) })) {
-            LicenseConfigWorker.enqueue(appContext)
-        }
-    }
 
     /** Outcome of an erase request, so the UI can tell the user what happened. */
     enum class EraseResult {
@@ -283,7 +208,7 @@ object CloudSync {
         }
 
         api.authed(tokens) { token ->
-            val cloudId = resolveCloudId(this, token, record)
+            val cloudId = CloudErase.resolveCloudId(this, token, record)
             if (cloudId != null) {
                 this.deleteSession(token, cloudId)
                 CloudBackupListing.forget(appContext, cloudId)
@@ -313,7 +238,7 @@ object CloudSync {
      * succeed instead of being refused as too stale.
      *
      * Runs to the end once started, even if the caller's scope is cancelled (a
-     * screen rotating away mid-delete): see the internal overload. A caller whose
+     * screen rotating away mid-delete): see [CloudErase.deleteAccount]. A caller whose
      * scope died never sees the result, so the next screen must judge by state
      * (signed out, no local sessions), not by a callback.
      */
@@ -324,76 +249,13 @@ object CloudSync {
     ): AccountDeletion = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val auth = AuthRepository(appContext, api, tokens)
-        deleteAccount(
-            eraseCloud = { eraseAccountInCloud(api, tokens).accountGone },
+        CloudErase.deleteAccount(
+            eraseCloud = { CloudErase.eraseAccountInCloud(api, tokens).accountGone },
             deleteIdentity = { auth.deleteIdentity().isSuccess },
             wipeLocal = { SessionStore.deleteAll(appContext) },
             signOut = { auth.signOut() },
         )
     }
-
-    /**
-     * The order-sensitive half of [deleteAccount], with its side effects passed
-     * in so the sequence can be tested without Firebase or a backend.
-     *
-     * The cloud goes first, for the same reason as [eraseEverywhere]: if it
-     * fails nothing local is touched, so the user is never told their data is
-     * gone while it still exists. Once the data *is* gone the session must not
-     * continue, so the wipe and sign-out run whether or not the identity itself
-     * could be deleted.
-     *
-     * The whole sequence is [NonCancellable]. Callers run it from a screen's scope,
-     * which a rotation cancels; cancelled after the erase, the phone kept its local
-     * data and a signed-in session for an account the server no longer has. The
-     * erase is covered too: the server may finish it after the caller has gone, and
-     * a client that stopped waiting would wipe nothing. Each step is local work or
-     * a network call that ends on its own timeouts.
-     */
-    internal suspend fun deleteAccount(
-        eraseCloud: suspend () -> Boolean,
-        deleteIdentity: suspend () -> Boolean,
-        wipeLocal: () -> Unit,
-        signOut: suspend () -> Unit,
-    ): AccountDeletion = withContext(NonCancellable) {
-        if (!eraseCloud()) return@withContext AccountDeletion.CLOUD_UNREACHABLE
-        // The data is gone, so nothing may stop the wipe. Under NonCancellable a
-        // CancellationException here is never this sequence's own (a cancelled
-        // Firebase Task, say): it means the identity survived, nothing more.
-        val identityGone = try {
-            deleteIdentity()
-        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            Timber.w(e, "Identity delete failed after the cloud erase; wiping anyway")
-            false
-        }
-        wipeLocal()
-        signOut()
-        Timber.i("Account erased and local data wiped")
-        if (identityGone) AccountDeletion.DELETED else AccountDeletion.IDENTITY_KEPT
-    }
-
-    /**
-     * Erase the account in the cloud, saying how it went: [Authed.Ok] (erased),
-     * [Authed.Disabled] (no backend, so nothing to erase), [Authed.NoToken], or
-     * [Authed.Failed] with the failure's [HttpFailure.Kind] (a refused token, a
-     * server error, no answer). [deleteAccount] reads only [accountGone]; the
-     * kind is there for a screen that wants to say which it was.
-     */
-    internal suspend fun eraseAccountInCloud(api: CloudApi, tokens: TokenSource): Authed<Unit> {
-        val erased = api.authed(tokens) { token -> this.deleteAccount(token) }
-        when (erased) {
-            is Authed.Failed -> Timber.e(
-                erased.failure.cause,
-                "Account erasure failed (%s) — local data left intact",
-                erased.failure.kind,
-            )
-            Authed.NoToken -> Timber.w("Account erasure not sent: no usable token — local data left intact")
-            else -> Unit
-        }
-        return erased
-    }
-
-    /** The account's cloud data is gone: erased, or there was never a backend. */
-    internal val Authed<Unit>.accountGone: Boolean get() = this is Authed.Ok || this == Authed.Disabled
 
     /** Delete only this device's heavy artifacts; the cloud backup and index row stay. */
     suspend fun eraseLocalOnly(context: Context, localSessionId: String) = withContext(Dispatchers.IO) {
@@ -423,35 +285,9 @@ object CloudSync {
         api.authed(tokens) { token ->
             this.deleteSession(token, cloudSessionId)
             CloudBackupListing.forget(appContext, cloudSessionId)
-            forgetCloudCopy(appContext, localSessionId)
+            CloudErase.forgetCloudCopy(appContext, localSessionId)
             Timber.i("Deleted cloud backup %s", cloudSessionId)
         }.toEraseResult { Timber.e(it, "Cloud backup delete failed for %s", cloudSessionId) }
-    }
-
-    /** The local row no longer has a cloud copy: LOCAL_ONLY, and no link to follow. */
-    internal fun forgetCloudCopy(appContext: Context, localSessionId: String) {
-        if (SessionStore.get(appContext, localSessionId) == null) return
-        SessionStore.update(appContext, localSessionId) {
-            it.copy(syncState = SessionRecord.SyncState.LOCAL_ONLY, cloudSessionId = "")
-        }
-    }
-
-    /**
-     * What an erase came to for the user. A call that failed is passed to
-     * [logFailure]; a 429 is worth waiting out, and anything else that did not
-     * go through leaves the cloud copy.
-     */
-    private inline fun Authed<Unit>.toEraseResult(logFailure: (Throwable) -> Unit): EraseResult = when (this) {
-        is Authed.Ok -> EraseResult.ERASED_EVERYWHERE
-        is Authed.Failed -> {
-            logFailure(failure.cause)
-            if (failure.kind == HttpFailure.Kind.RATE_LIMITED) {
-                EraseResult.RATE_LIMITED
-            } else {
-                EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
-            }
-        }
-        Authed.Disabled, Authed.NoToken -> EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
     }
 
     /**
@@ -467,24 +303,12 @@ object CloudSync {
     ): String? =
         withContext(Dispatchers.IO) {
             if (record.cloudSessionId.isNotBlank()) return@withContext record.cloudSessionId
-            val found = api.authed(tokens) { token -> resolveCloudId(this, token, record) }
+            val found = api.authed(tokens) { token -> CloudErase.resolveCloudId(this, token, record) }
             if (found is Authed.Failed) {
                 Timber.w(found.failure.cause, "Could not look up the backup of %s", record.id)
             }
             found.getOrNull()
         }
-
-    /**
-     * The backend session id for a local analysis. Uses the stored link when we
-     * have it, else falls back to matching on localSessionId (records uploaded
-     * before the link existed). Null = nothing in the cloud to erase.
-     */
-    private suspend fun resolveCloudId(api: CloudApi, token: String, record: SessionRecord): String? {
-        if (record.cloudSessionId.isNotBlank()) return record.cloudSessionId
-        return api.listSessions(token).sessions
-            .firstOrNull { it.localSessionId == record.id }
-            ?.sessionId
-    }
 
     /**
      * Whether a finished analysis is uploaded.
