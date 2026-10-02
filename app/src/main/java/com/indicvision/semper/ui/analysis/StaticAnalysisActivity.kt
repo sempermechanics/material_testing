@@ -1,11 +1,9 @@
 // The wizard's host: it builds the parts and implements the sweep setup's
 // callbacks, each a one-line hand-off, hence the function count.
 @file:Suppress("TooManyFunctions")
-@file:SuppressLint("PrivateResource")
 
 package com.indicvision.semper.ui.analysis
 
-import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle

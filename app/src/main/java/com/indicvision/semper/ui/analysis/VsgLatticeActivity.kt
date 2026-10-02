@@ -1,8 +1,5 @@
-@file:SuppressLint("PrivateResource")
-
 package com.indicvision.semper.ui.analysis
 
-import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView

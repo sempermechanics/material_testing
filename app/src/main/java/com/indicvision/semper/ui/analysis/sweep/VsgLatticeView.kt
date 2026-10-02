@@ -1,5 +1,3 @@
-@file:SuppressLint("ClickableViewAccessibility")
-
 package com.indicvision.semper.ui.analysis.sweep
 
 import android.annotation.SuppressLint

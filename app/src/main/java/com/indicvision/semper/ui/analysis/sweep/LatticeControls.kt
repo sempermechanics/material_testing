@@ -1,9 +1,6 @@
-@file:SuppressLint("ClickableViewAccessibility")
-
 package com.indicvision.semper.ui.analysis.sweep
 
 import android.animation.ObjectAnimator
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Resources
 import android.view.GestureDetector
