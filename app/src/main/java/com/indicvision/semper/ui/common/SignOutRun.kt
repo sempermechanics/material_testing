@@ -1,7 +1,10 @@
 package com.indicvision.semper.ui.common
 
+import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +28,11 @@ import timber.log.Timber
  * or Pending. Here the whole sequence runs on an application-lifetime scope,
  * and whichever of those screens is started routes once it is done
  * ([observe]).
+ *
+ * If the screen that asked is closed before the sign-out ends (backed out of
+ * while the seat release was still waiting on the network), no screen is
+ * left to route, and the app would sit on Home with no session. Then the run
+ * routes to sign-in itself, from the application context.
  */
 object SignOutRun {
 
@@ -42,6 +50,12 @@ object SignOutRun {
 
     val state: StateFlow<State> = mutableState.asStateFlow()
 
+    /** The application, once any screen has observed; what routes when no screen can. */
+    private var app: Context? = null
+
+    /** How many created, not yet destroyed, screens of each class [observe] this run. */
+    private val liveScreens = mutableMapOf<Class<*>, Int>()
+
     /**
      * Starts [signOut] for [owner], the screen class that asked: it, or the
      * instance recreated in its place, routes when it is done. False (nothing
@@ -58,9 +72,23 @@ object SignOutRun {
             runCatching { signOut() }.onFailure {
                 Timber.e(it, "Sign-out failed (%s); leaving locally anyway", it.javaClass.simpleName)
             }
-            mutableState.value = State.Done(owner)
+            finish(owner)
         }
         return true
+    }
+
+    /**
+     * Hands the outcome to [owner]'s screen, or, when every screen of that
+     * class has been destroyed, routes to sign-in from the application. A
+     * rotation is not a close: the recreated screen observes again in the
+     * same main-thread step that destroyed the old one.
+     */
+    private fun finish(owner: Class<*>) {
+        mutableState.value = State.Done(owner)
+        val app = app ?: return
+        if (owner in liveScreens) return
+        mutableState.value = State.Idle
+        app.startActivity(AuthRoute.signInIntent(app))
     }
 
     /** True once per sign-out finished for [owner]; the next reader sees [State.Idle]. */
@@ -75,6 +103,17 @@ object SignOutRun {
      * screen's class started has finished. [onDone] routes to sign-in.
      */
     fun observe(activity: AppCompatActivity, onRunning: () -> Unit = {}, onDone: () -> Unit) {
+        app = activity.applicationContext
+        val screen = activity.javaClass
+        liveScreens[screen] = (liveScreens[screen] ?: 0) + 1
+        activity.lifecycle.addObserver(
+            object : DefaultLifecycleObserver {
+                override fun onDestroy(owner: LifecycleOwner) {
+                    val left = (liveScreens[screen] ?: 1) - 1
+                    if (left > 0) liveScreens[screen] = left else liveScreens.remove(screen)
+                }
+            },
+        )
         activity.lifecycleScope.launch {
             activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 state.collect {
@@ -90,5 +129,7 @@ object SignOutRun {
 
     internal fun resetForTest() {
         mutableState.value = State.Idle
+        app = null
+        liveScreens.clear()
     }
 }
