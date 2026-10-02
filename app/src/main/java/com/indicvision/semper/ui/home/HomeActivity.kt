@@ -14,7 +14,6 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
@@ -22,6 +21,8 @@ import com.indicvision.semper.data.account.LicenseEntitlements
 import com.indicvision.semper.data.cloud.CloudBackupListing
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.cloud.SessionDeletes
+import com.indicvision.semper.data.cloud.TransferWork
+import com.indicvision.semper.data.cloud.WorkTags
 import com.indicvision.semper.data.cloud.restore.RestoreFailureLedger
 import com.indicvision.semper.data.cloud.restore.RestoreStart
 import com.indicvision.semper.data.net.AppRemoteConfig
@@ -47,6 +48,7 @@ import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.SerialJob
+import com.indicvision.semper.ui.common.TransferWorkObserver
 import com.indicvision.semper.ui.limit.SessionLimitActivity
 import com.indicvision.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
@@ -67,15 +69,6 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var selection: SessionSelectionController
     private lateinit var cloudBackups: CloudBackupsCard
 
-    /** Upload WorkInfo ids already surfaced, so one failure isn't snackbar-spammed. */
-    private val shownUploadFailures = mutableSetOf<java.util.UUID>()
-
-    /** Upload WorkInfo ids already refreshed on success, so we refresh once each. */
-    private val shownSucceededUploads = mutableSetOf<java.util.UUID>()
-
-    /** Restore WorkInfo ids already refreshed for, so each refreshes the list once. */
-    private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
-
     private lateinit var deleteFeedback: DeleteFeedback
 
     /**
@@ -83,8 +76,8 @@ class HomeActivity : AppCompatActivity() {
      * (the enqueue lands asynchronously) or it ends.
      */
     private val justQueuedDeletes = mutableSetOf<String>()
-    private var activeUploadProgress: Map<String, SessionListAdapter.RowProgress> = emptyMap()
-    private var activeRestoreProgress: Map<String, SessionListAdapter.RowProgress> = emptyMap()
+    private var activeUploadProgress: Map<String, TransferWorkObserver.RowProgress> = emptyMap()
+    private var activeRestoreProgress: Map<String, TransferWorkObserver.RowProgress> = emptyMap()
 
     /** The phone-list read in flight ([refreshList]); a newer one replaces it. */
     private val listRefresh = SerialJob()
@@ -300,93 +293,55 @@ class HomeActivity : AppCompatActivity() {
 
     /**
      * Background uploads run in WorkManager, so a failure would otherwise be
-     * silent (only the row badge changed). Watch the "upload" work tag and, when
-     * a run ends in a terminal failure carrying a reason, tell the user with a
-     * Retry action. Quota-full returns no reason: it opens the persistent limit
-     * screen instead.
+     * silent (only the row badge changed). Watch the upload jobs and, when one
+     * ends in a terminal failure carrying a reason, tell the user. Quota-full
+     * returns no reason: it opens the persistent limit screen instead.
      */
     private fun observeUploadFailures() {
-        WorkManager.getInstance(this)
-            .getWorkInfosByTagLiveData("upload")
-            .observe(this) { infos ->
-                val list = infos.orEmpty()
+        TransferWorkObserver(TransferWork.Kind.UPLOAD).observe(this, WorkManager.getInstance(this)) { update ->
+            // Live per-row progress from every running backup.
+            activeUploadProgress = update.rowProgress()
+            publishRowProgress()
 
-                // Live per-row progress from every running backup.
-                activeUploadProgress = list
-                    .filter { it.state == WorkInfo.State.RUNNING }
-                    .mapNotNull { info ->
-                        val id = info.progress.getString(DicKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
-                        val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, -1)
-                        if (pct < 0) return@mapNotNull null
-                        val phase = info.progress.getString(DicKeys.UPLOAD_PHASE) ?: "upload"
-                        id to SessionListAdapter.RowProgress(phase, pct)
-                    }
-                    .toMap()
-                publishRowProgress()
-
-                list.forEach { info ->
-                    when (info.state) {
-                        // A finished backup — flip the row's badge to "synced".
-                        WorkInfo.State.SUCCEEDED -> if (shownSucceededUploads.add(info.id)) refresh()
-                        WorkInfo.State.FAILED -> {
-                            if (!shownUploadFailures.add(info.id)) return@forEach
-                            val reason = info.outputData.getString(DicKeys.UPLOAD_FAIL_REASON)
-                            if (reason == null) {
-                                // No reason: a refusal at the account's limit, which
-                                // forces the stop. Open the limit screen from here so
-                                // it shows whether or not the worker also opens it
-                                // (it is singleTop, so the two cannot stack).
-                                if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
-                                return@forEach
-                            }
+            update.newlyFinished.forEach { job ->
+                when (val state = job.state) {
+                    // A finished backup — flip the row's badge to "synced".
+                    TransferWork.State.Succeeded -> refresh()
+                    is TransferWork.State.Failed -> {
+                        val reason = state.reason
+                        if (reason == null) {
+                            // No reason: a refusal at the account's limit, which
+                            // forces the stop. Open the limit screen from here so
+                            // it shows whether or not the worker also opens it
+                            // (it is singleTop, so the two cannot stack).
+                            if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
+                        } else {
                             showUploadFailure(reason)
                         }
-                        else -> Unit
                     }
+                    else -> Unit
                 }
             }
+        }
     }
 
     private fun observeRestoreProgress() {
-        WorkManager.getInstance(this)
-            .getWorkInfosByTagLiveData("restore")
-            .observe(this) { infos ->
-                val list = infos.orEmpty()
-                activeRestoreProgress = list
-                    .filter { it.state == WorkInfo.State.RUNNING }
-                    .mapNotNull { info ->
-                        val id = info.progress.getString(DicKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
-                        val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, -1)
-                        if (pct < 0) return@mapNotNull null
-                        id to SessionListAdapter.RowProgress(DicKeys.PHASE_DOWNLOAD, pct)
-                    }
-                    .toMap()
-                publishRowProgress()
+        TransferWorkObserver(TransferWork.Kind.RESTORE).observe(this, WorkManager.getInstance(this)) { update ->
+            activeRestoreProgress = update.rowProgress()
+            publishRowProgress()
 
-                list.forEach { info ->
-                    when (info.state) {
-                        WorkInfo.State.SUCCEEDED -> {
-                            if (shownRestoreOutcomes.add(info.id)) refresh()
-                        }
-                        WorkInfo.State.FAILED -> {
-                            if (shownRestoreOutcomes.add(info.id)) refresh()
-                            // Once per failure across Home and Settings, not once per screen open.
-                            if (!RestoreFailureLedger.claim(this@HomeActivity, info.id)) return@forEach
-                            val reason = info.outputData.getString(DicKeys.DOWNLOAD_ERROR)
-                                ?: getString(R.string.restore_failed_generic)
-                            CrispToast.show(
-                                this@HomeActivity,
-                                reason,
-                                long = true,
-                            )
-                        }
-                        WorkInfo.State.CANCELLED -> {
-                            if (shownRestoreOutcomes.add(info.id)) refresh()
-                        }
-                        else -> Unit
-                    }
-                }
+            update.newlyFinished.forEach { job ->
+                refresh()
+                val state = job.state as? TransferWork.State.Failed ?: return@forEach
+                // Once per failure across Home and Settings, not once per screen open.
+                if (!RestoreFailureLedger.claim(this@HomeActivity, job.id)) return@forEach
+                CrispToast.show(
+                    this@HomeActivity,
+                    state.reason ?: getString(R.string.restore_failed_generic),
+                    long = true,
+                )
             }
+        }
     }
 
     private fun publishRowProgress() {
@@ -757,10 +712,11 @@ class HomeActivity : AppCompatActivity() {
     /** The reason attached to the last terminal upload failure for [localId], if still retained. */
     private fun lastUploadFailureReason(localId: String): String? = runCatching {
         WorkManager.getInstance(this)
-            .getWorkInfosForUniqueWork("upload-$localId")
+            .getWorkInfosForUniqueWork(WorkTags.uploadName(localId))
             .get()
-            .firstOrNull { it.state == WorkInfo.State.FAILED }
-            ?.outputData?.getString(DicKeys.UPLOAD_FAIL_REASON)
+            .map { TransferWork.classify(it, TransferWork.Kind.UPLOAD) }
+            .firstNotNullOfOrNull { it as? TransferWork.State.Failed }
+            ?.reason
     }.getOrNull()
 
     /**

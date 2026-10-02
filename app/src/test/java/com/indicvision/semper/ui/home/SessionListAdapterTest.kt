@@ -6,10 +6,11 @@ import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.indicvision.semper.R
+import com.indicvision.semper.data.cloud.TransferPhase
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.fixtures.sessionRecord
-import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.run.EngineFailure
+import com.indicvision.semper.ui.common.TransferWorkObserver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -201,7 +202,7 @@ class SessionListAdapterTest {
     @Test
     fun `a running upload shows its percent and a determinate bar`() {
         submit(record("a"))
-        adapter.setUploadProgress(mapOf("a" to SessionListAdapter.RowProgress("upload", 42)))
+        adapter.setUploadProgress(mapOf("a" to TransferWorkObserver.RowProgress(TransferPhase.UPLOAD, 42)))
         val row = bind(0)
 
         assertEquals("uploading 42%", row.badge.text.toString())
@@ -213,7 +214,7 @@ class SessionListAdapterTest {
     @Test
     fun `a bundle download at zero percent spins instead of sitting empty`() {
         submit(record("a"))
-        adapter.setUploadProgress(mapOf("a" to SessionListAdapter.RowProgress(DicKeys.PHASE_DOWNLOAD, 0)))
+        adapter.setUploadProgress(mapOf("a" to TransferWorkObserver.RowProgress(TransferPhase.DOWNLOAD, 0)))
         val row = bind(0)
 
         assertTrue(row.progressBar.isIndeterminate)
@@ -223,7 +224,7 @@ class SessionListAdapterTest {
     @Test
     fun `a demo account shows no badge, no bar and no badge action`() {
         submit(record("a", sync = SessionRecord.SyncState.SYNCED))
-        adapter.setUploadProgress(mapOf("a" to SessionListAdapter.RowProgress("upload", 42)))
+        adapter.setUploadProgress(mapOf("a" to TransferWorkObserver.RowProgress(TransferPhase.UPLOAD, 42)))
         adapter.setSyncVisible(false)
         val row = bind(0)
 
@@ -273,20 +274,20 @@ class SessionListAdapterTest {
     @Test
     fun `progress rebinds only the rows whose progress moved`() {
         submit(record("a"), record("b"), record("c"))
-        adapter.setUploadProgress(mapOf("b" to SessionListAdapter.RowProgress("upload", 10)))
+        adapter.setUploadProgress(mapOf("b" to TransferWorkObserver.RowProgress(TransferPhase.UPLOAD, 10)))
         assertEquals(listOf(1), changed)
 
         changed.clear()
         adapter.setUploadProgress(
             mapOf(
-                "b" to SessionListAdapter.RowProgress("upload", 10),
-                "c" to SessionListAdapter.RowProgress("prepare", 0),
+                "b" to TransferWorkObserver.RowProgress(TransferPhase.UPLOAD, 10),
+                "c" to TransferWorkObserver.RowProgress(TransferPhase.PREPARE, 0),
             ),
         )
         assertEquals("b unchanged, c new", listOf(2), changed)
 
         changed.clear()
-        adapter.setUploadProgress(mapOf("b" to SessionListAdapter.RowProgress("upload", 10)))
+        adapter.setUploadProgress(mapOf("b" to TransferWorkObserver.RowProgress(TransferPhase.UPLOAD, 10)))
         assertEquals("c finished", listOf(2), changed)
         assertEquals(0, fullRefreshes)
     }
@@ -294,7 +295,7 @@ class SessionListAdapterTest {
     @Test
     fun `the same progress again rebinds nothing`() {
         submit(record("a"))
-        val progress = mapOf("a" to SessionListAdapter.RowProgress("upload", 50))
+        val progress = mapOf("a" to TransferWorkObserver.RowProgress(TransferPhase.UPLOAD, 50))
         adapter.setUploadProgress(progress)
         changed.clear()
 

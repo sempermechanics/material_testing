@@ -12,12 +12,13 @@ import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.indicvision.semper.R
+import com.indicvision.semper.data.cloud.TransferPhase
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.databinding.ItemSessionBinding
 import com.indicvision.semper.imaging.BitmapDecode
-import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.run.EngineFailure
 import com.indicvision.semper.ui.common.ThumbnailLoader
+import com.indicvision.semper.ui.common.TransferWorkObserver
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -39,7 +40,7 @@ class SessionListAdapter(
     private val dateFmt = SimpleDateFormat("MMM d", Locale.getDefault())
 
     /** id → live upload progress; empty except for rows currently backing up. */
-    private var progress: Map<String, RowProgress> = emptyMap()
+    private var progress: Map<String, TransferWorkObserver.RowProgress> = emptyMap()
 
     /**
      * Ids whose frames are not on this phone, read off the main thread with
@@ -86,7 +87,7 @@ class SessionListAdapter(
     }
 
     /** Update live backup progress; rebinds only the rows whose progress changed. */
-    fun setUploadProgress(new: Map<String, RowProgress>) {
+    fun setUploadProgress(new: Map<String, TransferWorkObserver.RowProgress>) {
         val old = progress
         if (old == new) return
         progress = new
@@ -101,9 +102,6 @@ class SessionListAdapter(
 
     /** Drop cached thumbs (e.g. when Home is destroyed). */
     fun clearThumbCache() = thumbs.clear()
-
-    /** Live backup progress for a row while its upload work is running. */
-    data class RowProgress(val phase: String, val percent: Int)
 
     class Holder(val row: ItemSessionBinding) : RecyclerView.ViewHolder(row.root)
 
@@ -192,16 +190,16 @@ class SessionListAdapter(
             progressBar.isVisible = true
             // Bundle restore reports 0% for most of the Session.zip download —
             // indeterminate reads as "working" instead of a stuck empty bar.
-            val indeterminate = prog.phase == DicKeys.PHASE_DOWNLOAD && prog.percent <= 0
+            val indeterminate = prog.phase == TransferPhase.DOWNLOAD && prog.percent <= 0
             progressBar.isIndeterminate = indeterminate
             if (!indeterminate) {
                 progressBar.setProgressCompat(prog.percent.coerceIn(0, 100), true)
             }
             badge.text = ctx.getString(
                 when (prog.phase) {
-                    "prepare" -> R.string.badge_preparing_fmt
-                    "download" -> R.string.badge_downloading_fmt
-                    else -> R.string.badge_uploading_fmt
+                    TransferPhase.PREPARE -> R.string.badge_preparing_fmt
+                    TransferPhase.DOWNLOAD -> R.string.badge_downloading_fmt
+                    TransferPhase.UPLOAD -> R.string.badge_uploading_fmt
                 },
                 prog.percent.coerceAtLeast(0),
             )

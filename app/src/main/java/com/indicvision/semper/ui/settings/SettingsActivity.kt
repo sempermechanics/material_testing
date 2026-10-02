@@ -16,18 +16,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.R
-import com.indicvision.semper.data.DicBundleDownloadWorker
-import com.indicvision.semper.data.DicRestoreWorker
 import com.indicvision.semper.data.account.AuthRepository
 import com.indicvision.semper.data.account.LicenseEntitlements
 import com.indicvision.semper.data.account.LicenseErrors
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.cloud.SessionDeletes
+import com.indicvision.semper.data.cloud.TransferWork
 import com.indicvision.semper.data.cloud.restore.CloudRestore
 import com.indicvision.semper.data.cloud.restore.RestoreFailureLedger
 import com.indicvision.semper.data.cloud.restore.RestoreStart
@@ -39,7 +37,6 @@ import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.databinding.ActivitySettingsBinding
 import com.indicvision.semper.databinding.SettingsScrollContentBinding
 import com.indicvision.semper.databinding.SettingsSectionHeaderBinding
-import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.ByteSize
@@ -55,6 +52,7 @@ import com.indicvision.semper.ui.common.Motion
 import com.indicvision.semper.ui.common.SettingsSectionHeader
 import com.indicvision.semper.ui.common.SignOutRun
 import com.indicvision.semper.ui.common.TransferBannerController
+import com.indicvision.semper.ui.common.TransferWorkObserver
 import com.indicvision.semper.ui.common.confirm
 import com.indicvision.semper.ui.home.SessionOpenHelper
 import kotlinx.coroutines.Dispatchers
@@ -99,9 +97,6 @@ class SettingsActivity : AppCompatActivity() {
     /** The scroll content's sections ([SettingsScrollContentView.sections]). */
     private lateinit var views: SettingsScrollContentBinding
     private lateinit var analysesAdapter: AnalysisDataAdapter
-
-    /** Restore WorkInfo ids already surfaced, so one outcome isn't shown twice. */
-    private val shownRestoreOutcomes = mutableSetOf<java.util.UUID>()
 
     /** Restore / Save-to-Files download keys currently busy — disables row actions. */
     private val busy = BusyTransfers()
@@ -151,8 +146,7 @@ class SettingsActivity : AppCompatActivity() {
         // records its analyses silently and cannot pull them back, so both
         // sections are absent rather than shown disabled.
         if (LicenseEntitlements.cloudBackupEnabled(this)) {
-            observeRestoreOutcomes()
-            observeBundleDownloadOutcomes()
+            observeTransfers()
             deleteFeedback = DeleteFeedback(this, binding.settingsRoot) { wireAnalysesDataSection() }
             deleteFeedback.observe()
             wireCloudSection()
@@ -453,147 +447,104 @@ class SettingsActivity : AppCompatActivity() {
         publishBusy()
     }
 
-    /** Show the busy rows again; [BusyTransfers] already dropped the ones whose work ended. */
-    private fun syncDownloadingKeys() = publishBusy()
-
     private fun publishBusy() = analysesAdapter.setDownloadingKeys(busy.keys())
 
     /**
-     * A restore runs in [com.indicvision.semper.data.DicRestoreWorker], so without
-     * this its outcome would be silent — the user taps Restore, sees "continues in
-     * background", and is never told if it failed (backup gone / not theirs / gave
-     * up). Watch the "restore" work tag and surface each terminal outcome once:
-     * failure with its reason, success with a confirmation + a refreshed list.
+     * Restores ([com.indicvision.semper.data.DicRestoreWorker]) and
+     * Save-to-Files downloads ([com.indicvision.semper.data.DicBundleDownloadWorker])
+     * run in WorkManager. Watch both so
+     * their rows go busy, the banner follows them even after leaving Analyses
+     * data management, and each outcome is told once.
      */
-    private fun observeRestoreOutcomes() {
+    private fun observeTransfers() {
         // Best-effort: WorkManager is always initialized in production (its startup
         // provider runs before any Activity), but not in a unit-test harness that
         // skips that provider. Missing WorkManager must not crash onCreate — and if
         // it were truly absent, restore couldn't be enqueued in the first place.
         val workManager = runCatching { WorkManager.getInstance(this) }.getOrNull() ?: return
-        workManager
-            .getWorkInfosByTagLiveData("restore")
-            .observe(this) { infos ->
-                busy.onRestoreWork(infos.orEmpty())
+        TransferWorkObserver(TransferWork.Kind.RESTORE).observe(this, workManager) { update ->
+            busy.onRestoreWork(update.jobs)
+            publishBusy()
+            update.jobs.forEach(::showRestoreInBanner)
+            update.newlyFinished.forEach(::reportRestore)
+        }
+        TransferWorkObserver(TransferWork.Kind.BUNDLE_DOWNLOAD, presentedBundleDownloads)
+            .observe(this, workManager) { update ->
+                // Running, queued and blocked rows go busy through this list.
+                busy.onDownloadWork(update.jobs)
                 publishBusy()
-                infos.orEmpty().forEach { info ->
-                    val cloudId = info.tags.firstOrNull { it.startsWith("restore-") }
-                        ?.removePrefix("restore-")
-                        ?: info.outputData.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
-                    val key = cloudId.orEmpty()
-                    when (info.state) {
-                        WorkInfo.State.RUNNING -> {
-                            if (key.isNotBlank()) {
-                                val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, 0)
-                                if (!transferBanner.contains(key)) {
-                                    transferBanner.upsert(
-                                        TransferBannerController.Transfer(
-                                            id = key,
-                                            title = getString(R.string.transfer_banner_restore),
-                                            cancellable = false,
-                                            percent = pct,
-                                        ),
-                                    )
-                                } else {
-                                    transferBanner.updateProgress(key, pct)
-                                }
-                            }
-                        }
-                        WorkInfo.State.FAILED -> {
-                            if (key.isNotBlank()) transferBanner.remove(key)
-                            if (shownRestoreOutcomes.add(info.id)) syncDownloadingKeys()
-                            // Once per failure across Home and Settings, not once per screen open.
-                            if (RestoreFailureLedger.claim(this@SettingsActivity, info.id)) {
-                                val reason = info.outputData.getString(DicKeys.DOWNLOAD_ERROR)
-                                    ?: getString(R.string.restore_failed_generic)
-                                CrispToast.show(
-                                    this@SettingsActivity,
-                                    reason,
-                                    long = true,
-                                )
-                            }
-                        }
-                        WorkInfo.State.SUCCEEDED -> {
-                            if (key.isNotBlank()) transferBanner.remove(key)
-                            // Silent on purpose (uploads don't toast success either): just
-                            // refresh so the restored session appears. Deduped so a retained
-                            // old success doesn't reload on every screen open.
-                            if (shownRestoreOutcomes.add(info.id)) {
-                                syncDownloadingKeys()
-                                wireAnalysesDataSection()
-                            }
-                        }
-                        WorkInfo.State.CANCELLED -> {
-                            if (key.isNotBlank()) transferBanner.remove(key)
-                            syncDownloadingKeys()
-                        }
-                        else -> Unit
-                    }
-                }
+                update.jobs.forEach(::showDownloadInBanner)
+                update.newlyFinished.forEach(::reportDownload)
             }
     }
 
-    /**
-     * Save-to-Files downloads run in [DicBundleDownloadWorker]. Observe the
-     * tag so progress survives leaving Analyses data management, and so a
-     * finished write still toasts success when the user returns.
-     */
-    private fun observeBundleDownloadOutcomes() {
-        val workManager = runCatching { WorkManager.getInstance(this) }.getOrNull() ?: return
-        workManager
-            .getWorkInfosByTagLiveData(CloudRestore.TAG_BUNDLE_DOWNLOAD)
-            .observe(this) { infos ->
-                // Running, queued and blocked rows go busy through this list.
-                busy.onDownloadWork(infos.orEmpty())
-                publishBusy()
-                infos.orEmpty().forEach { info ->
-                    val cloudId = info.tags
-                        .firstOrNull { it.startsWith("${CloudRestore.TAG_BUNDLE_DOWNLOAD}-") }
-                        ?.removePrefix("${CloudRestore.TAG_BUNDLE_DOWNLOAD}-")
-                        ?: info.outputData.getString(CloudRestore.KEY_CLOUD_SESSION_ID)
-                    val key = cloudId.orEmpty()
-                    when (info.state) {
-                        WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> {
-                            if (key.isNotBlank()) {
-                                val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, 0)
-                                if (!transferBanner.contains(key)) {
-                                    transferBanner.upsert(
-                                        TransferBannerController.Transfer(
-                                            id = key,
-                                            title = getString(R.string.transfer_banner_download),
-                                            percent = pct,
-                                            onCancel = {
-                                                CloudRestore.cancelBundleDownload(this, key)
-                                            },
-                                        ),
-                                    )
-                                } else if (info.state == WorkInfo.State.RUNNING) {
-                                    transferBanner.updateProgress(key, pct)
-                                }
-                            }
-                        }
-                        WorkInfo.State.FAILED -> {
-                            if (key.isNotBlank()) transferBanner.remove(key)
-                            if (presentedBundleDownloads.add(info.id)) {
-                                syncDownloadingKeys()
-                                val reason = info.outputData.getString(DicKeys.DOWNLOAD_ERROR)
-                                Feedback.toast(this, LicenseErrors.downloadMessage(this, reason), long = true)
-                            }
-                        }
-                        WorkInfo.State.SUCCEEDED -> {
-                            if (key.isNotBlank()) transferBanner.remove(key)
-                            if (presentedBundleDownloads.add(info.id)) {
-                                syncDownloadingKeys()
-                                Feedback.toast(this, R.string.save_success, long = true)
-                            }
-                        }
-                        WorkInfo.State.CANCELLED -> {
-                            if (key.isNotBlank()) transferBanner.remove(key)
-                            syncDownloadingKeys()
-                        }
-                    }
+    /** A running restore's progress in the banner; a finished one leaves it. */
+    private fun showRestoreInBanner(job: TransferWorkObserver.Job) {
+        val key = job.cloudSessionId?.takeIf { it.isNotBlank() } ?: return
+        val state = job.state
+        when {
+            state is TransferWork.State.Running -> {
+                val percent = state.percent ?: 0
+                if (!transferBanner.contains(key)) {
+                    transferBanner.upsert(
+                        TransferBannerController.Transfer(
+                            id = key,
+                            title = getString(R.string.transfer_banner_restore),
+                            cancellable = false,
+                            percent = percent,
+                        ),
+                    )
+                } else {
+                    transferBanner.updateProgress(key, percent)
                 }
             }
+            job.isFinished -> transferBanner.remove(key)
+        }
+    }
+
+    /**
+     * Without this a restore's outcome would be silent: the user taps Restore,
+     * sees "continues in background", and is never told if it failed (backup
+     * gone / not theirs / gave up). A success is silent on purpose (uploads
+     * don't toast success either): the list reloads so the session appears.
+     */
+    private fun reportRestore(job: TransferWorkObserver.Job) {
+        when (val state = job.state) {
+            TransferWork.State.Succeeded -> wireAnalysesDataSection()
+            // Once per failure across Home and Settings, not once per screen open.
+            is TransferWork.State.Failed -> if (RestoreFailureLedger.claim(this, job.id)) {
+                CrispToast.show(this, state.reason ?: getString(R.string.restore_failed_generic), long = true)
+            }
+            else -> Unit
+        }
+    }
+
+    /** A queued or running download in the banner (progress once it runs); a finished one leaves it. */
+    private fun showDownloadInBanner(job: TransferWorkObserver.Job) {
+        val key = job.cloudSessionId?.takeIf { it.isNotBlank() } ?: return
+        val state = job.state
+        when {
+            job.isFinished -> transferBanner.remove(key)
+            !transferBanner.contains(key) -> transferBanner.upsert(
+                TransferBannerController.Transfer(
+                    id = key,
+                    title = getString(R.string.transfer_banner_download),
+                    percent = (state as? TransferWork.State.Running)?.percent ?: 0,
+                    onCancel = { CloudRestore.cancelBundleDownload(this, key) },
+                ),
+            )
+            state is TransferWork.State.Running -> transferBanner.updateProgress(key, state.percent ?: 0)
+        }
+    }
+
+    /** A finished Save-to-Files write, told once per process ([presentedBundleDownloads]). */
+    private fun reportDownload(job: TransferWorkObserver.Job) {
+        when (val state = job.state) {
+            TransferWork.State.Succeeded -> Feedback.toast(this, R.string.save_success, long = true)
+            is TransferWork.State.Failed ->
+                Feedback.toast(this, LicenseErrors.downloadMessage(this, state.reason), long = true)
+            else -> Unit
+        }
     }
 
     private fun deleteBackup(entry: AnalysisEntry, row: View) {
@@ -780,8 +731,8 @@ class SettingsActivity : AppCompatActivity() {
         private const val STATE_DL_LOCAL = "pending_dl_local"
 
         /** Work ids whose Save-to-Files outcome was already shown (process-wide). */
-        private val presentedBundleDownloads =
-            java.util.Collections.synchronizedSet(mutableSetOf<java.util.UUID>())
+        private val presentedBundleDownloads: MutableSet<java.util.UUID> =
+            java.util.Collections.synchronizedSet(mutableSetOf())
 
         const val CHEVRON_EXPANDED_DEG = 180f
         const val ZIP_MIME = "application/zip"
