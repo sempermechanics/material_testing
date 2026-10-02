@@ -220,18 +220,28 @@ class SessionListAdapter(
 
     /** The idle badge: where [r]'s backup stands, and "Only in cloud" for a synced one off this phone. */
     @StringRes
-    private fun syncStateLabel(r: SessionRecord): Int = when (r.syncState) {
-        SessionRecord.SyncState.SYNCED ->
-            if (r.id in withoutLocalData) R.string.badge_cloud_only else R.string.badge_synced
-        SessionRecord.SyncState.PENDING -> R.string.badge_pending
-        SessionRecord.SyncState.LOCAL_ONLY -> R.string.badge_local
-        SessionRecord.SyncState.FAILED -> R.string.badge_not_backed_up
-    }
+    private fun syncStateLabel(r: SessionRecord): Int =
+        syncStateLabel(r.syncState, framesOnPhone = r.id !in withoutLocalData)
 
     /** A row's reference image, with the raw dimensions a TIFF/RAW sniff needs. */
     private data class Thumb(val path: String, val rawWidth: Int, val rawHeight: Int)
 
     companion object {
+        /**
+         * The words for a backup in [state], on Home's badge and Settings'
+         * analysis rows alike; a synced one whose frames are not on this
+         * phone ([framesOnPhone] false) is "Only in cloud".
+         */
+        @StringRes
+        internal fun syncStateLabel(state: SessionRecord.SyncState, framesOnPhone: Boolean = true): Int =
+            when (state) {
+                SessionRecord.SyncState.SYNCED ->
+                    if (framesOnPhone) R.string.badge_synced else R.string.badge_cloud_only
+                SessionRecord.SyncState.PENDING -> R.string.badge_pending
+                SessionRecord.SyncState.LOCAL_ONLY -> R.string.badge_local
+                SessionRecord.SyncState.FAILED -> R.string.badge_not_backed_up
+            }
+
         private const val THUMB_CACHE_MAX = 24
         private const val THUMB_EDGE = 256
         private const val PERCENT_MAX = 100

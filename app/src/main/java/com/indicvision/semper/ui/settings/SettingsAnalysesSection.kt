@@ -14,7 +14,6 @@ import com.indicvision.semper.data.account.LicenseErrors
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.cloud.TransferWork
 import com.indicvision.semper.data.cloud.restore.CloudRestore
-import com.indicvision.semper.data.cloud.restore.RestoreFailureLedger
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.prefs.DicSettings
 import com.indicvision.semper.data.session.SessionRecord
@@ -22,10 +21,11 @@ import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.databinding.SettingsScrollContentBinding
 import com.indicvision.semper.ui.common.ByteSize
 import com.indicvision.semper.ui.common.ConflatedRefresh
-import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Feedback
+import com.indicvision.semper.ui.common.RestoreFailureNotice
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.common.TransferWorkObserver
+import com.indicvision.semper.ui.home.SessionListAdapter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -192,23 +192,11 @@ internal class SettingsAnalysesSection(
         }
     }
 
-    /**
-     * Without this a restore's outcome would be silent: the user taps Restore,
-     * sees "continues in background", and is never told if it failed (backup
-     * gone / not theirs / gave up). A success is silent on purpose (uploads
-     * don't toast success either): the list reloads so the session appears.
-     */
+    /** A restore that succeeded reloads the list so the session appears; one that failed says so once. */
     private fun reportRestore(job: TransferWorkObserver.Job) {
-        when (val state = job.state) {
+        when (job.state) {
             TransferWork.State.Succeeded -> refresh()
-            // Once per failure across Home and Settings, not once per screen open.
-            is TransferWork.State.Failed -> if (RestoreFailureLedger.claim(activity, job.id)) {
-                CrispToast.show(
-                    activity,
-                    state.reason ?: activity.getString(R.string.restore_failed_generic),
-                    long = true,
-                )
-            }
+            is TransferWork.State.Failed -> RestoreFailureNotice.showIfNew(activity, job)
             else -> Unit
         }
     }
@@ -291,14 +279,7 @@ internal class SettingsAnalysesSection(
         // The cloud could not confirm this one: keep its badge rather than
         // claiming the backup is gone.
         AnalysisLocation.PHONE_SYNC_STATE ->
-            entry.record?.let { syncLabel(it.syncState) }.orEmpty()
-    }
-
-    private fun syncLabel(state: SessionRecord.SyncState): String = when (state) {
-        SessionRecord.SyncState.SYNCED -> activity.getString(R.string.badge_synced)
-        SessionRecord.SyncState.PENDING -> activity.getString(R.string.badge_pending)
-        SessionRecord.SyncState.LOCAL_ONLY -> activity.getString(R.string.badge_local)
-        SessionRecord.SyncState.FAILED -> activity.getString(R.string.badge_not_backed_up)
+            entry.record?.let { activity.getString(SessionListAdapter.syncStateLabel(it.syncState)) }.orEmpty()
     }
 
     private companion object {

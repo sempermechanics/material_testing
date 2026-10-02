@@ -5,8 +5,8 @@ import androidx.work.WorkManager
 import com.indicvision.semper.R
 import com.indicvision.semper.data.cloud.TransferWork
 import com.indicvision.semper.data.cloud.UploadErrors
-import com.indicvision.semper.data.cloud.restore.RestoreFailureLedger
 import com.indicvision.semper.ui.common.CrispToast
+import com.indicvision.semper.ui.common.RestoreFailureNotice
 import com.indicvision.semper.ui.common.TransferWorkObserver
 
 /**
@@ -75,14 +75,7 @@ internal class HomeTransferWatch(
 
             update.newlyFinished.forEach { job ->
                 refresh()
-                val state = job.state as? TransferWork.State.Failed ?: return@forEach
-                // Once per failure across Home and Settings, not once per screen open.
-                if (!RestoreFailureLedger.claim(activity, job.id)) return@forEach
-                CrispToast.show(
-                    activity,
-                    state.reason ?: activity.getString(R.string.restore_failed_generic),
-                    long = true,
-                )
+                RestoreFailureNotice.showIfNew(activity, job)
             }
         }
     }
