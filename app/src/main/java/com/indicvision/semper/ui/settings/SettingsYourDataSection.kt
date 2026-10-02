@@ -2,9 +2,6 @@
 
 package com.indicvision.semper.ui.settings
 
-import android.view.View
-import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
@@ -12,7 +9,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.switchmaterial.SwitchMaterial
 import com.indicvision.semper.R
 import com.indicvision.semper.data.account.AuthRepository
 import com.indicvision.semper.data.account.DevAuth
@@ -22,9 +18,13 @@ import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.data.prefs.DicSettings
 import com.indicvision.semper.data.session.SessionEverythingExporter
+import com.indicvision.semper.databinding.SettingsScrollContentBinding
 import com.indicvision.semper.diagnostics.Diagnostics
 import com.indicvision.semper.diagnostics.SemperAnalytics
 import com.indicvision.semper.ui.common.AuthRoute
+import com.indicvision.semper.ui.common.Dialogs
+import com.indicvision.semper.ui.common.ExternalLinks
+import com.indicvision.semper.ui.common.Feedback
 import com.indicvision.semper.ui.common.TransferBannerController
 import com.indicvision.semper.ui.viewer.share.SendToSheet
 import com.indicvision.semper.util.ProgressCount
@@ -37,16 +37,17 @@ import timber.log.Timber
  */
 class SettingsYourDataSection(
     private val activity: SettingsActivity,
+    private val views: SettingsScrollContentBinding,
 ) {
     /** The progress dialog this screen shows while [AccountDeletionRun] runs. */
     private var deletionProgress: AlertDialog? = null
 
     fun wire() {
-        activity.findViewById<View>(R.id.btnExportData).setOnClickListener { exportMyData() }
-        activity.findViewById<View>(R.id.btnExportCloudData).setOnClickListener { exportCloudAccountData() }
-        activity.findViewById<View>(R.id.btnDeleteAccount).setOnClickListener { confirmDeleteAccount() }
+        views.btnExportData.setOnClickListener { exportMyData() }
+        views.btnExportCloudData.setOnClickListener { exportCloudAccountData() }
+        views.btnDeleteAccount.setOnClickListener { confirmDeleteAccount() }
 
-        val switchDiagnostics = activity.findViewById<SwitchMaterial>(R.id.switchDiagnostics)
+        val switchDiagnostics = views.switchDiagnostics
         switchDiagnostics.isChecked = DicSettings.diagnosticsEnabled(activity)
         switchDiagnostics.setOnCheckedChangeListener { _, checked ->
             // Applies immediately in both directions: turning this off also
@@ -63,7 +64,7 @@ class SettingsYourDataSection(
      * any time. The switch reflects the last value the server confirmed.
      */
     private fun wireLegal() {
-        val switchImprove = activity.findViewById<SwitchMaterial>(R.id.switchImprovementConsent)
+        val switchImprove = views.switchImprovementConsent
         switchImprove.isChecked = TokenStore.improvementConsent(activity) == true
         switchImprove.setOnCheckedChangeListener { _, checked ->
             switchImprove.isEnabled = false
@@ -76,20 +77,20 @@ class SettingsYourDataSection(
                     switchImprove.setOnCheckedChangeListener(null)
                     switchImprove.isChecked = !checked
                     wireLegal()
-                    Toast.makeText(activity, R.string.terms_error_generic, Toast.LENGTH_LONG).show()
+                    Feedback.toast(activity, R.string.terms_error_generic, long = true)
                 }
             }
         }
 
         val accepted = TokenStore.termsAcceptedVersion(activity)
-        activity.findViewById<TextView>(R.id.tvTermsAccepted).text =
+        views.tvTermsAccepted.text =
             if (accepted == null) {
                 activity.getString(R.string.settings_terms_not_accepted)
             } else {
                 activity.getString(R.string.settings_terms_accepted_fmt, accepted)
             }
-        activity.findViewById<View>(R.id.btnViewTerms).setOnClickListener {
-            activity.openExternalUrl(activity.getString(R.string.legal_terms_url))
+        views.btnViewTerms.setOnClickListener {
+            ExternalLinks.open(activity, activity.getString(R.string.legal_terms_url))
         }
     }
 
@@ -103,7 +104,7 @@ class SettingsYourDataSection(
     private fun exportCloudAccountData() {
         val api = IndicApi.get(activity)
         if (!api.enabled) {
-            Toast.makeText(activity, R.string.export_cloud_data_offline, Toast.LENGTH_LONG).show()
+            Feedback.toast(activity, R.string.export_cloud_data_offline, long = true)
             return
         }
         runExport(CLOUD_EXPORT) { CloudAccountExport.download(activity.cacheDir, api) }
@@ -135,7 +136,7 @@ class SettingsYourDataSection(
         produce: suspend (onProgress: (done: Int, total: Int) -> Unit) -> java.io.File?,
     ) {
         if (activity.transferBanner.contains(kind.key)) {
-            Toast.makeText(activity, R.string.download_analysis_already, Toast.LENGTH_SHORT).show()
+            Feedback.toast(activity, R.string.download_analysis_already)
             return
         }
         var job: kotlinx.coroutines.Job? = null
@@ -173,7 +174,7 @@ class SettingsYourDataSection(
                         SemperAnalytics.EXPORT_FAILED,
                         mapOf("kind" to kind.analyticsKind),
                     )
-                    Toast.makeText(activity, kind.failedMessage, Toast.LENGTH_LONG).show()
+                    Feedback.toast(activity, kind.failedMessage, long = true)
                     return@launch
                 }
                 SemperAnalytics.event(
@@ -189,12 +190,12 @@ class SettingsYourDataSection(
     }
 
     private fun confirmDeleteAccount() {
-        MaterialAlertDialogBuilder(activity)
-            .setTitle(R.string.delete_account_title)
-            .setMessage(R.string.delete_account_body)
-            .setPositiveButton(R.string.delete_account_confirm) { _, _ -> verifyThenDeleteAccount() }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
+        Dialogs.confirm(
+            activity,
+            R.string.delete_account_title,
+            R.string.delete_account_body,
+            R.string.delete_account_confirm,
+        ) { verifyThenDeleteAccount() }
     }
 
     /**

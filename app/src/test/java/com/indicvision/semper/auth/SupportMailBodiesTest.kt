@@ -12,6 +12,7 @@ import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.auth.PendingApprovalActivity
 import com.indicvision.semper.ui.common.SupportMail
 import com.indicvision.semper.ui.limit.SessionLimitActivity
+import com.indicvision.semper.ui.settings.SettingsActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -75,6 +76,19 @@ class SupportMailBodiesTest {
         assertEquals(
             context.getString(R.string.limit_subject) + " — " + unknown,
             mail.getStringExtra(Intent.EXTRA_SUBJECT),
+        )
+    }
+
+    @Test
+    fun `settings support mail leaves room to write above the account and device`() {
+        val mail = mailFrom(SettingsActivity::class.java, R.id.btnEmailSupport)
+
+        assertEquals(
+            "\n\n---\n" +
+                "Account: $unknown\n" +
+                "Device ID: $deviceId\n" +
+                SupportMail.deviceLines(),
+            mail.getStringExtra(Intent.EXTRA_TEXT),
         )
     }
 
