@@ -666,6 +666,34 @@ class DicUploadWorkerTest {
         assertTrue("the recreate reuses the staging", File(staging, "Session.zip").isFile)
     }
 
+    @Test
+    fun `an expired upload link discards the session so the next run recreates it`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onUpload = { throw IndicApi.UploadLinkExpiredException(410) }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        // Retrying the dead link would fail the same way forever.
+        assertEquals(listOf("cs1"), api.deleted)
+        assertEquals("", row().cloudSessionId)
+        assertEquals(SessionRecord.SyncState.PENDING, row().syncState)
+        assertTrue("the recreate reuses the staging", File(staging, "Session.zip").isFile)
+    }
+
+    @Test
+    fun `an expired upload link whose session delete fails keeps the pointer`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onUpload = { throw IndicApi.UploadLinkExpiredException(404) }
+        api.base.onDeleteSession = { _, _ -> throw apiError(503, "firestore_unreachable") }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertEquals("cs1", row().cloudSessionId)
+        assertTrue(File(staging, "Session.zip").isFile)
+    }
+
     private companion object {
         const val ID = "s_upload"
     }

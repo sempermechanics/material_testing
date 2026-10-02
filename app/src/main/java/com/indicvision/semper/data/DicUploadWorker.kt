@@ -546,6 +546,16 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val progTotal = progress.total
         val sampler = progress.launchIn(this, PROGRESS_SAMPLE_MS) { setProgress(it) }
 
+        // [record] was snapshotted at doWork start — createSession may have
+        // written cloudSessionId afterward. Re-read before a delete.
+        fun currentCloudId(): String = SessionStore.get(applicationContext, localId)
+            ?.cloudSessionId.orEmpty()
+            .ifBlank { record.cloudSessionId }
+
+        // The token read at the start can have expired during a long
+        // upload; a delete refused for it would keep a session we meant to drop.
+        suspend fun freshToken(): String = tokens.usableIdToken() ?: idToken
+
         try {
             val artifacts = mutableListOf<Artifact>()
 
@@ -829,12 +839,6 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             )
             failure(applicationContext.getString(R.string.cloud_backup_failed_device), e.requestId)
         } catch (e: IndicApi.ApiException) {
-            // [record] was snapshotted at doWork start — createSession may have
-            // written cloudSessionId afterward. Re-read before a delete.
-            fun currentCloudId(): String = SessionStore.get(applicationContext, localId)
-                ?.cloudSessionId.orEmpty()
-                .ifBlank { record.cloudSessionId }
-
             // Terminal: mark the row failed and drop its staging. The next
             // attempt is a fresh one, so the integrity count starts over too.
             fun giveUp(analyticsReason: String) {
@@ -848,10 +852,6 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     mapOf("reason" to analyticsReason),
                 )
             }
-
-            // The token read at the start can have expired during a long
-            // upload; a delete refused for it would keep a session we meant to drop.
-            suspend fun freshToken(): String = tokens.usableIdToken() ?: idToken
 
             when (UploadErrors.classify(e.code, e.body)) {
                 UploadErrors.Kind.QUOTA -> {
@@ -920,6 +920,14 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                     retryLater("HTTP ${e.code}: ${e.parsedDetail.take(RETRY_REASON_MAX_LEN)}", e.requestId)
                 }
             }
+        } catch (e: IndicApi.UploadLinkExpiredException) {
+            // Drive no longer knows a resumable link (404/410 on its probe), and
+            // no retry with that link can work. Like a stale session: erase it
+            // and recreate from the same staging. Caught here because it is an
+            // IOException, which the generic catch below retried forever.
+            Timber.e("Drive upload link expired (HTTP %d) — discarding the session, keeping staging", e.code)
+            discardCloudSession(applicationContext, api, freshToken(), localId, currentCloudId())
+            retryLater("upload link expired (HTTP ${e.code}) — will recreate session")
         } catch (e: OutOfMemoryError) {
             // OOM is an Error, not an Exception, so it would otherwise escape every
             // catch above and surface as an untracked WorkManager failure with no
