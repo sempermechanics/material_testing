@@ -197,7 +197,7 @@ object CloudRestore {
             ?: throw UnrestorableBackupException("backup_no_bundle")
 
         val outDir = CacheJanitor.shareDir(context.applicationContext.cacheDir)
-        val dest = File(outDir, SessionNaming.bundleFileName(displayName))
+        val dest = File(outDir, SessionNaming.bundleCacheFileName(displayName, sessionId))
         discard(dest)
         var complete = false
         try {

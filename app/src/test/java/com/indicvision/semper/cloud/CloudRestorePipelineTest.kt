@@ -261,6 +261,25 @@ class CloudRestorePipelineTest {
         assertEquals(emptyList<String>(), left)
     }
 
+    @Test
+    fun `a failed download never deletes another backup's archive of the same name`() {
+        val bundle = bundle("dat/frame_0001.dat" to RestoreFakeApi.onePointDat())
+        api.files = listOf(bundle)
+        val first = runBlocking {
+            CloudRestore.downloadBundleZip(context, CLOUD_ID, "Specimen", api = api, tokens = tokens)
+        }
+        val extrasBytes = RestoreFakeApi.zipOf(listOf("csv/analysis_data.csv" to "a,b".toByteArray()))
+        val staleSha = RestoreFakeApi.sha256Of("an older extras body".toByteArray())
+        api.files = listOf(bundle, api.file("extras-1", "extras", extrasBytes, staleSha))
+
+        assertThrows(CorruptTransferException::class.java) {
+            runBlocking { CloudRestore.downloadBundleZip(context, "cloud-other", "Specimen", api = api, tokens = tokens) }
+        }
+
+        assertTrue("the first backup's archive was deleted by the second's failure", first.isFile)
+        assertTrue(first.name.endsWith("_Specimen_Session.zip"))
+    }
+
     private companion object {
         const val CLOUD_ID = "cloud-abc"
         const val LOCAL_ID = "local-1"
