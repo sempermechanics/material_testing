@@ -91,7 +91,7 @@ class SessionRepository {
             rawDir.listFiles()?.forEach { if (it.name != source.name) it.delete() }
             return source.name
         }
-        val name = (defOriginalNames.getOrNull(frameIndex) ?: source.name)
+        val name = defOriginalNames.originalNameOr(frameIndex, source.name)
             .substringAfterLast('/')
             .substringAfterLast('\\')
         return runCatching {
