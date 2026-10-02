@@ -131,10 +131,8 @@ class RestoreWorkersTest {
             {"schema":"indic.session.metadata/3","frames":[{"image":"def.png"}],
              "engine":{"sweep":{"subsets":[21],"skipped":{"subsets":[41,51],"steps":[9],"strainWindows":[121]}}}}
         """.trimIndent().toByteArray()
-        api.files = listOf(
-            api.file("meta-1", "metadata", meta),
-            api.file("bundle-1", "bundle", RestoreFakeApi.zipOf(listOf("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()))),
-        )
+        val bundle = RestoreFakeApi.zipOf(listOf("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()))
+        api.files = listOf(api.file("meta-1", "metadata", meta), api.file("bundle-1", "bundle", bundle))
 
         val result = runRestore(cloudRestorer)
 

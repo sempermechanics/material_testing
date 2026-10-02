@@ -126,7 +126,8 @@ class CloudRestorePipelineTest {
         restore()
 
         assertEquals(File(dir, "reference.png").absolutePath, SessionStore.get(context, LOCAL_ID)?.refPath)
-        assertEquals(listOf<Byte>(4, 5), File(dir, "${SessionPaths.RAW_DEFORMED_SUBDIR}/reference.png").readBytes().toList())
+        val deformed = File(dir, "${SessionPaths.RAW_DEFORMED_SUBDIR}/reference.png")
+        assertEquals(listOf<Byte>(4, 5), deformed.readBytes().toList())
     }
 
     /** Block (briefly) until [file] has been written by a sibling download. */
@@ -301,7 +302,9 @@ class CloudRestorePipelineTest {
         api.files = listOf(bundle, api.file("extras-1", "extras", extrasBytes, staleSha))
 
         assertThrows(CorruptTransferException::class.java) {
-            runBlocking { CloudRestore.downloadBundleZip(context, "cloud-other", "Specimen", api = api, tokens = tokens) }
+            runBlocking {
+                CloudRestore.downloadBundleZip(context, "cloud-other", "Specimen", api = api, tokens = tokens)
+            }
         }
 
         assertTrue("the first backup's archive was deleted by the second's failure", first.isFile)
