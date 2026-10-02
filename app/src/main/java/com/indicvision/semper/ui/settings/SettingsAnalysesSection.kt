@@ -4,7 +4,6 @@
 
 package com.indicvision.semper.ui.settings
 
-import android.view.View
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -82,9 +81,8 @@ internal class SettingsAnalysesSection(
     }
 
     /** Takes [row] out of the list at once, ahead of its queued delete. */
-    fun removeRow(row: View) {
-        analysesAdapter.removeAt(views.analysesDataList.getChildAdapterPosition(row))
-    }
+    /** Drops [entry]'s row at once; its deletion waits out the undo window. */
+    fun removeRow(entry: AnalysisEntry) = analysesAdapter.remove(entry.downloadKey())
 
     fun isBusy(key: String): Boolean = busy.isBusy(key)
 

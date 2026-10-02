@@ -23,10 +23,17 @@ class AnalysisDataAdapter(
     private val onBackup: (AnalysisEntry) -> Unit,
     private val onLocalDownload: (AnalysisEntry) -> Unit,
     private val onCloudRestore: (AnalysisEntry) -> Unit,
-    private val onDelete: (AnalysisEntry, View) -> Unit,
+    private val onDelete: (AnalysisEntry) -> Unit,
 ) : ListAdapter<AnalysisEntry, AnalysisDataAdapter.Row>(BY_KEY) {
 
     private var downloadingKeys: Set<String> = emptySet()
+
+    /**
+     * The list last handed to [submitList]. [getCurrentList] only catches up
+     * once its diff has run off the main thread, so a change made before
+     * then must start from this one, or it drops the change before it.
+     */
+    private var submitted: List<AnalysisEntry> = emptyList()
 
     /**
      * Shows [items]. Every row is rebound afterwards, as a whole-list refresh
@@ -34,7 +41,10 @@ class AnalysisDataAdapter(
      * part of its entry (Save to cloud), so an unchanged entry is not an
      * unchanged row.
      */
-    fun submit(items: List<AnalysisEntry>) = submitList(items) { notifyItemRangeChanged(0, itemCount) }
+    fun submit(items: List<AnalysisEntry>) {
+        submitted = items
+        submitList(items) { notifyItemRangeChanged(0, itemCount) }
+    }
 
     /** Keys from [AnalysisEntry.downloadKey] with an in-flight Download / restore. */
     fun setDownloadingKeys(keys: Set<String>) {
@@ -43,10 +53,15 @@ class AnalysisDataAdapter(
         notifyItemRangeChanged(0, itemCount)
     }
 
-    /** Drops one row immediately, before its deletion is actually sent. */
-    fun removeAt(position: Int) {
-        if (position !in currentList.indices) return
-        submitList(currentList.filterIndexed { i, _ -> i != position })
+    /**
+     * Drops the row for [key] ([AnalysisEntry.downloadKey]) immediately,
+     * before its deletion is actually sent.
+     */
+    fun remove(key: String) {
+        val kept = submitted.filterNot { it.downloadKey() == key }
+        if (kept.size == submitted.size) return
+        submitted = kept
+        submitList(kept)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Row =
@@ -84,7 +99,7 @@ class AnalysisDataAdapter(
                 if (entry.downloadKey() in downloadingKeys) return@setOnClickListener
                 onCloudRestore(entry)
             }
-            row.btnAnalysisDelete.setOnClickListener { onDelete(entry, itemView) }
+            row.btnAnalysisDelete.setOnClickListener { onDelete(entry) }
 
             // A backup action only applies to a row with no cloud copy listed.
             val label = if (hasCloud) null else backupLabel(entry)
