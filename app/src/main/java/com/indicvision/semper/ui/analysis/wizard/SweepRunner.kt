@@ -127,34 +127,38 @@ private fun AnalysisViewModel.solveSweep(
         )
     }
 
-    val saved = persistSweepSession(
-        appContext,
-        SweepSession(localSessionId, batchDir, bytes, result, spec, executionTimeMs),
-    )
+    return finishSolvedSweep(appContext, SweepSession(localSessionId, batchDir, bytes, result, spec, executionTimeMs))
+}
+
+/**
+ * Saves [run], a sweep that solved at least one combination, as a session
+ * and says how it ended, reading the save as a batch run's is ([afterSave]):
+ * a full quota ends it at the session limit, and an index that could not be
+ * read or written as not saved. [cloudEnabled] is whether a saved session
+ * queues its upload.
+ */
+@WorkerThread
+internal fun AnalysisViewModel.finishSolvedSweep(
+    appContext: Context,
+    run: SweepSession,
+    cloudEnabled: Boolean = CloudSync.uploadsEnabled(appContext),
+): BatchAnalysisOutcome {
+    val saved = persistSweepSession(appContext, run, cloudEnabled)
     val outcome = BatchAnalysisOutcome(
-        engineErrorCode = result.engineErrorCode,
-        firstFrameValidPoints = result.runs.first().pointsSolved,
-        totalFrames = result.runs.size,
-        executionTimeMs = executionTimeMs,
-        batchDirPath = batchDir.absolutePath,
-    ).afterSweepSave(saved)
+        engineErrorCode = saved.stop.wireCode,
+        firstFrameValidPoints = run.result.runs.first().pointsSolved,
+        totalFrames = run.result.runs.size,
+        executionTimeMs = run.executionTimeMs,
+        batchDirPath = run.batchDir.absolutePath,
+        saved = saved.recordSaved,
+        indexUnavailable = saved.indexUnavailable,
+    )
     sweepEndEvent(appContext, outcome)
     return outcome
 }
 
-/**
- * This solved sweep's outcome once its session's save came back as [saved],
- * read as a batch run's save is ([afterSave]): a full quota ends it at the
- * session limit, and an index that could not be read or written as not saved.
- */
-internal fun BatchAnalysisOutcome.afterSweepSave(saved: AfterSave): BatchAnalysisOutcome = copy(
-    engineErrorCode = saved.stop.wireCode,
-    saved = saved.recordSaved,
-    indexUnavailable = saved.indexUnavailable,
-)
-
 /** The analytics event a sweep that solved ends with: completed, or why its session was not saved. */
-internal fun sweepEndEvent(appContext: Context, outcome: BatchAnalysisOutcome) {
+private fun sweepEndEvent(appContext: Context, outcome: BatchAnalysisOutcome) {
     val duration = "duration" to SemperAnalytics.durationBucket(outcome.executionTimeMs.toLong())
     when {
         outcome.indexUnavailable ->
@@ -180,7 +184,7 @@ private fun VsgStudyRunner.Result.skippedNodes(): List<SkippedNode> =
     skipped.mapIndexed { index, point -> point.toSkippedNode(skippedCodes[index]) }
 
 /** What a finished sweep's session is assembled from. */
-private class SweepSession(
+internal class SweepSession(
     val localSessionId: String,
     val batchDir: File,
     val reference: ByteArray,
@@ -195,7 +199,11 @@ private class SweepSession(
  * Returns how the session's save came back.
  */
 @WorkerThread
-private fun AnalysisViewModel.persistSweepSession(appContext: Context, run: SweepSession): AfterSave {
+private fun AnalysisViewModel.persistSweepSession(
+    appContext: Context,
+    run: SweepSession,
+    cloudEnabled: Boolean,
+): AfterSave {
     val result = run.result
     val sweep = checkNotNull(run.spec.sweep)
     val refPngPath = sessions.writeReferenceCopy(run.batchDir, run.reference, realRefWidth, realRefHeight)
@@ -210,7 +218,6 @@ private fun AnalysisViewModel.persistSweepSession(appContext: Context, run: Swee
         )
     }
 
-    val cloudEnabled = CloudSync.uploadsEnabled(appContext)
     val first = result.runs.first().point
     val defDisplay = rawName.ifBlank {
         defOriginalNames.originalNameOr(frameIndex, File(defFilePaths[frameIndex]).name)
