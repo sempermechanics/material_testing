@@ -8,6 +8,7 @@ import com.indicvision.semper.data.cloud.CloudSync.EraseResult
 import com.indicvision.semper.data.cloud.SessionDeletes
 import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
+import com.indicvision.semper.data.net.CloudSessionDto
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.ListSessionsResponse
 import com.indicvision.semper.data.prefs.PrefFiles
@@ -20,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -163,6 +165,30 @@ class CloudSyncFailureMappingTest {
         assertEquals(items, report.stillInCloud)
         assertEquals(listOf("listSessions", "listSessions"), api.calls)
         assertEquals(SessionRecord.SyncState.SYNCED, SessionStore.get(context, "s1")!!.syncState)
+    }
+
+    // ── backup lookup ──────────────────────────────────────────────────────
+
+    @Test
+    fun `a backup lookup that fails offline is no backup, not a crash`() = runBlocking {
+        val record = sessionRecord(id = "s1", syncState = SessionRecord.SyncState.SYNCED)
+        api.onListSessions = { _, _ -> throw IOException("offline") }
+
+        assertNull(CloudSync.resolveCloudIdFor(context, record, api, tokens))
+        assertEquals(listOf("listSessions"), api.calls)
+    }
+
+    @Test
+    fun `a backup lookup reads the stored link first, then the listing`() = runBlocking {
+        assertEquals("c7", CloudSync.resolveCloudIdFor(context, sessionRecord(cloudSessionId = "c7"), api, tokens))
+        assertTrue(api.calls.isEmpty())
+
+        api.onListSessions = { _, _ ->
+            ListSessionsResponse(sessions = listOf(CloudSessionDto(sessionId = "c8", localSessionId = "s1")))
+        }
+        assertEquals("c8", CloudSync.resolveCloudIdFor(context, sessionRecord(id = "s1"), api, tokens))
+        tokens.token = null
+        assertNull(CloudSync.resolveCloudIdFor(context, sessionRecord(id = "s1"), api, tokens))
     }
 
     private fun store(record: SessionRecord) = assertTrue(SessionStore.upsert(context, record, allowOverLimit = true))

@@ -445,7 +445,11 @@ object CloudSync {
             EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE
         }
 
-    /** Backend session id for a local analysis, or null if none is known. */
+    /**
+     * Backend session id for a local analysis, or null if none is known. A
+     * lookup that fails (offline, a server error) is null too: Home calls this
+     * from a screen scope, where a thrown failure ended the app.
+     */
     suspend fun resolveCloudIdFor(
         context: Context,
         record: SessionRecord,
@@ -454,9 +458,11 @@ object CloudSync {
     ): String? =
         withContext(Dispatchers.IO) {
             if (record.cloudSessionId.isNotBlank()) return@withContext record.cloudSessionId
-            if (!api.enabled) return@withContext null
-            val token = tokens.usableIdToken() ?: return@withContext null
-            resolveCloudId(api, token, record)
+            val found = api.authed(tokens) { token -> resolveCloudId(this, token, record) }
+            if (found is Authed.Failed) {
+                Timber.w(found.failure.cause, "Could not look up the backup of %s", record.id)
+            }
+            found.getOrNull()
         }
 
     /**
