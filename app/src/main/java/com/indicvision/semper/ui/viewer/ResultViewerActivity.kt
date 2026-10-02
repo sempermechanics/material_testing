@@ -90,6 +90,7 @@ class ResultViewerActivity : AppCompatActivity() {
         private set
 
     internal var rawData: FloatArray? = null
+        private set
 
     /** The reference's true size: from the Intent, else read from its header off the main thread. */
     internal var imageSize: ImageSize = ImageSize.UNKNOWN
@@ -104,6 +105,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * is re-read whenever a frame loads rather than fixed at launch.
      */
     internal var step = DicParams.DEFAULT_STEP
+        private set
 
     /** Axis of the study's line cut through the ROI centre. */
     internal val lineCutHorizontal: Boolean get() = args.sweep?.lineCutHorizontal ?: true
@@ -130,7 +132,6 @@ class ResultViewerActivity : AppCompatActivity() {
     internal var plannedFrames: List<Int> = emptyList()
         private set
 
-    private var refImagePath: String? = null
     internal var defImagePaths: List<String> = emptyList()
         private set
     internal var currentFrameIndex: Int
@@ -226,7 +227,6 @@ class ResultViewerActivity : AppCompatActivity() {
         if (isSweep) frameJump.showingSummary = false
 
         val refPath = args.refPath.ifBlank { null }
-        refImagePath = refPath
         // Every writer puts the image size on the Intent; only an old one makes
         // the reference's header be read for it, off the main thread below.
         val dimsKnown = imageSize.isKnown
@@ -314,7 +314,8 @@ class ResultViewerActivity : AppCompatActivity() {
         defImagePaths = set.defImagePaths
         batchFiles = set.batchFiles
         plannedFrames = set.plannedFrames
-        frames.maxDatBytes = set.maxDatBytes
+        frames.useFrameSet(set)
+        viewerVm.useFrameListing(set.batchFiles)
         frameSetLoaded = true
 
         if (batchFiles.isNotEmpty()) {

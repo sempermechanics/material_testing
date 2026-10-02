@@ -20,6 +20,8 @@ import java.io.File
  * The viewer's frame data: the batch listing read when the viewer opens, each
  * frame's `.dat` decoded off the main thread, and a bounded look-ahead that
  * keeps the scrub cache warm around the frame on screen.
+ *
+ * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
  */
 internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
 
@@ -33,11 +35,11 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
     )
 
     /**
-     * Largest `.dat` size, from the [FrameSet]. The prefetch heap guard used to
-     * `stat()` every file on every frame load (3F syscalls per scrub step); the
-     * file set never changes once read, so one scan suffices.
+     * Largest `.dat` size, from the [FrameSet] ([useFrameSet]). The prefetch heap
+     * guard used to `stat()` every file on every frame load (3F syscalls per scrub
+     * step); the file set never changes once read, so one scan suffices.
      */
-    var maxDatBytes: Long = 0L
+    private var maxDatBytes: Long = 0L
 
     private val loadFrameJob = SerialJob()
 
@@ -84,6 +86,11 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
         )
     }
 
+    /** Takes what this loader needs from the [set] the viewer has just read. Main thread. */
+    fun useFrameSet(set: FrameSet) {
+        maxDatBytes = set.maxDatBytes
+    }
+
     fun loadFrameData(index: Int) {
         if (index < 0 || index >= batchFiles.size) return
 
@@ -99,10 +106,10 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
                 scrubCache.putData(index, data)
 
                 withContext(Dispatchers.Main) {
-                    if (host.currentFrameIndex != index) return@withContext
-                    host.applyLoadedFrame(index, data)
+                    if (host.currentFrameIndex == index) host.applyLoadedFrame(index, data)
+                    // On Main: prefetchJob is a SerialJob, which is main-thread only.
+                    prefetchAround(index)
                 }
-                prefetchAround(index)
             } catch (e: CancellationException) {
                 throw e // never swallow coroutine cancellation
             } catch (e: OutOfMemoryError) {

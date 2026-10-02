@@ -9,6 +9,7 @@ import com.indicvision.semper.field.DicResult
 import com.indicvision.semper.field.FieldStats
 import com.indicvision.semper.field.ValueRange
 import com.indicvision.semper.ui.viewer.share.ShareExportJobs
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -69,6 +70,23 @@ class ResultViewerViewModel(
      * Guarded by its own monitor (read on Main, written on Dispatchers.Default).
      */
     private val fieldMetricsCache = LinkedHashMap<Long, FieldMetrics>()
+
+    /** The frame listing [fieldMetricsCache]'s keys index into; see [useFrameListing]. */
+    private var metricsListing: List<File>? = null
+
+    /**
+     * Tells the cache which `.dat` files its frame indices name. A viewer
+     * rebuilt over the same listing (a rotation) keeps the cached metrics; a
+     * different listing drops them, since index N is then another frame.
+     */
+    internal fun useFrameListing(files: List<File>) {
+        synchronized(fieldMetricsCache) {
+            if (files != metricsListing) {
+                fieldMetricsCache.clear()
+                metricsListing = files
+            }
+        }
+    }
 
     internal fun fieldMetricsFor(frameIndex: Int, dataIndex: Int, data: FloatArray): FieldMetrics {
         val key = (frameIndex.toLong() shl Int.SIZE_BITS) or (dataIndex.toLong() and LOW_32_BITS)

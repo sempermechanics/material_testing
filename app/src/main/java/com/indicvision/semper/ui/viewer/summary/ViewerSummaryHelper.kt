@@ -183,6 +183,7 @@ class ViewerSummaryHelper(private val host: ResultViewerActivity) {
 
         val label = host.currentTypeString
         val total = host.summaryBatchFiles().size
+        buildJob.cancel()
         stopPlayback()
         showStatus(host.getString(R.string.summary_building_fmt, label, 0, total))
         buildJob.launch(host.lifecycleScope) {
