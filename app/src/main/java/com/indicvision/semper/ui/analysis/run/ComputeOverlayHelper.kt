@@ -1,6 +1,6 @@
 // Overlay helper binds a fixed set of named views; the constructor list and the
 // small progress/animation constants read clearest passed and inlined directly.
-@file:Suppress("LongParameterList", "MagicNumber")
+@file:Suppress("LongParameterList")
 
 @file:SuppressLint("SetTextI18n")
 
@@ -54,7 +54,7 @@ class ComputeOverlayHelper(
         override fun run() {
             val ms = System.currentTimeMillis() - processingStartTime
             elapsed.text = "Elapsed ${OverlayFormats.elapsed(ms)}"
-            mainHandler.postDelayed(this, 1000)
+            mainHandler.postDelayed(this, TICK_MS)
         }
     }
 
@@ -124,7 +124,7 @@ class ComputeOverlayHelper(
 
     /** Update the overlay's ring + percentage. Safe to call from any thread. */
     fun setProgress(percent: Float) {
-        pendingPercent = percent.coerceIn(0f, 100f)
+        pendingPercent = percent.coerceIn(0f, PERCENT_MAX)
         scheduleFlush()
     }
 
@@ -151,7 +151,7 @@ class ComputeOverlayHelper(
         pointsSolved: Int = -1,
         convergencePercent: Float = -1f,
     ) {
-        if (percent != null) pendingPercent = percent.coerceIn(0f, 100f)
+        if (percent != null) pendingPercent = percent.coerceIn(0f, PERCENT_MAX)
         if (status != null) pendingStatus = status
         if (title != null) pendingTitle = title
         if (pointsSolved >= 0) pendingPoints = pointsSolved
@@ -211,6 +211,8 @@ class ComputeOverlayHelper(
 
     companion object {
         private const val THROTTLE_MS = 100L
+        private const val TICK_MS = 1000L
+        private const val PERCENT_MAX = 100f
         private const val RING_MAX = 1000
         private const val RING_SCALE = 10f
     }

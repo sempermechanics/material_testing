@@ -20,7 +20,7 @@ import kotlin.math.roundToInt
  * slider label sync). Reset / paste / recommendation logic stays in the Activity
  * so it can touch ViewModel + sweep state without putting disk or network on Main.
  */
-@Suppress("LongParameterList", "MagicNumber") // the sheet's callbacks, each a different Activity action
+@Suppress("LongParameterList") // the sheet's callbacks, each a different Activity action
 class AnalysisSettingsSheetHelper(
     private val activity: Activity,
     private val settings: WizardStepSettingsContentBinding,
@@ -158,14 +158,19 @@ class AnalysisSettingsSheetHelper(
         overlapValue.showUnlessEditing(String.format(Locale.US, "%.2f", overlapFromSlider(overlap.value)))
     }
 
+    /** The overlap slider counts hundredths. */
     private fun overlapSliderValue(raw: Double): Float {
-        val hundredths = (VsgStudy.clampOverlap(raw) * 100.0).roundToInt()
+        val hundredths = (VsgStudy.clampOverlap(raw) * HUNDREDTHS).roundToInt()
         return hundredths.coerceIn(
-            (VsgStudy.MIN_OVERLAP * 100).toInt(),
-            (VsgStudy.MAX_OVERLAP * 100).toInt(),
+            (VsgStudy.MIN_OVERLAP * HUNDREDTHS).toInt(),
+            (VsgStudy.MAX_OVERLAP * HUNDREDTHS).toInt(),
         ).toFloat()
     }
 
     private fun overlapFromSlider(sliderValue: Float): Double =
-        VsgStudy.clampOverlap(sliderValue.toDouble() / 100.0)
+        VsgStudy.clampOverlap(sliderValue.toDouble() / HUNDREDTHS)
+
+    private companion object {
+        const val HUNDREDTHS = 100.0
+    }
 }

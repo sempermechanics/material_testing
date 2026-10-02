@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber", "NestedBlockDepth", "TooGenericExceptionCaught", "ReturnCount")
+@file:Suppress("NestedBlockDepth", "TooGenericExceptionCaught", "ReturnCount")
 
 @file:SuppressLint("InlinedApi")
 
@@ -72,6 +72,15 @@ object VideoFrameExtractor {
 
     private val PREVIEW_MAX_EDGE = BitmapDecode.PREVIEW_MAX_EDGE
 
+    /** The frame rate assumed when the clip does not report its frame count. */
+    private const val ASSUMED_FPS = 30.0
+    private const val MS_PER_SECOND = 1000.0
+    private const val US_PER_MS = 1000L
+
+    /** Rotations that swap the clip's width and height. */
+    private const val QUARTER_TURN = 90
+    private const val THREE_QUARTER_TURN = 270
+
     fun formatClock(ms: Long): String = VideoKeyframeHelper.formatClock(ms)
 
     fun readMeta(context: Context, uri: Uri): VideoMeta {
@@ -80,7 +89,7 @@ object VideoFrameExtractor {
         AviVideoDecoder.create(context, uri)?.use { avi ->
             return if (avi.canDecode) avi.meta else avi.meta.copy(unsupportedCodec = avi.fourcc)
         }
-        var meta = VideoMeta(0L, 30.0, false, 0, 0, 0)
+        var meta = VideoMeta(0L, ASSUMED_FPS, false, 0, 0, 0)
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, uri)
@@ -89,16 +98,16 @@ object VideoFrameExtractor {
             var w = m(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
             var h = m(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
             val rot = m(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
-            if (rot == 90 || rot == 270) {
+            if (rot == QUARTER_TURN || rot == THREE_QUARTER_TURN) {
                 val t = w
                 w = h
                 h = t
             }
             val frameCountMeta = m(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()
-            var fps = 30.0
+            var fps = ASSUMED_FPS
             var fpsKnown = false
             if (frameCountMeta != null && frameCountMeta > 0 && durationMs > 0) {
-                fps = frameCountMeta / (durationMs / 1000.0)
+                fps = frameCountMeta / (durationMs / MS_PER_SECOND)
                 fpsKnown = true
             }
             meta = VideoMeta(durationMs, fps, fpsKnown, w, h, rot)
@@ -171,8 +180,8 @@ object VideoFrameExtractor {
                 val keyframesUs = VideoKeyframeHelper.findKeyframeTimestampsUs(
                     extractor = dec.extractor,
                     trackIndex = dec.trackIndex,
-                    startUs = request.startMs * 1000L,
-                    endUs = request.endMs * 1000L,
+                    startUs = request.startMs * US_PER_MS,
+                    endUs = request.endMs * US_PER_MS,
                 )
                 val plan = VideoKeyframeHelper.resolveExtractionPlan(
                     keyframeTimestampsUs = keyframesUs,
