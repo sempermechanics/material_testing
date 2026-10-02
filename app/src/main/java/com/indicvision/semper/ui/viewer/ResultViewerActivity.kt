@@ -278,6 +278,7 @@ class ResultViewerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityResultViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.viewColorScale.background = ColorScaleBar.drawable(resources)
 
         binding.imgHeatmapOverlay.setOnTouchListener { _, event -> binding.imgBaseResult.dispatchTouchEvent(event) }
 
