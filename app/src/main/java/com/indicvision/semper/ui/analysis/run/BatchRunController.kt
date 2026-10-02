@@ -14,7 +14,7 @@ import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
-import com.indicvision.semper.ui.common.Dialogs
+import com.indicvision.semper.ui.common.dialog.Dialogs
 import kotlinx.coroutines.launch
 
 /**

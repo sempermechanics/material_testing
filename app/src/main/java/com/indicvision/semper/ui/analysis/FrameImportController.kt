@@ -10,7 +10,7 @@ import com.indicvision.semper.ui.analysis.frames.AnalysisDeformedBatchHelper
 import com.indicvision.semper.ui.analysis.frames.AnalysisVideoExtractHelper
 import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
-import com.indicvision.semper.ui.common.Feedback
+import com.indicvision.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.Job
 import java.io.File
 

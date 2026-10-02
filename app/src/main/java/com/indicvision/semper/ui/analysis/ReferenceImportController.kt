@@ -13,8 +13,8 @@ import com.indicvision.semper.field.ImageSize
 import com.indicvision.semper.imaging.BitmapDecode
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.wizard.ReferencePreviewLoader
-import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.SerialJob
+import com.indicvision.semper.ui.common.dialog.FaqRedirect
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers

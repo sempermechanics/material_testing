@@ -10,7 +10,7 @@ import com.indicvision.semper.data.cloud.TransferPhase
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.analysis.run.EngineFailure
-import com.indicvision.semper.ui.common.TransferWorkObserver
+import com.indicvision.semper.ui.common.transfer.TransferWorkObserver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

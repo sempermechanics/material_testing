@@ -24,10 +24,10 @@ import com.indicvision.semper.ui.analysis.sweep.VsgLatticeView
 import com.indicvision.semper.ui.analysis.sweep.VsgPlotView
 import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import com.indicvision.semper.ui.common.CoachMarkController
-import com.indicvision.semper.ui.common.CrispToast
-import com.indicvision.semper.ui.common.FaqRedirect
-import com.indicvision.semper.ui.common.Feedback
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.dialog.CrispToast
+import com.indicvision.semper.ui.common.dialog.FaqRedirect
+import com.indicvision.semper.ui.common.dialog.Feedback
 import com.indicvision.semper.ui.common.onButtonChecked
 import com.indicvision.semper.ui.viewer.ViewerArgs
 import kotlinx.coroutines.Dispatchers

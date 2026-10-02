@@ -15,8 +15,8 @@ import com.indicvision.semper.ui.analysis.sweep.toSkippedNode
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
-import com.indicvision.semper.ui.common.FaqRedirect
-import com.indicvision.semper.ui.common.Feedback
+import com.indicvision.semper.ui.common.dialog.FaqRedirect
+import com.indicvision.semper.ui.common.dialog.Feedback
 
 /**
  * What the wizard does with each way a run ends, for [BatchRunController]:

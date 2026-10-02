@@ -13,7 +13,7 @@ import com.indicvision.semper.imaging.video.ExtractionRequest
 import com.indicvision.semper.imaging.video.VideoFrameExtractor
 import com.indicvision.semper.imaging.video.VideoKeyframeHelper
 import com.indicvision.semper.imaging.video.VideoMeta
-import com.indicvision.semper.ui.common.FaqRedirect
+import com.indicvision.semper.ui.common.dialog.FaqRedirect
 import com.indicvision.semper.ui.common.onButtonChecked
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers

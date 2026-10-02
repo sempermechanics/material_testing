@@ -6,7 +6,7 @@ import android.widget.TextView
 import androidx.annotation.StringRes
 import androidx.core.view.isVisible
 import com.indicvision.semper.ui.analysis.run.RunChrome
-import com.indicvision.semper.ui.common.FaqRedirect
+import com.indicvision.semper.ui.common.dialog.FaqRedirect
 
 /**
  * The settings page's run-status line: what the last run ended with, and the

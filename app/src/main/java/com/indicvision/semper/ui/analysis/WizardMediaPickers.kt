@@ -3,8 +3,8 @@ package com.indicvision.semper.ui.analysis
 import android.net.Uri
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import com.indicvision.semper.ui.common.MediaPickerSheet
-import com.indicvision.semper.ui.common.MediaSourceChooser
+import com.indicvision.semper.ui.common.media.MediaPickerSheet
+import com.indicvision.semper.ui.common.media.MediaSourceChooser
 
 /**
  * Page 1's pickers: the Photos sheet, with Files (SAF) still reaching

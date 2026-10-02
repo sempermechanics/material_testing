@@ -14,8 +14,8 @@ import com.indicvision.semper.R
 import com.indicvision.semper.field.ImageSize
 import com.indicvision.semper.field.Roi
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
-import com.indicvision.semper.ui.common.WarnChip
-import com.indicvision.semper.ui.common.bindInfo
+import com.indicvision.semper.ui.common.dialog.WarnChip
+import com.indicvision.semper.ui.common.dialog.bindInfo
 import com.indicvision.semper.ui.common.onButtonChecked
 
 /**

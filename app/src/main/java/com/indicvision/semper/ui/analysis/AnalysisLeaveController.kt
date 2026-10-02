@@ -6,7 +6,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.wizard.WizardStep
-import com.indicvision.semper.ui.common.Dialogs
+import com.indicvision.semper.ui.common.dialog.Dialogs
 
 /**
  * Back on the wizard: asks before it stops a busy import or run, steps back a

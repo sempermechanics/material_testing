@@ -13,7 +13,7 @@ import com.indicvision.semper.field.Roi
 import com.indicvision.semper.field.getRoiExtras
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
-import com.indicvision.semper.ui.common.Feedback
+import com.indicvision.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

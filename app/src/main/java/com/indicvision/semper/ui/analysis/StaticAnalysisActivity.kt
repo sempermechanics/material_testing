@@ -42,10 +42,10 @@ import com.indicvision.semper.ui.analysis.wizard.DraftRestore
 import com.indicvision.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.indicvision.semper.ui.analysis.wizard.WizardStep
 import com.indicvision.semper.ui.common.CoachMarkController
-import com.indicvision.semper.ui.common.FaqRedirect
 import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.Motion
-import com.indicvision.semper.ui.common.WarnChip
+import com.indicvision.semper.ui.common.dialog.FaqRedirect
+import com.indicvision.semper.ui.common.dialog.WarnChip
 import com.indicvision.semper.ui.common.onButtonChecked
 import com.indicvision.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.launch

@@ -14,7 +14,7 @@ import com.indicvision.semper.ui.analysis.recommend.DicGoodPractice
 import com.indicvision.semper.ui.analysis.recommend.SubsetRecommender
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.analysis.wizard.snapToSlider
-import com.indicvision.semper.ui.common.WarnChip
+import com.indicvision.semper.ui.common.dialog.WarnChip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

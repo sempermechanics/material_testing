@@ -12,7 +12,7 @@ import com.indicvision.semper.ui.analysis.frames.FrameOrderDirection
 import com.indicvision.semper.ui.analysis.frames.FrameOrderHelper
 import com.indicvision.semper.ui.analysis.frames.FrameOrderMode
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
-import com.indicvision.semper.ui.common.Feedback
+import com.indicvision.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
