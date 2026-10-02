@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.run
 
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
@@ -6,9 +6,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.indicvision.semper.R
 import com.indicvision.semper.data.session.SkippedNode
 import com.indicvision.semper.field.RunStop
-import com.indicvision.semper.ui.analysis.run.BatchRunController
-import com.indicvision.semper.ui.analysis.run.EngineFailure
-import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.sweep.SweepSetupHelper
 import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.sweep.toSkippedNode

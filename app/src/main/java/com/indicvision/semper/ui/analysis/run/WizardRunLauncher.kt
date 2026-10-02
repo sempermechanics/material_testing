@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.run
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -6,8 +6,6 @@ import com.indicvision.semper.R
 import com.indicvision.semper.diagnostics.EngineDebug
 import com.indicvision.semper.field.DicParams
 import com.indicvision.semper.field.Roi
-import com.indicvision.semper.ui.analysis.run.RunChrome
-import com.indicvision.semper.ui.analysis.run.RunSpec
 import com.indicvision.semper.ui.analysis.sweep.SweepSetupHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel

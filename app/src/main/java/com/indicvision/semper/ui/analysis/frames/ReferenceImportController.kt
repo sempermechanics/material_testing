@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.frames
 
 import android.annotation.SuppressLint
 import android.content.ContentResolver

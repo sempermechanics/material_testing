@@ -1,11 +1,8 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.sweep
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.data.session.SkippedNode
-import com.indicvision.semper.ui.analysis.sweep.VsgLatticeView
-import com.indicvision.semper.ui.analysis.sweep.VsgPlotView
-import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import com.indicvision.semper.ui.viewer.ViewerSweepArgs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

@@ -1,6 +1,6 @@
 @file:SuppressLint("ClickableViewAccessibility")
 
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.sweep
 
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
@@ -13,8 +13,6 @@ import androidx.core.animation.doOnEnd
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toDrawable
 import com.indicvision.semper.R
-import com.indicvision.semper.ui.analysis.sweep.VsgLatticeView
-import com.indicvision.semper.ui.analysis.sweep.VsgPlotView
 import kotlin.math.roundToInt
 
 // Copy-confirmation "pop + highlight" animation (readout and param chip).

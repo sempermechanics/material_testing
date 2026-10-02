@@ -1,11 +1,10 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.run
 
 import android.app.Activity
 import android.view.View
 import android.widget.TextView
 import androidx.annotation.StringRes
 import androidx.core.view.isVisible
-import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.common.dialog.FaqRedirect
 
 /**

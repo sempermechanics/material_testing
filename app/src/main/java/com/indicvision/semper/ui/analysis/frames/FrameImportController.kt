@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.frames
 
 import android.content.res.Resources
 import android.net.Uri
@@ -6,8 +6,6 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.indicvision.semper.R
 import com.indicvision.semper.imaging.video.ExtractionRequest
-import com.indicvision.semper.ui.analysis.frames.AnalysisDeformedBatchHelper
-import com.indicvision.semper.ui.analysis.frames.AnalysisVideoExtractHelper
 import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.common.dialog.Feedback

@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.frames
 
 import android.app.Application
 import android.net.Uri
@@ -8,6 +8,7 @@ import com.indicvision.semper.R
 import com.indicvision.semper.imaging.video.ExtractionRequest
 import com.indicvision.semper.imaging.video.VideoFrameExtractor
 import com.indicvision.semper.imaging.video.VideoMeta
+import com.indicvision.semper.ui.analysis.WizardTestBed
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

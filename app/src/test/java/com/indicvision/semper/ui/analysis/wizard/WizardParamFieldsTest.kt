@@ -1,11 +1,12 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.wizard
 
 import android.app.Application
 import com.indicvision.semper.R
 import com.indicvision.semper.field.DicParams
+import com.indicvision.semper.ui.analysis.WizardTestBed
+import com.indicvision.semper.ui.analysis.recommend.SubsetRecommendationController
 import com.indicvision.semper.ui.analysis.recommend.SubsetRecommender
 import com.indicvision.semper.ui.analysis.sweep.VsgStudy
-import com.indicvision.semper.ui.analysis.wizard.snapToSlider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

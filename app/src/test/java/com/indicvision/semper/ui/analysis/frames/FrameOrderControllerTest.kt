@@ -1,9 +1,7 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.frames
 
 import android.app.Application
-import com.indicvision.semper.ui.analysis.frames.DeformedFrame
-import com.indicvision.semper.ui.analysis.frames.FrameOrderDirection
-import com.indicvision.semper.ui.analysis.frames.FrameOrderMode
+import com.indicvision.semper.ui.analysis.WizardTestBed
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before

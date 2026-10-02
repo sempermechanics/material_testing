@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.frames
 
 import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity

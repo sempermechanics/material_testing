@@ -1,10 +1,10 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.wizard
 
 import android.app.Application
 import androidx.appcompat.app.AlertDialog
 import com.indicvision.semper.R
 import com.indicvision.semper.field.ImageSize
-import com.indicvision.semper.ui.analysis.wizard.WizardStep
+import com.indicvision.semper.ui.analysis.WizardTestBed
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

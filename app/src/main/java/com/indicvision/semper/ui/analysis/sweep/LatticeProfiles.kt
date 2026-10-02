@@ -1,11 +1,9 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.sweep
 
 import androidx.annotation.WorkerThread
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.data.session.SkippedNode
 import com.indicvision.semper.field.DicResult
-import com.indicvision.semper.ui.analysis.sweep.VsgLatticeView
-import com.indicvision.semper.ui.analysis.sweep.VsgStudy
 import com.indicvision.semper.ui.viewer.ViewerArgs
 import com.indicvision.semper.ui.viewer.ViewerSweepArgs
 import timber.log.Timber

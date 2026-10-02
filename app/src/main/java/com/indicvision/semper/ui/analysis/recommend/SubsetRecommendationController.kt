@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.recommend
 
 import android.graphics.Rect
 import androidx.appcompat.app.AppCompatActivity
@@ -10,9 +10,8 @@ import com.indicvision.semper.databinding.ActivityStaticAnalysisBinding
 import com.indicvision.semper.databinding.WizardStepSettingsContentBinding
 import com.indicvision.semper.field.DicParams
 import com.indicvision.semper.field.toRect
-import com.indicvision.semper.ui.analysis.recommend.DicGoodPractice
-import com.indicvision.semper.ui.analysis.recommend.SubsetRecommender
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardHost
 import com.indicvision.semper.ui.analysis.wizard.snapToSlider
 import com.indicvision.semper.ui.common.dialog.WarnChip
 import kotlinx.coroutines.Dispatchers

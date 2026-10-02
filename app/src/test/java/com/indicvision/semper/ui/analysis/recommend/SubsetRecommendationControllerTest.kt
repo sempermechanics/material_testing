@@ -1,9 +1,9 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.recommend
 
 import android.app.Application
 import androidx.core.view.isVisible
 import com.indicvision.semper.field.DicParams
-import com.indicvision.semper.ui.analysis.recommend.SubsetRecommender
+import com.indicvision.semper.ui.analysis.WizardTestBed
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

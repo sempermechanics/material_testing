@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.wizard
 
 import com.indicvision.semper.ui.analysis.sweep.SweepSetupHelper
 

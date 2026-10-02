@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.wizard
 
 import android.graphics.Rect
 import androidx.appcompat.app.AppCompatActivity
@@ -6,10 +6,8 @@ import com.indicvision.semper.R
 import com.indicvision.semper.data.prefs.ParamClipboard
 import com.indicvision.semper.databinding.WizardStepSettingsContentBinding
 import com.indicvision.semper.field.DicParams
+import com.indicvision.semper.ui.analysis.recommend.SubsetRecommendationController
 import com.indicvision.semper.ui.analysis.sweep.VsgStudy
-import com.indicvision.semper.ui.analysis.wizard.AnalysisSettingsSheetHelper
-import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
-import com.indicvision.semper.ui.analysis.wizard.snapToSlider
 
 /**
  * The settings page's parameter sliders: the value fields are editable, so

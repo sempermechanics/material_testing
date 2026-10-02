@@ -1,11 +1,10 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.run
 
 import android.app.Application
 import androidx.core.view.isVisible
 import com.indicvision.semper.R
 import com.indicvision.semper.field.RunStop
-import com.indicvision.semper.ui.analysis.run.EngineFailure
-import com.indicvision.semper.ui.analysis.run.RunChrome
+import com.indicvision.semper.ui.analysis.WizardTestBed
 import com.indicvision.semper.ui.analysis.sweep.SweepSetupHelper
 import com.indicvision.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import org.junit.Assert.assertEquals

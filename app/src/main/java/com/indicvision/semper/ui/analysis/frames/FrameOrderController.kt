@@ -1,16 +1,10 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.frames
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.indicvision.semper.R
 import com.indicvision.semper.databinding.ActivityStaticAnalysisBinding
-import com.indicvision.semper.ui.analysis.frames.AnalysisFrameOrderMenuHelper
-import com.indicvision.semper.ui.analysis.frames.DeformedFrame
-import com.indicvision.semper.ui.analysis.frames.FrameOrderAdapter
-import com.indicvision.semper.ui.analysis.frames.FrameOrderDirection
-import com.indicvision.semper.ui.analysis.frames.FrameOrderHelper
-import com.indicvision.semper.ui.analysis.frames.FrameOrderMode
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import com.indicvision.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.CoroutineDispatcher

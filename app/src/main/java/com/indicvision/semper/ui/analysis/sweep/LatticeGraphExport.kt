@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.sweep
 
 import android.content.Intent
 import android.graphics.Bitmap
@@ -11,7 +11,6 @@ import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import com.indicvision.semper.R
 import com.indicvision.semper.data.session.CacheJanitor
-import com.indicvision.semper.ui.analysis.sweep.VsgPlotView
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream

@@ -1,11 +1,9 @@
-package com.indicvision.semper.ui.analysis
+package com.indicvision.semper.ui.analysis.wizard
 
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.indicvision.semper.R
 import com.indicvision.semper.ui.analysis.run.RunChrome
-import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
-import com.indicvision.semper.ui.analysis.wizard.WizardStep
 import com.indicvision.semper.ui.common.dialog.Dialogs
 
 /**
