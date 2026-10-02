@@ -2,7 +2,9 @@ package com.indicvision.semper.data.net
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.io.IOException
 
 /**
  * The session-file manifest and the pending-upload list are cursor-paged by the
@@ -65,17 +67,35 @@ class PagingTest {
     }
 
     @Test
-    fun `a token seen before ends the walk instead of looping`() {
+    fun `a token seen before fails the walk rather than keep a page twice`() {
+        // A proxy that drops page_token serves page one again, naming the same token.
         var calls = 0
-        val pages = fetchAllPages(
-            fetch = {
-                calls++
-                SessionFilesResponse("s1", files = listOf(file("f$calls")), page = more("same"))
-            },
-            pageOf = { it.page },
-        )
+        val e = assertThrows(IOException::class.java) {
+            fetchAllPages(
+                fetch = {
+                    calls++
+                    SessionFilesResponse("s1", files = listOf(file("a")), page = more("t1"))
+                },
+                pageOf = { it.page },
+            )
+        }
+        assertEquals("page token repeated", e.message)
         assertEquals(2, calls)
-        assertEquals(2, pages.size)
+    }
+
+    @Test
+    fun `a listing past the page ceiling fails`() {
+        var calls = 0
+        assertThrows(IOException::class.java) {
+            fetchAllPages(
+                fetch = {
+                    calls++
+                    SessionFilesResponse("s1", page = more("t$calls"))
+                },
+                pageOf = { it.page },
+            )
+        }
+        assertEquals(MAX_PAGES, calls)
     }
 
     @Test
