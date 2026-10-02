@@ -98,7 +98,50 @@ class SignOutRunTest {
         assertFalse(screenRouted)
         val started = shadowOf(app).nextStartedActivity
         assertEquals(AuthRoute.signInIntent(app).component, started?.component)
+        assertEquals("held until a screen claims it", SignOutRun.State.Unclaimed, SignOutRun.state.value)
+    }
+
+    @Test
+    fun `a sign-out that finishes while its screen is stopped routes when the screen closes`() {
+        val controller = screen()
+        val activity = controller.get()
+        var screenRouted = false
+        SignOutRun.observe(activity) { screenRouted = true }
+        SignOutRun.start(activity.javaClass) { gate.await() }
+
+        controller.pause().stop()
+        gate.complete(Unit)
+        idle()
+        val unread = SignOutRun.State.Done(activity.javaClass)
+        assertEquals("a stopped screen does not read it", unread, SignOutRun.state.value)
+        assertNull(shadowOf(app).nextStartedActivity)
+
+        controller.destroy()
+        idle()
+
+        assertFalse(screenRouted)
+        assertEquals(AuthRoute.signInIntent(app).component, shadowOf(app).nextStartedActivity?.component)
+        assertEquals(SignOutRun.State.Unclaimed, SignOutRun.state.value)
+    }
+
+    @Test
+    fun `an outcome the app routed is claimed once, by the next screen that starts`() {
+        val first = screen()
+        SignOutRun.observe(first.get()) {}
+        SignOutRun.start(first.get().javaClass) { gate.await() }
+        first.pause().stop().destroy()
+        gate.complete(Unit)
+        idle()
+        assertEquals(SignOutRun.State.Unclaimed, SignOutRun.state.value)
+
+        // The background start may have been refused; the next observing screen routes.
+        var routed = 0
+        SignOutRun.observe(screen().get()) { routed++ }
+        idle()
+
+        assertEquals(1, routed)
         assertEquals(SignOutRun.State.Idle, SignOutRun.state.value)
+        assertFalse("claimed once", SignOutRun.claimUnclaimed())
     }
 
     @Test

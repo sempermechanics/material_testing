@@ -26,6 +26,7 @@ import com.indicvision.semper.databinding.ActivityHomeBinding
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.analysis.StaticAnalysisActivity
 import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
+import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.ConflatedRefresh
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.DeleteFeedback
@@ -35,6 +36,7 @@ import com.indicvision.semper.ui.common.Insets
 import com.indicvision.semper.ui.common.MediaPickerSheet
 import com.indicvision.semper.ui.common.MediaSourceChooser
 import com.indicvision.semper.ui.common.SerialJob
+import com.indicvision.semper.ui.common.SignOutRun
 import com.indicvision.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -262,6 +264,13 @@ class HomeActivity : AppCompatActivity() {
 
         HomeTransferWatch(this, adapter, quotaCard, ::showsCloudState) { refresh() }.observe()
         deleteFeedback.observe()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // A sign-out finished with no screen left to route, and Android
+        // refused the background start to sign-in: route from here.
+        if (SignOutRun.claimUnclaimed()) AuthRoute.toSignIn(this)
     }
 
     override fun onResume() {

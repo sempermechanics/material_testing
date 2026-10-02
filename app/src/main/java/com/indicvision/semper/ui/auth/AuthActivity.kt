@@ -23,6 +23,7 @@ import com.indicvision.semper.databinding.ActivityAuthBinding
 import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.common.CrispToast
 import com.indicvision.semper.ui.common.Insets
+import com.indicvision.semper.ui.common.SignOutRun
 import com.indicvision.semper.ui.common.setBusy
 import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.CancellationException
@@ -53,6 +54,8 @@ class AuthActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A sign-out that routed here from the application has arrived.
+        SignOutRun.claimUnclaimed()
         binding = ActivityAuthBinding.inflate(layoutInflater)
         setContentView(binding.root)
         window.decorView.post { reportFullyDrawn() }

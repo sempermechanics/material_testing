@@ -29,10 +29,15 @@ import timber.log.Timber
  * and whichever of those screens is started routes once it is done
  * ([observe]).
  *
- * If the screen that asked is closed before the sign-out ends (backed out of
- * while the seat release was still waiting on the network), no screen is
- * left to route, and the app would sit on Home with no session. Then the run
- * routes to sign-in itself, from the application context.
+ * If the screen that asked is closed before its outcome is read (backed out
+ * of while the seat release was still waiting on the network, or stopped
+ * when it finished and then closed), no screen of its class is left to
+ * route, and the app would sit on Home with no session. Then the run routes
+ * to sign-in itself, from the application context, and the outcome becomes
+ * [State.Unclaimed]: Android may refuse that start while the app is in the
+ * background, so it stays until a screen claims it ([claimUnclaimed]) — the
+ * sign-in screen when the start went through, else the next observing
+ * screen or Home, which route then.
  */
 object SignOutRun {
 
@@ -43,6 +48,9 @@ object SignOutRun {
 
         /** Finished; [owner] is the screen class that routes on to sign-in. */
         data class Done(val owner: Class<*>) : State
+
+        /** Finished after every screen of its owner closed; routed from the application, maybe refused. */
+        data object Unclaimed : State
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -85,11 +93,22 @@ object SignOutRun {
      */
     private fun finish(owner: Class<*>) {
         mutableState.value = State.Done(owner)
+        if (owner !in liveScreens) routeFromApp()
+    }
+
+    /** No screen is left to read the outcome: route from the application and leave it [State.Unclaimed]. */
+    private fun routeFromApp() {
         val app = app ?: return
-        if (owner in liveScreens) return
-        mutableState.value = State.Idle
+        mutableState.value = State.Unclaimed
         app.startActivity(AuthRoute.signInIntent(app))
     }
+
+    /**
+     * Takes an outcome no screen read ([State.Unclaimed]); true when there
+     * was one. The sign-in screen calls this when it opens, which means the
+     * route went through; any other screen that takes it routes itself.
+     */
+    fun claimUnclaimed(): Boolean = mutableState.compareAndSet(State.Unclaimed, State.Idle)
 
     /** True once per sign-out finished for [owner]; the next reader sees [State.Idle]. */
     fun consume(owner: Class<*>): Boolean {
@@ -111,6 +130,12 @@ object SignOutRun {
                 override fun onDestroy(owner: LifecycleOwner) {
                     val left = (liveScreens[screen] ?: 1) - 1
                     if (left > 0) liveScreens[screen] = left else liveScreens.remove(screen)
+                    // Finished while this screen was stopped, and now it is
+                    // closing for good: no one of its class will read it.
+                    val orphaned = left <= 0 &&
+                        !activity.isChangingConfigurations &&
+                        mutableState.value == State.Done(screen)
+                    if (orphaned) routeFromApp()
                 }
             },
         )
@@ -121,6 +146,7 @@ object SignOutRun {
                         State.Idle -> Unit
                         State.Running -> onRunning()
                         is State.Done -> if (consume(activity.javaClass)) onDone()
+                        State.Unclaimed -> if (claimUnclaimed()) onDone()
                     }
                 }
             }
