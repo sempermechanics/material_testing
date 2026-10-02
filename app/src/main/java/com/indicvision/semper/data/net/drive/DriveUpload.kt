@@ -1,4 +1,4 @@
-package com.indicvision.semper.data.net
+package com.indicvision.semper.data.net.drive
 
 /**
  * A finished Drive resumable upload: the [driveFileId] Drive assigned and the

@@ -2,8 +2,8 @@ package com.indicvision.semper.data
 
 import android.app.ActivityManager
 import android.content.Context
-import com.indicvision.semper.data.net.MAX_CHUNK_BYTES
-import com.indicvision.semper.data.net.MIN_CHUNK_BYTES
+import com.indicvision.semper.data.net.drive.MAX_CHUNK_BYTES
+import com.indicvision.semper.data.net.drive.MIN_CHUNK_BYTES
 
 /**
  * Fraction of *currently available* memory the whole upload pipeline (all
