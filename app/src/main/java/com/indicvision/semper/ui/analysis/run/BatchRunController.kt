@@ -126,13 +126,15 @@ class BatchRunController(
 
         val outcome = result.getOrThrow()
         when {
-            outcome.stop == RunStop.Cancelled -> Unit
-            outcome.stop == RunStop.SessionLimit -> AnalysisNavHelper.openSessionLimit(activity)
+            // Ahead of the cancel: a cancelled re-run saves its frames, and must
+            // say so when that save could not reach the index.
             outcome.indexUnavailable -> {
                 host.clearEngineFailFaq()
                 tvResult.setText(R.string.analysis_not_saved_title)
                 Dialogs.info(activity, R.string.analysis_not_saved_title, R.string.analysis_index_unavailable_body)
             }
+            outcome.stop == RunStop.Cancelled -> Unit
+            outcome.stop == RunStop.SessionLimit -> AnalysisNavHelper.openSessionLimit(activity)
             // Stopped early (low convergence included) with frames kept. Only a
             // run that saved them may say so: a first frame that kept no points
             // saves nothing, however many frames solved after it.

@@ -1,16 +1,3 @@
-// Full-field batch compute: one JNI loop over deformed frames, writing `.dat`
-// results. Size, branching, and per-frame catch are inherent; suppress rather
-// than baseline so new findings elsewhere still fail CI.
-
-@file:Suppress(
-    "CyclomaticComplexMethod",
-    "LongMethod",
-    "LoopWithTooManyJumpStatements",
-    "MagicNumber",
-    "TooGenericExceptionCaught",
-    "NestedBlockDepth",
-)
-
 package com.indicvision.semper.ui.analysis.run
 
 import android.content.Context
@@ -49,6 +36,16 @@ import java.util.Locale
  * JNI [SemperNativeLib.computeFullFieldDirect] stays in this loop — do not
  * fragment it. Buffer allocate / overrun / `.dat` write are [DicFieldIo].
  */
+// One JNI loop over the deformed frames, writing `.dat` results: its size,
+// branching, jumps and per-frame catch are inherent, and it stays whole.
+@Suppress(
+    "CyclomaticComplexMethod",
+    "LongMethod",
+    "LoopWithTooManyJumpStatements",
+    "MagicNumber",
+    "TooGenericExceptionCaught",
+    "NestedBlockDepth",
+)
 @WorkerThread
 internal fun AnalysisViewModel.runBatchAnalysisBody(
     appContext: Context,
@@ -366,13 +363,10 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
         )
         val record = sessions.buildSessionRecord(appContext, input, outcome, cloudEnabled)
-        when (saveRunRecord(appContext, record, cloudEnabled)) {
-            SessionStore.UpsertResult.SAVED -> recordSaved = true
-            // Race: the limit filled between the pre-check and persist.
-            SessionStore.UpsertResult.QUOTA_FULL -> stop = RunStop.SessionLimit
-            // Not the quota: the index could not be read, or not written.
-            SessionStore.UpsertResult.INDEX_UNAVAILABLE -> indexUnavailable = true
-        }
+        val saved = afterSave(stop, saveRunRecord(appContext, record, cloudEnabled))
+        stop = saved.stop
+        recordSaved = saved.recordSaved
+        indexUnavailable = saved.indexUnavailable
     } else if (previous != null) {
         val framesOnDisk = batchDir.listFiles { f -> f.extension == "dat" }?.size ?: 0
         val after = afterUnsavedRerun(
@@ -411,7 +405,26 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     return outcome
 }
 
-/** The analytics event a batch run ends with: completed, or why it failed. None for a cancel. */
+/** How a batch run ends once its record's save came back as [result]. */
+internal data class AfterSave(val stop: RunStop, val recordSaved: Boolean, val indexUnavailable: Boolean)
+
+/**
+ * What the save [result] of a run that stopped with [stop] makes of it. A full
+ * quota (the limit filled between the pre-check and the save) stops the run
+ * as [RunStop.SessionLimit], whatever stopped it; an index that could not be
+ * read or written is not the quota, and leaves [stop] as it was.
+ */
+internal fun afterSave(stop: RunStop, result: SessionStore.UpsertResult): AfterSave = when (result) {
+    SessionStore.UpsertResult.SAVED -> AfterSave(stop, recordSaved = true, indexUnavailable = false)
+    SessionStore.UpsertResult.QUOTA_FULL ->
+        AfterSave(RunStop.SessionLimit, recordSaved = false, indexUnavailable = false)
+    SessionStore.UpsertResult.INDEX_UNAVAILABLE -> AfterSave(stop, recordSaved = false, indexUnavailable = true)
+}
+
+/**
+ * The analytics event a batch run ends with: completed, or why it failed.
+ * None for a cancel, unless the cancelled run's record could not be saved.
+ */
 internal fun batchEndEvent(appContext: Context, outcome: BatchAnalysisOutcome, stop: RunStop) {
     val indexUnavailable = outcome.indexUnavailable
     val completed = outcome.firstFrameValidPoints > 0 &&
@@ -429,7 +442,7 @@ internal fun batchEndEvent(appContext: Context, outcome: BatchAnalysisOutcome, s
                 duration,
             ),
         )
-    } else if (stop != RunStop.Cancelled) {
+    } else if (stop != RunStop.Cancelled || indexUnavailable) {
         SemperAnalytics.event(
             appContext,
             SemperAnalytics.ANALYSIS_FAILED,
