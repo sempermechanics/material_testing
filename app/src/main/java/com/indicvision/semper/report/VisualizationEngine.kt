@@ -81,14 +81,6 @@ object VisualizationEngine {
     fun rampColors(): IntArray = JET_LUT.copyOf(LAST_COLOR + 1)
 
     /**
-     * The k-th smallest value of `values[fromIndex, toIndex)`, in [Float.compareTo]
-     * order: what `values.sort(fromIndex, toIndex); values[k]` would give, found
-     * in expected O(n). Partially reorders that range. See [HeatmapColorScale.quickSelect].
-     */
-    internal fun quickSelect(values: FloatArray, k: Int, fromIndex: Int, toIndex: Int): Float =
-        HeatmapColorScale.quickSelect(values, k, fromIndex, toIndex)
-
-    /**
      * The displayed value range of several fields at once, in one pass over the
      * points — the same percentile-clamped bounds [generateHeatmap] would pick
      * for each. Null for a field with no correlated points.
