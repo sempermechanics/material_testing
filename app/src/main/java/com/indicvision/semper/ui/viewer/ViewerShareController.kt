@@ -13,6 +13,8 @@ import com.indicvision.semper.ui.viewer.summary.SummaryAnimation
  * What the viewer hands its exports: the snapshot [ShareCenter] builds every
  * export from, and the save-as document picker for the slow ones. Made while
  * the Activity is constructed, since it registers the picker's result.
+ *
+ * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
  */
 internal class ViewerShareController(private val host: ResultViewerActivity) {
 

@@ -49,9 +49,9 @@ internal class BundleExport(
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val f = File(outDir, "${s.baseName}_everything_$ts.zip")
         ZipOutputStream(f.outputStream().buffered()).use { zip ->
-            addRawPhotos(zip, s, ts)
+            addRawPhotos(zip, ts)
             for (gif in animations) Zips.putFile(zip, "photos_$ts/animations/${gif.name}", gif)
-            addResultImages(zip, s, ts) { done, total ->
+            addResultImages(zip, ts) { done, total ->
                 report(70 + (if (total > 0) done * 30 / total else 0), "Adding result images…")
             }
             // Home of the archive: the data table and the full report.
@@ -63,7 +63,7 @@ internal class BundleExport(
     }
 
     /** `photos_{ts}/raw photos/` — the reference and (best-effort) deformed originals. */
-    private fun addRawPhotos(zip: ZipOutputStream, s: ShareCenter.Snapshot, ts: String) {
+    private fun addRawPhotos(zip: ZipOutputStream, ts: String) {
         val dir = "photos_$ts/raw photos"
 
         val refFile = s.refImagePath?.let { File(it) }?.takeIf { it.exists() }
@@ -93,7 +93,6 @@ internal class BundleExport(
     /** `photos_{ts}/results/<NNN_frame>/` — every field's annotated heatmap per frame. */
     private fun addResultImages(
         zip: ZipOutputStream,
-        s: ShareCenter.Snapshot,
         ts: String,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ) {
@@ -110,7 +109,7 @@ internal class BundleExport(
             try {
                 addFrameResultImages(zip, data, index, folder, baseCache)
             } finally {
-                images.recycleBaseCache(baseCache, s)
+                images.recycleBaseCache(baseCache)
             }
         }
     }

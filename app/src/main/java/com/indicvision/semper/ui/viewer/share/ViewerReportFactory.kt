@@ -38,7 +38,8 @@ object ViewerReportFactory {
         val isSweep: Boolean get() = args.sweep != null
 
         /** Every frame's solver parameters. */
-        val frameParams: FrameParams get() = args.frameParams
+        /** Read from [args] once per source: every page and CSV row of an export asks for it. */
+        val frameParams: FrameParams = args.frameParams
 
         val roi: Roi get() = args.roi
 

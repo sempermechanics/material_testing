@@ -7,6 +7,8 @@ import android.view.ViewTreeObserver
  * The viewer's edge chrome: the top bar, the scrubber, the field button and the
  * colour scale. Any interaction brings them back and schedules their auto-hide;
  * the image is fitted to the space between the bars.
+ *
+ * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
  */
 internal class ViewerChromeController(private val host: ResultViewerActivity) {
 

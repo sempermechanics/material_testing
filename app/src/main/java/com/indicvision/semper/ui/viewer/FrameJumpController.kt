@@ -13,6 +13,8 @@ import kotlinx.coroutines.delay
  * Moving between the viewer's frames: Prev / Next (debounced, so a burst
  * decodes only the frame it settles on), the summary slot before frame 1, and
  * the typed frame number.
+ *
+ * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
  */
 internal class FrameJumpController(private val host: ResultViewerActivity) {
 

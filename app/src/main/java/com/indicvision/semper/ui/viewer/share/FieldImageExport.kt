@@ -65,7 +65,7 @@ internal class FieldImageExport(
         var out: Bitmap? = null
         var done = false
         try {
-            base = loadCappedBase(s, renderW, renderH, baseCache)
+            base = loadCappedBase(renderW, renderH, baseCache)
             out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(out)
             canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
@@ -105,7 +105,6 @@ internal class FieldImageExport(
      * viewer's display bitmap so export quality doesn't depend on viewer scale.
      */
     private fun loadCappedBase(
-        s: ShareCenter.Snapshot,
         renderW: Int,
         renderH: Int,
         cache: MutableMap<Pair<Int, Int>, Bitmap>? = null,
@@ -135,7 +134,7 @@ internal class FieldImageExport(
         return scaled
     }
 
-    fun recycleBaseCache(cache: MutableMap<Pair<Int, Int>, Bitmap>, s: ShareCenter.Snapshot) {
+    fun recycleBaseCache(cache: MutableMap<Pair<Int, Int>, Bitmap>) {
         cache.values.forEach { bmp ->
             if (bmp !== s.baseImage) bmp.recycle()
         }
@@ -171,7 +170,7 @@ internal class FieldImageExport(
                 )
             }
         } finally {
-            recycleBaseCache(baseCache, s)
+            recycleBaseCache(baseCache)
         }
     }
 }

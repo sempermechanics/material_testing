@@ -22,6 +22,8 @@ import kotlinx.coroutines.withContext
  * on screen off the main thread (or takes it from the scrub cache), keeps it
  * aligned with the image's zoom, labels the scale's ends, and lets the user fix
  * the scale for a field.
+ *
+ * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
  */
 internal class ViewerScaleController(private val host: ResultViewerActivity) {
 
@@ -133,10 +135,12 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
 
         val size = host.imageSize
         val frameStep = host.step
+        // Read on Main: viewModels() is a main-thread lazy.
+        val vm = host.viewerVm
         visualizationJob.launch(host.lifecycleScope, Dispatchers.Default) {
             // Warm the stats/extrema off the main thread, next to the heatmap render,
             // so the scrub settle never pays the O(n)+sort on the UI thread.
-            val metrics = host.viewerVm.fieldMetricsFor(frameAtStart, index, data)
+            val metrics = vm.fieldMetricsFor(frameAtStart, index, data)
             val heatmap = if (displaced) {
                 VisualizationEngine.generateDeformedHeatmap(
                     data,

@@ -1,4 +1,3 @@
-
 package com.indicvision.semper.ui.viewer.inspect
 
 import android.content.Context

@@ -16,6 +16,8 @@ import java.util.concurrent.ConcurrentHashMap
  * The image under the viewer's heatmap: the reference, decoded once at display
  * size, or the frame's own photo when it is on disk. Owns both bitmaps and the
  * rest-fit box the image is framed to.
+ *
+ * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
  */
 internal class ViewerImageLoader(private val host: ResultViewerActivity) {
 

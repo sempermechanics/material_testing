@@ -9,6 +9,8 @@ import com.indicvision.semper.ui.viewer.summary.SummaryCaption
 /**
  * The viewer's edge title and the field's stats: max and min (with where they
  * are) and mean, in the caption and in the info peek sheet.
+ *
+ * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
  */
 internal class ViewerCaptions(private val host: ResultViewerActivity) {
 
@@ -18,13 +20,8 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
     /** Max / min (with coordinates) / mean for the info peek sheet. */
     fun detailStatsText(): String = detailStats.ifBlank { host.getString(R.string.stat_empty) }
 
-    /** Push cached stats into the finding caption. Main thread only. */
+    /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. Main thread only. */
     fun applyFieldMetrics(metrics: FieldMetrics, index: Int) {
-        updateCaptionsFrom(metrics, index)
-    }
-
-    /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. */
-    private fun updateCaptionsFrom(metrics: FieldMetrics, index: Int) {
         val binding = host.binding
         val unit = if (DicResult.isStrainFieldIndex(index)) "mε" else "px"
         val frameBit = if (host.isShowingSummary) {

@@ -6,7 +6,11 @@ import android.widget.PopupWindow
 import com.google.android.material.button.MaterialButton
 import com.indicvision.semper.databinding.PopupFieldOptionsBinding
 
-/** The field button's popup: a glass pill per field, the live one checked; a tap switches field. */
+/**
+ * The field button's popup: a glass pill per field, the live one checked; a tap switches field.
+ *
+ * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ */
 internal class FieldPopup(private val host: ResultViewerActivity) {
 
     /** Glass-pill popup listing every field; the live field is checked. */
