@@ -23,8 +23,6 @@ import com.indicvision.semper.data.session.RunMetrics
 import com.indicvision.semper.data.session.RunOutcome
 import com.indicvision.semper.data.session.RunReference
 import com.indicvision.semper.data.session.SessionPaths
-import com.indicvision.semper.data.session.SessionRecord
-import com.indicvision.semper.data.session.SessionRecordSettings
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.diagnostics.EngineDebug
 import com.indicvision.semper.diagnostics.SemperAnalytics
@@ -45,19 +43,6 @@ import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 import java.io.File
 import java.util.Locale
-import kotlin.coroutines.CoroutineContext
-
-/**
- * One batch run: what it solves ([spec]), the import cache its frames came
- * from ([cacheDir]), when it started, and the [job] whose cancel it checks
- * between frames.
- */
-internal class BatchRun(
-    val spec: RunSpec,
-    val cacheDir: File,
-    val startedAtMs: Long,
-    val job: CoroutineContext,
-)
 
 /**
  * The batch DIC run loop, moved as one unit from [AnalysisViewModel].
@@ -322,15 +307,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // correctly: it just describes fewer frames, consistent with fewer .dat files
     // existing. Best-effort — a write failure here only costs the cache its
     // speedup, never correctness (globalRanges falls back to decoding).
-    if (perFrameSummaryRanges.isNotEmpty()) {
-        runCatching {
-            FieldRangesStore.write(
-                File(batchDir, FieldRangesStore.FILE_NAME),
-                summaryFieldIndices,
-                perFrameSummaryRanges,
-            )
-        }.onFailure { Timber.w(it, "Could not persist summary field ranges") }
-    }
+    writeSummaryRanges(batchDir, summaryFieldIndices, perFrameSummaryRanges)
 
     // Images an earlier run left behind that this one no longer has. This is
     // the wipe that used to run before the loop; done here it can never delete
@@ -430,18 +407,26 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         saved = recordSaved,
         indexUnavailable = indexUnavailable,
     )
-    val completed = firstFrameValidPoints > 0 &&
+    batchEndEvent(appContext, outcome, stop)
+    return outcome
+}
+
+/** The analytics event a batch run ends with: completed, or why it failed. None for a cancel. */
+internal fun batchEndEvent(appContext: Context, outcome: BatchAnalysisOutcome, stop: RunStop) {
+    val indexUnavailable = outcome.indexUnavailable
+    val completed = outcome.firstFrameValidPoints > 0 &&
         !indexUnavailable &&
         stop != RunStop.Cancelled &&
         stop != RunStop.SessionLimit
+    val duration = "duration" to SemperAnalytics.durationBucket(outcome.executionTimeMs.toLong())
     if (completed) {
         SemperAnalytics.event(
             appContext,
             SemperAnalytics.ANALYSIS_COMPLETED,
             mapOf(
                 "mode" to "batch",
-                "frames" to SemperAnalytics.frameCountBucket(solvedFrames),
-                "duration" to SemperAnalytics.durationBucket(executionTimeMs.toLong()),
+                "frames" to SemperAnalytics.frameCountBucket(outcome.totalFrames),
+                duration,
             ),
         )
     } else if (stop != RunStop.Cancelled) {
@@ -456,70 +441,16 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                     stop == RunStop.Finished -> "no_points"
                     else -> "engine"
                 },
-                "duration" to SemperAnalytics.durationBucket(executionTimeMs.toLong()),
+                duration,
             ),
         )
     }
-    return outcome
 }
 
-/**
- * What a re-run that wrote no record of its own left behind.
- *
- * @property settings what the run solved with, which the frames on disk now
- *   reflect
- * @property defNames the frame names on disk, as a saved run records them
- */
-internal data class UnsavedRerun(
-    val framesOnDisk: Int,
-    val stopCode: Int,
-    val plannedFrames: Int,
-    val settings: SessionRecordSettings,
-    val defNames: List<String>,
-)
-
-/**
- * What the Home row of a re-run that saved nothing should become. The run
- * deleted the previous frames before it started, so the row can no longer
- * describe them as on this phone.
- *
- * - Nothing on disk and a cloud copy: unchanged. The row reads "Only in
- *   cloud", and the cloud copy is the run it describes.
- * - Nothing on disk and no cloud copy: null, the row goes. There is no
- *   analysis left anywhere for it to open.
- * - Some frames on disk: it describes those. They are this run's, so the row
- *   takes its settings and frame names, and is an ordinary analysis even if
- *   it was a sweep; it keeps no headline or stats from the run that is gone,
- *   and is not backed up.
- */
-internal fun afterUnsavedRerun(previous: SessionRecord, run: UnsavedRerun): SessionRecord? = when {
-    run.framesOnDisk == 0 && previous.syncState == SessionRecord.SyncState.SYNCED -> previous
-    run.framesOnDisk == 0 -> null
-    else -> previous.copy(
-        updatedAt = System.currentTimeMillis(),
-        frameCount = run.framesOnDisk,
-        subset = run.settings.subset,
-        step = run.settings.step,
-        strainWindow = run.settings.strainWin,
-        use6x6 = run.settings.use6x6,
-        roiX = run.settings.roiX,
-        roiY = run.settings.roiY,
-        roiW = run.settings.roiW,
-        roiH = run.settings.roiH,
-        defNames = run.defNames,
-        stopCode = run.stopCode,
-        plannedFrameCount = run.plannedFrames,
-        headline = "",
-        engineStats = emptyList(),
-        syncState = SessionRecord.SyncState.LOCAL_ONLY,
-        sweepSubsets = emptyList(),
-        sweepSteps = emptyList(),
-        sweepStrainWindows = emptyList(),
-        sweepLabels = emptyList(),
-        sweepSkipSubsets = emptyList(),
-        sweepSkipSteps = emptyList(),
-        sweepSkipStrainWindows = emptyList(),
-        sweepSkipCodes = emptyList(),
-        sweepSkippedNodes = emptyList(),
-    )
+/** Persists [ranges], one entry per written frame, for [indices]; best-effort. */
+private fun writeSummaryRanges(batchDir: File, indices: IntArray, ranges: List<Map<Int, Pair<Float, Float>?>>) {
+    if (ranges.isEmpty()) return
+    runCatching {
+        FieldRangesStore.write(File(batchDir, FieldRangesStore.FILE_NAME), indices, ranges)
+    }.onFailure { Timber.w(it, "Could not persist summary field ranges") }
 }
