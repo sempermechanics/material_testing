@@ -108,6 +108,34 @@ class CloudRestorePipelineTest {
     }
 
     @Test
+    fun `a per-file backup's deformed image named reference_png does not become the reference`() {
+        // Pre-bundle backups list each artifact on its own; the fake names a file by its id.
+        api.files = listOf(
+            metadata(),
+            api.file("Reference.png", "raw", byteArrayOf(1, 2, 3)),
+            api.file("reference.png", "raw", byteArrayOf(4, 5)),
+            api.file("frame_0001.dat", "dat", RestoreFakeApi.onePointDat()),
+        )
+        val dir = SessionStore.dirFor(context, LOCAL_ID)
+        // The downloads run concurrently: finish the deformed image last, the order
+        // in which a name-only check took it for the reference.
+        api.beforeDownload = { fileId, _ ->
+            if (fileId == "reference.png") awaitFile(File(dir, "reference.png"))
+        }
+
+        restore()
+
+        assertEquals(File(dir, "reference.png").absolutePath, SessionStore.get(context, LOCAL_ID)?.refPath)
+        assertEquals(listOf<Byte>(4, 5), File(dir, "${SessionPaths.RAW_DEFORMED_SUBDIR}/reference.png").readBytes().toList())
+    }
+
+    /** Block (briefly) until [file] has been written by a sibling download. */
+    private fun awaitFile(file: File) {
+        val deadline = System.currentTimeMillis() + AWAIT_FILE_MS
+        while (!file.isFile && System.currentTimeMillis() < deadline) Thread.yield()
+    }
+
+    @Test
     fun `an entry that climbs into a sibling session directory is refused`() {
         // "<localId>X" shares the session dir's path as a string prefix, which is
         // all a startsWith(canonicalPath) check compared.
@@ -283,5 +311,6 @@ class CloudRestorePipelineTest {
     private companion object {
         const val CLOUD_ID = "cloud-abc"
         const val LOCAL_ID = "local-1"
+        const val AWAIT_FILE_MS = 5_000L
     }
 }
