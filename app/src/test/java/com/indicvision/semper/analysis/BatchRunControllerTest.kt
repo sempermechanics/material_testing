@@ -12,7 +12,9 @@ import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.ui.analysis.run.BatchRunController
 import com.indicvision.semper.ui.analysis.run.ComputeOverlayHelper
 import com.indicvision.semper.ui.analysis.run.EngineFailure
+import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.run.RunSpec
+import com.indicvision.semper.ui.analysis.sweep.VsgStudyRunner
 import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,9 +42,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(application = Application::class)
 class BatchRunControllerTest {
 
-    /** The real gate's rule for this: Compute follows `!isProcessing` at check time. */
+    /** The real gate's rule for this: Compute follows `!chrome.isBusy` at check time. */
     private class Gate {
-        var processing = true
         var computeEnabled = false
     }
 
@@ -69,21 +70,24 @@ class BatchRunControllerTest {
             status = TextView(activity),
             elapsed = TextView(activity),
         )
-        return BatchRunController(
-            activity = activity,
-            viewModel = viewModel,
-            overlayHelper = overlay,
-            tvResult = resultLine ?: TextView(activity),
-            setProcessing = { gate.processing = it },
-            checkReady = { gate.computeEnabled = !gate.processing },
-            onPartialRun = { onPartial() },
-            openResultViewer = {},
-            engineFailureMessage = { _, _, _ -> "" },
-            showEngineFailureDialog = { message, _, faqUrlRes -> onDialog(Shown(message, faqUrlRes)) },
-            clearEngineFailFaq = {},
-            onSweepProgress = {},
-            onSweepFinished = {},
-        )
+        // The run is in flight when its outcome arrives.
+        val chrome = RunChrome(activity, overlay, cancelButton = View(activity)).apply { beginRun {} }
+        val host = object : BatchRunController.Host {
+            override fun checkReady() {
+                gate.computeEnabled = !chrome.isBusy
+            }
+
+            override fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) = onPartial()
+            override fun openResultViewer() = Unit
+            override fun engineFailureMessage(code: Int, frameIndex: Int, frameName: String?) = ""
+            override fun showEngineFailureDialog(message: String, titleRes: Int, faqUrlRes: Int) =
+                onDialog(Shown(message, faqUrlRes))
+
+            override fun clearEngineFailFaq() = Unit
+            override fun onSweepProgress(progress: VsgStudyRunner.Progress) = Unit
+            override fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?) = Unit
+        }
+        return BatchRunController(activity, viewModel, chrome, resultLine ?: TextView(activity), host)
     }
 
     /** A run is saved when its first frame kept points; [route]'s tests override that. */

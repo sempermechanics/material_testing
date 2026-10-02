@@ -1,7 +1,6 @@
 package com.indicvision.semper.ui.analysis.run
 
 import android.annotation.SuppressLint
-import android.view.WindowManager
 import android.widget.TextView
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
@@ -25,22 +24,38 @@ import kotlinx.coroutines.launch
  * knows whether an Activity is still around to be told how they ended.
  */
 @SuppressLint("SetTextI18n") // same result strings as the former Activity handlers
-@Suppress("LongParameterList") // Activity-bound callbacks; grouping would just rename the fan-out
 class BatchRunController(
     private val activity: AppCompatActivity,
     private val viewModel: AnalysisViewModel,
-    private val overlayHelper: ComputeOverlayHelper,
+    private val chrome: RunChrome,
     private val tvResult: TextView,
-    private val setProcessing: (Boolean) -> Unit,
-    private val checkReady: () -> Unit,
-    private val onPartialRun: (AnalysisViewModel.BatchAnalysisOutcome) -> Unit,
-    private val openResultViewer: () -> Unit,
-    private val engineFailureMessage: (code: Int, frameIndex: Int, frameName: String?) -> String,
-    private val showEngineFailureDialog: (message: String, titleRes: Int, faqUrlRes: Int) -> Unit,
-    private val clearEngineFailFaq: () -> Unit,
-    private val onSweepProgress: (VsgStudyRunner.Progress) -> Unit,
-    private val onSweepFinished: (AnalysisViewModel.BatchAnalysisOutcome?) -> Unit,
+    private val host: Host,
 ) {
+
+    /** What the wizard does with each way a run can end. */
+    interface Host {
+        /** Re-checks what the wizard's buttons allow; once the run's chrome is down. */
+        fun checkReady()
+
+        /** A run that stopped partway with its frames saved. */
+        fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome)
+
+        fun openResultViewer()
+
+        /** Why a run produced nothing, naming the frame it stopped on. */
+        fun engineFailureMessage(code: Int, frameIndex: Int, frameName: String?): String
+
+        fun showEngineFailureDialog(message: String, titleRes: Int, faqUrlRes: Int)
+
+        fun clearEngineFailFaq()
+
+        fun onSweepProgress(progress: VsgStudyRunner.Progress)
+
+        /** A sweep's end; null when it failed. */
+        fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?)
+    }
+
+    private val overlayHelper get() = chrome.overlay
 
     fun observe() {
         activity.lifecycleScope.launch {
@@ -64,7 +79,7 @@ class BatchRunController(
                 }
                 launch {
                     viewModel.sweepProgress.collect { progress ->
-                        if (progress != null) onSweepProgress(progress)
+                        if (progress != null) host.onSweepProgress(progress)
                     }
                 }
                 launch {
@@ -80,28 +95,24 @@ class BatchRunController(
      * A sweep ends with the same chrome teardown as a batch run but its own
      * routing: the lattice, not the frame viewer, is what a finished sweep
      * opens. A failure is reported as a null outcome, which is the shape
-     * [onSweepFinished] already branched on.
+     * [Host.onSweepFinished] already branched on.
      */
     private fun handleSweepOutcome(result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {
-        setProcessing(false)
-        overlayHelper.hide()
-        activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        checkReady()
-        onSweepFinished(result.getOrNull())
+        chrome.end()
+        host.checkReady()
+        host.onSweepFinished(result.getOrNull())
     }
 
     @VisibleForTesting
     internal fun handleBatchOutcome(result: Result<AnalysisViewModel.BatchAnalysisOutcome>) {
-        setProcessing(false)
-        overlayHelper.hide()
-        activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        chrome.end()
         // Once, before any branch: Compute was disabled for the run, and a branch
         // that forgot to re-check left it disabled — a failed run could not be
         // re-run after changing a setting, since the sliders never re-check.
-        checkReady()
+        host.checkReady()
 
         result.onFailure { e ->
-            clearEngineFailFaq()
+            host.clearEngineFailFaq()
             val detail = e.message ?: e::class.java.simpleName
             tvResult.text = activity.getString(R.string.analysis_unexpected_title)
             Dialogs.info(
@@ -117,7 +128,7 @@ class BatchRunController(
             outcome.stop == RunStop.Cancelled -> Unit
             outcome.stop == RunStop.SessionLimit -> AnalysisNavHelper.openSessionLimit(activity)
             outcome.indexUnavailable -> {
-                clearEngineFailFaq()
+                host.clearEngineFailFaq()
                 tvResult.setText(R.string.analysis_not_saved_title)
                 Dialogs.info(activity, R.string.analysis_not_saved_title, R.string.analysis_index_unavailable_body)
             }
@@ -125,14 +136,14 @@ class BatchRunController(
             // run that saved them may say so: a first frame that kept no points
             // saves nothing, however many frames solved after it.
             outcome.engineErrorCode < 0 && outcome.saved && outcome.totalFrames > 0 -> {
-                clearEngineFailFaq()
-                onPartialRun(outcome)
+                host.clearEngineFailFaq()
+                host.onPartialRun(outcome)
             }
             outcome.engineErrorCode < 0 || outcome.firstFrameValidPoints <= 0 -> {
                 showNamedEngineFailure(outcome)
             }
             else -> {
-                clearEngineFailFaq()
+                host.clearEngineFailFaq()
                 // The runner records the planned count on a saved run; frames that
                 // kept no points are skipped, so kept can be below planned.
                 tvResult.text = RunSummaryText.computed(
@@ -142,7 +153,7 @@ class BatchRunController(
                 )
                 viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
                 viewModel.lastBatchDirPath = outcome.batchDirPath
-                openResultViewer()
+                host.openResultViewer()
             }
         }
     }
@@ -161,7 +172,7 @@ class BatchRunController(
                 viewModel.runResult.value.spec,
             )
         } else {
-            engineFailureMessage(outcome.engineErrorCode, outcome.failedFrameIndex, outcome.failedFrameName)
+            host.engineFailureMessage(outcome.engineErrorCode, outcome.failedFrameIndex, outcome.failedFrameName)
         }
         val faqRes = if (zeroPoints) {
             EngineFailure.zeroPointsFaqUrlRes(outcome.firstFrameCorrelatedPoints)
@@ -169,6 +180,6 @@ class BatchRunController(
             EngineFailure.faqUrlRes(outcome.engineErrorCode)
         }
         tvResult.text = "❌ Error: $errorMsg"
-        showEngineFailureDialog(errorMsg, R.string.analysis_failed_title, faqRes)
+        host.showEngineFailureDialog(errorMsg, R.string.analysis_failed_title, faqRes)
     }
 }

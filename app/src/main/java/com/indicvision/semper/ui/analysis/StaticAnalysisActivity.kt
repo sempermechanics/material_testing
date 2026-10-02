@@ -79,6 +79,7 @@ import com.indicvision.semper.ui.analysis.roi.RoiResolveHelper
 import com.indicvision.semper.ui.analysis.run.BatchRunController
 import com.indicvision.semper.ui.analysis.run.ComputeOverlayHelper
 import com.indicvision.semper.ui.analysis.run.EngineFailure
+import com.indicvision.semper.ui.analysis.run.RunChrome
 import com.indicvision.semper.ui.analysis.run.RunSpec
 import com.indicvision.semper.ui.analysis.sweep.SweepSetupHelper
 import com.indicvision.semper.ui.analysis.sweep.VsgStudy
@@ -92,6 +93,7 @@ import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardChrome
 import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardCoach
 import com.indicvision.semper.ui.analysis.wizard.AnalysisWizardSlots
 import com.indicvision.semper.ui.analysis.wizard.ReferencePreviewLoader
+import com.indicvision.semper.ui.analysis.wizard.WizardStep
 import com.indicvision.semper.ui.common.CoachMarkController
 import com.indicvision.semper.ui.common.Dialogs
 import com.indicvision.semper.ui.common.FaqRedirect
@@ -120,7 +122,9 @@ import java.io.IOException
  * the batch solve via [AnalysisViewModel]. Results open in ResultViewerActivity.
  */
 @MainThread
-class StaticAnalysisActivity : AppCompatActivity() {
+class StaticAnalysisActivity :
+    AppCompatActivity(),
+    AnalysisWizardHost {
 
     private companion object {
         /** Subset shown before a reference image is available to measure. */
@@ -149,8 +153,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private var refPreviewBmp: android.graphics.Bitmap? = null
 
-    // Prominent progress overlay (compute + video extraction)
-    private lateinit var overlayHelper: ComputeOverlayHelper
+    // Prominent progress overlay (compute + video extraction), and whether
+    // the wizard is busy with either.
+    private lateinit var chrome: RunChrome
 
     private lateinit var readyGate: AnalysisReadyGate
     private lateinit var wizardChrome: AnalysisWizardChrome
@@ -159,20 +164,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
     private lateinit var sweepHelper: SweepSetupHelper
     private lateinit var settingsSheetHelper: AnalysisSettingsSheetHelper
 
-    // State
-    private var isProcessing = false
     private var importJob: Job? = null
 
     /** The reference pick still loading; a newer pick cancels it. */
     private val refJob = SerialJob()
-
-    private data class CancelRunConfig(
-        @StringRes val titleRes: Int,
-        @StringRes val bodyRes: Int,
-        val onConfirm: () -> Unit,
-    )
-
-    private var cancelRun: CancelRunConfig? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -189,24 +184,18 @@ class StaticAnalysisActivity : AppCompatActivity() {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (isProcessing) {
-                        if (cancelRun != null) {
-                            showCancelRunDialog()
-                        } else {
-                            Feedback.toast(this@StaticAnalysisActivity, R.string.analysis_running_back_blocked)
-                        }
-                    } else if (viewModel.wizardStep > 1) {
-                        goToStep(viewModel.wizardStep - 1, animate = true)
-                    } else if (viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty()) {
-                        showLeaveAnalysisDialog()
-                    } else {
-                        finish()
+                    val previous = viewModel.step.previous
+                    when {
+                        chrome.isBusy -> chrome.confirmCancel()
+                        previous != null -> goToStep(previous, animate = true)
+                        viewModel.refBytes != null || viewModel.defFilePaths.isNotEmpty() -> showLeaveAnalysisDialog()
+                        else -> finish()
                     }
                 }
             },
         )
 
-        overlayHelper = ComputeOverlayHelper(binding)
+        chrome = RunChrome(this, ComputeOverlayHelper(binding), binding.btnRunCancel)
         clearRunStatus()
         frameSizeChip = WarnChip(settings.frameSizeWarnRow.root, ::confirmOpenFaq)
             .apply { setFaq(getString(R.string.url_faq_frame_size)) }
@@ -229,27 +218,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         wizardChrome = AnalysisWizardChrome(this, binding, settingsPage, sweepPage)
         wizardCoach = AnalysisWizardCoach(this, coach, binding, settings, sweepPage)
 
-        sweepHelper = SweepSetupHelper(
-            activity = this,
-            viewModel = viewModel,
-            callbacks = object : SweepSetupHelper.Callbacks {
-                override fun goToStep(step: Int, animate: Boolean) =
-                    this@StaticAnalysisActivity.goToStep(step, animate)
-                override fun updateWizardChrome() =
-                    wizardChrome.updateBottomNav(viewModel.wizardStep, viewModel.sweepMode)
-                override fun checkReady() = this@StaticAnalysisActivity.checkReady()
-                override fun commitParamFields() =
-                    this@StaticAnalysisActivity.commitParamFields()
-                override fun startVsgSweep() = this@StaticAnalysisActivity.startVsgSweep()
-                override fun currentSubsetSize() = this@StaticAnalysisActivity.currentSubsetSize()
-                override fun maxSubsetForRoi() = this@StaticAnalysisActivity.maxSubsetForRoi()
-                override fun refPreviewBitmap() = refPreviewBmp
-                override fun renderParamField(field: EditText, value: Int) =
-                    field.showUnlessEditing(value.toString())
-                override fun confirmOpenFaq(url: String) =
-                    this@StaticAnalysisActivity.confirmOpenFaq(url)
-            },
-        )
+        sweepHelper = SweepSetupHelper(activity = this, viewModel = viewModel, callbacks = this)
         // After the wizard views exist: the sweep controls call checkReady().
         sweepHelper.setup()
         wizardSlots = AnalysisWizardSlots(
@@ -262,15 +231,16 @@ class StaticAnalysisActivity : AppCompatActivity() {
         )
 
         binding.btnNext.setOnClickListener {
-            when (viewModel.wizardStep) {
-                1 -> goToStep(2, animate = true)
-                2 -> if (viewModel.sweepMode) goToStep(3, animate = true)
+            when (viewModel.step) {
+                WizardStep.IMAGES -> goToStep(WizardStep.SETTINGS, animate = true)
+                WizardStep.SETTINGS -> if (viewModel.sweepMode) goToStep(WizardStep.SWEEP, animate = true)
+                WizardStep.SWEEP -> Unit
             }
         }
         binding.btnBack.setOnClickListener {
-            if (viewModel.wizardStep > 1) goToStep(viewModel.wizardStep - 1, animate = true)
+            viewModel.step.previous?.let { goToStep(it, animate = true) }
         }
-        goToStep(viewModel.wizardStep, animate = false)
+        goToStep(viewModel.step, animate = false)
 
         // Hand-off from Home's media picker: the selection type already
         // decided the branch — image becomes the reference, video enters
@@ -303,23 +273,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
 
         restoreUiFromViewModel()
-        BatchRunController(
-            activity = this,
-            viewModel = viewModel,
-            overlayHelper = overlayHelper,
-            tvResult = settings.tvStaticResult,
-            setProcessing = { isProcessing = it },
-            checkReady = ::checkReady,
-            onPartialRun = ::onPartialRun,
-            openResultViewer = { openResultViewer() },
-            engineFailureMessage = { code, frameIndex, frameName ->
-                engineFailureMessage(code, frameIndex, frameName)
-            },
-            showEngineFailureDialog = ::showEngineFailureDialog,
-            clearEngineFailFaq = { setEngineFailFaq(null) },
-            onSweepProgress = ::showSweepProgress,
-            onSweepFinished = ::onSweepFinished,
-        ).observe()
+        BatchRunController(this, viewModel, chrome, settings.tvStaticResult, host = this).observe()
 
         // Files (SAF) still reaches DNG/RAW and Drive, which MediaStore may not index.
         var mediaPicker: MediaPickerSheet? = null
@@ -479,7 +433,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
         refJob.cancel()
         // VsgStudyRunner observes the same gate — no separate flag.
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if (::overlayHelper.isInitialized) overlayHelper.release()
+        if (::chrome.isInitialized) chrome.overlay.release()
         if (::frameOrderAdapter.isInitialized) frameOrderAdapter.release()
         // Reclaim the retained reference thumbnail deterministically on close. The
         // thumbnail ImageViews won't be drawn again after onDestroy, so this is
@@ -577,10 +531,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     private fun handleDeformedBatch(rawUris: List<Uri>) {
-        if (isProcessing) return
-        isProcessing = true
-        checkReady()
-        val job = AnalysisDeformedBatchHelper(this, viewModel, overlayHelper, settings.tvStaticResult).handle(
+        if (chrome.isBusy) return
+        val job = AnalysisDeformedBatchHelper(this, viewModel, chrome.overlay, settings.tvStaticResult).handle(
             rawUris = rawUris,
             displayName = ::getFileName,
             onApplied = {
@@ -592,10 +544,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
             onFinished = ::finishImportOperation,
         )
         importJob = job
-        wireCancelButton(
-            titleRes = R.string.cancel_import_title,
-            bodyRes = R.string.cancel_import_body,
-        ) { job.cancel() }
+        chrome.beginImport { job.cancel() }
+        checkReady()
     }
 
     private fun setupFrameOrderStrip() {
@@ -808,13 +758,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     /** Extracts the frames [request] samples, with the progress overlay. */
     private fun extractVideoFrames(request: ExtractionRequest) {
-        if (isProcessing) return
-        isProcessing = true
+        if (chrome.isBusy) return
         // The video's first frame becomes the reference; an image pick still
         // decoding must not land on top of it.
         refJob.cancel()
-        checkReady()
-        val job = AnalysisVideoExtractHelper(this, viewModel, overlayHelper, settings.tvStaticResult).extract(
+        val job = AnalysisVideoExtractHelper(this, viewModel, chrome.overlay, settings.tvStaticResult).extract(
             request = request,
             onApplied = { applied ->
                 applied.refPreview?.let { refPreviewBmp = it }
@@ -831,13 +779,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
             onFinished = ::finishImportOperation,
         )
         importJob = job
-        wireCancelButton(
-            titleRes = R.string.cancel_import_title,
-            bodyRes = R.string.cancel_import_body,
-        ) { job.cancel() }
+        chrome.beginImport { job.cancel() }
+        checkReady()
     }
 
-    private fun currentSubsetSize(): Int = settings.etSubsetSize.value.toInt()
+    override fun currentSubsetSize(): Int = settings.etSubsetSize.value.toInt()
     private fun currentStepSize(): Int = settings.etStepSize.value.toInt()
 
     /** The VSG in px handed to the engine: the slider's window is in data points. */
@@ -892,8 +838,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     /** Drop a previous run's ❌ / success line when the user changes inputs. */
-    private fun clearRunStatus() {
-        if (isProcessing) return
+    override fun clearRunStatus() {
+        if (chrome.isBusy) return
         settings.tvStaticResult.text = ""
         setEngineFailFaq(null)
     }
@@ -1083,7 +1029,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     /** Largest odd subset the loaded image and ROI can hold. */
-    private fun maxSubsetForRoi(): Int =
+    override fun maxSubsetForRoi(): Int =
         RoiResolveHelper.maxSubsetForRoi(viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
 
     private fun startBatchAnalysis() {
@@ -1105,15 +1051,11 @@ class StaticAnalysisActivity : AppCompatActivity() {
         lifecycleScope.launch {
             if (!ensureCanStart()) return@launch
 
-            isProcessing = true
+            chrome.beginRun { viewModel.cancelRequested = true }
             checkReady()
-            overlayHelper.processingStartTime = System.currentTimeMillis()
-            overlayHelper.show()
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            wireCancelButton { viewModel.cancelRequested = true }
 
             // Survives Activity destroy; progress/outcome observed via StateFlow / SharedFlow.
-            viewModel.launchBatchAnalysis(applicationContext, spec, cacheDir, overlayHelper.processingStartTime)
+            viewModel.launchBatchAnalysis(applicationContext, spec, cacheDir, chrome.overlay.processingStartTime)
         }
     }
 
@@ -1125,7 +1067,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * session appearing on Home that the user had just been told was a failure,
      * with no route to it from here.
      */
-    private fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
+    override fun onPartialRun(outcome: AnalysisViewModel.BatchAnalysisOutcome) {
         val kept = outcome.totalFrames
         val planned = viewModel.defFilePaths.size
         settings.tvStaticResult.text = getString(R.string.run_stopped_early_fmt, outcome.stoppedAtFrame, planned)
@@ -1151,13 +1093,15 @@ class StaticAnalysisActivity : AppCompatActivity() {
             .show()
     }
 
+    override fun openResultViewer() = openResultViewer(sweep = false)
+
     /**
      * @param sweep true when the frames are parameter combinations rather than
      *   deformed images. The viewer needs each frame's own settings then — the
      *   step size alone changes how a frame renders — and names the frames
      *   after the combination instead of after an image file.
      */
-    private fun openResultViewer(sweep: Boolean = false) {
+    private fun openResultViewer(sweep: Boolean) {
         val plan = viewModel.sweepPlan
         val frameNames = if (sweep) {
             ArrayList(plan.map { sweepHelper.combinationLabel(it) })
@@ -1199,7 +1143,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
     }
 
     /** Flushes any in-progress typing into the sliders (focus loss commits). */
-    private fun commitParamFields() {
+    override fun commitParamFields() {
         settings.tvSubsetValue.clearFocus()
         settings.tvStepValue.clearFocus()
         settings.tvOverlapValue.clearFocus()
@@ -1285,7 +1229,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------
     @Suppress("ReturnCount") // each precondition bails out on the spot
-    private fun startVsgSweep() {
+    override fun startVsgSweep() {
         if (!viewModel.isReadyToCompute()) return
         val plan = sweepHelper.currentPlan()
         if (plan.isEmpty()) return
@@ -1307,12 +1251,10 @@ class StaticAnalysisActivity : AppCompatActivity() {
         lifecycleScope.launch {
             if (!ensureCanStart()) return@launch
 
-            isProcessing = true
+            chrome.beginRun(getString(R.string.mode_sweep), sweepHelper.planSummary(plan)) {
+                viewModel.cancelRequested = true
+            }
             checkReady()
-            overlayHelper.processingStartTime = System.currentTimeMillis()
-            overlayHelper.show(getString(R.string.mode_sweep), sweepHelper.planSummary(plan))
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            wireCancelButton { viewModel.cancelRequested = true }
 
             // Handed to the view model rather than run here: a sweep is one
             // solve per combination, long enough that a rotation mid-run used to
@@ -1322,8 +1264,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         }
     }
 
-    private fun showSweepProgress(progress: VsgStudyRunner.Progress) {
-        overlayHelper.update(
+    override fun onSweepProgress(progress: VsgStudyRunner.Progress) {
+        chrome.overlay.update(
             percent = progress.percent.toFloat(),
             status = getString(
                 R.string.sweep_running_fmt,
@@ -1344,7 +1286,7 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * settings rather than images, so it opens in the normal result viewer.
      */
     @Suppress("ReturnCount") // one branch per way a sweep can end
-    private fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?) {
+    override fun onSweepFinished(outcome: AnalysisViewModel.BatchAnalysisOutcome?) {
         if (outcome == null) {
             Feedback.toast(this, R.string.sweep_failed, long = true)
             return
@@ -1394,51 +1336,24 @@ class StaticAnalysisActivity : AppCompatActivity() {
      * Why a run produced nothing. The engine's codes are the same for single
      * analysis and sweep; messages reuse the sweep-path string resources.
      */
-    private fun engineFailureMessage(
-        engineErrorCode: Int,
-        frameIndex: Int = -1,
-        frameName: String? = null,
-    ): String {
+    override fun engineFailureMessage(code: Int, frameIndex: Int, frameName: String?): String {
         val frameInfo = when {
             frameIndex < 0 -> ""
             frameName != null -> getString(R.string.failure_frame_fmt, frameIndex + 1, frameName)
             else -> getString(R.string.failure_frame_no_name_fmt, frameIndex + 1)
         }
-        return frameInfo + getString(EngineFailure.reasonRes(engineErrorCode), engineErrorCode)
+        return frameInfo + getString(EngineFailure.reasonRes(code), code)
     }
 
-    private fun showEngineFailureDialog(message: String, @StringRes titleRes: Int, @StringRes faqUrlRes: Int) {
+    override fun showEngineFailureDialog(message: String, @StringRes titleRes: Int, @StringRes faqUrlRes: Int) {
         setEngineFailFaq(faqUrlRes)
         FaqRedirect.errorDialog(this, getString(titleRes), message, faqUrlRes)
     }
 
+    override fun clearEngineFailFaq() = setEngineFailFaq(null)
+
     private suspend fun ensureCanStart(): Boolean =
         AnalysisNavHelper.ensureCanStart(this, viewModel)
-
-    private fun wireCancelButton(
-        titleRes: Int = R.string.cancel_run_title,
-        bodyRes: Int = R.string.cancel_run_body,
-        onConfirm: () -> Unit,
-    ) {
-        cancelRun = CancelRunConfig(titleRes, bodyRes, onConfirm)
-        binding.btnRunCancel.apply {
-            isEnabled = true
-            setOnClickListener { showCancelRunDialog() }
-        }
-    }
-
-    private fun showCancelRunDialog() {
-        val config = cancelRun ?: return
-        MaterialAlertDialogBuilder(this)
-            .setTitle(config.titleRes)
-            .setMessage(config.bodyRes)
-            .setPositiveButton(R.string.action_cancel) { _, _ ->
-                config.onConfirm()
-                binding.btnRunCancel.isEnabled = false
-            }
-            .setNegativeButton(R.string.keep_running, null)
-            .show()
-    }
 
     private fun showLeaveAnalysisDialog() {
         Dialogs.confirm(this, R.string.exit_analysis_title, R.string.exit_analysis_message, R.string.exit) { finish() }
@@ -1446,47 +1361,46 @@ class StaticAnalysisActivity : AppCompatActivity() {
 
     private fun finishImportOperation() {
         importJob = null
-        isProcessing = false
-        clearCancelButton()
+        chrome.end()
         checkReady()
     }
 
-    private fun clearCancelButton() {
-        cancelRun = null
-        binding.btnRunCancel.apply {
-            isEnabled = false
-            setOnClickListener(null)
-        }
-    }
-
-    private fun confirmOpenFaq(url: String) {
+    override fun confirmOpenFaq(url: String) {
         FaqRedirect.confirm(this, url)
     }
 
     // ------------------------------------------------------------------
     // Wizard navigation: page 1 (images) → page 2 (settings) → page 3 (sweep)
     // ------------------------------------------------------------------
-    private fun goToStep(step: Int, animate: Boolean) {
-        val previous = viewModel.wizardStep
+    /** The sweep setup's way to the settings page; also how the smoke test moves the wizard. */
+    override fun goToStep(step: Int, animate: Boolean) = goToStep(WizardStep.of(step), animate)
+
+    override fun updateWizardChrome() = wizardChrome.updateBottomNav(viewModel.step, viewModel.sweepMode)
+
+    override fun refPreviewBitmap(): Bitmap? = refPreviewBmp
+
+    override fun renderParamField(field: EditText, value: Int) = field.showUnlessEditing(value.toString())
+
+    private fun goToStep(step: WizardStep, animate: Boolean) {
         val target = wizardChrome.applyStep(
-            previous = previous,
-            requestedStep = step,
+            previous = viewModel.step,
+            requested = step,
             sweepMode = viewModel.sweepMode,
             animate = animate,
         )
-        viewModel.wizardStep = target
+        viewModel.step = target
 
         // Reaching the settings page counts as reviewing the parameters —
         // they are all visible here — which satisfies the Compute gate.
-        if (target >= 2) viewModel.settingsReviewed = true
+        if (target >= WizardStep.SETTINGS) viewModel.settingsReviewed = true
 
-        if (target == 2) {
+        if (target == WizardStep.SETTINGS) {
             wizardSlots.updateRoiSummary()
             // Cheap no-op when the reference/ROI have not changed since the
             // last measurement; covers inputs that arrived before this page.
             requestSubsetRecommendation()
         }
-        if (target == 3) {
+        if (target == WizardStep.SWEEP) {
             sweepHelper.refreshSweepPlan()
         }
 
@@ -1494,8 +1408,8 @@ class StaticAnalysisActivity : AppCompatActivity() {
         wizardCoach.maybeShow(target)
     }
 
-    private fun checkReady() {
-        readyGate.apply(isProcessing, sweepHelper = if (::sweepHelper.isInitialized) sweepHelper else null)
+    override fun checkReady() {
+        readyGate.apply(chrome.isBusy, sweepHelper = if (::sweepHelper.isInitialized) sweepHelper else null)
     }
 
     private fun consumePickerHandOff() {
@@ -1540,9 +1454,9 @@ class StaticAnalysisActivity : AppCompatActivity() {
             wizardSlots.refreshDefSlot()
             when (restore) {
                 // Re-enter the page so it re-measures what it shows.
-                AnalysisViewModel.DraftRestore.RESTORED -> goToStep(viewModel.wizardStep, animate = false)
+                AnalysisViewModel.DraftRestore.RESTORED -> goToStep(viewModel.step, animate = false)
                 AnalysisViewModel.DraftRestore.LOST -> {
-                    goToStep(1, animate = false)
+                    goToStep(WizardStep.IMAGES, animate = false)
                     val lost = getString(R.string.wizard_draft_lost)
                     Snackbar.make(findViewById(android.R.id.content), lost, FaqRedirect.durationFor(lost))
                         .setAnchorView(binding.bottomNav)

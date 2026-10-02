@@ -373,7 +373,16 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         get() = _runResult.value.engineStats
         set(v) = _runResult.update { it.copy(engineStats = v) }
 
-    var wizardStep: Int = 1
+    /** The page the wizard shows. */
+    var step: WizardStep = WizardStep.IMAGES
+
+    /** [step]'s number, as the saved state and the sweep setup read it. */
+    var wizardStep: Int
+        get() = step.number
+        set(value) {
+            step = WizardStep.of(value)
+        }
+
     var settingsReviewed: Boolean = false
 
     /**
@@ -1055,7 +1064,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle = SavedStateHandle()
         refName = NO_REFERENCE_NAME
         hasCustomRoi = false
         roi = NO_ROI
-        wizardStep = 1
+        step = WizardStep.IMAGES
         settingsReviewed = false
         subsetRecommendation = null
         subsetRecommendationKey = null

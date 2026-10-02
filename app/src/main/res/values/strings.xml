@@ -70,7 +70,6 @@
     <string name="roi_invalid_size">Invalid ROI size</string>
 
     <!-- Static analysis -->
-    <string name="analysis_running_back_blocked">Analysis running. Please wait or cancel first.</string>
     <string name="exit_indic_title">Exit Semper?</string>
     <string name="exit_indic_message">Are you sure you want to exit the app?</string>
     <string name="exit_analysis_title">Exit analysis?</string>

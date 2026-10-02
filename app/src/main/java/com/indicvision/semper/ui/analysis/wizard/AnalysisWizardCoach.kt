@@ -1,5 +1,3 @@
-@file:Suppress("MagicNumber")
-
 package com.indicvision.semper.ui.analysis.wizard
 
 import android.view.View
@@ -24,14 +22,13 @@ class AnalysisWizardCoach(
     private val sweepPage: WizardStepSweepBinding,
 ) {
 
-    fun maybeShow(step: Int) {
+    fun maybeShow(step: WizardStep) {
         coach.dismiss(markSeen = true)
         wizard.root.post {
             when (step) {
-                1 -> coach.maybeShow(CoachPrefs.Screen.ANALYSIS_IMAGES, imagesSteps())
-                2 -> coach.maybeShow(CoachPrefs.Screen.ANALYSIS_SETTINGS, settingsSteps())
-                3 -> coach.maybeShow(CoachPrefs.Screen.ANALYSIS_SWEEP, sweepSteps())
-                else -> Unit
+                WizardStep.IMAGES -> coach.maybeShow(CoachPrefs.Screen.ANALYSIS_IMAGES, imagesSteps())
+                WizardStep.SETTINGS -> coach.maybeShow(CoachPrefs.Screen.ANALYSIS_SETTINGS, settingsSteps())
+                WizardStep.SWEEP -> coach.maybeShow(CoachPrefs.Screen.ANALYSIS_SWEEP, sweepSteps())
             }
         }
     }
