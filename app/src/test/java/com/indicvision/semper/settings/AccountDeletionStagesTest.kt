@@ -8,8 +8,10 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
 import com.indicvision.semper.cloud.FakeCloudApi
+import com.indicvision.semper.cloud.FakeTokens
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.net.CloudApi
+import com.indicvision.semper.fixtures.idleUntil
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.settings.AccountDeletionRun
 import com.indicvision.semper.ui.settings.AccountDeletionRun.Outcome
@@ -36,11 +38,13 @@ class AccountDeletionStagesTest {
 
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val api = FakeCloudApi()
+    private var signOuts = 0
 
     @Before
     fun setUp() {
         AccountDeletionRun.resetForTest()
         AccountDeletionRun.cloudApi = { api }
+        AccountDeletionRun.signOut = { signOuts++ }
     }
 
     private val built = mutableListOf<ActivityController<SettingsActivity>>()
@@ -76,6 +80,64 @@ class AccountDeletionStagesTest {
 
         assertEquals(Outcome.PHONE_NOT_CLEARED, outcome)
         assertEquals(listOf("deleteAccount"), api.calls)
+        assertEquals("the sign-out the throw skipped still runs", 1, signOuts)
+    }
+
+    @Test
+    fun `a sign-out that also fails after the erase leaves the outcome as it was`() {
+        api.onDeleteAccount = {}
+        AccountDeletionRun.signOut = {
+            signOuts++
+            throw IOException("seat release failed")
+        }
+
+        val outcome = outcomeOf { cloud ->
+            cloud.deleteAccount("token")
+            throw IOException("could not delete the session index")
+        }
+
+        assertEquals(Outcome.PHONE_NOT_CLEARED, outcome)
+        assertEquals(1, signOuts)
+    }
+
+    @Test
+    fun `nothing is signed out when the cloud was never reached or the deletion finished`() {
+        assertEquals(Outcome.CLOUD_NOT_REACHED, outcomeOf { error("no token") })
+        AccountDeletionRun.consume()
+        assertEquals(Outcome.DELETED, outcomeOf { CloudSync.AccountDeletion.DELETED })
+
+        assertEquals(0, signOuts)
+    }
+
+    /** [inner], counting reads of [enabled] so a test can see the run's wrapper forwards it. */
+    private class CountingApi(private val inner: FakeCloudApi) : CloudApi by inner {
+        var enabledReads = 0
+
+        override val enabled: Boolean
+            get() {
+                enabledReads++
+                return inner.enabled
+            }
+    }
+
+    @Test
+    fun `the real deleteAccount runs through the run's wrapper unchanged`() {
+        val counting = CountingApi(api)
+        AccountDeletionRun.cloudApi = { counting }
+        api.onDeleteAccount = { token -> assertEquals("tok", token) }
+        // The real sequence, on the backend the run hands it; only the token source is faked.
+        AccountDeletionRun.delete = { context, cloud -> CloudSync.deleteAccount(context, cloud, FakeTokens("tok")) }
+
+        assertTrue(AccountDeletionRun.start(app))
+        idleUntil("the deletion to end") { AccountDeletionRun.state.value is AccountDeletionRun.State.Done }
+
+        assertTrue("enabled is read through the wrapper", counting.enabledReads > 0)
+        assertEquals("the erase reaches the backend once", 1, api.calls.count { it == "deleteAccount" })
+        val outcome = (AccountDeletionRun.state.value as AccountDeletionRun.State.Done).outcome
+        assertTrue(
+            "the erase answered, so the run never says nothing was touched: $outcome",
+            outcome != Outcome.CLOUD_NOT_REACHED,
+        )
     }
 
     @Test

@@ -2,9 +2,11 @@ package com.indicvision.semper.ui.settings
 
 import android.content.Context
 import androidx.annotation.VisibleForTesting
+import com.indicvision.semper.data.account.AuthRepository
 import com.indicvision.semper.data.cloud.CloudSync
 import com.indicvision.semper.data.net.CloudApi
 import com.indicvision.semper.data.net.IndicApi
+import com.indicvision.semper.util.suspendRunCatching
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -68,6 +70,10 @@ object AccountDeletionRun {
     @VisibleForTesting
     internal var cloudApi: (Context) -> CloudApi = { IndicApi.get(it) }
 
+    /** Seam for tests: the sign-out a deletion that failed after the erase still owes. */
+    @VisibleForTesting
+    internal var signOut: suspend (Context) -> Unit = { AuthRepository(it).signOut() }
+
     /** Starts the deletion; false (and nothing started) when one is already running or unread. */
     fun start(context: Context): Boolean {
         if (!mutableState.compareAndSet(State.Idle, State.Running)) return false
@@ -82,6 +88,9 @@ object AccountDeletionRun {
                 Timber.e(it, "Account deletion threw %s", it.javaClass.simpleName)
                 if (api.cloudErased) Outcome.PHONE_NOT_CLEARED else Outcome.CLOUD_NOT_REACHED
             }
+            // A wipe that threw skipped the sign-out after it, and the account
+            // is gone: do not leave Firebase and the token store signed in.
+            if (outcome == Outcome.PHONE_NOT_CLEARED) signOutAfterErase(app)
             mutableState.value = State.Done(outcome)
         }
         return true
@@ -91,6 +100,12 @@ object AccountDeletionRun {
     fun consume(): Outcome? {
         val done = mutableState.value as? State.Done ?: return null
         return if (mutableState.compareAndSet(done, State.Idle)) done.outcome else null
+    }
+
+    /** Best effort: a failure here is logged, and the outcome stays what it was. */
+    private suspend fun signOutAfterErase(app: Context) {
+        suspendRunCatching { signOut(app) }
+            .onFailure { Timber.w(it, "Sign-out after the erase failed (%s)", it.javaClass.simpleName) }
     }
 
     private fun CloudSync.AccountDeletion.toOutcome(): Outcome = when (this) {
@@ -121,5 +136,6 @@ object AccountDeletionRun {
         mutableState.value = State.Idle
         delete = { context, api -> CloudSync.deleteAccount(context, api) }
         cloudApi = { IndicApi.get(it) }
+        signOut = { AuthRepository(it).signOut() }
     }
 }
