@@ -191,11 +191,7 @@ class HomeActivity : AppCompatActivity() {
             }
             // At the account's analysis limit, block new work behind the persistent
             // limit screen (email support) instead of letting it fail on upload.
-            if (TokenStore.isSessionLimitReached(this)) {
-                openSessionLimitScreen()
-                return@setOnClickListener
-            }
-            showSourceChooser()
+            if (!openLimitScreenIfReached()) showSourceChooser()
         }
         binding.btnHomeSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -284,7 +280,7 @@ class HomeActivity : AppCompatActivity() {
                 SessionStore.list(this@HomeActivity).size
             }
             TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
-            if (TokenStore.isSessionLimitReached(this@HomeActivity)) openSessionLimitScreen()
+            openLimitScreenIfReached()
         }
 
         observeUploadFailures()
@@ -316,7 +312,7 @@ class HomeActivity : AppCompatActivity() {
                         // worker's quota kind says so: other failures carry
                         // no reason either (an analysis deleted before its
                         // backup ran), and the limit can be held from before.
-                        job.isQuotaStop() -> if (TokenStore.isSessionLimitReached(this)) openSessionLimitScreen()
+                        job.isQuotaStop() -> openLimitScreenIfReached()
                         state.reason != null -> showUploadFailure(state.reason)
                     }
                     else -> Unit
@@ -418,8 +414,14 @@ class HomeActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun openSessionLimitScreen() {
-        startActivity(Intent(this, SessionLimitActivity::class.java))
+    /**
+     * At the account's analysis limit, opens the persistent limit screen
+     * (email support) and says so; Home's every quota gate goes through here.
+     */
+    private fun openLimitScreenIfReached(): Boolean {
+        val reached = TokenStore.isSessionLimitReached(this)
+        if (reached) startActivity(Intent(this, SessionLimitActivity::class.java))
+        return reached
     }
 
     /**
@@ -539,11 +541,7 @@ class HomeActivity : AppCompatActivity() {
             ),
         )
         tvHomeQuota.setOnClickListener {
-            if (TokenStore.isSessionLimitReached(this)) {
-                openSessionLimitScreen()
-            } else {
-                binding.btnHomeSettings.performClick()
-            }
+            if (!openLimitScreenIfReached()) binding.btnHomeSettings.performClick()
         }
     }
 
@@ -567,9 +565,7 @@ class HomeActivity : AppCompatActivity() {
                 // reconcile's config fetch); only the used count is stored here.
                 TokenStore.setQuota(this, outcome.quotaUsed, localCount)
                 // Newly at the cap → open the persistent "email support" screen.
-                if (!wasLimited && TokenStore.isSessionLimitReached(this)) {
-                    openSessionLimitScreen()
-                }
+                if (!wasLimited) openLimitScreenIfReached()
                 // This check saved a fresh listing of the account's backups.
                 updateCloudBackups()
                 if (outcome.repaired > 0) {

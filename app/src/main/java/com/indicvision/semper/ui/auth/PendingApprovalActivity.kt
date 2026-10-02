@@ -1,6 +1,3 @@
-// Pending-approval screen: literal poll interval / UI constants read clearest inline.
-@file:Suppress("MagicNumber")
-
 package com.indicvision.semper.ui.auth
 
 import android.os.Bundle
@@ -75,7 +72,8 @@ class PendingApprovalActivity : AppCompatActivity() {
         val deviceId = DeviceKeyManager.deviceId(this)
 
         binding.tvUserEmail.text = email ?: getString(R.string.pending_unknown_user)
-        binding.tvDeviceId.text = getString(R.string.pending_device_id_fmt, deviceId.take(8), deviceId.takeLast(4))
+        binding.tvDeviceId.text =
+            getString(R.string.pending_device_id_fmt, deviceId.take(DEVICE_ID_HEAD), deviceId.takeLast(DEVICE_ID_TAIL))
     }
 
     private fun checkStatusAgain() {
@@ -122,5 +120,11 @@ class PendingApprovalActivity : AppCompatActivity() {
         } else {
             binding.btnRefreshStatus.setText(R.string.action_check_status)
         }
+    }
+
+    private companion object {
+        /** The device id is shown shortened, as its first and last characters. */
+        const val DEVICE_ID_HEAD = 8
+        const val DEVICE_ID_TAIL = 4
     }
 }

@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber", "TooManyFunctions")
+@file:Suppress("TooManyFunctions")
 
 package com.indicvision.semper.ui.common
 
@@ -61,7 +61,7 @@ class MediaPickerSheet private constructor(
         selectionUnlocked = true
         pickScrim.animate()
             .alpha(0f)
-            .setDuration(180L)
+            .setDuration(SCRIM_FADE_MS)
             .withEndAction {
                 pickScrim.isVisible = false
                 pickScrim.alpha = 1f
@@ -83,7 +83,7 @@ class MediaPickerSheet private constructor(
                 MediaSourceChooser.Mode.DEFORMED -> R.string.deformed_frames
             },
         )
-        list.layoutManager = GridLayoutManager(activity, 3)
+        list.layoutManager = GridLayoutManager(activity, GRID_COLUMNS)
         list.adapter = adapter
         views.toggleMediaSource.onButtonChecked { checkedId ->
             if (checkedId == R.id.btnMediaFiles) {
@@ -335,6 +335,8 @@ class MediaPickerSheet private constructor(
 
     companion object {
         private const val REF_HINT_MS = 1000L
+        private const val SCRIM_FADE_MS = 180L
+        private const val GRID_COLUMNS = 3
 
         /** Seam for tests, which query inline so the grid fills as the main thread idles. */
         @VisibleForTesting

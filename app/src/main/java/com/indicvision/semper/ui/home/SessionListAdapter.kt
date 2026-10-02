@@ -1,6 +1,4 @@
-// List adapter: onBindViewHolder assembles one row's subtitle/badges inline, and
-// literal view-type/dimension constants read clearest there too.
-@file:Suppress("MagicNumber", "CyclomaticComplexMethod", "TooManyFunctions")
+@file:Suppress("TooManyFunctions")
 
 @file:SuppressLint("NotifyDataSetChanged")
 
@@ -9,6 +7,7 @@ package com.indicvision.semper.ui.home
 import android.annotation.SuppressLint
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.annotation.StringRes
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.indicvision.semper.R
@@ -193,7 +192,7 @@ class SessionListAdapter(
             val indeterminate = prog.phase == TransferPhase.DOWNLOAD && prog.percent <= 0
             progressBar.isIndeterminate = indeterminate
             if (!indeterminate) {
-                progressBar.setProgressCompat(prog.percent.coerceIn(0, 100), true)
+                progressBar.setProgressCompat(prog.percent.coerceIn(0, PERCENT_MAX), true)
             }
             badge.text = ctx.getString(
                 when (prog.phase) {
@@ -207,15 +206,7 @@ class SessionListAdapter(
         } else {
             progressBar.isIndeterminate = false
             progressBar.isVisible = false
-            badge.text = when {
-                r.syncState == SessionRecord.SyncState.SYNCED && r.id in withoutLocalData ->
-                    ctx.getString(R.string.badge_cloud_only)
-                r.syncState == SessionRecord.SyncState.SYNCED -> ctx.getString(R.string.badge_synced)
-                r.syncState == SessionRecord.SyncState.PENDING -> ctx.getString(R.string.badge_pending)
-                r.syncState == SessionRecord.SyncState.LOCAL_ONLY -> ctx.getString(R.string.badge_local)
-                r.syncState == SessionRecord.SyncState.FAILED -> ctx.getString(R.string.badge_not_backed_up)
-                else -> ctx.getString(R.string.badge_local)
-            }
+            badge.setText(syncStateLabel(r))
             badge.setTextColor(
                 if (r.syncState == SessionRecord.SyncState.FAILED) {
                     ctx.getColor(R.color.semantic_danger)
@@ -227,12 +218,23 @@ class SessionListAdapter(
         if (syncVisible) badge.setOnClickListener { onBadgeClick(r) }
     }
 
+    /** The idle badge: where [r]'s backup stands, and "Only in cloud" for a synced one off this phone. */
+    @StringRes
+    private fun syncStateLabel(r: SessionRecord): Int = when (r.syncState) {
+        SessionRecord.SyncState.SYNCED ->
+            if (r.id in withoutLocalData) R.string.badge_cloud_only else R.string.badge_synced
+        SessionRecord.SyncState.PENDING -> R.string.badge_pending
+        SessionRecord.SyncState.LOCAL_ONLY -> R.string.badge_local
+        SessionRecord.SyncState.FAILED -> R.string.badge_not_backed_up
+    }
+
     /** A row's reference image, with the raw dimensions a TIFF/RAW sniff needs. */
     private data class Thumb(val path: String, val rawWidth: Int, val rawHeight: Int)
 
     companion object {
         private const val THUMB_CACHE_MAX = 24
         private const val THUMB_EDGE = 256
+        private const val PERCENT_MAX = 100
         private val thumbExecutor = Executors.newSingleThreadExecutor()
 
         /**

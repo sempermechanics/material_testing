@@ -1,7 +1,7 @@
 // Settings Activity hosts cloud backup and per-analysis restore/download/delete.
 // Account, storage, preferences, your-data, and help live in section classes.
 
-@file:Suppress("TooManyFunctions", "LongMethod", "CyclomaticComplexMethod", "ReturnCount")
+@file:Suppress("TooManyFunctions", "ReturnCount")
 
 package com.indicvision.semper.ui.settings
 
