@@ -114,7 +114,7 @@ class SettingsStorageSection(
             Dialogs.confirm(
                 activity,
                 activity.getText(R.string.storage_free_up_title),
-                activity.getString(R.string.storage_free_up_body, ByteSize.format(reclaimable)),
+                activity.getString(R.string.storage_free_up_body_fmt, ByteSize.format(reclaimable)),
                 R.string.storage_free_up_confirm,
             ) { freeUpSpace() }
         }

@@ -202,7 +202,7 @@ class AuthActivity : AppCompatActivity() {
             val result = authRepo.sendSignInLink(email)
             setLoading(false)
             result.fold(
-                onSuccess = { showMessage(getString(R.string.auth_link_sent, email)) },
+                onSuccess = { showMessage(getString(R.string.auth_link_sent_fmt, email)) },
                 onFailure = {
                     showMessage(it.message ?: getString(R.string.auth_link_send_failed))
                 },

@@ -34,7 +34,7 @@ class SettingsHelpSupportSection(
     private fun sendFeedback() {
         SemperAnalytics.event(activity, SemperAnalytics.FEEDBACK_OPENED)
         val body = activity.getString(
-            R.string.help_support_feedback_body,
+            R.string.help_support_feedback_body_fmt,
             BuildConfig.VERSION_NAME,
             BuildConfig.VERSION_CODE,
             "${Build.MANUFACTURER} ${Build.MODEL}",
@@ -44,7 +44,7 @@ class SettingsHelpSupportSection(
         SupportMail.open(
             activity,
             subject = activity.getString(
-                R.string.help_support_feedback_subject,
+                R.string.help_support_feedback_subject_fmt,
                 BuildConfig.VERSION_NAME,
                 BuildConfig.VERSION_CODE,
             ),

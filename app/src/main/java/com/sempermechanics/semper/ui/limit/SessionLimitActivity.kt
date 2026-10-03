@@ -36,7 +36,7 @@ class SessionLimitActivity : AppCompatActivity() {
         setContentView(binding.root)
         Insets.padVertical(binding.limitRoot)
 
-        binding.tvLimitBody.text = getString(R.string.limit_body, getString(R.string.support_email))
+        binding.tvLimitBody.text = getString(R.string.limit_body_fmt, getString(R.string.support_email))
         renderQuota()
 
         binding.btnEmailSupport.setOnClickListener { emailSupport() }

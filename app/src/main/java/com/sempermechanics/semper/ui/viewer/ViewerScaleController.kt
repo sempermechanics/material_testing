@@ -67,8 +67,8 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         val multiplier = DicResult.strainMultiplier(currentDataIndex)
         val unit = host.getString(if (isStrain) R.string.scale_unit_strain else R.string.scale_unit_px)
 
-        dialog.tilScaleMax.hint = host.getString(R.string.scale_max_value, unit)
-        dialog.tilScaleMin.hint = host.getString(R.string.scale_min_value, unit)
+        dialog.tilScaleMax.hint = host.getString(R.string.scale_max_value_fmt, unit)
+        dialog.tilScaleMin.hint = host.getString(R.string.scale_min_value_fmt, unit)
 
         val shown = shownRange.takeIf { cachedHeatmap != null && !host.isShowingSummary && !isGeneratingHeatmap }
         CustomScalePrefill.text(
@@ -81,7 +81,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         }
 
         MaterialAlertDialogBuilder(host)
-            .setTitle(host.getString(R.string.scale_dialog_title, host.currentTypeString))
+            .setTitle(host.getString(R.string.scale_dialog_title_fmt, host.currentTypeString))
             .setView(dialog.root)
             .setPositiveButton(R.string.apply) { _, _ ->
                 val maxVal = dialog.etScaleMax.text?.toString()?.toFloatOrNull()

@@ -22,7 +22,7 @@ internal class SettingsFooterSection(
                 .setTitle(R.string.about_title)
                 .setMessage(
                     activity.getString(
-                        R.string.about_message,
+                        R.string.about_message_fmt,
                         BuildConfig.VERSION_NAME,
                         BuildConfig.VERSION_CODE,
                     ),

@@ -134,7 +134,7 @@ internal class SettingsAnalysesSection(
         is CloudRestore.ListOutcome.Ready, CloudRestore.ListOutcome.Empty -> null
         CloudRestore.ListOutcome.NeedSignIn -> activity.getString(R.string.restore_need_sign_in)
         CloudRestore.ListOutcome.ApiOff -> activity.getString(R.string.restore_api_off)
-        is CloudRestore.ListOutcome.Failed -> activity.getString(R.string.restore_load_error, result.reason)
+        is CloudRestore.ListOutcome.Failed -> activity.getString(R.string.restore_load_error_fmt, result.reason)
     }
 
     // ── Transfers ────────────────────────────────────────────────────────

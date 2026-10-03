@@ -106,7 +106,7 @@ class TransferBannerController(
         pageView.isVisible = multi
         if (multi) {
             pageView.text = root.context.getString(
-                R.string.transfer_banner_page,
+                R.string.transfer_banner_page_fmt,
                 pageIndex + 1,
                 transfers.size,
             )
@@ -121,7 +121,7 @@ class TransferBannerController(
             progress.isIndeterminate = false
             progress.setProgressCompat(item.percent, true)
             statusView.text = item.status.ifBlank {
-                root.context.getString(R.string.transfer_banner_percent, item.percent)
+                root.context.getString(R.string.transfer_banner_percent_fmt, item.percent)
             }
         }
     }

@@ -448,7 +448,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val index = binding.spinnerStrainComponent.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
         lines += getString(
             R.string.vsg_export_title_fmt,
-            getString(R.string.setting_vsg),
+            getString(R.string.settings_used_vsg),
             getString(STRAIN_OPTIONS[index].first),
             axis,
         )

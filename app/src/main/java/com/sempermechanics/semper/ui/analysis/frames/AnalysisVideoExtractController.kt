@@ -91,7 +91,7 @@ class AnalysisVideoExtractController(
                 withContext(Dispatchers.Main) {
                     FaqRedirect.snackbar(
                         activity,
-                        activity.getString(R.string.video_read_error, e.message),
+                        activity.getString(R.string.video_read_error_fmt, e.message),
                         R.string.url_faq_video_extract,
                     )
                 }

@@ -80,7 +80,7 @@ class AnalysisDeformedBatchController(
                 withContext(Dispatchers.Main) {
                     FaqRedirect.snackbar(
                         activity,
-                        activity.getString(R.string.error_loading_images, e.message),
+                        activity.getString(R.string.error_loading_images_fmt, e.message),
                         R.string.url_faq_import_deformed,
                     )
                 }

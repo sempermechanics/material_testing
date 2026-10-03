@@ -44,7 +44,7 @@ class VideoSamplingSheet(
             when {
                 unsupported != null -> FaqRedirect.snackbar(
                     activity,
-                    activity.getString(R.string.video_codec_unsupported, unsupported.trim()),
+                    activity.getString(R.string.video_codec_unsupported_fmt, unsupported.trim()),
                     R.string.url_faq_video_read,
                 )
                 meta.durationMs <= 0L ->

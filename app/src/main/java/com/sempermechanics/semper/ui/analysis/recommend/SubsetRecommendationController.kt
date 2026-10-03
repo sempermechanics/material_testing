@@ -102,7 +102,7 @@ class SubsetRecommendationController(
         }
         // The one thing the measurement knows that the slider cannot show: even
         // the largest allowed subset misses the accuracy target on this pattern.
-        lowTextureChip.showOrHide(activity.getString(R.string.subset_low_texture_fmt).takeIf { rec.lowTexture })
+        lowTextureChip.showOrHide(activity.getString(R.string.subset_low_texture).takeIf { rec.lowTexture })
         if (!viewModel.subsetUserModified) {
             val snapped = snapToSlider(settings.sliderSubsetSize, rec.subsetSize)
             if (settings.sliderSubsetSize.value.toInt() != snapped) {

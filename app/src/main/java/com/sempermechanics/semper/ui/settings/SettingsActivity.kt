@@ -329,7 +329,7 @@ class SettingsActivity : AppCompatActivity() {
         Dialogs.confirm(
             this,
             getText(R.string.cloud_delete_forever_title),
-            getString(R.string.cloud_delete_forever_body, entry.name),
+            getString(R.string.cloud_delete_forever_body_fmt, entry.name),
             R.string.cloud_delete_forever_confirm,
         ) { scheduleDelete(entry, session.localSessionId, session.sessionId, SessionDeletes.Mode.CLOUD) }
     }

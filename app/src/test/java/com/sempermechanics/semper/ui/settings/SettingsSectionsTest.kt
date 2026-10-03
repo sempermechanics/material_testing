@@ -80,12 +80,12 @@ class SettingsSectionsTest {
         val wifi = settings.findViewById<CompoundButton>(R.id.switchWifiOnly)
         val sub = settings.findViewById<TextView>(R.id.tvSaveCloudSub)
         assertFalse(save.isChecked)
-        assertEquals(settings.getString(R.string.setting_save_cloud_sub_off), sub.text)
+        assertEquals(settings.getString(R.string.settings_save_cloud_sub_off), sub.text)
 
         save.isChecked = true
         idle()
         assertTrue(DicSettings.saveToCloudEnabled(context))
-        assertEquals(settings.getString(R.string.setting_save_cloud_sub), sub.text)
+        assertEquals(settings.getString(R.string.settings_save_cloud_sub), sub.text)
 
         val wifiBefore = DicSettings.wifiOnlyUploadEnabled(context)
         wifi.isChecked = !wifi.isChecked

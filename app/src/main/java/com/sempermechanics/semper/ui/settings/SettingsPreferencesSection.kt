@@ -28,7 +28,7 @@ class SettingsPreferencesSection(
                 DicSettings.setMaxFrames(activity, v.toInt(), remoteMaxFrames)
             }
         }
-        views.btnMaxFramesInfo.bindInfo(activity, R.string.setting_max_frames, R.string.setting_max_frames_info)
+        views.btnMaxFramesInfo.bindInfo(activity, R.string.settings_max_frames, R.string.settings_max_frames_info)
     }
 
     private fun frameCountText(value: Int): String = String.format(Locale.US, "%d", value)

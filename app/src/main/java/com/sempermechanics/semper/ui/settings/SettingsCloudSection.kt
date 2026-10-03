@@ -31,11 +31,13 @@ internal class SettingsCloudSection(
 
         switchSave.isChecked = DicSettings.saveToCloudEnabled(activity)
         switchWifi.isChecked = DicSettings.wifiOnlyUploadEnabled(activity)
-        sub.setText(if (switchSave.isChecked) R.string.setting_save_cloud_sub else R.string.setting_save_cloud_sub_off)
+        sub.setText(
+            if (switchSave.isChecked) R.string.settings_save_cloud_sub else R.string.settings_save_cloud_sub_off,
+        )
 
         switchSave.setOnCheckedChangeListener { _, checked ->
             DicSettings.setSaveToCloudEnabled(activity, checked)
-            sub.setText(if (checked) R.string.setting_save_cloud_sub else R.string.setting_save_cloud_sub_off)
+            sub.setText(if (checked) R.string.settings_save_cloud_sub else R.string.settings_save_cloud_sub_off)
             if (checked) maybeOfferBackfill()
         }
         switchWifi.setOnCheckedChangeListener { _, checked -> DicSettings.setWifiOnlyUploadEnabled(activity, checked) }

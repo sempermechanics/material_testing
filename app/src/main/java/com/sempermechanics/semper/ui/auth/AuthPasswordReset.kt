@@ -93,7 +93,7 @@ internal class AuthPasswordReset(
             val result = activity.authRepo.sendPasswordReset(email)
             activity.setLoading(false)
             result.fold(
-                onSuccess = { activity.showMessage(activity.getString(R.string.auth_reset_sent, email)) },
+                onSuccess = { activity.showMessage(activity.getString(R.string.auth_reset_sent_fmt, email)) },
                 onFailure = {
                     activity.showMessage(it.message ?: activity.getString(R.string.auth_reset_failed))
                 },
