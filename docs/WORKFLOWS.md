@@ -2,7 +2,7 @@
 
 One map for the whole product: the app's screens, the work that keeps running
 after you leave a screen, and every backend request. The engine is deliberately
-absent — it lives in the `native/` submodule and has its own docs
+absent — it lives in the `engine/` submodule and has its own docs
 ([engine/ARCHITECTURE.md](engine/ARCHITECTURE.md),
 [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md)).
 

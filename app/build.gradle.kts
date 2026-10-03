@@ -134,7 +134,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                // Portable engine package at repo-root native/; JNI adapter on.
+                // Portable engine package at repo-root engine/; JNI adapter on.
                 arguments += "-DSEMPER_ANDROID=ON"
 
                 // Vendored OpenCV defaults ENABLE_CCACHE to ON for Ninja builds,
@@ -262,7 +262,7 @@ android {
 
     externalNativeBuild {
         cmake {
-            path = file("../native/CMakeLists.txt")
+            path = file("../engine/CMakeLists.txt")
             version = "3.22.1"
         }
     }

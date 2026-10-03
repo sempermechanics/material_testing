@@ -84,14 +84,14 @@ gitleaks detect --config .gitleaks.toml --log-opts="<base-sha>..HEAD"
 | Output | Paths | Jobs |
 |--------|-------|------|
 | `app` | `app/**` except `app/src/main/cpp/**`; `gradle/**`, `*.gradle.kts`, `gradle.properties`, `gradlew`, `gradlew.bat`, `settings.gradle.kts` | tier 1 |
-| `native_core` | `native` (the gitlink itself) and `.gitmodules` | — see note |
-| `native_jni` | `native`, `.gitmodules`, `app/src/main/cpp/**`, `SemperNativeLib.kt` | tiers 3 + 5 on main / labels |
+| `native_core` | `engine` (the gitlink itself) and `.gitmodules` | — see note |
+| `native_jni` | `engine`, `.gitmodules`, `app/src/main/cpp/**`, `SemperNativeLib.kt` | tiers 3 + 5 on main / labels |
 | `backend` | `backend/**`, `firestore.rules`, `firebase-hosting/**`, `scripts/deploy-firestore.sh`, and the client's three wire-contract files | tier 4 |
 | `ci_workflow` | `.github/workflows/ci.yml` | sets `app` + `backend` so a workflow-only PR is not gates-only |
 | `full_ci` | `full-ci` label, or `workflow_dispatch` with `full_ci: true`, or **push to `main`** | all |
 
 Because the engine is a submodule, `native_core` and `native_jni` match the
-**gitlink** `native` rather than a source tree — bumping the pinned engine
+**gitlink** `engine` rather than a source tree — bumping the pinned engine
 commit is what triggers them. `native_core` no longer has a job of its own.
 
 The filter step runs with `predicate-quantifier: 'some-with-excludes'`: a file
