@@ -16,7 +16,7 @@ import androidx.core.graphics.createBitmap
  * Only the holes are void. The background outside the crop stays opaque on
  * purpose: the ROI rect (passed to the engine separately) already bounds the
  * grid, and the engine drops any point whose subset touches a void pixel
- * (`native/src/pipeline/full_field_solver.cpp`, "PURE SUBSETS ONLY"). A void
+ * (`engine/src/pipeline/full_field_solver.cpp`, "PURE SUBSETS ONLY"). A void
  * background would cost a subset-radius band of points along every crop edge.
  * That only holds because the crop is always a rectangle (TD-74).
  */

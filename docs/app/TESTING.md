@@ -251,7 +251,7 @@ starts no faster than `None` ([perf/startup.md](../perf/startup.md), which has t
 
 ## What not to test here
 
-- Algorithm accuracy → the engine's own suite, which lives in the `native/`
+- Algorithm accuracy → the engine's own suite, which lives in the `engine/`
   submodule and runs in the engine repo's CI, not here
   ([docs/engine/TESTING.md](../engine/TESTING.md))
 - Backend API → backend pytest (`backend/tests/`)

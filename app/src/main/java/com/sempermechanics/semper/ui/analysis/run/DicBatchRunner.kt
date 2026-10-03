@@ -241,7 +241,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         // Defensive bound: the engine must never report more points than the ROI
         // grid the direct buffer was sized for (maxPoints). Today it cannot: its
         // grid is exactly (rect_w / step) x (rect_h / step), the size allocated
-        // above (native/src/pipeline/full_field_solver.cpp, gridW / gridH), and
+        // above (engine/src/pipeline/full_field_solver.cpp, gridW / gridH), and
         // it stops packing at the buffer's capacity rather than overrun it
         // (full_field_solver_stats.cpp). Should either change, the get() below
         // would read past the buffer and crash the run with

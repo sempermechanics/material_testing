@@ -178,10 +178,10 @@ jobs:
             # sees pin bumps (gitlink) / .gitmodules — host/sanitizer suites run
             # in the engine repo's own workflow.
             native_core:
-              - 'native'
+              - 'engine'
               - '.gitmodules'
             native_jni:
-              - 'native'
+              - 'engine'
               - '.gitmodules'
               - 'app/src/main/cpp/**'
               - 'app/src/main/java/com/sempermechanics/semper/SemperNativeLib.kt'

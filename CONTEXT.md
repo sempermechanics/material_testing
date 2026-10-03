@@ -29,21 +29,21 @@ Use these words. Do not invent synonyms.
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (`native/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
+Engine pipeline (`engine/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 
 ```
-app/          Android UI (Kotlin). Gradle builds ../native/CMakeLists.txt;
+app/          Android UI (Kotlin). Gradle builds ../engine/CMakeLists.txt;
               app/src/main/cpp/ holds only a redirect CMakeLists.txt
-native/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
-              docs, and the JNI adapter in native/adapters/android/)
+engine/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
+              docs, and the JNI adapter in engine/adapters/android/)
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
               access in backend/app/repo/ behind the firestore_repo facade
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 ```
 
-Bump the engine by changing the `native` gitlink. Its host / sanitizer / DICe suites run
+Bump the engine by changing the `engine` gitlink. Its host / sanitizer / DICe suites run
 in the engine repo; this CI only proves the pin **links** (emulator x86_64, release arm64).
 
 ## Runtime
@@ -176,5 +176,5 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(DicKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
 - A new wizard input must survive a kill: scalars go in `WizardState`'s Bundle, bytes and lists in `WizardDraft`; and `cacheDir/temp_deformed` is only safe from the janitor while the draft is live — [ADR-005](docs/adr/ADR-005-wizard-process-death.md).
 - After Compute, read the run's `RunSpec` / `RunResult` (`spec`, `settings`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
-- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `native/tests/integration/test_full_field_determinism.cpp`.
+- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
 - `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/run/ConvergenceGate.kt).

@@ -6,9 +6,9 @@ changed.**
 
 ## Native solver throughput
 
-`Perf.SubsetSolveThroughput` from the engine's host tests (`native/tests/perf/`),
+`Perf.SubsetSolveThroughput` from the engine's host tests (`engine/tests/perf/`),
 checked against the reference in
-[native/docs/PERF_BASELINE_bd44af0.md](../../native/docs/PERF_BASELINE_bd44af0.md):
+[engine/docs/PERF_BASELINE_bd44af0.md](../../engine/docs/PERF_BASELINE_bd44af0.md):
 ≥ 4557 solves/s, 95 % of 4797.
 
 **Environment:**

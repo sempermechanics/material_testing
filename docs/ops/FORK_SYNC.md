@@ -32,7 +32,7 @@ apps. The deploy and Firestore workflows only run in this repo
    `applicationId` (ADR-008), so nothing else names the app.
 3. Docs conflicts are the norm: keep its CONTEXT and TECH_DEBT, both sides of
    CHANGELOG, and both sides of any ADR both repos added to.
-4. An engine bump (the `native` gitlink) means re-running its real-data checks
+4. An engine bump (the `engine` gitlink) means re-running its real-data checks
    (its `real_data_steel_tensile.py` and `real_data_pmma_bending.py` scripts); its JVM
    tests use arrays recorded on the old engine and stay green either way.
 

@@ -18,10 +18,14 @@ The README links here rather than repeating them.
 
 ## Clone and native deps
 
-The `--recursive` matters: `native/` is a submodule
+The `--recursive` matters: `engine/` is a submodule
 ([`sempermechanics/semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine)),
 and it has submodules of its own for Eigen and OpenCV. A non-recursive clone
-gives you an empty `native/` and a confusing CMake failure on first build.
+gives you an empty `engine/` and a confusing CMake failure on first build.
+
+A checkout from before the folder was renamed from `native/` (ADR-019) needs, after
+the pull: `git submodule sync && git submodule update --init --recursive`, then
+delete `app/.cxx` (its CMake cache holds the old path).
 
 ```bash
 git clone <repo-url>
@@ -109,9 +113,9 @@ cd backend && pip install -r requirements-test.txt && pytest tests/ -v
 
 # Engine tests — these build the submodule; they run in the engine repo's CI,
 # not this one. See docs/engine/TESTING.md.
-cmake -S native/tests -B build/native-tests -DCMAKE_BUILD_TYPE=Release
-cmake --build build/native-tests -j
-./build/native-tests/dic_tests
+cmake -S engine/tests -B build/engine-tests -DCMAKE_BUILD_TYPE=Release
+cmake --build build/engine-tests -j
+./build/engine-tests/dic_tests
 ```
 
 On Windows use `gradlew.bat` instead of `./gradlew`.
@@ -168,7 +172,7 @@ parallel). Kotlin/docs-only PRs run ~10–15 min via path filters.
 | Every workflow and the files behind it | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) |
 | Every user-facing screen, as a manual test pass | [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md) |
 | App tests (workflow chunks) | [docs/app/TESTING.md](docs/app/TESTING.md) |
-| C++ correlation engine | The `native/` submodule — the app-facing rules are in [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
+| C++ correlation engine | The `engine/` submodule — the app-facing rules are in [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
 | Engine tests | [docs/engine/TESTING.md](docs/engine/TESTING.md) |
 | Sign-in / allow-list | [docs/backend/AUTH_SETUP.md](docs/backend/AUTH_SETUP.md) |
 | Backend behaviour | [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) |
