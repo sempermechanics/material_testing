@@ -13,7 +13,7 @@ import com.sempermechanics.semper.R
  * The wizard repeated the same three steps for each chip — find `tvWarnText`
  * and set it, point `btnWarnFaq` at a FAQ page, flip `isVisible` — in
  * `StaticAnalysisActivity`, `AnalysisReadyGate`, `AnalysisWizardSlots` and
- * `SweepSetupHelper`. [openFaq] is what the button does with the page's URL
+ * `SweepSetupController`. [openFaq] is what the button does with the page's URL
  * (the wizard asks first, through `FaqRedirect.confirm`).
  */
 class WarnChip(

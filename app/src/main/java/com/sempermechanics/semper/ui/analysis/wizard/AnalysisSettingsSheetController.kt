@@ -18,7 +18,7 @@ import kotlin.math.roundToInt
  * slider label sync). Reset / paste / recommendation logic stays with the
  * [Listener], which can touch ViewModel + sweep state.
  */
-class AnalysisSettingsSheetHelper(
+class AnalysisSettingsSheetController(
     private val activity: Activity,
     private val settings: WizardStepSettingsContentBinding,
     private val listener: Listener,

@@ -56,7 +56,7 @@ class BatchRunController(
         fun onSweepFinished(outcome: BatchAnalysisOutcome?)
     }
 
-    private val overlayHelper get() = chrome.overlay
+    private val overlayController get() = chrome.overlay
 
     fun observe() {
         activity.lifecycleScope.launch {
@@ -64,7 +64,7 @@ class BatchRunController(
                 launch {
                     viewModel.progress.collect { progress ->
                         if (progress == null) return@collect
-                        overlayHelper.update(
+                        overlayController.update(
                             percent = progress.percent,
                             status = progress.status,
                             title = progress.status,

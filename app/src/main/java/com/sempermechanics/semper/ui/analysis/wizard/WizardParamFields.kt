@@ -22,10 +22,10 @@ class WizardParamFields(
     private val subsets: SubsetRecommendationController,
     private val host: AnalysisWizardHost,
 ) {
-    private val sheet = AnalysisSettingsSheetHelper(
+    private val sheet = AnalysisSettingsSheetController(
         activity,
         settings,
-        object : AnalysisSettingsSheetHelper.Listener {
+        object : AnalysisSettingsSheetController.Listener {
             override fun onSubsetUserModified() {
                 viewModel.subsetUserModified = true
                 subsets.showSpeckleFeedback()

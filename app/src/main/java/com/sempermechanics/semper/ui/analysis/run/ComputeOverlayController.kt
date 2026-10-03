@@ -25,7 +25,7 @@ import kotlin.math.roundToInt
  * Progress ticks are coalesced (~100 ms) into a single main-thread post that
  * updates all wired widgets together.
  */
-class ComputeOverlayHelper(
+class ComputeOverlayController(
     private val overlay: View,
     private val title: TextView,
     private val progress: ProgressBar,

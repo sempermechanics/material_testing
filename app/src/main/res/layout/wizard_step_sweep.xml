@@ -128,7 +128,7 @@
                 </LinearLayout>
 
                 <!-- Matches the result lattice's height (compact=true set in
-                     SweepSetupHelper.setup()) so the planned and solved lattices
+                     SweepSetupController.setup()) so the planned and solved lattices
                      read as the same element at two points in the flow. -->
                 <com.sempermechanics.semper.ui.analysis.sweep.VsgLatticeView
                     android:id="@+id/sweepLatticePreview"

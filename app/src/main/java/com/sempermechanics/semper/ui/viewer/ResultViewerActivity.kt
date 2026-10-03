@@ -33,12 +33,12 @@ import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.home.HomeActivity
-import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectHelper
+import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareExportUi
 import com.sempermechanics.semper.ui.viewer.share.ShareKind
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
-import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryHelper
+import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -86,7 +86,7 @@ class ResultViewerActivity : AppCompatActivity() {
         if (frameSetLoaded) action() else afterFrameSet += action
     }
 
-    internal lateinit var inspect: ViewerInspectHelper
+    internal lateinit var inspect: ViewerInspectController
         private set
 
     internal var rawData: FloatArray? = null
@@ -148,7 +148,7 @@ class ResultViewerActivity : AppCompatActivity() {
             viewerVm.currentDataIndex = value
         }
 
-    internal lateinit var summary: ViewerSummaryHelper
+    internal lateinit var summary: ViewerSummaryController
         private set
 
     /** True while the looping summary GIF is the thing on screen; see [FrameJumpController.showingSummary]. */
@@ -166,7 +166,7 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     internal fun customBoundsFor(dataIndex: Int): ValueRange? = viewerVm.customBounds[dataIndex]
 
-    /** Called when [ViewerSummaryHelper] finishes the whole-sequence range pass. */
+    /** Called when [ViewerSummaryController] finishes the whole-sequence range pass. */
     internal fun onSequenceRangesReady() {
         // The summary colour bar is sequence-global; refresh ⓘ so it quotes
         // the same ends instead of the hidden first frame's extrema.
@@ -195,7 +195,7 @@ class ResultViewerActivity : AppCompatActivity() {
         Insets.padBottomLiftAboveIme(binding.layoutScrubber)
         chrome.wireContentInsets()
 
-        inspect = ViewerInspectHelper(this)
+        inspect = ViewerInspectController(this)
         // Warm [sessionRecord] here rather than at the share tap that needs it:
         // the lazy reads the session index off disk, and by lazy is synchronized,
         // so a tap arriving mid-read waits on the read it would have done itself
@@ -232,7 +232,7 @@ class ResultViewerActivity : AppCompatActivity() {
         val dimsKnown = imageSize.isKnown
         if (dimsKnown) images.showReference(refPath)
 
-        summary = ViewerSummaryHelper(this)
+        summary = ViewerSummaryController(this)
 
         // The directory listings, and a stat per frame, used to run here on the
         // main thread on every open. The first frame (and, with it, everything

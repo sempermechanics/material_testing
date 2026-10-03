@@ -192,7 +192,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
             // colour ramp is built on (VisualizationEngine.computeSigmaClampedRange),
             // not the field's true extrema -- the ⓘ details sheet shows those,
             // via DicResult.fieldStats. Same wording as the summary-mode scale
-            // (ViewerSummaryHelper) so the two paths agree.
+            // (ViewerSummaryController) so the two paths agree.
             val minText = ReportBuilder.formatMetric(heatmap.min * multiplier)
             val maxText = ReportBuilder.formatMetric(heatmap.max * multiplier)
             binding.tvScaleMin.text = host.getString(R.string.scale_min_fmt, minText, unit)

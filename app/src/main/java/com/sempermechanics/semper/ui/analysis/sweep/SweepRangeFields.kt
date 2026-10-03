@@ -23,7 +23,7 @@ import java.util.Locale
 internal class SweepRangeFields(
     activity: AppCompatActivity,
     private val viewModel: AnalysisViewModel,
-    private val callbacks: SweepSetupHelper.Callbacks,
+    private val callbacks: SweepSetupController.Callbacks,
     private val onChanged: () -> Unit,
 ) {
     private val rangeSubset: RangeSlider = activity.findViewById(R.id.rangeSubset)
@@ -186,14 +186,14 @@ internal class SweepRangeFields(
     }
 
     private fun commitStrainWinMin(raw: Int) {
-        val currentMax = viewModel.strainWinMax.takeIf { it > 0 } ?: SweepSetupHelper.STRAIN_WIN_MAX_INPUT
+        val currentMax = viewModel.strainWinMax.takeIf { it > 0 } ?: SweepSetupController.STRAIN_WIN_MAX_INPUT
         viewModel.strainWinMin = oddWindow(raw).coerceAtMost(currentMax)
         writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
         onChanged()
     }
 
     private fun commitStrainWinMax(raw: Int) {
-        val floor = viewModel.strainWinMin.coerceAtLeast(SweepSetupHelper.STRAIN_WIN_MIN_INPUT)
+        val floor = viewModel.strainWinMin.coerceAtLeast(SweepSetupController.STRAIN_WIN_MIN_INPUT)
         viewModel.strainWinMax = oddWindow(raw).coerceAtLeast(floor)
         writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
         onChanged()
@@ -270,12 +270,12 @@ internal class SweepRangeFields(
     }
 
     /**
-     * A subset window of [SweepSetupHelper.SUGGESTED_SUBSET_SPAN] centred on
+     * A subset window of [SweepSetupController.SUGGESTED_SUBSET_SPAN] centred on
      * [rec], shifted whole to fit inside `[MIN_SUBSET, ceiling]` so it never
      * collapses to a single value unless the valid range itself is that narrow.
      */
     private fun suggestedSubsetWindow(rec: Int, ceiling: Int): Pair<Int, Int> {
-        val half = SweepSetupHelper.SUGGESTED_SUBSET_SPAN / 2
+        val half = SweepSetupController.SUGGESTED_SUBSET_SPAN / 2
         var lo = rec - half
         var hi = rec + half
         if (lo < SubsetRecommender.MIN_SUBSET) {
