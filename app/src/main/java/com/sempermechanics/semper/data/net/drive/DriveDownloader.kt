@@ -66,7 +66,7 @@ internal const val INITIAL_DOWNLOAD_WINDOW_BYTES = 4 shl 20
 
 /** About a 10x margin under the 300 s gateway deadline. */
 private const val TARGET_WINDOW_SECONDS = 30.0
-private const val MILLIS_PER_SECOND = 1000.0
+private const val MS_PER_SECOND = 1000.0
 
 /**
  * Given the throughput observed on the just-completed window, pick the next
@@ -77,8 +77,8 @@ private const val MILLIS_PER_SECOND = 1000.0
  */
 internal fun nextWindowBytes(bytesInWindow: Long, elapsedMs: Long): Int {
     if (bytesInWindow <= 0L || elapsedMs <= 0L) return INITIAL_DOWNLOAD_WINDOW_BYTES
-    val throughputBytesPerSec = bytesInWindow * MILLIS_PER_SECOND / elapsedMs
-    val target = (throughputBytesPerSec * TARGET_WINDOW_SECONDS)
+    val throughputBytesPerSecond = bytesInWindow * MS_PER_SECOND / elapsedMs
+    val target = (throughputBytesPerSecond * TARGET_WINDOW_SECONDS)
         .coerceIn(MIN_DOWNLOAD_WINDOW_BYTES.toDouble(), MAX_DOWNLOAD_WINDOW_BYTES.toDouble())
     // Round down to a power of two >= MIN_DOWNLOAD_WINDOW_BYTES.
     var pow = MIN_DOWNLOAD_WINDOW_BYTES

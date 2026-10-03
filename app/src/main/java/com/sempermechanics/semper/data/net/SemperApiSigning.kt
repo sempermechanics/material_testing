@@ -110,12 +110,12 @@ internal class SemperApiSigning(
      * signs a bare path and then fetches it with parameters is rejected.
      */
     private fun signedHeaders(idToken: String, call: SignedCall, nonce: String): Headers {
-        val msg = (nonce + call.method + call.path).toByteArray() + Digests.sha256(call.body)
+        val message = (nonce + call.method + call.path).toByteArray() + Digests.sha256(call.body)
         return Headers.Builder()
             .add(SemperApiHttp.AUTHORIZATION, "Bearer $idToken")
             .add(SemperApiHttp.DEVICE_ID, deviceId())
             .add(NONCE_HEADER, nonce)
-            .add(SIGNATURE_HEADER, sign(msg))
+            .add(SIGNATURE_HEADER, sign(message))
             .build()
     }
 }

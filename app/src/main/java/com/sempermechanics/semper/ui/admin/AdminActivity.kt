@@ -85,12 +85,12 @@ class AdminActivity : AppCompatActivity() {
             suspendRunCatching { api.setUserStatus(token, user.uid, action) }
                 .onSuccess {
                     val label = user.email ?: user.uid
-                    val msg = if (action == "approve") {
+                    val message = if (action == "approve") {
                         getString(R.string.admin_approved_toast, label)
                     } else {
                         getString(R.string.admin_denied_toast, label)
                     }
-                    Feedback.toast(this@AdminActivity, msg)
+                    Feedback.toast(this@AdminActivity, message)
                     load() // refresh the list
                 }
                 .onFailure { e ->

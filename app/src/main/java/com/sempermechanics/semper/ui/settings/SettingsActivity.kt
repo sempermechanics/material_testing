@@ -415,6 +415,6 @@ class SettingsActivity : AppCompatActivity() {
         const val CHEVRON_EXPANDED_DEG = 180f
         const val ZIP_MIME = "application/zip"
         const val JSON_MIME = "application/json"
-        const val PERCENT_MAX = 100
+        const val PERCENT = 100
     }
 }

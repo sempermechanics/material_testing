@@ -60,7 +60,7 @@ class TransferBannerController(
         onMain {
             val existing = transfers[id] ?: return@onMain
             transfers[id] = existing.copy(
-                percent = percent.coerceIn(0, PERCENT_MAX),
+                percent = percent.coerceIn(0, PERCENT),
                 status = status ?: existing.status,
             )
             render()
@@ -141,6 +141,6 @@ class TransferBannerController(
     }
 
     private companion object {
-        const val PERCENT_MAX = 100
+        const val PERCENT = 100
     }
 }

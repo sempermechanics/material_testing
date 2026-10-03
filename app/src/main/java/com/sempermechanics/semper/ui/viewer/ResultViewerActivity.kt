@@ -60,7 +60,7 @@ import java.io.File
 @MainThread
 class ResultViewerActivity : AppCompatActivity() {
 
-    internal val viewerVm: ResultViewerViewModel by viewModels()
+    internal val viewModel: ResultViewerViewModel by viewModels()
 
     internal lateinit var binding: ActivityResultViewerBinding
 
@@ -75,7 +75,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
     internal lateinit var shareBanner: TransferBannerController
 
-    /** Shows the running exports, which live in [viewerVm] and outlive this screen's rotations. */
+    /** Shows the running exports, which live in [viewModel] and outlive this screen's rotations. */
     internal lateinit var shareExports: ShareExportUi
 
     /** Run once the frame set is read; see [whenFrameSetLoaded]. */
@@ -120,9 +120,9 @@ class ResultViewerActivity : AppCompatActivity() {
     internal val cachedBaseImage: Bitmap? get() = images.cachedBaseImage
 
     internal var currentTypeString: String
-        get() = viewerVm.currentTypeString
+        get() = viewModel.currentTypeString
         set(value) {
-            viewerVm.currentTypeString = value
+            viewModel.currentTypeString = value
         }
 
     internal var batchFiles: List<File> = emptyList()
@@ -135,17 +135,17 @@ class ResultViewerActivity : AppCompatActivity() {
     internal var defImagePaths: List<String> = emptyList()
         private set
     internal var currentFrameIndex: Int
-        get() = viewerVm.currentFrameIndex
+        get() = viewModel.currentFrameIndex
         set(value) {
-            viewerVm.currentFrameIndex = value
+            viewModel.currentFrameIndex = value
         }
 
     internal val scrubCache = ScrubFrameCache()
 
     internal var currentDataIndex: Int
-        get() = viewerVm.currentDataIndex
+        get() = viewModel.currentDataIndex
         set(value) {
-            viewerVm.currentDataIndex = value
+            viewModel.currentDataIndex = value
         }
 
     internal lateinit var summary: ViewerSummaryController
@@ -164,7 +164,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * auto scale (the frame's own clamped range). Sequence-global scale is
      * reserved for the summary GIF / share animations, not the on-screen frame.
      */
-    internal fun customBoundsFor(dataIndex: Int): ValueRange? = viewerVm.customBounds[dataIndex]
+    internal fun customBoundsFor(dataIndex: Int): ValueRange? = viewModel.customBounds[dataIndex]
 
     /** Called when [ViewerSummaryController] finishes the whole-sequence range pass. */
     internal fun onSequenceRangesReady() {
@@ -172,7 +172,7 @@ class ResultViewerActivity : AppCompatActivity() {
         // the same ends instead of the hidden first frame's extrema.
         if (!isShowingSummary) return
         val data = rawData ?: return
-        val metrics = viewerVm.fieldMetricsFor(currentFrameIndex, currentDataIndex, data)
+        val metrics = viewModel.fieldMetricsFor(currentFrameIndex, currentDataIndex, data)
         captions.applyFieldMetrics(metrics, currentDataIndex)
     }
 
@@ -187,7 +187,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         shareBanner = TransferBannerController(binding.transferBannerRoot.root)
         // Re-attaches any export a rotation left running.
-        shareExports = ShareExportUi(this, viewerVm.exports).also { it.attach() }
+        shareExports = ShareExportUi(this, viewModel.exports).also { it.attach() }
 
         Insets.padTop(binding.viewerTopStack)
         // Lifted, not padded, above the keyboard: the image is fitted to the
@@ -219,7 +219,7 @@ class ResultViewerActivity : AppCompatActivity() {
         }
         // A save-as picked before the last viewer had listed its frames (a
         // rotation, or process death) waits in the ViewModel for this one.
-        if (viewerVm.hasPendingSave) share.startPendingSave()
+        if (viewModel.hasPendingSave) share.startPendingSave()
 
         imageSize = args.imageSize
         step = frameParams.base.step
@@ -315,7 +315,7 @@ class ResultViewerActivity : AppCompatActivity() {
         batchFiles = set.batchFiles
         plannedFrames = set.plannedFrames
         frames.useFrameSet(set)
-        viewerVm.useFrameListing(set.batchFiles)
+        viewModel.useFrameListing(set.batchFiles)
         frameSetLoaded = true
 
         if (batchFiles.isNotEmpty()) {

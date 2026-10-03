@@ -119,7 +119,7 @@ object LicenseEntitlements {
      * left read "expires tomorrow" and 25 hours "in 2 days".
      */
     fun daysUntilExpiry(context: Context, now: Long = System.currentTimeMillis()): Long? {
-        val expiresAt = AppRemoteConfig.licenseExpiresAtMillis(context)
+        val expiresAt = AppRemoteConfig.licenseExpiresAtMs(context)
         val worthWarningAbout = isLicensed(context) &&
             expiresAt != AppRemoteConfig.NO_INSTANT &&
             !AppRemoteConfig.isStale(context, STALE_CACHE_MS, now)

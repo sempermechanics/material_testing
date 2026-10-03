@@ -327,7 +327,7 @@ class PrefKeyTest {
         assertEquals("UNI", p[r.LICENSE_PREFIX])
         assertEquals(AppRemoteConfig.licenseKind(context), p[r.LICENSE_KIND])
         assertEquals(AppRemoteConfig.licenseDuration(context), p[r.LICENSE_DURATION])
-        assertEquals(AppRemoteConfig.licenseExpiresAtMillis(context), p[r.LICENSE_EXPIRES_AT])
+        assertEquals(AppRemoteConfig.licenseExpiresAtMs(context), p[r.LICENSE_EXPIRES_AT])
         assertTrue(p[r.LICENSE_EXPIRES_AT] > 0L)
         assertEquals(AppRemoteConfig.isInGrace(context), p[r.IN_GRACE])
         assertEquals("floating", p[r.SEATING])

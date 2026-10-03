@@ -67,10 +67,10 @@ class VideoSamplingSheet(
         form.tvFpsValue.text = fpsLabel(form.sliderFps.value.toInt())
 
         // --- Time-segment selector (seconds) ---
-        val durationSec = (meta.durationMs / MS_PER_SECOND).toFloat().coerceAtLeast(MIN_SEGMENT_SEC)
+        val durationSeconds = (meta.durationMs / MS_PER_SECOND).toFloat().coerceAtLeast(MIN_SEGMENT_SECONDS)
         form.rangeSegment.valueFrom = 0f
-        form.rangeSegment.valueTo = durationSec
-        form.rangeSegment.values = listOf(0f, durationSec)
+        form.rangeSegment.valueTo = durationSeconds
+        form.rangeSegment.values = listOf(0f, durationSeconds)
         form.tvSegmentValue.text = segmentLabel(0, meta.durationMs)
 
         form.toggleExtractMode.onButtonChecked { checkedId ->
@@ -148,7 +148,7 @@ class VideoSamplingSheet(
         const val DEFAULT_FPS = 10
         const val MS_PER_SECOND = 1000.0
         const val MS_PER_SECOND_F = 1000f
-        const val MIN_SEGMENT_SEC = 0.1f
+        const val MIN_SEGMENT_SECONDS = 0.1f
         const val MIN_EXTRACT_FPS = 0.1
     }
 }
