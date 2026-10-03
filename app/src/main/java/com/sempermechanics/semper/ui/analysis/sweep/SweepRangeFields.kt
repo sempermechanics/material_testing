@@ -33,7 +33,7 @@ internal class SweepRangeFields(
     private val etStrainWinMinValue: EditText = activity.findViewById(R.id.etStrainWinMinValue)
     private val etStrainWinMaxValue: EditText = activity.findViewById(R.id.etStrainWinMaxValue)
     private val etStepDepthValue: EditText = activity.findViewById(R.id.etStepDepthValue)
-    private val tvSweepOverlapValue: EditText = activity.findViewById(R.id.tvSweepOverlapValue)
+    private val etSweepOverlapValue: EditText = activity.findViewById(R.id.etSweepOverlapValue)
     private val etSubsetSamplesValue: EditText = activity.findViewById(R.id.etSubsetSamplesValue)
     private val etStrainWinSamplesValue: EditText = activity.findViewById(R.id.etVsgSamplesValue)
 
@@ -72,7 +72,7 @@ internal class SweepRangeFields(
         etStrainWinMinValue.clearFocus()
         etStrainWinMaxValue.clearFocus()
         etStepDepthValue.clearFocus()
-        tvSweepOverlapValue.clearFocus()
+        etSweepOverlapValue.clearFocus()
     }
 
     /** Shows the two sample counts and the step depth / overlap pair as the view model holds them. */
@@ -223,14 +223,14 @@ internal class SweepRangeFields(
         if (!etStepDepthValue.hasFocus()) {
             callbacks.renderParamField(etStepDepthValue, n)
         }
-        tvSweepOverlapValue.showUnlessEditing(String.format(Locale.US, "%.2f", viewModel.subsetOverlap))
+        etSweepOverlapValue.showUnlessEditing(String.format(Locale.US, "%.2f", viewModel.subsetOverlap))
     }
 
     /** The overlap field: a decimal (comma or point) that sets the step depth; unparseable puts it back. */
     private fun wireSweepOverlapField() {
-        tvSweepOverlapValue.setOnFocusChangeListener { _, hasFocus ->
+        etSweepOverlapValue.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) return@setOnFocusChangeListener
-            val typed = tvSweepOverlapValue.text.toString().trim().replace(',', '.').toDoubleOrNull()
+            val typed = etSweepOverlapValue.text.toString().trim().replace(',', '.').toDoubleOrNull()
             if (typed == null) {
                 writeStepDepth(viewModel.stepDenominator)
             } else {
@@ -238,7 +238,7 @@ internal class SweepRangeFields(
                 commitOverlap(typed)
             }
         }
-        tvSweepOverlapValue.commitOnDone()
+        etSweepOverlapValue.commitOnDone()
     }
 
     private fun commitSubsetSamples(raw: Int) {

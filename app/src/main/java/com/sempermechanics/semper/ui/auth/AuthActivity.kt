@@ -131,8 +131,8 @@ class AuthActivity : AppCompatActivity() {
 
     internal fun updateMode() {
         binding.tvSubtitle.setText(mode.subtitle)
-        binding.layoutEmail.isVisible = mode.showsEmail
-        binding.layoutConfirmPassword.isVisible = mode.choosesPassword
+        binding.tilEmail.isVisible = mode.showsEmail
+        binding.tilConfirmPassword.isVisible = mode.choosesPassword
         binding.recoveryLinks.isVisible = mode.showsRecoveryLinks
         binding.tvPasswordRules.isVisible = mode.choosesPassword
         binding.tvPasswordRules.setText(R.string.password_hint_rules)

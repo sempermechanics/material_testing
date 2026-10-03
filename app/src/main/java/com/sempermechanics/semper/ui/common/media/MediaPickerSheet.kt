@@ -91,7 +91,7 @@ class MediaPickerSheet private constructor(
         )
         list.layoutManager = GridLayoutManager(activity, GRID_COLUMNS)
         list.adapter = adapter
-        views.toggleMediaSource.onButtonChecked { checkedId ->
+        views.rgMediaSource.onButtonChecked { checkedId ->
             if (checkedId == R.id.btnMediaFiles) {
                 sheet.dismiss()
                 onBrowseSaf()

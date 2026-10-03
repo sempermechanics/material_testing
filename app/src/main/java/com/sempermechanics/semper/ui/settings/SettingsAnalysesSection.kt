@@ -18,7 +18,7 @@ import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.prefs.DicSettings
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
-import com.sempermechanics.semper.databinding.SettingsScrollContentBinding
+import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.ui.common.ByteSize
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
 import com.sempermechanics.semper.ui.common.dialog.Feedback
@@ -39,7 +39,7 @@ import kotlinx.coroutines.withContext
  */
 internal class SettingsAnalysesSection(
     private val activity: SettingsActivity,
-    private val views: SettingsScrollContentBinding,
+    private val views: ViewSettingsScrollContentBinding,
 ) {
     private val analysesAdapter = AnalysisDataAdapter(
         stateLine = ::stateLine,

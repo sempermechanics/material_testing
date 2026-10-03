@@ -9,7 +9,7 @@ import com.sempermechanics.semper.data.prefs.DicSettings
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.StorageBudget
-import com.sempermechanics.semper.databinding.SettingsScrollContentBinding
+import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.ui.common.ByteSize
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.bindInfo
@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
  */
 class SettingsStorageSection(
     private val activity: SettingsActivity,
-    private val views: SettingsScrollContentBinding,
+    private val views: ViewSettingsScrollContentBinding,
 ) {
     fun wire() {
         views.btnStorageClearCache.setOnClickListener { clearTemporaryFiles() }

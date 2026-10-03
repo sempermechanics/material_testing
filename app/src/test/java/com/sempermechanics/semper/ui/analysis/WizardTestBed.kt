@@ -100,10 +100,10 @@ internal class FakeWizardHost : AnalysisWizardHost {
     override fun commitParamFields() {
         calls += "commitParamFields"
         settings?.run {
-            tvSubsetValue.clearFocus()
-            tvStepValue.clearFocus()
-            tvOverlapValue.clearFocus()
-            tvStrainValue.clearFocus()
+            etSubsetValue.clearFocus()
+            etStepValue.clearFocus()
+            etOverlapValue.clearFocus()
+            etStrainValue.clearFocus()
         }
     }
 

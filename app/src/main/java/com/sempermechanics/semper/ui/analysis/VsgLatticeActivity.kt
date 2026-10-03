@@ -168,11 +168,11 @@ class VsgLatticeActivity : AppCompatActivity() {
     private fun bindStrainControls() {
         binding.plotLatticeStrain.zoomEnabled = true
         binding.plotLatticeStrain.compactAxes = true
-        binding.togglePlotModeClip.clipToOutline = true
+        binding.plotModeClip.clipToOutline = true
 
         binding.btnPrevNode.setOnClickListener { stepFocus(-1) }
         binding.btnNextNode.setOnClickListener { stepFocus(1) }
-        binding.togglePlotMode.onButtonChecked { redrawStrainPlot() }
+        binding.rgPlotMode.onButtonChecked { redrawStrainPlot() }
         binding.btnView.setOnClickListener { if (focusedFrameIndex >= 0) openViewer(focusedFrameIndex) }
         binding.btnSaveGraph.setOnClickListener { saveGraph() }
 
@@ -308,7 +308,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     /** Draws [seriesByFrame], the focused curve in colour and on top; Isolate drops the rest. */
     private fun showStrainPlot(seriesByFrame: List<FrameSeries>, preserveViewport: Boolean) {
         val horizontal = isLineCutHorizontal()
-        val isolate = binding.togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
+        val isolate = binding.rgPlotMode.checkedButtonId == R.id.btnPlotIsolate
         val toShow = if (isolate) {
             seriesByFrame.filter { it.frameIndex == focusedFrameIndex }
                 .map { it.series.copy(muted = false) }
@@ -468,7 +468,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         if (node != null) {
             lines += getString(R.string.vsg_lattice_param_labeled_fmt, node.subset, node.step, windowText(node))
         }
-        val isolate = binding.togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
+        val isolate = binding.rgPlotMode.checkedButtonId == R.id.btnPlotIsolate
         if (!isolate) {
             lines += resources.getQuantityString(R.plurals.vsg_export_combos_fmt, series.size, series.size)
         }

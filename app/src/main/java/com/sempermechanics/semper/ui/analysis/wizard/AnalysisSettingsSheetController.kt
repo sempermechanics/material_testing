@@ -41,14 +41,14 @@ class AnalysisSettingsSheetController(
         fun onParamsChanged()
     }
 
-    private val subset = settings.etSubsetSize
-    private val step = settings.etStepSize
-    private val overlap = settings.etOverlap
-    private val strain = settings.etStrainWindow
-    private val subsetValue = settings.tvSubsetValue
-    private val stepValue = settings.tvStepValue
-    private val overlapValue = settings.tvOverlapValue
-    private val strainValue = settings.tvStrainValue
+    private val subset = settings.sliderSubsetSize
+    private val step = settings.sliderStepSize
+    private val overlap = settings.sliderOverlap
+    private val strain = settings.sliderStrainWindow
+    private val subsetValue = settings.etSubsetValue
+    private val stepValue = settings.etStepValue
+    private val overlapValue = settings.etOverlapValue
+    private val strainValue = settings.etStrainValue
 
     /** The VSG in px the window in points gives at the current step. */
     private val strainVsg = settings.tvStrainVsg

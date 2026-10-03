@@ -88,7 +88,7 @@ class AnalysisWizardSmokeTest {
     fun analysisActivity_step2SingleSweepAndStep3Summary() {
         goToWizardStep(WizardStep.SETTINGS)
         onView(withId(R.id.rgAnalysisMode)).check(matches(isDisplayed()))
-        onView(withId(R.id.tvOverlapValue)).check(matches(isDisplayed()))
+        onView(withId(R.id.etOverlapValue)).check(matches(isDisplayed()))
         scenarioRule.scenario.onActivity { activity ->
             assertTrue(activity.findViewById<View>(R.id.advancedParamsCard).isVisible)
             assertFalse(activity.findViewById<View>(R.id.sweepSettingsCard).isVisible)

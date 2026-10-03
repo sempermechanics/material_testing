@@ -25,8 +25,8 @@ import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.CloudSessionDto
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.databinding.ActivitySettingsBinding
-import com.sempermechanics.semper.databinding.SettingsScrollContentBinding
-import com.sempermechanics.semper.databinding.SettingsSectionHeaderBinding
+import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
+import com.sempermechanics.semper.databinding.ViewSettingsSectionHeaderBinding
 import com.sempermechanics.semper.ui.auth.AuthActivity
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.Motion
@@ -79,7 +79,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
 
     /** The scroll content's sections ([SettingsScrollContentView.sections]). */
-    private lateinit var views: SettingsScrollContentBinding
+    private lateinit var views: ViewSettingsScrollContentBinding
     private lateinit var analyses: SettingsAnalysesSection
 
     internal lateinit var transferBanner: TransferBannerController
@@ -141,9 +141,9 @@ class SettingsActivity : AppCompatActivity() {
      * Titles [header] and makes it open and close [body], starting closed.
      * The chevron is the header's own, never one looked up across the screen.
      */
-    private fun wireCollapsible(header: SettingsSectionHeaderBinding, @StringRes title: Int, body: View) {
+    private fun wireCollapsible(header: ViewSettingsSectionHeaderBinding, @StringRes title: Int, body: View) {
         SettingsSectionHeader.bind(header, title)
-        val chevron = header.ivSectionChevron
+        val chevron = header.imgSectionChevron
         fun apply(expanded: Boolean) {
             body.isVisible = expanded
             chevron.rotation = if (expanded) CHEVRON_EXPANDED_DEG else 0f

@@ -7,7 +7,7 @@ import androidx.core.view.isVisible
 import com.sempermechanics.semper.R
 
 /**
- * One `warn_chip_row` (the amber warning strip under a wizard input): its
+ * One `view_warn_chip` (the amber warning strip under a wizard input): its
  * text, its FAQ "i" button and whether it shows.
  *
  * The wizard repeated the same three steps for each chip — find `tvWarnText`

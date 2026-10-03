@@ -89,7 +89,7 @@ internal class SweepFramePicker(
      * after [selected] has moved on is dropped.
      */
     private fun bindPreview(content: DialogSweepFramePickBinding, index: Int, selected: () -> Int) {
-        val preview = content.ivSweepFrameDialogPreview
+        val preview = content.imgSweepFramePreview
         val progress = content.progressSweepFramePreview
         val path = viewModel.defFilePaths.getOrNull(index)
         framePreview.cancel()

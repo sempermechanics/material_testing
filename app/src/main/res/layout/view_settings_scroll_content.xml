@@ -7,7 +7,7 @@
             <!-- 1. Account -->
             <include
                 android:id="@+id/headerAccount"
-                layout="@layout/settings_section_header"
+                layout="@layout/view_settings_section_header"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" />
@@ -64,7 +64,7 @@
             <!-- 2. Cloud backup -->
             <include
                 android:id="@+id/headerCloud"
-                layout="@layout/settings_section_header" />
+                layout="@layout/view_settings_section_header" />
 
             <LinearLayout
                 android:id="@+id/bodyCloud"
@@ -160,7 +160,7 @@
             <!-- 3. Analyses data management: one row per analysis, phone + cloud -->
             <include
                 android:id="@+id/headerAnalysesData"
-                layout="@layout/settings_section_header" />
+                layout="@layout/view_settings_section_header" />
 
             <LinearLayout
                 android:id="@+id/bodyAnalysesData"
@@ -211,7 +211,7 @@
             <!-- 3b. Storage: what this phone holds, and how to get it back -->
             <include
                 android:id="@+id/headerStorage"
-                layout="@layout/settings_section_header" />
+                layout="@layout/view_settings_section_header" />
 
             <LinearLayout
                 android:id="@+id/bodyStorage"
@@ -361,7 +361,7 @@
             <!-- 4. Your data -->
             <include
                 android:id="@+id/headerYourData"
-                layout="@layout/settings_section_header" />
+                layout="@layout/view_settings_section_header" />
 
             <LinearLayout
                 android:id="@+id/bodyYourData"
@@ -508,7 +508,7 @@
             <!-- 5. Analysis preferences -->
             <include
                 android:id="@+id/headerAnalysisPrefs"
-                layout="@layout/settings_section_header" />
+                layout="@layout/view_settings_section_header" />
 
             <LinearLayout
                 android:id="@+id/bodyAnalysisPrefs"
@@ -573,7 +573,7 @@
             <!-- 6. Help & support -->
             <include
                 android:id="@+id/headerHelpSupport"
-                layout="@layout/settings_section_header" />
+                layout="@layout/view_settings_section_header" />
 
             <LinearLayout
                 android:id="@+id/bodyHelpSupport"
