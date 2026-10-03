@@ -141,6 +141,29 @@ Here, a PR that mixes moves with fixes is merged with a merge commit, never a
 squash ([ADR-015](../adr/ADR-015-package-layout.md)), so its pure-move commits
 stay in `git log` for the fork to review one at a time.
 
+### The app id and package move (ADR-019, 2026-10)
+
+[ADR-019](../adr/ADR-019-sempermechanics-app-id.md) moved this app to
+`com.sempermechanics.semper` and renamed the engine submodule's folder from
+`native/` to `engine/`. Take it in **one** merge on the fork, together with the
+fork's own id change:
+
+1. Set `applicationId = "com.sempermechanics.materialtesting"` and register that
+   app in Firebase (new `google-services.json` client). The backend already maps
+   it to `materialtesting` (`backend/app/apps.py`), and `assetlinks.json` lists it.
+2. Merge. Git moves the Kotlin tree (`com/indicvision/semper` →
+   `com/sempermechanics/semper`) and the submodule path; then run
+   `git submodule sync && git submodule update --init --recursive`, and delete
+   `app/.cxx` (its CMake cache holds the old `native/` path).
+3. Rewrite the fork-only files' `package` and `import` lines:
+   `com.indicvision.semper` → `com.sempermechanics.semper`. Same for
+   `IndicApi*` → `SemperApi*` and the `INDIC_*` build keys → `SEMPER_*` (the old
+   keys are still read).
+
+Do not take this code under the old id: the prefs files (`semper_*`) and the
+Keystore alias (`SemperDeviceKeyEc`) are renamed, so an install that upgrades in
+place would find them empty and lose sign-in, settings and its device key.
+
 ## Porting back
 
 List the fork's commits that touch shared paths and are not here:

@@ -121,6 +121,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   merge with a merge commit (ADR-015). Owed before release: the emulator passes in
   each PR's test plan, the Pixel 6 benchmark runs, and ADR-015's queued-work upgrade
   check. Results: [QUALITY_PROGRAM_RESULTS.md](docs/ops/QUALITY_PROGRAM_RESULTS.md).
+- **App id `com.sempermechanics.semper` (open PR, stacked on the docs PR).** A new app;
+  "indic" leaves the code and the engine submodule is `engine/`
+  ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)). Owed before merge: the Firebase
+  app and its `google-services.json` (the committed one carries a stand-in client), the
+  Play listing, the `SEMPER_API_BASE_URL` var, a backend and Hosting deploy; the engine
+  PR merged first. material_testing moves to `com.sempermechanics.materialtesting` in
+  the same merge that takes this code.
 - **Deployed.** Cloud Run `semper-api` (image `semper-api-36844645753-1` from `9230f444`,
   2026-10-01; scales to zero) behind API Gateway `semper-gw` (config `v202610010948-83`,
   deployed by CI, ADR-006); staging `semper-api-staging` behind `semper-gw-staging` (CI
@@ -133,13 +140,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Owed on the backend side.** Material Testing signed in beside a signed-in Semper on
   one phone, and App Check for it; the Pixel 6 account demoted on 2026-09-26 (#264) still
   needs one **New device** to get its licence back (not verified here).
-- **App release `v1.2-beta.3`** (beta, private GitHub Release, run 36239577288, from
-  `ae05bb87`, versionCode 35). Pixel 6 smoke on 2026-09-26, on the account #264 demoted
-  (runs as Demo): clean install, sign-in, a two-frame run, an attested upload, Home
-  "9 / 25" after a refresh, no crashes.
-- **Ported from material_testing, for the next app release:** #298–#302 (first-run
-  dialogs, keyboard insets, ROI zoom/pan, rename re-sends metadata, each frame on its own
-  photo, ADR-011). Owed: manual emulator checks of the keyboard, ROI dock and viewer.
+- **App release `v1.2-beta.3`** (beta, private GitHub Release, versionCode 35, from
+  `ae05bb87`); Pixel 6 smoke on 2026-09-26 was clean. Next release also carries the
+  material_testing ports #298–#302 (manual keyboard / ROI dock / viewer checks owed).
 - **material_testing shares this history** and merges this `main` (last at `a735582`,
   material_testing#115), with its own app id (TD-133). Shared code and backend changes land
   here first; after the quality program it replays two package mappings
