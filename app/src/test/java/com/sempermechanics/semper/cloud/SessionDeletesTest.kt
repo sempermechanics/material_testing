@@ -7,9 +7,9 @@ import com.sempermechanics.semper.data.cloud.CloudSync.EraseResult
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.SessionDeletes.Item
 import com.sempermechanics.semper.data.cloud.SessionDeletes.Mode
+import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.CloudSessionDto
 import com.sempermechanics.semper.data.net.ListSessionsResponse
-import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.fixtures.sessionRecord
@@ -68,7 +68,7 @@ class SessionDeletesTest {
         api.onDeleteSession = { _, _ ->
             sent++
             // Three refusals in a row on two rows, as when two deletes race for the bucket.
-            if (sent in 4..6 || sent in 9..11) throw SemperApi.ApiException(429, """{"detail":"rate_limited"}""")
+            if (sent in 4..6 || sent in 9..11) throw ApiException(429, """{"detail":"rate_limited"}""")
         }
         val progress = mutableListOf<Pair<Int, Int>>()
 
@@ -86,7 +86,7 @@ class SessionDeletesTest {
     @Test
     fun `a limit that never lifts gives up on that row after six tries`() = runBlocking {
         store(record("s1", SessionRecord.SyncState.SYNCED, cloudId = "c1"))
-        api.onDeleteSession = { _, _ -> throw SemperApi.ApiException(429, "") }
+        api.onDeleteSession = { _, _ -> throw ApiException(429, "") }
 
         val report = run(listOf(Item("s1", "c1", Mode.EVERYWHERE)))
 

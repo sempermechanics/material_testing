@@ -6,12 +6,13 @@ import com.sempermechanics.semper.data.account.SeatLease
 import com.sempermechanics.semper.data.cloud.CloudAccountExport
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.CloudSync.EraseResult
+import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudSessionDto
 import com.sempermechanics.semper.data.net.ListSessionsResponse
+import com.sempermechanics.semper.data.net.NotApprovedException
 import com.sempermechanics.semper.data.net.QuotaDto
-import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.fixtures.sessionRecord
@@ -107,7 +108,7 @@ class CloudSeamTest {
     @Test
     fun `a server that answers with an error is a failure the user sees`() {
         configDown()
-        api.onListSessions = { _, _ -> throw SemperApi.ApiException(404, "") }
+        api.onListSessions = { _, _ -> throw ApiException(404, "") }
 
         val outcome = reconcile()
 
@@ -125,7 +126,7 @@ class CloudSeamTest {
     @Test
     fun `an unapproved account is told why`() {
         configDown()
-        api.onListSessions = { _, _ -> throw SemperApi.NotApprovedException() }
+        api.onListSessions = { _, _ -> throw NotApprovedException() }
 
         assertTrue(reconcile() is CloudSync.Outcome.Failed)
     }

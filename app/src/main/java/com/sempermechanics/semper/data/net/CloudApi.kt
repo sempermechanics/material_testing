@@ -11,7 +11,7 @@ import java.io.File
  * and the cloud export — can take a fake in a JVM test. Each takes it as a
  * defaulted parameter, `api: CloudApi = SemperApi.get(context)`, so production
  * call sites do not change. The failures stay nested in [SemperApi]
- * ([SemperApi.ApiException], [SemperApi.NotApprovedException], …), so no `catch`
+ * ([ApiException], [NotApprovedException], …), so no `catch`
  * moves.
  *
  * Every call runs off the main thread on its own; the defaults below are the

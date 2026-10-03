@@ -11,11 +11,15 @@ import com.sempermechanics.semper.data.cloud.TransferNotifications
 import com.sempermechanics.semper.data.cloud.TransferPhase
 import com.sempermechanics.semper.data.cloud.UploadErrors
 import com.sempermechanics.semper.data.cloud.UploadProgressSampler
+import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.CloudApi
+import com.sempermechanics.semper.data.net.DeviceConflictException
+import com.sempermechanics.semper.data.net.DeviceNotActiveException
 import com.sempermechanics.semper.data.net.FileCompleteRequest
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
+import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SessionZip
 import com.sempermechanics.semper.data.session.StorageBudget
@@ -134,13 +138,13 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 is StagingResult.Retry -> UploadLog.retry(staged.reason)
                 StagingResult.InputsGone -> failures.inputsGone()
             }
-        } catch (e: SemperApi.DeviceNotActiveException) {
+        } catch (e: DeviceNotActiveException) {
             failures.deviceNotActive(e)
-        } catch (e: SemperApi.DeviceConflictException) {
+        } catch (e: DeviceConflictException) {
             failures.deviceConflict(e)
-        } catch (e: SemperApi.ApiException) {
+        } catch (e: ApiException) {
             failures.refused(e)
-        } catch (e: SemperApi.UploadLinkExpiredException) {
+        } catch (e: UploadLinkExpiredException) {
             failures.linkExpired(e)
         } catch (e: OutOfMemoryError) {
             failures.outOfMemory(e)

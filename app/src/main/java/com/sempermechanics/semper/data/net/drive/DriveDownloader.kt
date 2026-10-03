@@ -5,7 +5,6 @@ import com.sempermechanics.semper.data.net.ApiAnswer
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.ClientNonce
 import com.sempermechanics.semper.data.net.HttpStatus
-import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.util.AtomicFiles
 import com.sempermechanics.semper.util.Digests
 import kotlinx.coroutines.Dispatchers
@@ -109,7 +108,7 @@ internal class DriveDownloader(private val downloadClient: OkHttpClient) {
                 try {
                     // Fresh challenge per window so a resumed Range never replays a nonce.
                     if (fetchWindow(job, offset, signedGetHeaders(job.path))) return@withContext
-                } catch (e: SemperApi.ApiException) {
+                } catch (e: ApiException) {
                     throw e
                 } catch (e: DownloadWindowException) {
                     // Our own message, which names the download only by its label.
