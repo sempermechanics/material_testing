@@ -32,7 +32,7 @@ import kotlin.random.Random
  * is what the chip tells them to go and change.
  */
 @RunWith(AndroidJUnit4::class)
-class SpeckleScaleInstrumentedTest {
+class SpeckleScaleDeviceTest {
 
     @Test
     fun a_two_pixel_speckle_reads_as_under_resolved() {

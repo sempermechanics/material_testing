@@ -8,8 +8,8 @@ import com.sempermechanics.semper.data.cloud.SessionMetadataSync.Outcome
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudSessionDto
-import com.sempermechanics.semper.data.net.ListSessionsResponse
 import com.sempermechanics.semper.data.net.QuotaDto
+import com.sempermechanics.semper.data.net.SessionsResponse
 import com.sempermechanics.semper.data.session.SessionRecord.SyncState
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.fixtures.sessionRecord
@@ -194,7 +194,7 @@ class SessionMetadataSyncTest {
         store("s2", SyncState.SYNCED, cloudId = "c2")
         api.onGetConfig = { throw IOException("config down") }
         api.onListSessions = { _, _ ->
-            ListSessionsResponse(
+            SessionsResponse(
                 sessions = listOf(
                     CloudSessionDto(sessionId = "c1", localSessionId = "s1", status = "COMPLETED"),
                     CloudSessionDto(sessionId = "c2", localSessionId = "s2", status = "COMPLETED"),

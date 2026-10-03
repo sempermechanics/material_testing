@@ -288,11 +288,11 @@ class SettingsActivity : AppCompatActivity() {
             val started = withContext(Dispatchers.IO) {
                 RestoreStart.start(this@SettingsActivity, cloud.sessionId, targetLocalId, entry.name)
             }
-            if (started == RestoreStart.Result.ALREADY_RUNNING) {
+            if (started == RestoreStart.Outcome.ALREADY_RUNNING) {
                 Feedback.toast(this@SettingsActivity, R.string.download_analysis_already)
                 return@launch
             }
-            if (started != RestoreStart.Result.STARTED) {
+            if (started != RestoreStart.Outcome.STARTED) {
                 analyses.unmarkBusy(key)
                 Feedback.toast(this@SettingsActivity, R.string.restore_failed_generic, long = true)
                 return@launch

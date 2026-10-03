@@ -166,7 +166,7 @@ object CloudSync {
     internal var queueMetadata: (Context, String) -> Unit = SessionMetadataSync::enqueue
 
     /** Outcome of an erase request, so the UI can tell the user what happened. */
-    enum class EraseResult {
+    enum class EraseOutcome {
         /** Local files gone AND the cloud copy erased (or there wasn't one). */
         ERASED_EVERYWHERE,
 
@@ -196,7 +196,7 @@ object CloudSync {
         localSessionId: String,
         api: CloudApi = SemperApi.get(context),
         tokens: TokenSource = TokenProvider,
-    ): EraseResult = withContext(Dispatchers.IO) {
+    ): EraseOutcome = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         val record = SessionStore.get(appContext, localSessionId)
 
@@ -204,7 +204,7 @@ object CloudSync {
             (record.syncState == SessionRecord.SyncState.LOCAL_ONLY && record.cloudSessionId.isBlank())
         if (!api.enabled || neverSynced) {
             SessionStore.delete(appContext, localSessionId)
-            return@withContext EraseResult.ERASED_EVERYWHERE
+            return@withContext EraseOutcome.ERASED_EVERYWHERE
         }
 
         api.authed(tokens) { token ->
@@ -272,7 +272,7 @@ object CloudSync {
      * LOCAL_ONLY so the Home badge stops claiming a backup that no longer
      * exists, and forgets the link so that a later delete of the phone copy
      * does not ask the backend to erase this backup a second time. Anything
-     * but [EraseResult.ERASED_EVERYWHERE] means nothing was deleted.
+     * but [EraseOutcome.ERASED_EVERYWHERE] means nothing was deleted.
      */
     suspend fun eraseCloudBackup(
         context: Context,
@@ -280,7 +280,7 @@ object CloudSync {
         localSessionId: String,
         api: CloudApi = SemperApi.get(context),
         tokens: TokenSource = TokenProvider,
-    ): EraseResult = withContext(Dispatchers.IO) {
+    ): EraseOutcome = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         api.authed(tokens) { token ->
             this.deleteSession(token, cloudSessionId)

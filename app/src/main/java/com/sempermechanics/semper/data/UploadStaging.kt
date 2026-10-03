@@ -25,15 +25,15 @@ internal data class UploadArtifact(
 )
 
 /** What staging an analysis for upload concluded. */
-internal sealed interface StagingResult {
+internal sealed interface StagingOutcome {
     /** Upload these: `metadata.json` and the archives (or every file, when there is no payload). */
-    data class Ready(val files: List<UploadArtifact>) : StagingResult
+    data class Ready(val files: List<UploadArtifact>) : StagingOutcome
 
     /** The report bundle is not ready yet; end this run with a retry. */
-    data class Retry(val reason: String) : StagingResult
+    data class Retry(val reason: String) : StagingOutcome
 
     /** The bundle's inputs are gone for good: fail the backup ([UploadFailures.inputsGone]). */
-    data object InputsGone : StagingResult
+    data object InputsGone : StagingOutcome
 }
 
 /**
@@ -81,11 +81,11 @@ internal class UploadStaging(private val context: Context, private val record: S
      * and `.dat`, the CSV and report bundle, then the two archives. [progress]
      * follows the report pass by frame and the archives by source byte.
      */
-    suspend fun stage(progress: UploadProgressSampler): StagingResult {
+    suspend fun stage(progress: UploadProgressSampler): StagingOutcome {
         val sources = sourceArtifacts()
         val incomplete = stageReports(progress)
         if (incomplete != null) return incomplete
-        return StagingResult.Ready(archive(sources + derivedArtifacts(), progress))
+        return StagingOutcome.Ready(archive(sources + derivedArtifacts(), progress))
     }
 
     /** Session-level metadata (generated once, then reused), the reference, and every frame's files. */
@@ -144,7 +144,7 @@ internal class UploadStaging(private val context: Context, private val record: S
      * by a killed run, or a pass that skipped every PDF/heatmap, must not be
      * mistaken for done.
      */
-    private suspend fun stageReports(progress: UploadProgressSampler): StagingResult? {
+    private suspend fun stageReports(progress: UploadProgressSampler): StagingOutcome? {
         val needCsv = !layout.analysisCsv.exists() || layout.analysisCsv.length() == 0L
         val needBundles = record.defNames.isNotEmpty() && !UploadWorkOutcomes.bundleArtifactsReady(layout.dir)
         if (!needCsv && !needBundles) return null
@@ -184,12 +184,12 @@ internal class UploadStaging(private val context: Context, private val record: S
      * while a later pass can still succeed; once the inputs are gone for good,
      * fail so Home shows why instead of "pending" forever.
      */
-    private fun incompleteBundles(): StagingResult {
+    private fun incompleteBundles(): StagingOutcome {
         Timber.e("Bundle staging incomplete (csv=%dB, reports/processed missing)", layout.analysisCsv.length())
         return if (inputsGoneForGood()) {
-            StagingResult.InputsGone
+            StagingOutcome.InputsGone
         } else {
-            StagingResult.Retry("bundle staging incomplete — reports/csv/processed not ready")
+            StagingOutcome.Retry("bundle staging incomplete — reports/csv/processed not ready")
         }
     }
 

@@ -31,7 +31,7 @@ class SubsetRecommendationControllerTest {
     }
 
     private fun recommend(subset: Int, speckle: Double? = null, capped: Int = 0) {
-        bed.viewModel.subsetRecommendation = SubsetRecommender.Result(
+        bed.viewModel.subsetRecommendation = SubsetRecommender.Recommendation(
             subsetSize = subset,
             samples = 10,
             cappedSamples = capped,

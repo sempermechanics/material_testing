@@ -88,7 +88,7 @@ object SessionStore {
     fun get(context: Context, id: String): SessionRecord? = list(context).firstOrNull { it.id == id }
 
     /** What [save] did with a row. */
-    enum class UpsertResult {
+    enum class UpsertOutcome {
         SAVED,
 
         /** A new row was refused: the account is at its analysis quota ([SessionQuotaGate]). */
@@ -109,20 +109,20 @@ object SessionStore {
         context: Context,
         record: SessionRecord,
         allowOverLimit: Boolean = false,
-    ): UpsertResult = synchronized(lock) {
+    ): UpsertOutcome = synchronized(lock) {
         val existing = readRows(context)
         if (existing == null) {
             Timber.e("Refusing upsert: session index is corrupt")
-            return@synchronized UpsertResult.INDEX_UNAVAILABLE
+            return@synchronized UpsertOutcome.INDEX_UNAVAILABLE
         }
         val isNew = existing.none { it.id == record.id }
         if (isNew && !allowOverLimit && !SessionQuotaGate.allowNewSession(context, existing.size)) {
-            return@synchronized UpsertResult.QUOTA_FULL
+            return@synchronized UpsertOutcome.QUOTA_FULL
         }
         val next = existing.filterNot { it.id == record.id } + record
-        if (!write(context, next)) return@synchronized UpsertResult.INDEX_UNAVAILABLE
+        if (!write(context, next)) return@synchronized UpsertOutcome.INDEX_UNAVAILABLE
         TokenStore.refreshSessionLimit(context, next.size)
-        UpsertResult.SAVED
+        UpsertOutcome.SAVED
     }
 
     /**
@@ -134,7 +134,7 @@ object SessionStore {
         context: Context,
         record: SessionRecord,
         allowOverLimit: Boolean = false,
-    ): Boolean = save(context, record, allowOverLimit) == UpsertResult.SAVED
+    ): Boolean = save(context, record, allowOverLimit) == UpsertOutcome.SAVED
 
     /**
      * Replaces row [id] with [transform] of it, leaving every other row alone.

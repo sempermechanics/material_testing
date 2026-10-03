@@ -22,7 +22,7 @@ import com.sempermechanics.semper.databinding.ActivityStaticAnalysisBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
 import com.sempermechanics.semper.databinding.WizardStepSweepBinding
-import com.sempermechanics.semper.imaging.BitmapDecode
+import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.video.ExtractionRequest
 import com.sempermechanics.semper.navigation.DicKeys
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportController
@@ -409,7 +409,7 @@ class StaticAnalysisActivity :
                         bytes = bytes,
                         intentWidth = viewModel.realRefWidth,
                         intentHeight = viewModel.realRefHeight,
-                        previewMaxEdge = BitmapDecode.PREVIEW_MAX_EDGE,
+                        previewMaxEdge = BitmapDecoder.PREVIEW_MAX_EDGE,
                     ),
                 ).bitmap
             }

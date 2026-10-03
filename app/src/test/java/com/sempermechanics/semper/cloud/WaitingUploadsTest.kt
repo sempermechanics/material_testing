@@ -6,8 +6,8 @@ import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudSessionDto
-import com.sempermechanics.semper.data.net.ListSessionsResponse
 import com.sempermechanics.semper.data.net.QuotaDto
+import com.sempermechanics.semper.data.net.SessionsResponse
 import com.sempermechanics.semper.data.prefs.DicSettings
 import com.sempermechanics.semper.data.session.SessionRecord.SyncState
 import com.sempermechanics.semper.data.session.SessionStore
@@ -42,7 +42,7 @@ class WaitingUploadsTest {
         AppRemoteConfig.clear(context)
         api.onGetConfig = { throw IOException("config down") }
         api.onListSessions = { _, _ ->
-            ListSessionsResponse(
+            SessionsResponse(
                 sessions = listOf(CloudSessionDto(sessionId = "c2", localSessionId = "s2", status = "COMPLETED")),
                 quota = QuotaDto(used = 1, max = 25),
             )

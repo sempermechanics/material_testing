@@ -6,8 +6,8 @@ import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.CloudSessionDto
-import com.sempermechanics.semper.data.net.ListSessionsResponse
 import com.sempermechanics.semper.data.net.QuotaDto
+import com.sempermechanics.semper.data.net.SessionsResponse
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.fixtures.sessionRecord
@@ -108,7 +108,7 @@ class CloudBackupListingTest {
     fun `a successful reconcile saves the listing`() {
         api.onGetConfig = { throw IOException("config down") }
         api.onListSessions = { _, _ ->
-            ListSessionsResponse(sessions = listOf(dto("c1", "s1")), quota = QuotaDto(used = 1, max = 25))
+            SessionsResponse(sessions = listOf(dto("c1", "s1")), quota = QuotaDto(used = 1, max = 25))
         }
 
         runBlocking { CloudSync.reconcile(context, reupload = false, deep = true, api = api, tokens = tokens) }

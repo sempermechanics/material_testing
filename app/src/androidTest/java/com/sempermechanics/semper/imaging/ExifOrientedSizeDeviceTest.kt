@@ -28,7 +28,7 @@ import java.io.File
  * covers that the tag is read at all and that the two answers now match.
  */
 @RunWith(AndroidJUnit4::class)
-class ExifOrientedSizeInstrumentedTest {
+class ExifOrientedSizeDeviceTest {
 
     private lateinit var dir: File
 

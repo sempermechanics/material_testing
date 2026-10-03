@@ -214,7 +214,7 @@ class SemperApi @VisibleForTesting internal constructor(
      */
     override suspend fun acceptTerms(idToken: String, version: String): Unit = calls.bearer(
         idToken,
-        route = { url(endpoint("/v1/me/terms")).post(jsonBody(TermsAcceptanceBody(version))) },
+        route = { url(endpoint("/v1/me/terms")).post(jsonBody(TermsAcceptRequest(version))) },
         orElse = { answer ->
             if (answer.code == HttpStatus.CONFLICT) throw TermsVersionMismatchException(answer.requestId)
             answer.fail()
@@ -223,7 +223,7 @@ class SemperApi @VisibleForTesting internal constructor(
 
     /** PUT /v1/me/consents — grant or withdraw the optional product-improvement consent. */
     override suspend fun setImprovementConsent(idToken: String, granted: Boolean): Unit =
-        calls.bearer(idToken, { url(endpoint("/v1/me/consents")).put(jsonBody(ConsentUpdateBody(granted))) }) {}
+        calls.bearer(idToken, { url(endpoint("/v1/me/consents")).put(jsonBody(ConsentUpdateRequest(granted))) }) {}
 
     // ----------------------------------------------------------- session/files
 
@@ -238,7 +238,7 @@ class SemperApi @VisibleForTesting internal constructor(
      * exist in Drive (catching artifacts deleted straight in Drive). It costs
      * Drive calls per page, so it's for explicit refreshes, not every resume.
      */
-    override suspend fun listSessions(idToken: String, verify: Boolean): ListSessionsResponse {
+    override suspend fun listSessions(idToken: String, verify: Boolean): SessionsResponse {
         val pages = fetchAllPages(
             fetch = { token ->
                 val query = buildString {
@@ -247,12 +247,12 @@ class SemperApi @VisibleForTesting internal constructor(
                     if (token != null) append('&').append(pageTokenParam(token))
                 }
                 calls.bearer(idToken, { url(endpoint("/v1/sessions?$query")) }, ApiAnswer::failApprovedOnly) {
-                    decode<ListSessionsResponse>(it)
+                    decode<SessionsResponse>(it)
                 }
             },
             pageOf = { it.page },
         )
-        return ListSessionsResponse(sessions = pages.flatMap { it.sessions }, quota = pages.last().quota)
+        return SessionsResponse(sessions = pages.flatMap { it.sessions }, quota = pages.last().quota)
     }
 
     /** POST /v1/sessions (device-signed). Initiates a session + one resumable target per file. */

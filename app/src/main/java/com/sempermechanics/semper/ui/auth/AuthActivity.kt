@@ -220,7 +220,7 @@ class AuthActivity : AppCompatActivity() {
                 } else {
                     routeResult(authRepo.signInWithGoogle(idToken))
                 }
-            } catch (e: GoogleSignInHelper.NotConfigured) {
+            } catch (e: GoogleSignInHelper.NotConfiguredException) {
                 Timber.w(e, "Google sign-in is not configured")
                 setLoading(false)
                 showMessage(getString(R.string.auth_google_unconfigured))

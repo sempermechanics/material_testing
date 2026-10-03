@@ -14,7 +14,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.TransferPhase
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.databinding.ItemSessionBinding
-import com.sempermechanics.semper.imaging.BitmapDecode
+import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
 import com.sempermechanics.semper.ui.common.media.ThumbnailLoader
 import com.sempermechanics.semper.ui.common.transfer.TransferWorkObserver
@@ -251,12 +251,12 @@ class SessionListAdapter(
          * Runs on the decode thread. The existence check is file I/O, so it
          * runs here rather than on every bind. A missing reference is not a
          * miss: a restore can still bring it back. Sniff-first via
-         * [BitmapDecode] — never hand TIFF/RAW to BitmapFactory (Skia
+         * [BitmapDecoder] — never hand TIFF/RAW to BitmapFactory (Skia
          * "invalid input" spam on Home rebind).
          */
         private fun decodeThumb(thumb: Thumb): ThumbnailLoader.Decoded {
             if (!File(thumb.path).exists()) return ThumbnailLoader.Decoded.Missing
-            val bitmap = BitmapDecode.decodeFileForView(
+            val bitmap = BitmapDecoder.decodeFileForView(
                 thumb.path,
                 THUMB_EDGE,
                 THUMB_EDGE,

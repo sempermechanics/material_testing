@@ -48,10 +48,10 @@ data class TermsDto(
 )
 
 @Serializable
-data class TermsAcceptanceBody(val version: String)
+data class TermsAcceptRequest(val version: String)
 
 @Serializable
-data class ConsentUpdateBody(val improvement: Boolean)
+data class ConsentUpdateRequest(val improvement: Boolean)
 
 /** Resolved product limits from GET /v1/config (per-user override → fleet default). */
 @Serializable
@@ -172,7 +172,7 @@ data class CloudSessionDto(
 data class QuotaDto(val used: Int = 0, val max: Int = 0)
 
 @Serializable
-data class ListSessionsResponse(
+data class SessionsResponse(
     val sessions: List<CloudSessionDto> = emptyList(),
     val quota: QuotaDto = QuotaDto(),
     val page: PageDto? = null,

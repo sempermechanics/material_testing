@@ -40,7 +40,7 @@ interface CloudApi {
 
     suspend fun setImprovementConsent(idToken: String, granted: Boolean)
 
-    suspend fun listSessions(idToken: String, verify: Boolean = false): ListSessionsResponse
+    suspend fun listSessions(idToken: String, verify: Boolean = false): SessionsResponse
 
     suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse
 

@@ -5,14 +5,14 @@ import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.account.SeatLease
 import com.sempermechanics.semper.data.cloud.CloudAccountExport
 import com.sempermechanics.semper.data.cloud.CloudSync
-import com.sempermechanics.semper.data.cloud.CloudSync.EraseResult
+import com.sempermechanics.semper.data.cloud.CloudSync.EraseOutcome
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudSessionDto
-import com.sempermechanics.semper.data.net.ListSessionsResponse
 import com.sempermechanics.semper.data.net.NotApprovedException
 import com.sempermechanics.semper.data.net.QuotaDto
+import com.sempermechanics.semper.data.net.SessionsResponse
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.fixtures.sessionRecord
@@ -138,7 +138,7 @@ class CloudSeamTest {
         store(record("lost", SessionRecord.SyncState.SYNCED))
         api.onListSessions = { _, verify ->
             assertTrue("a deep check verifies the blobs", verify)
-            ListSessionsResponse(
+            SessionsResponse(
                 sessions = listOf(CloudSessionDto(sessionId = "c1", localSessionId = "kept", status = "COMPLETED")),
                 quota = QuotaDto(used = 1, max = 25),
             )
@@ -160,7 +160,7 @@ class CloudSeamTest {
 
         val result = CloudSync.eraseEverywhere(context, "s1", api, tokens)
 
-        assertEquals(EraseResult.LOCAL_ONLY_CLOUD_UNREACHABLE, result)
+        assertEquals(EraseOutcome.LOCAL_ONLY_CLOUD_UNREACHABLE, result)
         assertTrue(SessionStore.get(context, "s1") != null)
     }
 
@@ -169,7 +169,7 @@ class CloudSeamTest {
         store(record("s1", SessionRecord.SyncState.SYNCED))
         val order = mutableListOf<String>()
         api.onListSessions = { _, _ ->
-            ListSessionsResponse(sessions = listOf(CloudSessionDto(sessionId = "c9", localSessionId = "s1")))
+            SessionsResponse(sessions = listOf(CloudSessionDto(sessionId = "c9", localSessionId = "s1")))
         }
         api.onDeleteSession = { _, sid ->
             order += "cloud:$sid"
@@ -178,7 +178,7 @@ class CloudSeamTest {
 
         val result = CloudSync.eraseEverywhere(context, "s1", api, tokens)
 
-        assertEquals(EraseResult.ERASED_EVERYWHERE, result)
+        assertEquals(EraseOutcome.ERASED_EVERYWHERE, result)
         // Found by its local id, deleted while the local row still existed.
         assertEquals(listOf("cloud:c9", "local:true"), order)
         assertNull(SessionStore.get(context, "s1"))

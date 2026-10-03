@@ -4,12 +4,12 @@ import com.sempermechanics.semper.data.net.AdminUserDto
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.FileCompleteRequest
-import com.sempermechanics.semper.data.net.ListSessionsResponse
 import com.sempermechanics.semper.data.net.MeResponse
 import com.sempermechanics.semper.data.net.SessionCreateRequest
 import com.sempermechanics.semper.data.net.SessionCreateResponse
 import com.sempermechanics.semper.data.net.SessionFilesResponse
 import com.sempermechanics.semper.data.net.SessionUploadsResponse
+import com.sempermechanics.semper.data.net.SessionsResponse
 import com.sempermechanics.semper.data.net.TokenSource
 import java.io.File
 
@@ -35,7 +35,7 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     var onReleaseLease: suspend (String) -> AppConfigDto = { unscripted("releaseLease") }
     var onAcceptTerms: suspend (String, String) -> Unit = { _, _ -> unscripted("acceptTerms") }
     var onSetImprovementConsent: suspend (String, Boolean) -> Unit = { _, _ -> unscripted("setImprovementConsent") }
-    var onListSessions: suspend (String, Boolean) -> ListSessionsResponse = { _, _ -> unscripted("listSessions") }
+    var onListSessions: suspend (String, Boolean) -> SessionsResponse = { _, _ -> unscripted("listSessions") }
     var onDeleteAccount: suspend (String) -> Unit = { unscripted("deleteAccount") }
     var onDeleteSession: suspend (String, String) -> Unit = { _, _ -> unscripted("deleteSession") }
     var onReplaceSessionMetadata: suspend (String, String, String) -> Unit =

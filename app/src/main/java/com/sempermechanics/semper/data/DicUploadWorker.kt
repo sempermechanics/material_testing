@@ -134,9 +134,9 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val failures = UploadFailures(run, stagingDir)
         try {
             when (val staged = staging.stage(progress)) {
-                is StagingResult.Ready -> upload(run, staged.files, progress, stagingDir)
-                is StagingResult.Retry -> UploadLog.retry(staged.reason)
-                StagingResult.InputsGone -> failures.inputsGone()
+                is StagingOutcome.Ready -> upload(run, staged.files, progress, stagingDir)
+                is StagingOutcome.Retry -> UploadLog.retry(staged.reason)
+                StagingOutcome.InputsGone -> failures.inputsGone()
             }
         } catch (e: DeviceNotActiveException) {
             failures.deviceNotActive(e)
