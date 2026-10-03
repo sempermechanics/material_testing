@@ -65,7 +65,8 @@ class WizardParamFieldsTest {
 
     @Test
     fun `Reset goes back to the recommendation and the default step, window and interpolator`() {
-        bed.viewModel.subsetRecommendation = SubsetRecommender.Recommendation(subsetSize = 25, samples = 10, cappedSamples = 0)
+        bed.viewModel.subsetRecommendation =
+            SubsetRecommender.Recommendation(subsetSize = 25, samples = 10, cappedSamples = 0)
         bed.viewModel.subsetUserModified = true
         bed.settings.etSubsetSize.value = 61f
         bed.settings.etStepSize.value = 9f
