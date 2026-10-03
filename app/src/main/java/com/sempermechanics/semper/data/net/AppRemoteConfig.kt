@@ -269,7 +269,7 @@ object AppRemoteConfig {
         prefs(context)[RemoteConfig.LICENSE_EXPIRES_AT]
 
     /** Past expiry but still fully entitled — warn, do not gate. */
-    fun inGrace(context: Context): Boolean = prefs(context)[RemoteConfig.IN_GRACE]
+    fun isInGrace(context: Context): Boolean = prefs(context)[RemoteConfig.IN_GRACE]
 
     /** `assigned` or `floating`; assigned until a response says otherwise. */
     fun licenseSeating(context: Context): String =

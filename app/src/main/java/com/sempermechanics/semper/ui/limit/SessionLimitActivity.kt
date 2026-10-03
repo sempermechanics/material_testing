@@ -77,7 +77,7 @@ class SessionLimitActivity : AppCompatActivity() {
             // "still full" from stale data.
             when (val outcome = CloudSync.reconcile(this@SessionLimitActivity, deep = true)) {
                 is CloudSync.Outcome.Ok -> {
-                    val localCount = SessionStore.listAsync(this@SessionLimitActivity).size
+                    val localCount = SessionStore.listOnIo(this@SessionLimitActivity).size
                     // Ceiling is owned by AppRemoteConfig (refreshed by the same
                     // reconcile's config fetch); only the used count is stored here.
                     TokenStore.setQuota(

@@ -231,7 +231,7 @@ data class SessionUploadsResponse(
     /** Set when status is PROVISION_FAILED — why the targets were never opened. */
     val provisionError: String? = null,
     val uploads: List<PendingUploadDto> = emptyList(),
-    /** Set when more pending files follow; [SemperApi.sessionUploads] fetches them all. */
+    /** Set when more pending files follow; [SemperApi.listSessionUploads] fetches them all. */
     val page: PageDto? = null,
 )
 

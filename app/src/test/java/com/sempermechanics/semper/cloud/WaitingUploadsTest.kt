@@ -53,7 +53,7 @@ class WaitingUploadsTest {
     fun tearDown() {
         CloudSync.queueUpload = CloudSync::enqueueUpload
         AppRemoteConfig.clear(context)
-        DicSettings.setSaveToCloud(context, true)
+        DicSettings.setSaveToCloudEnabled(context, true)
     }
 
     // ── No backend ──────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ class WaitingUploadsTest {
     @Test
     fun `a licensed account with save-to-cloud off keeps its waiting rows waiting`() {
         AppRemoteConfig.apply(context, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
-        DicSettings.setSaveToCloud(context, false)
+        DicSettings.setSaveToCloudEnabled(context, false)
         store("s1", SyncState.PENDING)
 
         reconcile(api)

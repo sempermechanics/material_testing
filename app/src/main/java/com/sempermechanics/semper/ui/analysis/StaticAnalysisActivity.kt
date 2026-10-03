@@ -209,7 +209,7 @@ class StaticAnalysisActivity :
         binding.btnCalculateFullField.setOnClickListener {
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
-            if (!viewModel.sweepMode) runs.startBatch(params.dicParams(), params.useKeysInterpolator())
+            if (!viewModel.sweepMode) runs.startBatch(params.dicParams(), params.isKeysInterpolatorSelected())
         }
     }
 
@@ -330,7 +330,7 @@ class StaticAnalysisActivity :
         sweepController.seedSweepSuggestions()
     }
 
-    override fun startVsgSweep() = runs.startSweep(params.useKeysInterpolator())
+    override fun startVsgSweep() = runs.startSweep(params.isKeysInterpolatorSelected())
 
     override fun confirmOpenFaq(url: String) {
         FaqRedirect.confirm(this, url)

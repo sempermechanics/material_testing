@@ -225,7 +225,7 @@ internal class DriveDownloader(private val downloadClient: OkHttpClient) {
         val answer = ApiAnswer.of(resp)
         // Signed with a client nonce the server would not take: go back to
         // challenges and re-sign this window.
-        val nonceRefused = ClientNonce.isRefusal(answer.code, answer.body) && ClientNonce.usable()
+        val nonceRefused = ClientNonce.isRefusal(answer.code, answer.body) && ClientNonce.isUsable()
         if (nonceRefused) ClientNonce.markRefused()
         val transient = RestoreDownloadOutcomes.shouldResumeAfterHttp(
             code = answer.code,

@@ -100,7 +100,7 @@ class DicUploadWorkerTest {
             throw AssertionError("unexpected CloudApi.createSession call")
         }
         var onSessionUploads: suspend (String) -> SessionUploadsResponse = {
-            throw AssertionError("unexpected CloudApi.sessionUploads call")
+            throw AssertionError("unexpected CloudApi.listSessionUploads call")
         }
         var onUpload: suspend (File) -> Pair<String, String> = { it.name to Digests.md5Hex(it) }
         var onComplete: suspend (String, FileCompleteRequest) -> Unit = { _, req -> completed += req }
@@ -115,8 +115,8 @@ class DicUploadWorkerTest {
             return onCreateSession(request)
         }
 
-        override suspend fun sessionUploads(idToken: String, sessionId: String): SessionUploadsResponse {
-            calls += "sessionUploads"
+        override suspend fun listSessionUploads(idToken: String, sessionId: String): SessionUploadsResponse {
+            calls += "listSessionUploads"
             return onSessionUploads(sessionId)
         }
 

@@ -69,11 +69,11 @@ internal class UploadStaging(private val context: Context, private val record: S
      * forcing a full prepare loop on every WorkManager retry.
      */
     fun prepare() {
-        if (record.cloudSessionId.isBlank() && !UploadWorkOutcomes.stagingReusable(layout.dir)) {
+        if (record.cloudSessionId.isBlank() && !UploadWorkOutcomes.isStagingReusable(layout.dir)) {
             layout.dir.deleteRecursively()
         }
         layout.dir.mkdirs()
-        reuse = UploadWorkOutcomes.stagingReusable(layout.dir)
+        reuse = UploadWorkOutcomes.isStagingReusable(layout.dir)
     }
 
     /**
@@ -146,7 +146,7 @@ internal class UploadStaging(private val context: Context, private val record: S
      */
     private suspend fun stageReports(progress: UploadProgressSampler): StagingOutcome? {
         val needCsv = !layout.analysisCsv.exists() || layout.analysisCsv.length() == 0L
-        val needBundles = record.defNames.isNotEmpty() && !UploadWorkOutcomes.bundleArtifactsReady(layout.dir)
+        val needBundles = record.defNames.isNotEmpty() && !UploadWorkOutcomes.areBundleArtifactsReady(layout.dir)
         if (!needCsv && !needBundles) return null
 
         // Restaging invalidates any prior Session.zip — it was built without the
@@ -169,7 +169,7 @@ internal class UploadStaging(private val context: Context, private val record: S
         )
         return when {
             record.defNames.isEmpty() -> null
-            UploadWorkOutcomes.bundleArtifactsReady(layout.dir) -> {
+            UploadWorkOutcomes.areBundleArtifactsReady(layout.dir) -> {
                 layout.bundlesDone.createNewFile()
                 null
             }
@@ -186,7 +186,7 @@ internal class UploadStaging(private val context: Context, private val record: S
      */
     private fun incompleteBundles(): StagingOutcome {
         Timber.e("Bundle staging incomplete (csv=%dB, reports/processed missing)", layout.analysisCsv.length())
-        return if (inputsGoneForGood()) {
+        return if (areInputsGoneForGood()) {
             StagingOutcome.InputsGone
         } else {
             StagingOutcome.Retry("bundle staging incomplete — reports/csv/processed not ready")
@@ -198,10 +198,10 @@ internal class UploadStaging(private val context: Context, private val record: S
      * record's inputs are gone for good
      * ([UploadWorkOutcomes.classifyIncompleteStaging]); false means retry.
      */
-    private fun inputsGoneForGood(): Boolean {
+    private fun areInputsGoneForGood(): Boolean {
         val sessionDir = session.dir
         val now = System.currentTimeMillis()
-        val onDisk = UploadWorkOutcomes.stagingInputsOnDisk(sessionDir, record.defNames.size, File(record.refPath))
+        val onDisk = UploadWorkOutcomes.areStagingInputsOnDisk(sessionDir, record.defNames.size, File(record.refPath))
         val verdict = UploadWorkOutcomes.classifyIncompleteStaging(
             inputsOnDisk = onDisk,
             sessionAgeMs = now - record.updatedAt,
@@ -288,7 +288,7 @@ internal class UploadStaging(private val context: Context, private val record: S
      * an empty payload and because an empty object would cost a Firestore doc and a
      * signed upload for nothing.
      *
-     * Reuses only a sidecar-verified archive (see `UploadWorkOutcomes.stagingReusable`).
+     * Reuses only a sidecar-verified archive (see `UploadWorkOutcomes.isStagingReusable`).
      * A sidecar is never invented from a leftover truncated zip — doing so uploaded
      * bit-identical corrupt Drive objects.
      */

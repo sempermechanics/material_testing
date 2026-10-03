@@ -325,7 +325,7 @@ object CloudSync {
      * waiting for an upload that can never run.
      */
     fun uploadsEnabled(context: Context, api: CloudApi = SemperApi.get(context)): Boolean =
-        api.enabled && (!LicenseEntitlements.cloudBackupEnabled(context) || DicSettings.saveToCloud(context))
+        api.enabled && (!LicenseEntitlements.cloudBackupEnabled(context) || DicSettings.saveToCloudEnabled(context))
 
     /**
      * This build has no backend, so a row waiting to upload never will. It goes
@@ -349,7 +349,7 @@ object CloudSync {
      * [SessionStore], so only the id travels in the input Data.
      *
      * Uses [ExistingWorkPolicy.KEEP] so a reconcile pass cannot cancel an
-     * in-flight upload. Network constraint follows [DicSettings.uploadWifiOnly].
+     * in-flight upload. Network constraint follows [DicSettings.wifiOnlyUploadEnabled].
      *
      * No-op until the server quota is known ([TokenStore.isQuotaKnown]): the
      * analysis is already saved locally and its [SessionRecord] stays PENDING, so
@@ -369,7 +369,7 @@ object CloudSync {
         }
         // One policy for post-analysis and repair: Wi‑Fi-only when opted in;
         // otherwise any connected network.
-        val network = if (DicSettings.uploadWifiOnly(context)) {
+        val network = if (DicSettings.wifiOnlyUploadEnabled(context)) {
             NetworkType.UNMETERED
         } else {
             NetworkType.CONNECTED

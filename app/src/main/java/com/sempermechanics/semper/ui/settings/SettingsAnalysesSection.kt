@@ -237,7 +237,7 @@ internal class SettingsAnalysesSection(
         return when (record.syncState) {
             SessionRecord.SyncState.FAILED, SessionRecord.SyncState.PENDING -> R.string.cloud_retry_backup
             SessionRecord.SyncState.LOCAL_ONLY ->
-                if (DicSettings.saveToCloud(activity)) R.string.cloud_backup_now else null
+                if (DicSettings.saveToCloudEnabled(activity)) R.string.cloud_backup_now else null
             // Backed up, but this run could not list the cloud: offer nothing
             // rather than a "back up" that would duplicate an existing copy.
             SessionRecord.SyncState.SYNCED -> null
@@ -254,7 +254,7 @@ internal class SettingsAnalysesSection(
         // Same ordering as Home's: the PENDING stamp before the worker, so a
         // fast upload cannot have its SYNCED stamp overwritten by this one.
         activity.lifecycleScope.launch {
-            SessionStore.setSyncStateAsync(activity, record.id, SessionRecord.SyncState.PENDING)
+            SessionStore.setSyncStateOnIo(activity, record.id, SessionRecord.SyncState.PENDING)
             CloudSync.enqueueUpload(activity, record.id)
             Feedback.toast(activity, label)
             refresh()

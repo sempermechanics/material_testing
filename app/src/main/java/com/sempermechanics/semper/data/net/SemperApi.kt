@@ -86,7 +86,7 @@ class SemperApi @VisibleForTesting internal constructor(
     // ---------------------------------------------------------------- identity
 
     /** GET /v1/me. Throws [NotApprovedException] for a PENDING/SUSPENDED user. */
-    override suspend fun me(idToken: String): MeResponse =
+    override suspend fun getMe(idToken: String): MeResponse =
         calls.bearer(idToken, { url(endpoint("/v1/me")) }, ApiAnswer::failMe) { decode(it) }
 
     /**
@@ -273,7 +273,7 @@ class SemperApi @VisibleForTesting internal constructor(
      * reason it does on createSession — a stolen ID token must not be able to
      * recover them.
      */
-    override suspend fun sessionUploads(idToken: String, sessionId: String): SessionUploadsResponse =
+    override suspend fun listSessionUploads(idToken: String, sessionId: String): SessionUploadsResponse =
         fetchAllPages(
             fetch = { token ->
                 val path = "/v1/sessions/$sessionId/uploads" + pageTokenQuery(token)

@@ -29,8 +29,8 @@ import java.io.FileOutputStream
  * index is readable again (from the primary file or `.bak`).
  *
  * Sync accessors take the lock on the calling thread and are marked
- * [WorkerThread]; UI code calls the `suspend` variants ([listAsync],
- * [setSyncStateAsync]) so disk+JSON never block Main. The annotation is half a
+ * [WorkerThread]; UI code calls the `suspend` variants ([listOnIo],
+ * [setSyncStateOnIo]) so disk+JSON never block Main. The annotation is half a
  * pair: Android Lint's `WrongThread` fires only when the *calling* method
  * carries a conflicting one, and nothing in this app is `@MainThread` yet, so
  * today it documents the contract for the IDE rather than failing a build.
@@ -81,7 +81,7 @@ object SessionStore {
         rows.orEmpty().sortedByDescending { it.createdAt }
     }
 
-    suspend fun listAsync(context: Context): List<SessionRecord> =
+    suspend fun listOnIo(context: Context): List<SessionRecord> =
         withContext(Dispatchers.IO) { list(context) }
 
     @WorkerThread
@@ -165,7 +165,7 @@ object SessionStore {
     /**
      * The backend now holds metadata built from [sent]. Clears
      * [SessionRecord.metadataStale] only if what the metadata carries and can
-     * change after a backup ([sameMetadataInputs]) is still [sent]'s, so a
+     * change after a backup ([haveSameMetadataInputs]) is still [sent]'s, so a
      * change made while the send was in flight is sent again. Returns whether
      * it cleared.
      */
@@ -173,7 +173,7 @@ object SessionStore {
     fun clearMetadataStale(context: Context, id: String, sent: SessionRecord): Boolean {
         var cleared = false
         val written = update(context, id) {
-            if (sameMetadataInputs(it, sent)) {
+            if (haveSameMetadataInputs(it, sent)) {
                 cleared = true
                 it.copy(metadataStale = false)
             } else {
@@ -188,7 +188,7 @@ object SessionStore {
      * that mark [SessionRecord.metadataStale]. One place, so a field added to
      * that list is compared here too.
      */
-    private fun sameMetadataInputs(a: SessionRecord, b: SessionRecord): Boolean = a.name == b.name
+    private fun haveSameMetadataInputs(a: SessionRecord, b: SessionRecord): Boolean = a.name == b.name
 
     @WorkerThread
     fun markSynced(context: Context, id: String) = setSyncState(context, id, SessionRecord.SyncState.SYNCED)
@@ -203,7 +203,7 @@ object SessionStore {
     fun setSyncState(context: Context, id: String, state: SessionRecord.SyncState) =
         update(context, id) { it.copy(syncState = state) }
 
-    suspend fun setSyncStateAsync(context: Context, id: String, state: SessionRecord.SyncState) =
+    suspend fun setSyncStateOnIo(context: Context, id: String, state: SessionRecord.SyncState) =
         withContext(Dispatchers.IO) { setSyncState(context, id, state) }
 
     /** Removes the index row AND the local files. Cloud copies are untouched. */

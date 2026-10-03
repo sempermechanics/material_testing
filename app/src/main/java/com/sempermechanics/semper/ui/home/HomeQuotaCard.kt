@@ -103,7 +103,7 @@ internal class HomeQuotaCard(
         val support = activity.getString(R.string.support_email)
         licenseView.isVisible = true
         licenseView.text = when {
-            LicenseEntitlements.inGrace(activity) -> activity.getString(R.string.license_grace, support)
+            LicenseEntitlements.isInGrace(activity) -> activity.getString(R.string.license_grace, support)
             // Past its day on a config fetched before it ended: the cache
             // cannot say whether grace applies, only that the day has gone.
             days < 0L -> activity.getString(R.string.license_expired, support)
@@ -116,7 +116,7 @@ internal class HomeQuotaCard(
         }
         licenseView.setTextColor(
             activity.getColor(
-                if (LicenseEntitlements.inGrace(activity)) {
+                if (LicenseEntitlements.isInGrace(activity)) {
                     R.color.semantic_danger
                 } else {
                     R.color.text_secondary

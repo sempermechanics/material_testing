@@ -42,7 +42,7 @@ import java.io.File
  * the process's own importance — `lifecycle-process` is not on the compile
  * classpath. A foreground service alone (this worker) ranks below FOREGROUND.
  */
-private fun appInForeground(): Boolean {
+private fun isAppInForeground(): Boolean {
     val info = ActivityManager.RunningAppProcessInfo()
     ActivityManager.getMyMemoryState(info)
     return info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
@@ -57,7 +57,7 @@ private fun appInForeground(): Boolean {
 internal object DicUploadSeams {
     var api: (Context) -> CloudApi = { SemperApi.get(it) }
     var tokens: TokenSource = TokenProvider
-    var inForeground: () -> Boolean = ::appInForeground
+    var inForeground: () -> Boolean = ::isAppInForeground
 }
 
 /**

@@ -65,13 +65,13 @@ class SemperApiRoutesTest {
     @Test
     fun `me maps 403 to not approved and a 409 to the binding it names`() {
         answer(403, "not_approved")
-        fails<NotApprovedException> { api.me("tok") }
+        fails<NotApprovedException> { api.getMe("tok") }
 
         answer(409, "device_in_use")
-        assertEquals("ref1", fails<DeviceInUseException> { api.me("tok") }.requestId)
+        assertEquals("ref1", fails<DeviceInUseException> { api.getMe("tok") }.requestId)
 
         answer(409, "device_conflict")
-        fails<DeviceConflictException> { api.me("tok") }
+        fails<DeviceConflictException> { api.getMe("tok") }
     }
 
     @Test
@@ -138,7 +138,7 @@ class SemperApiRoutesTest {
     }
 
     @Test
-    fun `sessionUploads walks every page and signs each page's query`() {
+    fun `listSessionUploads walks every page and signs each page's query`() {
         answer(
             200,
             body = """{"sessionId":"s1","status":"UPLOADING",""" +
@@ -146,7 +146,7 @@ class SemperApiRoutesTest {
         )
         answer(200, body = """{"sessionId":"s1","uploads":[{"fileId":"b","uploadUrl":"u"}]}""")
 
-        val plan = runBlocking { api.sessionUploads("tok", "s1") }
+        val plan = runBlocking { api.listSessionUploads("tok", "s1") }
 
         assertEquals(listOf("a", "b"), plan.uploads.map { it.fileId })
         assertEquals("/v1/sessions/s1/uploads", server.takeRequest().target)
@@ -165,7 +165,7 @@ class SemperApiRoutesTest {
         answer(200, body = page)
         answer(200, body = page)
 
-        fails<IOException> { api.sessionUploads("tok", "s1") }
+        fails<IOException> { api.listSessionUploads("tok", "s1") }
         assertEquals(2, server.requestCount)
     }
 }

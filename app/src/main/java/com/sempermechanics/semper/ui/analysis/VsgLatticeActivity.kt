@@ -25,7 +25,7 @@ import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
 import com.sempermechanics.semper.ui.analysis.sweep.animateCopyConfirmation
 import com.sempermechanics.semper.ui.analysis.sweep.bindCopyGestures
 import com.sempermechanics.semper.ui.analysis.sweep.latticeSummary
-import com.sempermechanics.semper.ui.analysis.sweep.loadSweepFrameProfiles
+import com.sempermechanics.semper.ui.analysis.sweep.readSweepFrameProfiles
 import com.sempermechanics.semper.ui.analysis.sweep.scrubReadout
 import com.sempermechanics.semper.ui.analysis.sweep.skippedLatticeNodes
 import com.sempermechanics.semper.ui.analysis.sweep.solvedLatticeNodes
@@ -268,7 +268,7 @@ class VsgLatticeActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val loaded = withContext(Dispatchers.IO) {
-                loadSweepFrameProfiles(File(batchDirPath), steps, baseStep, components, line)
+                readSweepFrameProfiles(File(batchDirPath), steps, baseStep, components, line)
             }
             if (loaded.isEmpty()) return@launch
             frameProfiles = loaded
@@ -278,9 +278,9 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     /** The ROI centre line every profile is cut along — fixed for the activity's lifetime. */
     private fun centreLine(): VsgStudy.StudyLine =
-        VsgStudy.centreLine(Roi(args.roiX, args.roiY, args.roiW, args.roiH), lineCutHorizontal())
+        VsgStudy.centreLine(Roi(args.roiX, args.roiY, args.roiW, args.roiH), isLineCutHorizontal())
 
-    private fun lineCutHorizontal(): Boolean = args.sweep?.lineCutHorizontal ?: true
+    private fun isLineCutHorizontal(): Boolean = args.sweep?.lineCutHorizontal ?: true
 
     /**
      * Rebuilds the line-cut plot for Highlight or Isolate mode: hidden with
@@ -307,7 +307,7 @@ class VsgLatticeActivity : AppCompatActivity() {
 
     /** Draws [seriesByFrame], the focused curve in colour and on top; Isolate drops the rest. */
     private fun showStrainPlot(seriesByFrame: List<FrameSeries>, preserveViewport: Boolean) {
-        val horizontal = lineCutHorizontal()
+        val horizontal = isLineCutHorizontal()
         val isolate = binding.togglePlotMode.checkedButtonId == R.id.btnPlotIsolate
         val toShow = if (isolate) {
             seriesByFrame.filter { it.frameIndex == focusedFrameIndex }
@@ -443,7 +443,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     /** Study type, image names, and settings for the export header. */
     private fun exportHeaderLines(series: List<VsgPlotView.Series>): List<String> {
         val lines = mutableListOf<String>()
-        val horizontal = lineCutHorizontal()
+        val horizontal = isLineCutHorizontal()
         val axis = getString(if (horizontal) R.string.axis_x else R.string.axis_y)
         val index = binding.spinnerStrainComponent.selectedItemPosition.coerceIn(0, STRAIN_OPTIONS.lastIndex)
         lines += getString(

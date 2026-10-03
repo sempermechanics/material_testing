@@ -29,16 +29,16 @@ internal class SettingsCloudSection(
         val sub = views.tvSaveCloudSub
         val status = views.tvCloudSyncStatus
 
-        switchSave.isChecked = DicSettings.saveToCloud(activity)
-        switchWifi.isChecked = DicSettings.uploadWifiOnly(activity)
+        switchSave.isChecked = DicSettings.saveToCloudEnabled(activity)
+        switchWifi.isChecked = DicSettings.wifiOnlyUploadEnabled(activity)
         sub.setText(if (switchSave.isChecked) R.string.setting_save_cloud_sub else R.string.setting_save_cloud_sub_off)
 
         switchSave.setOnCheckedChangeListener { _, checked ->
-            DicSettings.setSaveToCloud(activity, checked)
+            DicSettings.setSaveToCloudEnabled(activity, checked)
             sub.setText(if (checked) R.string.setting_save_cloud_sub else R.string.setting_save_cloud_sub_off)
             if (checked) maybeOfferBackfill()
         }
-        switchWifi.setOnCheckedChangeListener { _, checked -> DicSettings.setUploadWifiOnly(activity, checked) }
+        switchWifi.setOnCheckedChangeListener { _, checked -> DicSettings.setWifiOnlyUploadEnabled(activity, checked) }
 
         activity.lifecycleScope.launch {
             val states = withContext(Dispatchers.IO) {

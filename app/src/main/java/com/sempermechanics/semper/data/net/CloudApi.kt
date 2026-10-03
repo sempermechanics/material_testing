@@ -22,7 +22,7 @@ interface CloudApi {
     /** A backend is configured and the debug sign-in bypass is off. */
     val enabled: Boolean
 
-    suspend fun me(idToken: String): MeResponse
+    suspend fun getMe(idToken: String): MeResponse
 
     suspend fun getConfig(idToken: String): AppConfigDto
 
@@ -44,7 +44,7 @@ interface CloudApi {
 
     suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse
 
-    suspend fun sessionUploads(idToken: String, sessionId: String): SessionUploadsResponse
+    suspend fun listSessionUploads(idToken: String, sessionId: String): SessionUploadsResponse
 
     suspend fun completeFile(idToken: String, fileId: String, request: FileCompleteRequest)
 

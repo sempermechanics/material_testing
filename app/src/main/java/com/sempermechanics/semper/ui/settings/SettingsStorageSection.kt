@@ -122,7 +122,7 @@ class SettingsStorageSection(
 
     private fun freeUpSpace() {
         activity.lifecycleScope.launch {
-            val outcome = StorageBudget.freeAllBackedUpAsync(activity)
+            val outcome = StorageBudget.freeAllBackedUpOnIo(activity)
             if (outcome.didAnything) {
                 activity.toast(
                     activity.resources.getQuantityString(
@@ -156,7 +156,7 @@ class SettingsStorageSection(
 
     private fun applyStorageBudget() {
         activity.lifecycleScope.launch {
-            val outcome = StorageBudget.enforceAsync(activity)
+            val outcome = StorageBudget.enforceOnIo(activity)
             if (outcome.didAnything) {
                 activity.toast(
                     activity.resources.getQuantityString(

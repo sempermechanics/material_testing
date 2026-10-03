@@ -246,7 +246,7 @@ internal class UploadSessionPlanner(
      */
     private suspend fun resumeSession(cloudSessionId: String, artifacts: List<UploadArtifact>): Resume {
         val state = try {
-            api.sessionUploads(idToken, cloudSessionId)
+            api.listSessionUploads(idToken, cloudSessionId)
         } catch (e: ApiException) {
             return unreadable(e)
         }

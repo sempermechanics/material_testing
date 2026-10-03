@@ -87,7 +87,7 @@ internal class AuthPasswordReset(
     /** "Forgot password": mails a reset link to the address in the form. */
     fun sendResetMail() {
         val email = binding.etEmail.text.toString().trim()
-        if (!activity.validEmail(email)) return
+        if (!activity.isValidEmail(email)) return
         activity.setLoading(true)
         activity.lifecycleScope.launch {
             val result = activity.authRepo.sendPasswordReset(email)

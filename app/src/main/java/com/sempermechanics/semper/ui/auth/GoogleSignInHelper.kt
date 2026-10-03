@@ -50,7 +50,7 @@ object GoogleSignInHelper {
      * Throws [NotConfiguredException] if Google isn't set up, or a `GetCredentialException`
      * if the user cancels / no credential is available.
      */
-    suspend fun getIdToken(activity: Activity): String {
+    suspend fun requestIdToken(activity: Activity): String {
         val webClientId = webClientId(activity) ?: throw NotConfiguredException()
 
         val option = GetSignInWithGoogleOption.Builder(webClientId).build()

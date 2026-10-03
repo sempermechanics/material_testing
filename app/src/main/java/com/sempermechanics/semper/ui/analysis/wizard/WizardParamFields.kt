@@ -54,7 +54,7 @@ class WizardParamFields(
     /** The VSG in px handed to the engine: the slider's window is in data points. */
     private fun strainWindow(): Int = VsgStudy.vsgFor(settings.etStrainWindow.value.toInt(), stepSize())
 
-    fun useKeysInterpolator(): Boolean = settings.rgInterpolator.checkedButtonId == R.id.rbKeys
+    fun isKeysInterpolatorSelected(): Boolean = settings.rgInterpolator.checkedButtonId == R.id.rbKeys
 
     /** Flushes any in-progress typing into the sliders (focus loss commits). */
     fun commit() {

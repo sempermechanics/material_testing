@@ -161,7 +161,7 @@ class AuthActivity : AppCompatActivity() {
         }
         val email = binding.etEmail.text.toString().trim()
         val password = binding.etPassword.text.toString()
-        if (!validEmail(email)) return
+        if (!isValidEmail(email)) return
         if (mode == AuthMode.REGISTER) {
             val failure = PasswordPolicy.validate(password)
             if (failure != null) {
@@ -196,7 +196,7 @@ class AuthActivity : AppCompatActivity() {
 
     private fun onSendEmailLink() {
         val email = binding.etEmail.text.toString().trim()
-        if (!validEmail(email)) return
+        if (!isValidEmail(email)) return
         setLoading(true)
         lifecycleScope.launch {
             val result = authRepo.sendSignInLink(email)
@@ -214,7 +214,7 @@ class AuthActivity : AppCompatActivity() {
         setLoading(true)
         lifecycleScope.launch {
             try {
-                val idToken = GoogleSignInHelper.getIdToken(this@AuthActivity)
+                val idToken = GoogleSignInHelper.requestIdToken(this@AuthActivity)
                 if (mode == AuthMode.REAUTH) {
                     finishReauth(authRepo.reauthenticateWithGoogle(idToken))
                 } else {
@@ -363,7 +363,7 @@ class AuthActivity : AppCompatActivity() {
         is PasswordPolicy.Failure.Missing -> getString(failure.message)
     }
 
-    internal fun validEmail(email: String): Boolean {
+    internal fun isValidEmail(email: String): Boolean {
         if (email.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             showMessage(getString(R.string.error_email_invalid))
             return false
