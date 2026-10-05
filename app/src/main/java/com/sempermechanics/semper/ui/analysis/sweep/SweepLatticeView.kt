@@ -28,7 +28,7 @@ import kotlin.math.hypot
  * Both plot axes: Y (VSG) is floored at 1; X (subset) uses evenly spaced
  * columns for the present subset sizes.
  */
-class VsgLatticeView @JvmOverloads constructor(
+class SweepLatticeView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0,
@@ -287,7 +287,7 @@ class VsgLatticeView @JvmOverloads constructor(
     private fun drawNodes(canvas: Canvas, columnX: Map<Int, Float>, yFor: (Int) -> Float) {
         val radius = dp(NODE_RADIUS_DP)
         val selectedRadius = radius + dp(SELECT_RING_DP)
-        // Single solved colour, not one per curve (VsgPlotView.paletteColor is
+        // Single solved colour, not one per curve (SweepPlotView.paletteColor is
         // reserved for the plot's own emphasis -- keying the node fill to it too
         // taught a colour that never matched once more than one node was solved,
         // since only the FOCUSED curve is ever shown in colour there now).

@@ -7,13 +7,13 @@ import org.json.JSONObject
 /**
  * The solver parameters one frame is computed with: [subset] (px, odd), grid
  * [step] (px) and [strainWindow], the VSG diameter in **px** that the engine is
- * handed (`VsgStudy.vsgFor(points, step)`), never the window in data points.
+ * handed (`SweepStudy.vsgFor(points, step)`), never the window in data points.
  *
  * The same three ints travel today as `subset/step/strainWindow` (`RunSpec`,
  * `SessionRecord`, `SkippedNode`, CSV frames), `subset/step/strainWin`
  * (`SessionRecordSettings`, the JNI call),
  * `subsetSize/step/strainWindow` (`ViewerArgs`, `ReportBuildParams`),
- * `subset/step/vsg` (`VsgStudy.Point`, `ParamClipboard`, lattice nodes), the
+ * `subset/step/vsg` (`SweepStudy.Point`, `ParamClipboard`, lattice nodes), the
  * `SUBSET_SIZE` / `STEP` / `STRAIN_WINDOW` extras and the `engine` object of
  * `metadata.json`. This is a view over those fields; it writes the same keys.
  *

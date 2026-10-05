@@ -7,7 +7,7 @@ import java.nio.ByteOrder
 
 /**
  * Direct-buffer allocate, overrun guard, and `.dat` write shared by the batch
- * run loop and the VSG sweep. This is only the buffer around the solve: the
+ * run loop and the parameter sweep. This is only the buffer around the solve: the
  * batch keeps its JNI `computeFullFieldDirect` call inline in its one loop
  * (`DicBatchRunner`), and the sweep solves through [SemperEngine.solve].
  */

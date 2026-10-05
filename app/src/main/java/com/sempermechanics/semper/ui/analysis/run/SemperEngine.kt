@@ -8,7 +8,7 @@ import com.sempermechanics.semper.report.newMetrics
 import java.nio.ByteBuffer
 
 /**
- * One full-field solve for the single-shot callers: the VSG sweep's per-node
+ * One full-field solve for the single-shot callers: the parameter sweep's per-node
  * solve and the noise-floor probe. Both cleared the output buffer, passed a
  * silent progress callback and handed back the engine's point count, around
  * the same JNI call; this is that wrapper.

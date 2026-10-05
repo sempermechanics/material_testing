@@ -74,7 +74,7 @@ object DicKeys {
     const val ROI_W = "ROI_W"
     const val ROI_H = "ROI_H"
 
-    // ── Parameter sweep (VsgStudy) → ResultViewerActivity
+    // ── Parameter sweep (SweepStudy) → ResultViewerActivity
     // A sweep varies the settings instead of the image, so each frame of the
     // result carries its own subset/step/strain window. Absent for an ordinary
     // analysis, which is what tells the viewer it is not looking at a sweep.

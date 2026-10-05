@@ -120,7 +120,7 @@
             android:textSize="11sp"
             android:textStyle="bold" />
 
-        <com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
+        <com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
             android:id="@+id/plotLineCut"
             android:layout_width="match_parent"
             android:layout_height="190dp"

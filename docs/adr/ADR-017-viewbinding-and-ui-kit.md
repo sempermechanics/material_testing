@@ -81,7 +81,7 @@ Conventions:
 **Not Compose.** The app has no Compose dependency. Moving to it would mean a
 new compiler plugin and runtime, rewriting every screen at once or living
 with interop at each boundary, and keeping the custom drawing views
-(`StudioOverlayView`, `VsgPlotView`, `TouchImageView`, `VsgLatticeView`) as
+(`StudioOverlayView`, `SweepPlotView`, `TouchImageView`, `SweepLatticeView`) as
 Views anyway. The Robolectric view tests (TD-57) are written against Views.
 ViewBinding removes the run-time lookup failures with one Gradle flag and no
 change to how a screen is built.

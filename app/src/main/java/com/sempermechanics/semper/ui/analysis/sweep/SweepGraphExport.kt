@@ -17,15 +17,15 @@ import java.io.FileOutputStream
 
 /**
  * The strain graph as a shareable PNG: a header (study, images, settings), the
- * plot body rendered from a detached [VsgPlotView] at full fit, and a colour
+ * plot body rendered from a detached [SweepPlotView] at full fit, and a colour
  * legend of the curves. Detached so it never disturbs the on-screen (scrolled)
  * plot.
  */
-internal class LatticeGraphExport(private val activity: AppCompatActivity) {
+internal class SweepGraphExport(private val activity: AppCompatActivity) {
 
     /** Composes the PNG's bitmap for [series], titled by [header] (first line bold). */
-    fun render(series: List<VsgPlotView.Series>, header: List<String>, xLabel: String, yLabel: String): Bitmap {
-        val plotBitmap = VsgPlotView(activity).apply {
+    fun render(series: List<SweepPlotView.Series>, header: List<String>, xLabel: String, yLabel: String): Bitmap {
+        val plotBitmap = SweepPlotView(activity).apply {
             zoomEnabled = false
             setData(series, xLabel, yLabel)
         }.renderToBitmap(EXPORT_PLOT_WIDTH_PX, EXPORT_PLOT_HEIGHT_PX)
@@ -91,7 +91,7 @@ internal class LatticeGraphExport(private val activity: AppCompatActivity) {
     }
 
     /** One colour swatch + param label per curve, laid out in [EXPORT_LEGEND_COLS] columns. */
-    private fun drawLegend(canvas: Canvas, series: List<VsgPlotView.Series>, top: Float) {
+    private fun drawLegend(canvas: Canvas, series: List<SweepPlotView.Series>, top: Float) {
         val swatchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.DKGRAY

@@ -212,7 +212,7 @@ class LineCutPreviewView @JvmOverloads constructor(
         }
         canvas.drawRect(roiRect, roiStrokePaint)
 
-        val line = VsgStudy.centreLine(roi, horizontal)
+        val line = SweepStudy.centreLine(roi, horizontal)
         if (line.horizontal) {
             val y = mapY(line.position)
             canvas.drawLine(roiRect.left, y, roiRect.right, y, cutPaint)

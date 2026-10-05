@@ -8,7 +8,7 @@ package com.sempermechanics.semper.ui.analysis.sweep
  *
  * Today these are seven `var`s on `AnalysisViewModel` (`subsetMin` … `stepDenominator`),
  * the seven-int `"sweepRanges"` array of the wizard's saved state, and the
- * seven parameters of [VsgStudy.plan]. The ranges are 0 until a recommendation
+ * seven parameters of [SweepStudy.plan]. The ranges are 0 until a recommendation
  * or default seeds them ([UNSEEDED]).
  */
 data class SweepRanges(
@@ -16,21 +16,21 @@ data class SweepRanges(
     val subsetMax: Int,
     val strainWinMin: Int,
     val strainWinMax: Int,
-    val subsetSamples: Int = VsgStudy.DEFAULT_SUBSET_SAMPLES,
-    val strainWinSamples: Int = VsgStudy.DEFAULT_VSG_SAMPLES,
-    val stepDenominator: Int = VsgStudy.DEFAULT_STEP_DENOM,
+    val subsetSamples: Int = SweepStudy.DEFAULT_SUBSET_SAMPLES,
+    val strainWinSamples: Int = SweepStudy.DEFAULT_VSG_SAMPLES,
+    val stepDenominator: Int = SweepStudy.DEFAULT_STEP_DENOM,
 ) {
 
     /**
      * The combinations this sweep solves when the ROI holds subsets up to
      * [subsetCeiling] (`RoiResolveHelper.maxSubsetForRoi`): none when even
-     * [subsetMin] is over it, else [VsgStudy.plan] with [subsetMax] capped at
+     * [subsetMin] is over it, else [SweepStudy.plan] with [subsetMax] capped at
      * it. The rule `SweepSetupController.currentPlan` applies.
      */
-    fun plan(subsetCeiling: Int): List<VsgStudy.Point> = if (subsetMin > subsetCeiling) {
+    fun plan(subsetCeiling: Int): List<SweepStudy.Point> = if (subsetMin > subsetCeiling) {
         emptyList()
     } else {
-        VsgStudy.plan(
+        SweepStudy.plan(
             subsetMin = subsetMin,
             subsetMax = subsetMax.coerceAtMost(subsetCeiling),
             subsetSamples = subsetSamples,

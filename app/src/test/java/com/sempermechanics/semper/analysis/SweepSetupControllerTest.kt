@@ -6,7 +6,7 @@ import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
 import org.junit.Assert.assertEquals
@@ -31,7 +31,7 @@ class SweepSetupControllerTest {
         override fun updateWizardChrome() = Unit
         override fun checkReady() = Unit
         override fun commitParamFields() = Unit
-        override fun startVsgSweep() = Unit
+        override fun startSweep() = Unit
         override fun currentSubsetSize(): Int = 21
         override fun maxSubsetForRoi(): Int = maxSubset
         override fun refPreviewBitmap(): Bitmap? = null
@@ -51,7 +51,7 @@ class SweepSetupControllerTest {
 
     @Test
     fun `no frames resolves to frame zero`() {
-        vm.vsgFrameIndex = 3
+        vm.sweepFrameIndex = 3
         assertEquals(0, helper.resolvedSweepFrame())
     }
 
@@ -68,7 +68,7 @@ class SweepSetupControllerTest {
     @Test
     fun `a stored frame is kept while it exists and replaced once it does not`() {
         frames(5)
-        vm.vsgFrameIndex = 4
+        vm.sweepFrameIndex = 4
         assertEquals(4, helper.resolvedSweepFrame())
         frames(3) // the user removed frames after picking
         assertEquals(1, helper.resolvedSweepFrame())
@@ -90,7 +90,7 @@ class SweepSetupControllerTest {
         val plan = helper.currentPlan()
         assertTrue(plan.isNotEmpty())
         assertTrue(plan.all { it.subset <= 41 })
-        val expected = VsgStudy.plan(
+        val expected = SweepStudy.plan(
             subsetMin = 21,
             subsetMax = 41,
             subsetSamples = 3,
@@ -106,7 +106,7 @@ class SweepSetupControllerTest {
     fun `a range that starts above the ceiling plans nothing`() {
         sweep(51, 61)
         callbacks.maxSubset = 41
-        assertEquals(emptyList<VsgStudy.Point>(), helper.currentPlan())
+        assertEquals(emptyList<SweepStudy.Point>(), helper.currentPlan())
     }
 
     @Test

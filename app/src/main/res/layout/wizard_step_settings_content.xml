@@ -473,7 +473,7 @@
                             android:textStyle="bold" />
                     </LinearLayout>
 
-                    <!-- In data points (VsgStudy.MIN_WINDOW_POINTS..MAX_WINDOW_POINTS);
+                    <!-- In data points (SweepStudy.MIN_WINDOW_POINTS..MAX_WINDOW_POINTS);
                          tvStrainVsg below shows the VSG in px it gives at the current step. -->
                     <com.google.android.material.slider.Slider
                         android:id="@+id/sliderStrainWindow"

@@ -180,8 +180,8 @@ One Activity, three pages (`WizardStep`); pages 2 and 3 inflate from ViewStubs.
 | A5.1 | Load frames | `StaticAnalysisActivity` + `AnalysisWizardSlots` / `AnalysisWizardCoach` | `ui/common/media/MediaPickerSheet` → `ui/analysis/frames/FrameImportHelper` → `imaging/BitmapDecoder`; ordering via `AnalysisFrameOrderMenuHelper` + `FrameOrderHelper` / `FrameOrderAdapter` |
 | A5.1a | Video source | same | `AnalysisVideoExtractController` → `VideoFrameExtractor` |
 | A5.2 | Confirm settings | same | `AnalysisSettingsSheetController`, `SubsetRecommender` (SSSIG seed), `data/prefs/ParamClipboard` (Paste params), ROI card → A6, `AnalysisReadyGate` |
-| A5.3 | Sweep summary `[sweep]` | same | `SweepSetupController` + `VsgStudy` (plan) + `LineCutPreviewView` |
-| A5.4 | Running | `BatchRunController` + `ComputeOverlayController` | `RunChannels.launchBatchAnalysis` → `runBatchAnalysis` → `DicBatchRunner.runBatchAnalysisBody` → `DicFieldIo` → JNI `SemperNativeLib.computeFullFieldDirect`; sweeps go `RunChannels.launchVsgSweep` → `SweepRunner.runVsgSweep` → `VsgStudyRunner` |
+| A5.3 | Sweep summary `[sweep]` | same | `SweepSetupController` + `SweepStudy` (plan) + `LineCutPreviewView` |
+| A5.4 | Running | `BatchRunController` + `ComputeOverlayController` | `RunChannels.launchBatchAnalysis` → `runBatchAnalysis` → `DicBatchRunner.runBatchAnalysisBody` → `DicFieldIo` → JNI `SemperNativeLib.computeFullFieldDirect`; sweeps go `RunChannels.launchSweep` → `SweepRunner.runSweep` → `SweepStudyRunner` |
 | A5.5 | Terminal states | `EngineFailure` + `ui/common/dialog/FaqRedirect` | `field/RunStop`, `ConvergenceGate`, `AnalysisCancelGate` |
 
 | Field | Value |
@@ -190,7 +190,7 @@ One Activity, three pages (`WizardStep`); pages 2 and 3 inflate from ViewStubs.
 | Then | Once the row is saved, `saveRunRecord` calls `data/cloud/CloudSync.enqueueUpload` → B1 when cloud backup is on. `afterSave` reads the save's `UpsertOutcome` for both, a sweep's through `SweepRunner.finishSolvedSweep` → `persistSweepSession`: a full quota ends the run at the session limit and opens the session-limit screen; an index that could not be read or written shows **Analysis not saved**. Either way a sweep's lattice does not open, and the sweep records `analysis_failed` with reason `session_limit` or `index_unavailable` (`SweepRunner.sweepEndEvent`) |
 | Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart, and in the backup's `metadata.json` `metrics` so it survives a restore. A re-run that saves nothing updates or drops its Home row to match what is left on disk (`DicBatchRunner.afterUnsavedRerun`); a cancelled re-run is saved as a partial run |
 | Signals | Timber; `android.os.Trace` sections; `diagnostics/SemperAnalytics` analysis started / completed / failed (consent-gated, buckets only) |
-| Tests | `analysis/VsgStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
+| Tests | `analysis/SweepStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
 
 **Accuracy invariants** (do not "clean up"): the JNI output buffer is sized to
 the ROI grid and the returned point count is checked against that capacity
@@ -214,11 +214,11 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 | Field | Value |
 |---|---|
 | Entry | `ui/analysis/VsgLatticeActivity` (a sweep opens here, not in the viewer) |
-| Chain | `VsgLatticeView` (nodes) + `VsgPlotView` (line-cut plot) + `VsgStudy` (plan maths); node open → A8 |
+| Chain | `SweepLatticeView` (nodes) + `SweepPlotView` (line-cut plot) + `SweepStudy` (plan maths); node open → A8 |
 | Reads | `DicKeys.SWEEP_*` extras packed by `AnalysisNavHelper.openResults` or `ui/home/SessionOpenHelper.intentFor` |
 | Writes | `data/prefs/ParamClipboard` on a parameter-chip copy |
 | Fails as | Hollow node → `EngineFailure.shortReasonRes` + FAQ |
-| Tests | `analysis/VsgStudyTest`, `EngineFailureTest` |
+| Tests | `analysis/SweepStudyTest`, `EngineFailureTest` |
 
 ### A8 Result viewer
 

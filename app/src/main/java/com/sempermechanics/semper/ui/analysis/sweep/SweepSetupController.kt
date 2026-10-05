@@ -22,7 +22,7 @@ import com.sempermechanics.semper.ui.common.onButtonChecked
 /**
  * Parameter-sweep setup UI for the analysis wizard (§5.4.5 parameter sweep): mode
  * toggle, subset/VSG/sample fields, lattice + line-cut previews, and plan
- * summary. Orchestration ([startVsgSweep], progress, lifecycle) stays in the
+ * summary. Orchestration ([startSweep], progress, lifecycle) stays in the
  * Activity. The range inputs are [SweepRangeFields]; the frame dialog is
  * [SweepFramePicker].
  */
@@ -37,7 +37,7 @@ class SweepSetupController(
         fun updateWizardChrome()
         fun checkReady()
         fun commitParamFields()
-        fun startVsgSweep()
+        fun startSweep()
         fun currentSubsetSize(): Int
         fun maxSubsetForRoi(): Int
         fun refPreviewBitmap(): Bitmap?
@@ -50,8 +50,8 @@ class SweepSetupController(
         const val SUGGESTED_SUBSET_SPAN = 20
 
         /** Hard bounds on strain window input, in data points — the guardrail against a mistyped huge number. */
-        const val STRAIN_WIN_MIN_INPUT = VsgStudy.MIN_WINDOW_POINTS
-        const val STRAIN_WIN_MAX_INPUT = VsgStudy.MAX_WINDOW_POINTS
+        const val STRAIN_WIN_MIN_INPUT = SweepStudy.MIN_WINDOW_POINTS
+        const val STRAIN_WIN_MAX_INPUT = SweepStudy.MAX_WINDOW_POINTS
     }
 
     private lateinit var rgAnalysisMode: MaterialButtonToggleGroup
@@ -62,7 +62,7 @@ class SweepSetupController(
     private lateinit var tvSweepPlan: TextView
     private lateinit var sweepPlanWarn: WarnChip
     private lateinit var lineCutPreview: LineCutPreviewView
-    private lateinit var sweepLatticePreview: VsgLatticeView
+    private lateinit var sweepLatticePreview: SweepLatticeView
     lateinit var btnRunSweep: Button
         private set
     private lateinit var latticeSamplesBody: View
@@ -71,7 +71,7 @@ class SweepSetupController(
     private var rangeFields: SweepRangeFields? = null
 
     private val framePicker = SweepFramePicker(activity, viewModel) { picked ->
-        viewModel.vsgFrameIndex = picked
+        viewModel.sweepFrameIndex = picked
         refreshSweepPlan()
     }
 
@@ -115,7 +115,7 @@ class SweepSetupController(
 
         btnRunSweep.setOnClickListener {
             callbacks.commitParamFields()
-            callbacks.startVsgSweep()
+            callbacks.startSweep()
         }
 
         activity.findViewById<View>(R.id.btnLatticeSamples).setOnClickListener {
@@ -170,7 +170,7 @@ class SweepSetupController(
      * The sweep grid the current inputs describe, capped to the subsets the ROI
      * can hold: x subset sizes × y strain windows, one step per subset.
      */
-    fun currentPlan(): List<VsgStudy.Point> = sweepRanges().plan(callbacks.maxSubsetForRoi())
+    fun currentPlan(): List<SweepStudy.Point> = sweepRanges().plan(callbacks.maxSubsetForRoi())
 
     /** The view model's seven sweep inputs as one value. */
     private fun sweepRanges() = SweepRanges(
@@ -223,7 +223,7 @@ class SweepSetupController(
         val n = viewModel.defCount
         if (n <= 0) return 0
         val last = n - 1
-        val stored = viewModel.vsgFrameIndex
+        val stored = viewModel.sweepFrameIndex
         return if (stored < 0 || stored > last) {
             (n / 2).coerceIn(0, last)
         } else {
@@ -232,7 +232,7 @@ class SweepSetupController(
     }
 
     /** "N analyses · subset a–b px · window c–d points" for a plan. */
-    fun planSummary(plan: List<VsgStudy.Point>): String = activity.resources.getQuantityString(
+    fun planSummary(plan: List<SweepStudy.Point>): String = activity.resources.getQuantityString(
         R.plurals.sweep_plan_grid_fmt,
         plan.size,
         plan.size,
@@ -243,7 +243,7 @@ class SweepSetupController(
     )
 
     /** Short per-combination label; becomes the frame name in viewer and report. */
-    fun combinationLabel(point: VsgStudy.Point): String = activity.getString(
+    fun combinationLabel(point: SweepStudy.Point): String = activity.getString(
         R.string.sweep_frame_label_fmt,
         point.subset,
         point.step,
@@ -309,12 +309,12 @@ class SweepSetupController(
         )
     }
 
-    private fun refreshLatticePreview(plan: List<VsgStudy.Point>) {
+    private fun refreshLatticePreview(plan: List<SweepStudy.Point>) {
         if (!::sweepLatticePreview.isInitialized) return
         sweepLatticePreview.onNodeClick = null
         sweepLatticePreview.setNodes(
             plan.map { point ->
-                VsgLatticeView.Node(
+                SweepLatticeView.Node(
                     subset = point.subset,
                     step = point.step,
                     window = point.window,

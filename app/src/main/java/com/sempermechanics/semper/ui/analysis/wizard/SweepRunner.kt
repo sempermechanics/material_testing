@@ -21,7 +21,7 @@ import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.afterSave
 import com.sempermechanics.semper.ui.analysis.run.baseName
 import com.sempermechanics.semper.ui.analysis.run.saveRunRecord
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudyRunner
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.sweep.toSkippedNode
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -30,7 +30,7 @@ import java.util.Date
 import java.util.Locale
 
 /*
- * Virtual strain gauge study (see VsgStudy): the sweep's run, and the
+ * Virtual strain gauge study (see SweepStudy): the sweep's run, and the
  * session it is saved as. One solve per combination, on the native thread.
  */
 
@@ -39,20 +39,20 @@ import java.util.Locale
  * parameter combination, so the result viewer and the report treat the
  * combinations exactly as they treat frames.
  */
-internal suspend fun AnalysisViewModel.runVsgSweep(
+internal suspend fun AnalysisViewModel.runSweep(
     appContext: Context,
     spec: RunSpec,
-    onProgress: (VsgStudyRunner.Progress) -> Unit,
+    onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
     traceSection("Semper.analysis.sweep") {
-        runVsgSweepBody(appContext, spec, onProgress)
+        runSweepBody(appContext, spec, onProgress)
     }
 }
 
-private fun AnalysisViewModel.runVsgSweepBody(
+private fun AnalysisViewModel.runSweepBody(
     appContext: Context,
     spec: RunSpec,
-    onProgress: (VsgStudyRunner.Progress) -> Unit,
+    onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome {
     val sweep = checkNotNull(spec.sweep) { "not a sweep" }
     val plan = sweep.plan
@@ -74,7 +74,7 @@ private fun AnalysisViewModel.solveSweep(
     spec: RunSpec,
     bytes: ByteArray,
     startedAt: Long,
-    onProgress: (VsgStudyRunner.Progress) -> Unit,
+    onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome {
     val sweep = checkNotNull(spec.sweep)
     val plan = sweep.plan
@@ -87,11 +87,11 @@ private fun AnalysisViewModel.solveSweep(
     // A run that throws must not report the previous sweep's skipped nodes.
     sweepSkippedNodes = emptyList()
 
-    val result = VsgStudyRunner.run(
+    val result = SweepStudyRunner.run(
         bytes,
         realRefWidth,
         realRefHeight,
-        VsgStudyRunner.Params(
+        SweepStudyRunner.Params(
             plan = plan,
             defFramePath = defFilePaths[sweep.frameIndex],
             roiX = spec.roi.x,
@@ -180,7 +180,7 @@ private fun sweepEvent(appContext: Context, event: String, vararg params: Pair<S
 }
 
 /** One [SkippedNode] per combination the engine could not solve, in plan order. */
-private fun VsgStudyRunner.SweepResult.skippedNodes(): List<SkippedNode> =
+private fun SweepStudyRunner.SweepResult.skippedNodes(): List<SkippedNode> =
     skipped.mapIndexed { index, point -> point.toSkippedNode(skippedCodes[index]) }
 
 /** What a finished sweep's session is assembled from. */
@@ -188,7 +188,7 @@ internal class SweepSession(
     val localSessionId: String,
     val batchDir: File,
     val reference: ByteArray,
-    val result: VsgStudyRunner.SweepResult,
+    val result: SweepStudyRunner.SweepResult,
     val spec: RunSpec,
     val executionTimeMs: Int,
 )
@@ -269,7 +269,7 @@ private class SweepSummary(
 private fun sweepSummary(
     appContext: Context,
     localSessionId: String,
-    result: VsgStudyRunner.SweepResult,
+    result: SweepStudyRunner.SweepResult,
     sweep: RunSpec.Sweep,
     defDisplay: String,
 ): SweepSummary {

@@ -13,7 +13,7 @@ import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.BatchRun
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudyRunner
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,7 +44,7 @@ internal class RunChannels {
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     val batchOutcome = MutableSharedFlow<Result<BatchAnalysisOutcome>>(extraBufferCapacity = 1)
-    val sweepProgress = MutableSharedFlow<VsgStudyRunner.Progress?>(
+    val sweepProgress = MutableSharedFlow<SweepStudyRunner.Progress?>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
@@ -127,13 +127,13 @@ private suspend fun AnalysisViewModel.runBatchAnalysis(
  * result on [AnalysisViewModel.sweepOutcome].
  */
 @Suppress("TooGenericExceptionCaught") // any failure is the sweep's outcome
-fun AnalysisViewModel.launchVsgSweep(appContext: Context, spec: RunSpec) {
+fun AnalysisViewModel.launchSweep(appContext: Context, spec: RunSpec) {
     require(spec.sweep != null) { "not a sweep" }
     if (runs.sweepJob?.isActive == true) return
     runs.sweepJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
         runs.sweepProgress.tryEmit(null)
         try {
-            val outcome = runVsgSweep(appContext, spec) { update ->
+            val outcome = runSweep(appContext, spec) { update ->
                 if (isActive) runs.sweepProgress.tryEmit(update)
             }
             runs.sweepOutcome.emit(Result.success(outcome))

@@ -902,7 +902,7 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 | Feature | Where | Why unreachable |
 |---|---|---|
 | **Circle, ellipse and freeform ROI** | `StudioOverlayView` — full draw, hit-test and mask generation | `activity_roi_draw.xml` only exposes Rect and Square; everything else collapses to Rectangle |
-| **Convergence view** (peak strain and noise vs VSG) | documented in `VsgPlotView` / `VsgStudy` | Never built — only line-cut plots exist |
+| **Convergence view** (peak strain and noise vs VSG) | documented in `SweepPlotView` / `SweepStudy` | Never built — only line-cut plots exist |
 | Frame-order *picker* mode | `FrameOrderHelper` | Only the initial state; the sort menu offers no way back once you sort |
 
 ### Behavioural gaps worth knowing

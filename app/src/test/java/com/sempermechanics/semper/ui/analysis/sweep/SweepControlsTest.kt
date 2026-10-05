@@ -20,7 +20,7 @@ import java.io.File
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
-class LatticeControlsTest {
+class SweepControlsTest {
 
     @get:Rule
     val temp = TemporaryFolder()
@@ -31,26 +31,27 @@ class LatticeControlsTest {
 
     @Test
     fun `no scrub reads nothing`() {
-        val samples = listOf(VsgPlotView.Sample("a", 1f, 0))
+        val samples = listOf(SweepPlotView.Sample("a", 1f, 0))
         assertEquals("", scrubReadout(context, Float.NaN, samples).toString())
         assertEquals("", scrubReadout(context, 3f, emptyList()).toString())
     }
 
     @Test
     fun `one curve reads as x and y`() {
-        assertEquals("x=12.0 y=2.500", scrubReadout(context, 12f, listOf(VsgPlotView.Sample("a", 2.5f, 0))).toString())
+        val samples = listOf(SweepPlotView.Sample("a", 2.5f, 0))
+        assertEquals("x=12.0 y=2.500", scrubReadout(context, 12f, samples).toString())
     }
 
     @Test
     fun `several curves read as x and each label's value`() {
-        val samples = listOf(VsgPlotView.Sample("a", 1.5f, 0), VsgPlotView.Sample("b", -0.25f, 0))
+        val samples = listOf(SweepPlotView.Sample("a", 1.5f, 0), SweepPlotView.Sample("b", -0.25f, 0))
         assertEquals("x=3.0 a=1.500  b=-0.2500", scrubReadout(context, 3f, samples).toString())
     }
 
     // ── latticeSummary ──
 
     private fun node(step: Int, solved: Boolean) =
-        VsgLatticeView.Node(subset = 21, step = step, window = 5, vsg = 35, solved = solved)
+        SweepLatticeView.Node(subset = 21, step = step, window = 5, vsg = 35, solved = solved)
 
     private val nodes = listOf(node(7, true), node(7, true), node(7, false))
 
@@ -93,7 +94,7 @@ class LatticeControlsTest {
         val solved = solvedLatticeNodes(sweep())
         assertEquals(listOf(0, 1), solved.map { it.frameIndex })
         assertEquals(listOf(21, 31), solved.map { it.subset })
-        val windows = listOf(VsgStudy.windowPointsFor(35, 7), VsgStudy.windowPointsFor(50, 10))
+        val windows = listOf(SweepStudy.windowPointsFor(35, 7), SweepStudy.windowPointsFor(50, 10))
         assertEquals(windows, solved.map { it.window })
         assertTrue(solved.all { it.solved })
         assertTrue(solvedLatticeNodes(null).isEmpty())
@@ -114,8 +115,8 @@ class LatticeControlsTest {
 
     @Test
     fun `a missing or empty batch directory has no profiles`() {
-        val line = VsgStudy.StudyLine(horizontal = true, position = 0f)
-        val components = VsgStudy.STRAIN_COMPONENTS.toIntArray()
+        val line = SweepStudy.StudyLine(horizontal = true, position = 0f)
+        val components = SweepStudy.STRAIN_COMPONENTS.toIntArray()
         assertTrue(readSweepFrameProfiles(File(temp.root, "gone"), listOf(7), 7, components, line).isEmpty())
         assertTrue(readSweepFrameProfiles(temp.newFolder("empty"), listOf(7), 7, components, line).isEmpty())
     }

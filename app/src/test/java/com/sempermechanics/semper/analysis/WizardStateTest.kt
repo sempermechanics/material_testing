@@ -97,7 +97,7 @@ class WizardStateTest {
         stepDenominator = 4
         subsetOverlap = 0.75
         lineCutHorizontal = false
-        vsgFrameIndex = 1
+        sweepFrameIndex = 1
         workingLocalId = "abc123"
     }
 
@@ -133,7 +133,7 @@ class WizardStateTest {
         )
         assertEquals(0.75, after.subsetOverlap, 0.0)
         assertFalse(after.lineCutHorizontal)
-        assertEquals(1, after.vsgFrameIndex)
+        assertEquals(1, after.sweepFrameIndex)
         // The re-run keeps its Home row instead of making a second one.
         assertEquals("abc123", after.workingLocalId)
         // Not yet: the heavy inputs wait for restoreDraft.

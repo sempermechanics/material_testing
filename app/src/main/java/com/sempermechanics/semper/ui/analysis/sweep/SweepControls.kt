@@ -66,7 +66,7 @@ internal fun animateCopyConfirmation(view: View) {
  * Scrub readout: x plus the unmuted series' y values (one series → `y=…`,
  * several → each `label=value`).
  */
-internal fun scrubReadout(context: Context, x: Float, samples: List<VsgPlotView.Sample>): CharSequence {
+internal fun scrubReadout(context: Context, x: Float, samples: List<SweepPlotView.Sample>): CharSequence {
     if (x.isNaN() || samples.isEmpty()) return ""
     return if (samples.size == 1) {
         context.getString(R.string.vsg_lattice_scrub_xy_fmt, x, samples[0].value)
@@ -83,7 +83,7 @@ internal fun scrubReadout(context: Context, x: Float, samples: List<VsgPlotView.
  */
 internal fun latticeSummary(
     resources: Resources,
-    nodes: List<VsgLatticeView.Node>,
+    nodes: List<SweepLatticeView.Node>,
     solvedCount: Int,
     skippedCount: Int,
     plannedFrames: Int,

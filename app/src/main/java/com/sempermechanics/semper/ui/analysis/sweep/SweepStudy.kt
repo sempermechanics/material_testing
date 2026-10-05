@@ -38,7 +38,7 @@ import kotlin.math.roundToInt
  * rather than on a summary statistic.
  */
 @Suppress("TooManyFunctions") // planning and line-cut extraction belong together
-object VsgStudy {
+object SweepStudy {
 
     /**
      * VSG of a strain window of [points] data points at [step], in pixels:

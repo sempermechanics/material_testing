@@ -25,7 +25,7 @@ Use these words. Do not invent synonyms.
 | step | Grid spacing between tracked points, px |
 | ZNSSD | Match score; 0 = perfect, ≤ 0.15 accepted, < 0 failed-point sentinel |
 | ICGN | Iterative Gauss-Newton sub-pixel solver |
-| VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd, 3–31); VSG = `(window − 1) × step + 1` px is what the engine and sessions get (`VsgStudy.vsgFor`) |
+| VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd, 3–31); VSG = `(window − 1) × step + 1` px is what the engine and sessions get (`SweepStudy.vsgFor`) |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 

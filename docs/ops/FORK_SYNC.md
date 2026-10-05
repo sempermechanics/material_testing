@@ -254,6 +254,14 @@ group is one commit, reviewable with `git diff -M`.
 | **Sign out wording** (the one copy change: "Log Out" → "Sign out") | |
 | `logout_confirm_title`, `logout_confirm_body`, `logout_success` | `sign_out_confirm_title` ("Sign out?"), `sign_out_confirm_body`, `sign_out_success` ("You have been signed out.") |
 | `action_log_out` ("Log Out") | `action_sign_out` (the existing key, same text now) |
+| **Sweep vocabulary** (`ui/analysis/sweep/` unless noted; "lattice" stays only for the grid of combinations) | |
+| `VsgStudy`, `VsgStudyRunner` (with its nested `SweepResult`) | `SweepStudy`, `SweepStudyRunner`; `SweepStudy.vsgFor` / `DEFAULT_VSG_SAMPLES` keep VSG (the quantity) |
+| `VsgPlotView`, `VsgPlotAxes`, `VsgPlotPalette`, `VsgPlotViewport` | `SweepPlotView`, `SweepPlotAxes`, `SweepPlotPalette`, `SweepPlotViewport` |
+| `VsgLatticeView` | `SweepLatticeView`; `VsgLatticeActivity`, `activity_vsg_lattice.xml` and its `vsg_lattice_*` strings keep their names (the Activity is pinned) |
+| `LatticeGraphExport`; files `LatticeControls.kt`, `LatticeProfiles.kt` | `SweepGraphExport`; `SweepControls.kt`, `SweepProfiles.kt` (the functions in them keep their names and package) |
+| `SweepSetupController.Callbacks.startVsgSweep`; `AnalysisViewModel.launchVsgSweep`, `.runVsgSweep` (`ui/analysis/wizard/`) | `startSweep`; `launchSweep`, `runSweep` |
+| `AnalysisViewModel.vsgFrameIndex` | `sweepFrameIndex` (saved-state key `"vsgFrameIndex"` unchanged) |
+| Tests: `VsgStudyTest`, `VsgStudyRunnerParamsTest`, `VsgPlotViewTest`, `VsgPlotViewportTest`, `VsgLatticeViewTest`, `LatticeControlsTest`; oracle `ui/common/vsg_plot_clamp_viewport.txt` | `SweepStudyTest`, `SweepStudyRunnerParamsTest`, `SweepPlotViewTest`, `SweepPlotViewportTest`, `SweepLatticeViewTest`, `SweepControlsTest`; `sweep_plot_clamp_viewport.txt` |
 
 ## Porting back
 

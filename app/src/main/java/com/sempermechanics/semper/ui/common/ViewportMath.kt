@@ -11,7 +11,7 @@ package com.sempermechanics.semper.ui.common
  *   translation in view px — [panCorrection], [clampScale].
  * - **Centre fraction** (`RoiViewport`, behind `StudioOverlayView`): the
  *   image point at the view centre, 0..1 of the side — [centerFraction].
- * - **Data window** (`VsgPlotView`): the visible data range, inside the full
+ * - **Data window** (`SweepPlotView`): the visible data range, inside the full
  *   extent — [clampWindow].
  *
  * The rule is the same for all three: content larger than the window always
@@ -74,7 +74,7 @@ object ViewportMath {
      * Keeps [min]..[max] inside [fullMin]..[fullMax] and at least
      * [minSpanFraction] of the full extent wide (widened about its middle).
      * A window as wide as the extent becomes the extent; a narrower one is
-     * slid back inside it, keeping its width. `VsgPlotView.clampViewport`, per axis.
+     * slid back inside it, keeping its width. `SweepPlotView.clampViewport`, per axis.
      */
     fun clampWindow(min: Float, max: Float, fullMin: Float, fullMax: Float, minSpanFraction: Float): Window {
         var lo = min

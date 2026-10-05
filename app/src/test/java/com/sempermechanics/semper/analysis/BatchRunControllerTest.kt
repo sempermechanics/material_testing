@@ -14,7 +14,7 @@ import com.sempermechanics.semper.ui.analysis.run.ComputeOverlayController
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
 import com.sempermechanics.semper.ui.analysis.run.RunChrome
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudyRunner
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import org.junit.Assert.assertEquals
@@ -88,7 +88,7 @@ class BatchRunControllerTest {
                 onDialog(Shown(message, faqUrlRes))
 
             override fun clearEngineFailFaq() = Unit
-            override fun onSweepProgress(progress: VsgStudyRunner.Progress) = Unit
+            override fun onSweepProgress(progress: SweepStudyRunner.Progress) = Unit
             override fun onSweepFinished(outcome: BatchAnalysisOutcome?) {
                 sweepsFinished += outcome
             }

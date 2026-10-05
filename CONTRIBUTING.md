@@ -280,6 +280,9 @@ them:
 
 25. One word per user-facing concept, in copy and in code. "Sign out", never
     "log out" (keys `sign_out_*`, `action_sign_out`).
+    The UI's "Parameter sweep" is `Sweep*` in code (`SweepStudy`, `SweepPlotView`,
+    `runSweep`); "lattice" names only the grid of combinations, and VSG only the
+    virtual strain gauge size. `VsgLatticeActivity` is pinned.
 
 **Never renamed:** persisted values keep their exact strings (prefs files and
 keys, intent extras, Bundle / SavedState keys, WorkManager names, tags and Data

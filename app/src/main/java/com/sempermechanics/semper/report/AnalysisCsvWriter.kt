@@ -4,7 +4,7 @@
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.field.DicResult
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import java.io.File
 import java.io.Writer
 import java.util.Locale
@@ -268,7 +268,7 @@ object AnalysisCsvWriter {
     private fun prefix(frame: Frame, sweep: Boolean): String {
         val image = escape(frame.image)
         if (!sweep) return "$image,"
-        val points = VsgStudy.windowPointsFor(frame.strainWindow, frame.step)?.toString().orEmpty()
+        val points = SweepStudy.windowPointsFor(frame.strainWindow, frame.step)?.toString().orEmpty()
         return "$image,${frame.subset},${frame.step},$points,${frame.strainWindow},"
     }
 

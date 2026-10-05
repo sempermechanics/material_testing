@@ -20,32 +20,32 @@ import org.robolectric.annotation.Config
 /**
  * What the strain plot reports back: the value under the scrub line (the
  * readout the guide's conclusions are read from), and the data-space viewport
- * a pinch or pan leaves behind. Everything is read through [VsgPlotView.onScrub]
- * and [VsgPlotView.scrubToFraction], so no assertion depends on the gutter
- * widths in pixels. The gutter's own tests call [VsgPlotAxes.compactLeftPad]
+ * a pinch or pan leaves behind. Everything is read through [SweepPlotView.onScrub]
+ * and [SweepPlotView.scrubToFraction], so no assertion depends on the gutter
+ * widths in pixels. The gutter's own tests call [SweepPlotAxes.compactLeftPad]
  * with a phone's font metrics, which Robolectric's text measuring does not have.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
-class VsgPlotViewTest {
+class SweepPlotViewTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
-    private lateinit var view: VsgPlotView
+    private lateinit var view: SweepPlotView
 
-    private data class Scrub(val x: Float, val samples: List<VsgPlotView.Sample>)
+    private data class Scrub(val x: Float, val samples: List<SweepPlotView.Sample>)
 
     private val scrubs = mutableListOf<Scrub>()
     private val fractions = mutableListOf<Float>()
 
-    private val rising = VsgPlotView.Series("rising", Color.RED, listOf(0f to 0f, 10f to 10f, 20f to 40f))
-    private val flat = VsgPlotView.Series("flat", Color.BLUE, listOf(5f to 3f, 15f to 3f))
-    private val muted = VsgPlotView.Series("muted", Color.GRAY, listOf(0f to 100f, 20f to 100f), muted = true)
+    private val rising = SweepPlotView.Series("rising", Color.RED, listOf(0f to 0f, 10f to 10f, 20f to 40f))
+    private val flat = SweepPlotView.Series("flat", Color.BLUE, listOf(5f to 3f, 15f to 3f))
+    private val muted = SweepPlotView.Series("muted", Color.GRAY, listOf(0f to 100f, 20f to 100f), muted = true)
 
     private var clock = 0L
 
     @Before
     fun setUp() {
-        view = VsgPlotView(context).apply {
+        view = SweepPlotView(context).apply {
             onScrub = { x, samples -> scrubs += Scrub(x, samples) }
             onScrubMove = { fractions += it }
             setData(listOf(rising, flat, muted), "VSG", "strain")
@@ -83,7 +83,7 @@ class VsgPlotViewTest {
 
     @Test
     fun `nothing is reported before the plot has been laid out and drawn`() {
-        val fresh = VsgPlotView(context).apply {
+        val fresh = SweepPlotView(context).apply {
             onScrub = { x, samples -> scrubs += Scrub(x, samples) }
             setData(listOf(rising), "x", "y")
         }
@@ -135,7 +135,7 @@ class VsgPlotViewTest {
 
     @Test
     fun `a single x value still gets a unit-wide axis`() {
-        view.setData(listOf(VsgPlotView.Series("one", Color.RED, listOf(7f to 2f))), "x", "y")
+        view.setData(listOf(SweepPlotView.Series("one", Color.RED, listOf(7f to 2f))), "x", "y")
         redraw()
         assertEquals(7f to 8f, viewportX())
         assertEquals(2f, sampleOf("one"), EPS)
@@ -341,41 +341,41 @@ class VsgPlotViewTest {
 
     @Test
     fun `a tick that rounds to zero never reads -0`() {
-        assertEquals("0.00", VsgPlotAxes.tickLabel(-0.001f))
-        assertEquals("0.00", VsgPlotAxes.tickLabel(-0f))
-        assertEquals("-0.26", VsgPlotAxes.tickLabel(-0.26f))
-        assertEquals("-1.8", VsgPlotAxes.tickLabel(-1.8f))
-        assertEquals("-150", VsgPlotAxes.tickLabel(-150f))
-        assertEquals("1962", VsgPlotAxes.tickLabel(1962f))
+        assertEquals("0.00", SweepPlotAxes.tickLabel(-0.001f))
+        assertEquals("0.00", SweepPlotAxes.tickLabel(-0f))
+        assertEquals("-0.26", SweepPlotAxes.tickLabel(-0.26f))
+        assertEquals("-1.8", SweepPlotAxes.tickLabel(-1.8f))
+        assertEquals("-150", SweepPlotAxes.tickLabel(-150f))
+        assertEquals("1962", SweepPlotAxes.tickLabel(1962f))
     }
 
     @Test
     fun `the scrub label sits clear of its line, flipping left near the edge`() {
         // Plot 100..900, label 200 wide, 10 clear of the dot.
-        assertEquals(410f, VsgPlotAxes.scrubLabelX(400f, 200f, 10f, 100f, 900f), EPS)
-        assertEquals(700f, VsgPlotAxes.scrubLabelX(690f, 200f, 10f, 100f, 900f), EPS) // just fits
-        assertEquals(640f, VsgPlotAxes.scrubLabelX(850f, 200f, 10f, 100f, 900f), EPS)
+        assertEquals(410f, SweepPlotAxes.scrubLabelX(400f, 200f, 10f, 100f, 900f), EPS)
+        assertEquals(700f, SweepPlotAxes.scrubLabelX(690f, 200f, 10f, 100f, 900f), EPS) // just fits
+        assertEquals(640f, SweepPlotAxes.scrubLabelX(850f, 200f, 10f, 100f, 900f), EPS)
         // Too wide for either side: held at the left edge.
-        assertEquals(100f, VsgPlotAxes.scrubLabelX(150f, 900f, 10f, 100f, 900f), EPS)
+        assertEquals(100f, SweepPlotAxes.scrubLabelX(150f, 900f, 10f, 100f, 900f), EPS)
     }
 
     /** Pixel 6 (2.625 dp/px): 11 sp monospace, whose glyphs advance 0.6 em. */
     private val pixel6Px = 2.625f
-    private val monoChar = VsgPlotView.AXIS_LABEL_SP * pixel6Px * MONO_ADVANCE_EM
+    private val monoChar = SweepPlotView.AXIS_LABEL_SP * pixel6Px * MONO_ADVANCE_EM
     private val measureMono: (String) -> Float = { it.length * monoChar }
-    private val minPad = VsgPlotView.PAD_LEFT_COMPACT_DP * pixel6Px
-    private val gap = VsgPlotView.TICK_GAP_DP * pixel6Px
+    private val minPad = SweepPlotView.PAD_LEFT_COMPACT_DP * pixel6Px
+    private val gap = SweepPlotView.TICK_GAP_DP * pixel6Px
 
     @Test
     fun `a bending load axis's widest tick fits inside the compact gutter`() {
         // concrete_00 on a Pixel 6 (2026-09-26): the fixed 34 dp gutter showed "1686" for 21686.
         // Fractional, as the padded data bounds are: the middle tick lands on 7855.3, not 7855.5.
         val (yMin, yMax) = -5975.4f to 21686f
-        val labels = (0..VsgPlotView.GRID_LINES).map { VsgPlotAxes.tickLabel(VsgPlotAxes.yTick(yMin, yMax, it)) }
+        val labels = (0..SweepPlotView.GRID_LINES).map { SweepPlotAxes.tickLabel(SweepPlotAxes.yTick(yMin, yMax, it)) }
         assertEquals(listOf("-5975", "940", "7855", "14771", "21686"), labels)
         assertTrue("the old fixed gutter clipped it", measureMono("21686") + gap > minPad)
 
-        val pad = VsgPlotAxes.compactLeftPad(yMin, yMax, minPad, gap, measureMono)
+        val pad = SweepPlotAxes.compactLeftPad(yMin, yMax, minPad, gap, measureMono)
 
         labels.forEach { label ->
             // drawGridTicks right-aligns each tick at left - gap, so its left edge is here.
@@ -387,7 +387,7 @@ class VsgPlotViewTest {
     @Test
     fun `ticks that fit keep the compact gutter's minimum`() {
         // "1.0" … "5.0": three characters, well inside 34 dp.
-        assertEquals(minPad, VsgPlotAxes.compactLeftPad(1f, 5f, minPad, gap, measureMono), EPS)
+        assertEquals(minPad, SweepPlotAxes.compactLeftPad(1f, 5f, minPad, gap, measureMono), EPS)
     }
 
     // ── Export and palette ───────────────────────────────────────────────────
@@ -404,10 +404,10 @@ class VsgPlotViewTest {
 
     @Test
     fun `palette slots wrap for any index, including a skipped node's -1`() {
-        assertEquals(VsgPlotView.paletteColor(context, 7), VsgPlotView.paletteColor(context, -1))
-        assertEquals(VsgPlotView.paletteColor(context, 0), VsgPlotView.paletteColor(context, 8))
-        assertEquals(VsgPlotView.lineCutColor(context, 0), VsgPlotView.lineCutColor(context, 3))
-        val slots = (0 until 3).map { VsgPlotView.lineCutColor(context, it) }
+        assertEquals(SweepPlotView.paletteColor(context, 7), SweepPlotView.paletteColor(context, -1))
+        assertEquals(SweepPlotView.paletteColor(context, 0), SweepPlotView.paletteColor(context, 8))
+        assertEquals(SweepPlotView.lineCutColor(context, 0), SweepPlotView.lineCutColor(context, 3))
+        val slots = (0 until 3).map { SweepPlotView.lineCutColor(context, it) }
         assertEquals("the three concurrent line-cut curves are distinct", 3, slots.toSet().size)
     }
 

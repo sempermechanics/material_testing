@@ -49,7 +49,7 @@ on 2026-10-03.
 | `ui/analysis/frames/` | 12 | Reference and frame import (`ReferenceImportController`, `FrameImportController`, `WizardMediaPickers`), ordering (`FrameOrderController`, adapter, menu), deformed batch, video (`VideoSamplingSheet`, extract controller) |
 | `ui/analysis/roi/` | 7 | ROI studio: `StudioOverlayView` with its geometry, viewport and mask encoder; `RoiViewport`, `RoiResolveHelper`, `RoiStudioLauncher` |
 | `ui/analysis/recommend/` | 9 | `SubsetRecommender` and `SubsetRecommendationController`, speckle scale, noise floor, good-practice and strain-window copy, EXIF patch map |
-| `ui/analysis/sweep/` | 17 | VSG sweep: `SweepSetupController` with `SweepRangeFields` / `SweepFramePicker`, `VsgStudy` / `VsgStudyRunner`, the lattice (`LatticeControls`, `LatticeProfiles`, `LatticeGraphExport`) and plot views (`VsgPlotView` with viewport, axes, palette; `PlotStyle`), line-cut preview |
+| `ui/analysis/sweep/` | 17 | Parameter sweep: `SweepSetupController` with `SweepRangeFields` / `SweepFramePicker`, `SweepStudy` / `SweepStudyRunner`, the lattice (`SweepControls`, `SweepProfiles`, `SweepGraphExport`) and plot views (`SweepPlotView` with viewport, axes, palette; `PlotStyle`), line-cut preview |
 | `ui/viewer/` | 19 | `ResultViewerActivity` and its controllers (`ViewerChromeController`, `ViewerImageLoader`, `ViewerFrameLoader`, `ViewerScaleController`, `FrameJumpController`, `ViewerCaptions`, `ViewerShareController`, `FieldPopup`), `SaveExportActivity`, their ViewModels, `ViewerArgs` ([ADR-003](../adr/ADR-003-viewerargs-read-side.md)), scrub cache, `ViewerFieldPills`, the ⓘ details sheet; heatmaps draw each frame on its own photo at the displaced positions ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md)) |
 | `ui/viewer/share/` | 11 | `ShareCenter` → `ShareExportJobs` (held by `ResultViewerViewModel`) → `ShareExportBuilder` (`FieldImageExport`, `BundleExport`, `DataExport`); `ShareExportUi`, `ShareKind`, `SendToSheet`, `ViewerReportFactory` |
 | `ui/viewer/summary/` | 3 | Summary GIF (`SummaryAnimation`), caption, `ViewerSummaryController` |
@@ -227,7 +227,7 @@ and prev/next paging — hosted by both `ResultViewerActivity` and
 Non-obvious rules the analysis and transfer paths depend on. Breaking one tends to
 show up as an OOM, a mid-run crash, or a "nothing happened" report:
 
-- **JNI output buffer is bounded.** `DicBatchRunner` / `VsgStudyRunner` allocate
+- **JNI output buffer is bounded.** `DicBatchRunner` / `SweepStudyRunner` allocate
   one direct `ByteBuffer` via `DicFieldIo` sized to the ROI grid (`(w/step)·(h/step)`
   points). The engine's returned point count is checked against that capacity
   *before* the buffer is read back — a count over capacity is treated as an engine
@@ -261,7 +261,7 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
   Save-to-Files downloads. Quota-full is the one exclusion —
   it routes to its own screen. Progress from the same `WorkInfo` drives the
   per-row badge and progress bar on Home, for downloads as well as uploads.
-- **Cancelling a sweep abandons the sweep.** `VsgStudyRunner` checks the cancel
+- **Cancelling a sweep abandons the sweep.** `SweepStudyRunner` checks the cancel
   token *between* combinations as well as inside a solve, so Cancel does not merely
   skip to the next parameter set.
 - **A Drive outage must not look like deleted data.** A verifying refresh drops
@@ -279,8 +279,8 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 | Change Home list / settings | `ui/home/HomeActivity.kt` + `Session*`, `HomeQuotaCard`, `HomeTransferWatch` / `ui/settings/SettingsActivity` + `Settings*Section` |
 | Change import / video extraction | `FrameImportController` / `ReferenceImportController` → `FrameImportHelper`, `VideoSamplingSheet`, `VideoFrameExtractor` (three rungs: `AviVideoDecoder` → `HardwareVideoDecoder` → `MediaMetadataRetriever`; all write through `FrameSink`). Fixed-interval instants are `VideoKeyframeHelper.uniformTimestampsUs` for the sheet's estimate and every rung, over a segment the sheet caps at `lastFrameStartMs` |
 | Change AVI support | `imaging/AviReader` (demuxer), `imaging/AviLuma` (uncompressed layouts), `imaging/MjpegHuffman` (table repair), `AviCodecDecoder` (`MediaCodec` for Xvid/H.264) |
-| Change parameter-sweep setup UI | `SweepSetupController` + `SweepRangeFields` / `SweepFramePicker`; the run is `SweepRunner.runVsgSweep` → `VsgStudyRunner` |
-| Change the sweep result lattice | `ui/analysis/VsgLatticeActivity.kt` + `LatticeControls` / `LatticeProfiles` / `LatticeGraphExport`, `VsgLatticeView`, `VsgPlotView` |
+| Change parameter-sweep setup UI | `SweepSetupController` + `SweepRangeFields` / `SweepFramePicker`; the run is `SweepRunner.runSweep` → `SweepStudyRunner` |
+| Change the sweep result lattice | `ui/analysis/VsgLatticeActivity.kt` + `SweepControls` / `SweepProfiles` / `SweepGraphExport`, `SweepLatticeView`, `SweepPlotView` |
 | Change heatmap / probe | `ui/viewer/ViewerScaleController.kt` (heatmap, colour scale), `ViewerImageLoader.kt` (photo under the map), `inspect/ViewerInspectController.kt` (probe); wired in `ResultViewerActivity.kt` |
 | Change how exports are handed off | `ui/viewer/share/ShareCenter.kt` → `ShareExportJobs.kt` → `ShareExportBuilder.kt`, `SendToSheet.kt`, `SaveExportActivity.kt` |
 | Change transfer progress UI | `ui/common/transfer/TransferBannerController.kt` (Settings + viewer), `data/cloud/TransferNotifications.kt` (the one channel) |

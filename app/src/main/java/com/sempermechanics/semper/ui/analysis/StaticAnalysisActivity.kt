@@ -41,7 +41,7 @@ import com.sempermechanics.semper.ui.analysis.run.RunStatusLine
 import com.sempermechanics.semper.ui.analysis.run.WizardRunLauncher
 import com.sempermechanics.semper.ui.analysis.run.WizardRunOutcomes
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisLeaveController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisReadyGate
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -243,7 +243,7 @@ class StaticAnalysisActivity :
         viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancelGate
         if (::imports.isInitialized) imports.cancel()
         if (::reference.isInitialized) reference.cancel()
-        // VsgStudyRunner observes the same gate — no separate flag.
+        // SweepStudyRunner observes the same gate — no separate flag.
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::chrome.isInitialized) chrome.overlay.release()
         if (::frameOrder.isInitialized) frameOrder.release()
@@ -324,13 +324,13 @@ class StaticAnalysisActivity :
 
     override fun resetSweepInputs() {
         if (!::sweepController.isInitialized) return
-        viewModel.stepDenominator = VsgStudy.DEFAULT_STEP_DENOM
-        viewModel.subsetOverlap = VsgStudy.overlapForDenominator(VsgStudy.DEFAULT_STEP_DENOM)
+        viewModel.stepDenominator = SweepStudy.DEFAULT_STEP_DENOM
+        viewModel.subsetOverlap = SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM)
         sweepController.resetUserModified()
         sweepController.seedSweepSuggestions()
     }
 
-    override fun startVsgSweep() = runs.startSweep(params.isKeysInterpolatorSelected())
+    override fun startSweep() = runs.startSweep(params.isKeysInterpolatorSelected())
 
     override fun confirmOpenFaq(url: String) {
         FaqRedirect.confirm(this, url)

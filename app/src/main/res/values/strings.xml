@@ -509,7 +509,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="vsg_lattice_axis_subset">Subset size (px)</string>
     <string name="vsg_lattice_axis_vsg">VSG (px)</string>
     <!-- Compact lattice: unit folded onto the rightmost subset tick instead of a
-         separate axis title (see VsgLatticeView.compact). -->
+         separate axis title (see SweepLatticeView.compact). -->
     <string name="vsg_lattice_axis_subset_unit_fmt">%1$d px</string>
     <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · %3$s</string>
     <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · %3$s</string>
