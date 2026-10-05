@@ -280,30 +280,34 @@ data class ViewerArgs(
                 defFilePaths = intent.getStringArrayListExtra(DicKeys.DEF_FILE_PATHS).orEmpty(),
                 startFrame = intent.takeIf { it.hasExtra(DicKeys.START_FRAME) }?.getIntExtra(DicKeys.START_FRAME, 0),
                 strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: STRAIN_METHOD_VSG,
-                testType = string(DicKeys.TEST_TYPE, { it.testType }, "").orEmpty(),
-                crossSectionMm2 = fill(DicKeys.CROSS_SECTION_MM2, { it.crossSectionMm2 }, 0f) {
-                    it.getFloatExtra(DicKeys.CROSS_SECTION_MM2, 0f)
-                },
-                loadAxisX = fill(DicKeys.LOAD_AXIS_X, { it.loadAxisX }, true) {
-                    it.getBooleanExtra(DicKeys.LOAD_AXIS_X, true)
-                },
-                loadsN = fill(
-                    DicKeys.LOADS_N,
-                    { if (it.hasMachineLoads) it.loadsN else emptyList() },
-                    emptyList(),
-                ) { it.getFloatArrayExtra(DicKeys.LOADS_N)?.toList() },
-                geometry = fill(DicKeys.SPECIMEN_GEOMETRY, { it.geometry }, SpecimenGeometry.NONE) {
-                    SpecimenGeometry.fromArray(it.getFloatArrayExtra(DicKeys.SPECIMEN_GEOMETRY))
-                },
-                curveCorrection = fill(DicKeys.CURVE_CORRECTION, { it.curveCorrection }, CurveCorrection.NONE) {
-                    CurveCorrection.fromArray(it.getFloatArrayExtra(DicKeys.CURVE_CORRECTION))
-                },
-            )
+            ).let(::withMechanical)
             if (fromRecord.isNotEmpty() || defaulted.isNotEmpty()) {
                 Timber.w("Viewer Intent missing keys; from record: %s; defaulted: %s", fromRecord, defaulted)
             }
             return args
         }
+
+        /** [args] with the mechanical test's keys (material_testing), filled like the rest. */
+        private fun withMechanical(args: ViewerArgs): ViewerArgs = args.copy(
+            testType = string(DicKeys.TEST_TYPE, { it.testType }, "").orEmpty(),
+            crossSectionMm2 = fill(DicKeys.CROSS_SECTION_MM2, { it.crossSectionMm2 }, 0f) {
+                it.getFloatExtra(DicKeys.CROSS_SECTION_MM2, 0f)
+            },
+            loadAxisX = fill(DicKeys.LOAD_AXIS_X, { it.loadAxisX }, true) {
+                it.getBooleanExtra(DicKeys.LOAD_AXIS_X, true)
+            },
+            loadsN = fill(
+                DicKeys.LOADS_N,
+                { if (it.hasMachineLoads) it.loadsN else emptyList() },
+                emptyList(),
+            ) { it.getFloatArrayExtra(DicKeys.LOADS_N)?.toList() },
+            geometry = fill(DicKeys.SPECIMEN_GEOMETRY, { it.geometry }, SpecimenGeometry.NONE) {
+                SpecimenGeometry.fromArray(it.getFloatArrayExtra(DicKeys.SPECIMEN_GEOMETRY))
+            },
+            curveCorrection = fill(DicKeys.CURVE_CORRECTION, { it.curveCorrection }, CurveCorrection.NONE) {
+                CurveCorrection.fromArray(it.getFloatArrayExtra(DicKeys.CURVE_CORRECTION))
+            },
+        )
 
         private fun readSweep(): ViewerSweepArgs? {
             val subsets = intent.getIntArrayExtra(DicKeys.SWEEP_SUBSETS) ?: return null

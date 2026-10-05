@@ -45,7 +45,9 @@ class FrameSinkTest {
 
     @Test
     fun `frame 0 is the reference and the rest are the deformed batch`() {
-        val result = runBlocking { sink(temp.newFolder()).write(count = 3, offsetMsAt = { it * 250L }) { luma(6, 4) } }!!
+        val result = runBlocking {
+            sink(temp.newFolder()).write(count = 3, offsetMsAt = { it * 250L }) { luma(6, 4) }
+        }!!
 
         assertEquals(ImageSize(6, 4), result.reference.size)
         assertTrue(result.reference.png.isNotEmpty())
@@ -61,7 +63,11 @@ class FrameSinkTest {
 
     @Test
     fun `a frame that does not decode aborts the batch`() {
-        val result = runBlocking { sink(temp.newFolder()).write(count = 3, offsetMsAt = { it * 250L }) { i -> if (i == 1) null else luma(6, 4) } }
+        val result = runBlocking {
+            sink(temp.newFolder()).write(count = 3, offsetMsAt = { it * 250L }) { i ->
+                if (i == 1) null else luma(6, 4)
+            }
+        }
         assertNull(result)
     }
 

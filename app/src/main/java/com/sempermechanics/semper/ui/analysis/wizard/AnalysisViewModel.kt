@@ -179,7 +179,10 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     /** Display name of the imported log; blank when none. */
     var loadCsvName: String = ""
 
-    /** [parsedLoadCsv] (or bending's typed loads) matched to the current deformed frames; null when either is missing. */
+    /**
+     * [parsedLoadCsv] (or bending's typed loads) matched to the current
+     * deformed frames; null when either is missing.
+     */
     var machineLoads: MachineLoadTable? = null
         internal set
 

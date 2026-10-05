@@ -3,6 +3,8 @@ package com.sempermechanics.semper.ui.analysis.wizard
 import android.app.Application
 import android.os.Bundle
 import androidx.lifecycle.SavedStateHandle
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -18,7 +20,8 @@ import org.robolectric.annotation.Config
  *
  * [baseBundle] is that Bundle written out by hand, key by key, as the build
  * before the wizard's value types (`Roi`, `ImageSize`, `SweepRanges`,
- * `WizardStep`) wrote it.
+ * `WizardStep`) wrote it, plus the lab keys material_testing's build wrote
+ * beside them ([labKeys]).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -48,6 +51,38 @@ class WizardStateBundleFormatTest {
         putInt("vsgFrameIndex", 1)
         putString("workingLocalId", "abc123")
         putString("framesFingerprint", WizardState.fingerprint(WizardState.encodeFrames(WizardState.Frames())))
+        putLong("refCaptureMs", 1_790_433_000_000L)
+        labKeys(
+            testType = TestType.BENDING.wireName,
+            crossSectionMm2 = 12.5f,
+            loadAxisX = false,
+            geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f).toArray(),
+            loadCsvName = "run1.csv",
+            loadLogStartS = 0.5f,
+            typedLoadsEntry = "INCREMENTAL",
+        )
+    }
+
+    /** The mechanical test's keys, which material_testing's build wrote on every save. */
+    @Suppress("LongParameterList") // one parameter per saved key
+    private fun Bundle.labKeys(
+        testType: String = TestType.TENSILE.wireName,
+        crossSectionMm2: Float = 0f,
+        loadAxisX: Boolean = true,
+        geometry: FloatArray = SpecimenGeometry.NONE.toArray(),
+        loadCsvName: String = "",
+        loadLogStartS: Float = 0f,
+        typedLoadsEntry: String = "ABSOLUTE",
+    ) {
+        putString("testType", testType)
+        putFloat("crossSectionMm2", crossSectionMm2)
+        putBoolean("loadAxisX", loadAxisX)
+        putFloatArray("geometry", geometry)
+        // A load log lives in the draft; without one this is false.
+        putBoolean("hasLoadLog", false)
+        putString("loadCsvName", loadCsvName)
+        putFloat("loadLogStartS", loadLogStartS)
+        putString("typedLoadsEntry", typedLoadsEntry)
     }
 
     @Test
@@ -82,6 +117,7 @@ class WizardStateBundleFormatTest {
             putInt("vsgFrameIndex", -1)
             putString("workingLocalId", null)
             putString("framesFingerprint", WizardState.fingerprint(WizardState.encodeFrames(WizardState.Frames())))
+            labKeys()
         }
 
         assertSameBundle(expected, AnalysisViewModel().saveWizardState())
@@ -109,6 +145,8 @@ class WizardStateBundleFormatTest {
             assertEquals("type of $key", want?.javaClass, got?.javaClass)
             if (want is IntArray) {
                 assertArrayEquals("value of $key", want, got as IntArray)
+            } else if (want is FloatArray) {
+                assertArrayEquals("value of $key", want, got as FloatArray, 0f)
             } else {
                 assertEquals("value of $key", want, got)
             }

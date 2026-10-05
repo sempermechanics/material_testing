@@ -113,7 +113,7 @@ internal class VsgPlotAxes(private val plot: View, private val text: Paint) {
                 magnitude >= LARGE_VALUE -> 0
                 magnitude >= READOUT_TENS -> 1
                 magnitude >= SMALL_VALUE -> 2
-                else -> 3
+                else -> READOUT_FINEST_DECIMALS
             }
             val text = String.format(Locale.US, "%.${decimals}f", value)
             return if (text.startsWith('-') && text.all { it in "-0." }) text.drop(1) else text
@@ -170,5 +170,8 @@ internal class VsgPlotAxes(private val plot: View, private val text: Paint) {
         private const val LARGE_VALUE = 100f
         private const val SMALL_VALUE = 1f
         private const val READOUT_TENS = 10f
+
+        /** A read value under 1 keeps three decimals: three significant figures down to 0.1. */
+        private const val READOUT_FINEST_DECIMALS = 3
     }
 }

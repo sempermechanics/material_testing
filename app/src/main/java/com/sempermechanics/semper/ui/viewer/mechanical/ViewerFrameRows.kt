@@ -40,7 +40,11 @@ object ViewerFrameRows {
     }
 
     private fun unitRes(dimension: StressStrain.Dimension): Int =
-        if (dimension == StressStrain.Dimension.CROSS_SECTION) R.string.settings_used_mm2_fmt else R.string.settings_used_mm_fmt
+        if (dimension == StressStrain.Dimension.CROSS_SECTION) {
+            R.string.settings_used_mm2_fmt
+        } else {
+            R.string.settings_used_mm_fmt
+        }
 
     private fun fmt(value: Float): String = String.format(Locale.US, "%.3f", value).trimEnd('0').trimEnd('.')
 }

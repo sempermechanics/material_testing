@@ -47,6 +47,7 @@ data class ExtractionRequest(
 
     companion object {
         /** Evenly at [fpsExtract] over [startMs] to [endMs], at most [maxFrames] ([VideoSampling.sampleTimesMs]). */
+        @Suppress("LongParameterList") // a fixed-rate sampling's whole description, all named at the call
         fun uniform(
             uri: Uri,
             fpsExtract: Double,
@@ -178,10 +179,9 @@ object VideoFrameExtractor {
                     sink,
                 )
                 ?: extractWithRetriever(context, request, sink)
-                ?: return null
 
-            refPreview = result.reference.preview
-            completed = true
+            refPreview = result?.reference?.preview
+            completed = result != null
             return result
         } finally {
             stagingDir.deleteRecursively()

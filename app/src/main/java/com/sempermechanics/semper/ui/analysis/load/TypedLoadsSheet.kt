@@ -24,12 +24,12 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.data.mechanical.TypedLoads.Entry
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.common.dialog.inflateSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -94,7 +94,8 @@ internal object TypedLoadsSheet {
         onDone: (List<Float?>, Entry) -> Unit,
     ) {
         if (frames.isEmpty()) return
-        val root = activity.layoutInflater.inflate(R.layout.sheet_typed_loads, null)
+        val content = inflateSheet(activity, R.layout.sheet_typed_loads)
+        val root = content.view
         val list = root.findViewById<RecyclerView>(R.id.rvTypedLoads)
         val adapter = RowAdapter(activity, frames, initialKg, initialEntry, list)
         list.layoutManager = LinearLayoutManager(activity)
@@ -102,8 +103,7 @@ internal object TypedLoadsSheet {
         list.setItemViewCacheSize(frames.size.coerceAtMost(MAX_CACHED_ROWS))
         bindEntryDropdown(root, adapter)
 
-        val sheet = BottomSheetDialog(activity)
-        sheet.setContentView(root)
+        val sheet = content.dialog
         sheet.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         sheet.behavior.skipCollapsed = true
         sheet.behavior.isDraggable = false

@@ -42,7 +42,10 @@ class VideoSamplingSheet(
     private val onExtract: (ExtractionRequest) -> Unit,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    /** Reads [uri]'s metadata and key frames on [io], then offers the sampling sheet; a video it cannot read gets a snackbar. */
+    /**
+     * Reads [uri]'s metadata and key frames on [io], then offers the sampling
+     * sheet; a video it cannot read gets a snackbar.
+     */
     fun open(uri: Uri) {
         activity.lifecycleScope.launch {
             val meta = withContext(io) { VideoFrameExtractor.readMeta(activity, uri) }
@@ -148,7 +151,7 @@ class VideoSamplingSheet(
             !form.isKeyframeMode() ->
                 activity.resources.getQuantityString(R.plurals.video_estimate_fmt, n, n, deformed, capped)
             n < 2 -> activity.getString(R.string.video_keyframes_too_few)
-            else -> activity.getString(R.string.video_keyframes_estimate_fmt, n, deformed, capped)
+            else -> activity.resources.getQuantityString(R.plurals.video_keyframes_estimate_fmt, n, n, deformed, capped)
         }
         form.btnExtractFrames.isEnabled = n >= 2
         form.btnExtractFrames.text = activity.resources.getQuantityString(R.plurals.extract_n_frames_fmt, n, n)

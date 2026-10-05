@@ -69,7 +69,8 @@ class VideoSamplingSheetTest {
         assertEquals(segment, sheet.findViewById<TextView>(R.id.tvSegmentValue)!!.text.toString())
 
         // Without two key frames the plan is the frame rate, and the choice is hidden.
-        assertEquals(android.view.View.GONE, sheet.findViewById<MaterialButtonToggleGroup>(R.id.rgExtractMode)!!.visibility)
+        val modes = sheet.findViewById<MaterialButtonToggleGroup>(R.id.rgExtractMode)!!
+        assertEquals(android.view.View.GONE, modes.visibility)
         val estimate = sheet.findViewById<TextView>(R.id.tvEstimate)!!.text.toString()
         assertTrue(estimate, estimate.startsWith("≈ 40 frames: 1 reference + 39 deformed"))
 

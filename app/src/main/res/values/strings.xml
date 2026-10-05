@@ -802,7 +802,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="results_peak_stress_off_curve_fmt">Peak stress: %1$s MPa (frame %2$d, off the curve: no strain there)</string>
     <string name="modulus_fit_label">Elastic fit</string>
     <string name="results_yield_mark_fmt">Yield (0.2%% offset) %1$s MPa</string>
-    <string name="results_yield_fmt">Yield strength Rp0.2 ≈ %1$s MPa at %2$s mε: where the curve meets the E line moved 0.2%% along the strain axis, between frames %3$d and %4$d.</string>
+    <string name="results_yield_fmt">Yield strength Rp0.2 ≈ %1$s MPa at %2$s mε: where the curve meets the E line moved 0.2%% along the strain axis, between frames %3$d–%4$d.</string>
     <string name="results_yield_none">Yield strength Rp0.2: not found. The curve does not reach the E line moved 0.2%% along the strain axis before its peak.</string>
     <string name="modulus_tensile_fmt">Young’s modulus E ≈ %1$s GPa, from the straight part of the curve (frames %2$d–%3$d, R² %4$s). Approximate: the strain comes from the camera, not an extensometer.</string>
     <string name="modulus_tensile_none">Young’s modulus E: not found. It needs at least three photos on the straight, early part of the curve, before the peak.</string>
@@ -1030,7 +1030,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="video_mode_rate">Frame rate</string>
     <string name="video_mode_keyframes">Key frames</string>
     <string name="video_keyframes_note">Key frames are stored whole, not predicted from their neighbours, so they are the sharpest frames for DIC. Phones record about one a second.</string>
-    <string name="video_keyframes_estimate_fmt">%1$d key frames: 1 reference + %2$d deformed%3$s</string>
+    <plurals name="video_keyframes_estimate_fmt">
+        <item quantity="one">%1$d key frame: 1 reference + %2$d deformed%3$s</item>
+        <item quantity="other">%1$d key frames: 1 reference + %2$d deformed%3$s</item>
+    </plurals>
     <string name="video_keyframes_too_few">Fewer than two key frames in this segment. Widen it, or use Frame rate.</string>
     <string name="video_extracting_progress_fmt">Extracting frame %1$d of %2$d</string>
     <string name="video_fps_fmt">%1$.0f fps</string>

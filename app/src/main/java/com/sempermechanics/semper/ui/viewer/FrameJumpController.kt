@@ -105,7 +105,11 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
         binding.tvFinding.text = if (host.resultsOnScreen) {
             host.getString(R.string.results_title)
         } else {
-            host.getString(R.string.viewer_edge_title_fmt, host.currentTypeString, host.getString(R.string.summary_title))
+            host.getString(
+                R.string.viewer_edge_title_fmt,
+                host.currentTypeString,
+                host.getString(R.string.summary_title),
+            )
         }
         updateNavButtons()
         host.bumpChrome()

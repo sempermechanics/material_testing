@@ -31,7 +31,11 @@ class ViewerPersistedKeysTest {
 
     @Test
     fun `the share kinds keep their wire strings`() {
-        assertEquals(listOf("photo", "photos", "gifs", "pdf", "csv", "zip"), ShareKind.entries.map { it.wire })
+        // lab_pdf is material_testing's Lab report (its KIND_LAB_PDF before ShareKind).
+        assertEquals(
+            listOf("photo", "photos", "gifs", "pdf", "csv", "zip", "lab_pdf"),
+            ShareKind.entries.map { it.wire },
+        )
     }
 
     @Test

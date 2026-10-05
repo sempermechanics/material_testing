@@ -26,6 +26,11 @@ import org.robolectric.RobolectricTestRunner
  * the staged bytes and the backend re-dumps the file, so neither reaches a
  * reader. Only the clock (`capturedAtUtc`) and the device's own id differ by
  * nature and are left out.
+ *
+ * material_testing writes schema `/6` (its `test` object and per-frame
+ * `loadN`, SessionMetadataMechanicalTest); for these untyped fixtures that is
+ * the only difference from the parent's `/3` golden, so the golden is read
+ * with this repository's schema.
  */
 @RunWith(RobolectricTestRunner::class)
 class SessionUploadMetadataTest {
@@ -100,12 +105,16 @@ class SessionUploadMetadataTest {
     }
 
     private companion object {
+        /** The schema semperdic-app's golden was written under, its slash escaped as org.json wrote it. */
+        const val PARENT_SCHEMA_ESCAPED = "indic.session.metadata\\/3"
+
         /** The org.json writer's output, by record id. */
         val GOLDEN: Map<String, String> by lazy {
             val text = checkNotNull(SessionUploadMetadataTest::class.java.classLoader)
                 .getResource(UploadMetadataFixtures.GOLDEN)
                 .readText()
             Json.decodeFromString<Map<String, String>>(text)
+                .mapValues { (_, file) -> file.replace(PARENT_SCHEMA_ESCAPED, SessionUploadMetadata.SCHEMA) }
         }
     }
 }

@@ -96,8 +96,11 @@ internal class LabExport(
      */
     suspend fun stressStrainPage(report: (Int, String) -> Unit): PdfReportGenerator.StressStrainPage? {
         if (lab.loadsN.isEmpty() || s.isSweep) return null
-        val curve = sessionCurve(report)
-        if (curve.isEmpty) return null
+        return sessionCurve(report).takeUnless { it.isEmpty }?.let { stressStrainPageOf(it) }
+    }
+
+    /** [curve]'s page: its plot drawn off screen on the main thread, and the modulus fit for tensile. */
+    private suspend fun stressStrainPageOf(curve: StressStrain.Curve): PdfReportGenerator.StressStrainPage {
         val axisLabels = ViewerStressStrainHelper.axisLabels(context, curve.model)
         val modulus = ViewerStressStrainHelper.modulusOf(curve)
         val plot = withContext(Dispatchers.Main) {
