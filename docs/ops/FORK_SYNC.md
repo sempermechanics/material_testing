@@ -266,6 +266,9 @@ group is one commit, reviewable with `git diff -M`.
 | `data/prefs/DicSettings` | `data/prefs/AppSettings` |
 | `navigation/DicKeys` | `navigation/IntentKeys` |
 | Test `DicSettingsMigrateTest` | `AppSettingsMigrateTest` |
+| **Runner files** (`AnalysisViewModel` extension functions; the functions keep their names) | |
+| `ui/analysis/run/DicBatchRunner.kt`, test `DicBatchRunnerLimitTest` | `ui/analysis/run/BatchAnalysis.kt`, `BatchAnalysisLimitTest` |
+| `ui/analysis/wizard/SweepRunner.kt` | `ui/analysis/wizard/SweepAnalysis.kt` |
 
 ## Porting back
 

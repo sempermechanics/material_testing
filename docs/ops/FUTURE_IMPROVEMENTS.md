@@ -140,7 +140,7 @@ twice.
 - **The `tmp → renameTo → copy-fallback` promote idiom** exists six times
   exactly (`DriveTransfer.kt:350,497`, `SemperApi.kt:219`,
   `SessionEverythingExporter.kt:91`, `SessionStore.kt:467`, `SessionZip.kt:231`)
-  plus two variants (`SessionRepository.kt:105`, `DicBatchRunner.kt:182`).
+  plus two variants (`SessionRepository.kt:105`, `BatchAnalysis.kt:182`).
   One `util/AtomicFiles.promote(tmp, dest)` covers all of them.
 - **Cache filenames** (`semper-account-export.json`, `roi_mask_cache.bin`,
   `temp_roi_ref.bin`) are spelled in both their writer and `CacheJanitor`'s
@@ -163,7 +163,7 @@ twice.
 - `ui/common/auth/SupportMail` builds the intent, the fallback toast and the
   diagnostics lines for all four screens.
 - `util/AtomicFiles` owns `PART_SUFFIX` / `FULL_SUFFIX`, `deleteSidecars` and
-  `promote(tmp, dest)`, used at every site above except `DicBatchRunner`, which
+  `promote(tmp, dest)`, used at every site above except `BatchAnalysis`, which
   keeps `writeBytes` so the `.dat` is not read a second time.
 - `CacheJanitor.SHARE_SUBDIR`, `shareDir()` and the reclaimable file names are
   public, and their writers use them.

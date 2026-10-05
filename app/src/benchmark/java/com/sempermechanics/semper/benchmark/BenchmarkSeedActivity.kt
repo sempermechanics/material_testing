@@ -57,7 +57,7 @@ class BenchmarkSeedActivity : Activity() {
      * landed in `MemoryUsageMetric` — i.e. the harness would have been measuring its own
      * fabrication cost instead of the viewer's.
      *
-     * It also writes the [FieldRangesStore] sidecar that `DicBatchRunner` writes for a
+     * It also writes the [FieldRangesStore] sidecar that `BatchAnalysis` writes for a
      * real batch, so the viewer's colour-scale pass reads it instead of decoding every
      * frame. Without it the benchmark measured only the no-sidecar fallback (older or
      * restored sessions), whose ~1 MB per frame of garbage set the 150-frame heap

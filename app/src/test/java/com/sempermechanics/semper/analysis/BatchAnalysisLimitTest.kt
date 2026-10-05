@@ -36,7 +36,7 @@ import org.robolectric.RobolectricTestRunner
  * with an UnsatisfiedLinkError rather than pass quietly.
  */
 @RunWith(RobolectricTestRunner::class)
-class DicBatchRunnerLimitTest {
+class BatchAnalysisLimitTest {
 
     private lateinit var ctx: Context
     private val vm = AnalysisViewModel()

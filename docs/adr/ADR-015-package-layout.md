@@ -60,8 +60,8 @@ File counts are main sources only; the first move's table is in this file's hist
 | `imaging/video/` | 7 | `VideoFrameExtractor`, `FrameSink` (was `VideoFrameBatchWriter`), `VideoKeyframeHelper`, `HardwareVideoDecoder`, `AviCodecDecoder`, `AviVideoDecoder`, `ImageLuma` |
 | `report/` | 22 | PDF, CSV, GIF and heatmaps; `VisualizationEngine` is a facade over `HeatmapColorScale`, `HeatmapRenderer` and `DeformedHeatmap` |
 | `ui/analysis/` | 3 | The three Activities only (pinned): `StaticAnalysisActivity`, `RoiDrawActivity`, `VsgLatticeActivity` |
-| `ui/analysis/wizard/` | 22 | `AnalysisViewModel` (+ `AnalysisModels`, `RunChannels`, `SweepRunner`, `WizardDraftBinding`), `WizardState`, `WizardStep`, the host interface `AnalysisWizardHost`, chrome / slots / coach, nav, ready and cancel gates, the settings sheet, `WizardParamFields` (+ `ParamSliders`), `AnalysisLeaveController`, `WizardStepSettingsContentView` |
-| `ui/analysis/run/` | 16 | `DicBatchRunner` (+ `BatchRun`, `UnsavedRerun`, `RunRecordSave`), `DicFieldIo`, `SemperEngine`, `BatchRunController`, `RunChrome`, `ComputeOverlayController`, `ConvergenceGate`, `EngineFailure`, `RunSpec`, `RunSummaryText`, `RunStatusLine`, `WizardRunLauncher`, `WizardRunOutcomes` |
+| `ui/analysis/wizard/` | 22 | `AnalysisViewModel` (+ `AnalysisModels`, `RunChannels`, `SweepAnalysis`, `WizardDraftBinding`), `WizardState`, `WizardStep`, the host interface `AnalysisWizardHost`, chrome / slots / coach, nav, ready and cancel gates, the settings sheet, `WizardParamFields` (+ `ParamSliders`), `AnalysisLeaveController`, `WizardStepSettingsContentView` |
+| `ui/analysis/run/` | 16 | `BatchAnalysis` (+ `BatchRun`, `UnsavedRerun`, `RunRecordSave`), `DicFieldIo`, `SemperEngine`, `BatchRunController`, `RunChrome`, `ComputeOverlayController`, `ConvergenceGate`, `EngineFailure`, `RunSpec`, `RunSummaryText`, `RunStatusLine`, `WizardRunLauncher`, `WizardRunOutcomes` |
 | `ui/analysis/frames/` | 12 | Frame and reference import (`ReferenceImportController`, `FrameImportController`, `FrameImportHelper`, `WizardMediaPickers`), ordering (`FrameOrderController`, `FrameOrderAdapter`, `FrameOrderHelper`, `AnalysisFrameOrderMenuHelper`), `DeformedFrame`, the deformed-batch and video-extract controllers, `VideoSamplingSheet` |
 | `ui/analysis/roi/` | 7 | `StudioOverlayView` (+ `StudioOverlayGeometry`, `StudioOverlayViewport`), `StudioOverlayMaskEncoder`, `RoiViewport`, `RoiResolveHelper`, `RoiStudioLauncher` |
 | `ui/analysis/recommend/` | 9 | `SubsetRecommender`, `SubsetRecommendationController`, `SpeckleScale`, `DicGoodPractice`, `StrainWindowText`, `NoiseFloorPixels`, `NoiseFloorProbe`, `NoiseFloorStats`, `ExifPatchMap` |
@@ -100,7 +100,7 @@ whole however long it is, and only the code around it moves out. They are
 
 | Hot loop | Function | Lines (2026-10-03) |
 |---|---|---|
-| The batch JNI loop | `DicBatchRunner.runBatchAnalysisBody` (`ui/analysis/run/DicBatchRunner.kt:51`) | 354 |
+| The batch JNI loop | `BatchAnalysis.runBatchAnalysisBody` (`ui/analysis/run/BatchAnalysis.kt:51`) | 354 |
 | The ReportBuilder fusion pass | `ReportBuilder.buildReport` (`report/ReportBuilder.kt:133`) | 180 |
 | The heatmap pixel loops | `HeatmapRenderer.generateHeatmapIndices` (`report/HeatmapRenderer.kt:59`), `DeformedHeatmap.generateDeformedHeatmapIndices` (`report/DeformedHeatmap.kt:40`) | 119, 78 |
 | GIF LZW | `GifEncoder`'s `compress` (`report/GifEncoder.kt:184`) | |

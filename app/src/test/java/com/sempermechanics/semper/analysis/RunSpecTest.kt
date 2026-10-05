@@ -54,7 +54,7 @@ class RunSpecTest {
 
     @Test
     fun `the saved record gets the settings the engine solved with`() {
-        // What DicBatchRunner built from the params before ADR-004.
+        // What BatchAnalysis built from the params before ADR-004.
         val before = SessionRecordSettings(
             subset = 21,
             step = 5,

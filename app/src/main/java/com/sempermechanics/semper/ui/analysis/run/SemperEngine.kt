@@ -13,7 +13,7 @@ import java.nio.ByteBuffer
  * silent progress callback and handed back the engine's point count, around
  * the same JNI call; this is that wrapper.
  *
- * Not for the batch run: `DicBatchRunner` keeps its
+ * Not for the batch run: `BatchAnalysis` keeps its
  * [SemperNativeLib.computeFullFieldDirect] call inline in its one loop (it
  * reports progress, and its buffer handling is pinned there).
  *
