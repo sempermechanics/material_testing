@@ -56,9 +56,9 @@ first install. The app is in testing and not on Play, so no store listing moves.
 
 - `com.sempermechanics.semper` is registered in Firebase project
   `indicvision-dic-app-auth` (2026-10-05) with the same debug and release
-  fingerprints as the old app; `app/google-services.json` is its downloaded
-  config. Release still needs the owner's steps: App Check (Play Integrity) for
-  the new app; the `SEMPER_API_BASE_URL` var (optional while
+  fingerprints as the old app, and App Check (Play Integrity) is registered for
+  it; `app/google-services.json` is its downloaded config. Release still needs
+  the owner's steps: the `SEMPER_API_BASE_URL` var (optional while
   `INDIC_API_BASE_URL` is read); the backend and Hosting deploys. Releases are
   APKs signed with the release key, which is already registered; a later move
   to Play App Signing adds its fingerprint to Firebase and `assetlinks.json`
