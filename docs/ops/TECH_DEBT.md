@@ -39,7 +39,7 @@ TD-98, TD-99, TD-135, TD-140–TD-144 and TD-146–TD-152, and are not listed he
 against its `main` @ `3afbc76` on 2026-10-01). TD-81 means a different item in each repo:
 here the Compute-after-failed-run fix, there the bending E decimals (it carries ours as
 TD-89). TD-134 is the same fix in both, and TD-139 the same open item in shared code.
-TD-153–TD-175 are taken, so the next row here is TD-176;
+TD-153–TD-183 are taken, so the next row here is TD-184;
 re-check both registers before taking a number ([FORK_SYNC.md](FORK_SYNC.md)).
 
 **Re-verified against the code on 2026-09-23.** Every row below was checked at
@@ -172,6 +172,22 @@ checked on `quality/q1-sweep` @ `2bb72a45`, 2026-10-03; `app/` paths are under
 | TD-175 | Performance | No benchmark covers the deformed-frame heatmap. The viewer draws `VisualizationEngine.generateDeformedHeatmap` whenever a frame has its own photo (`ui/viewer/ViewerScaleController.kt:144-145`, [ADR-011](../adr/ADR-011-viewer-deformed-frame.md)), but `HotPathMicroBenchmark` times only `generateHeatmap` (`app/src/androidTest/java/com/sempermechanics/semper/benchmark/HotPathMicroBenchmark.kt:84`) and the scrub benchmark's seeded session has no frame photos (`app/src/benchmark/java/com/sempermechanics/semper/benchmark/BenchmarkSeedActivity.kt`) | 1 | 2 | 1 | **15** | Open (#328's review). Add a `generateDeformedHeatmap_oneFrame` micro case, and seed photos for one scrub run |
 | TD-176 | App / backend | The move to `com.sempermechanics.semper` ([ADR-019](../adr/ADR-019-sempermechanics-app-id.md)) keeps the old ids working: the engine forwarders `Java_com_indicvision_semper_*` (engine `adapters/android/jni/SemperJNI.cpp`, after `computeFullFieldDirect`), the old ids in `backend/app/apps.py:40-41`, the old packages in `firebase-hosting/public/.well-known/assetlinks.json:23-44`, the `INDIC_*` fallbacks (`app/build.gradle.kts:34-43`) and `vars.INDIC_API_BASE_URL` (`.github/workflows/release.yml:126`). Each is dead once no installed build sends an old id | 1 | 2 | 1 | **15** | Open. Remove them after the old apps have no users; nothing logs which id a call came from yet, so add `X-App-Id` to the access log first |
 | TD-177 | Performance | Three small slowdowns after the quality program held on the Pixel 6 in both rounds of the 2026-10-05 A/B, whichever build ran first ([QUALITY_PROGRAM_RESULTS.md](QUALITY_PROGRAM_RESULTS.md) §7.1, `ff0cfc3d` against `691fbdd5`): warm start's first frame +13 ms, 62 → 75 and 59 → 72 ms (`benchmark/src/main/java/com/sempermechanics/semper/benchmark/StartupBenchmark.kt:43`, Home's restart path in `ui/home/HomeActivity.kt`); `generateHeatmap` +5 %, 19.0 → 19.7 / 20.2 ms (`report/VisualizationEngine.kt:107`, whose pixel loop was moved whole into `HeatmapRenderer`); `buildReport` +2.3 %, 193 → 198 ms (`report/ReportBuilder.kt:133`). Allocation counts are unchanged. The micro times are from the debuggable build | 1 | 1 | 2 | **8** | Open. Run the three alone and interleaved (`scripts/startup_ab.py` for the warm start) on a release-like build; if they persist, compare a Perfetto trace of Home's warm start and the moved heatmap call path against `ff0cfc3d` |
+
+### New (backend review, 2026-10-05)
+
+A strict review of `backend/`, its consoles and its request costs, against `main` @
+`1a9b235`. Evidence is the code as it was before each fix. The structural rows
+(refusal model, typed documents, the `firestore_repo` facade) land with their own
+phases and get rows then.
+
+| ID | Category | Item | I | R | E | P | Status |
+|----|----------|------|---|---|---|---|--------|
+| TD-178 | Performance | Every device-signed request checked the licence device lock twice: `current_user` (`backend/app/deps.py:164`) and again in `verified_device` (`:299-300`), with the same device id, user and app, so the licence and seat were read twice per completion, download window and erase | 1 | 1 | 1 | **10** | **Fixed** 2026-10-05: the second check is gone; `test_signed_request_reads_the_licence_and_seat_once` |
+| TD-179 | Performance | Adding or patching a roster member streamed every seat to return one (`backend/app/repo/institution_admin.py:111-112`, `backend/app/routers/institutions.py:241-242`), and the seats listing read the licence twice (`institutions.py:49`, `:116`) | 1 | 1 | 1 | **10** | **Fixed** 2026-10-05: `repo.institution_seat` reads one document; the membership check hands the licence on; `test_roster_routes_read_one_seat_not_the_roster` |
+| TD-180 | Performance | The retry lookup on every `POST /v1/sessions` ran one query per in-flight status, one after the other (`backend/app/repo/sessions.py:437-446`) | 1 | 1 | 1 | **10** | **Fixed** 2026-10-05: one `status in (...)` query on the existing index; create is 6 + N reads (`test_read_budget.py`) |
+| TD-181 | Performance | Restoring a deleted institution licence ran `_drop_superseded_demo` per member: a read and a query each (`backend/app/repo/deletion.py:213-215`) | 1 | 1 | 1 | **10** | **Fixed** 2026-10-05: `_drop_superseded_demos` does one `get_all` and one query per 30 members |
+| TD-182 | Performance | Account erasure without a stored user-folder pointer deleted each session's Drive folder in its own round trip (`backend/app/routers/account.py:252-257`) | 1 | 1 | 1 | **10** | **Fixed** 2026-10-05: `drive.delete_files`, a bounded fan-out that still fails before Firestore is touched |
+| TD-183 | Performance | `drive.open_download` raised on an error status without closing the streamed response (`backend/app/drive.py:469-470`), holding a pooled connection until garbage collection | 1 | 1 | 1 | **10** | **Fixed** 2026-10-05: closed before raising; `tests/test_drive_helpers.py` |
 
 ### Cannot be verified from the repository
 

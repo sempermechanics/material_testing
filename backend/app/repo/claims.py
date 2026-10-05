@@ -16,6 +16,7 @@ from . import _base
 from ._base import (
     _CONTENDED,
     db,
+    _get_all,
     _license_mode,
     _mode_patch,
     _run_tx,
@@ -122,17 +123,32 @@ def _drop_superseded_demo(uid: str, license_id: str) -> None:
     closes. Only `ensure_demo_license` writes `mode: demo` and
     `createdByUid: "system"` together.
     """
-    snap = db().collection("users").document(uid).get()
-    if not snap.exists or ((snap.to_dict() or {}).get("licenseId") or "") != license_id:
-        # Something has moved the account on again. Whatever it holds now is
-        # not this claim's to reason about.
-        return
-    for doc in db().collection("licenses").where("redeemedByUid", "==", uid).stream():
-        if doc.id == license_id:
-            continue
-        lic = doc.to_dict() or {}
-        if _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system":
-            doc.reference.delete()
+    _drop_superseded_demos([uid], license_id)
+
+
+#: Firestore caps an `in` filter at 30 values.
+_IN_LIMIT = 30
+
+
+def _drop_superseded_demos(uids: list[str], license_id: str) -> None:
+    """`_drop_superseded_demo` for a roster: one `get_all` for the accounts
+    and one query per 30 of them, where a restored institution licence used to
+    pay a read and a query per member."""
+    users = db().collection("users")
+    still_here = [
+        snap.id for snap in _get_all([users.document(u) for u in dict.fromkeys(uids) if u])
+        if snap.exists and ((snap.to_dict() or {}).get("licenseId") or "") == license_id
+    ]
+    # Accounts something has moved on again are not this claim's to reason
+    # about; the rest may still hold the Demo key they were given meanwhile.
+    for start in range(0, len(still_here), _IN_LIMIT):
+        chunk = still_here[start:start + _IN_LIMIT]
+        for doc in db().collection("licenses").where("redeemedByUid", "in", chunk).stream():
+            if doc.id == license_id:
+                continue
+            lic = doc.to_dict() or {}
+            if _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system":
+                doc.reference.delete()
 
 
 def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch: dict,

@@ -237,9 +237,10 @@ def delete_account(ctx=Depends(verified_device)):
 
     # 1. The session folders live inside the user folder, so deleting that one
     #    removes the whole subtree in a single call. The per-session loop below
-    #    is the fallback for accounts predating the stored pointer — walking N
-    #    sessions is N sequential Drive round-trips, which is what made deleting
-    #    a busy account take the best part of a minute.
+    #    is the fallback for accounts predating the stored pointer; it deletes
+    #    the session folders with a bounded fan-out (`drive.delete_files`),
+    #    where one round trip per session made a busy account take the best
+    #    part of a minute.
     user_folder = user.get("driveFolderId")
     folders_deleted = 0
     if user_folder:
@@ -249,12 +250,9 @@ def delete_account(ctx=Depends(verified_device)):
         # rather than trusting a lookup by name. If a name lookup missed we would
         # silently skip Drive and still wipe the metadata, stranding the blobs
         # with nothing left pointing at them.
-        sessions = repo.iter_user_sessions(uid)
-        for s in sessions:
-            folder = s.get("driveFolderId")
-            if folder:
-                drive.delete_file(token, folder)
-                folders_deleted += 1
+        folders_deleted = drive.delete_files(
+            token, [s.get("driveFolderId") for s in repo.iter_user_sessions(uid)],
+        )
         # Then the scaffolding itself, and anything a failed sync orphaned.
         user_folder = drive.find_user_folder(token, uid)
         if user_folder:

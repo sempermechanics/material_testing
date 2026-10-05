@@ -291,13 +291,11 @@ async def verified_device(
         # Stale or from a phone whose clock is off: no write, and the client
         # retries once with a server challenge.
         raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
-    # current_user already re-validated the lock for THIS x_device_id when it
-    # was present on the request — but device-attested routes are the ones
-    # that actually spend the entitlement (create a session, download a file),
-    # so re-check here too rather than trust a value resolved before the
-    # signature/nonce were even verified.
-    user = await run_in_threadpool(repo.revalidate_device_lock, user, x_device_id,
-                                   getattr(request.state, "app", None) or apps.SEMPER)
+    # No second lock check here. `current_user` ran `revalidate_device_lock`
+    # for this same X-Device-Id, user and app, and handed us its answer: a
+    # mismatch or a revoke is already Demo in `user`. Checking again read the
+    # licence and seat twice on every signed request and could not answer
+    # differently.
 
     body = await request.body()
     # The query string is inside the signature whenever there is one, so a

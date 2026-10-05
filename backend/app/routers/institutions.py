@@ -52,7 +52,7 @@ def institution_admin_context(license_id: DocumentId, user: dict = Depends(curre
     email = (user.get("email") or "").strip().lower()
     if not repo.is_institution_admin(lic, email):
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
-    return {"user": user, "license_id": license_id}
+    return {"user": user, "license_id": license_id, "license": lic}
 
 
 async def institution_admin_stepup(
@@ -113,7 +113,7 @@ def list_seats(license_id: DocumentId, ctx=Depends(institution_admin_stepup)):
     only one of the two holds a uid and counts against `maxSeats`.
     """
     return {
-        "license": repo.institution_license_summary(license_id),
+        "license": repo.institution_license_summary(license_id, ctx["license"]),
         "seats": repo.list_institution_seats(license_id),
         "invites": repo.list_institution_invites(license_id),
     }
@@ -238,8 +238,7 @@ def patch_seat(
                    for name in ("previousDeviceId", "releasedDeviceId")
                    for k in apps.spread(name, {})}},
     )
-    seats = repo.list_institution_seats(license_id)
-    seat = next((s for s in seats if s["uid"] == uid), None)
+    seat = repo.institution_seat(license_id, uid)
     if seat is None:
         raise HTTPException(404, errors.SEAT_NOT_FOUND)
     return {"licenseId": license_id, "seat": seat}

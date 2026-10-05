@@ -211,7 +211,7 @@ read fails the suite. Python 3.13, Windows 11; the counts are deterministic
 | `GET /v1/config` | 1 | 0 |
 | `GET /v1/me` | 1 | 0 |
 | `GET /v1/sessions` | S + 2 = 22 (S + 3 = 23 since #224) | 0 |
-| `POST /v1/sessions` | 14 → **9** (10 since #224) | 11 |
+| `POST /v1/sessions` | 14 → **9** (10 since #224, 9 again since TD-180) | 11 |
 | `POST /v1/files/{id}/complete`, each | 6 | 4 |
 | `DELETE /v1/sessions/{id}` | 7 | 5 |
 
@@ -247,7 +247,8 @@ it. Per upload of 3 files: 32 → 27 reads (16 % fewer). **Gate met** (5 ≥ 3).
 both the create check and `quota.used` on the listing) now subtracts a second
 count of `PROVISION_FAILED` sessions, which store nothing and were charged as
 stored analyses. That is one more read on each of the two routes: create is
-7 + N, the listing S + 3. The status write that ends an inline create stays a
+7 + N, the listing S + 3. The retry lookup became one query on 2026-10-05
+(TD-180), so create is 6 + N. The status write that ends an inline create stays a
 plain write; only the queued path pays a read to keep a `COMPLETED` session
 from being moved back (TD-120).
 
@@ -263,8 +264,10 @@ The whole backend suite passes (539 passed, 23 skipped; coverage 89.4 %).
   a synthetic user, and `test_folder_ids_are_stored_then_reused` failed.
 - `iter_unprovisioned_files` (N reads) stays. It is what makes a retried
   provisioning resume instead of opening a second upload URL.
-- The re-reads inside the `complete` transaction and the second licence check in
-  `verified_device` are there for correctness and security.
+- The re-reads inside the `complete` transaction are there for correctness. (The
+  second licence check in `verified_device` was listed here too; it repeated
+  `current_user`'s check with the same inputs and was removed on 2026-10-05,
+  TD-178.)
 
 **Latency.** Production `POST /v1/sessions`, 200s over the last 30 days, all
 N = 3 (9 requests, 2026-09-23/24): median 3158 ms, IQR 2704–3653 ms, range

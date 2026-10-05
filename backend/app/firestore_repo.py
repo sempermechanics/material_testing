@@ -92,6 +92,7 @@ from .repo.deletion import (  # noqa: F401
 from .repo.institution_admin import (  # noqa: F401
     add_institution_member,
     institution_license_summary,
+    institution_seat,
     is_institution_admin,
     list_institution_seats,
     list_licenses_administered_by,

@@ -9,6 +9,7 @@ from ..licenses import (
 from ._base import (
     db,
     get_license,
+    _seat_ref,
 )
 from .claims import (
     claim_seat,
@@ -108,34 +109,47 @@ def add_institution_member(license_id: str, email: str,
                      _institution_member_patch(license_id, lic))
     if err:
         return _public_claim_error(err, "claim_contended"), None, None
-    seats = list_institution_seats(license_id)
-    return "", next((s for s in seats if s["uid"] == uid), None), None
+    return "", institution_seat(license_id, uid), None
 
 
-def institution_license_summary(license_id: str) -> dict | None:
+def institution_license_summary(license_id: str, lic: dict | None = None) -> dict | None:
     """Public (no key plaintext) summary of one institution license, for IT
     self-service — same redaction as the Semper-staff admin listing, scoped to
-    callers who already passed the adminEmails membership check."""
-    lic = get_license(license_id)
+    callers who already passed the adminEmails membership check.
+
+    `lic` is the licence document when the caller has just read it (the
+    membership check does), so the roster listing does not read it twice."""
+    lic = lic if lic is not None else get_license(license_id)
     return _license_public(license_id, lic) if lic else None
 
 
+def institution_seat(license_id: str, uid: str) -> dict | None:
+    """One seat as the roster lists it, or None. One document read, where
+    finding it in `list_institution_seats` read the whole roster."""
+    snap = _seat_ref(license_id, uid).get()
+    return _seat_public(snap.id, snap.to_dict() or {}) if snap.exists else None
+
+
 def list_institution_seats(license_id: str) -> list[dict]:
-    out = []
-    for doc in db().collection("licenses").document(license_id).collection("seats").stream():
-        s = doc.to_dict() or {}
-        out.append({
-            "uid": doc.id,
-            "email": s.get("email") or "",
-            **{apps.field("deviceIdLock", app): s.get(apps.field("deviceIdLock", app)) or ""
-               for app in apps.ALL},
-            "status": s.get("status") or "active",
-            # The lease is the point of the floating roster view: without it
-            # IT cannot see who is actually using a seat right now, only who
-            # is allowed to. Null on an assigned licence, which has no leases.
-            "leaseExpiresAt": s.get("leaseExpiresAt"),
-            "lastHeartbeatAt": s.get("lastHeartbeatAt"),
-            "createdAt": s.get("createdAt"),
-            "updatedAt": s.get("updatedAt"),
-        })
-    return out
+    return [
+        _seat_public(doc.id, doc.to_dict() or {})
+        for doc in db().collection("licenses").document(license_id).collection("seats").stream()
+    ]
+
+
+def _seat_public(seat_id: str, s: dict) -> dict:
+    """A seat as the roster shows it."""
+    return {
+        "uid": seat_id,
+        "email": s.get("email") or "",
+        **{apps.field("deviceIdLock", app): s.get(apps.field("deviceIdLock", app)) or ""
+           for app in apps.ALL},
+        "status": s.get("status") or "active",
+        # The lease is the point of the floating roster view: without it
+        # IT cannot see who is actually using a seat right now, only who
+        # is allowed to. Null on an assigned licence, which has no leases.
+        "leaseExpiresAt": s.get("leaseExpiresAt"),
+        "lastHeartbeatAt": s.get("lastHeartbeatAt"),
+        "createdAt": s.get("createdAt"),
+        "updatedAt": s.get("updatedAt"),
+    }

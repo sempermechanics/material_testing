@@ -384,3 +384,47 @@ async def test_institution_seat_revoke_over_http(client, monkeypatch):
     resp = await client.delete(f"/v1/institutions/licenses/{license_id}/seats/student")
     assert resp.status_code == 200, resp.text
     assert store._data["users"]["student"]["plan"] == "demo"
+
+
+@pytest.mark.asyncio
+async def test_roster_routes_read_one_seat_not_the_roster(client, monkeypatch, audited):
+    """Adding or patching a member answers with that member's seat, read alone.
+
+    Both used to stream every seat on the licence to pick one out, so each edit
+    cost a read per member; the listing read the licence document twice.
+    """
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "email": "it@university.edu"})
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "member": {"email": "m@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+    }
+    license_id = _mint_institution()["license"]["id"]
+    base = f"/v1/institutions/licenses/{license_id}"
+
+    streams, gets = [], []
+    real_stream, real_get = fake_firestore._Query.stream, fake_firestore._DocRef.get
+    monkeypatch.setattr(fake_firestore._Query, "stream",
+                        lambda q: streams.append(q._collection) or real_stream(q))
+    monkeypatch.setattr(fake_firestore._DocRef, "get",
+                        lambda ref, transaction=None: gets.append(ref._collection)
+                        or real_get(ref, transaction=transaction))
+    seats = f"licenses/{license_id}/seats"
+
+    added = await client.post(f"{base}/seats", json={"email": "a@university.edu"})
+    assert added.status_code == 200, added.text
+    assert added.json()["seat"]["uid"] == "student"
+    assert seats not in streams
+
+    streams.clear()
+    patched = await client.patch(f"{base}/seats/student", json={"enabled": False})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["seat"]["status"] == "disabled"
+    assert seats not in streams
+
+    gets.clear()
+    listed = await client.get(f"{base}/seats")
+    assert listed.status_code == 200, listed.text
+    assert gets.count("licenses") == 1

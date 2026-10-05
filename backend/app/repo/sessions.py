@@ -428,22 +428,21 @@ def find_incomplete_session(uid: str, local_session_id: str):
     a duplicate (and burning quota). Empty localSessionId is never matched —
     clients that omit it still get a fresh session each call.
 
-    One exact query per status rather than an `in` filter: both are indexed the
-    same way, and this keeps the match precise instead of over-fetching and
-    filtering in Python.
+    One `status in (...)` query on the `(uid, localSessionId, status)` index,
+    which serves an `in` on its last field as it serves an equality. It was
+    one query per status, run one after the other on every session create.
     """
     if not local_session_id:
         return None
-    for status in IN_FLIGHT_STATUSES:
-        q = (
-            db().collection("sessions")
-            .where("uid", "==", uid)
-            .where("localSessionId", "==", local_session_id)
-            .where("status", "==", status)
-            .limit(1)
-        )
-        for d in q.stream():
-            return {**d.to_dict(), "sessionId": d.id}
+    q = (
+        db().collection("sessions")
+        .where("uid", "==", uid)
+        .where("localSessionId", "==", local_session_id)
+        .where("status", "in", list(IN_FLIGHT_STATUSES))
+        .limit(1)
+    )
+    for d in q.stream():
+        return {**d.to_dict(), "sessionId": d.id}
     return None
 
 

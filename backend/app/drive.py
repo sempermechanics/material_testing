@@ -374,6 +374,21 @@ def probe_files(token: str, file_ids: list[str], *, max_workers: int = 8) -> dic
     return out
 
 
+def delete_files(token: str, file_ids: list[str], *, max_workers: int = 8) -> int:
+    """`delete_file` for several ids, with a bounded fan-out like `probe_files`.
+
+    For the account-erase fallback, which used to delete one session folder
+    per round trip. Any failure propagates, as one `delete_file` would, so the
+    caller still stops before touching Firestore. Returns how many it deleted.
+    """
+    unique = [fid for fid in dict.fromkeys(file_ids) if fid]
+    if not unique:
+        return 0
+    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(unique)))) as pool:
+        list(pool.map(lambda fid: delete_file(token, fid), unique))
+    return len(unique)
+
+
 def ping(timeout_s: float = 5.0) -> None:
     """Cheap Drive reachability probe for readiness (Shared Drive about)."""
     from .observability import DependencyError
@@ -466,7 +481,10 @@ def open_download(
         stream=True,
         timeout=_TIMEOUT_S,
     )
-    if r.status_code not in (200, 206):
+    if r.status_code >= 400:
+        # A streamed response holds its pooled connection until it is read or
+        # closed, and nothing reads an error body here: close it, then raise.
+        r.close()
         r.raise_for_status()
     return DriveDownload(r)
 

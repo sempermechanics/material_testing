@@ -41,7 +41,7 @@ from ._base import (
     _update_refs,
 )
 from .claims import (
-    _drop_superseded_demo,
+    _drop_superseded_demos,
     _individual_member_patch,
     _institution_member_patch,
 )
@@ -210,9 +210,8 @@ def restore_license(license_id: str, admin_uid: str) -> tuple[str, dict | None]:
     patch = (_institution_member_patch if institution else _individual_member_patch)(license_id, lic)
     users = db().collection("users")
     _update_refs([(users.document(uid), patch) for uid in back])
-    for uid in back:
-        # The Demo key the account was given while this licence was gone.
-        _drop_superseded_demo(uid, license_id)
+    # The Demo keys the accounts were given while this licence was gone.
+    _drop_superseded_demos(back, license_id)
     address = (lic.get("emailLock") or "").strip().lower()
     if live and not institution and lic["status"] == "unused" and address \
             and not licence_held_by(address, exclude_id=license_id):
