@@ -54,11 +54,13 @@ on-device storage on first install.
 
 ## Consequences
 
-- Release needs the owner's steps first: register `com.sempermechanics.semper`
-  in Firebase (SHA keys, App Check, OAuth client) and replace
-  `app/google-services.json`; create the Play listing; add the new app-signing
-  fingerprint to `assetlinks.json` if Play signs with a new key; set the
-  `SEMPER_API_BASE_URL` var; deploy the backend and Hosting.
+- `com.sempermechanics.semper` is registered in Firebase project
+  `indicvision-dic-app-auth` (2026-10-05) with the same debug and release
+  fingerprints as the old app; `app/google-services.json` is its downloaded
+  config. Release still needs the owner's steps: App Check (Play Integrity) for
+  the new app; the Play listing; the new app-signing fingerprint in Firebase and
+  `assetlinks.json` if Play signs with a new key; the `SEMPER_API_BASE_URL` var
+  (optional while `INDIC_API_BASE_URL` is read); the backend and Hosting deploys.
 - Existing users install the new app beside the old one; their backups restore
   into it. On-device analyses that were never backed up stay in the old app.
 - material_testing must switch to `com.sempermechanics.materialtesting` **in
