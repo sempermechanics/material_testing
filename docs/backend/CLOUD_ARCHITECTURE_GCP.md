@@ -1206,6 +1206,15 @@ self-service surface. `GET /v1/institutions/licenses` answers the question
 that comes before all of them — *which* licences does this address administer
 — so nobody has to be told an id before they can open the console (§20.11).
 
+The roster routes are one implementation, `backend/app/routers/roster.py`,
+mounted twice. IT reach it under `/v1/institutions/licenses/{licenseId}`
+(adminEmails + step-up, `institution_bucket`, audit actions `INSTITUTION_*`).
+Semper staff reach it under `/v1/admin/licenses/{licenseId}` for any
+institution licence: reads take an ordinary admin token, changes take the
+staff step-up (`admin_bucket`, `ADMIN_*`). The seats listing is paged
+(`page_size` 1..1000, default 500; `page_token`); invites come with the first
+page.
+
 ### 20.1 Delivery, and activation as the fallback
 
 Neither licence kind is delivered by handing someone a key. An individual mint
@@ -2061,7 +2070,7 @@ until now only one of them could do it. The table is the whole feature:
 | Who | Route | Tier |
 |---|---|---|
 | Institution IT | `PATCH /v1/institutions/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}` | `INSTITUTION_ADMIN` |
-| Semper staff, a seat | `PATCH /v1/admin/licenses/{id}/seats/{uid}/device` | `ADMIN_STEPUP` |
+| Semper staff, a seat | `PATCH /v1/admin/licenses/{id}/seats/{uid}` `{"clearDeviceLock": true}` (or the older `.../seats/{uid}/device`) | `ADMIN_STEPUP` |
 | Semper staff, an individual licence | `PATCH /v1/admin/licenses/{id}` `{"clearDeviceLock": true}` | `ADMIN_STEPUP` |
 | The holder | `POST /v1/licenses/unbind` | `USER_STEPUP` |
 | Semper staff, a Demo account | `POST /v1/admin/device-releases` `{"email": …}` | `ADMIN_STEPUP` |

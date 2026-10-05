@@ -4,7 +4,7 @@ from .. import apps, audit, errors, repo, statuses
 from .. import rate_limit
 from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
-from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
+from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION, normalize_kind
 from ..models import (
     AdminDeviceRelease,
     AdminLicenseConvert,
@@ -14,6 +14,7 @@ from ..models import (
 )
 from ..validation import AccessStatus, DocumentId, LicenceSearch, PageToken, Uid
 from ._shared import clamp_page_size, page_block
+from .roster import RosterAdmin, Tier, roster_router
 
 router = APIRouter()
 
@@ -476,3 +477,36 @@ def admin_revoke_license(
         target={"type": "license", "id": license_id},
     )
     return revoked
+
+
+# ---------------- institution rosters, at the staff tier ----------------
+# The same roster routes IT has (`routers/roster.py`), for any institution
+# licence. Staff are not in a customer's `adminEmails`, and a support request
+# must not depend on whether they are. Reads take the ordinary admin token,
+# like the licence listing; changes take the staff step-up, like every other
+# staff write.
+
+
+def _staff_roster(license_id: str, user: dict) -> RosterAdmin:
+    lic = repo.get_license(license_id)
+    if not lic or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
+    return RosterAdmin(user, license_id, lic)
+
+
+def staff_roster_reader(license_id: DocumentId, admin=Depends(admin_user)) -> RosterAdmin:
+    return _staff_roster(license_id, admin)
+
+
+def staff_roster_writer(license_id: DocumentId,
+                        ctx=Depends(attested_or_mfa_admin)) -> RosterAdmin:
+    return _staff_roster(license_id, ctx.user)
+
+
+router.include_router(
+    roster_router(Tier(
+        reader=staff_roster_reader, writer=staff_roster_writer,
+        bucket=rate_limit.admin_bucket, actor=repo.ACTOR_STAFF, audit="ADMIN",
+    )),
+    prefix="/v1/admin/licenses/{license_id}",
+)

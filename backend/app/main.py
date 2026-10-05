@@ -216,13 +216,30 @@ for _router in (
     institutions.router,
 ):
     app.include_router(_router)
-    # The access log classifies by declared template, not by guessing which
-    # path segments are ids (TD-44).
-    obs.register_routes(route.path_format for route in _router.routes)
+
+
+
+def served_routes(application: FastAPI):
+    """Every route the app serves, with its full path, methods, endpoint and
+    dependencies — nested routers included. FastAPI keeps an included router
+    as one `_IncludedRouter` entry in `app.routes` and resolves its routes,
+    prefixes and all (the roster under institutions and under admin), only
+    through `effective_route_contexts()`. The app's own routes (the
+    interactive docs) are not part of the API and are left out."""
+    for route in application.routes:
+        contexts = getattr(route, "effective_route_contexts", None)
+        if contexts is not None:
+            yield from contexts()
+
+
+# The access log classifies by declared template, not by guessing which path
+# segments are ids (TD-44).
+obs.register_routes(route.path_format for route in served_routes(app))
 
 # Re-exports so existing tests keep `from app.main import …`.
 __all__ = [
     "app",
+    "served_routes",
     "json_dumps",
     "_client_key",
     "_is_first_byte_request",

@@ -115,6 +115,14 @@ EXPECTED = {
     # own route, at the staff tier, because staff are not in a customer's
     # adminEmails and that route 404s for them.
     ("PATCH", "/v1/admin/licenses/{license_id}/seats/{uid}/device"): ADMIN_STEPUP,
+    # The institution roster at the staff tier (`routers/roster.py`): any
+    # institution licence, adminEmails or not. Reading it is an ordinary
+    # admin read, like the licence list; changing it is a staff write.
+    ("GET", "/v1/admin/licenses/{license_id}/seats"): ADMIN,
+    ("POST", "/v1/admin/licenses/{license_id}/seats"): ADMIN_STEPUP,
+    ("PATCH", "/v1/admin/licenses/{license_id}/seats/{uid}"): ADMIN_STEPUP,
+    ("DELETE", "/v1/admin/licenses/{license_id}/seats/{uid}"): ADMIN_STEPUP,
+    ("DELETE", "/v1/admin/licenses/{license_id}/invites/{invite_key}"): ADMIN_STEPUP,
     # Read-only device-move history for support. ADMIN (token) not step-up —
     # same tier as listing licences.
     ("GET", "/v1/admin/licenses/{license_id}/device-history"): ADMIN,
@@ -192,24 +200,17 @@ def _tier(route) -> str:
     return NONE
 
 
-def _iter_api_routes(routes):
-    """Walk `app.routes`, including FastAPI `_IncludedRouter` wrappers.
-
-    `include_router` no longer flattens child APIRoutes onto `app.routes`;
-    they live on `original_router.routes`. The auth-tier table still needs
-    every user-facing path.
-    """
-    for route in routes:
-        nested = getattr(route, "original_router", None)
-        if nested is not None:
-            yield from _iter_api_routes(nested.routes)
-            continue
-        yield route
+def _iter_api_routes(_routes=None):
+    """Every route the app serves, nested routers included, with full paths
+    (`app.main.served_routes`). Walking only the top level would compare
+    against the docs endpoints and pass vacuously."""
+    from app.main import served_routes
+    yield from served_routes(app)
 
 
 def _actual_routes():
     out = {}
-    for route in _iter_api_routes(app.routes):
+    for route in _iter_api_routes():
         if not hasattr(route, "dependant") or not getattr(route, "methods", None):
             continue
         for method in route.methods:

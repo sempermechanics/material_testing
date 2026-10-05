@@ -30,6 +30,9 @@ SIGNED = {
     "attested_or_mfa_admin",
     "attested_or_mfa_admin_fresh",
     "institution_admin_stepup",
+    # The roster routes (`routers/roster.py`) take their changing caller from
+    # the tier: IT's step-up or the staff step-up.
+    "tier.writer",
 }
 
 

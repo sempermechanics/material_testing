@@ -125,3 +125,23 @@ def test_list_license_device_history_filters_non_device_seat_patches(store):
         "detail": {"enabled": True},
     }
     assert audit.list_license_device_history(license_id) == []
+
+
+@pytest.mark.asyncio
+async def test_device_history_includes_a_staff_roster_unbind(store, client):
+    """A staff seat patch on the roster is a device move when it clears the lock."""
+    license_id = "lic-staff"
+    store._data["licenses"] = {
+        license_id: {"kind": "institution", "status": "active", "keyPrefix": "SEMP-STAF"},
+    }
+    logs = store._data.setdefault("audit_logs", {})
+    for doc_id, cleared in (("clear", True), ("hold", False)):
+        logs[doc_id] = {
+            "ts": datetime(2026, 9, 6, tzinfo=timezone.utc), "uid": "admin-1",
+            "action": "ADMIN_SEAT_PATCH", "outcome": "OK",
+            "target": {"type": "seat", "id": f"{license_id}/student-1"},
+            "detail": {"clearDeviceLock": cleared, "enabled": None if cleared else False},
+        }
+    r = await client.get(f"/v1/admin/licenses/{license_id}/device-history",
+                         headers={"Authorization": "Bearer ok"})
+    assert [e["id"] for e in r.json()["events"]] == ["clear"]

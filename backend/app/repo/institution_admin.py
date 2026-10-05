@@ -5,6 +5,7 @@ from ..licenses import normalize_email
 from ..errors import Refusal
 
 from ._base import (
+    _cursor_page,
     _is_institution,
     _is_revoked,
     db,
@@ -128,6 +129,14 @@ def institution_seat(license_id: str, uid: str) -> dict | None:
     finding it in `list_institution_seats` read the whole roster."""
     snap = _seat_ref(license_id, uid).get()
     return _seat_public(snap.id, snap.to_dict() or {}) if snap.exists else None
+
+
+def page_institution_seats(license_id: str, limit: int,
+                           page_token: str | None = None) -> tuple[list[dict], str | None]:
+    """One page of a roster, in uid order. Returns (seats, next_token)."""
+    col = db().collection("licenses").document(license_id).collection("seats")
+    docs, next_token = _cursor_page(col, col, limit, page_token)
+    return [_seat_public(d.id, d.to_dict() or {}) for d in docs], next_token
 
 
 def list_institution_seats(license_id: str) -> list[dict]:

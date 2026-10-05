@@ -12,7 +12,7 @@ from license_helpers import (  # noqa: F401
     _recording_stubs,
     _signed_in,
 )
-from refusals import attempt
+from refusals import attempt, attempt_add
 
 
 # ===================================================================== institution
@@ -430,3 +430,102 @@ async def test_roster_routes_read_one_seat_not_the_roster(client, monkeypatch, a
     listed = await client.get(f"{base}/seats")
     assert listed.status_code == 200, listed.text
     assert gets.count("licenses") == 1
+
+
+# ================================================ the roster at the staff tier
+# The operator desk drives any institution's roster. The routes are IT's
+# (`routers/roster.py`), mounted again under /v1/admin for staff, who are not
+# in a customer's adminEmails.
+
+
+@pytest.fixture
+def staff_desk(monkeypatch, audited):
+    """The dev caller is staff and administers no licence."""
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "email": "staff@semper.test"})
+    store._data["users"] = {
+        "dev-user": {"email": "staff@semper.test", "access_status": "APPROVED", "role": "admin"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+    }
+    return store
+
+
+@pytest.mark.asyncio
+async def test_staff_drive_a_roster_whose_admin_emails_do_not_name_them(staff_desk, client, audited):
+    license_id = _mint_institution()["license"]["id"]
+    assert "staff@semper.test" not in staff_desk._data["licenses"][license_id]["adminEmails"]
+    base = f"/v1/admin/licenses/{license_id}"
+
+    # IT's own route still refuses them, as for any foreign licence.
+    it = await client.get(f"/v1/institutions/licenses/{license_id}/seats")
+    assert it.status_code == 404
+
+    added = await client.post(f"{base}/seats", json={"email": "a@university.edu"})
+    assert added.status_code == 200, added.text
+    assert added.json()["seat"]["uid"] == "student"
+    invited = await client.post(f"{base}/seats", json={"email": "new@university.edu"})
+    assert invited.json()["invite"]["email"] == "new@university.edu"
+
+    listed = (await client.get(f"{base}/seats")).json()
+    assert [s["uid"] for s in listed["seats"]] == ["student"]
+    assert [i["email"] for i in listed["invites"]] == ["new@university.edu"]
+
+    held = await client.patch(f"{base}/seats/student", json={"enabled": False})
+    assert held.json()["seat"]["status"] == "disabled"
+    withdrawn = await client.delete(f"{base}/invites/{listed['invites'][0]['id']}")
+    assert withdrawn.status_code == 200
+    removed = await client.delete(f"{base}/seats/student")
+    assert removed.json() == {"licenseId": license_id, "uid": "student", "revoked": True}
+
+    actions = [r["action"] for r in audited]
+    assert actions == ["ADMIN_SEAT_ADD", "ADMIN_INVITE_ADD", "ADMIN_SEAT_PATCH",
+                       "ADMIN_INVITE_REVOKE", "ADMIN_SEAT_REVOKE"]
+
+
+@pytest.mark.asyncio
+async def test_staff_roster_routes_are_for_institution_licences_only(staff_desk, client):
+    solo = _mint_individual("solo@lab.org")["license"]["id"]
+    assert (await client.get(f"/v1/admin/licenses/{solo}/seats")).status_code == 404
+    assert (await client.get("/v1/admin/licenses/nope/seats")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_staff_seat_unbind_is_staff_not_the_holder(staff_desk, client, audited):
+    """Staff clears carry no cooldown; only the holder's own change does."""
+    minted = _mint_institution()
+    license_id = minted["license"]["id"]
+    attempt(repo.activate_license, "student", "a@university.edu", "old-dev", minted["key"])
+    base = f"/v1/admin/licenses/{license_id}/seats/student"
+
+    for _ in range(2):
+        r = await client.patch(base, json={"clearDeviceLock": True})
+        assert r.status_code == 200, r.text
+        assert r.json()["seat"]["deviceIdLock"] == ""
+    patches = [r for r in audited if r["action"] == "ADMIN_SEAT_PATCH"]
+    assert patches[0]["detail"]["previousDeviceId"] == "old-dev"
+
+
+@pytest.mark.asyncio
+async def test_a_roster_listing_pages(staff_desk, client):
+    license_id = _mint_institution()["license"]["id"]
+    for i in range(5):
+        staff_desk._data[f"licenses/{license_id}/seats"] = {
+            **staff_desk._data.get(f"licenses/{license_id}/seats", {}),
+            f"u{i}": {"uid": f"u{i}", "email": f"m{i}@university.edu", "status": "active"},
+        }
+    attempt_add(repo.add_institution_member, license_id, "later@university.edu")
+    base = f"/v1/admin/licenses/{license_id}/seats"
+
+    first = (await client.get(f"{base}?page_size=2")).json()
+    assert [s["uid"] for s in first["seats"]] == ["u0", "u1"]
+    assert first["page"]["hasMore"] is True
+    assert [i["email"] for i in first["invites"]] == ["later@university.edu"]
+
+    uids, token = [s["uid"] for s in first["seats"]], first["page"]["nextPageToken"]
+    while token:
+        page = (await client.get(f"{base}?page_size=2&page_token={token}")).json()
+        assert page["invites"] == []
+        uids += [s["uid"] for s in page["seats"]]
+        token = page["page"]["nextPageToken"]
+    assert uids == ["u0", "u1", "u2", "u3", "u4"]

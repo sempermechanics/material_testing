@@ -996,6 +996,13 @@ above, or by calling these routes directly (script, curl, or their own tooling):
 | Pause someone without losing their seat (e.g. leave of absence) | `PATCH .../seats/{uid}` `{"enabled": false}`, then later `{"enabled": true}` to restore — this does **not** free the seat slot |
 | Someone leaves the institution for good | `DELETE .../seats/{uid}` — drops them to Demo and **frees the slot** for someone else |
 
+The listing is paged: `?page_size=` (up to 1000, default 500) and the answer's
+`page.nextPageToken` as `?page_token=` for the next page.
+
+Semper staff have the same roster routes under `/v1/admin/licenses/{id}/…`
+for any institution licence, without being on its `adminEmails`; changing
+the roster needs the staff step-up.
+
 Institution IT authenticates with a normal signed-in account (their Firebase
 ID token) whose **verified** email is in that license's `adminEmails` — they
 do not need a registered/attested device for this, since they are managing

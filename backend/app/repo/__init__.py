@@ -87,6 +87,7 @@ from .institution_admin import (  # noqa: F401
     institution_license_summary,
     institution_seat,
     list_institution_seats,
+    page_institution_seats,
 )
 from .devices import (  # noqa: F401
     get_device,
