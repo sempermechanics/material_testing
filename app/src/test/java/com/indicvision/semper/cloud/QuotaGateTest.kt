@@ -2,11 +2,11 @@ package com.indicvision.semper.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.data.RestoreStart
-import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.cloud.restore.RestoreStart
 import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.data.session.SessionStore
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

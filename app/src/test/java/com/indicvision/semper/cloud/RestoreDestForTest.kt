@@ -1,8 +1,8 @@
 package com.indicvision.semper.cloud
 
-import com.indicvision.semper.data.CloudRestore
-import com.indicvision.semper.data.CorruptTransferException
-import com.indicvision.semper.data.SessionPaths
+import com.indicvision.semper.data.cloud.CorruptTransferException
+import com.indicvision.semper.data.cloud.restore.CloudRestore
+import com.indicvision.semper.data.session.SessionPaths
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Rule

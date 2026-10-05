@@ -1,8 +1,8 @@
 package com.indicvision.semper.ui.settings
 
 import androidx.annotation.WorkerThread
-import com.indicvision.semper.data.SessionRecord
 import com.indicvision.semper.data.net.CloudSessionDto
+import com.indicvision.semper.data.session.SessionRecord
 
 /** Where one analysis lives, which decides its row's wording and actions. */
 enum class AnalysisLocation {

@@ -3,7 +3,7 @@ package com.indicvision.semper.results
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import com.indicvision.semper.DicResult
+import com.indicvision.semper.field.DicResult
 import com.indicvision.semper.report.ReportBuilder
 import com.indicvision.semper.report.VisualizationEngine
 import org.junit.Assert.assertArrayEquals

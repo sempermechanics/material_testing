@@ -2,7 +2,7 @@ package com.indicvision.semper.ui.settings
 
 import android.content.Context
 import androidx.annotation.VisibleForTesting
-import com.indicvision.semper.data.CloudSync
+import com.indicvision.semper.data.cloud.CloudSync
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

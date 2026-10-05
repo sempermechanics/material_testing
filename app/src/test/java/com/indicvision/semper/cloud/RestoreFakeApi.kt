@@ -1,9 +1,9 @@
 package com.indicvision.semper.cloud
 
-import com.indicvision.semper.DicResult
 import com.indicvision.semper.data.net.CloudApi
 import com.indicvision.semper.data.net.CloudFileDto
 import com.indicvision.semper.data.net.SessionFilesResponse
+import com.indicvision.semper.field.DicResult
 import com.indicvision.semper.util.Digests
 import java.io.ByteArrayOutputStream
 import java.io.File

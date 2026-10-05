@@ -1,7 +1,7 @@
 package com.indicvision.semper.results
 
-import com.indicvision.semper.DicResult
-import com.indicvision.semper.ui.viewer.SummaryAnimation
+import com.indicvision.semper.field.DicResult
+import com.indicvision.semper.ui.viewer.summary.SummaryAnimation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking

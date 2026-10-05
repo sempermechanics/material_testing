@@ -18,8 +18,8 @@ import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.indicvision.semper.R
-import com.indicvision.semper.data.AuthRepository
-import com.indicvision.semper.data.LegalTerms
+import com.indicvision.semper.data.account.AuthRepository
+import com.indicvision.semper.data.account.LegalTerms
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.ui.common.AuthRoute
 import com.indicvision.semper.ui.common.Insets

@@ -7,7 +7,8 @@ import android.widget.ImageView
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
-import com.indicvision.semper.data.WizardDraft
+import com.indicvision.semper.data.prefs.WizardDraft
+import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

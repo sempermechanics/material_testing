@@ -20,7 +20,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CoachPrefs
+import com.indicvision.semper.data.prefs.CoachPrefs
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

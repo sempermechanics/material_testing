@@ -1,7 +1,7 @@
 package com.indicvision.semper.analysis
 
 import android.os.Looper
-import com.indicvision.semper.ui.analysis.AnalysisViewModel
+import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

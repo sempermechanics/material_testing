@@ -10,10 +10,11 @@ import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.CacheJanitor
+import com.indicvision.semper.data.session.CacheJanitor
 import com.indicvision.semper.fixtures.idleUntil
+import com.indicvision.semper.navigation.DicKeys
+import com.indicvision.semper.ui.analysis.roi.StudioOverlayView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

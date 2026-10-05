@@ -1,12 +1,12 @@
 package com.indicvision.semper.analysis
 
-import com.indicvision.semper.data.SessionRecord.SyncState
-import com.indicvision.semper.data.SessionRecordSettings
+import com.indicvision.semper.data.session.SessionRecord.SyncState
+import com.indicvision.semper.data.session.SessionRecordSettings
 import com.indicvision.semper.fixtures.sessionRecord
-import com.indicvision.semper.ui.analysis.AnalysisNavHelper
-import com.indicvision.semper.ui.analysis.AnalysisViewModel
-import com.indicvision.semper.ui.analysis.UnsavedRerun
-import com.indicvision.semper.ui.analysis.afterUnsavedRerun
+import com.indicvision.semper.ui.analysis.run.UnsavedRerun
+import com.indicvision.semper.ui.analysis.run.afterUnsavedRerun
+import com.indicvision.semper.ui.analysis.wizard.AnalysisNavHelper
+import com.indicvision.semper.ui.analysis.wizard.AnalysisViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

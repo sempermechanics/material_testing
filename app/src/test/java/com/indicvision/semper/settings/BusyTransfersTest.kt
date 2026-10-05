@@ -1,7 +1,7 @@
 package com.indicvision.semper.settings
 
 import androidx.work.WorkInfo
-import com.indicvision.semper.data.CloudRestore
+import com.indicvision.semper.data.cloud.restore.CloudRestore
 import com.indicvision.semper.ui.settings.BusyTransfers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

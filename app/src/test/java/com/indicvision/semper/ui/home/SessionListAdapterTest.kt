@@ -5,11 +5,11 @@ import android.view.View
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.fixtures.sessionRecord
-import com.indicvision.semper.ui.analysis.EngineFailure
+import com.indicvision.semper.navigation.DicKeys
+import com.indicvision.semper.ui.analysis.run.EngineFailure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

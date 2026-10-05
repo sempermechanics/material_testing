@@ -2,8 +2,8 @@ package com.indicvision.semper.data.net
 
 import android.content.Context
 import com.indicvision.semper.BuildConfig
-import com.indicvision.semper.data.DevAuth
-import com.indicvision.semper.data.DeviceKeyManager
+import com.indicvision.semper.data.account.DevAuth
+import com.indicvision.semper.data.account.DeviceKeyManager
 import com.indicvision.semper.util.AtomicFiles
 import com.indicvision.semper.util.Digests
 import kotlinx.coroutines.Dispatchers

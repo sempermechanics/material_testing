@@ -3,8 +3,8 @@ package com.indicvision.semper.ui.common
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import com.indicvision.semper.DicKeys
-import com.indicvision.semper.data.DevAuth
+import com.indicvision.semper.data.account.DevAuth
+import com.indicvision.semper.navigation.DicKeys
 import com.indicvision.semper.ui.auth.AuthActivity
 import com.indicvision.semper.ui.auth.SplashActivity
 

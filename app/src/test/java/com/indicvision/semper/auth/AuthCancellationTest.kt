@@ -2,11 +2,11 @@ package com.indicvision.semper.auth
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.analytics.SemperAnalytics
 import com.indicvision.semper.cloud.FakeCloudApi
 import com.indicvision.semper.cloud.FakeTokens
-import com.indicvision.semper.data.AuthRepository
-import com.indicvision.semper.data.DicSettings
+import com.indicvision.semper.data.account.AuthRepository
+import com.indicvision.semper.data.prefs.DicSettings
+import com.indicvision.semper.diagnostics.SemperAnalytics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers

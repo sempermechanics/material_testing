@@ -17,11 +17,11 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
-import com.indicvision.semper.DicKeys
 import com.indicvision.semper.R
-import com.indicvision.semper.data.SessionRecord
+import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.imaging.BitmapDecode
-import com.indicvision.semper.ui.analysis.EngineFailure
+import com.indicvision.semper.navigation.DicKeys
+import com.indicvision.semper.ui.analysis.run.EngineFailure
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Collections

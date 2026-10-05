@@ -6,7 +6,7 @@ package com.indicvision.semper.data.net
 
 import android.content.Context
 import androidx.core.content.edit
-import com.indicvision.semper.data.LicenseEntitlements
+import com.indicvision.semper.data.account.LicenseEntitlements
 
 /**
  * Local session cache alongside Firebase Auth: the signed-in identity plus the

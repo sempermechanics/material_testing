@@ -6,7 +6,7 @@ import android.widget.Button
 import android.widget.CheckBox
 import androidx.test.core.app.ApplicationProvider
 import com.indicvision.semper.R
-import com.indicvision.semper.data.LegalTerms
+import com.indicvision.semper.data.account.LegalTerms
 import com.indicvision.semper.data.net.TokenStore
 import com.indicvision.semper.ui.auth.AccessRouter
 import com.indicvision.semper.ui.auth.AuthActivity

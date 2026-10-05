@@ -3,10 +3,10 @@ package com.indicvision.semper.cloud
 import android.content.Context
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.data.CloudSync
-import com.indicvision.semper.data.CloudSync.EraseResult
-import com.indicvision.semper.data.SessionRecord
-import com.indicvision.semper.data.SessionStore
+import com.indicvision.semper.data.cloud.CloudSync
+import com.indicvision.semper.data.cloud.CloudSync.EraseResult
+import com.indicvision.semper.data.session.SessionRecord
+import com.indicvision.semper.data.session.SessionStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
