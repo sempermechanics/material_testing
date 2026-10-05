@@ -18,6 +18,7 @@ from license_helpers import (  # noqa: F401
     _recording_stubs,
     _signed_in,
 )
+from refusals import attempt
 
 
 def _mint_floating(max_seats=2):
@@ -47,7 +48,7 @@ def _leased_pool(store, max_seats=1):
     license_id = _mint_floating(max_seats=max_seats)["license"]["id"]
     repo.add_institution_member(license_id, "u1@university.edu")
     repo.add_institution_member(license_id, "u2@university.edu")
-    err, _ = repo.checkout_lease(_user(store, "u1"), "dev-1")
+    err, _ = attempt(repo.checkout_lease, _user(store, "u1"), "dev-1")
     assert err == ""
     return license_id
 
@@ -65,11 +66,11 @@ def test_releasing_an_expired_unswept_lease_gives_its_slot_back(store):
     license_id = _leased_pool(store)
     _expire_unswept(store, license_id, "u1")
 
-    err, _ = repo.release_lease(_user(store, "u1"))
+    err, _ = attempt(repo.release_lease, _user(store, "u1"))
 
     assert err == ""
     assert store._data["licenses"][license_id]["leasesActive"] == 0
-    err, _ = repo.checkout_lease(_user(store, "u2"), "dev-2")
+    err, _ = attempt(repo.checkout_lease, _user(store, "u2"), "dev-2")
     assert err == "", "the slot must not leak"
 
 
@@ -88,7 +89,7 @@ def test_taking_up_an_expired_unswept_lease_again_counts_it_once(store, monkeypa
     # The sweep is bounded and runs outside the claim; model the lease it missed.
     monkeypatch.setattr(repo, "_sweep_expired_leases", lambda *a: 0)
 
-    err, _ = repo.checkout_lease(_user(store, "u1"), "dev-1")
+    err, _ = attempt(repo.checkout_lease, _user(store, "u1"), "dev-1")
 
     assert err == ""
     assert store._data["licenses"][license_id]["leasesActive"] == 1
@@ -108,8 +109,8 @@ def test_a_removed_seat_cannot_be_resumed(store):
     repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
     repo.revoke_institution_seat(license_id, "u1")
 
-    assert repo.set_seat_enabled(license_id, "u1", True) == "seat_revoked"
-    assert repo.set_seat_enabled(license_id, "u1", False) == "seat_revoked"
+    assert attempt(repo.set_seat_enabled, license_id, "u1", True)[0] == "seat_revoked"
+    assert attempt(repo.set_seat_enabled, license_id, "u1", False)[0] == "seat_revoked"
 
     assert store._data[f"licenses/{license_id}/seats"]["u1"]["status"] == "revoked"
     assert store._data["users"]["u1"]["mode"] == "demo"
@@ -126,13 +127,13 @@ def test_a_seat_on_a_revoked_licence_cannot_be_resumed(store):
     repo.set_seat_enabled(license_id, "u1", False)
     store._data["licenses"][license_id]["status"] = "revoked"
 
-    assert repo.set_seat_enabled(license_id, "u1", True) == "license_revoked"
+    assert attempt(repo.set_seat_enabled, license_id, "u1", True)[0] == "license_revoked"
     assert store._data["users"]["u1"]["mode"] == "demo"
 
 
 def test_an_unknown_seat_is_not_found(store):
     license_id = _mint_institution()["license"]["id"]
-    assert repo.set_seat_enabled(license_id, "nobody", True) == "seat_not_found"
+    assert attempt(repo.set_seat_enabled, license_id, "nobody", True)[0] == "seat_not_found"
 
 
 def test_holding_a_seat_releases_its_lease(store):
@@ -140,13 +141,13 @@ def test_holding_a_seat_releases_its_lease(store):
     pool until it expires."""
     license_id = _leased_pool(store)
 
-    assert repo.set_seat_enabled(license_id, "u1", False) == ""
+    assert attempt(repo.set_seat_enabled, license_id, "u1", False)[0] == ""
 
     seat = store._data[f"licenses/{license_id}/seats"]["u1"]
     assert "leaseExpiresAt" not in seat
     assert store._data["licenses"][license_id]["leasesActive"] == 0
     assert "leaseExpiresAt" not in store._data["users"]["u1"]
-    err, _ = repo.checkout_lease(_user(store, "u2"), "dev-2")
+    err, _ = attempt(repo.checkout_lease, _user(store, "u2"), "dev-2")
     assert err == ""
 
 

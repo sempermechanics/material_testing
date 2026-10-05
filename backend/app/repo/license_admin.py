@@ -1,6 +1,7 @@
 """Licence administration by Semper staff: listing, renewal fan-out, whole-key revoke.
 """
 from .. import errors
+from ..errors import Refusal
 from ..config import settings
 from ..licenses import (
     DURATION_PERPETUAL,
@@ -162,14 +163,6 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
     return _license_public(license_id, {**lic, "status": STATUS_REVOKED})
 
 
-class LicenseTermsRejected(Exception):
-    """A licence edit `update_license` refuses. `code` is the 422 detail."""
-
-    def __init__(self, code: str):
-        super().__init__(code)
-        self.code = code
-
-
 def expiry_change_error(lic: dict, expires_at, *, allow_shorten: bool = False) -> str:
     """Why this new `expiresAt` may not be applied to `lic`, or "".
 
@@ -268,7 +261,7 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     seat needs none.
 
     Returns the updated public license, or None if there is no such license.
-    Raises `LicenseTermsRejected`, before writing anything, for anything
+    Raises `Refusal`, before writing anything, for anything
     `license_edit_error` refuses.
     """
     ref = db().collection("licenses").document(license_id)
@@ -280,7 +273,7 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     update = {k: v for k, v in patch.items() if v is not None}
     err = license_edit_error(lic, update)
     if err:
-        raise LicenseTermsRejected(err)
+        raise Refusal(err)
     allow_shorten = update.pop("allowShorten", False)
     clear_cap = bool(update.pop("clearMaxAnalyses", False))
     if clear_cap:

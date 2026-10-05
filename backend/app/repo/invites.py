@@ -1,5 +1,7 @@
 """Pending invites: the promise of a licence to an address with no account yet.
 """
+from .. import errors
+from ..errors import Refusal
 from ..licenses import (
     KIND_INSTITUTION,
     invite_id,
@@ -57,10 +59,10 @@ def _invite_public(doc_id: str, inv: dict) -> dict:
 
 def invite_institution_member(
     license_id: str, email: str, invited_by_uid: str,
-) -> tuple[str, dict | None]:
+) -> dict:
     """Reserve a roster place for someone who has no account yet.
 
-    Returns (error, invite). The invite is redeemed by `claim_pending_invite`
+    Returns the invite, or raises `Refusal`. The invite is redeemed by `claim_pending_invite`
     the first time that address signs in, which is also the moment the person
     would otherwise have been given a Demo key.
 
@@ -71,13 +73,14 @@ def invite_institution_member(
     taken when it is kept.
     """
     lic = get_license(license_id)
-    if not lic:
-        return "license_not_found", None
-    if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
-        return "license_not_found", None
+    if not lic or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     if (lic.get("status") or "active") == "revoked":
-        return "license_revoked", None
-    return _write_invite(license_id, email, invited_by_uid)
+        raise Refusal(errors.LICENSE_REVOKED)
+    err, invite = _write_invite(license_id, email, invited_by_uid)
+    if err:
+        raise Refusal(err)
+    return invite
 
 
 def _invite_is_stale(license_id: str) -> bool:
@@ -131,7 +134,7 @@ def _write_invite(license_id: str, email: str,
     """
     address = normalize_email(email)
     if not address:
-        return "invalid_email", None
+        return errors.INVALID_EMAIL, None
 
     ref = _invite_ref(address)
     existing = ref.get()
@@ -145,7 +148,7 @@ def _write_invite(license_id: str, email: str,
         if (held.get("licenseId") or "") == license_id:
             return "", _invite_public(ref.id, held)
         if not _invite_is_stale(held.get("licenseId") or ""):
-            return "invite_exists", None
+            return errors.INVITE_EXISTS, None
 
     data = {
         "email": address,

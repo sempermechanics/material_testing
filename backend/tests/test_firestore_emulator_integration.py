@@ -21,6 +21,7 @@ import pytest
 from app import drive, firestore_repo as repo
 from app.config import settings
 from app.models import FileComplete, FileSpec, SessionCreate
+from refusals import attempt, attempt_add
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("FIRESTORE_EMULATOR_HOST"),
@@ -390,7 +391,7 @@ def test_a_floating_pool_never_hands_out_more_leases_than_it_has(emulator_repo):
 
     with ThreadPoolExecutor(max_workers=12) as pool:
         results = list(pool.map(
-            lambda u: emulator_repo.checkout_lease(u, f"dev-{u['uid']}"), users,
+            lambda u: attempt(emulator_repo.checkout_lease, u, f"dev-{u['uid']}"), users,
         ))
 
     granted = [cfg for err, cfg in results if err == ""]
@@ -419,14 +420,14 @@ def test_renewing_a_lease_does_not_consume_a_second_slot(emulator_repo):
     holder = {**user, "licenseId": license_id, "mode": "licensed"}
 
     for _ in range(5):
-        err, _cfg = emulator_repo.checkout_lease(holder, "dev-1")
+        err, _cfg = attempt(emulator_repo.checkout_lease, holder, "dev-1")
         assert err == ""
 
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
     # Concurrent heartbeats from the same holder must not inflate it either.
     with ThreadPoolExecutor(max_workers=6) as pool:
-        list(pool.map(lambda _: emulator_repo.checkout_lease(holder, "dev-1"), range(6)))
+        list(pool.map(lambda _: attempt(emulator_repo.checkout_lease, holder, "dev-1"), range(6)))
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
 
@@ -443,15 +444,15 @@ def test_releasing_a_lease_frees_exactly_one_slot(emulator_repo):
         holders.append({**user, "licenseId": license_id, "mode": "licensed"})
 
     first, second = holders
-    assert emulator_repo.checkout_lease(first, "dev-a")[0] == ""
-    assert emulator_repo.checkout_lease(second, "dev-b")[0] == "no_floating_seat"
+    assert attempt(emulator_repo.checkout_lease, first, "dev-a")[0] == ""
+    assert attempt(emulator_repo.checkout_lease, second, "dev-b")[0] == "no_floating_seat"
 
-    assert emulator_repo.release_lease(first)[0] == ""
+    assert attempt(emulator_repo.release_lease, first)[0] == ""
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 0
-    assert emulator_repo.checkout_lease(second, "dev-b")[0] == ""
+    assert attempt(emulator_repo.checkout_lease, second, "dev-b")[0] == ""
 
     # Releasing a lease that already lapsed frees nothing and still succeeds.
-    assert emulator_repo.release_lease(first)[0] == ""
+    assert attempt(emulator_repo.release_lease, first)[0] == ""
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
 
@@ -473,8 +474,8 @@ def test_an_expired_lease_is_reclaimed_by_the_next_claimant(emulator_repo):
         holders.append({**user, "licenseId": license_id, "mode": "licensed"})
     crashed, waiting = holders
 
-    assert emulator_repo.checkout_lease(crashed, "dev-crash")[0] == ""
-    assert emulator_repo.checkout_lease(waiting, "dev-wait")[0] == "no_floating_seat"
+    assert attempt(emulator_repo.checkout_lease, crashed, "dev-crash")[0] == ""
+    assert attempt(emulator_repo.checkout_lease, waiting, "dev-wait")[0] == "no_floating_seat"
 
     # Backdate the lease without releasing it — what a crashed client leaves.
     stale = emulator_repo._now() - timedelta(hours=1)
@@ -482,7 +483,7 @@ def test_an_expired_lease_is_reclaimed_by_the_next_claimant(emulator_repo):
     # The counter is now wrong, which is the condition the sweep exists for.
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
-    err, _cfg = emulator_repo.checkout_lease(waiting, "dev-wait")
+    err, _cfg = attempt(emulator_repo.checkout_lease, waiting, "dev-wait")
     assert err == "", "the expired lease was never reclaimed"
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
@@ -495,7 +496,7 @@ def test_an_invite_is_redeemed_at_most_once(emulator_repo):
     tag = uuid.uuid4().hex[:8]
     address = f"newcomer-{tag}@university.edu"
 
-    err, seat, invite = emulator_repo.add_institution_member(
+    err, seat, invite = attempt_add(emulator_repo.add_institution_member,
         license_id, address, invited_by_uid="emu-it",
     )
     assert err == "" and seat is None and invite is not None
@@ -521,7 +522,7 @@ def test_a_revoked_invite_loses_the_race_cleanly(emulator_repo):
     license_id = _emu_institution(emulator_repo, max_seats=10, seating="assigned")
     tag = uuid.uuid4().hex[:8]
     address = f"racer-{tag}@university.edu"
-    _err, _seat, invite = emulator_repo.add_institution_member(license_id, address)
+    _err, _seat, invite = attempt_add(emulator_repo.add_institution_member, license_id, address)
     uid = f"emu-{tag}"
     user = _emu_user(emulator_repo, uid, address)
 
@@ -547,10 +548,10 @@ def _race_until(race, settled, *, what: str, rounds: int = _RACE_ROUNDS):
     See `_race_entitlement` for why a race that granted nothing is re-run
     rather than asserted on.
     """
-    for attempt in range(1, rounds + 1):
+    for round_ in range(1, rounds + 1):
         result = race()
         if settled(result):
-            return result, attempt
+            return result, round_
     pytest.fail(f"{what} in none of {rounds} rounds — contention should not starve that long")
 
 
@@ -800,7 +801,7 @@ def test_reconcile_matches_each_seat_to_its_own_holder(emulator_repo):
     assert emulator_repo.revoke_institution_seat(license_id, gone["uid"]) is True
     emulator_repo.db().collection("users").document(gone["uid"]).delete()
 
-    err, report = emulator_repo.reconcile_institution_seats(license_id)
+    err, report = attempt(emulator_repo.reconcile_institution_seats, license_id)
 
     assert err == ""
     by_uid = {row["uid"]: row for row in report["seats"]}

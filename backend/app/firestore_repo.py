@@ -76,7 +76,6 @@ from .repo.license_admin import (  # noqa: F401
     expiry_change_error,
     get_license_public,
     license_edit_error,
-    LicenseTermsRejected,
     list_licenses,
     revoke_license,
     update_license,

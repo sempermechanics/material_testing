@@ -145,22 +145,9 @@ def add_seat(
     it makes them eligible and consumes no slot; they check out a lease when
     they want to work.
     """
-    code, seat, invite = repo.add_institution_member(
+    seat, invite = repo.add_institution_member(
         license_id, body.email, invited_by_uid=ctx["user"]["uid"],
     )
-    if code:
-        status = {
-            errors.LICENSE_NOT_FOUND: 404,
-            errors.USER_NOT_FOUND: 404,
-            errors.LICENSE_SEATS_EXHAUSTED: 409,
-            errors.LICENSE_SEAT_DISABLED: 409,
-            errors.INVITE_EXISTS: 409,
-            errors.MEMBER_ALREADY_LICENSED: 409,
-            errors.INVALID_EMAIL: 400,
-            # Lost the race for the seat, not out of seats: try again.
-            errors.CLAIM_CONTENDED: 503,
-        }.get(code, 403)
-        raise HTTPException(status, code)
     audit.record(
         ctx["user"]["uid"],
         action="INSTITUTION_SEAT_ADD" if seat else "INSTITUTION_INVITE_ADD",
@@ -217,13 +204,12 @@ def patch_seat(
         raise HTTPException(400, errors.EMPTY_PATCH)
     cleared = {}
     if body.clearDeviceLock:
-        err, cleared = repo.clear_device_lock(license_id, uid, actor=repo.ACTOR_IT)
-        if err:
-            raise HTTPException(404, errors.SEAT_NOT_FOUND)
+        cleared = repo.clear_device_lock(license_id, uid, actor=repo.ACTOR_IT)
     if body.enabled is not None:
-        err = repo.set_seat_enabled(license_id, uid, body.enabled)
-        if err:
-            raise HTTPException(404 if err == errors.SEAT_NOT_FOUND else 409, err)
+        # A seat on a revoked licence is a roster conflict for IT (409); on
+        # the member's own routes it is "you may not use it" (403).
+        with errors.restatus({errors.LICENSE_REVOKED: 409}):
+            repo.set_seat_enabled(license_id, uid, body.enabled)
     audit.record(
         ctx["user"]["uid"], action="INSTITUTION_SEAT_PATCH",
         target={"type": "seat", "id": f"{license_id}/{uid}"},
@@ -234,7 +220,7 @@ def patch_seat(
                 # `releasedDeviceId` is the registered device the account was
                 # signed out of, which can differ from the lock's
                 # (repo.clear_device_lock).
-                **{k: (cleared or {}).get(k) or ""
+                **{k: cleared.get(k) or ""
                    for name in ("previousDeviceId", "releasedDeviceId")
                    for k in apps.spread(name, {})}},
     )

@@ -16,11 +16,12 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps, errors, firestore_repo as repo
 from app.config import settings
 from app.repo import leases
 from app.repo.claims import _institution_member_patch
 from license_helpers import _mint_institution, _signed_in
+from refusals import attempt, attempt_add
 
 
 def _now():
@@ -43,7 +44,7 @@ def _roster(store, license_id, *uids):
         for uid in uids
     }
     for uid in uids:
-        err, _seat, _invite = repo.add_institution_member(license_id, f"{uid}@university.edu")
+        err, _seat, _invite = attempt_add(repo.add_institution_member, license_id, f"{uid}@university.edu")
         assert err == ""
 
 
@@ -71,7 +72,7 @@ class _FrozenSeatQuery:
 
 
 def _checkout(store, uid):
-    return repo.checkout_lease({**store._data["users"][uid], "uid": uid}, f"dev-{uid}")
+    return attempt(repo.checkout_lease, {**store._data["users"][uid], "uid": uid}, f"dev-{uid}")
 
 
 # ============================================================ TD-101 sweep
@@ -167,7 +168,7 @@ def test_a_lost_race_to_add_a_member_is_claim_contended(store, monkeypatch):
     _signed_in(store, "u1", "u1@university.edu")
     monkeypatch.setattr(repo, "claim_seat", lambda *a, **k: repo._CONTENDED)
 
-    err, seat, invite = repo.add_institution_member(license_id, "u1@university.edu")
+    err, seat, invite = attempt_add(repo.add_institution_member, license_id, "u1@university.edu")
     assert (err, seat, invite) == ("claim_contended", None, None)
 
 
@@ -178,7 +179,7 @@ def test_a_lost_race_to_activate_is_claim_contended(store, monkeypatch):
     minted = _mint_institution(max_seats=5)
     monkeypatch.setattr(repo, "claim_seat", lambda *a, **k: repo._CONTENDED)
 
-    err, cfg = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert (err, cfg) == ("claim_contended", None)
 
 
@@ -282,7 +283,7 @@ def _timed(store, days=30):
 def test_extend_refuses_a_date_that_would_end_or_shorten(store, delta, code):
     license_id = _timed(store, days=30)
     before = dict(store._data["licenses"][license_id])
-    with pytest.raises(repo.LicenseTermsRejected) as raised:
+    with pytest.raises(errors.Refusal) as raised:
         repo.update_license(license_id, {"expiresAt": _now() + delta}, "admin")
     assert raised.value.code == code
     assert store._data["licenses"][license_id] == before
@@ -397,7 +398,7 @@ def test_adding_a_member_during_a_renewal_gets_the_renewed_terms(store, monkeypa
         return real_claim(*a, **k)
 
     monkeypatch.setattr(repo, "claim_seat", renewed_first)
-    err, seat, _invite = repo.add_institution_member(license_id, "u1@university.edu")
+    err, seat, _invite = attempt_add(repo.add_institution_member, license_id, "u1@university.edu")
     assert err == "" and seat["uid"] == "u1"
     user = store._data["users"]["u1"]
     assert user["licenseExpiresAt"] == later

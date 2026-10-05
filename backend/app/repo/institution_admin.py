@@ -1,6 +1,7 @@
 """Institution licence self-service for the licence's own IT admins.
 """
-from .. import apps
+from .. import apps, errors
+from ..errors import Refusal
 from ..licenses import (
     KIND_INSTITUTION,
     normalize_kind,
@@ -71,8 +72,9 @@ def list_licenses_administered_by(email: str) -> list[dict]:
 
 
 def add_institution_member(license_id: str, email: str,
-                           invited_by_uid: str = "") -> tuple[str, dict | None, dict | None]:
-    """Put someone on an institution license's roster. Returns (error, seat, invite).
+                           invited_by_uid: str = "") -> tuple[dict | None, dict | None]:
+    """Put someone on an institution license's roster. Returns (seat, invite),
+    or raises `Refusal`.
 
     On an assigned license this entitles them immediately. On a floating one
     it makes them eligible; they still check out a lease to work, and adding
@@ -91,16 +93,15 @@ def add_institution_member(license_id: str, email: str,
     """
     lic = get_license(license_id)
     if not lic:
-        return "license_not_found", None, None
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     user = find_user_by_email(email)
     # One licence per person: someone who holds, or is promised, a different
     # live licence is refused rather than moved onto this roster. Their own
     # seat on this licence is excluded, so re-adding a member stays a no-op.
     if licence_held_by(email, user=user or {}, exclude_id=license_id):
-        return "member_already_licensed", None, None
+        raise Refusal(errors.MEMBER_ALREADY_LICENSED)
     if not user:
-        err, invite = invite_institution_member(license_id, email, invited_by_uid)
-        return err, None, invite
+        return None, invite_institution_member(license_id, email, invited_by_uid)
     uid = user["uid"]
 
     # No device lock: IT adds a member before that member has picked a device,
@@ -108,8 +109,8 @@ def add_institution_member(license_id: str, email: str,
     err = claim_seat(license_id, uid, user.get("email") or email, "",
                      _institution_member_patch(license_id, lic))
     if err:
-        return _public_claim_error(err), None, None
-    return "", institution_seat(license_id, uid), None
+        raise Refusal(_public_claim_error(err))
+    return institution_seat(license_id, uid), None
 
 
 def institution_license_summary(license_id: str, lic: dict | None = None) -> dict | None:

@@ -17,6 +17,7 @@ from app import audit, deps, drive, main, rate_limit, statuses, tasks
 from app import firestore_repo as repo
 from app.config import settings
 from license_helpers import _mint_individual, _mint_institution, _signed_in
+from refusals import attempt
 
 DEV_UID = "dev-user"  # deps._DEV_USER in DEV_INSECURE_AUTH mode
 _SHA = "a" * 64
@@ -30,7 +31,7 @@ def _university(store, *uids):
 
 
 def _seat(store, license_id, key, uid):
-    err, _ = repo.activate_license(uid, f"{uid}@university.edu", f"dev-{uid}", key)
+    err, _ = attempt(repo.activate_license, uid, f"{uid}@university.edu", f"dev-{uid}", key)
     assert err == ""
 
 

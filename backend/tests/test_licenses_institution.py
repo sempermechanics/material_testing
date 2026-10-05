@@ -11,6 +11,7 @@ from license_helpers import (  # noqa: F401
     _recording_stubs,
     _signed_in,
 )
+from refusals import attempt
 
 
 # ===================================================================== institution
@@ -21,7 +22,7 @@ def test_activate_institution_requires_domain_match(store):
         "u1": {"email": "student@other.edu", "access_status": "APPROVED", "plan": "demo"},
     }
     minted = _mint_institution()
-    err, cfg = repo.activate_license("u1", "student@other.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "student@other.edu", "dev-1", minted["key"])
     assert err == "license_email_mismatch"
     assert cfg is None
 
@@ -32,7 +33,7 @@ def test_activate_institution_creates_seat_and_locks_device(store):
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
-    err, cfg = repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "student@university.edu", "dev-1", minted["key"])
     assert err == ""
     assert cfg["plan"] == "professional"
     assert cfg["licenseKind"] == "institution"
@@ -43,7 +44,7 @@ def test_activate_institution_creates_seat_and_locks_device(store):
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
 
     # Same uid, same device: idempotent re-entry, no second seat minted.
-    err2, cfg2 = repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
+    err2, cfg2 = attempt(repo.activate_license, "u1", "student@university.edu", "dev-1", minted["key"])
     assert err2 == ""
     assert cfg2["plan"] == "professional"
     assert len(repo.list_institution_seats(license_id)) == 1
@@ -56,7 +57,7 @@ def test_activate_institution_device_mismatch_once_seat_is_locked(store):
     }
     minted = _mint_institution()
     repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
-    err, cfg = repo.activate_license("u1", "student@university.edu", "dev-2", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "student@university.edu", "dev-2", minted["key"])
     assert err == "license_device_mismatch"
     assert cfg is None
 
@@ -67,9 +68,9 @@ def test_activate_institution_seats_exhausted_returns_409(store):
         "u2": {"email": "b@university.edu", "access_status": "APPROVED", "plan": "demo"},
     }
     minted = _mint_institution(max_seats=1)
-    err1, _ = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err1, _ = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert err1 == ""
-    err2, cfg2 = repo.activate_license("u2", "b@university.edu", "dev-2", minted["key"])
+    err2, cfg2 = attempt(repo.activate_license, "u2", "b@university.edu", "dev-2", minted["key"])
     assert err2 == "license_seats_exhausted"
     assert cfg2 is None
 
@@ -151,19 +152,19 @@ def test_disable_seat_drops_to_demo_without_freeing_slot(store):
     repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
 
-    assert repo.set_seat_enabled(license_id, "u1", False) == ""
+    assert attempt(repo.set_seat_enabled, license_id, "u1", False)[0] == ""
     assert store._data["users"]["u1"]["plan"] == "demo"
     # Slot is still occupied — a second student cannot claim it while disabled.
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
     store._data["users"]["u2"] = {
         "email": "b@university.edu", "access_status": "APPROVED", "plan": "demo",
     }
-    err, cfg = repo.activate_license("u2", "b@university.edu", "dev-2", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u2", "b@university.edu", "dev-2", minted["key"])
     assert err == "license_seats_exhausted"
     assert cfg is None
 
     # Re-enabling restores Professional in place, no re-activation needed.
-    assert repo.set_seat_enabled(license_id, "u1", True) == ""
+    assert attempt(repo.set_seat_enabled, license_id, "u1", True)[0] == ""
     assert store._data["users"]["u1"]["plan"] == "professional"
 
 
@@ -175,11 +176,11 @@ def test_clearing_a_seat_lock_lets_the_key_be_re_activated_elsewhere(store):
     license_id = minted["license"]["id"]
     repo.activate_license("u1", "a@university.edu", "old-phone", minted["key"])
     # Without clearing, a new device on the same seat is rejected.
-    err, _ = repo.activate_license("u1", "a@university.edu", "new-phone", minted["key"])
+    err, _ = attempt(repo.activate_license, "u1", "a@university.edu", "new-phone", minted["key"])
     assert err == "license_device_mismatch"
 
-    assert repo.clear_device_lock(license_id, "u1", actor=repo.ACTOR_IT)[0] == ""
-    err2, cfg2 = repo.activate_license("u1", "a@university.edu", "new-phone", minted["key"])
+    assert attempt(repo.clear_device_lock, license_id, "u1", actor=repo.ACTOR_IT)[0] == ""
+    err2, cfg2 = attempt(repo.activate_license, "u1", "a@university.edu", "new-phone", minted["key"])
     assert err2 == ""
     assert cfg2["plan"] == "professional"
 
@@ -198,7 +199,7 @@ def test_activation_is_in_place_session_data_untouched(store):
     assert before == 5
 
     minted = _mint_institution()
-    err, cfg = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert err == ""
     assert cfg["plan"] == "professional"
     after = repo.count_user_sessions("u1")
@@ -224,7 +225,7 @@ def test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores(st
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
-    err, cfg = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert err == ""
     assert cfg["cloudBackupEnabled"] is True
     assert repo.count_user_sessions("u1") == 30
@@ -244,7 +245,7 @@ def test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores(st
 
     # Re-activation (institution re-admits the student, or they self-serve
     # re-enter the same key) restores Professional in place, zero data loss.
-    err2, cfg2 = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err2, cfg2 = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert err2 == ""
     assert cfg2["plan"] == "professional"
     assert cfg2["cloudBackupEnabled"] is True

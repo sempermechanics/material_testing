@@ -9,6 +9,7 @@ individual licence revoked — with `supersededBy` naming its replacement, so
 the audit trail and the desk can follow the chain.
 """
 from .. import apps, errors
+from ..errors import Refusal
 from ..licenses import (
     KIND_INDIVIDUAL,
     MODE_DEMO,
@@ -54,9 +55,9 @@ def convert_to_institution(
     max_seats: int | None,
     seating: str,
     admin_uid: str,
-) -> tuple[str, dict | None]:
+) -> dict:
     """Replace an individual licence with an institution one. Returns
-    (error, {"key", "license", "claimedByUid", "supersededId"}).
+    {"key", "license", "claimedByUid", "supersededId"}, or raises `Refusal`.
 
     The new licence copies the expiry, grace, support date, analysis cap and
     note. Its holder — the account the old licence is on, or, before anyone
@@ -70,11 +71,11 @@ def convert_to_institution(
     """
     lic = get_license(license_id)
     if not lic:
-        return errors.LICENSE_NOT_FOUND, None
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     if normalize_kind(lic.get("kind")) != KIND_INDIVIDUAL or _license_mode(lic) == MODE_DEMO:
-        return errors.LICENSE_NOT_CONVERTIBLE, None
+        raise Refusal(errors.LICENSE_NOT_CONVERTIBLE)
     if (lic.get("status") or "") == STATUS_REVOKED:
-        return errors.LICENSE_REVOKED, None
+        raise Refusal(errors.LICENSE_REVOKED)
 
     holder_uid = lic.get("redeemedByUid") or ""
     holder = _load_user(holder_uid) if holder_uid else None
@@ -83,7 +84,7 @@ def convert_to_institution(
         holder = None
     address = ((holder or {}).get("email") or lic.get("emailLock") or "").strip().lower()
     if address and _email_domain(address) != domain_lock:
-        return errors.CONVERT_DOMAIN_MISMATCH, None
+        raise Refusal(errors.CONVERT_DOMAIN_MISMATCH)
 
     minted = create_institution_license(
         domain_lock=domain_lock,
@@ -109,7 +110,7 @@ def convert_to_institution(
                                         for a in apps.ALL})
         if err:
             new_ref.delete()
-            return _public_claim_error(err), None
+            raise Refusal(_public_claim_error(err))
         claimed = holder_uid
     elif address:
         # Not signed in yet: the promise moves to the new licence. The old
@@ -125,7 +126,7 @@ def convert_to_institution(
         "supersededBy": new_id,
         "supersededAt": _base.firestore.SERVER_TIMESTAMP,
     })
-    return "", {
+    return {
         "key": minted["key"],
         "license": get_license_public(new_id),
         "claimedByUid": claimed,

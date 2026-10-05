@@ -5,6 +5,7 @@ import pytest
 
 from app import firestore_repo as repo
 from license_helpers import _mint_individual, _mint_institution, _signed_in
+from refusals import attempt, attempt_add
 
 
 def _claimed(store, uid):
@@ -28,7 +29,7 @@ def _seats(store, lid, bucket="licenses"):
 def test_a_deleted_licence_is_held_for_thirty_days(store):
     lid = _held(store, expires_at=datetime.now(timezone.utc) + timedelta(days=90))
 
-    err, row = repo.delete_license(lid, "admin")
+    err, row = attempt(repo.delete_license, lid, "admin")
 
     assert err == ""
     assert lid not in store._data["licenses"]
@@ -58,7 +59,7 @@ def test_an_institution_is_deleted_with_its_roster(store):
     lid = _mint_institution()["license"]["id"]
     for i in range(3):
         _signed_in(store, f"m-{i}", f"m{i}@university.edu")
-        assert repo.add_institution_member(lid, f"m{i}@university.edu")[0] == ""
+        assert attempt_add(repo.add_institution_member, lid, f"m{i}@university.edu")[0] == ""
 
     repo.delete_license(lid, "admin")
 
@@ -72,7 +73,7 @@ def test_a_system_demo_key_is_not_deleted(store):
     store._data["users"] = {}
     user = _signed_in(store, "u-1", "u@lab.org")
     demo = repo.ensure_entitlement(user, "and-1")["licenseId"]
-    assert repo.delete_license(demo, "admin") == ("demo_key_not_deletable", None)
+    assert attempt(repo.delete_license, demo, "admin") == ("demo_key_not_deletable", None)
     assert demo in store._data["licenses"]
 
 
@@ -81,7 +82,7 @@ def test_restoring_puts_the_holder_back(store):
     repo.delete_license(lid, "admin")
     demo = _claimed(store, "solo-1")["licenseId"]
 
-    err, lic = repo.restore_license(lid, "admin")
+    err, lic = attempt(repo.restore_license, lid, "admin")
 
     assert err == "" and lic["status"] == "redeemed"
     user = store._data["users"]["solo-1"]
@@ -98,7 +99,7 @@ def test_restoring_leaves_someone_who_has_moved_on(store):
     other = _mint_individual()["license"]["id"]
     assert _claimed(store, "solo-1")["licenseId"] == other
 
-    err, lic = repo.restore_license(lid, "admin")
+    err, lic = attempt(repo.restore_license, lid, "admin")
 
     assert err == ""
     assert lic["status"] == "unused" and lic["redeemedByUid"] == ""
@@ -113,7 +114,7 @@ def test_restoring_an_institution_reseats_its_roster(store):
         repo.add_institution_member(lid, f"m{i}@university.edu")
     repo.delete_license(lid, "admin")
 
-    err, lic = repo.restore_license(lid, "admin")
+    err, lic = attempt(repo.restore_license, lid, "admin")
 
     assert err == "" and lic["seatsUsed"] == 2 and lic["status"] == "active"
     assert {s["status"] for s in _seats(store, lid).values()} == {"active"}
@@ -127,7 +128,7 @@ def test_a_revoked_licence_comes_back_revoked(store):
     repo.delete_license(lid, "admin")
     _claimed(store, "solo-1")
 
-    err, lic = repo.restore_license(lid, "admin")
+    err, lic = attempt(repo.restore_license, lid, "admin")
 
     assert (err, lic["status"]) == ("", "revoked")
     assert store._data["users"]["solo-1"]["licenseId"] != lid
@@ -149,8 +150,8 @@ def test_nothing_is_restored_after_the_hold(store):
     lid = _held(store)
     repo.delete_license(lid, "admin")
     store._data["deleted_licenses"][lid]["purgeAt"] = datetime.now(timezone.utc) - timedelta(minutes=1)
-    assert repo.restore_license(lid, "admin") == ("deleted_license_purged", None)
-    assert repo.restore_license("nope", "admin") == ("deleted_license_not_found", None)
+    assert attempt(repo.restore_license, lid, "admin") == ("deleted_license_purged", None)
+    assert attempt(repo.restore_license, "nope", "admin") == ("deleted_license_not_found", None)
 
 
 def test_the_deleted_list_is_newest_first(store):

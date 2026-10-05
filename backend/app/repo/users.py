@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from google.api_core.exceptions import AlreadyExists
 
 from .. import apps, errors, notify, statuses
+from ..errors import Refusal
 from ..config import settings
 from ..licenses import (
     MODE_LICENSED,
@@ -253,9 +254,9 @@ def list_users(
     return out, next_token
 
 
-def release_account_device(uid: str) -> tuple[str, dict[str, str]]:
+def release_account_device(uid: str) -> dict[str, str]:
     """Free the account's registered phones so a new one can register.
-    `(error, {app: released id})`, naming only the apps that had one.
+    `{app: released id}`, naming only the apps that had one; raises `Refusal`.
 
     Staff only, on the holder's request (decided 2026-09-26, TD-126). A Demo
     account has no licence lock to clear, so before this its first phone was its
@@ -276,14 +277,14 @@ def release_account_device(uid: str) -> tuple[str, dict[str, str]]:
     user_ref = db().collection("users").document(uid)
     snap = user_ref.get()
     if not snap.exists:
-        return errors.USER_NOT_FOUND, {}
+        raise Refusal(errors.USER_NOT_FOUND)
     user = snap.to_dict() or {}
     if user.get("licenseId") and effective_mode(user) == MODE_LICENSED:
-        return errors.LICENSE_DEVICE_CLEAR_REQUIRED, {}
+        raise Refusal(errors.LICENSE_DEVICE_CLEAR_REQUIRED)
     released = {app: user.get(apps.field("activeDeviceId", app)) or "" for app in apps.ALL}
     released = {app: device for app, device in released.items() if device}
     if not released:
-        return "", {}
+        return {}
     batch = db().batch()
     patch = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
     for app, device in released.items():
@@ -293,7 +294,7 @@ def release_account_device(uid: str) -> tuple[str, dict[str, str]]:
             _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
     batch.update(user_ref, patch)
     batch.commit()
-    return "", released
+    return released
 
 
 def set_user_status(uid: str, status: str) -> bool:

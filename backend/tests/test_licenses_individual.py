@@ -11,6 +11,7 @@ from license_helpers import (  # noqa: F401
     _recording_stubs,
     _signed_in,
 )
+from refusals import attempt, attempt_add
 
 
 # ---------------- individual licences delivered by email ----------------
@@ -211,12 +212,12 @@ def test_a_key_typed_for_recovery_binds_an_unbound_licence(store):
     _signed_in(store, "solo-1", "solo@lab.org")
     minted = _mint_individual()
 
-    err, cfg = repo.activate_license("solo-1", "solo@lab.org", "and-first", minted["key"])
+    err, cfg = attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-first", minted["key"])
 
     assert err == ""
     assert cfg["mode"] == "licensed"
     assert store._data["licenses"][minted["license"]["id"]]["deviceIdLock"] == "and-first"
-    err2, _ = repo.activate_license("solo-1", "solo@lab.org", "and-second", minted["key"])
+    err2, _ = attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-second", minted["key"])
     assert err2 == "license_device_mismatch"
 
 
@@ -276,7 +277,7 @@ def test_a_bind_lost_to_another_device_is_a_plain_loss(store, monkeypatch):
     minted, _, ref = _unbound_individual(store)
     calls = _contended_binds(monkeypatch, starved=1, rival=(ref, "and-rival"))
 
-    err, _ = repo.activate_license("solo-1", "solo@lab.org", "and-first", minted["key"])
+    err, _ = attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-first", minted["key"])
 
     # The lock is held, so this device really is the mismatch — and one
     # round was enough to find that out.
@@ -506,7 +507,7 @@ def test_a_seat_also_clears_the_demo_key_it_replaces(store):
     )["licenseId"]
     license_id = _mint_institution()["license"]["id"]
 
-    err, seat, _invite = repo.add_institution_member(license_id, "newcomer@university.edu")
+    err, seat, _invite = attempt_add(repo.add_institution_member, license_id, "newcomer@university.edu")
 
     assert (err, seat["uid"]) == ("", "new-1")
     assert store._data["users"]["new-1"]["licenseId"] == license_id

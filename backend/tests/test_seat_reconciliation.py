@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 
 from app import firestore_repo as repo
+from refusals import attempt
 
 NOW = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -38,7 +39,7 @@ def _roster(store, *uids):
 
 
 def _report(license_id):
-    err, report = repo.reconcile_institution_seats(license_id)
+    err, report = attempt(repo.reconcile_institution_seats, license_id)
     assert err == "", err
     return report
 
@@ -312,13 +313,13 @@ def test_reconciling_an_individual_licence_is_refused_rather_than_empty(store):
         email_lock="solo@lab.org",
         created_by_uid="admin",
     )
-    err, report = repo.reconcile_institution_seats(minted["license"]["id"])
+    err, report = attempt(repo.reconcile_institution_seats, minted["license"]["id"])
     assert err == "kind_not_institution"
     assert report is None
 
 
 def test_reconciling_an_unknown_licence_is_not_found(store):
-    err, report = repo.reconcile_institution_seats("no-such-licence")
+    err, report = attempt(repo.reconcile_institution_seats, "no-such-licence")
     assert err == "license_not_found"
     assert report is None
 

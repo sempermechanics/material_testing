@@ -2,6 +2,7 @@
 """
 
 from .. import errors
+from ..errors import Refusal
 from ..licenses import (
     KIND_INSTITUTION,
     MODE_LICENSED,
@@ -53,7 +54,7 @@ def _seat_revoked_at(seat: dict):
     return seat.get("revokedAt") or seat.get("updatedAt")
 
 
-def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
+def reconcile_institution_seats(license_id: str) -> dict:
     """Compare every seat on an institution licence against its holder.
 
     Returns `(error_code, report)`; exactly one of the two is set.
@@ -81,13 +82,13 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
     """
     lic_snap = db().collection("licenses").document(license_id).get()
     if not lic_snap.exists:
-        return errors.LICENSE_NOT_FOUND, None
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = lic_snap.to_dict() or {}
     if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
         # An individual licence has one redeemer and no roster, so there are
         # no two counts to reconcile; saying so beats returning an empty
         # report that reads like a clean bill of health.
-        return errors.KIND_NOT_INSTITUTION, None
+        raise Refusal(errors.KIND_NOT_INSTITUTION)
 
     seats, counts = [], {
         "active": 0, "notEntitled": 0,
@@ -149,7 +150,7 @@ def reconcile_institution_seats(license_id: str) -> tuple[str, dict | None]:
         })
 
     intended = int(lic.get("seatsUsed") or 0)
-    return "", {
+    return {
         "licenseId": license_id,
         # None when the licence has no cap. 0 read as "no seats at all".
         "maxSeats": int(lic["maxSeats"]) if lic.get("maxSeats") else None,

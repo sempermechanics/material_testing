@@ -5,7 +5,7 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps, errors, firestore_repo as repo
 from app.config import settings
 from license_helpers import (  # noqa: F401
     _mint_individual,
@@ -13,6 +13,7 @@ from license_helpers import (  # noqa: F401
     _recording_stubs,
     _signed_in,
 )
+from refusals import attempt
 
 
 # ====================================================== rename compatibility
@@ -83,7 +84,7 @@ def test_activation_resolves_a_pre_migration_license_document(store):
             "seatsUsed": 0,
         },
     }
-    err, cfg = repo.activate_license("u1", "student@university.edu", "dev-1", key)
+    err, cfg = attempt(repo.activate_license, "u1", "student@university.edu", "dev-1", key)
     assert err == ""
     assert cfg["mode"] == "licensed"
     assert cfg["plan"] == "professional"
@@ -182,7 +183,7 @@ def test_expired_institution_license_drops_the_seat_holder(store):
         created_by_uid="admin",
         expires_at=datetime.now(timezone.utc) + timedelta(seconds=1),
     )
-    err, cfg = repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "student@university.edu", "dev-1", minted["key"])
     assert err == ""
     assert cfg["mode"] == "licensed"
 
@@ -206,7 +207,7 @@ def test_activating_an_expired_key_is_refused_not_silently_demoted(store):
         expires_at=datetime.now(timezone.utc)
         - timedelta(days=settings.LICENSE_GRACE_DAYS_DEFAULT + 1),
     )
-    err, cfg = repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "a@b.com", "dev-1", minted["key"])
     assert err == "license_expired"
     assert cfg is None
     # And nothing was written onto the user.
@@ -241,7 +242,7 @@ def test_activating_inside_grace_still_works(store):
         created_by_uid="admin",
         expires_at=datetime.now(timezone.utc) - timedelta(days=1),
     )
-    err, cfg = repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "a@b.com", "dev-1", minted["key"])
     assert err == ""
     assert cfg["mode"] == "licensed"
     assert cfg["inGrace"] is True
@@ -347,7 +348,7 @@ def test_extending_a_perpetual_license_is_refused(store):
     )
     license_id = minted["license"]["id"]
     far = datetime.now(timezone.utc) + timedelta(days=30)
-    with pytest.raises(repo.LicenseTermsRejected) as raised:
+    with pytest.raises(errors.Refusal) as raised:
         repo.update_license(license_id, {"expiresAt": far}, "admin")
     assert raised.value.code == "license_perpetual"
     assert store._data["licenses"][license_id]["duration"] == "perpetual"
@@ -407,7 +408,7 @@ def test_clearing_the_analysis_cap_reaches_the_holder(store, monkeypatch):
         max_analyses=1,
     )
     license_id = minted["license"]["id"]
-    err, cfg = repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "a@b.com", "dev-1", minted["key"])
     assert err == ""
     assert store._data["users"]["u1"]["licenseMaxAnalyses"] == 1
     assert cfg["maxSessions"] == 25  # floored, never "0 / 1"
@@ -490,7 +491,7 @@ def test_a_cap_on_a_demo_key_is_refused_before_anything_is_written(store, monkey
     before_lic = dict(store._data["licenses"][license_id])
     before_user = dict(store._data["users"]["u1"])
 
-    with pytest.raises(repo.LicenseTermsRejected) as exc:
+    with pytest.raises(errors.Refusal) as exc:
         repo.update_license(license_id, {"maxAnalyses": 100}, "admin")
 
     assert exc.value.code == "cap_on_demo_key"
@@ -553,7 +554,7 @@ async def test_admin_cap_on_a_licensed_key_still_reaches_the_holder(store, clien
         email_lock="a@b.com", device_id_lock="dev-1", created_by_uid="admin",
     )
     license_id = minted["license"]["id"]
-    err, _ = repo.activate_license("u1", "a@b.com", "dev-1", minted["key"])
+    err, _ = attempt(repo.activate_license, "u1", "a@b.com", "dev-1", minted["key"])
     assert err == ""
 
     resp = await client.patch(f"/v1/admin/licenses/{license_id}", json={"maxAnalyses": 100})

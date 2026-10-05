@@ -13,6 +13,7 @@ from license_helpers import (  # noqa: F401
     _recording_stubs,
     _signed_in,
 )
+from refusals import attempt
 
 
 def test_canonicalize_strips_separators():
@@ -107,24 +108,24 @@ def test_activate_professional_requires_email_and_device_lock(store):
         expires_at=datetime.now(timezone.utc) + timedelta(days=30),
     )
     key = minted["key"]
-    err, cfg = repo.activate_license("dev-user", "other@x.com", "dev-device", key)
+    err, cfg = attempt(repo.activate_license, "dev-user", "other@x.com", "dev-device", key)
     assert err == "license_email_mismatch"
-    err, cfg = repo.activate_license("dev-user", "dev@local", "other-device", key)
+    err, cfg = attempt(repo.activate_license, "dev-user", "dev@local", "other-device", key)
     assert err == "license_device_mismatch"
-    err, cfg = repo.activate_license("dev-user", "dev@local", "dev-device", key)
+    err, cfg = attempt(repo.activate_license, "dev-user", "dev@local", "dev-device", key)
     assert err == ""
     assert cfg["plan"] == "professional"
     assert cfg["cloudBackupEnabled"] is True
     assert cfg["maxSessions"] == 40
     # Same uid, same key is idempotent.
-    err2, cfg2 = repo.activate_license("dev-user", "dev@local", "dev-device", key)
+    err2, cfg2 = attempt(repo.activate_license, "dev-user", "dev@local", "dev-device", key)
     assert err2 == ""
     assert cfg2["plan"] == "professional"
 
 
 def test_activate_unknown_key(store):
     store._data["users"] = {"dev-user": {"email": "dev@local", "access_status": "APPROVED"}}
-    err, cfg = repo.activate_license("dev-user", "dev@local", "dev-device", "SEMP-ZZZZ-ZZZZ-ZZZZ-ZZZZ")
+    err, cfg = attempt(repo.activate_license, "dev-user", "dev@local", "dev-device", "SEMP-ZZZZ-ZZZZ-ZZZZ-ZZZZ")
     assert err == "license_not_found"
     assert cfg is None
 
@@ -138,7 +139,7 @@ def test_revoke_professional_drops_user_to_demo(store):
         device_id_lock="and-12345678",
         created_by_uid="admin",
     )
-    err, _ = repo.activate_license("u1", "a@b.com", "and-12345678", minted["key"])
+    err, _ = attempt(repo.activate_license, "u1", "a@b.com", "and-12345678", minted["key"])
     assert err == ""
     revoked = repo.revoke_license(minted["license"]["id"], "admin")
     assert revoked["status"] == "revoked"

@@ -13,6 +13,7 @@ import pytest
 from app import firestore_repo as repo
 
 from license_helpers import _mint_individual, _mint_institution, _signed_in
+from refusals import attempt, attempt_add
 
 
 def _claimed(store, uid):
@@ -53,7 +54,7 @@ def test_an_account_holding_a_licence_counts(store):
 def test_a_roster_invite_counts(store):
     store._data["users"] = {}
     inst = _mint_institution()
-    err, _, invite = repo.add_institution_member(inst["license"]["id"], "new@university.edu")
+    err, _, invite = attempt_add(repo.add_institution_member, inst["license"]["id"], "new@university.edu")
     assert err == "" and invite
     assert repo.licence_held_by("new@university.edu") == inst["license"]["id"]
 
@@ -138,7 +139,7 @@ async def test_the_desk_refuses_an_address_on_a_roster(client, store):
     store._data["users"] = {}
     inst = _mint_institution()
     _signed_in(store, "m-1", "member@university.edu")
-    assert repo.add_institution_member(inst["license"]["id"], "member@university.edu")[0] == ""
+    assert attempt_add(repo.add_institution_member, inst["license"]["id"], "member@university.edu")[0] == ""
 
     resp = await client.post("/v1/admin/licenses", json={"emailLock": "member@university.edu"})
 
@@ -155,7 +156,7 @@ def test_a_typed_institution_key_does_not_move_an_individual_holder(store):
     _claimed(store, "dr-1")
     inst = _mint_institution()
 
-    err, cfg = repo.activate_license("dr-1", "dr@university.edu", "and-1", inst["key"])
+    err, cfg = attempt(repo.activate_license, "dr-1", "dr@university.edu", "and-1", inst["key"])
 
     assert (err, cfg) == ("already_licensed", None)
     assert store._data["users"]["dr-1"]["licenseId"] == solo["license"]["id"]
@@ -166,8 +167,8 @@ def test_re_entering_the_key_one_holds_still_works(store):
     store._data["users"] = {}
     _signed_in(store, "solo-1", "solo@lab.org")
     minted = _mint_individual()
-    assert repo.activate_license("solo-1", "solo@lab.org", "and-1", minted["key"])[0] == ""
-    assert repo.activate_license("solo-1", "solo@lab.org", "and-1", minted["key"])[0] == ""
+    assert attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-1", minted["key"])[0] == ""
+    assert attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-1", minted["key"])[0] == ""
 
 
 @pytest.mark.asyncio
@@ -198,7 +199,7 @@ def test_it_cannot_put_an_individual_holder_on_its_roster(store):
     _claimed(store, "dr-1")
     inst = _mint_institution()
 
-    err, seat, invite = repo.add_institution_member(inst["license"]["id"], "dr@university.edu")
+    err, seat, invite = attempt_add(repo.add_institution_member, inst["license"]["id"], "dr@university.edu")
 
     assert (err, seat, invite) == ("member_already_licensed", None, None)
     assert store._data["users"]["dr-1"]["licenseId"] == solo["license"]["id"]
@@ -211,7 +212,7 @@ def test_it_cannot_invite_an_address_a_licence_waits_for(store):
     _mint_individual(email="new@university.edu")
     inst = _mint_institution()
 
-    err, _, invite = repo.add_institution_member(inst["license"]["id"], "new@university.edu")
+    err, _, invite = attempt_add(repo.add_institution_member, inst["license"]["id"], "new@university.edu")
 
     assert (err, invite) == ("member_already_licensed", None)
 
@@ -220,6 +221,6 @@ def test_re_adding_a_member_is_still_a_no_op(store):
     store._data["users"] = {}
     inst = _mint_institution()
     _signed_in(store, "m-1", "member@university.edu")
-    assert repo.add_institution_member(inst["license"]["id"], "member@university.edu")[0] == ""
-    err, seat, _ = repo.add_institution_member(inst["license"]["id"], "member@university.edu")
+    assert attempt_add(repo.add_institution_member, inst["license"]["id"], "member@university.edu")[0] == ""
+    err, seat, _ = attempt_add(repo.add_institution_member, inst["license"]["id"], "member@university.edu")
     assert err == "" and seat["uid"] == "m-1"

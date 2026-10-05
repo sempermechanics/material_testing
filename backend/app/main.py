@@ -1,6 +1,8 @@
 import logging
+import math
 import time
 import uuid
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -184,6 +186,17 @@ async def dependency_error_handler(request: Request, exc: obs.DependencyError):
         status=exc.status_code,
     )
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.code})
+
+
+@app.exception_handler(errors.Refusal)
+async def refusal_handler(request: Request, exc: errors.Refusal):
+    """Every domain refusal, answered from `errors.STATUS` — no route maps
+    codes to statuses itself."""
+    headers = None
+    if exc.retry_at is not None:
+        wait = (exc.retry_at - datetime.now(timezone.utc)).total_seconds()
+        headers = {"Retry-After": str(max(0, math.ceil(wait)))}
+    return JSONResponse(status_code=exc.status, content={"detail": exc.detail}, headers=headers)
 
 
 # Route handlers live in app.routers.* and are included below. They stay plain

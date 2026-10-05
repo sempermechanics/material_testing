@@ -6,6 +6,7 @@ import pytest
 
 from app import firestore_repo as repo
 from license_helpers import _mint_individual, _mint_institution
+from refusals import attempt
 
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
@@ -113,7 +114,7 @@ def _two_seat_roster(store):
     }
     minted = _mint_institution()
     for i, uid in enumerate(("u1", "u2")):
-        err, _ = repo.activate_license(uid, store._data["users"][uid]["email"], f"dev-{i}",
+        err, _ = attempt(repo.activate_license, uid, store._data["users"][uid]["email"], f"dev-{i}",
                                        minted["key"])
         assert err == ""
     return minted["license"]["id"]

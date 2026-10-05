@@ -1,6 +1,7 @@
 """Redeeming a typed licence key onto an account.
 """
-from .. import apps
+from .. import apps, errors
+from ..errors import Refusal
 from ..licenses import (
     KIND_INDIVIDUAL,
     KIND_INSTITUTION,
@@ -45,9 +46,9 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
                          app: str):
     status = lic.get("status") or "unused"
     if status == "revoked":
-        return "license_revoked", None
+        raise Refusal(errors.LICENSE_REVOKED)
     if not _emails_match(lic.get("emailLock"), email):
-        return "license_email_mismatch", None
+        raise Refusal(errors.LICENSE_EMAIL_MISMATCH)
     lock_field = apps.field("deviceIdLock", app)
     locked = lic.get(lock_field) or ""
     if not locked and device_id and _may_bind(user, device_id, app):
@@ -63,9 +64,9 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         bind_device_lock(ref, device_id, app)
         locked = (ref.get().to_dict() or {}).get(lock_field) or ""
     if locked != device_id:
-        return "license_device_mismatch", None
+        raise Refusal(errors.LICENSE_DEVICE_MISMATCH)
     if status == "redeemed" and lic.get("redeemedByUid") != uid:
-        return "license_already_redeemed", None
+        raise Refusal(errors.LICENSE_ALREADY_REDEEMED)
 
     mode = _license_mode(lic)
     license_id = ref.id
@@ -93,16 +94,16 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
     batch.commit()
 
     merged = _apply_patch(user, user_patch)
-    return "", resolve_user_config(merged)
+    return resolve_user_config(merged)
 
 
 def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str,
                           app: str):
     if (lic.get("status") or "active") == "revoked":
-        return "license_revoked", None
+        raise Refusal(errors.LICENSE_REVOKED)
     domain_lock = (lic.get("domainLock") or "").strip().lower()
     if not domain_lock or _email_domain(email) != domain_lock:
-        return "license_email_mismatch", None
+        raise Refusal(errors.LICENSE_EMAIL_MISMATCH)
 
     license_id = ref.id
     user_patch = {
@@ -116,10 +117,10 @@ def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic:
 
     err = claim_seat(license_id, uid, email, device_id, user_patch, app=app)
     if err:
-        return _public_claim_error(err), None
+        raise Refusal(_public_claim_error(err))
 
     merged = _apply_patch(user, user_patch)
-    return "", resolve_user_config(merged)
+    return resolve_user_config(merged)
 
 
 def _apply_patch(user: dict, patch: dict) -> dict:
@@ -131,10 +132,9 @@ def _apply_patch(user: dict, patch: dict) -> dict:
 
 
 def activate_license(uid: str, email: str, device_id: str, key: str,
-                     app: str = apps.SEMPER) -> tuple[str, dict | None]:
-    """Redeem a key onto this uid. Returns (error_code, config_or_none).
-
-    Empty error_code means success. Branches on the license's `kind`:
+                     app: str = apps.SEMPER) -> dict:
+    """Redeem a key onto this uid. Returns the account's config, or raises
+    `Refusal`. Branches on the license's `kind`:
     - individual: single email+device lock, same behaviour as before
       institution licensing existed. Same uid re-entering the same key is OK.
     - institution: verified-email domain match against `domainLock`; a seat is
@@ -146,24 +146,24 @@ def activate_license(uid: str, email: str, device_id: str, key: str,
     """
     user = _load_user(uid)
     if not user:
-        return "user_not_found", None
+        raise Refusal(errors.USER_NOT_FOUND)
     license_id = key_hash(key)
     ref = db().collection("licenses").document(license_id)
     snap = ref.get()
     if not snap.exists:
-        return "license_not_found", None
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = snap.to_dict() or {}
     if _license_past_grace(lic):
         # Without this the activation "succeeds": the past expiry is mirrored
         # onto the user, effective_mode immediately resolves demo, and the
         # caller is handed err="" with a demo config and no explanation.
-        return "license_expired", None
+        raise Refusal(errors.LICENSE_EXPIRED)
     if licence_held_by(email, user=user, exclude_id=license_id):
         # One licence per person. Before this the key simply won: an
         # institution seat or an individual licence replaced whatever the
         # account held, and the licence it left stayed `redeemed` in their
         # name. Asked before the kind branch so both refuse alike.
-        return "already_licensed", None
+        raise Refusal(errors.ALREADY_LICENSED)
     if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
         return _activate_institution(user, uid, email, device_id, lic, ref, key, app)
     return _activate_individual(user, uid, email, device_id, lic, ref, key, app)
