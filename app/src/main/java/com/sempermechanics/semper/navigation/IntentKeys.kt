@@ -7,7 +7,7 @@ package com.sempermechanics.semper.navigation
  *
  * Same-file keys (e.g. savedInstanceState) intentionally stay local.
  */
-object DicKeys {
+object IntentKeys {
     // Auth routing (e.g. PendingApproval → AuthActivity) uses [ROUTING_ERROR]
     // below; identity lives in Firebase Auth / TokenStore, not Intent extras.
 

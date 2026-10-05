@@ -24,7 +24,7 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SessionZip
 import com.sempermechanics.semper.data.session.StorageBudget
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -113,7 +113,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
             return@withContext Result.success()
         }
         val idToken = tokens.usableIdToken() ?: return@withContext UploadLog.retry("no usable Firebase ID token")
-        val localId = inputData.getString(DicKeys.SESSION_LOCAL_ID) ?: return@withContext Result.failure()
+        val localId = inputData.getString(IntentKeys.SESSION_LOCAL_ID) ?: return@withContext Result.failure()
         val record = SessionStore.get(applicationContext, localId) ?: return@withContext Result.failure()
         backUp(UploadRun(applicationContext, api, tokens, idToken, record))
     }

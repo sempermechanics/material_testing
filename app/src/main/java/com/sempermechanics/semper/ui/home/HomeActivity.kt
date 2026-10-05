@@ -22,7 +22,7 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
@@ -131,9 +131,9 @@ class HomeActivity : AppCompatActivity() {
         val mime = contentResolver.getType(uri) ?: ""
         val intent = Intent(this, StaticAnalysisActivity::class.java)
         if (mime.startsWith("video/")) {
-            intent.putExtra(DicKeys.PICKED_VIDEO_URI, uri.toString())
+            intent.putExtra(IntentKeys.PICKED_VIDEO_URI, uri.toString())
         } else {
-            intent.putExtra(DicKeys.PICKED_REF_URI, uri.toString())
+            intent.putExtra(IntentKeys.PICKED_REF_URI, uri.toString())
         }
         startActivity(intent)
     }

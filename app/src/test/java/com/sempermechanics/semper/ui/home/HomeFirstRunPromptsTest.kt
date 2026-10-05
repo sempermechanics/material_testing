@@ -10,7 +10,7 @@ import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.net.TokenStore
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -87,8 +87,8 @@ class HomeFirstRunPromptsTest {
     @Test
     fun `nothing is asked once both are answered`() {
         TokenStore.setBetaNoticeAcked(context)
-        DicSettings.setDiagnosticsEnabled(context, false)
-        assertTrue("setting the choice records it as asked", DicSettings.wasDiagnosticsAsked(context))
+        AppSettings.setDiagnosticsEnabled(context, false)
+        assertTrue("setting the choice records it as asked", AppSettings.wasDiagnosticsAsked(context))
 
         home()
 

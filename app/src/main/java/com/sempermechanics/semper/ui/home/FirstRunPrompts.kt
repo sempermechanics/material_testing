@@ -5,8 +5,8 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.CoachPrefs
-import com.sempermechanics.semper.data.prefs.DicSettings
 import com.sempermechanics.semper.diagnostics.Diagnostics
 import com.sempermechanics.semper.ui.common.CoachMarkController
 
@@ -65,7 +65,7 @@ internal class FirstRunPrompts(private val activity: AppCompatActivity) {
      * recorded, so this does not nag, and the toggle stays in Settings.
      */
     private fun maybeAskDiagnostics(next: () -> Unit) {
-        if (DicSettings.wasDiagnosticsAsked(activity)) {
+        if (AppSettings.wasDiagnosticsAsked(activity)) {
             next()
             return
         }

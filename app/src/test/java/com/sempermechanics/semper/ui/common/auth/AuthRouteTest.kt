@@ -4,7 +4,7 @@ import android.app.Activity
 import android.app.Application
 import android.content.Intent
 import com.sempermechanics.semper.data.account.DevAuth
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.auth.AuthActivity
 import com.sempermechanics.semper.ui.auth.SplashActivity
 import com.sempermechanics.semper.ui.auth.StatusRecheck
@@ -39,14 +39,14 @@ class AuthRouteTest {
         val intent = AuthRoute.signInIntent(context, "Session expired.", devBypass = false)
 
         assertEquals(AuthActivity::class.java.name, intent.component?.className)
-        assertEquals("Session expired.", intent.getStringExtra(DicKeys.ROUTING_ERROR))
+        assertEquals("Session expired.", intent.getStringExtra(IntentKeys.ROUTING_ERROR))
         assertEquals(clearTask, intent.flags and clearTask)
     }
 
     @Test
     fun `no reason, no routing error`() {
         val intent = AuthRoute.signInIntent(context, devBypass = false)
-        assertFalse(intent.hasExtra(DicKeys.ROUTING_ERROR))
+        assertFalse(intent.hasExtra(IntentKeys.ROUTING_ERROR))
     }
 
     @Test
@@ -54,7 +54,7 @@ class AuthRouteTest {
         val intent = AuthRoute.signInIntent(context, "Logged out.", devBypass = true)
 
         assertEquals(SplashActivity::class.java.name, intent.component?.className)
-        assertNull("the splash has nowhere to show it", intent.getStringExtra(DicKeys.ROUTING_ERROR))
+        assertNull("the splash has nowhere to show it", intent.getStringExtra(IntentKeys.ROUTING_ERROR))
         assertEquals(clearTask, intent.flags and clearTask)
     }
 
@@ -64,7 +64,7 @@ class AuthRouteTest {
         val route = AuthRoute.signInIntent(context, "Device not authorised.")
 
         assertEquals(route.component, recheck.component)
-        assertEquals(route.getStringExtra(DicKeys.ROUTING_ERROR), recheck.getStringExtra(DicKeys.ROUTING_ERROR))
+        assertEquals(route.getStringExtra(IntentKeys.ROUTING_ERROR), recheck.getStringExtra(IntentKeys.ROUTING_ERROR))
         assertEquals(route.flags, recheck.flags)
         assertEquals(
             "unit tests do not run on an emulator, so this is the real sign-in screen",

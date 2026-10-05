@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.field
 
 import android.content.Intent
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import org.json.JSONObject
 
 /**
@@ -34,14 +34,14 @@ data class DicParams(val subset: Int, val step: Int, val strainWindow: Int) {
         .put(JSON_STRAIN_WINDOW, strainWindow)
 
     /**
-     * Puts the viewer's three extras, [DicKeys.SUBSET_SIZE], [DicKeys.STEP],
-     * [DicKeys.STRAIN_WINDOW]. Write-only: the viewer reads them through
+     * Puts the viewer's three extras, [IntentKeys.SUBSET_SIZE], [IntentKeys.STEP],
+     * [IntentKeys.STRAIN_WINDOW]. Write-only: the viewer reads them through
      * `ViewerArgs.Reader`, which falls back to the session record.
      */
     fun putViewerExtras(intent: Intent): Intent = intent
-        .putExtra(DicKeys.SUBSET_SIZE, subset)
-        .putExtra(DicKeys.STEP, step)
-        .putExtra(DicKeys.STRAIN_WINDOW, strainWindow)
+        .putExtra(IntentKeys.SUBSET_SIZE, subset)
+        .putExtra(IntentKeys.STEP, step)
+        .putExtra(IntentKeys.STRAIN_WINDOW, strainWindow)
 
     companion object {
         /** `ViewerArgs.DEFAULT_SUBSET` and `CloudRestore`'s fallback. */

@@ -13,7 +13,7 @@ import com.sempermechanics.semper.data.net.DeviceNotActiveException
 import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.navigation.AppIntents
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.util.suspendRunCatching
 import timber.log.Timber
 import java.io.File
@@ -161,7 +161,7 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
         return ListenableWorker.Result.failure(
             workDataOf(
                 UploadErrors.UPLOAD_FAIL_KIND to UploadErrors.FAIL_KIND_QUOTA,
-                DicKeys.SESSION_LOCAL_ID to run.localId,
+                IntentKeys.SESSION_LOCAL_ID to run.localId,
             ),
         )
     }

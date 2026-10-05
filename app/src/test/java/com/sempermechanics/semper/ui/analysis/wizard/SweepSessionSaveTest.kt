@@ -9,7 +9,7 @@ import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.TokenStore
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionQuotaGate
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
@@ -59,7 +59,7 @@ class SweepSessionSaveTest {
     @Before
     fun setUp() {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, name, params -> events += name to params }
-        DicSettings.setDiagnosticsEnabled(ctx, true)
+        AppSettings.setDiagnosticsEnabled(ctx, true)
         WorkManagerTestInitHelper.initializeTestWorkManager(ctx)
         AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 2, maxFilesPerSession = 600, maxFrames = 150))
         TokenStore.setQuota(ctx, used = 0)
@@ -68,7 +68,7 @@ class SweepSessionSaveTest {
     @After
     fun tearDown() {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, _, _ -> }
-        DicSettings.setDiagnosticsEnabled(ctx, false)
+        AppSettings.setDiagnosticsEnabled(ctx, false)
         WorkManagerTestInitHelper.closeWorkDatabase()
         WorkManagerImpl.setDelegate(null)
     }

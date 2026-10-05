@@ -20,7 +20,7 @@ import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.isTrustedAuthLink
 import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.databinding.ActivityAuthBinding
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
@@ -99,7 +99,7 @@ class AuthActivity : AppCompatActivity() {
         maybeCompleteEmailLink(intent)
         passwordReset.handleLink(intent)
 
-        intent.getStringExtra(DicKeys.ROUTING_ERROR)?.let { showMessage(it) }
+        intent.getStringExtra(IntentKeys.ROUTING_ERROR)?.let { showMessage(it) }
     }
 
     /** The email sign-in / reset link may arrive while this activity is already open. */

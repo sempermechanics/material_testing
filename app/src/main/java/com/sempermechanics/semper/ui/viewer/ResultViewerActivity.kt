@@ -26,7 +26,7 @@ import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.ValueRange
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
@@ -463,7 +463,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * session index per report page would be a file read per page.
      */
     internal val sessionRecord: SessionRecord? by lazy {
-        intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
+        intent.getStringExtra(IntentKeys.SESSION_LOCAL_ID)
             ?.let { runCatching { SessionStore.get(this, it) }.getOrNull() }
     }
 

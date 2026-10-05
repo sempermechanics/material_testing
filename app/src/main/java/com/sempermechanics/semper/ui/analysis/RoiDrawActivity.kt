@@ -24,7 +24,7 @@ import com.sempermechanics.semper.field.getRoiEdges
 import com.sempermechanics.semper.field.getRoiEditorImageSize
 import com.sempermechanics.semper.field.putRoiEdges
 import com.sempermechanics.semper.field.putRoiExtras
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.roi.StudioOverlayMaskEncoder
 import com.sempermechanics.semper.ui.analysis.roi.StudioOverlayView
 import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
@@ -77,7 +77,7 @@ class RoiDrawActivity : AppCompatActivity() {
         Insets.padBottomAboveIme(binding.bottomToolbar)
 
         setImageSize(intent.getRoiEditorImageSize())
-        intent.getStringExtra(DicKeys.IMAGE_FILE_PATH)?.let { loadReference(File(it), savedInstanceState) }
+        intent.getStringExtra(IntentKeys.IMAGE_FILE_PATH)?.let { loadReference(File(it), savedInstanceState) }
 
         wireModeToggles()
         if (savedInstanceState != null) {
@@ -157,7 +157,7 @@ class RoiDrawActivity : AppCompatActivity() {
 
     /** Puts back the draw shape, Crop/Erase and Draw/Manual toggles [onSaveInstanceState] kept. */
     private fun restoreModes(state: Bundle) {
-        val modeId = state.getInt(DicKeys.DRAW_MODE, R.id.rbRect)
+        val modeId = state.getInt(IntentKeys.DRAW_MODE, R.id.rbRect)
         binding.rgDrawMode.check(if (modeId == R.id.rbSquare) R.id.rbSquare else R.id.rbRect)
         val erase = state.getBoolean(STATE_ERASE, false)
         binding.rgCropErase.check(if (erase) R.id.rbErase else R.id.rbCrop)
@@ -328,7 +328,7 @@ class RoiDrawActivity : AppCompatActivity() {
 
             val resultIntent = Intent()
                 .putRoiExtras(roi)
-                .putExtra(DicKeys.MASK_FILE_PATH, maskFile.absolutePath)
+                .putExtra(IntentKeys.MASK_FILE_PATH, maskFile.absolutePath)
             setResult(Activity.RESULT_OK, resultIntent)
             finish()
         }
@@ -336,7 +336,7 @@ class RoiDrawActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putInt(DicKeys.DRAW_MODE, binding.rgDrawMode.checkedButtonId)
+        outState.putInt(IntentKeys.DRAW_MODE, binding.rgDrawMode.checkedButtonId)
         outState.putBoolean(STATE_MANUAL, binding.rgEditMode.checkedButtonId == R.id.rbModeManual)
         outState.putBoolean(STATE_ERASE, erasing)
 

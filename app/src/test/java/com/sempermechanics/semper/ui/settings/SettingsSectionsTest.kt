@@ -12,7 +12,7 @@ import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import org.junit.After
@@ -74,7 +74,7 @@ class SettingsSectionsTest {
 
     @Test
     fun `the cloud switches show and store the backup preferences`() {
-        DicSettings.setSaveToCloudEnabled(context, false)
+        AppSettings.setSaveToCloudEnabled(context, false)
         open()
         val save = settings.findViewById<CompoundButton>(R.id.switchSaveCloud)
         val wifi = settings.findViewById<CompoundButton>(R.id.switchWifiOnly)
@@ -84,12 +84,12 @@ class SettingsSectionsTest {
 
         save.isChecked = true
         idle()
-        assertTrue(DicSettings.saveToCloudEnabled(context))
+        assertTrue(AppSettings.saveToCloudEnabled(context))
         assertEquals(settings.getString(R.string.settings_save_cloud_sub), sub.text)
 
-        val wifiBefore = DicSettings.wifiOnlyUploadEnabled(context)
+        val wifiBefore = AppSettings.wifiOnlyUploadEnabled(context)
         wifi.isChecked = !wifi.isChecked
-        assertEquals(!wifiBefore, DicSettings.wifiOnlyUploadEnabled(context))
+        assertEquals(!wifiBefore, AppSettings.wifiOnlyUploadEnabled(context))
     }
 
     // ── SettingsFooterSection ────────────────────────────────────────────

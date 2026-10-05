@@ -46,7 +46,7 @@ class Settings:
     # the frame count; 600 was sized for earlier builds that sent one file per
     # artifact (3 x frames + 4).
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces
-    # (DicSettings.MAX_MAX_FRAMES, the app's offline fallback, is also 500).
+    # (AppSettings.MAX_MAX_FRAMES, the app's offline fallback, is also 500).
     DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
     LICENSED_MAX_SESSIONS_PER_USER = _env_int("LICENSED_MAX_SESSIONS_PER_USER", "999")
 

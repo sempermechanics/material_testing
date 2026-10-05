@@ -4,7 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import com.sempermechanics.semper.data.account.DevAuth
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.auth.AuthActivity
 import com.sempermechanics.semper.ui.auth.SplashActivity
 
@@ -35,7 +35,7 @@ object AuthRoute {
         val target = if (devBypass) SplashActivity::class.java else AuthActivity::class.java
         return Intent(context, target).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            if (!devBypass && message != null) putExtra(DicKeys.ROUTING_ERROR, message)
+            if (!devBypass && message != null) putExtra(IntentKeys.ROUTING_ERROR, message)
         }
     }
 }

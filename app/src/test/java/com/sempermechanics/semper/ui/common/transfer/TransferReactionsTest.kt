@@ -24,7 +24,7 @@ import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.fixtures.idleUntil
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.home.HomeActivity
 import com.sempermechanics.semper.ui.limit.SessionLimitActivity
 import com.sempermechanics.semper.ui.settings.SettingsActivity
@@ -138,11 +138,11 @@ class TransferReactionsTest {
     fun `Home tells a failed backup's reason once`() {
         val home = launch(HomeActivity::class.java)
         val first = "Too large (ref r1)"
-        run(setOf("upload", "upload-a"), workDataOf(DicKeys.UPLOAD_FAIL_REASON to first), fail = true)
+        run(setOf("upload", "upload-a"), workDataOf(IntentKeys.UPLOAD_FAIL_REASON to first), fail = true)
         idleUntil("the backup failure pill") { pills.isNotEmpty() }
 
         val second = "Device conflict (ref r2)"
-        run(setOf("upload", "upload-b"), workDataOf(DicKeys.UPLOAD_FAIL_REASON to second), fail = true)
+        run(setOf("upload", "upload-b"), workDataOf(IntentKeys.UPLOAD_FAIL_REASON to second), fail = true)
         idleUntil("the second failure") { pills.size >= 2 }
         assertEquals(
             "each failure told once",
@@ -162,7 +162,7 @@ class TransferReactionsTest {
 
         val quotaStop = workDataOf(
             UploadErrors.UPLOAD_FAIL_KIND to UploadErrors.FAIL_KIND_QUOTA,
-            DicKeys.SESSION_LOCAL_ID to "a",
+            IntentKeys.SESSION_LOCAL_ID to "a",
         )
         run(setOf("upload", "upload-a"), quotaStop, fail = true)
 
@@ -185,7 +185,7 @@ class TransferReactionsTest {
 
         // A later failure that is told: by then Home has read the first one.
         val later = "Device conflict (ref r3)"
-        run(setOf("upload", "upload-b"), workDataOf(DicKeys.UPLOAD_FAIL_REASON to later), fail = true)
+        run(setOf("upload", "upload-b"), workDataOf(IntentKeys.UPLOAD_FAIL_REASON to later), fail = true)
         idleUntil("the later failure") { pills.isNotEmpty() }
 
         assertNull("only a quota stop opens the limit screen", shadowOf(home).nextStartedActivity)
@@ -195,7 +195,7 @@ class TransferReactionsTest {
     fun `Home tells a failed restore's reason once across screens`() {
         val home = launch(HomeActivity::class.java)
         val reason = "Backup gone"
-        run(setOf("restore", "restore-c1"), workDataOf(DicKeys.DOWNLOAD_ERROR to reason), fail = true)
+        run(setOf("restore", "restore-c1"), workDataOf(IntentKeys.DOWNLOAD_ERROR to reason), fail = true)
         idleUntil("the restore failure pill") { pills.isNotEmpty() }
 
         // A new Home sees the same retained job: the ledger keeps it quiet.
@@ -212,7 +212,7 @@ class TransferReactionsTest {
     fun `Settings tells a failed restore's reason once`() {
         val settings = launch(SettingsActivity::class.java)
         val reason = "Not your backup"
-        run(setOf("restore", "restore-s1"), workDataOf(DicKeys.DOWNLOAD_ERROR to reason), fail = true)
+        run(setOf("restore", "restore-s1"), workDataOf(IntentKeys.DOWNLOAD_ERROR to reason), fail = true)
         idleUntil("the restore failure pill") { pills.isNotEmpty() }
 
         run(setOf("restore", "restore-s2"), fail = true)
@@ -223,7 +223,7 @@ class TransferReactionsTest {
     @Test
     fun `Settings tells each Save-to-Files outcome once per process`() {
         val settings = launch(SettingsActivity::class.java)
-        val boom = workDataOf(DicKeys.DOWNLOAD_ERROR to "boom")
+        val boom = workDataOf(IntentKeys.DOWNLOAD_ERROR to "boom")
         run(setOf("download-bundle", "download-bundle-d1"), boom, fail = true)
         val failed = LicenseErrors.downloadMessage(settings, "boom")
         idleUntil("the download failure toast") { ShadowToast.shownToastCount() >= 1 }

@@ -17,7 +17,7 @@ import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.session.SessionEverythingExporter
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.util.suspendRunCatching
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -152,7 +152,7 @@ class DicBundleDownloadWorker internal constructor(
     }
 
     /**
-     * End the work with [DicKeys.DOWNLOAD_ERROR] set to [reason].
+     * End the work with [IntentKeys.DOWNLOAD_ERROR] set to [reason].
      *
      * For this worker the value is a **reason code or the backend's raw response
      * body**, never prose: Settings passes it through `LicenseErrors.downloadMessage`,
@@ -162,7 +162,7 @@ class DicBundleDownloadWorker internal constructor(
      * [DicRestoreWorker] fills the same key the other way round, with display-ready
      * text its observers toast verbatim; see its `failWith`.
      */
-    private fun fail(reason: String): Result = Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to reason))
+    private fun fail(reason: String): Result = Result.failure(workDataOf(IntentKeys.DOWNLOAD_ERROR to reason))
 
     /**
      * Prefer the cloud Session.zip; if that backup has no bundle (legacy) or

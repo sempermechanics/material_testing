@@ -27,7 +27,7 @@ import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.navigation.AppIntents
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.util.Digests
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -211,7 +211,7 @@ class DicUploadWorkerTest {
 
     private fun run(): ListenableWorker.Result = runBlocking {
         TestListenableWorkerBuilder<DicUploadWorker>(context)
-            .setInputData(workDataOf(DicKeys.SESSION_LOCAL_ID to ID))
+            .setInputData(workDataOf(IntentKeys.SESSION_LOCAL_ID to ID))
             .build()
             .doWork()
     }
@@ -323,7 +323,7 @@ class DicUploadWorkerTest {
         val result = run()
 
         assertTrue(result is ListenableWorker.Result.Failure)
-        val reason = (result as ListenableWorker.Result.Failure).outputData.getString(DicKeys.UPLOAD_FAIL_REASON)!!
+        val reason = (result as ListenableWorker.Result.Failure).outputData.getString(IntentKeys.UPLOAD_FAIL_REASON)!!
         val tooLarge = context.getString(com.sempermechanics.semper.R.string.cloud_backup_failed_too_large)
         assertFalse(reason.contains(tooLarge))
         assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
@@ -362,7 +362,10 @@ class DicUploadWorkerTest {
 
         assertTrue(result is ListenableWorker.Result.Failure)
         assertEquals(UploadErrors.FAIL_KIND_QUOTA, result.outputData.getString(UploadErrors.UPLOAD_FAIL_KIND))
-        assertNull("no reason: Home shows no snackbar for it", result.outputData.getString(DicKeys.UPLOAD_FAIL_REASON))
+        assertNull(
+            "no reason: Home shows no snackbar for it",
+            result.outputData.getString(IntentKeys.UPLOAD_FAIL_REASON),
+        )
         assertTrue(TokenStore.isSessionLimitReached(context))
         // Background activity starts are blocked on targetSdk 36; Home opens the
         // limit screen from the gate instead.
@@ -500,7 +503,7 @@ class DicUploadWorkerTest {
     // ── the paths doWork's steps must keep ──────────────────────────────────
 
     private fun failReason(result: ListenableWorker.Result): String? =
-        (result as? ListenableWorker.Result.Failure)?.outputData?.getString(DicKeys.UPLOAD_FAIL_REASON)
+        (result as? ListenableWorker.Result.Failure)?.outputData?.getString(IntentKeys.UPLOAD_FAIL_REASON)
 
     private fun string(id: Int) = context.getString(id)
 
@@ -530,7 +533,7 @@ class DicUploadWorkerTest {
     fun `an unknown analysis fails`() {
         val result = runBlocking {
             TestListenableWorkerBuilder<DicUploadWorker>(context)
-                .setInputData(workDataOf(DicKeys.SESSION_LOCAL_ID to "nobody"))
+                .setInputData(workDataOf(IntentKeys.SESSION_LOCAL_ID to "nobody"))
                 .build()
                 .doWork()
         }

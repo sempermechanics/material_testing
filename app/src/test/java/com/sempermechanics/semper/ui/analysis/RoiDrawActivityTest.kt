@@ -15,7 +15,7 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.fromImageRect
 import com.sempermechanics.semper.fixtures.idleUntil
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.roi.StudioOverlayView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -53,9 +53,9 @@ class RoiDrawActivityTest {
 
     private fun intent(path: String?, w: Int = IMG_W, h: Int = IMG_H) =
         Intent(app, RoiDrawActivity::class.java).apply {
-            path?.let { putExtra(DicKeys.IMAGE_FILE_PATH, it) }
-            putExtra(DicKeys.IMAGE_WIDTH, w)
-            putExtra(DicKeys.IMAGE_HEIGHT, h)
+            path?.let { putExtra(IntentKeys.IMAGE_FILE_PATH, it) }
+            putExtra(IntentKeys.IMAGE_WIDTH, w)
+            putExtra(IntentKeys.IMAGE_HEIGHT, h)
         }
 
     /** A RAW reference: exactly w × h × 4 bytes, so RawRgba.matches picks the JVM preview. */
@@ -92,7 +92,8 @@ class RoiDrawActivityTest {
 
     private fun RoiDrawActivity.resultRect(): List<Int> {
         val data = shadowOf(this).resultIntent
-        return listOf(DicKeys.ROI_X, DicKeys.ROI_Y, DicKeys.ROI_W, DicKeys.ROI_H).map { data.getIntExtra(it, -1) }
+        return listOf(IntentKeys.ROI_X, IntentKeys.ROI_Y, IntentKeys.ROI_W, IntentKeys.ROI_H)
+            .map { data.getIntExtra(it, -1) }
     }
 
     // ── Result Intent ────────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ class RoiDrawActivityTest {
 
         assertEquals(Activity.RESULT_OK, shadowOf(activity).resultCode)
         assertEquals(listOf(0, 0, IMG_W, IMG_H), activity.resultRect())
-        val mask = File(shadowOf(activity).resultIntent.getStringExtra(DicKeys.MASK_FILE_PATH)!!)
+        val mask = File(shadowOf(activity).resultIntent.getStringExtra(IntentKeys.MASK_FILE_PATH)!!)
         assertEquals(File(activity.cacheDir, CacheJanitor.ROI_MASK_CACHE), mask)
         val bytes = mask.readBytes()
         assertEquals(IMG_W * IMG_H, bytes.size)
@@ -132,7 +133,7 @@ class RoiDrawActivityTest {
         assertFalse("Save blocked the main thread until the mask was on disk", activity.isFinishing)
         awaitFinish(activity)
         assertEquals(Activity.RESULT_OK, shadowOf(activity).resultCode)
-        val mask = File(shadowOf(activity).resultIntent.getStringExtra(DicKeys.MASK_FILE_PATH)!!)
+        val mask = File(shadowOf(activity).resultIntent.getStringExtra(IntentKeys.MASK_FILE_PATH)!!)
         assertEquals(IMG_W.toLong() * IMG_H, mask.length())
         // One save, not two: a save of the full image toasts as it starts, so
         // a second toast means the second tap built and wrote the mask again.
@@ -170,7 +171,7 @@ class RoiDrawActivityTest {
         activity.click(R.id.btnSaveRoi)
         awaitFinish(activity)
         assertEquals(listOf(100, 200, 300, 150), activity.resultRect())
-        val mask = File(shadowOf(activity).resultIntent.getStringExtra(DicKeys.MASK_FILE_PATH)!!)
+        val mask = File(shadowOf(activity).resultIntent.getStringExtra(IntentKeys.MASK_FILE_PATH)!!)
         assertTrue("one mask byte per image pixel or more", mask.length() >= IMG_W.toLong() * IMG_H)
     }
 

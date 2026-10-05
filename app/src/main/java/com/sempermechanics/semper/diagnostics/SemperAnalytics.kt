@@ -3,13 +3,13 @@ package com.sempermechanics.semper.diagnostics
 import android.content.Context
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import timber.log.Timber
 
 /**
  * Consent-gated product analytics.
  *
- * Events fire only when [DicSettings.diagnosticsEnabled] is true (same opt-in as
+ * Events fire only when [AppSettings.diagnosticsEnabled] is true (same opt-in as
  * Crashlytics / Firebase Analytics collection). Params must stay PII-free:
  * enums, coarse buckets, and success/fail — never emails, session ids, specimen
  * names, paths, or image content.
@@ -37,7 +37,7 @@ object SemperAnalytics {
     }
 
     fun event(context: Context, name: String, params: Map<String, String> = emptyMap()) {
-        if (!DicSettings.diagnosticsEnabled(context)) return
+        if (!AppSettings.diagnosticsEnabled(context)) return
         sink.log(context.applicationContext, name, params)
     }
 

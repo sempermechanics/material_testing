@@ -16,7 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.databinding.ActivityStaticAnalysisBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsBinding
@@ -24,7 +24,7 @@ import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
 import com.sempermechanics.semper.databinding.WizardStepSweepBinding
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.video.ExtractionRequest
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportController
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderController
 import com.sempermechanics.semper.ui.analysis.frames.ReferenceImportController
@@ -223,7 +223,7 @@ class StaticAnalysisActivity :
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         }
-        val maxFrames = DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
+        val maxFrames = AppSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
         binding.tvDefDropHint.text =
             resources.getQuantityString(R.plurals.def_formats_hint_fmt, maxFrames, maxFrames)
         Insets.padBottom(binding.bottomNav)
@@ -378,16 +378,16 @@ class StaticAnalysisActivity :
     }
 
     private fun consumePickerHandOff() {
-        intent.getStringExtra(DicKeys.PICKED_REF_URI)?.let {
-            intent.removeExtra(DicKeys.PICKED_REF_URI)
+        intent.getStringExtra(IntentKeys.PICKED_REF_URI)?.let {
+            intent.removeExtra(IntentKeys.PICKED_REF_URI)
             reference.load(it.toUri())
         }
-        intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
-            intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
+        intent.getStringExtra(IntentKeys.PICKED_VIDEO_URI)?.let {
+            intent.removeExtra(IntentKeys.PICKED_VIDEO_URI)
             VideoSamplingSheet(this, onExtract = ::extractVideoFrames).open(it.toUri())
         }
-        intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
-            intent.removeExtra(DicKeys.PICKED_DEF_URIS)
+        intent.getStringArrayListExtra(IntentKeys.PICKED_DEF_URIS)?.let { list ->
+            intent.removeExtra(IntentKeys.PICKED_DEF_URIS)
             if (list.isNotEmpty()) importDeformed(list.map { it.toUri() })
         }
     }

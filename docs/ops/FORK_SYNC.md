@@ -262,6 +262,10 @@ group is one commit, reviewable with `git diff -M`.
 | `SweepSetupController.Callbacks.startVsgSweep`; `AnalysisViewModel.launchVsgSweep`, `.runVsgSweep` (`ui/analysis/wizard/`) | `startSweep`; `launchSweep`, `runSweep` |
 | `AnalysisViewModel.vsgFrameIndex` | `sweepFrameIndex` (saved-state key `"vsgFrameIndex"` unchanged) |
 | Tests: `VsgStudyTest`, `VsgStudyRunnerParamsTest`, `VsgPlotViewTest`, `VsgPlotViewportTest`, `VsgLatticeViewTest`, `LatticeControlsTest`; oracle `ui/common/vsg_plot_clamp_viewport.txt` | `SweepStudyTest`, `SweepStudyRunnerParamsTest`, `SweepPlotViewTest`, `SweepPlotViewportTest`, `SweepLatticeViewTest`, `SweepControlsTest`; `sweep_plot_clamp_viewport.txt` |
+| **`Dic` prefix** (prefs file `dic_settings` and every extra's value unchanged) | |
+| `data/prefs/DicSettings` | `data/prefs/AppSettings` |
+| `navigation/DicKeys` | `navigation/IntentKeys` |
+| Test `DicSettingsMigrateTest` | `AppSettingsMigrateTest` |
 
 ## Porting back
 

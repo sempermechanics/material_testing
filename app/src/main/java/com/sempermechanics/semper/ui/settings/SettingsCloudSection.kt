@@ -4,7 +4,7 @@ import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.net.SemperApi
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
@@ -29,18 +29,18 @@ internal class SettingsCloudSection(
         val sub = views.tvSaveCloudSub
         val status = views.tvCloudSyncStatus
 
-        switchSave.isChecked = DicSettings.saveToCloudEnabled(activity)
-        switchWifi.isChecked = DicSettings.wifiOnlyUploadEnabled(activity)
+        switchSave.isChecked = AppSettings.saveToCloudEnabled(activity)
+        switchWifi.isChecked = AppSettings.wifiOnlyUploadEnabled(activity)
         sub.setText(
             if (switchSave.isChecked) R.string.settings_save_cloud_sub else R.string.settings_save_cloud_sub_off,
         )
 
         switchSave.setOnCheckedChangeListener { _, checked ->
-            DicSettings.setSaveToCloudEnabled(activity, checked)
+            AppSettings.setSaveToCloudEnabled(activity, checked)
             sub.setText(if (checked) R.string.settings_save_cloud_sub else R.string.settings_save_cloud_sub_off)
             if (checked) maybeOfferBackfill()
         }
-        switchWifi.setOnCheckedChangeListener { _, checked -> DicSettings.setWifiOnlyUploadEnabled(activity, checked) }
+        switchWifi.setOnCheckedChangeListener { _, checked -> AppSettings.setWifiOnlyUploadEnabled(activity, checked) }
 
         activity.lifecycleScope.launch {
             val states = withContext(Dispatchers.IO) {

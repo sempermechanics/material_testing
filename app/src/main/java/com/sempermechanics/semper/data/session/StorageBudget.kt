@@ -2,7 +2,7 @@ package com.sempermechanics.semper.data.session
 
 import android.content.Context
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,7 +12,7 @@ import java.io.File
 /**
  * Opt-in ceiling on local analysis storage.
  *
- * When the user sets a budget ([DicSettings.autoFreeBudgetGb]), sessions that
+ * When the user sets a budget ([AppSettings.autoFreeBudgetGb]), sessions that
  * already have a cloud copy give up their local files — oldest first — until
  * the total is back under it. Reopening one downloads it again, which is the
  * same path the "Only in cloud" rows on Home already use.
@@ -37,8 +37,8 @@ object StorageBudget {
 
     /** Applies the configured budget, if any. Blocking I/O — call off the main thread. */
     fun enforce(context: Context): Outcome {
-        val budgetGb = DicSettings.autoFreeBudgetGb(context)
-        if (budgetGb == DicSettings.AUTO_FREE_OFF) return Outcome(0L, 0)
+        val budgetGb = AppSettings.autoFreeBudgetGb(context)
+        if (budgetGb == AppSettings.AUTO_FREE_OFF) return Outcome(0L, 0)
         return freeDownTo(context, budgetGb * BYTES_PER_GB)
     }
 

@@ -14,7 +14,7 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityVsgLatticeBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.Roi
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.recommend.StrainWindowText
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
 import com.sempermechanics.semper.ui.analysis.sweep.StrainProfiles
@@ -99,7 +99,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     /** The sweep's arguments, parsed once (ADR-003); the record is read only for an Intent missing a key. */
     private val args: ViewerArgs by lazy {
         ViewerArgs.from(intent) {
-            intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)?.let { SessionStore.get(this, it) }
+            intent.getStringExtra(IntentKeys.SESSION_LOCAL_ID)?.let { SessionStore.get(this, it) }
         }
     }
 

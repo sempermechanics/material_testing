@@ -47,13 +47,13 @@ File counts are main sources only; the first move's table is in this file's hist
 | *(root)* | 2 | `SemperApp`, `SemperNativeLib` + `ProgressCallback` (pinned) |
 | `field/` | 12 | The decoded field (`DicResult`, `DatDecoder`, `FieldHistogram`) and the value types every layer shares: `Roi` (+ `RoiCodecs`, `RoiRects`), `ImageSize`, `DicParams`, `FrameParams`, `RunStop`, `ValueRange`, `FieldStats` |
 | `diagnostics/` | 4 | `Diagnostics`, `CrashReportingTree`, `EngineDebug`, `SemperAnalytics` (the old `analytics/` package) |
-| `navigation/` | 2 | `AppIntents`, `DicKeys` |
+| `navigation/` | 2 | `AppIntents`, `IntentKeys` |
 | `data/` | 11 | The six workers (pinned): `BackupDeleteWorker`, `DicBundleDownloadWorker`, `DicRestoreWorker`, `DicUploadWorker`, `LicenseConfigWorker`, `SessionMetadataWorker`. Beside `DicUploadWorker`, the steps it was split into: `UploadStaging`, `UploadSessionPlanner`, `UploadRun`, `UploadFailures`, `UploadTuning` |
 | `data/session/` | 17 | Local sessions: `SessionStore`, `SessionRecord` (+ `SessionRecordFields`), `SessionPaths`, `SessionLayout`, `SessionNaming`, `SessionRepository`, `SessionHeadline`, `SessionQuotaGate`, `SessionZip`, `ZipDirectory`, `DatCodec`, `LocalArtifacts`, `SkippedNode`, `StorageBudget`, `CacheJanitor`, `SessionEverythingExporter` |
 | `data/cloud/` | 18 | Backup and sync: `CloudSync`, `CloudErase`, `CloudReconcile`, `CloudBackupListing`, `CloudAccountExport`, `SessionDeletes`, `SessionMetadataSync`, `SessionMetadataDoc`, `SessionUploadBundler`, `SessionUploadMetadata`, `UploadWorkOutcomes`, `UploadProgressSampler`, `UploadErrors`, `TransferWork`, `WorkTags`, `TransferLog`, `TransferNotifications`, `CorruptTransferException` |
 | `data/cloud/restore/` | 10 | `CloudRestore`, `RestoreBundleFetcher`, `RestoreUnpacker`, `RestoreZipVerifier`, `RestoreStart` (+ `RestoreFailureLedger`), `RestoreDownloadOutcomes`, `DownloadFailure`, `DownloadProgress`, `SafDestination`, `UnrestorableBackupException` |
 | `data/account/` | 15 | `AuthRepository`, `AuthLinks`, `AccessStatus`, `AccessStatusResolver`, `FirebaseOp`, `ReauthCredentials`, `DevAuth`, `DeviceEnv`, `DeviceKeyManager`, `LicenseEntitlements`, `LicenseErrors`, `SeatLease`, `SeatHeartbeat`, `LegalTerms`, `TotpMfa` |
-| `data/prefs/` | 6 | `DicSettings`, `CoachPrefs`, `ParamClipboard`, `WizardDraft`, `PrefKey`, `PrefFiles` |
+| `data/prefs/` | 6 | `AppSettings`, `CoachPrefs`, `ParamClipboard`, `WizardDraft`, `PrefKey`, `PrefFiles` |
 | `data/net/` | 23 | The backend client: `SemperApi` (+ `SemperApiCalls`, `SemperApiClients`, `SemperApiHttp`, `SemperApiSigning`, `Paging`, `ApiHost`), `CloudApi`, `Authed`, `HttpFailure`, `HttpStatus`, `ApiDtos`, `ApiErrors`, `ApiExceptions`, the interceptors (`RetryOnTransient`, `AppCheckHeader`, `AppIdHeader`, `ClientNonce`), `AppRemoteConfig`, `ArtifactRoles`, `SingleFlight`, `TokenProvider`, `TokenStore` |
 | `data/net/drive/` | 5 | Drive's resumable transfers: `DriveTransfer`, `DriveUploader`, `DriveDownloader`, `DriveDownload`, `DriveUpload` |
 | `imaging/` | 9 | Decoders and encoders (`BitmapDecoder`, `ImageEncoder`, `AviReader`, `AviLuma`, `MjpegHuffman`, `LumaRange`, …) |

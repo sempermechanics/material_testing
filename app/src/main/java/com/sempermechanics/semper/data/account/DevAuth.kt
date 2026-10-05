@@ -5,7 +5,7 @@ import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.TokenStore
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import timber.log.Timber
 
 /**
@@ -57,7 +57,7 @@ object DevAuth {
             AppConfigDto(
                 maxSessions = DEV_QUOTA_MAX,
                 maxFilesPerSession = 600,
-                maxFrames = DicSettings.MAX_MAX_FRAMES,
+                maxFrames = AppSettings.MAX_MAX_FRAMES,
                 mode = LicenseEntitlements.MODE_LICENSED,
                 plan = "professional",
                 cloudBackupEnabled = true,

@@ -72,7 +72,7 @@ SplashActivity ─ session restore ─┬─ no session ────────
 | Entry | `ui/auth/SplashActivity` |
 | Chain | `data/account/AuthRepository` → `data/net/SemperApi.me` (with `getConfig` in parallel, fetched again once if its `mode` disagrees with `me.license.mode`, as when the invite claim landed between the two) → `ui/auth/AccessRouter` (+ `data/account/AccessStatus`), `data/account/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
 | Writes | `data/net/TokenStore` cached uid / email / status / role |
-| Fails as | Routing error passed on as `DicKeys.ROUTING_ERROR`, shown by A1 as a red pill |
+| Fails as | Routing error passed on as `IntentKeys.ROUTING_ERROR`, shown by A1 as a red pill |
 | Tests | `auth/AccessRouterTest`, `auth/StatusRecheckTest` |
 
 The quota check is **not** here — it runs in `HomeActivity.onCreate` (A3), which
@@ -128,7 +128,7 @@ HomeActivity ─┬─ beta notice + diagnostics prompt (first run) ......... B1
 | Entry | `ui/home/HomeActivity` |
 | Chain | `data/session/SessionStore.list` (local index) ⋈ `data/cloud/CloudSync.reconcile` (cloud) |
 | Writes | Session index (rename, delete, sync state), coach-mark flags in `data/prefs/CoachPrefs` |
-| Fails as | Message pill + a "why + retry" dialog on the sync badge, fed by the worker's `DicKeys.UPLOAD_FAIL_REASON` / `DicRestoreWorker.KEY_ERROR` |
+| Fails as | Message pill + a "why + retry" dialog on the sync badge, fed by the worker's `IntentKeys.UPLOAD_FAIL_REASON` / `DicRestoreWorker.KEY_ERROR` |
 | Tests | `session/SessionStoreAtomicTest`, `cloud/QuotaGateTest` |
 
 ### A3a New-analysis media picker
@@ -152,7 +152,7 @@ delete stay on the Activity.
 | Analyses data management | `ui/settings/SettingsAnalysesSection` + `AnalysisEntries` / `AnalysisDataAdapter`; open, restore, download and delete on `SettingsActivity` | B2, B3, B4 |
 | Storage | `ui/settings/SettingsStorageSection` | B5, B6 |
 | Your data 🔒 | `ui/settings/SettingsYourDataSection` | B8, B9, B10 |
-| Analysis preferences | `ui/settings/SettingsPreferencesSection` | `data/prefs/DicSettings` + `data/net/AppRemoteConfig` |
+| Analysis preferences | `ui/settings/SettingsPreferencesSection` | `data/prefs/AppSettings` + `data/net/AppRemoteConfig` |
 | Help & support | `ui/settings/SettingsHelpSupportSection` | mailto / hosted pages |
 
 Long jobs are non-modal: `ui/common/transfer/TransferBannerController` carries restores,
@@ -160,7 +160,7 @@ bundle downloads and both exports. Terminal restore failures are observed here
 as well as on Home.
 
 Tests: `settings/AnalysisEntriesTest`, `settings/HelpSupportSectionTest`,
-`settings/DeleteAccountReauthTest`, `settings/DicSettingsMigrateTest`,
+`settings/DeleteAccountReauthTest`, `settings/AppSettingsMigrateTest`,
 `settings/TransferBannerControllerTest`.
 
 ### A4.1 Admin `[admin]` 🔒
@@ -203,7 +203,7 @@ progress is a buffered `SharedFlow`, not a `StateFlow`.
 |---|---|
 | Entry | `ui/analysis/RoiDrawActivity` (started for result by A5.2) |
 | Chain | `ui/analysis/roi/StudioOverlayView` (draw / hit-test / mask) → `StudioOverlayMaskEncoder` → `util/OverlayFormats`; resolved back by `ui/analysis/roi/RoiResolveHelper` |
-| Writes | Mask file at `DicKeys.MASK_FILE_PATH`; ROI rect in `DicKeys.ROI_*` |
+| Writes | Mask file at `IntentKeys.MASK_FILE_PATH`; ROI rect in `IntentKeys.ROI_*` |
 | Tests | `util/OverlayFormatsTest` |
 
 Circle / ellipse / freeform are implemented in `StudioOverlayView` but not
@@ -215,7 +215,7 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 |---|---|
 | Entry | `ui/analysis/VsgLatticeActivity` (a sweep opens here, not in the viewer) |
 | Chain | `SweepLatticeView` (nodes) + `SweepPlotView` (line-cut plot) + `SweepStudy` (plan maths); node open → A8 |
-| Reads | `DicKeys.SWEEP_*` extras packed by `AnalysisNavHelper.openResults` or `ui/home/SessionOpenHelper.intentFor` |
+| Reads | `IntentKeys.SWEEP_*` extras packed by `AnalysisNavHelper.openResults` or `ui/home/SessionOpenHelper.intentFor` |
 | Writes | `data/prefs/ParamClipboard` on a parameter-chip copy |
 | Fails as | Hollow node → `EngineFailure.shortReasonRes` + FAQ |
 | Tests | `analysis/SweepStudyTest`, `EngineFailureTest` |
@@ -280,8 +280,8 @@ CloudSync.enqueueUpload → DicUploadWorker.doWork → backUp
 | Triggered by | `saveRunRecord` after a run, the Home badge retry, Settings **Back up now**, turning **Save to cloud** on, and each reconcile that lists the cloud, for rows still PENDING (`CloudSync.reconcile`) |
 | Decisions | `data/cloud/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip`, incomplete staging (`classifyIncompleteStaging`: retry while the reference/`.dat` inputs exist, the row was saved < 15 min ago, or they have been missing < 10 min by the `<sessionDir>/upload_inputs_missing_since` marker; else terminal `inputs_missing`) |
 | Writes | `<sessionDir>/upload_staging/`, sync state + `cloudSessionId` on the index row; `StorageBudget.enforce` runs at the end |
-| Fails as | Terminal: `DicKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + badge dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
-| Signals | `data/cloud/TransferNotifications` foreground notification; `DicKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
+| Fails as | Terminal: `IntentKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + badge dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
+| Signals | `data/cloud/TransferNotifications` foreground notification; `IntentKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
 | Tests | `cloud/UploadResumableTest`, `cloud/DicUploadWorkerOutcomesTest`, `cloud/UploadChunkSizingTest`, `cloud/BackupSplitTest`, `cloud/SessionZipTest`, `cloud/WaitingUploadsTest` |
 
 `doWork` may be broken into named steps, but the resume contract depends on
@@ -360,7 +360,7 @@ Tests: `cloud/SessionEverythingExporterTest`, `results/*`.
 `ui/settings/SettingsYourDataSection` → re-authentication via `ui/common/auth/AuthRoute`
 (password, Google or email link) → `CloudSync.deleteAccount` → `SemperApi.deleteAccount`
 (C13) → **only on success** the local wipe (`SessionStore`, `TokenStore`,
-`DicSettings`) and Firebase `delete()`. Backend first, deliberately: a local wipe
+`AppSettings`) and Firebase `delete()`. Backend first, deliberately: a local wipe
 on a failed server call would strand the cloud copy.
 Tests: `cloud/AccountDeletionTest`, `settings/DeleteAccountReauthTest`.
 
@@ -369,7 +369,7 @@ Tests: `cloud/AccountDeletionTest`, `settings/DeleteAccountReauthTest`.
 One flag, two consumers:
 
 ```
-DicSettings.diagnosticsEnabled ─┬─ Diagnostics.apply/setEnabled → Crashlytics + CrashReportingTree
+AppSettings.diagnosticsEnabled ─┬─ Diagnostics.apply/setEnabled → Crashlytics + CrashReportingTree
                                 └─ diagnostics/SemperAnalytics.event (dropped, not queued, when off)
 ```
 
@@ -513,7 +513,7 @@ Details and failure triage: [ops/CI.md](ops/CI.md).
 | A wrong number in the viewer or ⓘ sheet | The extras it was opened with: `AnalysisNavHelper.openResults` (fresh run) or `ui/home/SessionOpenHelper.intentFor` (reopen) → read in `ResultViewerActivity` / `ViewerSettingsSheet` / `ViewerReportFactory`. **Check which of the two packed it** — see E2.1 |
 | A wrong number in an export | `report/ReportBuilder` (fusion), `report/AnalysisCsvWriter`, `report/VisualizationEngine`; the source of truth is `DicResult.decodeDatFile` over `frame_%04d.dat` |
 | "Analysis failed" wording | `ui/analysis/run/EngineFailure` (code → string) + `field/RunStop` (the stop codes); the code itself comes from the engine or `ConvergenceGate` |
-| A backup that failed | Home badge dialog text = `DicKeys.UPLOAD_FAIL_REASON` from `UploadRun.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
+| A backup that failed | Home badge dialog text = `IntentKeys.UPLOAD_FAIL_REASON` from `UploadRun.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
 | A restore that failed | `DicRestoreWorker.KEY_ERROR` (the `ApiException` message) → `CloudRestore` → `RestoreDownloadOutcomes` for retry vs terminal |
 | Any cloud 4xx/5xx | The reason carries `(ref: <id>)` — that is the backend's `X-Request-Id`. Search the Cloud Run log for `requestId="<id>"` to get the exact access line (`opClass`, `routeTemplate`, `errorCode`, latency) |
 | A cloud call that is rejected consistently | `backend/app/errors.py` names the `detail` code; the client's branch is in `data/net/ApiErrors.kt` + `SemperApi.failSigned` |
@@ -527,7 +527,7 @@ Ranked by how often it costs someone an afternoon. Each has a proposed fix in
 [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md).
 
 **E2.1 The viewer's input state is packed in two places and read in four.**
-~25 `DicKeys` extras are built by `AnalysisNavHelper.openResults` (fresh run) and
+~25 `IntentKeys` extras are built by `AnalysisNavHelper.openResults` (fresh run) and
 again by `SessionOpenHelper.intentFor` (reopen from Home / Settings), and the two
 sets are not identical — `DEF_PATH` and `DEF_FILE_PATHS`, for instance, exist
 only on the fresh-run path. They are then read in `ResultViewerActivity` (~20

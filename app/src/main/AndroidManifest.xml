@@ -30,7 +30,7 @@
         <!-- Diagnostics collection is OFF until the user opts in. Both SDKs
              otherwise start collecting on first launch, before any notice is
              shown — SemperApp re-enables them at startup when the user has
-             agreed (DicSettings.diagnosticsEnabled). These flags are the
+             agreed (AppSettings.diagnosticsEnabled). These flags are the
              build-time default, not the runtime state. -->
         <meta-data
             android:name="firebase_crashlytics_collection_enabled"

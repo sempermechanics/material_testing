@@ -8,7 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.cloud.SessionMetadataDoc
 import com.sempermechanics.semper.data.cloud.SessionUploadMetadata
 import com.sempermechanics.semper.fixtures.sessionRecord
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.report.RoiData
 import com.sempermechanics.semper.report.toRoi
 import com.sempermechanics.semper.report.toRoiData
@@ -35,10 +35,10 @@ class RoiCodecsTest {
     @Test
     fun `Intent extras use the existing ROI_X to ROI_H int keys`() {
         val intent = Intent().putRoiExtras(roi)
-        assertEquals(12, intent.getIntExtra(DicKeys.ROI_X, -1))
-        assertEquals(34, intent.getIntExtra(DicKeys.ROI_Y, -1))
-        assertEquals(560, intent.getIntExtra(DicKeys.ROI_W, -1))
-        assertEquals(400, intent.getIntExtra(DicKeys.ROI_H, -1))
+        assertEquals(12, intent.getIntExtra(IntentKeys.ROI_X, -1))
+        assertEquals(34, intent.getIntExtra(IntentKeys.ROI_Y, -1))
+        assertEquals(560, intent.getIntExtra(IntentKeys.ROI_W, -1))
+        assertEquals(400, intent.getIntExtra(IntentKeys.ROI_H, -1))
         assertEquals(setOf("ROI_X", "ROI_Y", "ROI_W", "ROI_H"), intent.extras!!.keySet())
         assertEquals(roi, intent.getRoiExtras(Roi.full(ImageSize(640, 480))))
     }
@@ -46,10 +46,10 @@ class RoiCodecsTest {
     @Test
     fun `Intent extras written the old way read back as the same ROI`() {
         val legacy = Intent()
-            .putExtra(DicKeys.ROI_X, 12)
-            .putExtra(DicKeys.ROI_Y, 34)
-            .putExtra(DicKeys.ROI_W, 560)
-            .putExtra(DicKeys.ROI_H, 400)
+            .putExtra(IntentKeys.ROI_X, 12)
+            .putExtra(IntentKeys.ROI_Y, 34)
+            .putExtra(IntentKeys.ROI_W, 560)
+            .putExtra(IntentKeys.ROI_H, 400)
         assertEquals(roi, legacy.getRoiExtras(Roi.full(ImageSize(640, 480))))
     }
 
@@ -57,7 +57,7 @@ class RoiCodecsTest {
     fun `absent ROI extras fall back per key to the default, as the wizard reads them`() {
         val size = ImageSize(640, 480)
         assertEquals(Roi.full(size), Intent().getRoiExtras(Roi.full(size)))
-        val partial = Intent().putExtra(DicKeys.ROI_X, 7)
+        val partial = Intent().putExtra(IntentKeys.ROI_X, 7)
         assertEquals(Roi(7, 0, 640, 480), partial.getRoiExtras(Roi.full(size)))
     }
 
@@ -76,10 +76,10 @@ class RoiCodecsTest {
         val b = Bundle()
         val edges = RectF(1.5f, 2.25f, 300.75f, 200f)
         b.putRoiEdges(edges)
-        assertEquals(1.5f, b.getFloat(DicKeys.ROI_L), 0f)
-        assertEquals(2.25f, b.getFloat(DicKeys.ROI_T), 0f)
-        assertEquals(300.75f, b.getFloat(DicKeys.ROI_R), 0f)
-        assertEquals(200f, b.getFloat(DicKeys.ROI_B), 0f)
+        assertEquals(1.5f, b.getFloat(IntentKeys.ROI_L), 0f)
+        assertEquals(2.25f, b.getFloat(IntentKeys.ROI_T), 0f)
+        assertEquals(300.75f, b.getFloat(IntentKeys.ROI_R), 0f)
+        assertEquals(200f, b.getFloat(IntentKeys.ROI_B), 0f)
         assertEquals(edges, b.getRoiEdges())
         assertNull(Bundle().getRoiEdges())
     }
@@ -121,11 +121,11 @@ class RoiCodecsTest {
     fun `image size extras use the viewer and editor keys`() {
         val size = ImageSize(640, 480)
         val viewer = ImageSizeExtras.VIEWER.put(Intent(), size)
-        assertEquals(640, viewer.getIntExtra(DicKeys.IMG_W, 0))
-        assertEquals(480, viewer.getIntExtra(DicKeys.IMG_H, 0))
+        assertEquals(640, viewer.getIntExtra(IntentKeys.IMG_W, 0))
+        assertEquals(480, viewer.getIntExtra(IntentKeys.IMG_H, 0))
         val editor = ImageSizeExtras.ROI_EDITOR.put(Intent(), size)
-        assertEquals(640, editor.getIntExtra(DicKeys.IMAGE_WIDTH, 0))
-        assertEquals(480, editor.getIntExtra(DicKeys.IMAGE_HEIGHT, 0))
+        assertEquals(640, editor.getIntExtra(IntentKeys.IMAGE_WIDTH, 0))
+        assertEquals(480, editor.getIntExtra(IntentKeys.IMAGE_HEIGHT, 0))
         assertEquals(size, editor.getRoiEditorImageSize())
         assertEquals(ImageSize.UNKNOWN, Intent().getRoiEditorImageSize())
     }

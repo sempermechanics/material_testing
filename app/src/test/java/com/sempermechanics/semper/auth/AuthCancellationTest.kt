@@ -6,7 +6,7 @@ import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.cloud.FakeTokens
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.SignInMethod
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -37,14 +37,14 @@ class AuthCancellationTest {
 
     @Before
     fun setUp() {
-        DicSettings.setDiagnosticsEnabled(context, true)
+        AppSettings.setDiagnosticsEnabled(context, true)
         SemperAnalytics.sink = SemperAnalytics.Sink { _, name, _ -> synchronized(events) { events += name } }
     }
 
     @After
     fun tearDown() {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, _, _ -> }
-        DicSettings.setDiagnosticsEnabled(context, false)
+        AppSettings.setDiagnosticsEnabled(context, false)
     }
 
     @Test

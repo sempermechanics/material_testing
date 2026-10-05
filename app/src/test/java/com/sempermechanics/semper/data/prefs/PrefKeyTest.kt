@@ -122,17 +122,17 @@ class PrefKeyTest {
     }
 
     @Test
-    fun `dic_settings keys are DicSettings' own`() {
+    fun `dic_settings keys are AppSettings' own`() {
         val s = PrefFiles.Settings
         val p = prefs(s.NAME)
         assertEquals("dic_settings", s.NAME)
         // Defaults agree with the owner's on an empty file.
-        assertEquals(DicSettings.saveToCloudEnabled(context), p[s.SAVE_TO_CLOUD])
-        assertEquals(DicSettings.wifiOnlyUploadEnabled(context), p[s.UPLOAD_WIFI_ONLY])
-        assertEquals(DicSettings.maxFrames(context, 0), p[s.MAX_FRAMES])
-        assertEquals(DicSettings.autoFreeBudgetGb(context), p[s.AUTO_FREE_GB])
-        assertEquals(DicSettings.diagnosticsEnabled(context), p[s.DIAGNOSTICS_ENABLED])
-        assertEquals(DicSettings.wasDiagnosticsAsked(context), p[s.DIAGNOSTICS_ASKED])
+        assertEquals(AppSettings.saveToCloudEnabled(context), p[s.SAVE_TO_CLOUD])
+        assertEquals(AppSettings.wifiOnlyUploadEnabled(context), p[s.UPLOAD_WIFI_ONLY])
+        assertEquals(AppSettings.maxFrames(context, 0), p[s.MAX_FRAMES])
+        assertEquals(AppSettings.autoFreeBudgetGb(context), p[s.AUTO_FREE_GB])
+        assertEquals(AppSettings.diagnosticsEnabled(context), p[s.DIAGNOSTICS_ENABLED])
+        assertEquals(AppSettings.wasDiagnosticsAsked(context), p[s.DIAGNOSTICS_ASKED])
 
         // Written through the key, read by the owner.
         p.edit(commit = true) {
@@ -141,24 +141,24 @@ class PrefKeyTest {
             put(s.MAX_FRAMES, 77)
             put(s.AUTO_FREE_GB, 5)
         }
-        assertFalse(DicSettings.saveToCloudEnabled(context))
-        assertTrue(DicSettings.wifiOnlyUploadEnabled(context))
-        assertEquals(77, DicSettings.maxFrames(context, 0))
-        assertEquals(5, DicSettings.autoFreeBudgetGb(context))
+        assertFalse(AppSettings.saveToCloudEnabled(context))
+        assertTrue(AppSettings.wifiOnlyUploadEnabled(context))
+        assertEquals(77, AppSettings.maxFrames(context, 0))
+        assertEquals(5, AppSettings.autoFreeBudgetGb(context))
         assertFalse(p.getBoolean("save_to_cloud", true))
         assertTrue(p.getBoolean("upload_wifi_only", false))
         assertEquals(77, p.getInt("max_frames", 0))
         assertEquals(5, p.getInt("auto_free_gb", -1))
 
         // Written by the owner, read through the key.
-        DicSettings.setDiagnosticsEnabled(context, true)
+        AppSettings.setDiagnosticsEnabled(context, true)
         assertTrue(p[s.DIAGNOSTICS_ENABLED])
         assertTrue(p[s.DIAGNOSTICS_ASKED])
         assertTrue(p.getBoolean("diagnostics_enabled", false))
         assertTrue(p.getBoolean("diagnostics_asked", false))
 
         p.edit(commit = true) { put(s.KEEP_EVERY_RERUN, true) }
-        DicSettings.migrate(context)
+        AppSettings.migrate(context)
         assertFalse(s.KEEP_EVERY_RERUN in p)
         assertFalse(p.contains("keep_every_rerun"))
         assertEquals(1, p[s.SCHEMA])

@@ -21,8 +21,8 @@ import com.sempermechanics.semper.data.SessionMetadataWorker
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.prefs.DicSettings
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.data.prefs.AppSettings
+import com.sempermechanics.semper.navigation.IntentKeys
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -54,7 +54,7 @@ class WorkRequestsTest {
         WorkManagerTestInitHelper.closeWorkDatabase()
         WorkManagerImpl.setDelegate(null)
         AppRemoteConfig.clear(context)
-        DicSettings.setWifiOnlyUploadEnabled(context, false)
+        AppSettings.setWifiOnlyUploadEnabled(context, false)
     }
 
     private fun queued(name: String): WorkInfo = workManager.getWorkInfosForUniqueWork(name).get().single()
@@ -100,18 +100,18 @@ class WorkRequestsTest {
             WorkTags.uploadName("L1"),
             oneTimeWork<DicUploadWorker>(
                 tags = listOf(WorkTags.UPLOAD),
-                input = workDataOf(DicKeys.SESSION_LOCAL_ID to "L1"),
+                input = workDataOf(IntentKeys.SESSION_LOCAL_ID to "L1"),
                 expedited = true,
             ),
         )
 
-        DicSettings.setWifiOnlyUploadEnabled(context, true)
+        AppSettings.setWifiOnlyUploadEnabled(context, true)
         CloudSync.enqueueUpload(context, "L2")
         assertSameRequest(
             WorkTags.uploadName("L2"),
             oneTimeWork<DicUploadWorker>(
                 tags = listOf(WorkTags.UPLOAD),
-                input = workDataOf(DicKeys.SESSION_LOCAL_ID to "L2"),
+                input = workDataOf(IntentKeys.SESSION_LOCAL_ID to "L2"),
                 network = NetworkType.UNMETERED,
                 expedited = true,
             ),
@@ -196,7 +196,7 @@ class WorkRequestsTest {
             WorkTags.metadataName("L1"),
             oneTimeWork<SessionMetadataWorker>(
                 tags = listOf(WorkTags.METADATA),
-                input = workDataOf(DicKeys.SESSION_LOCAL_ID to "L1"),
+                input = workDataOf(IntentKeys.SESSION_LOCAL_ID to "L1"),
             ),
         )
     }
@@ -216,7 +216,7 @@ class WorkRequestsTest {
         val upload = storedSpec(queued("upload-L1"))
         assertEquals(setOf("upload", DicUploadWorker::class.java.name), queued("upload-L1").tags)
         assertEquals(DicUploadWorker::class.java.name, upload.workerClassName)
-        assertEquals("L1", upload.input.getString(DicKeys.SESSION_LOCAL_ID))
+        assertEquals("L1", upload.input.getString(IntentKeys.SESSION_LOCAL_ID))
         assertEquals(NetworkType.CONNECTED, upload.constraints.requiredNetworkType)
         assertEquals(30_000L, upload.backoffDelayDuration)
         assertEquals(androidx.work.BackoffPolicy.EXPONENTIAL, upload.backoffPolicy)
@@ -225,7 +225,7 @@ class WorkRequestsTest {
 
         val metadata = storedSpec(queued("metadata-L1"))
         assertEquals(setOf("metadata", SessionMetadataWorker::class.java.name), queued("metadata-L1").tags)
-        assertEquals("L1", metadata.input.getString(DicKeys.SESSION_LOCAL_ID))
+        assertEquals("L1", metadata.input.getString(IntentKeys.SESSION_LOCAL_ID))
         assertEquals(30_000L, metadata.backoffDelayDuration)
         assertEquals(false, metadata.expedited)
 

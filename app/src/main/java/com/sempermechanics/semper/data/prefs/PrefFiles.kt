@@ -11,18 +11,18 @@ package com.sempermechanics.semper.data.prefs
  */
 object PrefFiles {
 
-    /** [DicSettings]. */
+    /** [AppSettings]. */
     object Settings {
         const val NAME = "dic_settings"
         val SCHEMA = PrefKey.int("schema")
         val SAVE_TO_CLOUD = PrefKey.boolean("save_to_cloud", default = true)
         val UPLOAD_WIFI_ONLY = PrefKey.boolean("upload_wifi_only")
-        val MAX_FRAMES = PrefKey.int("max_frames", DicSettings.DEFAULT_MAX_FRAMES)
-        val AUTO_FREE_GB = PrefKey.int("auto_free_gb", DicSettings.AUTO_FREE_OFF)
+        val MAX_FRAMES = PrefKey.int("max_frames", AppSettings.DEFAULT_MAX_FRAMES)
+        val AUTO_FREE_GB = PrefKey.int("auto_free_gb", AppSettings.AUTO_FREE_OFF)
         val DIAGNOSTICS_ENABLED = PrefKey.boolean("diagnostics_enabled")
         val DIAGNOSTICS_ASKED = PrefKey.boolean("diagnostics_asked")
 
-        /** Retired; [DicSettings.migrate] removes it. */
+        /** Retired; [AppSettings.migrate] removes it. */
         val KEEP_EVERY_RERUN = PrefKey.boolean("keep_every_rerun")
     }
 

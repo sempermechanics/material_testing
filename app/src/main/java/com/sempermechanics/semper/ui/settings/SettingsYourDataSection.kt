@@ -15,7 +15,7 @@ import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.data.cloud.CloudAccountExport
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenStore
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionEverythingExporter
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.diagnostics.Diagnostics
@@ -47,7 +47,7 @@ class SettingsYourDataSection(
         views.btnDeleteAccount.setOnClickListener { confirmDeleteAccount() }
 
         val switchDiagnostics = views.switchDiagnostics
-        switchDiagnostics.isChecked = DicSettings.diagnosticsEnabled(activity)
+        switchDiagnostics.isChecked = AppSettings.diagnosticsEnabled(activity)
         switchDiagnostics.setOnCheckedChangeListener { _, checked ->
             // Applies immediately in both directions: turning this off also
             // deletes any crash report still queued on disk.

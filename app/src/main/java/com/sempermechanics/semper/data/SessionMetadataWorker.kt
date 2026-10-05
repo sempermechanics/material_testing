@@ -5,7 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 
 /**
  * Runs [SessionMetadataSync.send] for one session. It waits out an upload
@@ -16,7 +16,7 @@ import com.sempermechanics.semper.navigation.DicKeys
 class SessionMetadataWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val id = inputData.getString(DicKeys.SESSION_LOCAL_ID) ?: return Result.failure()
+        val id = inputData.getString(IntentKeys.SESSION_LOCAL_ID) ?: return Result.failure()
         return when (SessionMetadataSync.send(applicationContext, id)) {
             SessionMetadataSync.Outcome.DONE, SessionMetadataSync.Outcome.LATER -> Result.success()
             SessionMetadataSync.Outcome.WAIT, SessionMetadataSync.Outcome.RETRY ->
