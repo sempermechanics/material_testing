@@ -2,9 +2,11 @@ package com.sempermechanics.semper.session
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.session.SessionQuotaGate
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.fixtures.CleanAppState
@@ -150,6 +152,9 @@ class SessionStoreAtomicTest {
 
     @Test
     fun `save refuses a new row at a full quota but still updates an existing one`() {
+        // Cloud on: a build with no API URL (CI) would otherwise skip the quota.
+        val realApi = SessionQuotaGate.api
+        SessionQuotaGate.api = { FakeCloudApi() }
         try {
             AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 1, maxFilesPerSession = 600, maxFrames = 150))
             assertEquals(SessionStore.UpsertOutcome.SAVED, SessionStore.save(ctx, record("a", 1)))
@@ -163,6 +168,7 @@ class SessionStoreAtomicTest {
                 SessionStore.save(ctx, record("c", 4), allowOverLimit = true),
             )
         } finally {
+            SessionQuotaGate.api = realApi
             TokenStore.clear(ctx)
         }
     }
