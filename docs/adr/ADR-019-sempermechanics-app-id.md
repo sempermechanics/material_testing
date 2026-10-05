@@ -15,8 +15,8 @@ names and two string keys. The product is Semper by Semper Mechanics
 neither the app nor anything in it.
 
 An Android `applicationId` cannot change in place. A new id is a new app: a new
-Play listing, a new Firebase Android app, new App Links entries, and empty
-on-device storage on first install.
+Firebase Android app, new App Links entries, and empty on-device storage on
+first install. The app is in testing and not on Play, so no store listing moves.
 
 ## Decision
 
@@ -58,10 +58,12 @@ on-device storage on first install.
   `indicvision-dic-app-auth` (2026-10-05) with the same debug and release
   fingerprints as the old app; `app/google-services.json` is its downloaded
   config. Release still needs the owner's steps: App Check (Play Integrity) for
-  the new app; the Play listing; the new app-signing fingerprint in Firebase and
-  `assetlinks.json` if Play signs with a new key; the `SEMPER_API_BASE_URL` var
-  (optional while `INDIC_API_BASE_URL` is read); the backend and Hosting deploys.
-- Existing users install the new app beside the old one; their backups restore
+  the new app; the `SEMPER_API_BASE_URL` var (optional while
+  `INDIC_API_BASE_URL` is read); the backend and Hosting deploys. Releases are
+  APKs signed with the release key, which is already registered; a later move
+  to Play App Signing adds its fingerprint to Firebase and `assetlinks.json`
+  (RELEASING.md).
+- Testers install the new APK beside the old app (it is not an upgrade); their backups restore
   into it. On-device analyses that were never backed up stay in the old app.
 - material_testing must switch to `com.sempermechanics.materialtesting` **in
   the same merge** that brings this code in. Otherwise its installs, still on

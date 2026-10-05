@@ -125,7 +125,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   "indic" leaves the code and the engine submodule is `engine/`
   ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)). The Firebase app is
   registered and its `google-services.json` committed (2026-10-05). Owed before release:
-  App Check for the new app, the Play listing, a backend and Hosting deploy; the engine
+  App Check for the new app, a backend and Hosting deploy; the engine
   PR merged first. material_testing moves to `com.sempermechanics.materialtesting` in
   the same merge that takes this code.
 - **Deployed.** Cloud Run `semper-api` (image `semper-api-36844645753-1` from `9230f444`,
