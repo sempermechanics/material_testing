@@ -15,6 +15,13 @@ data class SkippedNode(
     val code: Int,
 ) {
     companion object {
+        /**
+         * The code of a legacy node saved before codes were kept. The FI-3 types
+         * have no "no code" value, so such a node reads as the engine's 0, the
+         * strain-window (VSG) skip.
+         */
+        const val UNRECORDED_CODE = 0
+
         private val json = Json { ignoreUnknownKeys = true }
 
         fun encodeJson(nodes: List<SkippedNode>): String = json.encodeToString(nodes)
@@ -45,19 +52,25 @@ data class SkippedNode(
             fromLegacyArrays(subsets, steps, strainWindows, codes)
         }
 
+        /**
+         * The four parallel lists from before FI-3. The combinations must agree
+         * in length. [codes] may be shorter or empty: sweeps saved or backed up
+         * before codes were kept (5a1e5fcb..1eb3fa2d) have none, and those nodes
+         * read as [UNRECORDED_CODE].
+         */
         fun fromLegacyArrays(
             subsets: List<Int>,
             steps: List<Int>,
             strainWindows: List<Int>,
             codes: List<Int>,
         ): List<SkippedNode> {
-            val n = listOf(subsets.size, steps.size, strainWindows.size, codes.size).distinct()
-            require(n.size == 1) {
+            val count = subsets.size
+            require(steps.size == count && strainWindows.size == count && codes.size <= count) {
                 "Legacy skip arrays length mismatch: subsets=${subsets.size} steps=${steps.size} " +
                     "windows=${strainWindows.size} codes=${codes.size}"
             }
             return subsets.indices.map { i ->
-                SkippedNode(subsets[i], steps[i], strainWindows[i], codes[i])
+                SkippedNode(subsets[i], steps[i], strainWindows[i], codes.getOrElse(i) { UNRECORDED_CODE })
             }
         }
 

@@ -1,5 +1,6 @@
 package com.indicvision.semper.data.session
 
+import com.indicvision.semper.util.Digests
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -15,6 +16,9 @@ object SessionNaming {
 
     /** How much of a session id an export entry name keeps. */
     private const val ID_CHARS = 8
+
+    /** Hex digits of a backup id's hash in a cache file name: 48 bits, ample for one phone's backups. */
+    private const val CACHE_ID_HEX = 12
 
     /**
      * The name a run gives its session: the reference's base name and the
@@ -36,6 +40,16 @@ object SessionNaming {
 
     /** A Save-to-Files name for analysis [displayName]'s `Session.zip`. */
     fun bundleFileName(displayName: String): String = "${fileSafe(displayName, "analysis")}_Session.zip"
+
+    /**
+     * The cache file a Save-to-Files download of backup [cloudSessionId] is built in:
+     * [bundleFileName] behind a short hash of the id, so two backups with the same
+     * display name never share (or delete) one file. Not a persisted name.
+     */
+    fun bundleCacheFileName(displayName: String, cloudSessionId: String): String {
+        val idHash = Digests.toHex(Digests.sha256(cloudSessionId.toByteArray(Charsets.UTF_8))).take(CACHE_ID_HEX)
+        return "${idHash}_${bundleFileName(displayName)}"
+    }
 
     /** The name of session [id]'s archive inside a master export, without its `.zip`. */
     fun exportEntryName(name: String, id: String): String = fileSafe(name, "session") + "_" + id.take(ID_CHARS)

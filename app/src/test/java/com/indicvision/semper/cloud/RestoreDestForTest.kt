@@ -9,10 +9,12 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.zip.ZipFile
 
 /**
  * [RestoreUnpacker.destFor] is the one zip-slip guard both restore paths share:
- * every artifact must land strictly inside its own session directory.
+ * every artifact must land strictly inside its own session directory. Also
+ * which entry an unpack takes for the reference.
  */
 class RestoreDestForTest {
 
@@ -60,5 +62,26 @@ class RestoreDestForTest {
     fun `the session directory itself is not an artifact`() {
         assertThrows(CorruptTransferException::class.java) { dest("dat", ".") }
         assertThrows(CorruptTransferException::class.java) { dest("raw", "..") }
+    }
+
+    @Test
+    fun `a legacy prefix's deformed image named reference_png is not taken for the reference`() {
+        val prefix = File(tmp.root, "prefix.zip").apply {
+            writeBytes(
+                RestoreFakeApi.zipOf(
+                    listOf(
+                        "raw/Reference.png" to byteArrayOf(1, 2, 3),
+                        "raw/reference.png" to byteArrayOf(4, 5),
+                        "dat/frame_0001.dat" to RestoreFakeApi.onePointDat(),
+                    ),
+                ),
+            )
+        }
+        val crcByName = ZipFile(prefix).use { zip -> zip.entries().toList().associate { it.name to it.crc } }
+
+        val refPath = RestoreUnpacker.unpackPrefix(prefix, layout, crcByName)
+
+        assertEquals(layout.referencePng.absolutePath, refPath)
+        assertEquals(listOf<Byte>(4, 5), layout.rawDeformed("reference.png").readBytes().toList())
     }
 }

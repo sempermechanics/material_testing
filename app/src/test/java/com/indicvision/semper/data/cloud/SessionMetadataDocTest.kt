@@ -260,13 +260,53 @@ class SessionMetadataDocTest {
     }
 
     @Test
-    fun `legacy skip lists of different lengths are refused, as the org json reader refused them`() {
+    fun `a sweep backed up before skip codes were kept restores with the unrecorded code`() {
+        // As 5a1e5fcb..1eb3fa2d uploaded it: three skip lists, no codes. The reader
+        // after FI-3 refused it, and the restore downloaded the bundle again forever.
+        val record = toRecord(SessionMetadataDoc.decode(SWEEP_WITHOUT_SKIP_CODES), null)
+
+        assertEquals(
+            listOf(SkippedNode(41, 9, 121, SkippedNode.UNRECORDED_CODE), SkippedNode(51, 9, 121, 0)),
+            record.sweepSkippedNodes,
+        )
+        assertEquals(listOf(41, 51), record.sweepSkipSubsets)
+        assertEquals(listOf(0, 0), record.sweepSkipCodes)
+        assertEquals("d.png · 2 of 4 solved · subset 21–31", record.headline)
+    }
+
+    @Test
+    fun `legacy skip lists whose combinations disagree in length are still refused`() {
         val text = """
             {"engine":{"sweep":{"subsets":[21],
               "skipped":{"subsets":[1,2],"steps":[1],"strainWindows":[1],"codes":[1]}}}}
         """.trimIndent()
         val viaModel = runCatching { toRecord(SessionMetadataDoc.decode(text), null) }.exceptionOrNull()
         assertTrue(viaModel is IllegalArgumentException)
+    }
+
+    @Test
+    fun `NaN and infinite numbers read as they read today`() {
+        // Pins the lenient reader, not a judgement on it: an Int field takes the
+        // number's intValue (NaN is 0, an infinity clamps), as org.json's optInt did,
+        // and a float field keeps the non-finite value.
+        val text = """
+            {"frameCount":NaN,
+             "engine":{"subset":Infinity,"stats":[NaN,Infinity,-Infinity,1.5]},
+             "metrics":{"avgIterations":NaN,"executionTimeMs":-Infinity,"pointsConverged":Infinity}}
+        """.trimIndent()
+
+        val record = toRecord(SessionMetadataDoc.decode(text), null)
+
+        assertEquals(0, record.frameCount)
+        assertEquals(Int.MAX_VALUE, record.subset)
+        assertEquals(
+            listOf(Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, 1.5f),
+            record.engineStats,
+        )
+        assertTrue(record.avgIterations.isNaN())
+        assertEquals(Int.MIN_VALUE, record.executionTimeMs)
+        assertEquals(Int.MAX_VALUE, record.pointsConverged)
+        assertEquals("0.0% converged", record.headline)
     }
 
     @Test
@@ -323,6 +363,13 @@ class SessionMetadataDocTest {
                 .readText()
             Json.decodeFromString<Map<String, SessionRecord>>(text)
         }
+
+        /** A sweep as uploaded from 5a1e5fcb until 1eb3fa2d added `codes` to its skip block. */
+        val SWEEP_WITHOUT_SKIP_CODES = """
+            {"frameCount":2,"frames":[{"image":"d.png"},{"image":"d.png"}],
+             "engine":{"subset":21,"sweep":{"lineCutHorizontal":true,"subsets":[21,31],"steps":[5,7],"strainWindows":[41,85],
+               "labels":["a","b"],"skipped":{"subsets":[41,51],"steps":[9,9],"strainWindows":[121,121]}}}}
+        """.trimIndent()
 
         /** Files the reader must keep tolerating, each labelled with what it exercises. */
         val LEGACY_AND_ODD: List<Pair<String, String>> = listOf(

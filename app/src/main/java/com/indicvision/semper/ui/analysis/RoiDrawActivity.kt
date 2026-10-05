@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.RectF
 import android.os.Bundle
 import android.view.View
+import android.widget.EditText
 import androidx.annotation.MainThread
 import androidx.annotation.StringRes
 import androidx.annotation.WorkerThread
@@ -262,9 +263,13 @@ class RoiDrawActivity : AppCompatActivity() {
 
     /** The typed X, Y, W, H in image px, or null unless all four are whole numbers and W, H are positive. */
     private fun typedRoi(): Roi? {
-        val typed = listOf(binding.etRoiX, binding.etRoiY, binding.etRoiW, binding.etRoiH)
-            .map { it.text?.toString()?.toIntOrNull() ?: return null }
-        return Roi.fromXywh(typed.toIntArray())?.takeIf { it.w > 0 && it.h > 0 }
+        fun typed(field: EditText): Int? = field.text?.toString()?.toIntOrNull()
+        val x = typed(binding.etRoiX)
+        val y = typed(binding.etRoiY)
+        val w = typed(binding.etRoiW)
+        val h = typed(binding.etRoiH)
+        if (x == null || y == null) return null
+        return if (w != null && h != null) Roi(x, y, w, h).takeIf { w > 0 && h > 0 } else null
     }
 
     private fun applyManualFields() {
@@ -303,17 +308,17 @@ class RoiDrawActivity : AppCompatActivity() {
             Feedback.toast(this, R.string.roi_invalid_size)
             return
         }
-        val buildMask: () -> ByteArray = if (nothingDrawn) {
-            Feedback.toast(this, R.string.roi_full_image_selected)
-            fullMask(imageSize.width * imageSize.height)
-        } else {
-            maskOf(overlay.maskInput())
-        }
+        // Copied here, on Main: the overlay's rects keep changing under touch.
+        val maskInput = if (nothingDrawn) null else overlay.maskInput()
+        if (nothingDrawn) Feedback.toast(this, R.string.roi_full_image_selected)
+        val pixels = imageSize.width * imageSize.height
 
         saving = true
         val maskFile = File(cacheDir, CacheJanitor.ROI_MASK_CACHE)
         lifecycleScope.launch {
-            val maskBytes = withContext(Dispatchers.Default) { buildMask() }
+            val maskBytes = withContext(Dispatchers.Default) {
+                if (maskInput == null) fullMask(pixels) else StudioOverlayMaskEncoder.encode(maskInput)
+            }
             val written = withContext(Dispatchers.IO) { writeMask(maskFile, maskBytes) }
             if (!written) {
                 saving = false
@@ -347,14 +352,11 @@ class RoiDrawActivity : AppCompatActivity() {
     }
 }
 
-/** Builds a mask that correlates every one of [pixels]. */
-private fun fullMask(pixels: Int): () -> ByteArray = { ByteArray(pixels) { FULL_MASK } }
-
-/** Builds the mask the overlay's crop and holes describe. */
-private fun maskOf(input: StudioOverlayMaskEncoder.Input): () -> ByteArray = { StudioOverlayMaskEncoder.encode(input) }
+/** A mask that correlates every one of [pixels]. */
+private fun fullMask(pixels: Int): ByteArray = ByteArray(pixels) { FULL_MASK }
 
 /** A mask byte that marks its pixel as correlated. */
-private const val FULL_MASK: Byte = -1 // 0xFF
+private const val FULL_MASK: Byte = 255.toByte()
 
 /** The reference the wizard staged for the ROI editor, or null when it is gone. */
 @WorkerThread

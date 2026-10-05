@@ -3,9 +3,9 @@ package com.indicvision.semper.ui.analysis.sweep
 import com.indicvision.semper.SemperNativeLib
 import com.indicvision.semper.data.session.SessionPaths
 import com.indicvision.semper.diagnostics.EngineDebug
-import com.indicvision.semper.field.RunStop
 import com.indicvision.semper.report.EngineStats
 import com.indicvision.semper.report.newMetrics
+import com.indicvision.semper.ui.analysis.run.AnalysisRunCodes
 import com.indicvision.semper.ui.analysis.run.DicFieldIo
 import com.indicvision.semper.ui.analysis.run.EngineFailure
 import com.indicvision.semper.ui.analysis.run.SemperEngine
@@ -74,7 +74,7 @@ object VsgStudyRunner {
      *   on past them, so this is empty on a clean run and non-empty on a
      *   partial one
      * @param engineErrorCode 0 when at least one combination solved,
-     *   [RunStop.Cancelled]'s code when the user stopped it, otherwise the engine's own
+     *   [AnalysisRunCodes.ERROR_CANCELLED] when the user stopped it, otherwise the engine's own
      *   negative code from the last attempt. Low convergence is not an error
      *   here — see [run].
      */
@@ -191,7 +191,7 @@ object VsgStudyRunner {
         // Some combinations failing is a partial success. Only a sweep that
         // produced nothing reports the engine's own code, which says why.
         if (cancelRequested) {
-            errorCode = RunStop.Cancelled.wireCode
+            errorCode = AnalysisRunCodes.ERROR_CANCELLED
         } else if (runs.isEmpty() && skipped.isNotEmpty()) {
             errorCode = lastEngineError
         }
@@ -254,8 +254,11 @@ object VsgStudyRunner {
         }
     }
 
-    /** The engine settings for one full-field solve of [point] over this sweep's ROI and mask. */
-    private fun Params.engineParams(point: VsgStudy.Point) = SemperEngine.Params(
+    /**
+     * The engine settings for one full-field solve of [point] over this sweep's
+     * ROI and mask: the point's step, subset and VSG (in px) as the strain window.
+     */
+    internal fun Params.engineParams(point: VsgStudy.Point) = SemperEngine.Params(
         roiX = roiX,
         roiY = roiY,
         roiW = roiW,

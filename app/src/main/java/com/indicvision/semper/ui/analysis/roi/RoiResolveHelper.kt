@@ -49,7 +49,11 @@ object RoiResolveHelper {
         size = ImageSize(realRefWidth, realRefHeight),
     )?.toXywh()
 
-    /** [maxSubsetForRoi] over the wizard's loose ROI and image fields. */
+    /**
+     * Largest odd subset the loaded image and ROI can actually hold, given
+     * [ENGINE_EDGE_BUFFER_PX]. A custom ROI counts only the part inside the
+     * image, at its own position. Kept inside [SubsetRecommender]'s slider range.
+     */
     @Suppress("LongParameterList") // the wizard's loose ROI and image fields
     fun maxSubsetForRoi(
         hasCustomRoi: Boolean,
@@ -61,12 +65,7 @@ object RoiResolveHelper {
         realRefHeight: Int,
     ): Int = maxSubsetForRoi(hasCustomRoi, Roi(roiX, roiY, roiW, roiH), ImageSize(realRefWidth, realRefHeight))
 
-    /**
-     * Largest odd subset the loaded image and ROI can actually hold, given
-     * [ENGINE_EDGE_BUFFER_PX]. A custom ROI counts only the part inside the
-     * image, at its own position. Kept inside [SubsetRecommender]'s slider range.
-     */
-    fun maxSubsetForRoi(hasCustomRoi: Boolean, roi: Roi, size: ImageSize): Int {
+    private fun maxSubsetForRoi(hasCustomRoi: Boolean, roi: Roi, size: ImageSize): Int {
         if (!size.isKnown) return SubsetRecommender.MAX_SUBSET
         val fits = if (hasCustomRoi) {
             val clipped = roi.clampTo(size)

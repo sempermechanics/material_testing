@@ -149,11 +149,13 @@ class LineCutPreviewView @JvmOverloads constructor(
             Color.blue(red),
         )
 
+        val roiRight = roi.right
+        val roiBottom = roi.bottom
         for (oy in 0 until oh) {
             val iy = ((oy + 0.5f) / oh * imageH).toInt().coerceIn(0, imageH - 1)
             for (ox in 0 until ow) {
                 val ix = ((ox + 0.5f) / ow * imageW).toInt().coerceIn(0, imageW - 1)
-                val insideRoi = ix >= roi.x && ix < roi.right && iy >= roi.y && iy < roi.bottom
+                val insideRoi = ix >= roi.x && ix < roiRight && iy >= roi.y && iy < roiBottom
                 if (!insideRoi) {
                     pixels[oy * ow + ox] = Color.TRANSPARENT
                     continue
