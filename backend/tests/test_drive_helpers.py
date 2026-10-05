@@ -92,3 +92,45 @@ async def test_account_erase_without_a_stored_folder_deletes_every_session_folde
     assert resp.json()["driveFolders"] == 5
     assert sorted(deleted) == sorted([f"folder-{i}" for i in range(5)] + ["user-folder"])
     assert store._data["sessions"] == {}
+
+
+# ------------------------------------------------------------------ fan_out
+
+def test_fan_out_keeps_the_input_order_and_this_callers_width():
+    """Results come back in input order, and no more than `width` of one
+    caller's calls run at once, whatever the shared pool could take."""
+    import time as _time
+
+    lock = threading.Lock()
+    running = peak = 0
+
+    def call(n):
+        nonlocal running, peak
+        with lock:
+            running += 1
+            peak = max(peak, running)
+        _time.sleep(0.01 * (n % 3))
+        with lock:
+            running -= 1
+        return n * n
+
+    assert drive.fan_out(call, range(12), width=3) == [n * n for n in range(12)]
+    assert peak <= 3
+
+
+def test_fan_out_stops_submitting_after_a_failure_and_raises_it():
+    started = []
+
+    def call(n):
+        started.append(n)
+        if n == 1:
+            raise RuntimeError("drive said no")
+        return n
+
+    with pytest.raises(RuntimeError, match="drive said no"):
+        drive.fan_out(call, range(50), width=2)
+    assert len(started) < 50
+
+
+def test_fan_out_of_nothing_is_nothing():
+    assert drive.fan_out(lambda n: n, [], width=8) == []

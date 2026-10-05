@@ -149,7 +149,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   refusal model ([ADR-020](docs/adr/ADR-020-backend-refusal-model.md)), the `firestore_repo`
   facade retired ([ADR-021](docs/adr/ADR-021-retire-firestore-repo-facade.md)), one roster
   for IT and staff (`routers/roster.py`, new staff paths: gateway config deploy owed), and
-  the consoles on `ApiError`, `roster.js` and a split operator desk (TD-178–TD-194).
+  the consoles on `ApiError`, `roster.js` and a split operator desk, and a performance
+  pass (TD-178–TD-198). Before its backend deploys: the `files (uid, sessionId)` index.
 - **Dependabot** opens monthly PRs for major versions only (pip, Gradle, Actions; #337);
   minor and patch fixes arrive as Dependabot security updates, which are on.
 - **Owed.** The public release of `v1.2-beta.3` (website / Play); a licensed-account smoke

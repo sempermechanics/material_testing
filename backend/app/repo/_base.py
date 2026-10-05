@@ -263,11 +263,13 @@ def _get_all(refs: list) -> list:
     return out
 
 
-def _scan(col, query, page_token: str | None = None, chunk: int = _BATCH_LIMIT):
-    """Every document of [query] after `page_token`, in document-id order,
-    fetched `chunk` at a time. A token naming a document that has since been
-    deleted restarts from the beginning, as `_cursor_page` does."""
-    query = query.order_by("__name__")
+def _scan(col, query, page_token: str | None = None, chunk: int = _BATCH_LIMIT,
+          order_field: str = "__name__"):
+    """Every document of [query] after `page_token`, in document-id order
+    unless `order_field` is given (ties then break on the id), fetched `chunk`
+    at a time. A token naming a document that has since been deleted restarts
+    from the beginning, as `_cursor_page` does."""
+    query = query.order_by(order_field)
     cursor = None
     if page_token:
         snap = col.document(page_token).get()

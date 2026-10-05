@@ -1,6 +1,5 @@
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 from . import drive, repo, statuses
 from . import observability as obs
@@ -82,17 +81,23 @@ def provision_session(sid: str, *, purge_on_failure: bool = False,
             repo.set_session_folder(sid, folders["sessionFolderId"])
             folder_ms = (time.monotonic() - started) * 1000
 
+            opened: list = []  # (fileId, uri), appended from the pool's threads
+
             def open_one(f):
                 uri = drive.init_resumable(token, folders[f["role"]], f["name"], f["sizeBytes"])
-                repo.set_file_upload_url(f["fileId"], uri)
+                opened.append((f["fileId"], uri))
                 return repo.upload_target(f["fileId"], uri, f)
 
-            # Bounded fan-out rather than a serial loop — same pattern as
-            # drive.probe_files. Serially this was the whole problem.
-            # pool.map keeps the input order, which is the listing's (document id).
-            workers = max(1, min(settings.TASKS_PROVISION_WORKERS, len(pending)))
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                uploads = list(pool.map(open_one, pending))
+            # Bounded fan-out on the shared Drive pool rather than a serial
+            # loop — serially this was the whole problem. The results keep the
+            # input order, which is the listing's (document id).
+            try:
+                uploads = drive.fan_out(open_one, pending, width=settings.TASKS_PROVISION_WORKERS)
+            finally:
+                # Every URI opened is recorded, after a failed fan-out too, so
+                # a retry never opens a second session for a file. Each used to
+                # be written as it was opened, one round trip per file.
+                repo.set_file_upload_urls(opened)
             provisioned = len(pending)
         else:
             uploads = []

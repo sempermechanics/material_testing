@@ -218,11 +218,15 @@ def iter_unprovisioned_files(sid: str):
             yield _file_view(d.id, f)
 
 
-def set_file_upload_url(file_id: str, url: str) -> None:
-    db().collection("files").document(file_id).update({
-        "uploadUrl": url,
-        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-    })
+def set_file_upload_urls(opened: list[tuple[str, str]]) -> None:
+    """Record each `(file_id, upload_url)` provisioning opened, batched: one
+    write round trip per 400 files rather than one per file. Safe to repeat."""
+    files = db().collection("files")
+    _base._update_refs([
+        (files.document(file_id), {"uploadUrl": url,
+                                   "updatedAt": _base.firestore.SERVER_TIMESTAMP})
+        for file_id, url in opened
+    ])
 
 
 def session_app(session: dict | None) -> str:
@@ -303,16 +307,35 @@ def iter_all_user_sessions(uid: str, *, page_size: int = 100):
             return
 
 
-def list_session_files_all(sid: str, *, page_size: int = 200) -> list:
-    """Every file in a session, paging past the soft list cap."""
-    return [_file_view(d.id, d.to_dict(), *_MANIFEST_FIELDS)
-            for d in _session_file_docs(sid, page_size)]
+def iter_sessions_with_files(uid: str, *, page_size: int = 100, file_chunk: int = _BATCH_LIMIT):
+    """Every session of `uid`, each with its file manifest, for the export.
+
+    Two ordered streams, merged: the sessions by id, and the account's files
+    by session id (index `files (uid, sessionId)`). The export used to run one
+    files query per session, so an account with a thousand analyses cost a
+    thousand round trips before the last byte. Memory holds one session's
+    files at a time. A file whose session is gone is not listed, as before.
+    """
+    col = db().collection("files")
+    files = ((f["sessionId"], _file_view(d.id, f, *_MANIFEST_FIELDS))
+             for d in _scan(col, col.where("uid", "==", uid), chunk=file_chunk,
+                            order_field="sessionId")
+             for f in (d.to_dict(),))
+    head = next(files, None)
+    for session in iter_all_user_sessions(uid, page_size=page_size):
+        sid = session["sessionId"]
+        listed = []
+        while head is not None and head[0] <= sid:
+            if head[0] == sid:
+                listed.append(head[1])
+            head = next(files, None)
+        yield {**session, "files": listed}
 
 
 def list_session_artifacts(sid: str, *, page_size: int = 200) -> list:
     """Every *uploaded* file in a session, with the Drive id needed to read it.
 
-    Separate from `list_session_files_all` on purpose. That projection feeds
+    Separate from the export's manifest (`iter_sessions_with_files`) on purpose. That projection feeds
     `GET /v1/me/export`, where a Drive file id is a handle to bytes the caller
     is not being handed and so is deliberately withheld; this one exists only
     for code that is about to fetch those bytes on the caller's behalf. Keeping

@@ -96,9 +96,11 @@ shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
 
 ### A2b. Deploy the composite indexes
 
-`backend/firestore.indexes.json` declares four composite indexes: the
-duplicate-session lookup's (`sessions`: `uid`, `localSessionId`, `status`) and
-three for the staff licence list (`licenses`: `mode` + `createdAt` DESC,
+`backend/firestore.indexes.json` declares five composite indexes: the
+duplicate-session lookup's (`sessions`: `uid`, `localSessionId`, `status`), the
+account export's (`files`: `uid` + `sessionId`, so the export reads the
+account's files as one stream ordered by session), and three for the staff
+licence list (`licenses`: `mode` + `createdAt` DESC,
 `mode` + `status` + `createdAt` DESC, `status` + `createdAt` DESC). Every other query the backend and the consoles run is a single-field equality or
 `array-contains`, optionally ordered by `__name__`, and Firestore serves those
 from its automatic single-field indexes — do not add `field + __name__` entries
@@ -338,7 +340,7 @@ Everything above is required (or near enough). These are the rest of what
 | `MAX_FRAMES_PER_ANALYSIS` | `500` | Deformed-frame ceiling the app enforces |
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
-| `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
+| `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions: how many of one session's calls run at once on the process-wide Drive pool (64 workers, the size of the Drive connection pool) |
 | `INLINE_PROVISION_MAX_FILES` | `8` | Manifests this small provision inside `POST /v1/sessions` instead of through the queue. `0` sends everything through Cloud Tasks |
 | `CLIENT_NONCE_WINDOW_SECONDS` | `120` | How far a device-minted `t1.` nonce's timestamp may be from server time ([CLOUD_ARCHITECTURE_GCP.md §3](CLOUD_ARCHITECTURE_GCP.md)). `0` refuses client nonces, so every signed call fetches a challenge |
 | `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |

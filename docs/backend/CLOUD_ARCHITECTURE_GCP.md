@@ -2305,7 +2305,7 @@ Five decisions in it are worth keeping:
   an App column.
 
 `list_session_artifacts` is a second projection over the same `files`
-collection, deliberately kept apart from `list_session_files_all`. That one
+collection, deliberately kept apart from the export's manifest (`iter_sessions_with_files`). That one
 feeds `GET /v1/me/export`, where a Drive file id is a handle to bytes the
 caller is not being handed and is withheld on purpose; this one exists only for
 code about to fetch those bytes on the caller's behalf. Keeping them separate

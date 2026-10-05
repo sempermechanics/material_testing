@@ -185,7 +185,8 @@ def export_account(ctx=Depends(verified_device)):
         """Emit the document incrementally.
 
         The previous version built the whole account in memory first — every
-        session, plus a files query per session — before writing a byte. For a
+        session, plus a files query per session — before writing a byte. The
+        files are now one ordered stream beside the sessions'. For a
         busy account that is an unbounded allocation and a long silence before
         the first byte, on a request with a 60s budget. Streaming keeps memory
         flat and starts the response immediately; `"complete": true` is written
@@ -197,9 +198,7 @@ def export_account(ctx=Depends(verified_device)):
         yield b',"sessions":['
         first = True
         count = 0
-        for s in repo.iter_all_user_sessions(uid):
-            s = dict(s)
-            s["files"] = repo.list_session_files_all(s["sessionId"])
+        for s in repo.iter_sessions_with_files(uid):
             yield (b"" if first else b",") + json_dumps(s).encode()
             first = False
             count += 1

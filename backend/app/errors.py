@@ -214,6 +214,8 @@ DRIVE_FILE_GONE = "drive_file_gone"
 # DependencyError codes the readiness probe and the Drive/Firestore clients
 # raise (main.dependency_error_handler returns exc.code as the detail).
 INTERNAL_ERROR = "internal_error"
+# 413 from `main.EdgeMiddleware`: a body over its cap, refused before it is read.
+REQUEST_TOO_LARGE = "request_too_large"
 DRIVE_UNREACHABLE = "drive_unreachable"
 DRIVE_UNHEALTHY = "drive_unhealthy"
 FIRESTORE_UNREACHABLE = "firestore_unreachable"

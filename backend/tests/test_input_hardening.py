@@ -5,7 +5,8 @@ import time
 import pytest
 from fastapi import Request
 
-from app import audit, drive, main, rate_limit
+from app import audit, drive, rate_limit
+from app.routers import health
 from app.drive import _escape_q_value
 from app.rate_limit import TokenBucket
 
@@ -68,17 +69,17 @@ def _request(headers: dict, peer: str = "10.0.0.1") -> Request:
 def test_client_key_prefers_forwarded_for_over_proxy_peer():
     """Behind the gateway, request.client.host is the proxy — keying on it puts
     every external caller in one bucket, so one client starves the LB probes."""
-    key = main._client_key(_request({"x-forwarded-for": "203.0.113.9, 70.41.3.18"}))
+    key = health._client_key(_request({"x-forwarded-for": "203.0.113.9, 70.41.3.18"}))
     assert key == "203.0.113.9"
 
 
 def test_client_key_falls_back_to_peer_without_the_header():
-    assert main._client_key(_request({}, peer="192.0.2.7")) == "192.0.2.7"
+    assert health._client_key(_request({}, peer="192.0.2.7")) == "192.0.2.7"
 
 
 def test_client_key_is_length_bounded():
     """The header is attacker-controlled; an unbounded value becomes a dict key."""
-    assert len(main._client_key(_request({"x-forwarded-for": "a" * 10_000}))) <= 64
+    assert len(health._client_key(_request({"x-forwarded-for": "a" * 10_000}))) <= 64
 
 
 def test_bucket_evicts_fully_refilled_keys(monkeypatch):

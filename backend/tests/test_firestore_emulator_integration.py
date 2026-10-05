@@ -74,7 +74,7 @@ def test_create_complete_list_delete_roundtrip(emulator_repo, monkeypatch):
     emulator_repo.set_session_folder(sid, "session-folder")
     file_id = f"{sid}_bundle_Session.zip"
     emulator_repo.create_files_batch(sid, uid, [(file_id, body.files[0])])
-    emulator_repo.set_file_upload_url(file_id, "https://upload.example/session")
+    emulator_repo.set_file_upload_urls([(file_id, "https://upload.example/session")])
     outcome = emulator_repo.complete_file(
         file_id, uid, FileComplete(sessionId=sid, driveFileId="drive-1", bytes=10, md5="d" * 32),
     )
@@ -115,7 +115,7 @@ def _seed_session(repo_, uid, file_count):
         ids.append(file_id)
     repo_.create_files_batch(sid, uid, [(file_id, spec) for file_id, spec in zip(ids, specs)])
     for file_id in ids:
-        repo_.set_file_upload_url(file_id, "https://upload.example/s")
+        repo_.set_file_upload_urls([(file_id, "https://upload.example/s")])
     return sid, ids
 
 
@@ -847,3 +847,26 @@ def test_the_staff_list_pages_newest_first_through_the_real_query(emulator_repo)
     assert gone not in seen
     found = emulator_repo.list_licenses(q=f"page1-{tag}@lab.org")[0]
     assert [row["id"] for row in found] == [made[1]]
+
+
+def test_the_export_pairs_each_session_with_its_own_files(emulator_repo):
+    """The export merges the sessions (ordered by document id) with the
+    account's files (ordered by their `sessionId` field). The two orders
+    must agree in the real store, across page boundaries, or files would be
+    dropped silently."""
+    uid = f"emu-{uuid.uuid4().hex[:8]}"
+    db = emulator_repo.db()
+    # Ids that differ in case, digits and punctuation, so that an order on
+    # one side unlike the other's would show.
+    sids = ["A1", "a1", "B_0", "b-0", "Z", "z9", "0x", "_s"]
+    for sid in sids:
+        db.collection("sessions").document(f"{uid}-{sid}").set({"uid": uid, "status": "COMPLETED"})
+        for n in range(3):
+            db.collection("files").document(f"{uid}-{sid}-f{n}").set(
+                {"uid": uid, "sessionId": f"{uid}-{sid}", "name": f"f{n}", "role": "bundle"})
+    db.collection("files").document(f"{uid}-orphan").set(
+        {"uid": uid, "sessionId": f"{uid}-M", "name": "lost", "role": "bundle"})
+    out = list(emulator_repo.iter_sessions_with_files(uid, page_size=3, file_chunk=4))
+    assert sorted(s["sessionId"] for s in out) == sorted(f"{uid}-{sid}" for sid in sids)
+    for s in out:
+        assert [f["fileId"] for f in s["files"]] == [f"{s['sessionId']}-f{n}" for n in range(3)]

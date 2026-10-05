@@ -209,13 +209,13 @@ async def test_the_download_is_recorded(client, stored, monkeypatch):
 def test_the_artifact_read_carries_a_drive_id_and_the_export_read_does_not(stored):
     """Two projections of one query, kept apart on purpose.
 
-    `list_session_files_all` feeds `GET /v1/me/export`, where a Drive file id
+    `iter_sessions_with_files` feeds `GET /v1/me/export`, where a Drive file id
     is a handle to bytes the caller is not being handed. Adding a field to the
     artifact read must never widen that.
     """
     artifacts = repo.list_session_artifacts(SID)
     assert [a["driveFileId"] for a in artifacts] == ["drive-bundle", "drive-extras"]
-    exported = repo.list_session_files_all(SID)
+    exported = next(s for s in repo.iter_sessions_with_files("dev-user") if s["sessionId"] == SID)["files"]
     assert len(exported) == 3
     assert all("driveFileId" not in f for f in exported)
 

@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.datastructures import Headers, MutableHeaders
 
 from . import errors
 from . import observability as obs
@@ -23,10 +24,6 @@ from .routers import (
     provision_tasks,
     sessions,
 )
-from .routers._shared import json_dumps  # noqa: F401
-from .routers.files import _is_first_byte_request, download_file  # noqa: F401
-from .routers.health import _client_key  # noqa: F401
-from .session_provision import provision_session, purge_session  # noqa: F401
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("semper")
@@ -90,9 +87,7 @@ app = FastAPI(
 
 
 # Browser dashboards only. Bearer tokens, no cookies, so no credentials mode;
-# the phone sends no Origin and never hits this. add_middleware stacks
-# outward, so the decorators below wrap this one: a preflight answered here
-# still passes through security_headers and access_log on the way out.
+# the phone sends no Origin and never hits this.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CONSOLE_ORIGINS,
@@ -103,79 +98,127 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def security_headers(request: Request, call_next):
-    """Apply browser-safe defaults without claiming HTTP is secure in local dev."""
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Permissions-Policy"] = (
-        "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-    )
-    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
-    if settings.ON_CLOUD_RUN and forwarded_proto == "https":
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
-    return response
+# Every response carries these. HSTS only on Cloud Run behind HTTPS, so that
+# local HTTP is never told it is secure.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+}
+_HSTS = "max-age=31536000; includeSubDomains"
+
+# The largest body any route accepts. The largest valid one is a session
+# manifest at its 5,000-file ceiling with 256-character names, about 2 MB.
+# Every route used to buffer whatever arrived — `verified_device` reads the
+# body to hash it before the route's model sees it — so a large junk body cost
+# memory in proportion to its size.
+MAX_BODY_BYTES = 4 * 1024 * 1024
 
 
-@app.middleware("http")
-async def access_log(request: Request, call_next):
-    """One structured JSON line per request with UTC timestamp, request ID,
-    device context, and outcome. Stamps X-Request-Id. Never logs tokens."""
-    start = time.perf_counter()
-    request_id = uuid.uuid4().hex[:12]
-    request.state.uid = None
-    request.state.device_id = None
-    request.state.request_id = request_id
-    ctx_token = obs.bind_request(request_id)
-    status = 500
-    try:
+class EdgeMiddleware:
+    """Security headers, `X-Request-Id`, and one structured access-log line
+    per request. Never logs tokens.
+
+    A plain ASGI middleware. The two `BaseHTTPMiddleware` layers it replaces
+    each ran the rest of the app in a task of its own and passed every
+    response body through a memory stream, a 300 s download included.
+    `request.state` is `scope["state"]`, so what the dependencies record there
+    (`uid`, `device_id`, `usage_counts`) is read back here for the log line.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        start = time.perf_counter()
+        request_id = uuid.uuid4().hex[:12]
+        state = scope.setdefault("state", {})
+        state.update(uid=None, device_id=None, request_id=request_id)
+        ctx_token = obs.bind_request(request_id)
+        added = {**_SECURITY_HEADERS, "X-Request-Id": request_id}
+        forwarded_proto = Headers(scope=scope).get("x-forwarded-proto", "").split(",", 1)[0].strip()
+        if settings.ON_CLOUD_RUN and forwarded_proto == "https":
+            added["Strict-Transport-Security"] = _HSTS
+        status = 500
+        started = False
+
+        received = 0
+
+        async def capped_receive():
+            # A body sent without a length is counted as it arrives. An
+            # HTTPException, because FastAPI turns anything else raised while
+            # it reads a body into a 400.
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > MAX_BODY_BYTES:
+                    raise HTTPException(413, errors.REQUEST_TOO_LARGE)
+            return message
+
+        async def send_with_headers(message):
+            nonlocal status, started
+            if message["type"] == "http.response.start":
+                started = True
+                status = message["status"]
+                headers = MutableHeaders(scope=message)
+                for name, value in added.items():
+                    headers[name] = value
+            await send(message)
+
+        declared = Headers(scope=scope).get("content-length", "")
         try:
-            response = await call_next(request)
-        except HTTPException:
-            raise
-        except obs.DependencyError:
-            raise
-        except Exception:
-            obs.report_exception(log, error_code=errors.INTERNAL_ERROR)
-            # In production, never leak exception text to clients. Locally and in
-            # tests, re-raise so pytest and debuggers still see the real failure.
-            if settings.ON_CLOUD_RUN:
-                response = JSONResponse(status_code=500, content={"detail": errors.INTERNAL_ERROR})
-            else:
-                raise
-        status = response.status_code
-        response.headers["X-Request-Id"] = request_id
-        return response
-    finally:
+            try:
+                if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+                    # Refused unread.
+                    refusal = JSONResponse(status_code=413, content={"detail": errors.REQUEST_TOO_LARGE})
+                    await refusal(scope, receive, send_with_headers)
+                else:
+                    await self.app(scope, capped_receive, send_with_headers)
+            except Exception:
+                obs.report_exception(log, error_code=errors.INTERNAL_ERROR)
+                # In production, never leak exception text to clients. Locally
+                # and in tests, re-raise so pytest and debuggers still see the
+                # real failure. A response already under way cannot be replaced.
+                if not settings.ON_CLOUD_RUN or started:
+                    raise
+                error = JSONResponse(status_code=500, content={"detail": errors.INTERNAL_ERROR})
+                await error(scope, receive, send_with_headers)
+        finally:
+            self._log(scope, state, status, start)
+            obs.reset_request(ctx_token)
+
+    @staticmethod
+    def _log(scope, state: dict, status: int, start: float) -> None:
         latency_ms = round((time.perf_counter() - start) * 1000, 1)
         outcome = "ok" if status < 400 else ("client_error" if status < 500 else "server_error")
-        uid = getattr(request.state, "uid", None)
-        device_id = getattr(request.state, "device_id", None)
-        obs.bind_uid(uid)
-        obs.bind_device(device_id)
-        op_class, route_template = obs.classify_route(request.method, request.url.path)
-        extra: dict = {}
-        counts = getattr(request.state, "usage_counts", None)
-        if isinstance(counts, dict):
-            extra.update(counts)
+        obs.bind_uid(state.get("uid"))
+        obs.bind_device(state.get("device_id"))
+        method, path = scope["method"], scope["path"]
+        op_class, route_template = obs.classify_route(method, path)
+        counts = state.get("usage_counts")
         obs.log_event(
             _access_log, logging.INFO, "http_access",
-            method=request.method,
-            path=request.url.path,
+            method=method,
+            path=path,
             status=status,
             latencyMs=latency_ms,
             outcome=outcome,
             errorCode=None if status < 400 else f"http_{status}",
             opClass=op_class,
             routeTemplate=route_template,
-            **extra,
+            **(counts if isinstance(counts, dict) else {}),
         )
-        obs.reset_request(ctx_token)
+
+
+# Outermost, so a CORS preflight answered by the layer above still leaves
+# with the security headers and its access-log line.
+app.add_middleware(EdgeMiddleware)
 
 
 @app.exception_handler(obs.DependencyError)
@@ -235,15 +278,3 @@ def served_routes(application: FastAPI):
 # The access log classifies by declared template, not by guessing which path
 # segments are ids (TD-44).
 obs.register_routes(route.path_format for route in served_routes(app))
-
-# Re-exports so existing tests keep `from app.main import …`.
-__all__ = [
-    "app",
-    "served_routes",
-    "json_dumps",
-    "_client_key",
-    "_is_first_byte_request",
-    "download_file",
-    "provision_session",
-    "purge_session",
-]

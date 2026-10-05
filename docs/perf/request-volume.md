@@ -290,3 +290,28 @@ Do not credit the 671 ms drop to Pass 4. It is about 20 times the 10–30 ms tha
 three Firestore round trips could save. The after-runs were back to back against one
 warm instance with one payload; the baseline was spread over two days and three
 revisions. It is the Drive calls that vary.
+
+## Pass 5: the export, the edge and the Drive fan-out (2026-10-05)
+
+Backend-only levers, measured against the store double and the emulator, not
+yet deployed.
+
+- **Export, one files stream (TD-195).** `GET /v1/me/export` ran one files
+  query per session: S + 1 queries for S sessions. It now merges the sessions
+  (by id) with the account's files (by `sessionId`, index `files (uid,
+  sessionId)`), one query per 400 files. With S = 20, N = 3: files queries
+  **20 → 1** [Measured, `test_export_reads_the_files_as_one_stream_not_a_query_per_session`].
+  Billed reads are unchanged: one per document either way.
+- **Upload URLs, one batch (TD-196).** Provisioning wrote each upload URL as it
+  opened it, one commit per file. It now records them in one batch per 400
+  files, a failed fan-out included. N = 12: **12 commits → 1**
+  [Measured, `test_upload_targets_are_recorded_in_one_batch`]. Billed writes are
+  unchanged.
+- **One Drive pool (TD-196).** Each fan-out started its own 8-thread pool, so
+  40 concurrent requests could run 320 Drive calls against 64 pooled
+  connections. One process-wide pool of 64 now serves them all, each caller
+  still at most `TASKS_PROVISION_WORKERS` wide.
+- **One ASGI middleware (TD-196).** Security headers and the access log were two
+  `BaseHTTPMiddleware` layers, each running the app in a task of its own and
+  passing every body, a 300 s download included, through a memory stream.
+  Latency [Unknown] until a deploy.

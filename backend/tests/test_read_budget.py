@@ -255,3 +255,44 @@ async def test_signed_request_reads_the_licence_and_seat_once(world, client, mon
     await _call(client, priv, meter, "DELETE", "/v1/sessions/s00")
     assert gets["licenses"] == 1
     assert gets["licenses/L1/seats"] == 1
+
+
+def _queries_by_collection(monkeypatch) -> collections.Counter:
+    """Queries run per collection."""
+    seen: collections.Counter = collections.Counter()
+    real = fake_firestore._Query.stream
+
+    def stream(q):
+        seen[q._collection] += 1
+        return real(q)
+
+    monkeypatch.setattr(fake_firestore._Query, "stream", stream)
+    return seen
+
+
+@pytest.mark.asyncio
+async def test_export_reads_the_files_as_one_stream_not_a_query_per_session(
+        world, client, monkeypatch):
+    """`GET /v1/me/export` used to run one files query per session: an account
+    with a thousand analyses made a thousand round trips. The files are now
+    one stream ordered by session, merged with the sessions'."""
+    priv, meter = world
+    import repo_view as repo
+    data = repo._DB._data
+    data["files"] = {
+        f"s{i:02d}-f{j}": {"uid": UID, "sessionId": f"s{i:02d}", "name": f"f{j}.zip",
+                           "role": "bundle", "sizeBytes": 10, "status": "COMPLETED"}
+        for i in range(SESSIONS) for j in range(FILES)
+    }
+    # A file whose session is gone, between two that exist, is not listed.
+    data["files"]["s05x-orphan"] = {"uid": UID, "sessionId": "s05x", "name": "lost.zip",
+                                    "role": "bundle", "sizeBytes": 1}
+    # Nor is another account's file in a session of the same name.
+    data["files"]["other"] = {"uid": "u2", "sessionId": "s03", "name": "theirs.zip",
+                              "role": "bundle", "sizeBytes": 1}
+    queries = _queries_by_collection(monkeypatch)
+    body, _ = await _call(client, priv, meter, "GET", "/v1/me/export")
+    assert queries["files"] == 1
+    assert body["complete"] is True and body["sessionCount"] == SESSIONS
+    assert [[f["fileId"] for f in s["files"]] for s in body["sessions"]] == [
+        [f"s{i:02d}-f{j}" for j in range(FILES)] for i in range(SESSIONS)]

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import audit, deps, drive, main, rate_limit, statuses, tasks
+from app import audit, deps, drive, rate_limit, session_provision, statuses, tasks
 import repo_view as repo
 from app.config import settings
 from license_helpers import _mint_individual, _mint_institution, _signed_in
@@ -205,13 +205,13 @@ async def test_a_provisioning_retry_after_completion_keeps_it_completed(uploads,
     sid = (await client.post(
         "/v1/sessions", json={"specimen": "s", "files": [_file("a")]},
     )).json()["sessionId"]
-    main.provision_session(sid)
+    session_provision.provision_session(sid)
     # Every file landed; the task's retry arrives afterwards.
     uploads._data["sessions"][sid].update(
         {"status": statuses.SESSION_COMPLETED, "completedCount": 1},
     )
 
-    again = main.provision_session(sid)
+    again = session_provision.provision_session(sid)
 
     assert again["status"] == statuses.SESSION_COMPLETED
     assert uploads._data["sessions"][sid]["status"] == statuses.SESSION_COMPLETED
