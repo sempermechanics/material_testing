@@ -751,7 +751,7 @@ instead of failing the client.
 | Credential Manager helper | [`ui/auth/GoogleSignInHelper.kt`](../../app/src/main/java/com/sempermechanics/semper/ui/auth/GoogleSignInHelper.kt) |
 | EC P-256 Keystore device key | [`data/account/DeviceKeyManager.kt`](../../app/src/main/java/com/sempermechanics/semper/data/account/DeviceKeyManager.kt) |
 | Backend HTTP client | [`data/net/SemperApi.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/SemperApi.kt) |
-| Token storage / refresh | [`data/net/TokenStore.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/TokenStore.kt) · [`TokenProvider.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/TokenProvider.kt) |
+| Account cache / token refresh | [`data/net/AccountCache.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/AccountCache.kt) · [`TokenProvider.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/TokenProvider.kt) |
 | Resumable upload worker | [`data/DicUploadWorker.kt`](../../app/src/main/java/com/sempermechanics/semper/data/DicUploadWorker.kt) |
 | Restore / download | [`data/DicRestoreWorker.kt`](../../app/src/main/java/com/sempermechanics/semper/data/DicRestoreWorker.kt) · [`CloudRestore.kt`](../../app/src/main/java/com/sempermechanics/semper/data/cloud/restore/CloudRestore.kt) |
 
@@ -2417,7 +2417,7 @@ that keep the phone from contradicting it.
 
 - **A seat check parallel to the quota check.** An institution member without
   a live lease is not over any quota — a licensed account never is — so
-  `TokenStore.isSessionLimitReached` would let them through every existing
+  `AccountCache.isSessionLimitReached` would let them through every existing
   gate. `LicenseEntitlements.isSeatRequiredToStart` is a separate predicate. It
   gates the Home **+** before the source menu opens (`HomeActivity`) and both
   compute paths (`AnalysisNavHelper`), guarded by

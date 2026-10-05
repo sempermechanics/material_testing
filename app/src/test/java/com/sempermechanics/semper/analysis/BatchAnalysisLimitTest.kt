@@ -3,9 +3,9 @@ package com.sempermechanics.semper.analysis
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.Roi
@@ -51,14 +51,14 @@ class BatchAnalysisLimitTest {
     @Before
     fun setUp() {
         ctx = ApplicationProvider.getApplicationContext()
-        TokenStore.clear(ctx)
+        AccountCache.clear(ctx)
         AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 1, maxFilesPerSession = 600, maxFrames = 150))
         vm.deformedFrames = listOf("/frames/a.png", "/frames/b.png", "/frames/c.png").map { DeformedFrame(it, "") }
     }
 
     @After
     fun tearDown() {
-        TokenStore.clear(ctx)
+        AccountCache.clear(ctx)
     }
 
     private fun run(): BatchAnalysisOutcome {
@@ -70,7 +70,7 @@ class BatchAnalysisLimitTest {
 
     @Test
     fun `a new session at a full quota stops before the engine`() {
-        TokenStore.setQuota(ctx, used = 1)
+        AccountCache.setQuota(ctx, used = 1)
         val outcome = run()
         assertEquals(RunStop.SessionLimit, outcome.stop)
         assertEquals(3, outcome.totalFrames)
@@ -81,7 +81,7 @@ class BatchAnalysisLimitTest {
 
     @Test
     fun `the stop is for new sessions only`() {
-        TokenStore.setQuota(ctx, used = 1)
+        AccountCache.setQuota(ctx, used = 1)
         assertNotNull(vm.sessionLimitOutcome(ctx, 3))
         vm.workingLocalId = "existing_row"
         assertNull("a re-run reuses its Home row and costs nothing", vm.sessionLimitOutcome(ctx, 3))
@@ -89,10 +89,10 @@ class BatchAnalysisLimitTest {
 
     @Test
     fun `before the config arrives a demo account is held to the demo cap`() {
-        TokenStore.clear(ctx)
-        TokenStore.setQuota(ctx, used = LicenseEntitlements.DEMO_MAX_ANALYSES - 1)
+        AccountCache.clear(ctx)
+        AccountCache.setQuota(ctx, used = LicenseEntitlements.DEMO_MAX_ANALYSES - 1)
         assertNull(vm.sessionLimitOutcome(ctx, 3))
-        TokenStore.setQuota(ctx, used = LicenseEntitlements.DEMO_MAX_ANALYSES)
+        AccountCache.setQuota(ctx, used = LicenseEntitlements.DEMO_MAX_ANALYSES)
         assertNotNull(vm.sessionLimitOutcome(ctx, 3))
     }
 }

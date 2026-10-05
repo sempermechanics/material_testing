@@ -21,7 +21,7 @@ without a backend; do this only if you are deploying the cloud side yourself.
 > - ✅ The **backend** (`backend/app/*.py`) is complete: auth, device binding,
 >   Firestore, keyless Drive resumable uploads. You can deploy and smoke-test it
 >   with `curl` right now (Parts A + B).
-> - ✅ The **Android client is implemented** — `data/net/` (SemperApi, TokenStore,
+> - ✅ The **Android client is implemented** — `data/net/` (SemperApi, AccountCache,
 >   TokenProvider), `DeviceKeyManager`, `AuthRepository`, and
 >   `DicUploadWorker` (resumable PUT straight to Drive). Part C is the
 >   operational path to point the app at your deployment and test it.
@@ -542,7 +542,7 @@ Then use `URL=http://localhost:8080` in the B2 steps.
 
 ## Part C — Connect & test the Android app
 
-> **The client code is implemented.** `data/net/` (SemperApi, TokenStore,
+> **The client code is implemented.** `data/net/` (SemperApi, AccountCache,
 > TokenProvider, ApiDtos), the EC-P256 `DeviceKeyManager` (challenge-response),
 > `AuthRepository` (Google, email/password, or email-link sign-in) and `DicUploadWorker` (resumable PUT
 > direct to Drive) are all in the app. This part is the **operational** steps

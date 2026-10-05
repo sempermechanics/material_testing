@@ -71,7 +71,7 @@ SplashActivity ─ session restore ─┬─ no session ────────
 |---|---|
 | Entry | `ui/auth/SplashActivity` |
 | Chain | `data/account/AuthRepository` → `data/net/SemperApi.me` (with `getConfig` in parallel, fetched again once if its `mode` disagrees with `me.license.mode`, as when the invite claim landed between the two) → `ui/auth/AccessRouter` (+ `data/account/AccessStatus`), `data/account/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
-| Writes | `data/net/TokenStore` cached uid / email / status / role |
+| Writes | `data/net/AccountCache` cached uid / email / status / role |
 | Fails as | Routing error passed on as `IntentKeys.ROUTING_ERROR`, shown by A1 as a red pill |
 | Tests | `auth/AccessRouterTest`, `auth/StatusRecheckTest` |
 
@@ -94,7 +94,7 @@ AuthActivity ─┬─ Google SSO ............ ui/auth/GoogleSignInHelper
 |---|---|
 | Entry | `ui/auth/AuthActivity` |
 | Chain | `data/account/AuthRepository` (Firebase Auth) → `data/net/SemperApi.me` / `registerDevice` → `ui/auth/AccessRouter` |
-| Writes | Firebase session; `TokenStore` identity; device registration flag |
+| Writes | Firebase session; `AccountCache` identity; device registration flag |
 | Fails as | `ui/common/dialog/CrispToast` pill; policy failures inline from `PasswordPolicy` |
 | Tests | `auth/PasswordPolicyTest`, `auth/ReauthFlowTest`, `auth/FirebaseAuthIntegrationTest` (instrumented) |
 
@@ -119,7 +119,7 @@ HomeActivity ─┬─ beta notice + diagnostics prompt (first run) ......... B1
               ├─ selection mode .... ui/home/SessionSelectionController → B4 / B12
               ├─ pull to refresh ... data/cloud/CloudSync.reconcile(deep = true) ....... B7
               ├─ row badges ........ WorkInfo from B1 / B2
-              ├─ quota chip ........ data/net/TokenStore + AppRemoteConfig → A9
+              ├─ quota chip ........ data/net/AccountCache + AppRemoteConfig → A9
               └─ FAB ............... ui/common/media/MediaPickerSheet (A3a) → A5
 ```
 
@@ -166,7 +166,7 @@ Tests: `settings/AnalysisEntriesTest`, `settings/HelpSupportSectionTest`,
 ### A4.1 Admin `[admin]` 🔒
 
 `ui/admin/AdminActivity` → `SemperApi.listUsers` / `setUserStatus` → `C14`.
-Visible only when `TokenStore.isAdmin` (backend-reported role).
+Visible only when `AccountCache.isAdmin` (backend-reported role).
 
 ### A5 Analysis wizard
 
@@ -241,7 +241,7 @@ demand, never on open; report compositing is capped at
 ### A9 Session limit
 
 `ui/limit/SessionLimitActivity` → `CloudSync.reconcile(deep = true)` +
-`TokenStore` quota → back to A3 when the cap clears. Reached from Home cold
+`AccountCache` quota → back to A3 when the cap clears. Reached from Home cold
 start, the FAB, the quota chip, a pre-run check (`AnalysisNavHelper.ensureSessionQuota`)
 or a quota rejection during B1. Not a paywall: the way past it is an email.
 
@@ -338,7 +338,7 @@ Storage section shows.
 `CloudSync.reconcile(deep = …)` from Home pull-to-refresh and the limit screen →
 `SemperApi.listSessions` (paged, `verify=true` on a deep refresh) → C8. Repairs
 sync state, re-enqueues B1 for local-only rows, refreshes the quota in
-`TokenStore` / `AppRemoteConfig`.
+`AccountCache` / `AppRemoteConfig`.
 
 **A Drive outage must not look like deleted data**: local metadata is dropped
 only when the backend *confirms* a blob is missing (`C8` returns `MISSING`, not
@@ -359,7 +359,7 @@ Tests: `cloud/SessionEverythingExporterTest`, `results/*`.
 
 `ui/settings/SettingsYourDataSection` → re-authentication via `ui/common/auth/AuthRoute`
 (password, Google or email link) → `CloudSync.deleteAccount` → `SemperApi.deleteAccount`
-(C13) → **only on success** the local wipe (`SessionStore`, `TokenStore`,
+(C13) → **only on success** the local wipe (`SessionStore`, `AccountCache`,
 `AppSettings`) and Firebase `delete()`. Backend first, deliberately: a local wipe
 on a failed server call would strand the cloud copy.
 Tests: `cloud/AccountDeletionTest`, `settings/DeleteAccountReauthTest`.
@@ -388,7 +388,7 @@ Tests: `diagnostics/SemperAnalyticsTest`.
 | Key | `data/account/DeviceKeyManager` — EC P-256 in the AndroidKeyStore, private key never leaves it |
 | Register | `SemperApi.registerDevice` → C2 (409 = this account or device is bound elsewhere) |
 | Per call | `SemperApi.fetchChallenge` → C3, then `signedHeaders` signs `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → verified by `C4` |
-| Tokens | `data/net/TokenProvider` / `TokenStore` — Firebase ID tokens are held in memory, never persisted |
+| Tokens | `data/net/TokenProvider` / `AccountCache` — Firebase ID tokens are held in memory, never persisted |
 
 ### B12 Local session index
 

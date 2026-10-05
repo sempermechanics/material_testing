@@ -19,9 +19,9 @@ import androidx.work.workDataOf
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseErrors
 import com.sempermechanics.semper.data.cloud.UploadErrors
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.navigation.IntentKeys
@@ -158,7 +158,7 @@ class TransferReactionsTest {
         do {
             val started = shadowOf(home).nextStartedActivity
         } while (started != null)
-        TokenStore.setSessionLimitReached(context, true)
+        AccountCache.setSessionLimitReached(context, true)
 
         val quotaStop = workDataOf(
             UploadErrors.UPLOAD_FAIL_KIND to UploadErrors.FAIL_KIND_QUOTA,
@@ -180,7 +180,7 @@ class TransferReactionsTest {
         } while (started != null)
         // Held at the limit from earlier; this backup then fails for a reason
         // of its own: its analysis was deleted before it ran.
-        TokenStore.setSessionLimitReached(context, true)
+        AccountCache.setSessionLimitReached(context, true)
         run(setOf("upload", "upload-gone"), fail = true)
 
         // A later failure that is told: by then Home has read the first one.

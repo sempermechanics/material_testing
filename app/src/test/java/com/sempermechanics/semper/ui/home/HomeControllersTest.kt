@@ -23,9 +23,9 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import androidx.work.workDataOf
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.WorkTags
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.fixtures.CleanAppState
@@ -104,7 +104,7 @@ class HomeControllersTest {
     @Test
     fun `the quota line counts the phone's analyses and turns red at the ceiling`() {
         AppRemoteConfig.apply(context, AppConfigDto(maxSessions = 5))
-        TokenStore.setQuota(context, used = 2)
+        AccountCache.setQuota(context, used = 2)
 
         card.render(localSessionCount = 3)
         assertEquals(View.VISIBLE, quotaView.visibility)
@@ -124,7 +124,7 @@ class HomeControllersTest {
         assertEquals(1, settingsOpened)
         assertNull(startedScreen())
 
-        TokenStore.setSessionLimitReached(context, true)
+        AccountCache.setSessionLimitReached(context, true)
         quotaView.performClick()
         assertEquals(1, settingsOpened)
         assertEquals(SessionLimitActivity::class.java.name, startedScreen())
@@ -139,7 +139,7 @@ class HomeControllersTest {
 
         runBlocking { card.recordReconciled(quotaUsed = 6) }
         assertNull("already held at the limit", startedScreen())
-        assertEquals(6, TokenStore.quotaUsed(context))
+        assertEquals(6, AccountCache.quotaUsed(context))
     }
 
     // ── HomeFabLayout ────────────────────────────────────────────────────

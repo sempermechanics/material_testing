@@ -13,8 +13,8 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.data.cloud.CloudAccountExport
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.SemperApi
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionEverythingExporter
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
@@ -64,7 +64,7 @@ class SettingsYourDataSection(
      */
     private fun wireLegal() {
         val switchImprove = views.switchImprovementConsent
-        switchImprove.isChecked = TokenStore.improvementConsent(activity) == true
+        switchImprove.isChecked = AccountCache.improvementConsent(activity) == true
         switchImprove.setOnCheckedChangeListener { _, checked ->
             switchImprove.isEnabled = false
             activity.lifecycleScope.launch {
@@ -81,7 +81,7 @@ class SettingsYourDataSection(
             }
         }
 
-        val accepted = TokenStore.termsAcceptedVersion(activity)
+        val accepted = AccountCache.termsAcceptedVersion(activity)
         views.tvTermsAccepted.text =
             if (accepted == null) {
                 activity.getString(R.string.settings_terms_not_accepted)

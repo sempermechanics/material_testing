@@ -9,7 +9,7 @@ import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.DeviceKeyManager
 import com.sempermechanics.semper.data.cloud.CloudSync
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivitySessionLimitBinding
 import com.sempermechanics.semper.ui.common.Insets
@@ -45,8 +45,8 @@ class SessionLimitActivity : AppCompatActivity() {
     }
 
     private fun renderQuota() {
-        val used = TokenStore.quotaUsed(this)
-        val max = TokenStore.quotaMax(this)
+        val used = AccountCache.quotaUsed(this)
+        val max = AccountCache.quotaMax(this)
         // Only show the counter when the backend actually reported numbers.
         binding.tvLimitQuota.isVisible = max > 0
         if (max > 0) {
@@ -56,8 +56,8 @@ class SessionLimitActivity : AppCompatActivity() {
 
     /** Opens the mail app pre-filled to support with account + device context. */
     private fun emailSupport() {
-        val email = TokenStore.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
-        val quota = "Quota: ${TokenStore.quotaUsed(this)}/${TokenStore.quotaMax(this)}"
+        val email = AccountCache.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
+        val quota = "Quota: ${AccountCache.quotaUsed(this)}/${AccountCache.quotaMax(this)}"
         val context = SupportMail.contextLines(email, DeviceKeyManager.deviceId(this), extra = listOf(quota))
         val body = "I've reached my Semper analysis limit and would like it raised.\n\n$context"
         SupportMail.open(
@@ -80,7 +80,7 @@ class SessionLimitActivity : AppCompatActivity() {
                     val localCount = SessionStore.listOnIo(this@SessionLimitActivity).size
                     // Ceiling is owned by AppRemoteConfig (refreshed by the same
                     // reconcile's config fetch); only the used count is stored here.
-                    TokenStore.setQuota(
+                    AccountCache.setQuota(
                         this@SessionLimitActivity,
                         outcome.quotaUsed,
                         localCount,
@@ -89,7 +89,7 @@ class SessionLimitActivity : AppCompatActivity() {
                 else -> Unit
             }
             setLoading(false)
-            if (!TokenStore.isSessionLimitReached(this@SessionLimitActivity)) {
+            if (!AccountCache.isSessionLimitReached(this@SessionLimitActivity)) {
                 Feedback.toast(this@SessionLimitActivity, R.string.limit_cleared)
                 finish()
             } else {

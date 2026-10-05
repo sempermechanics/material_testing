@@ -4,7 +4,7 @@ import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.CoachPrefs
 import com.sempermechanics.semper.diagnostics.Diagnostics
@@ -41,7 +41,7 @@ internal class FirstRunPrompts(private val activity: AppCompatActivity) {
      * then [next]. The only way out is "I understand", so [next] runs from there.
      */
     private fun maybeShowBetaNotice(next: () -> Unit) {
-        if (TokenStore.hasAckedBetaNotice(activity)) {
+        if (AccountCache.hasAckedBetaNotice(activity)) {
             next()
             return
         }
@@ -50,7 +50,7 @@ internal class FirstRunPrompts(private val activity: AppCompatActivity) {
             .setMessage(R.string.beta_notice_body)
             .setCancelable(false)
             .setPositiveButton(R.string.beta_notice_ack) { _, _ ->
-                TokenStore.setBetaNoticeAcked(activity)
+                AccountCache.setBetaNoticeAcked(activity)
                 next()
             }
             .show()

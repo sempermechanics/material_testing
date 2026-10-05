@@ -57,7 +57,7 @@ object PrefFiles {
         }
     }
 
-    /** [com.sempermechanics.semper.data.net.TokenStore]'s session file; cleared on sign-out. */
+    /** [com.sempermechanics.semper.data.net.AccountCache]'s session file; cleared on sign-out. */
     object Session {
         const val NAME = "semper_session"
         val UID = PrefKey.string("uid")
@@ -82,7 +82,7 @@ object PrefFiles {
         val IMPROVEMENT_CONSENT = PrefKey.string("improvement_consent")
     }
 
-    /** TokenStore's onboarding file, which outlives sign-out. */
+    /** AccountCache's onboarding file, which outlives sign-out. */
     object Onboarding {
         const val NAME = "semper_onboarding"
         const val BETA_ACKED_PREFIX = "beta_notice_acked_"

@@ -6,9 +6,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.SemperApi
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.ui.limit.SessionLimitActivity
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +33,7 @@ internal class HomeQuotaCard(
      * (email support) and says so; Home's every quota gate goes through here.
      */
     fun openLimitScreenIfReached(): Boolean {
-        val reached = TokenStore.isSessionLimitReached(activity)
+        val reached = AccountCache.isSessionLimitReached(activity)
         if (reached) activity.startActivity(Intent(activity, SessionLimitActivity::class.java))
         return reached
     }
@@ -50,17 +50,17 @@ internal class HomeQuotaCard(
      * latest server truth; newly at the cap, opens the limit screen.
      */
     suspend fun recordReconciled(quotaUsed: Int) {
-        val wasLimited = TokenStore.isSessionLimitReached(activity)
+        val wasLimited = AccountCache.isSessionLimitReached(activity)
         val localCount = withContext(Dispatchers.IO) { SessionStore.list(activity).size }
         // Ceiling is owned by AppRemoteConfig (refreshed by the same
         // reconcile's config fetch); only the used count is stored here.
-        TokenStore.setQuota(activity, quotaUsed, localCount)
+        AccountCache.setQuota(activity, quotaUsed, localCount)
         if (!wasLimited) openLimitScreenIfReached()
     }
 
     private fun updateQuotaIndicator(localSessionCount: Int) {
-        val max = TokenStore.quotaMax(activity)
-        val used = TokenStore.quotaUsed(activity).coerceAtLeast(localSessionCount)
+        val max = AccountCache.quotaMax(activity)
+        val used = AccountCache.quotaUsed(activity).coerceAtLeast(localSessionCount)
         if (max <= 0) {
             if (AppRemoteConfig.shouldHintSyncBlocked(activity) && SemperApi.get(activity).enabled) {
                 quotaView.isVisible = true

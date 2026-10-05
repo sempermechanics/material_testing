@@ -9,7 +9,7 @@ package com.sempermechanics.semper.navigation
  */
 object IntentKeys {
     // Auth routing (e.g. PendingApproval → AuthActivity) uses [ROUTING_ERROR]
-    // below; identity lives in Firebase Auth / TokenStore, not Intent extras.
+    // below; identity lives in Firebase Auth / AccountCache, not Intent extras.
 
     // ── HomeActivity → StaticAnalysisActivity (media picker hand-off)
     const val PICKED_REF_URI = "PICKED_REF_URI"

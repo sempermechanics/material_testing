@@ -7,7 +7,7 @@ import android.os.Build
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.account.DeviceKeyManager
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionHeadline
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
@@ -369,7 +369,7 @@ data class SessionMetadataDoc(
                 os = "Android ${Build.VERSION.RELEASE}",
                 sdkInt = Build.VERSION.SDK_INT,
             ),
-            user = User(uid = TokenStore.cachedUid(context), email = TokenStore.cachedEmail(context)),
+            user = User(uid = AccountCache.cachedUid(context), email = AccountCache.cachedEmail(context)),
         )
 
         /** The uploader's document for [record]; the environment parts are passed in. */

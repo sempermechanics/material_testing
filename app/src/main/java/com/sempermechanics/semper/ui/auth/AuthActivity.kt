@@ -18,7 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.isTrustedAuthLink
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.databinding.ActivityAuthBinding
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.common.Insets
@@ -77,7 +77,7 @@ class AuthActivity : AppCompatActivity() {
             // Re-auth must prove *this* account, so the address is fixed. Read
             // from the cached session rather than Firebase: it is only shown, and
             // the re-auth calls take the address from the live user themselves.
-            binding.etEmail.setText(TokenStore.cachedEmail(this).orEmpty())
+            binding.etEmail.setText(AccountCache.cachedEmail(this).orEmpty())
             binding.etEmail.isEnabled = false
         }
 

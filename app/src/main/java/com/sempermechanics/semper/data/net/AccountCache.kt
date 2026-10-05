@@ -1,4 +1,4 @@
-// Token/claims store: one small accessor per stored field, so TooManyFunctions
+// Account cache: one small accessor per stored field, so TooManyFunctions
 // is suppressed for this whole file.
 @file:Suppress("TooManyFunctions")
 
@@ -22,7 +22,7 @@ import com.sempermechanics.semper.data.prefs.put
  * longer store any token here. This holds only the cached identity and the
  * app-layer state the backend tells us (approval status, admin role, quota).
  */
-object TokenStore {
+object AccountCache {
 
     private fun prefs(context: Context) = privatePrefs(context, Session.NAME)
 
@@ -54,9 +54,9 @@ object TokenStore {
     }
 
     // ── Cloud analysis quota (max sessions per account) ──────────────────
-    // The ceiling is owned by [AppRemoteConfig] (from /v1/config); TokenStore
+    // The ceiling is owned by [AppRemoteConfig] (from /v1/config); AccountCache
     // holds only the runtime USED count and a forced-stop flag and reads the
-    // ceiling from there. One dependency direction (TokenStore → AppRemoteConfig),
+    // ceiling from there. One dependency direction (AccountCache → AppRemoteConfig),
     // no cycle. The hard stop is computed live, so a changed ceiling takes effect
     // without any write-back from AppRemoteConfig.
 

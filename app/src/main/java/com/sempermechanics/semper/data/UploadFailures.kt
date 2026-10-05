@@ -6,11 +6,11 @@ import androidx.work.ListenableWorker
 import androidx.work.workDataOf
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.UploadErrors
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.DeviceConflictException
 import com.sempermechanics.semper.data.net.DeviceNotActiveException
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.navigation.AppIntents
 import com.sempermechanics.semper.navigation.IntentKeys
@@ -47,9 +47,9 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
      * stalling forever. Keep staging for the retry.
      */
     suspend fun deviceNotActive(e: DeviceNotActiveException): ListenableWorker.Result {
-        TokenStore.setDeviceRegistered(context, false)
+        AccountCache.setDeviceRegistered(context, false)
         suspendRunCatching { run.api.registerDevice(run.idToken) }
-            .onSuccess { TokenStore.setDeviceRegistered(context, true) }
+            .onSuccess { AccountCache.setDeviceRegistered(context, true) }
             .onFailure { Timber.e(it, "Re-registration failed") }
         return UploadLog.retry("device not active — re-registered, retry upload", e.requestId)
     }
@@ -150,7 +150,7 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
     private fun quotaFull(e: ApiException): ListenableWorker.Result {
         Timber.e("Upload rejected (%d): %s", e.code, e.parsedDetail)
         run.abandon(stagingDir, analyticsReason = "quota")
-        TokenStore.setSessionLimitReached(context, true)
+        AccountCache.setSessionLimitReached(context, true)
         // Android blocks a background activity start, so open it only while the
         // app is on screen; otherwise Home opens it from the gate (and can read
         // UPLOAD_FAIL_KIND).

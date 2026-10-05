@@ -2,7 +2,7 @@ package com.sempermechanics.semper.data.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -33,11 +33,11 @@ class SessionUploadMetadataTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
 
     @After
-    fun tearDown() = TokenStore.clear(context)
+    fun tearDown() = AccountCache.clear(context)
 
     @Test
     fun `each record writes what the org json writer wrote`() {
-        TokenStore.saveIdentity(context, UploadMetadataFixtures.UID, UploadMetadataFixtures.EMAIL)
+        AccountCache.saveIdentity(context, UploadMetadataFixtures.UID, UploadMetadataFixtures.EMAIL)
         for (record in UploadMetadataFixtures.all) {
             val written = SessionUploadMetadata.buildMetadataJson(record, context)
             assertSameJson(record.id, GOLDEN.getValue(record.id), written)
@@ -46,7 +46,7 @@ class SessionUploadMetadataTest {
 
     @Test
     fun `a signed-out upload writes what the org json writer wrote`() {
-        TokenStore.clear(context)
+        AccountCache.clear(context)
         val label = "b1 signed out"
         assertSameJson(
             label,
@@ -62,7 +62,7 @@ class SessionUploadMetadataTest {
 
     @Test
     fun `the frames and engine views are the file's own`() {
-        TokenStore.saveIdentity(context, UploadMetadataFixtures.UID, UploadMetadataFixtures.EMAIL)
+        AccountCache.saveIdentity(context, UploadMetadataFixtures.UID, UploadMetadataFixtures.EMAIL)
         for (record in UploadMetadataFixtures.all) {
             val file = Json.parseToJsonElement(GOLDEN.getValue(record.id)).jsonObject
             val frames = Json.parseToJsonElement(SessionUploadMetadata.framesJson(record).toString())

@@ -12,12 +12,12 @@ import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudErase.accountGone
 import com.sempermechanics.semper.data.cloud.CloudErase.toEraseResult
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.Authed
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.net.authed
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.PrefFiles
@@ -351,7 +351,7 @@ object CloudSync {
      * Uses [ExistingWorkPolicy.KEEP] so a reconcile pass cannot cancel an
      * in-flight upload. Network constraint follows [AppSettings.wifiOnlyUploadEnabled].
      *
-     * No-op until the server quota is known ([TokenStore.isQuotaKnown]): the
+     * No-op until the server quota is known ([AccountCache.isQuotaKnown]): the
      * analysis is already saved locally and its [SessionRecord] stays PENDING, so
      * the next reconcile, which fetches config first, queues it again once the
      * ceiling arrives. This is the single point that gates
@@ -363,7 +363,7 @@ object CloudSync {
     ) {
         // Deliberately not gated on the licence: recording an analysis is open
         // to every account (see [uploadsEnabled]); only restore is licensed.
-        if (!TokenStore.isQuotaKnown(context)) {
+        if (!AccountCache.isQuotaKnown(context)) {
             Timber.i("Upload deferred for %s — cloud quota not yet known", localSessionId)
             return
         }

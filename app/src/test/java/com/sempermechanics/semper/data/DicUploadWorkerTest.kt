@@ -9,6 +9,7 @@ import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.cloud.FakeTokens
 import com.sempermechanics.semper.data.cloud.SessionUploadBundlerTest
 import com.sempermechanics.semper.data.cloud.UploadErrors
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.DeviceConflictException
@@ -21,7 +22,6 @@ import com.sempermechanics.semper.data.net.SessionCreateResponse
 import com.sempermechanics.semper.data.net.SessionUploadsResponse
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
@@ -356,7 +356,7 @@ class DicUploadWorkerTest {
         seed()
         api.onCreateSession = { throw apiError(409, "session_quota_exceeded: 25/25 analyses stored.") }
         DicUploadSeams.inForeground = { false }
-        assertFalse(TokenStore.isSessionLimitReached(context))
+        assertFalse(AccountCache.isSessionLimitReached(context))
 
         val result = run()
 
@@ -366,7 +366,7 @@ class DicUploadWorkerTest {
             "no reason: Home shows no snackbar for it",
             result.outputData.getString(IntentKeys.UPLOAD_FAIL_REASON),
         )
-        assertTrue(TokenStore.isSessionLimitReached(context))
+        assertTrue(AccountCache.isSessionLimitReached(context))
         // Background activity starts are blocked on targetSdk 36; Home opens the
         // limit screen from the gate instead.
         assertNull(shadowOf(context).nextStartedActivity)
@@ -383,7 +383,7 @@ class DicUploadWorkerTest {
 
         val started = shadowOf(context).nextStartedActivity
         assertEquals(AppIntents.sessionLimit(context).component, started?.component)
-        assertTrue(TokenStore.isSessionLimitReached(context))
+        assertTrue(AccountCache.isSessionLimitReached(context))
     }
 
     @Test
@@ -598,7 +598,7 @@ class DicUploadWorkerTest {
         assertEquals(ListenableWorker.Result.retry(), run())
 
         assertTrue("registerDevice" in api.base.calls)
-        assertTrue(TokenStore.isDeviceRegistered(context))
+        assertTrue(AccountCache.isDeviceRegistered(context))
         assertTrue(File(staging, "Session.zip").isFile)
     }
 

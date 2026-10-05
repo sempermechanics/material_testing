@@ -6,9 +6,9 @@ import androidx.work.WorkManager
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.sempermechanics.semper.cloud.FakeCloudApi
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionQuotaGate
 import com.sempermechanics.semper.data.session.SessionStore
@@ -62,7 +62,7 @@ class SweepSessionSaveTest {
         AppSettings.setDiagnosticsEnabled(ctx, true)
         WorkManagerTestInitHelper.initializeTestWorkManager(ctx)
         AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 2, maxFilesPerSession = 600, maxFrames = 150))
-        TokenStore.setQuota(ctx, used = 0)
+        AccountCache.setQuota(ctx, used = 0)
     }
 
     @After
@@ -122,7 +122,7 @@ class SweepSessionSaveTest {
 
     @Test
     fun `a quota that filled before the save ends the sweep at the session limit, queueing nothing`() {
-        TokenStore.setQuota(ctx, used = 2)
+        AccountCache.setQuota(ctx, used = 2)
         // Cloud on: a build with no API URL (CI) would otherwise skip the quota.
         val realApi = SessionQuotaGate.api
         SessionQuotaGate.api = { FakeCloudApi() }

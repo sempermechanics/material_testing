@@ -269,6 +269,8 @@ group is one commit, reviewable with `git diff -M`.
 | **Runner files** (`AnalysisViewModel` extension functions; the functions keep their names) | |
 | `ui/analysis/run/DicBatchRunner.kt`, test `DicBatchRunnerLimitTest` | `ui/analysis/run/BatchAnalysis.kt`, `BatchAnalysisLimitTest` |
 | `ui/analysis/wizard/SweepRunner.kt` | `ui/analysis/wizard/SweepAnalysis.kt` |
+| **Account cache** (prefs file `semper_session` and its keys unchanged) | |
+| `data/net/TokenStore` | `data/net/AccountCache` (it caches identity, role, status and quota; Firebase holds the token) |
 
 ## Porting back
 

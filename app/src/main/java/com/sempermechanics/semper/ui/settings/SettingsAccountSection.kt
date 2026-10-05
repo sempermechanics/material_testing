@@ -5,7 +5,7 @@ import androidx.core.view.isVisible
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.DeviceKeyManager
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.ui.admin.AdminActivity
 
@@ -18,7 +18,7 @@ class SettingsAccountSection(
     private val views: ViewSettingsScrollContentBinding,
 ) {
     fun wire() {
-        views.tvAccountEmail.text = TokenStore.cachedEmail(activity).orEmpty()
+        views.tvAccountEmail.text = AccountCache.cachedEmail(activity).orEmpty()
         val deviceId = DeviceKeyManager.deviceId(activity)
         views.tvAccountDevice.text = activity.getString(R.string.account_device_id_fmt, deviceId)
 
@@ -33,7 +33,7 @@ class SettingsAccountSection(
         }
 
         views.btnAdmin.apply {
-            isVisible = TokenStore.isAdmin(activity)
+            isVisible = AccountCache.isAdmin(activity)
             setOnClickListener { activity.startActivity(Intent(activity, AdminActivity::class.java)) }
         }
     }

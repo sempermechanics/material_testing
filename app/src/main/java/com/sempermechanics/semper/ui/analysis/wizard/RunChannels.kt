@@ -6,7 +6,7 @@ import androidx.annotation.AnyThread
 import androidx.annotation.MainThread
 import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.SemperNativeLib
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
@@ -155,11 +155,11 @@ fun AnalysisViewModel.launchSweep(appContext: Context, spec: RunSpec) {
  */
 internal fun AnalysisViewModel.sessionLimitOutcome(appContext: Context, plannedFrames: Int): BatchAnalysisOutcome? {
     if (!wouldCreateNewSession()) return null
-    TokenStore.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
+    AccountCache.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
     // Before the config is fetched a demo account is held to the demo cap
     // (LicenseEntitlements.analysisCap); a licensed one has no local cap.
     // The upload is gated separately in CloudSync until config is known.
-    return if (TokenStore.isSessionLimitReached(appContext)) {
+    return if (AccountCache.isSessionLimitReached(appContext)) {
         Timber.w("Hard stop: analysis blocked at session limit")
         BatchAnalysisOutcome(
             engineErrorCode = RunStop.SessionLimit.wireCode,

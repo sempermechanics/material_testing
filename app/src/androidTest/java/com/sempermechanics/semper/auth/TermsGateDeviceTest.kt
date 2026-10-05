@@ -8,7 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.ui.auth.TermsActivity
 import com.sempermechanics.semper.ui.home.HomeActivity
 import org.junit.Assert.assertFalse
@@ -29,7 +29,7 @@ class TermsGateDeviceTest {
     @Test
     fun gateStartsUntickedAndUnlocksOnTheRequiredBox() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        TokenStore.clear(context)
+        AccountCache.clear(context)
         val intent = TermsActivity.intent(context, HomeActivity::class.java)
         ActivityScenario.launch<TermsActivity>(intent).use { scenario ->
             Thread.sleep(SETTLE_MS)
