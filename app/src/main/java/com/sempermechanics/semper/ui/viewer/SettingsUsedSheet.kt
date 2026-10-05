@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
  * colour-bar ends only — no mean, no histogram. Then the parameter rows that
  * produced the result (and the sweep line-cut).
  */
-object ViewerSettingsSheet {
+object SettingsUsedSheet {
 
     private const val SETTINGS_ROW_SP = 13f
     private const val SETTINGS_ROW_PAD_V = 11

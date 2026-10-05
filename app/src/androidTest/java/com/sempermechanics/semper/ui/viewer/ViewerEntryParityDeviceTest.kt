@@ -124,7 +124,7 @@ class ViewerEntryParityDeviceTest {
             scenario.onActivity { viewer ->
                 seen = Seen(
                     viewer.args,
-                    ViewerSettingsSheet.entriesFor(viewer),
+                    SettingsUsedSheet.entriesFor(viewer),
                     viewer.roi.let { listOf(it.x, it.y, it.w, it.h) },
                 )
             }

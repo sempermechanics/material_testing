@@ -277,6 +277,8 @@ group is one commit, reviewable with `git diff -M`.
 | `ui/auth/AuthTotpUi`, `ui/viewer/share/ShareExportUi` | `AuthTotpController`, `ShareExportController` |
 | `ui/analysis/wizard/AnalysisCancelGate` | `AnalysisCancel` (a shared flag, not a `*Gate`) |
 | `data/account/DeviceKeyManager` | `DeviceKeys` (Keystore alias `SemperDeviceKeyEc` unchanged) |
+| **Viewer sheet** | |
+| `ui/viewer/ViewerSettingsSheet`, test `ViewerSettingsSheetTest` | `SettingsUsedSheet`, `SettingsUsedSheetTest` (it inflates `sheet_settings_used.xml`; strings `settings_used_*`) |
 
 ## Porting back
 

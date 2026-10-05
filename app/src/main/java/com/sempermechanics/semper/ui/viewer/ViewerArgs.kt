@@ -33,7 +33,7 @@ data class ViewerSweepArgs(
  *
  * Two callers open the viewer — `SessionOpenHelper` from the Home list and a
  * finished run from `AnalysisNavHelper` — and four places read it:
- * `ResultViewerActivity`, `VsgLatticeActivity`, `ViewerSettingsSheet` and
+ * `ResultViewerActivity`, `VsgLatticeActivity`, `SettingsUsedSheet` and
  * `ViewerReportFactory`. All of them go through this type: writers through
  * [toIntent], readers through [from]. A missing extra used to read as whatever
  * default each reader picked (subset 41 in one place, 0 in another); now it is

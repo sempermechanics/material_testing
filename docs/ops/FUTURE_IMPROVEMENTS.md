@@ -26,7 +26,7 @@ is scheduled; take one deliberately, with its own PR.
 
 ~25 `IntentKeys` extras were packed in two places — `AnalysisNavHelper.openResults`
 (fresh run) and `ui/home/SessionOpenHelper.intentFor` (reopen) — and are read in
-four (`ResultViewerActivity`, `VsgLatticeActivity`, `ViewerSettingsSheet`,
+four (`ResultViewerActivity`, `VsgLatticeActivity`, `SettingsUsedSheet`,
 `ViewerReportFactory`). The two packers did not write the same set, and a missing
 extra silently defaults, so the ⓘ sheet, the report header and the export
 filename could differ by entry path with nothing logged.

@@ -228,7 +228,7 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 | Reads | `.dat` frames via `DicResult.decodeDatFile` (memory-mapped) and `data/session/DatCodec` |
 | Renders | `report/VisualizationEngine` heatmaps, `ui/viewer/HeatmapFit` rest-fit, `TouchImageView` zoom/pan, `ViewerFieldPills`, `ScrubFrameCache` look-ahead; single-setting only: `ViewerSummaryController` + `SummaryAnimation` + `report/GifEncoder` |
 | Probe | `ViewerInspectController` + `PointSpatialIndex` (built lazily on first tap) + `InspectOverlayView` |
-| Details | `ViewerSettingsSheet` (ⓘ). On a frame: true extrema plus a Scott-binned histogram of accepted values (`FieldHistogramView`). On the summary: min of every frame's colour-bar min and max of every frame's colour-bar max, matching the GIF; no mean, no histogram |
+| Details | `SettingsUsedSheet` (ⓘ). On a frame: true extrema plus a Scott-binned histogram of accepted values (`FieldHistogramView`). On the summary: min of every frame's colour-bar min and max of every frame's colour-bar max, matching the GIF; no mean, no histogram |
 | Exports | `ShareCenter` → `ViewerReportFactory` / `report/ReportBuilder` / `PdfReportGenerator` / `AnalysisCsvWriter` / `data/session/SessionEverythingExporter` → `SendToSheet` → `SaveExportActivity` (SAF) |
 | Fails as | Snackbar + **Why?** FAQ (`no_batch_data`, OOM, scale) |
 | Tests | `results/*` (decode, histogram, CSV, heatmap, PDF, GIF, summary), `viewer/ScrubFrameCacheTest`, `viewer/FrameNumberEntryTest`, `HeatmapFitTest`, `ViewerFieldPillsTest` |
@@ -510,7 +510,7 @@ Details and failure triage: [ops/CI.md](ops/CI.md).
 |---|---|
 | A message, label or dialog text on screen | `rg "<the phrase>" app/src/main/res/values/strings.xml` → then `rg "R.string.<name>"`. Every user-facing string is in `strings.xml`; a phrase you cannot find there is either formatted (`_fmt`, plurals) or comes from an exception message |
 | An error with a **Why?** action | `ui/common/dialog/FaqRedirect` and [app/FAQ_LINKS.md](app/FAQ_LINKS.md) — the FAQ url resource names the case |
-| A wrong number in the viewer or ⓘ sheet | The extras it was opened with: `AnalysisNavHelper.openResults` (fresh run) or `ui/home/SessionOpenHelper.intentFor` (reopen) → read in `ResultViewerActivity` / `ViewerSettingsSheet` / `ViewerReportFactory`. **Check which of the two packed it** — see E2.1 |
+| A wrong number in the viewer or ⓘ sheet | The extras it was opened with: `AnalysisNavHelper.openResults` (fresh run) or `ui/home/SessionOpenHelper.intentFor` (reopen) → read in `ResultViewerActivity` / `SettingsUsedSheet` / `ViewerReportFactory`. **Check which of the two packed it** — see E2.1 |
 | A wrong number in an export | `report/ReportBuilder` (fusion), `report/AnalysisCsvWriter`, `report/VisualizationEngine`; the source of truth is `DicResult.decodeDatFile` over `frame_%04d.dat` |
 | "Analysis failed" wording | `ui/analysis/run/EngineFailure` (code → string) + `field/RunStop` (the stop codes); the code itself comes from the engine or `ConvergenceGate` |
 | A backup that failed | Home badge dialog text = `IntentKeys.UPLOAD_FAIL_REASON` from `UploadRun.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
@@ -531,7 +531,7 @@ Ranked by how often it costs someone an afternoon. Each has a proposed fix in
 again by `SessionOpenHelper.intentFor` (reopen from Home / Settings), and the two
 sets are not identical — `DEF_PATH` and `DEF_FILE_PATHS`, for instance, exist
 only on the fresh-run path. They are then read in `ResultViewerActivity` (~20
-sites), `VsgLatticeActivity` (~16), `ViewerSettingsSheet` (~12) and
+sites), `VsgLatticeActivity` (~16), `SettingsUsedSheet` (~12) and
 `ViewerReportFactory` (~8). A missing extra is not an error: it silently becomes
 a default, so the same session can render differently depending on how it was
 opened, with nothing in the log. → **FI-1**

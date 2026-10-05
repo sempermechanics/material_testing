@@ -283,7 +283,7 @@ class ResultViewerActivity : AppCompatActivity() {
         binding.btnViewerHome.setOnClickListener { goHome() }
         binding.btnViewerSettingsInfo.setOnClickListener {
             bumpChrome()
-            ViewerSettingsSheet.show(this)
+            SettingsUsedSheet.show(this)
         }
 
         binding.layoutColorScale.setOnClickListener {
