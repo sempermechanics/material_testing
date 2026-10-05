@@ -137,7 +137,7 @@ object PrefFiles {
     }
 
     /** `CloudSync.reconcile`'s throttle. */
-    object CloudSync {
+    object CloudSyncPrefs {
         const val NAME = "semper_cloudsync"
         val LAST_RECONCILE_AT = PrefKey.long("last_reconcile_at")
     }
@@ -157,7 +157,7 @@ object PrefFiles {
     }
 
     /** `DeleteFeedback`: delete outcomes already shown. */
-    object SessionDeletes {
+    object SessionDeletesPrefs {
         const val NAME = "session_deletes"
         val SHOWN_OUTCOMES = PrefKey.stringSet("shown_outcomes")
     }
@@ -172,9 +172,9 @@ object PrefFiles {
         RemoteConfig.NAME,
         Device.NAME,
         CloudListing.NAME,
-        CloudSync.NAME,
+        CloudSyncPrefs.NAME,
         RestoreOutcomes.NAME,
         EmailLink.NAME,
-        SessionDeletes.NAME,
+        SessionDeletesPrefs.NAME,
     )
 }

@@ -279,6 +279,8 @@ group is one commit, reviewable with `git diff -M`.
 | `data/account/DeviceKeyManager` | `DeviceKeys` (Keystore alias `SemperDeviceKeyEc` unchanged) |
 | **Viewer sheet** | |
 | `ui/viewer/ViewerSettingsSheet`, test `ViewerSettingsSheetTest` | `SettingsUsedSheet`, `SettingsUsedSheetTest` (it inflates `sheet_settings_used.xml`; strings `settings_used_*`) |
+| **Nested `PrefFiles`** (file names and keys unchanged) | |
+| `PrefFiles.CloudSync`, `PrefFiles.SessionDeletes` | `PrefFiles.CloudSyncPrefs`, `PrefFiles.SessionDeletesPrefs` (they no longer shadow `data/cloud/CloudSync` and `SessionDeletes`); the other ten nested objects keep their names |
 
 ## Porting back
 

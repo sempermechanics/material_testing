@@ -416,7 +416,7 @@ class PrefKeyTest {
     @Test
     fun `the remaining files keep their names and keys`() {
         // Owners with no public reader for these: the raw value is the check.
-        val sync = PrefFiles.CloudSync
+        val sync = PrefFiles.CloudSyncPrefs
         assertEquals("semper_cloudsync", sync.NAME)
         prefs(sync.NAME).edit(commit = true) { put(sync.LAST_RECONCILE_AT, 99L) }
         assertEquals(99L, prefs("semper_cloudsync").getLong("last_reconcile_at", 0L))
@@ -427,7 +427,7 @@ class PrefKeyTest {
         prefs(link.NAME).edit(commit = true) { put(link.PENDING_EMAIL, "a@b.c") }
         assertEquals("a@b.c", prefs("semper_emaillink").getString("pending_email", null))
 
-        val deletes = PrefFiles.SessionDeletes
+        val deletes = PrefFiles.SessionDeletesPrefs
         assertEquals("session_deletes", deletes.NAME)
         prefs(deletes.NAME).edit(commit = true) { put(deletes.SHOWN_OUTCOMES, setOf("w1")) }
         assertEquals(setOf("w1"), prefs("session_deletes").getStringSet("shown_outcomes", null))

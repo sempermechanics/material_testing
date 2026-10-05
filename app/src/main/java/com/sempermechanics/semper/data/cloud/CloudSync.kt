@@ -113,8 +113,8 @@ object CloudSync {
                 // Every screen resume lands here, and each check costs one Firestore
                 // read per cloud session. A successful check stays fresh for a few
                 // minutes; an explicit pull-to-refresh (deep) always goes through.
-                val prefs = privatePrefs(appContext, PrefFiles.CloudSync.NAME)
-                val sinceLast = System.currentTimeMillis() - prefs[PrefFiles.CloudSync.LAST_RECONCILE_AT]
+                val prefs = privatePrefs(appContext, PrefFiles.CloudSyncPrefs.NAME)
+                val sinceLast = System.currentTimeMillis() - prefs[PrefFiles.CloudSyncPrefs.LAST_RECONCILE_AT]
                 val throttled = !deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS
 
                 val listed = api.authed(tokens) { token ->
@@ -151,7 +151,7 @@ object CloudSync {
                     reupload,
                     requeue = reupload && uploadsEnabled(appContext, api),
                 )
-                prefs.edit { put(PrefFiles.CloudSync.LAST_RECONCILE_AT, System.currentTimeMillis()) }
+                prefs.edit { put(PrefFiles.CloudSyncPrefs.LAST_RECONCILE_AT, System.currentTimeMillis()) }
                 Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
             }
         }
