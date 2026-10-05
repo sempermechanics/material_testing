@@ -110,23 +110,21 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-03)
+## Current state (2026-10-05)
 
-- **Quality program (open PRs, not yet on `main`).** Bug fixes, the package layout
+- **Quality program (on `main`, #310–#332, 2026-10-05).** Bug fixes, the package layout
   ([ADR-015](docs/adr/ADR-015-package-layout.md)), ViewBinding and the `ui/common` kit
   ([ADR-017](docs/adr/ADR-017-viewbinding-and-ui-kit.md)), typed outcomes
-  ([ADR-018](docs/adr/ADR-018-error-convention.md)) and no main file over 500 lines;
-  #310 and #315 are merged. Merge order: #311 → #312, #316 → #313 → #314 → #317 →
-  #318–#321 → #322 → #323–#326 → #327–#330 → #331 → the docs PR. Moves-plus-fixes PRs
-  merge with a merge commit (ADR-015). Owed before release: the emulator passes in
-  each PR's test plan, the Pixel 6 benchmark runs, and ADR-015's queued-work upgrade
-  check. Results: [QUALITY_PROGRAM_RESULTS.md](docs/ops/QUALITY_PROGRAM_RESULTS.md).
-- **App id `com.sempermechanics.semper` (open PR, stacked on the docs PR).** A new app;
+  ([ADR-018](docs/adr/ADR-018-error-convention.md)) and no main file over 500 lines.
+  Owed before release: the emulator passes in each PR's test plan, the Pixel 6
+  benchmark write-up (a wizard cold-start regression is being checked), and ADR-015's
+  queued-work upgrade check. Results: [QUALITY_PROGRAM_RESULTS.md](docs/ops/QUALITY_PROGRAM_RESULTS.md).
+- **App id `com.sempermechanics.semper` (open PR).** A new app;
   "indic" leaves the code and the engine submodule is `engine/`
   ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)). The Firebase app and its
-  App Check are registered and its `google-services.json` committed (2026-10-05). Owed
-  before release: a backend and Hosting deploy; the engine
-  PR merged first. material_testing moves to `com.sempermechanics.materialtesting` in
+  App Check are registered and its `google-services.json` committed (2026-10-05). The engine
+  gitlink is semper-dic-engine#5's merge commit. Owed before release: a backend and
+  Hosting deploy. material_testing moves to `com.sempermechanics.materialtesting` in
   the same merge that takes this code.
 - **Deployed.** Cloud Run `semper-api` (image `semper-api-36844645753-1` from `9230f444`,
   2026-10-01; scales to zero) behind API Gateway `semper-gw` (config `v202610010948-83`,
