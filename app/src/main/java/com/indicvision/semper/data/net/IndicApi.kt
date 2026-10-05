@@ -1,6 +1,7 @@
 package com.indicvision.semper.data.net
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import com.indicvision.semper.BuildConfig
 import com.indicvision.semper.data.account.DevAuth
 import com.indicvision.semper.data.account.DeviceKeyManager
@@ -32,7 +33,14 @@ private const val SESSIONS_PAGE_SIZE = 100
  * returned by the broker — they never pass through this client's backend host.
  */
 @Suppress("TooManyFunctions") // one method per backend endpoint
-class IndicApi private constructor(context: Context) : CloudApi {
+class IndicApi @VisibleForTesting internal constructor(
+    context: Context,
+    baseUrl: String,
+    /** How calls are sent, from [endpoint]; null for the shared clients and this device's key. */
+    newCalls: ((endpoint: (path: String) -> String) -> IndicApiCalls)?,
+) : CloudApi {
+
+    private constructor(context: Context) : this(context, BuildConfig.INDIC_API_BASE_URL, null)
 
     private val appContext = context.applicationContext
 
@@ -42,7 +50,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
     private val device by lazy { DeviceKeyManager(appContext) }
     private val json = IndicApiHttp.json
 
-    private val base = BuildConfig.INDIC_API_BASE_URL.trimEnd('/').also { url ->
+    private val base = baseUrl.trimEnd('/').also { url ->
         require(url.isEmpty() || url.startsWith("https://")) {
             "INDIC_API_BASE_URL must be https (or empty to disable cloud): $url"
         }
@@ -59,7 +67,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
     private fun endpoint(path: String): String = IndicApiHttp.endpoint(base, path)
 
     private val drive = DriveTransfer(IndicApiClients.api, IndicApiClients.download, IndicApiHttp.OCTET_MEDIA)
-    private val calls = IndicApiCalls(
+    private val calls = newCalls?.invoke(::endpoint) ?: IndicApiCalls(
         IndicApiClients.api,
         ::endpoint,
         deviceId = { device.getDeviceId() },
@@ -122,8 +130,8 @@ class IndicApi private constructor(context: Context) : CloudApi {
     class DeviceNotActiveException(val requestId: String? = null) : IOException(ApiErrors.DEVICE_NOT_ACTIVE)
 
     /**
-     * Drive no longer knows the resumable upload link (404 or 410 on the status
-     * probe): the link expired, or the upload session was cancelled. Sending
+     * Drive no longer knows the resumable upload link (404, 410 or 499 on the
+     * status probe): the link expired, or the upload session was cancelled. Sending
      * bytes to it cannot work, and neither can a retry with the same link; the
      * cloud session has to be opened again.
      */
@@ -139,17 +147,8 @@ class IndicApi private constructor(context: Context) : CloudApi {
     // ---------------------------------------------------------------- identity
 
     /** GET /v1/me. Throws [NotApprovedException] for a PENDING/SUSPENDED user. */
-    override suspend fun me(idToken: String): MeResponse = calls.bearer(
-        idToken,
-        route = { url(endpoint("/v1/me")) },
-        onRefusal = { refusal ->
-            when (refusal.code) {
-                HttpStatus.FORBIDDEN -> throw NotApprovedException()
-                HttpStatus.CONFLICT -> throwForMeConflict(refusal.body, refusal.requestId)
-                else -> refusal.fail()
-            }
-        },
-    ) { decode(it) }
+    override suspend fun me(idToken: String): MeResponse =
+        calls.bearer(idToken, { url(endpoint("/v1/me")) }, ApiAnswer::failMe) { decode(it) }
 
     /**
      * GET /v1/config — resolved product limits for this account.
@@ -160,7 +159,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
      * user's token.
      */
     override suspend fun getConfig(idToken: String): AppConfigDto = configFlight.run {
-        calls.bearer(idToken, { url(endpoint("/v1/config")) }, Refusal::failApprovedOnly) { decode(it) }
+        calls.bearer(idToken, { url(endpoint("/v1/config")) }, ApiAnswer::failApprovedOnly) { decode(it) }
     }
 
     private val configFlight = SingleFlight<AppConfigDto>()
@@ -211,7 +210,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
             when (resp.code) {
                 HttpStatus.CREATED, HttpStatus.OK -> Unit
                 HttpStatus.CONFLICT -> throw DeviceConflictException(IndicApiHttp.requestIdOf(resp))
-                else -> throw IndicApiHttp.apiException(resp)
+                else -> throw ApiAnswer.of(resp).exception()
             }
         }
     }
@@ -255,11 +254,11 @@ class IndicApi private constructor(context: Context) : CloudApi {
     private suspend fun seatCall(idToken: String, action: String): AppConfigDto = calls.bearer(
         idToken,
         route = { url(endpoint("/v1/licenses/$action")).post(EMPTY_JSON.toRequestBody(IndicApiHttp.JSON_MEDIA)) },
-        onRefusal = { refusal ->
-            if (refusal.code == HttpStatus.CONFLICT && refusal.hasCode(ApiErrors.NO_FLOATING_SEAT)) {
+        orElse = { answer ->
+            if (answer.code == HttpStatus.CONFLICT && answer.hasCode(ApiErrors.NO_FLOATING_SEAT)) {
                 throw NoSeatAvailableException()
             }
-            refusal.fail()
+            answer.fail()
         },
     ) { decode<LicenseActivateResponse>(it).config }
 
@@ -277,9 +276,9 @@ class IndicApi private constructor(context: Context) : CloudApi {
     override suspend fun acceptTerms(idToken: String, version: String): Unit = calls.bearer(
         idToken,
         route = { url(endpoint("/v1/me/terms")).post(jsonBody(TermsAcceptanceBody(version))) },
-        onRefusal = { refusal ->
-            if (refusal.code == HttpStatus.CONFLICT) throw TermsVersionMismatchException(refusal.requestId)
-            refusal.fail()
+        orElse = { answer ->
+            if (answer.code == HttpStatus.CONFLICT) throw TermsVersionMismatchException(answer.requestId)
+            answer.fail()
         },
     ) {}
 
@@ -308,7 +307,7 @@ class IndicApi private constructor(context: Context) : CloudApi {
                     if (verify) append("&verify=true")
                     if (token != null) append('&').append(pageTokenParam(token))
                 }
-                calls.bearer(idToken, { url(endpoint("/v1/sessions?$query")) }, Refusal::failApprovedOnly) {
+                calls.bearer(idToken, { url(endpoint("/v1/sessions?$query")) }, ApiAnswer::failApprovedOnly) {
                     decode<ListSessionsResponse>(it)
                 }
             },
@@ -410,17 +409,17 @@ class IndicApi private constructor(context: Context) : CloudApi {
     override suspend fun listUsers(idToken: String, status: String): List<AdminUserDto> = calls.bearer(
         idToken,
         route = { url(endpoint(if (status.isBlank()) "/v1/admin/users" else "/v1/admin/users?status=$status")) },
-        onRefusal = { refusal ->
-            if (refusal.code == HttpStatus.FORBIDDEN) {
-                throw ApiException(HttpStatus.FORBIDDEN, ApiErrors.NOT_ADMIN, refusal.requestId)
+        orElse = { answer ->
+            if (answer.code == HttpStatus.FORBIDDEN) {
+                throw ApiException(HttpStatus.FORBIDDEN, ApiErrors.NOT_ADMIN, answer.requestId)
             }
-            refusal.fail()
+            answer.fail()
         },
     ) { decode<AdminUsersResponse>(it).users }
 
     /** POST /v1/admin/users/{uid}/{action} — device-attested (approve/revoke). */
     override suspend fun setUserStatus(idToken: String, uid: String, action: String) =
-        calls.signed(idToken, SignedCall("POST", "/v1/admin/users/$uid/$action"), Refusal::fail) {}
+        calls.signed(idToken, SignedCall("POST", "/v1/admin/users/$uid/$action"), ApiAnswer::fail) {}
 
     // ----------------------------------------------------------------- erasure
 
@@ -449,9 +448,9 @@ class IndicApi private constructor(context: Context) : CloudApi {
     override suspend fun deleteSession(idToken: String, sessionId: String) = calls.signed(
         idToken,
         SignedCall("DELETE", "/v1/sessions/$sessionId"),
-        onRefusal = { refusal ->
-            if (refusal.code != HttpStatus.NOT_FOUND || !refusal.hasCode(ApiErrors.SESSION_NOT_FOUND)) {
-                refusal.failSigned()
+        orElse = { answer ->
+            if (answer.code != HttpStatus.NOT_FOUND || !answer.hasCode(ApiErrors.SESSION_NOT_FOUND)) {
+                answer.failSigned()
             }
         },
     ) {}
@@ -472,16 +471,6 @@ class IndicApi private constructor(context: Context) : CloudApi {
     companion object {
         @Volatile
         private var instance: IndicApi? = null
-
-        /** Maps a 409 from `GET /v1/me` to the most specific device-binding exception. */
-        internal fun throwForMeConflict(body: String, requestId: String?): Nothing {
-            val err: Throwable = when {
-                ApiErrors.hasCode(body, ApiErrors.DEVICE_IN_USE) -> DeviceInUseException(requestId)
-                ApiErrors.hasCode(body, ApiErrors.DEVICE_CONFLICT) -> DeviceConflictException(requestId)
-                else -> ApiException(HttpStatus.CONFLICT, body, requestId)
-            }
-            throw err
-        }
 
         /**
          * Process-wide client. Shares OkHttp pools and DeviceKeyManager; call sites

@@ -135,7 +135,8 @@ internal class DriveUploader(private val client: OkHttpClient, private val octet
      *
      * Any answer but those three is a failure, not "start at zero": re-sending
      * bytes Drive already holds is what made a resumed upload fail its size
-     * check, and a gone link (404/410) fails every PUT the same way.
+     * check, and a gone link (404/410, or 499 once cancelled) fails every PUT
+     * the same way.
      */
     private fun probeStatus(uploadUrl: String, total: Long): UploadProbe {
         val req = Request.Builder().url(uploadUrl)
@@ -148,7 +149,8 @@ internal class DriveUploader(private val client: OkHttpClient, private val octet
                     UploadProbe(resp.header("Range")?.substringAfterLast('-')?.toLongOrNull()?.plus(1) ?: 0L, null)
                 // Already complete — the body is the Drive file resource.
                 HttpStatus.OK, HttpStatus.CREATED -> UploadProbe(total, IndicApiHttp.driveFileIdOf(resp.body.string()))
-                HttpStatus.NOT_FOUND, HttpStatus.GONE -> throw IndicApi.UploadLinkExpiredException(resp.code)
+                HttpStatus.NOT_FOUND, HttpStatus.GONE, HttpStatus.CLIENT_CLOSED ->
+                    throw IndicApi.UploadLinkExpiredException(resp.code)
                 // Drive's resumable endpoint, not the Semper backend: no X-Request-Id.
                 else -> throw IndicApi.ApiException(resp.code, IndicApiHttp.bodyText(resp))
             }

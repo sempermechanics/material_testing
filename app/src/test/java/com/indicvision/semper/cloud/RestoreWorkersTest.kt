@@ -126,6 +126,20 @@ class RestoreWorkersTest {
     }
 
     @Test
+    fun `metadata whose skip lists disagree fails instead of downloading the bundle again`() {
+        val meta = """
+            {"schema":"indic.session.metadata/3","frames":[{"image":"def.png"}],
+             "engine":{"sweep":{"subsets":[21],"skipped":{"subsets":[41,51],"steps":[9],"strainWindows":[121]}}}}
+        """.trimIndent().toByteArray()
+        val bundle = RestoreFakeApi.zipOf(listOf("dat/frame_0001.dat" to RestoreFakeApi.onePointDat()))
+        api.files = listOf(api.file("meta-1", "metadata", meta), api.file("bundle-1", "bundle", bundle))
+
+        val result = runRestore(cloudRestorer)
+
+        assertEquals(context.getString(R.string.restore_failed_generic), failureReason(result))
+    }
+
+    @Test
     fun `a dropped connection is retried`() {
         val result = runRestore { _, _, _, _ -> throw IOException("connection reset") }
 

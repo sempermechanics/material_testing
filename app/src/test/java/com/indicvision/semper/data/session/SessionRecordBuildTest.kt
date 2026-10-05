@@ -13,8 +13,8 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
- * [SessionRepository.buildSessionRecord]: the grouped inputs land in the same
- * row fields the one-value-per-parameter form fills.
+ * [SessionRepository.buildSessionRecord]: each run value lands in its row field,
+ * through the grouped inputs and through the one-value-per-parameter form.
  */
 @RunWith(RobolectricTestRunner::class)
 class SessionRecordBuildTest {
@@ -42,30 +42,54 @@ class SessionRecordBuildTest {
         plannedFrameCount = 3,
     )
 
+    /**
+     * Every field the run fills, as literals: [input] and [outcome] carry a
+     * different value per field, so a swapped or dropped one shows. The clock
+     * and the auto-name derived from it are taken from [built].
+     */
+    private fun expectedRow(built: SessionRecord, syncState: SessionRecord.SyncState) = SessionRecord(
+        id = "s1",
+        name = SessionNaming.defaultSessionName("plate.tif", built.createdAt),
+        createdAt = built.createdAt,
+        updatedAt = built.updatedAt,
+        frameCount = 2,
+        subset = 41,
+        step = 5,
+        strainWindow = 21,
+        use6x6 = true,
+        imgW = 4000,
+        imgH = 3000,
+        roiX = 1,
+        roiY = 2,
+        roiW = 300,
+        roiH = 400,
+        refPath = "/ref.png",
+        refName = "plate.tif",
+        sessionDir = File("sessions/s1").absolutePath,
+        defNames = listOf("a.tif", "b.tif", "c.tif"),
+        headline = "97.5% converged on frame 1",
+        engineStats = stats,
+        stopCode = -3,
+        plannedFrameCount = 3,
+        strainMethod = "VSG",
+        pointsConverged = 1180,
+        avgIterations = 2.3f,
+        executionTimeMs = 812,
+        syncState = syncState,
+        renamedByUser = false,
+    )
+
     @Test
     fun `the grouped inputs fill the row`() {
         val record = repository.buildSessionRecord(context, input, outcome, cloudEnabled = true)
 
-        assertEquals("s1", record.id)
-        assertEquals(File("sessions/s1").absolutePath, record.sessionDir)
-        assertEquals(listOf(4000, 3000), listOf(record.imgW, record.imgH))
-        assertEquals(listOf(1, 2, 300, 400), listOf(record.roiX, record.roiY, record.roiW, record.roiH))
-        assertEquals(listOf(41, 5, 21), listOf(record.subset, record.step, record.strainWindow))
-        assertEquals("/ref.png", record.refPath)
-        assertEquals("plate.tif", record.refName)
-        assertEquals(2, record.frameCount)
-        assertEquals(-3, record.stopCode)
-        assertEquals(3, record.plannedFrameCount)
-        assertEquals(stats, record.engineStats)
-        assertEquals("97.5% converged on frame 1", record.headline)
-        assertEquals(SessionRecord.SyncState.PENDING, record.syncState)
-        assertEquals(SessionNaming.defaultSessionName("plate.tif", record.createdAt), record.name)
+        assertEquals(expectedRow(record, SessionRecord.SyncState.PENDING), record)
+        assertEquals(record.createdAt, record.updatedAt)
     }
 
     @Test
-    fun `the one-value-per-parameter form builds the same row`() {
-        val grouped = repository.buildSessionRecord(context, input, outcome, cloudEnabled = false)
-        val flat = repository.buildSessionRecord(
+    fun `the one-value-per-parameter form fills the same fields`() {
+        val record = repository.buildSessionRecord(
             appContext = context,
             localSessionId = "s1",
             batchDir = File("sessions/s1"),
@@ -85,9 +109,20 @@ class SessionRecordBuildTest {
             plannedFrameCount = 3,
         )
 
-        // Only the clock differs between the two calls.
-        val sameClock = flat.copy(createdAt = grouped.createdAt, updatedAt = grouped.updatedAt, name = grouped.name)
-        assertEquals(grouped, sameClock)
+        assertEquals(expectedRow(record, SessionRecord.SyncState.LOCAL_ONLY), record)
+    }
+
+    @Test
+    fun `the flat form without engine stats saves none`() {
+        val record = repository.buildSessionRecord(
+            context, "s1", File("sessions/s1"), "/ref.png", "plate.tif", 4000, 3000, settings,
+            cloudEnabled = false, pointsConverged = 0, avgIterations = 0f, executionTimeMs = 0,
+            frameCount = 1, defNames = listOf("a.tif"), engineStatsArray = null,
+        )
+
+        assertEquals(emptyList<Float>(), record.engineStats)
+        assertEquals(listOf(0, 0), listOf(record.stopCode, record.plannedFrameCount))
+        assertEquals("0.0% converged", record.headline)
     }
 
     @Test

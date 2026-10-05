@@ -179,6 +179,19 @@ class UploadResumableTest {
     }
 
     @Test
+    fun `a 499 from the probe is a cancelled session, so an expired link too`() {
+        writeBytes(1000)
+        enqueue(499)
+
+        val e = assertThrows(IndicApi.UploadLinkExpiredException::class.java) {
+            runBlocking { api.uploadResumable(server.url("/u").toString(), file, chunk256k) }
+        }
+
+        assertEquals(499, e.code)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
     fun `a probe that fails transiently does not restart the upload at zero`() {
         writeBytes(1000)
         enqueue(500, body = "backend error")
