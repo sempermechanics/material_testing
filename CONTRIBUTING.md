@@ -276,6 +276,11 @@ them:
     key is never named after its own text.
 24. No company name in identifiers or resource names.
 
+**Vocabulary**
+
+25. One word per user-facing concept, in copy and in code. "Sign out", never
+    "log out" (keys `sign_out_*`, `action_sign_out`).
+
 **Never renamed:** persisted values keep their exact strings (prefs files and
 keys, intent extras, Bundle / SavedState keys, WorkManager names, tags and Data
 keys, `index.json` / metadata fields, analytics events, the Keystore alias); a

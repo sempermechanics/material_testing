@@ -836,11 +836,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="status_changed_relogin">Your access status has changed. Please log in again.</string>
     <string name="error_network_retry">Network error. Try again.</string>
 
-    <!-- Log out confirmation -->
-    <string name="logout_confirm_title">Log Out?</string>
-    <string name="logout_confirm_body">Are you sure you want to log out of Semper on this device?</string>
-    <string name="action_log_out">Log Out</string>
-    <string name="logout_success">You have been successfully logged out.</string>
+    <!-- Sign out confirmation -->
+    <string name="sign_out_confirm_title">Sign out?</string>
+    <string name="sign_out_confirm_body">Are you sure you want to sign out of Semper on this device?</string>
+    <string name="sign_out_success">You have been signed out.</string>
     <plurals name="video_loaded_frames">
         <item quantity="one">Video loaded: 1 reference + 1 deformed frame</item>
         <item quantity="other">Video loaded: 1 reference + %1$d deformed frames</item>

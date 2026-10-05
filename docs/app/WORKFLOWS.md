@@ -108,7 +108,7 @@ below is the user's own nudge on top of that, not the only signal.
 | [ ] 2.4 | Tap **Check status** while still pending | "Account is still pending approval." and you stay put |
 | [ ] 2.5 | Have an admin approve, then tap **Check status** | "Access granted" and you land on Home |
 | [ ] 2.6 | Wait on this screen without touching it | Nothing happens — approval is *not* polled |
-| [ ] 2.7 | Tap **Log out** → confirm | Login screen, back stack cleared |
+| [ ] 2.7 | Tap **Sign out** → confirm | Login screen, back stack cleared |
 
 ---
 

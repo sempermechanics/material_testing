@@ -45,11 +45,11 @@ class PendingApprovalActivity : AppCompatActivity() {
             // Runs in [SignOutRun] so a rotation cannot leave the session half
             // cleared; the observer below routes to sign-in once it is done.
             val repo = authRepo
-            SignOutRun.confirm(this, R.string.action_log_out) { repo.signOut() }
+            SignOutRun.confirm(this, R.string.action_sign_out) { repo.signOut() }
         }
 
         SignOutRun.observe(this, onRunning = { setLoadingState(true) }) {
-            routeToLogin(getString(R.string.logout_success))
+            routeToLogin(getString(R.string.sign_out_success))
         }
     }
 

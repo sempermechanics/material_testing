@@ -251,6 +251,9 @@ group is one commit, reviewable with `git diff -M`.
 | `setting_diagnostics`, `setting_diagnostics_sub`, `setting_save_cloud`, `setting_save_cloud_sub`, `setting_save_cloud_sub_off`, `setting_wifi_only`, `setting_wifi_only_sub`, `setting_max_frames`, `setting_max_frames_info` (the Settings screen) | `settings_` + the rest (`settings_diagnostics`, …) |
 | **Instrumented test methods** | |
 | 27 snake_case or `subject_condition` names in `SpeckleScaleDeviceTest`, `ExifOrientedSizeDeviceTest`, `FirebaseAuthIntegrationTest`, `AnalysisWizardSmokeTest`, `EnginePipelineSmokeTest` | camelCase sentences (`repeatSolve_bitIdentical` → `repeatSolveIsBitIdentical`, `analysisActivity_showsToolbar` → `wizardShowsToolbar`, …); benchmark methods keep their names |
+| **Sign out wording** (the one copy change: "Log Out" → "Sign out") | |
+| `logout_confirm_title`, `logout_confirm_body`, `logout_success` | `sign_out_confirm_title` ("Sign out?"), `sign_out_confirm_body`, `sign_out_success` ("You have been signed out.") |
+| `action_log_out` ("Log Out") | `action_sign_out` (the existing key, same text now) |
 
 ## Porting back
 
