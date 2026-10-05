@@ -122,13 +122,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **App id `com.sempermechanics.semper` (on `main`, #333 and the naming scheme #334,
   2026-10-05).** A new app; "indic" leaves the code and the engine submodule is `engine/`
   ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)); naming rules in CONTRIBUTING
-  "Code style". Firebase app, App Check and `google-services.json` done; Hosting
-  (`assetlinks.json`) deployed 2026-10-05. Owed before a build under the new id ships: the
-  backend deploy (new ids in `apps.py`). material_testing moves to
+  "Code style". Firebase app, App Check and `google-services.json` done; backend
+  (new ids in `apps.py`) and Hosting (`assetlinks.json`) deployed 2026-10-05. Owed: a phone
+  check of the new app (sign in, restore an old backup, App Link). material_testing moves to
   `com.sempermechanics.materialtesting` in the same merge that takes this code
   ([FORK_SYNC](docs/ops/FORK_SYNC.md)).
-- **Deployed.** Cloud Run `semper-api` (image `semper-api-36844645753-1` from `9230f444`,
-  2026-10-01; scales to zero) behind API Gateway `semper-gw` (config `v202610010948-83`,
+- **Deployed.** Cloud Run `semper-api` (image `semper-api-37277643509-1` from `67d2ad35`,
+  2026-10-05; scales to zero) behind API Gateway `semper-gw` (config `v202610010948-83`,
   deployed by CI, ADR-006); staging `semper-api-staging` behind `semper-gw-staging` (CI
   since #258); project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing, the licence desk ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device
