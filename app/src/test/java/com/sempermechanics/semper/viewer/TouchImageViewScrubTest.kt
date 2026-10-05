@@ -1,11 +1,11 @@
-package com.indicvision.semper.viewer
+package com.sempermechanics.semper.viewer
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.view.MotionEvent
 import android.view.View
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.ui.viewer.TouchImageView
+import com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith

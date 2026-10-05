@@ -1,4 +1,4 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
 import java.util.Locale
 import kotlin.math.abs

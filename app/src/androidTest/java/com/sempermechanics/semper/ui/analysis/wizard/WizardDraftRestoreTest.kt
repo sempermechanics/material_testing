@@ -5,11 +5,11 @@ import android.os.Parcel
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.sempermechanics.semper.data.BeamEdgeTaps
-import com.sempermechanics.semper.data.LoadCsvParse
-import com.sempermechanics.semper.data.MachineLoadCsv
-import com.sempermechanics.semper.data.SpecimenGeometry
-import com.sempermechanics.semper.data.TestType
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.LoadCsvParse
+import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
@@ -141,7 +141,7 @@ class WizardDraftRestoreTest {
         val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved)))
         after.attachDraft(WizardDraft(context))
 
-        assertEquals(AnalysisViewModel.DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(TestType.BENDING, after.testType)
         assertEquals(geometry, after.geometry)
         assertEquals(listOf(500L, 1_000L, 1_500L), after.defFrameTimesMs)

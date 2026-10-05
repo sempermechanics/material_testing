@@ -1,7 +1,7 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
-import com.indicvision.semper.DicResult
-import com.indicvision.semper.data.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.field.DicResult
 import kotlin.math.abs
 import kotlin.math.max
 

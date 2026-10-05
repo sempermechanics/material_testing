@@ -45,6 +45,7 @@ class VideoFrameExtractionDeviceTest {
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private lateinit var dir: File
+
     /** Each deformed frame's video time from the last [extract]. */
     private var lastTimesMs: List<Long?> = emptyList()
 

@@ -1,13 +1,13 @@
 package com.sempermechanics.semper.analysis
 
-import com.sempermechanics.semper.data.BeamEdgeTaps
-import com.sempermechanics.semper.data.LoadCsvParse
-import com.sempermechanics.semper.data.LoadMapping
-import com.sempermechanics.semper.data.MachineLoadCsv
-import com.sempermechanics.semper.data.MechanicalTestInputs
-import com.sempermechanics.semper.data.SpecimenGeometry
-import com.sempermechanics.semper.data.TestType
-import com.sempermechanics.semper.data.TypedLoads
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.LoadCsvParse
+import com.sempermechanics.semper.data.mechanical.LoadMapping
+import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
+import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.load.clearTypedLoads
 import com.sempermechanics.semper.ui.analysis.load.loadPointMissing
@@ -278,6 +278,7 @@ class AnalysisViewModelLabTest {
     }
 
     private companion object {
-        /** 2026-09-26 14:30:00 UTC, as [com.sempermechanics.semper.ui.analysis.PhotoCaptureTime] reads it. */
+        /** 2026-09-26 14:30:00 UTC, as [com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime] reads it. */
         const val PHOTO_T0 = 1_790_433_000_000L
+    }
 }

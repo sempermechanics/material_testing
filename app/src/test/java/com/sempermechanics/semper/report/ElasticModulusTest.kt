@@ -1,6 +1,6 @@
 @file:Suppress("MagicNumber")
 
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

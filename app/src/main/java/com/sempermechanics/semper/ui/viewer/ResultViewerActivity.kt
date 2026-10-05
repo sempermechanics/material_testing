@@ -17,10 +17,10 @@ import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.CurveCorrection
-import com.sempermechanics.semper.data.SpecimenGeometry
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
@@ -39,10 +39,14 @@ import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.home.HomeActivity
 import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
+import com.sempermechanics.semper.ui.viewer.mechanical.ViewerCurveCorrection
+import com.sempermechanics.semper.ui.viewer.mechanical.ViewerDeflectionCorrection
+import com.sempermechanics.semper.ui.viewer.mechanical.ViewerStressStrainHelper
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareExportUi
 import com.sempermechanics.semper.ui.viewer.share.ShareKind
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
+import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers

@@ -2,11 +2,11 @@ package com.sempermechanics.semper.cloud
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.CurveCorrection
-import com.sempermechanics.semper.data.SpecimenGeometry
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync.Outcome
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudSessionDto

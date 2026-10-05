@@ -3,11 +3,11 @@ package com.sempermechanics.semper.ui.analysis.wizard
 import android.os.Bundle
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.ui.analysis.load.clearLabInputs
+import com.sempermechanics.semper.ui.analysis.load.restoreLoadLog
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
-import com.sempermechanics.semper.ui.analysis.load.clearLabInputs
-import com.sempermechanics.semper.ui.analysis.load.restoreLoadLog
 
 /**
  * A wizard's tie to the process's one [WizardDraft] (ADR-005): where its

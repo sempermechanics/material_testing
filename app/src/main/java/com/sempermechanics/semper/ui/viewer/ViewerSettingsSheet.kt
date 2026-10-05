@@ -10,7 +10,7 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.TestType
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.databinding.SheetSettingsUsedBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.FieldHistogram
@@ -19,8 +19,9 @@ import com.sempermechanics.semper.ui.analysis.recommend.StrainWindowText
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
 import com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
 import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
-import com.sempermechanics.semper.ui.common.TestTypeSheet
 import com.sempermechanics.semper.ui.common.dialog.inflateSheet
+import com.sempermechanics.semper.ui.home.TestTypeSheet
+import com.sempermechanics.semper.ui.viewer.mechanical.ViewerFrameRows
 import kotlin.math.roundToInt
 
 /**

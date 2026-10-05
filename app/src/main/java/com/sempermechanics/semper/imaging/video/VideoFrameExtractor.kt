@@ -13,7 +13,6 @@ import androidx.core.graphics.scale
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.ImageEncoder
-import com.sempermechanics.semper.ui.analysis.VideoSampling
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import com.sempermechanics.semper.ui.analysis.frames.ImportedBatch
 import kotlinx.coroutines.CancellationException

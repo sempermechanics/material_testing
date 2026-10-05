@@ -4,18 +4,17 @@
 
 package com.sempermechanics.semper.ui.analysis.load
 
-import com.sempermechanics.semper.data.BeamEdgeTaps
-import com.sempermechanics.semper.data.LoadCsvParse
-import com.sempermechanics.semper.data.LoadMapping
-import com.sempermechanics.semper.data.MachineLoadCsv
-import com.sempermechanics.semper.data.MachineLoadMapper
-import com.sempermechanics.semper.data.MechanicalTestInputs
-import com.sempermechanics.semper.data.ParsedLoadCsv
-import com.sempermechanics.semper.data.SpecimenGeometry
-import com.sempermechanics.semper.data.TestType
-import com.sempermechanics.semper.data.TypedLoads
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.LoadCsvParse
+import com.sempermechanics.semper.data.mechanical.LoadMapping
+import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
+import com.sempermechanics.semper.data.mechanical.MachineLoadMapper
+import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
+import com.sempermechanics.semper.data.mechanical.ParsedLoadCsv
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.report.StressStrain
-import com.sempermechanics.semper.ui.analysis.PhotoCaptureTime
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 
 /*

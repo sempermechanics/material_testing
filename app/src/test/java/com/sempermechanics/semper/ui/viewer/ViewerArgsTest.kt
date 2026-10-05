@@ -3,6 +3,8 @@ package com.sempermechanics.semper.ui.viewer
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.DicParams
@@ -12,8 +14,6 @@ import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.navigation.DicKeys
 import com.sempermechanics.semper.ui.analysis.VsgLatticeActivity
 import com.sempermechanics.semper.ui.home.SessionOpenHelper
-import com.sempermechanics.semper.data.CurveCorrection
-import com.sempermechanics.semper.data.SpecimenGeometry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

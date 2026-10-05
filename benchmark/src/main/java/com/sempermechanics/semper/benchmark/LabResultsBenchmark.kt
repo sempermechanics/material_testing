@@ -1,4 +1,4 @@
-package com.indicvision.semper.benchmark
+package com.sempermechanics.semper.benchmark
 
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.ExperimentalMetricApi
@@ -70,7 +70,7 @@ class LabResultsBenchmark {
 
     companion object {
         private const val PACKAGE = BuildConfig.TARGET_PACKAGE
-        private const val SEEDER = "com.indicvision.semper.benchmark.BenchmarkSeedActivity"
+        private const val SEEDER = "com.sempermechanics.semper.benchmark.BenchmarkSeedActivity"
         private const val TRACE_BUILD = "Semper.viewer.stressStrain"
         private const val ELASTIC_BUTTON = "btnRangeElastic"
         private const val WHOLE_BUTTON = "btnRangeWhole"

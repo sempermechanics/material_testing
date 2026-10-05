@@ -1,6 +1,6 @@
 @file:Suppress("MagicNumber")
 
-package com.indicvision.semper.e2e
+package com.sempermechanics.semper.e2e
 
 import android.app.Activity
 import android.content.Intent
@@ -14,11 +14,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import com.indicvision.semper.DicKeys
-import com.indicvision.semper.R
-import com.indicvision.semper.data.BeamEdgeTaps
-import com.indicvision.semper.ui.analysis.BeamEdgeTapActivity
-import com.indicvision.semper.ui.viewer.TouchImageView
+import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.ui.analysis.BeamEdgeTapActivity
+import com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

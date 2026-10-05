@@ -1,13 +1,13 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
-import com.indicvision.semper.data.TypedLoads
-import com.indicvision.semper.report.LabReport.Block
-import com.indicvision.semper.report.LabReport.Document
-import com.indicvision.semper.report.LabReport.Series
-import com.indicvision.semper.report.LabReportFormat.frameCell
-import com.indicvision.semper.report.LabReportFormat.gpa
-import com.indicvision.semper.report.LabReportFormat.num
-import com.indicvision.semper.report.LabReportFormat.sci
+import com.sempermechanics.semper.data.mechanical.TypedLoads
+import com.sempermechanics.semper.report.LabReport.Block
+import com.sempermechanics.semper.report.LabReport.Document
+import com.sempermechanics.semper.report.LabReport.Series
+import com.sempermechanics.semper.report.LabReportFormat.frameCell
+import com.sempermechanics.semper.report.LabReportFormat.gpa
+import com.sempermechanics.semper.report.LabReportFormat.num
+import com.sempermechanics.semper.report.LabReportFormat.sci
 import java.util.Locale
 
 /**

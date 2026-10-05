@@ -31,9 +31,9 @@ class AppIdHeaderTest {
 
     @Test
     fun `a backend call names the app`() {
-        call(AppIdHeader(server.hostName, "com.indicvision.semper.materialtesting"))
+        call(AppIdHeader(server.hostName, "com.sempermechanics.semper.materialtesting"))
         assertEquals(
-            "com.indicvision.semper.materialtesting",
+            "com.sempermechanics.semper.materialtesting",
             server.takeRequest().headers["X-App-Id"],
         )
     }

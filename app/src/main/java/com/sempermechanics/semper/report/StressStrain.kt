@@ -1,9 +1,9 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
-import com.indicvision.semper.DicResult
-import com.indicvision.semper.data.CurveCorrection
-import com.indicvision.semper.data.SpecimenGeometry
-import com.indicvision.semper.data.TestType
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.field.DicResult
 import kotlin.math.abs
 
 /**

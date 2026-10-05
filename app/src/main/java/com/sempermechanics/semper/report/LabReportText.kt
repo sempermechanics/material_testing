@@ -1,9 +1,9 @@
 // Column widths are layout fractions, not tunable magic.
 @file:Suppress("MagicNumber")
 
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
-import com.indicvision.semper.data.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import java.util.Locale
 import kotlin.math.abs
 

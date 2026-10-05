@@ -1,9 +1,9 @@
 package com.sempermechanics.semper.data.cloud
 
-import com.sempermechanics.semper.data.BeamEdgeTaps
-import com.sempermechanics.semper.data.CurveCorrection
-import com.sempermechanics.semper.data.SpecimenGeometry
-import com.sempermechanics.semper.data.loadOfFrame
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.loadOfFrame
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.util.OptDoubleSerializer
 import com.sempermechanics.semper.util.OptObjectSerializer

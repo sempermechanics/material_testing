@@ -1,4 +1,4 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
 /**
  * Young's modulus E from a stress–strain [StressStrain.Curve]: the slope of

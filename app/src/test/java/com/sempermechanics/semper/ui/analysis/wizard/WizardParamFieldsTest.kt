@@ -78,7 +78,8 @@ class WizardParamFieldsTest {
 
         assertEquals(25, bed.settings.sliderSubsetSize.value.toInt())
         assertEquals(DicParams.DEFAULT_STEP, bed.settings.sliderStepSize.value.toInt())
-        assertEquals(VsgStudy.DEFAULT_WINDOW_POINTS, bed.settings.sliderStrainWindow.value.toInt())
+        // The test type's own default (tensile 5, bending 9; ADR-012).
+        assertEquals(bed.viewModel.testType.defaultStrainWindow, bed.settings.sliderStrainWindow.value.toInt())
         assertFalse(fields.isKeysInterpolatorSelected())
         assertFalse(bed.viewModel.subsetUserModified)
         assertEquals(listOf("commitParamFields", "resetSweepInputs", "clearRunStatus"), bed.host.calls)

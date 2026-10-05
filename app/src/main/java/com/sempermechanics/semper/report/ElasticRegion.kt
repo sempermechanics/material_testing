@@ -1,4 +1,4 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
 import kotlin.math.max
 import kotlin.math.min

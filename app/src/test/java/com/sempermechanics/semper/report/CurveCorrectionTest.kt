@@ -1,10 +1,10 @@
 @file:Suppress("MagicNumber")
 
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
-import com.indicvision.semper.DicResult
-import com.indicvision.semper.data.CurveCorrection
-import com.indicvision.semper.data.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.field.DicResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame

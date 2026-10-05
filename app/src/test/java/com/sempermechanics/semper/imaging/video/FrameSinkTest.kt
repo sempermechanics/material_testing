@@ -45,7 +45,7 @@ class FrameSinkTest {
 
     @Test
     fun `frame 0 is the reference and the rest are the deformed batch`() {
-        val result = runBlocking { sink(temp.newFolder()).write(count = 3) { luma(6, 4) } }!!
+        val result = runBlocking { sink(temp.newFolder()).write(count = 3, offsetMsAt = { it * 250L }) { luma(6, 4) } }!!
 
         assertEquals(ImageSize(6, 4), result.reference.size)
         assertTrue(result.reference.png.isNotEmpty())
@@ -53,18 +53,20 @@ class FrameSinkTest {
         assertEquals(listOf("frame_0001.png", "frame_0002.png"), result.batch.frames.map { it.name })
         assertEquals(listOf(ImageSize(6, 4), ImageSize(6, 4)), result.batch.frames.map { it.size })
         assertTrue(result.batch.fromVideo)
+        // Each deformed frame keeps its time after the reference, for load matching.
+        assertEquals(listOf(250L, 500L), result.batch.frames.map { it.videoTimeMs })
         assertTrue(result.batch.frames.all { File(it.path).isFile })
         assertEquals(listOf(33, 66, 100), progress)
     }
 
     @Test
     fun `a frame that does not decode aborts the batch`() {
-        val result = runBlocking { sink(temp.newFolder()).write(count = 3) { i -> if (i == 1) null else luma(6, 4) } }
+        val result = runBlocking { sink(temp.newFolder()).write(count = 3, offsetMsAt = { it * 250L }) { i -> if (i == 1) null else luma(6, 4) } }
         assertNull(result)
     }
 
     @Test
     fun `a clip with no deformed frame gives no batch`() {
-        assertNull(runBlocking { sink(temp.newFolder()).write(count = 1) { luma(6, 4) } })
+        assertNull(runBlocking { sink(temp.newFolder()).write(count = 1, offsetMsAt = { 0L }) { luma(6, 4) } })
     }
 }

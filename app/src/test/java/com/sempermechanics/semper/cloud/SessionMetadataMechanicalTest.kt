@@ -1,13 +1,14 @@
 @file:Suppress("MagicNumber")
 
-package com.indicvision.semper.cloud
+package com.sempermechanics.semper.cloud
 
-import com.indicvision.semper.data.BeamEdgeTaps
-import com.indicvision.semper.data.CloudRestore
-import com.indicvision.semper.data.SessionRecord
-import com.indicvision.semper.data.SessionUploadMetadata
-import com.indicvision.semper.data.SpecimenGeometry
-import com.indicvision.semper.report.BeamDeflection
+import com.sempermechanics.semper.data.cloud.SessionMetadataDoc
+import com.sempermechanics.semper.data.cloud.SessionUploadMetadata
+import com.sempermechanics.semper.data.cloud.restore.CloudRestore
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.session.SessionRecord
+import com.sempermechanics.semper.report.BeamDeflection
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -65,7 +66,7 @@ class SessionMetadataMechanicalTest {
             .put("schema", SessionUploadMetadata.SCHEMA)
             .put("test", test)
             .put("frames", SessionUploadMetadata.framesJson(record))
-        val restored = CloudRestore.recordFrom(meta, target())
+        val restored = restore(meta)
 
         assertEquals("bending", restored.testType)
         assertEquals(geometry, restored.geometry)
@@ -83,7 +84,7 @@ class SessionMetadataMechanicalTest {
             .put("test", SessionUploadMetadata.testJson(record)!!)
             .put("frames", SessionUploadMetadata.framesJson(record))
 
-        val restored = CloudRestore.recordFrom(meta, target())
+        val restored = restore(meta)
 
         assertEquals(BeamDeflection.Correction(1.05f, -0.12f), restored.geometry.deflectionCorrection)
     }
@@ -96,11 +97,11 @@ class SessionMetadataMechanicalTest {
 
         val test = SessionUploadMetadata.testJson(record)!!
         assertTrue(test.getJSONObject("geometry").has("loadPoint"))
-        val restored = CloudRestore.recordFrom(JSONObject().put("test", test), target())
+        val restored = restore(JSONObject().put("test", test))
         assertEquals(geometry, restored.geometry)
 
         test.getJSONObject("geometry").remove("loadPoint")
-        val older = CloudRestore.recordFrom(JSONObject().put("test", test), target())
+        val older = restore(JSONObject().put("test", test))
         assertEquals(BeamEdgeTaps.NONE, older.geometry.loadPoint)
         assertEquals(935f, older.geometry.spanMm)
     }
@@ -112,11 +113,11 @@ class SessionMetadataMechanicalTest {
         val test = SessionUploadMetadata.testJson(record)!!
         assertEquals(setOf("spanMm"), test.getJSONObject("geometry").keys().asSequence().toSet())
 
-        val restored = CloudRestore.recordFrom(JSONObject().put("test", test), target())
+        val restored = restore(JSONObject().put("test", test))
         assertEquals(geometry, restored.geometry)
 
         test.remove("geometry")
-        val older = CloudRestore.recordFrom(JSONObject().put("test", test), target())
+        val older = restore(JSONObject().put("test", test))
         assertEquals("bending", older.testType)
         assertEquals(SpecimenGeometry.NONE, older.geometry)
     }
@@ -140,7 +141,7 @@ class SessionMetadataMechanicalTest {
             .put("schema", SessionUploadMetadata.SCHEMA)
             .put("test", SessionUploadMetadata.testJson(record))
             .put("frames", SessionUploadMetadata.framesJson(record))
-        val restored = CloudRestore.recordFrom(meta, target())
+        val restored = restore(meta)
 
         assertEquals("tensile", restored.testType)
         assertEquals(12.5f, restored.crossSectionMm2, 1e-4f)
@@ -158,7 +159,7 @@ class SessionMetadataMechanicalTest {
             .put("test", SessionUploadMetadata.testJson(record))
             .put("frames", SessionUploadMetadata.framesJson(record))
 
-        val restored = CloudRestore.recordFrom(meta, target())
+        val restored = restore(meta)
 
         assertFalse(restored.loadAxisX)
         assertEquals(listOf(0f, -10f, -20f), restored.loadsN)
@@ -170,7 +171,7 @@ class SessionMetadataMechanicalTest {
             .put("schema", "indic.session.metadata/3")
             .put("frames", SessionUploadMetadata.framesJson(record(testType = "", loadsN = emptyList())))
 
-        val restored = CloudRestore.recordFrom(meta, target())
+        val restored = restore(meta)
 
         assertEquals("", restored.testType)
         assertEquals(0f, restored.crossSectionMm2, 0f)
@@ -188,7 +189,7 @@ class SessionMetadataMechanicalTest {
             .put("test", SessionUploadMetadata.testJson(record))
             .put("frames", frames)
 
-        val restored = CloudRestore.recordFrom(meta, target())
+        val restored = restore(meta)
 
         assertEquals(listOf(0f, Float.NaN, 1700.5f), restored.loadsN)
         assertTrue(restored.hasMachineLoads)
@@ -203,22 +204,18 @@ class SessionMetadataMechanicalTest {
             .put("test", SessionUploadMetadata.testJson(record))
             .put("frames", frames)
 
-        val restored = CloudRestore.recordFrom(meta, target())
+        val restored = restore(meta)
 
         assertTrue(restored.loadsN.isEmpty())
         assertFalse(restored.hasMachineLoads)
     }
 
-    private fun target(): CloudRestore.RestoreRecordTarget {
+    /** [meta] read back as a restore reads a backup's metadata.json, into a folder of its own. */
+    private fun restore(meta: JSONObject): SessionRecord {
         // One folder per call: a test that restores twice must not collide.
         val dir = temp.newFolder("sess-${targets++}")
-        return CloudRestore.RestoreRecordTarget(
-            localId = "local-1",
-            cloudSessionId = "cloud-1",
-            sessionDir = dir,
-            refPath = File(dir, "ref.png").absolutePath,
-            existing = null,
-        )
+        return SessionMetadataDoc.decode(meta.toString())
+            .toRecord("local-1", "cloud-1", dir, File(dir, "ref.png").absolutePath, existing = null)
     }
 
     private fun record(

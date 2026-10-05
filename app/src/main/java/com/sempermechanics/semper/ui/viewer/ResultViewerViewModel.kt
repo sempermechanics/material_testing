@@ -5,7 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
-import com.sempermechanics.semper.data.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.FieldStats
 import com.sempermechanics.semper.field.ValueRange

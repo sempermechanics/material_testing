@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.results
 
-import com.sempermechanics.semper.data.BeamEdgeTaps
-import com.sempermechanics.semper.data.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.report.AnalysisCsvWriter
 import com.sempermechanics.semper.report.StressStrain

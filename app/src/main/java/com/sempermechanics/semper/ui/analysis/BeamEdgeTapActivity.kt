@@ -1,4 +1,4 @@
-package com.indicvision.semper.ui.analysis
+package com.sempermechanics.semper.ui.analysis
 
 import android.app.Activity
 import android.content.Intent
@@ -10,11 +10,14 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
-import com.indicvision.semper.DicKeys
-import com.indicvision.semper.R
-import com.indicvision.semper.data.BeamEdgeTaps
-import com.indicvision.semper.ui.common.Insets
-import com.indicvision.semper.ui.viewer.TouchImageView
+import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.ui.analysis.load.BeamEdgeTapOverlay
+import com.sempermechanics.semper.ui.analysis.load.BeamTapPlacement
+import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
+import com.sempermechanics.semper.ui.common.Insets
+import com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,7 +34,7 @@ import kotlin.math.roundToInt
  * be laid along the edge. The bottom mark is held on the top mark's vertical
  * line ([BeamTapPlacement]). The thickness they measured over the tapped
  * pixels is the photo's mm per pixel, and the midpoint is where
- * [com.indicvision.semper.report.BeamDeflection] reads δ. Pinch and pan to
+ * [com.sempermechanics.semper.report.BeamDeflection] reads δ. Pinch and pan to
  * zoom in; a tap after both are placed moves the mark nearer in height. Returns
  * [DicKeys.BEAM_EDGE_TAPS] in true reference pixels.
  */

@@ -1,4 +1,4 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
 /**
  * The 0.2 % offset yield strength Rp0.2 (ISO 6892-1, ASTM E8) of a tensile

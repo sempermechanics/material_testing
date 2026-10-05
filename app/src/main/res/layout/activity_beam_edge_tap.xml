@@ -70,7 +70,7 @@
             android:layout_height="match_parent"
             android:contentDescription="@string/beam_tap_canvas" />
 
-        <com.sempermechanics.semper.ui.analysis.BeamEdgeTapOverlay
+        <com.sempermechanics.semper.ui.analysis.load.BeamEdgeTapOverlay
             android:id="@+id/overlayBeamTaps"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />

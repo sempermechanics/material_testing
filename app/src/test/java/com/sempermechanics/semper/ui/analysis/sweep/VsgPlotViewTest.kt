@@ -353,20 +353,20 @@ class VsgPlotViewTest {
 
     @Test
     fun `the scrub label reads both coordinates with their units`() {
-        assertEquals("(0.520 mm, 9.81 N)", VsgPlotView.scrubLabel(0.52f, 9.80665f, "mm", "N"))
-        assertEquals("(1.94 mε, 263 MPa)", VsgPlotView.scrubLabel(1.94f, 263.2f, "mε", "MPa"))
+        assertEquals("(0.520 mm, 9.81 N)", VsgPlotAxes.scrubLabel(0.52f, 9.80665f, "mm", "N"))
+        assertEquals("(1.94 mε, 263 MPa)", VsgPlotAxes.scrubLabel(1.94f, 263.2f, "mε", "MPa"))
         // The lattice and line-cut plots pass no units.
-        assertEquals("(41.0, 0.012)", VsgPlotView.scrubLabel(41f, 0.0123f, "", ""))
+        assertEquals("(41.0, 0.012)", VsgPlotAxes.scrubLabel(41f, 0.0123f, "", ""))
     }
 
     @Test
     fun `a read value keeps three significant figures and never reads -0`() {
-        assertEquals("0.052", VsgPlotView.readoutValue(0.052f))
-        assertEquals("4.90", VsgPlotView.readoutValue(4.903325f))
-        assertEquals("14.7", VsgPlotView.readoutValue(14.709975f))
-        assertEquals("1962", VsgPlotView.readoutValue(1962.4f))
-        assertEquals("0.000", VsgPlotView.readoutValue(-0.0001f))
-        assertEquals("-0.260", VsgPlotView.readoutValue(-0.26f))
+        assertEquals("0.052", VsgPlotAxes.readoutValue(0.052f))
+        assertEquals("4.90", VsgPlotAxes.readoutValue(4.903325f))
+        assertEquals("14.7", VsgPlotAxes.readoutValue(14.709975f))
+        assertEquals("1962", VsgPlotAxes.readoutValue(1962.4f))
+        assertEquals("0.000", VsgPlotAxes.readoutValue(-0.0001f))
+        assertEquals("-0.260", VsgPlotAxes.readoutValue(-0.26f))
     }
 
     @Test

@@ -19,7 +19,7 @@ object DicKeys {
     const val PICKED_DEF_URIS = "PICKED_DEF_URIS"
 
     /**
-     * [com.indicvision.semper.data.TestType.wireName] chosen on Home. Left on
+     * [com.sempermechanics.semper.data.mechanical.TestType.wireName] chosen on Home. Left on
      * the wizard's Intent (not consumed) so a recreation after process death
      * still knows which test it is building; the viewer carries it too.
      */
@@ -36,12 +36,12 @@ object DicKeys {
     const val LOADS_N = "LOADS_N"
 
     /**
-     * [com.indicvision.semper.data.SpecimenGeometry.toArray] — the bending
+     * [com.sempermechanics.semper.data.mechanical.SpecimenGeometry.toArray] — the bending
      * dimensions, taps and deflection correction; all zero (scale 1) on a tensile test.
      */
     const val SPECIMEN_GEOMETRY = "SPECIMEN_GEOMETRY"
 
-    /** [com.indicvision.semper.data.CurveCorrection.toArray] — tensile scale and bias. */
+    /** [com.sempermechanics.semper.data.mechanical.CurveCorrection.toArray] — tensile scale and bias. */
     const val CURVE_CORRECTION = "CURVE_CORRECTION"
 
     // ── StaticAnalysisActivity  RoiDrawActivity

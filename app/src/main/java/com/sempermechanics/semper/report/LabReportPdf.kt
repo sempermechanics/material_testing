@@ -3,7 +3,7 @@
 // suppressed for this file.
 @file:Suppress("MagicNumber", "TooManyFunctions")
 
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
 import android.graphics.Bitmap
 import android.graphics.Canvas

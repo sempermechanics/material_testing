@@ -15,8 +15,8 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.inflateSheet
-import com.sempermechanics.semper.ui.viewer.LabReportExporter
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.ui.viewer.mechanical.LabReportExporter
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import timber.log.Timber
 import java.io.File

@@ -1,4 +1,4 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
 /**
  * Ordinary least-squares straight line, y = slope·x + intercept, with its

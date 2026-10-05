@@ -26,6 +26,7 @@ import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.ui.viewer.mechanical.ViewerStressStrainHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -11,9 +11,9 @@ import com.sempermechanics.semper.data.prefs.DicSettings
 import com.sempermechanics.semper.databinding.SheetVideoSamplingBinding
 import com.sempermechanics.semper.imaging.video.ExtractionRequest
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
+import com.sempermechanics.semper.imaging.video.VideoKeyframes
 import com.sempermechanics.semper.imaging.video.VideoMeta
-import com.sempermechanics.semper.ui.analysis.VideoKeyframes
-import com.sempermechanics.semper.ui.analysis.VideoSampling
+import com.sempermechanics.semper.imaging.video.VideoSampling
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.onButtonChecked
 import kotlinx.coroutines.CoroutineDispatcher

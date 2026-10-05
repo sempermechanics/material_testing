@@ -16,7 +16,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.TestType
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.prefs.DicSettings
 import com.sempermechanics.semper.data.prefs.WizardDraft
@@ -33,6 +33,7 @@ import com.sempermechanics.semper.ui.analysis.frames.ReferenceImportController
 import com.sempermechanics.semper.ui.analysis.frames.VideoSamplingSheet
 import com.sempermechanics.semper.ui.analysis.frames.WizardMediaPickers
 import com.sempermechanics.semper.ui.analysis.frames.checkFrameSizes
+import com.sempermechanics.semper.ui.analysis.load.AnalysisLoadCard
 import com.sempermechanics.semper.ui.analysis.load.BeamEdgeTapLauncher
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
 import com.sempermechanics.semper.ui.analysis.roi.RoiResolveHelper
@@ -404,7 +405,7 @@ class StaticAnalysisActivity :
      * TooManyViews cap.
      */
     private fun setupLoadCard() {
-        beamTaps = BeamEdgeTapLauncher(this, viewModel) { taps -> loadCard?.loadPoint?.onPicked(taps) }
+        beamTaps = BeamEdgeTapLauncher(this, viewModel, onPicked = { taps -> loadCard?.loadPoint?.onPicked(taps) })
         if (!viewModel.testType.hasMachineLoad) return
         val root = binding.stubLoadCard.inflate()
         loadCard = AnalysisLoadCard(

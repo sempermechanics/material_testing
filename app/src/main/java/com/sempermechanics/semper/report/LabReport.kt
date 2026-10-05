@@ -1,10 +1,10 @@
-package com.indicvision.semper.report
+package com.sempermechanics.semper.report
 
-import com.indicvision.semper.data.CurveCorrection
-import com.indicvision.semper.report.LabReportFormat.frameCell
-import com.indicvision.semper.report.LabReportFormat.gpa
-import com.indicvision.semper.report.LabReportFormat.num
-import com.indicvision.semper.report.LabReportFormat.sci
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.report.LabReportFormat.frameCell
+import com.sempermechanics.semper.report.LabReportFormat.gpa
+import com.sempermechanics.semper.report.LabReportFormat.num
+import com.sempermechanics.semper.report.LabReportFormat.sci
 import java.util.Locale
 
 /**

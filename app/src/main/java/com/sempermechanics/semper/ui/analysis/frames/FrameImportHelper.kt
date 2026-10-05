@@ -7,7 +7,7 @@ import com.sempermechanics.semper.SemperNativeLib
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.ExifOrientedSize
-import com.sempermechanics.semper.ui.analysis.PhotoCaptureTime
+import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 import com.sempermechanics.semper.util.forEachChunk
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive

@@ -2,7 +2,7 @@ package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.content.Context
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.TestType
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.databinding.ActivityStaticAnalysisBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
 import com.sempermechanics.semper.report.StressStrain

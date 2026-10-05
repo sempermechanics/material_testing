@@ -5,7 +5,7 @@ package com.sempermechanics.semper.data.session
 import android.content.Context
 import android.graphics.Bitmap
 import com.sempermechanics.semper.SemperNativeLib
-import com.sempermechanics.semper.data.MechanicalTestInputs
+import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.ImageEncoder

@@ -1,13 +1,13 @@
-package com.indicvision.semper.analysis
+package com.sempermechanics.semper.analysis
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.indicvision.semper.R
-import com.indicvision.semper.data.LoadCsvParse
-import com.indicvision.semper.data.LoadUnit
-import com.indicvision.semper.data.MachineLoadCsv
-import com.indicvision.semper.data.TestType
-import com.indicvision.semper.ui.analysis.LoadInfoDialog
+import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.mechanical.LoadCsvParse
+import com.sempermechanics.semper.data.mechanical.LoadUnit
+import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
+import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.ui.analysis.load.LoadInfoDialog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue

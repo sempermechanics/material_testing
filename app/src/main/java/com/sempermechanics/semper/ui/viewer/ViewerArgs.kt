@@ -2,8 +2,8 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.content.Context
 import android.content.Intent
-import com.sempermechanics.semper.data.CurveCorrection
-import com.sempermechanics.semper.data.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.DicParams

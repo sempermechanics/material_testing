@@ -1,6 +1,6 @@
 @file:Suppress("MagicNumber")
 
-package com.indicvision.semper.e2e
+package com.sempermechanics.semper.e2e
 
 import android.graphics.Bitmap
 import android.graphics.Matrix
@@ -13,21 +13,21 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.indicvision.semper.DicResult
-import com.indicvision.semper.R
-import com.indicvision.semper.data.BeamEdgeTaps
-import com.indicvision.semper.data.CoachPrefs
-import com.indicvision.semper.data.SessionPaths
-import com.indicvision.semper.data.SessionRecord
-import com.indicvision.semper.data.SessionStore
-import com.indicvision.semper.data.SpecimenGeometry
-import com.indicvision.semper.data.TestType
-import com.indicvision.semper.report.BeamDeflection
-import com.indicvision.semper.report.ElasticModulus
-import com.indicvision.semper.report.StressStrain
-import com.indicvision.semper.ui.home.SessionOpenHelper
-import com.indicvision.semper.ui.viewer.LabReportExporter
-import com.indicvision.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.data.prefs.CoachPrefs
+import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.data.session.SessionRecord
+import com.sempermechanics.semper.data.session.SessionStore
+import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.report.BeamDeflection
+import com.sempermechanics.semper.report.ElasticModulus
+import com.sempermechanics.semper.report.StressStrain
+import com.sempermechanics.semper.ui.home.SessionOpenHelper
+import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.ui.viewer.mechanical.LabReportExporter
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -49,7 +49,7 @@ import java.nio.ByteOrder
  * probe) behave.
  *
  * Sessions are seeded on disk with a known field, as
- * [com.indicvision.semper.ui.viewer.ViewerEntryParityDeviceTest] does, so the
+ * [com.sempermechanics.semper.ui.viewer.ViewerEntryParityDeviceTest] does, so the
  * expected E is exact: tensile 200 GPa over frames 1–6, bending 3 GPa.
  * The wizard's own inputs (load card, taps) are covered by
  * `BeamTapEditorGestureTest` and `WizardDraftRestoreTest`.
@@ -161,7 +161,7 @@ class LabWorkflowDeviceTest {
         val record = seedTensile()
         val intent = SessionOpenHelper.argsFor(record).copy(startFrame = 0).toIntent(context)
         ActivityScenario.launch<ResultViewerActivity>(intent).use { scenario ->
-            awaitOn(scenario, "frame 1's field") { it.rawData != null && it.imgMain.drawable != null }
+            awaitOn(scenario, "frame 1's field") { it.rawData != null && it.binding.imgBaseResult.drawable != null }
             val restScale = scaleOf(scenario)
 
             // At rest, a horizontal swipe is a scrub: one frame whether it is a
@@ -189,7 +189,7 @@ class LabWorkflowDeviceTest {
             // A short tap reads the nearest point.
             val box = image().visibleBounds
             device.click(box.centerX(), box.centerY())
-            awaitOn(scenario, "the probe readout") { it.tvProbeReadout.isVisible }
+            awaitOn(scenario, "the probe readout") { it.binding.tvProbeReadout.isVisible }
 
             image().pinchClose(PINCH_PERCENT)
             device.waitForIdle()
@@ -222,7 +222,7 @@ class LabWorkflowDeviceTest {
         var scale = 0f
         scenario.onActivity {
             val values = FloatArray(9)
-            it.imgMain.getZoomMatrix().getValues(values)
+            it.binding.imgBaseResult.getZoomMatrix().getValues(values)
             scale = values[Matrix.MSCALE_X]
         }
         return scale

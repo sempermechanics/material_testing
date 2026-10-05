@@ -11,7 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.imaging.BitmapDecoder
-import com.sempermechanics.semper.ui.analysis.PhotoCaptureTime
+import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.sempermechanics.semper.ui.common.SerialJob
