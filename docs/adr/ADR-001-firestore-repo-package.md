@@ -162,6 +162,9 @@ facade's public names, and that only `_base` binds `firestore`.
 modules. Code moved unchanged; `licensing.py` now only re-exports the 44 names
 it used to define, so `from app.repo.licensing import …` still works.
 
+*2026-10-05:* nothing imported `app.repo.licensing` any more, so the
+re-export module is deleted (TD-184).
+
 ```
 repo/claims.py             claim_seat, claim_individual_license,
                            _drop_superseded_demo, and what a claim writes or

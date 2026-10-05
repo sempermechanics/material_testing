@@ -109,7 +109,7 @@ def convert_to_institution(
                                         for a in apps.ALL})
         if err:
             new_ref.delete()
-            return _public_claim_error(err, errors.CLAIM_CONTENDED), None
+            return _public_claim_error(err), None
         claimed = holder_uid
     elif address:
         # Not signed in yet: the promise moves to the new licence. The old

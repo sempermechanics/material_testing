@@ -578,9 +578,8 @@ def test_contention_is_not_reported_as_an_exhausted_licence(store, monkeypatch, 
 
     # A caller who has to answer a route gets the public code it names; the
     # private marker never reaches the wire.
-    assert repo._public_claim_error(
-        repo._CONTENDED, "claim_contended") == "claim_contended"
-    assert repo._public_claim_error("license_revoked", "x") == "license_revoked"
+    assert repo._public_claim_error(repo._CONTENDED) == "claim_contended"
+    assert repo._public_claim_error("license_revoked") == "license_revoked"
 
 
 def test_revoking_frees_the_address_for_a_replacement_licence(store):

@@ -341,7 +341,7 @@ def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[
         # Demo key short-circuits the sign-in path — so say so plainly rather
         # than leaking the private marker. The licence is minted and the key
         # in hand redeems it through the support route.
-        public = _public_claim_error(err, "claim_contended")
+        public = _public_claim_error(err)
         log.warning("individual licence %s not attached to %s: %s",
                     license_id, holder["uid"], public)
         return "", public

@@ -15,7 +15,6 @@ from app.repo import (
     claims,
     entitlement,
     institution_admin,
-    licensing,
     seats,
     user_config,
 )
@@ -36,7 +35,7 @@ def test_a_patch_through_the_facade_reaches_callers_inside_the_package():
     def fake(*a, **k):
         return repo._CONTENDED
 
-    holders = (claims, activation, entitlement, institution_admin, licensing)
+    holders = (claims, activation, entitlement, institution_admin)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(repo, "claim_seat", fake)
         assert all(m.claim_seat is fake for m in holders)
@@ -102,7 +101,7 @@ def test_only_base_binds_the_firestore_module():
 
 #: What each licensing module may import from the package (TD-64). Claims and
 #: invites are leaves; `holders` (the one-licence rule) reads through invites;
-#: everything else builds on them, and `licensing` only re-exports.
+#: everything else builds on them.
 LICENSING_IMPORTS = {
     "claims": {"_base"},
     "invites": {"_base"},
@@ -114,8 +113,6 @@ LICENSING_IMPORTS = {
     "upgrade": {"_base", "claims", "invites", "mint", "license_admin"},
     "deletion": {"_base", "claims", "holders", "invites", "mint", "license_admin"},
     "institution_admin": {"_base", "claims", "holders", "invites", "mint"},
-    "licensing": {"claims", "invites", "holders", "mint", "activation", "entitlement",
-                  "license_admin", "upgrade", "deletion", "institution_admin"},
 }
 
 
@@ -134,19 +131,3 @@ def test_the_licensing_modules_import_only_their_layer():
         if _package_imports(by_name[name]) - allowed
     }
     assert extra == {}
-
-
-def test_licensing_only_re_exports():
-    """The old import path keeps working, but no code lands there again."""
-    defined = [
-        getattr(node, "name", None) or type(node).__name__
-        for node in _tree(licensing).body
-        if not isinstance(node, (ast.ImportFrom, ast.Expr))
-    ]
-    assert defined == []
-    by_name = {m.__name__.rsplit(".", 1)[1]: m for m in repo.PACKAGE}
-    for node in _tree(licensing).body:
-        if isinstance(node, ast.ImportFrom):
-            owner = by_name[node.module]
-            for alias in node.names:
-                assert getattr(licensing, alias.name) is vars(owner)[alias.name]

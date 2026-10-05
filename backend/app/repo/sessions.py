@@ -236,10 +236,6 @@ def set_file_upload_url(file_id: str, url: str) -> None:
     })
 
 
-def count_unprovisioned_files(sid: str) -> int:
-    return sum(1 for _ in iter_unprovisioned_files(sid))
-
-
 def session_app(session: dict | None) -> str:
     """The app a session was backed up from (ADR-014): `apps.SEMPER` or
     `apps.MATERIAL_TESTING`, the vocabulary of `devices/{id}.app`.
@@ -415,12 +411,6 @@ def count_user_sessions(uid: str) -> int:
     return max(0, total - int(failed[0][0].value))
 
 
-#: Session states that still expect more bytes. PROVISIONING is included so a
-#: retried POST /v1/sessions joins the session whose upload targets are still
-#: being opened, instead of minting a duplicate alongside it.
-IN_FLIGHT_STATUSES = statuses.IN_FLIGHT_SESSION_STATUSES
-
-
 def find_incomplete_session(uid: str, local_session_id: str):
     """An in-flight session for (uid, localSessionId), if any.
 
@@ -438,7 +428,9 @@ def find_incomplete_session(uid: str, local_session_id: str):
         db().collection("sessions")
         .where("uid", "==", uid)
         .where("localSessionId", "==", local_session_id)
-        .where("status", "in", list(IN_FLIGHT_STATUSES))
+        # PROVISIONING is in flight too: a retry joins the session whose upload
+        # targets are still being opened rather than minting a duplicate.
+        .where("status", "in", list(statuses.IN_FLIGHT_SESSION_STATUSES))
         .limit(1)
     )
     for d in q.stream():
@@ -505,19 +497,13 @@ def _file_doc(sid: str, uid: str, f: FileSpec, upload_url: str | None) -> dict:
     }
 
 
-def create_file(sid: str, uid: str, file_id: str, f: FileSpec, upload_url: str | None):
-    """Write the file doc. `upload_url` is None until provisioning opens the
-    Drive resumable session for it (see iter_unprovisioned_files)."""
-    db().collection("files").document(file_id).set(_file_doc(sid, uid, f, upload_url))
-
-
 def create_files_batch(sid: str, uid: str, files: list[tuple[str, FileSpec]]) -> None:
-    """[create_file] for every (file_id, spec) pair, batched — a plain Python
-    loop of individual `.set()` calls was one Firestore round trip per file (a
-    3-object split-bundle session is 3 already; a legacy per-file-per-frame
-    session could be far more). `upload_url` is always None here: provisioning
-    fills it in once Drive resumable sessions exist, same as the single-file
-    path. Chunked to Firestore's per-batch write cap, same pattern as
+    """Write the file doc for every (file_id, spec) pair, batched — one
+    `.set()` per file was one Firestore round trip each (a 3-object
+    split-bundle session is 3 already; a legacy per-file-per-frame session
+    could be far more). `uploadUrl` starts as None: provisioning fills it in
+    once the Drive resumable session exists (`iter_unprovisioned_files`).
+    Chunked to Firestore's per-batch write cap, same pattern as
     [_delete_refs]."""
     for start in range(0, len(files), _BATCH_LIMIT):
         batch = db().batch()

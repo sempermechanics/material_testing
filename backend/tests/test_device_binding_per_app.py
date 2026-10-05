@@ -88,9 +88,9 @@ def test_one_apps_device_is_a_mismatch_in_the_other(store):
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-mt", MT)
     user = store._data["users"]["solo-1"]
 
-    assert repo.check_device_lock(user, "and-semper", MT) is False
-    assert repo.check_device_lock(user, "and-mt") is False
-    assert repo.check_device_lock(user, "and-mt", MT) is True
+    assert repo.revalidate_device_lock(user, "and-semper", MT)["mode"] == "demo"
+    assert repo.revalidate_device_lock(user, "and-mt")["mode"] == "demo"
+    assert repo.revalidate_device_lock(user, "and-mt", MT)["mode"] == "licensed"
 
 
 def test_a_seat_binds_one_device_per_app(store):

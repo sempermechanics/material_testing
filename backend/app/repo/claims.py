@@ -1,7 +1,7 @@
 """Claiming a licence: the seat and individual-licence transactions, and the
 user-document patches they write.
 """
-from .. import apps
+from .. import apps, errors
 from ..licenses import (
     SEATING_FLOATING,
     KIND_INDIVIDUAL,
@@ -24,14 +24,14 @@ from ._base import (
 )
 
 
-def _public_claim_error(err: str, fallback: str) -> str:
-    """The wire code for a claim failure, contention included.
+def _public_claim_error(err: str) -> str:
+    """The wire code for a claim failure: `claim_contended` for a lost race.
 
-    Contention fails closed as `fallback` — granting a seat or a licence we
-    could not commit is the one outcome that breaks the cap, and a caller who
-    lost the race succeeds on their next request.
+    Contention fails closed — granting a seat or a licence we could not
+    commit is the one outcome that breaks the cap — and a caller who lost the
+    race succeeds on their next request.
     """
-    return fallback if err == _CONTENDED else err
+    return errors.CLAIM_CONTENDED if err == _CONTENDED else err
 
 
 def _emails_match(left, right) -> bool:

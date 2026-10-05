@@ -108,7 +108,7 @@ def add_institution_member(license_id: str, email: str,
     err = claim_seat(license_id, uid, user.get("email") or email, "",
                      _institution_member_patch(license_id, lic))
     if err:
-        return _public_claim_error(err, "claim_contended"), None, None
+        return _public_claim_error(err), None, None
     return "", institution_seat(license_id, uid), None
 
 

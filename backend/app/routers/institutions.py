@@ -21,7 +21,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from .. import apps, audit, errors, firestore_repo as repo
 from .. import rate_limit
-from ..deps import current_user, ensure_web_step_up, rate_limited
+from ..config import settings
+from ..deps import current_user, rate_limited, step_up_check
 from ..licenses import KIND_INSTITUTION, normalize_kind
 from ..models import InstitutionSeatAdd, InstitutionSeatPatch
 from ..validation import DocumentId, Uid
@@ -69,9 +70,8 @@ async def institution_admin_stepup(
     device-or-MFA gate the operator and account consoles use.
     """
     ctx = institution_admin_context(license_id, user)
-    await ensure_web_step_up(
-        request, user, x_device_id, x_nonce, x_signature,
-    )
+    await step_up_check(request, user, x_device_id, x_nonce, x_signature,
+                        max_age_seconds=settings.ADMIN_WEB_REAUTH_SECONDS)
     return ctx
 
 

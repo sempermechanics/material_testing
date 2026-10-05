@@ -101,7 +101,6 @@ from .repo.devlock import (  # noqa: F401
     bind_device_lock,
     released_device_held,
     _BIND_ROUNDS,
-    check_device_lock,
     _device_lock_state,
     DeviceLockContended,
     revalidate_device_lock,
@@ -134,7 +133,6 @@ from .repo.devices import (  # noqa: F401
     get_device,
     issue_nonce,
     register_device,
-    user_has_active_device,
 )
 from .repo.account import (  # noqa: F401
     delete_all_user_data,
@@ -147,16 +145,13 @@ from .repo.account import (  # noqa: F401
 from .repo.sessions import (  # noqa: F401
     bump_session_progress,
     complete_file,
-    count_unprovisioned_files,
     count_user_sessions,
-    create_file,
     create_files_batch,
     create_session,
     delete_session,
     find_incomplete_session,
     get_file,
     get_session,
-    IN_FLIGHT_STATUSES,
     iter_all_user_sessions,
     iter_unprovisioned_files,
     iter_user_sessions,
@@ -189,7 +184,6 @@ from .repo import (
     invites,
     leases,
     license_admin,
-    licensing,
     mint,
     reconcile,
     seats,
@@ -201,7 +195,7 @@ from .repo import (
 
 #: Every module of the package, each after everything it imports.
 PACKAGE = (_base, user_config, devlock, claims, invites, holders, mint, activation, entitlement,
-           license_admin, upgrade, deletion, institution_admin, licensing, devices, users, leases, seats,
+           license_admin, upgrade, deletion, institution_admin, devices, users, leases, seats,
            reconcile, account, sessions)
 _MISSING = object()
 

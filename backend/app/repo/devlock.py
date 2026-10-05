@@ -41,7 +41,6 @@ _LOCK_OK = "ok"
 _LOCK_UNBOUND = "unbound"
 _LOCK_REVOKED = "revoked"
 _LOCK_MISMATCH = "mismatch"
-_LOCK_REFUSED = (_LOCK_REVOKED, _LOCK_MISMATCH)
 
 
 def _device_lock_state(user: dict, device_id: str,
@@ -156,17 +155,6 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
         if round_ + 1 < _BIND_ROUNDS:
             time.sleep(random.uniform(0, _BIND_BACKOFF_S * 2 ** round_))
     raise DeviceLockContended()
-
-
-def check_device_lock(user: dict, device_id: str, app: str = apps.SEMPER) -> bool:
-    """True if `device_id` may still use this account's entitlement.
-
-    An unbound lock passes: it is not a violation, it is a licence that has
-    not met a device yet. Binding is revalidate_device_lock's job, because
-    only it knows the caller is a real authed request rather than a check.
-    """
-    return _device_lock_state(user, device_id, app)[0] not in _LOCK_REFUSED
-
 
 
 def released_device_held(user: dict, device_id: str, app: str = apps.SEMPER) -> bool:

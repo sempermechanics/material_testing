@@ -71,9 +71,8 @@ def test_create_complete_list_delete_roundtrip(emulator_repo, monkeypatch):
     emulator_repo.create_session(sid, user, device, body)
     emulator_repo.set_session_folder(sid, "session-folder")
     file_id = f"{sid}_bundle_Session.zip"
-    emulator_repo.create_file(
-        sid, uid, file_id, body.files[0], "https://upload.example/session",
-    )
+    emulator_repo.create_files_batch(sid, uid, [(file_id, body.files[0])])
+    emulator_repo.set_file_upload_url(file_id, "https://upload.example/session")
     outcome = emulator_repo.complete_file(
         file_id, uid, FileComplete(sessionId=sid, driveFileId="drive-1", bytes=10, md5="d" * 32),
     )
@@ -111,8 +110,10 @@ def _seed_session(repo_, uid, file_count):
     ids = []
     for spec in specs:
         file_id = f"{sid}_bundle_{spec.name}"
-        repo_.create_file(sid, uid, file_id, spec, "https://upload.example/s")
         ids.append(file_id)
+    repo_.create_files_batch(sid, uid, [(file_id, spec) for file_id, spec in zip(ids, specs)])
+    for file_id in ids:
+        repo_.set_file_upload_url(file_id, "https://upload.example/s")
     return sid, ids
 
 

@@ -1669,7 +1669,7 @@ as assigned because that is what those documents say.
 
 #### The lease is on the seat document
 
-Not in a `leases` collection, as first sketched. `check_device_lock` already
+Not in a `leases` collection, as first sketched. `revalidate_device_lock` already
 reads `licenses/{id}/seats/{uid}` on every institution request, and license
 terms are already mirrored onto the user so `effective_mode` and
 `resolve_user_config` touch no Firestore at all (§20.6). A separate collection
@@ -2185,7 +2185,7 @@ phone does not wait 30 days.
 
 `POST /v1/licenses/unbind` sits on `attested_or_mfa_user`, the same step-up
 machinery as `attested_or_mfa_admin` with `current_user` beneath it instead of
-`admin_user`; both delegate to one `_attested_or_mfa` so the browser path can
+`admin_user`; both delegate to one `step_up_check` so the browser path can
 only ever be withdrawn (`ADMIN_WEB_MFA_ENABLED=0`) for both at once. The route
 authz matrix records it as its own tier, `USER_STEPUP`.
 

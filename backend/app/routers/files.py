@@ -148,7 +148,7 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
     # Advance the session the FILE belongs to, never the one the client named:
     # body.sessionId is unauthenticated input, and bump_session_progress does no
     # ownership check of its own, so trusting it let a caller complete someone
-    # else's session. The binding was fixed at upload time (create_file records
+    # else's session. The binding was fixed at upload time (create_files_batch records
     # sessionId on the file doc), so the client's copy is redundant anyway.
     if outcome == "ok":
         repo.bump_session_progress(rec["sessionId"])

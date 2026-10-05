@@ -116,7 +116,7 @@ def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic:
 
     err = claim_seat(license_id, uid, email, device_id, user_patch, app=app)
     if err:
-        return _public_claim_error(err, "claim_contended"), None
+        return _public_claim_error(err), None
 
     merged = _apply_patch(user, user_patch)
     return "", resolve_user_config(merged)

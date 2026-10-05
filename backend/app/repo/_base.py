@@ -146,7 +146,7 @@ def _seat_ref(license_id: str, uid: str):
 # ---------------- floating-seat leases ----------------
 # A floating license separates the roster from the count: every member may use
 # the license, but only `maxSeats` hold a live lease at once. The lease lives
-# on the seat document — `check_device_lock` already reads that document on
+# on the seat document — `revalidate_device_lock` already reads that document on
 # every institution request, so consulting it costs nothing extra — and its
 # expiry is mirrored onto the user so `effective_mode` stays a pure function.
 

@@ -27,15 +27,6 @@ def get_device(device_id: str):
     return {**snap.to_dict(), "deviceId": device_id} if snap.exists else None
 
 
-def user_has_active_device(uid: str) -> bool:
-    """Whether the account has a phone registered for any app."""
-    u = db().collection("users").document(uid).get()
-    if not u.exists:
-        return False
-    doc = u.to_dict() or {}
-    return any(doc.get(apps.field("activeDeviceId", app)) for app in apps.ALL)
-
-
 def _release_patch(device_id: str, app: str = apps.SEMPER) -> dict:
     """The `users/{uid}` fields that release `device_id` from `app`: the binding
     dropped and the id stamped, so `repo.devlock.released_device_held` holds it
