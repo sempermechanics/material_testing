@@ -2,9 +2,12 @@
 
 package com.sempermechanics.semper.cloud
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.cloud.SessionMetadataDoc
 import com.sempermechanics.semper.data.cloud.SessionUploadMetadata
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
+import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
@@ -150,6 +153,26 @@ class SessionMetadataMechanicalTest {
         assertEquals("utm.csv", restored.loadSource)
         assertEquals("RESAMPLED", restored.loadMapping)
         assertTrue(restored.hasMachineLoads)
+    }
+
+    @Test
+    fun `a typed backup restored into a placeholder keeps its own date and its loads`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val record = record(testType = "tensile", loadsN = listOf(0f, 850.25f, 1700.5f))
+        val text = SessionUploadMetadata.buildMetadataJson(record, context)
+        val keys = JSONObject(text).keys().asSequence().toList()
+        // createdAtUtc sits where the parent writes it; this repo's test object follows analysisKind.
+        assertEquals(keys.indexOf("capturedAtUtc") + 1, keys.indexOf("createdAtUtc"))
+        assertEquals(keys.indexOf("analysisKind") + 1, keys.indexOf("test"))
+
+        val dir = temp.newFolder("sess-${targets++}")
+        val placeholder = RestoreStart.newRow(context, "cloud-1", "local-1", "Run", now = 1_800_000_000_000L)
+        val restored = SessionMetadataDoc.decode(text)
+            .toRecord("local-1", "cloud-1", dir, File(dir, "ref.png").absolutePath, existing = placeholder)
+
+        assertEquals(record.createdAt, restored.createdAt)
+        assertEquals("tensile", restored.testType)
+        assertEquals(listOf(0f, 850.25f, 1700.5f), restored.loadsN)
     }
 
     @Test
