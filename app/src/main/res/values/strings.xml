@@ -158,9 +158,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="reference_image_preview">Reference image preview</string>
     <string name="parameters">Parameters</string>
     <string name="subset_size">Subset size</string>
-    <string name="label_41">41</string>
     <string name="step_size_density">Step size (density)</string>
-    <string name="label_5">5</string>
     <string name="strain_window">Strain window</string>
     <string name="strain_window_unit_points">points</string>
     <!-- Under the strain-window slider: the window in points gives this VSG at the current step. -->
@@ -175,16 +173,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="back">Back</string>
     <string name="next_settings">Next: Settings →</string>
     <string name="computing_strain_field">Computing Strain Field</string>
-    <string name="label_0">0%</string>
     <string name="initializing_engine">Initializing engine…</string>
     <string name="elapsed_0s">Elapsed 0:00</string>
     <string name="please_keep_the_app_open">Please keep the app open</string>
     <string name="text">—</string>
     <string name="extraction_frame_rate">Extraction frame rate</string>
-    <string name="label_10_fps">10 fps</string>
     <string name="time_segment">Time segment</string>
-    <string name="label_0_00_0_00">0:00 – 0:00</string>
-    <string name="label_0_frames">≈ 0 frames</string>
     <!-- Home screen -->
     <string name="home_title">Analyses</string>
     <string name="home_empty_title">No analyses yet</string>

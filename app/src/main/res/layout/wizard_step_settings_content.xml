@@ -245,7 +245,7 @@
                             android:maxLength="3"
                             android:paddingTop="0dp"
                             android:paddingBottom="0dp"
-                            android:text="@string/label_41"
+                            tools:text="41"
                             android:textColor="@color/sky_primary"
                             android:textStyle="bold" />
 
@@ -374,7 +374,7 @@
                             android:maxLength="2"
                             android:paddingTop="0dp"
                             android:paddingBottom="0dp"
-                            android:text="@string/label_5"
+                            tools:text="5"
                             android:textColor="@color/sky_primary"
                             android:textSize="16sp"
                             android:textStyle="bold" />
@@ -460,7 +460,7 @@
                             android:maxLength="3"
                             android:paddingTop="0dp"
                             android:paddingBottom="0dp"
-                            android:text="@string/label_5"
+                            tools:text="5"
                             android:textColor="@color/sky_primary"
                             android:textStyle="bold" />
 
