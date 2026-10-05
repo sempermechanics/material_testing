@@ -12,10 +12,89 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
-## 2026-10-05 — material_testing: synced with semperdic-app `dfc28e1`, new app id
+## 2026-10-05 — material_testing: detail moved out of Current state
+
+Current state was trimmed to its guideline length again. These lines had no other
+home, as they stood in CONTEXT.md before the trim (the sync and app id bullets are
+restated in the entry below):
+
+- **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
+  extensometer's ΔL / L₀ since ADR-012), E from the
+  longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
+  view, a lab-report PDF. Results' **Adjust curve** takes a strain and stress scale
+  and bias to match the machine's own export (`CurveCorrection`, in `Model.Axial`;
+  per session; re-sent to a backed-up copy like the deflection correction, TD-152).
+  Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
+  from a machine CSV, matched by time within 100 ms for video; bending's are
+  typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
+  2026-09-28), as totals or as increments per photo (stored as totals), and shown in kg;
+  the maths and CSV stay in N. A per-session deflection scale and bias is set from
+  Results (`ViewerDeflectionCorrection`, not the wizard), and re-sent to a backed-up
+  session's metadata.json (ADR-013, TD-150; route deployed 2026-10-01, the app side ships next release). Strain window in
+  points (tensile 5, bending 9). Engine `v0.2.3` (deterministic, TD-65). Checked against published
+  steel and PMMA data, on a Pixel 6 too (2026-09-26; steel re-run under ΔL / L₀
+  on 2026-09-29, TD-144); a concrete set fails as
+  expected ([REAL_WORLD_VALIDATION.md](../app/REAL_WORLD_VALIDATION.md)).
+  Both cases were re-run on `v0.2.3` on the emulator on 2026-10-01 and match
+  `v0.2.2` (steel E 148.853 GPa; PMMA slope 6800.26 N/mm at the same taps);
+  `RealPmmaBendingTest` now holds that run's deflections. The repeat solve is
+  bit-identical on a Pixel 6 (arm64); the real-data re-run there is still owed
+  (TD-65's row).
+  Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
+  counts frames off the curve).
+- **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
+  the session records no test type. The load card's ⓘ shows the CSV header and a
+  diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room
+  on every screen with a text field: wizard, ROI editor, viewer frame jump (#71, TD-99).
+  The ROI editor zooms (pinch to 10×, double-tap 2× / fit) and pans with two fingers
+  (#84); `e2e/RoiEditorGestureTest` passes on the API 37 emulator (2026-09-28); a pan
+  now stops where the fingers lift (TD-142), which had kept Tier 3 red on `main` since #86;
+  and a pan pushed against an edge stays on it when they lift (TD-146), which had made
+  the test's last check flaky on CI.
+- **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
+  run in Tier 3 and pass on a Galaxy S21+ and the API 37 emulator (TD-95).
+  `WizardDraftRestoreTest`: a load log survives process death.
+- **CI and benchmarks.** A docs-only PR skips Tier 1 (#63, TD-96); a merge no longer
+  cancels `main`'s running CI (#67, TD-97). `HotPathMicroBenchmark` runs in CI (#31); the
+  Pixel 6 medians and the report-only `benchmark/gates.json` are in
+  [TESTING.md](../app/TESTING.md). The 2026-09-25/26 re-runs pass every gate, but
+  the wizard cold start sits at +23 %, 75 % of its headroom: the phone's state, not
+  the code (TD-135). Gates now skip throttled or unplugged runs and a trip is settled
+  A/B (ADR-008); the Pixel 6 references are owed a re-take.
+  TD-86–TD-88 and TD-90 match the parent's numbers; its TD-81 is TD-89 here.
+- **Owed.**
+  - By hand on a phone ([WORKFLOWS.md](../app/WORKFLOWS.md)): how ROI zoom and pan feel
+    on a real screen (§6.21–6.25; the gestures themselves pass in e2e on the emulator).
+    From §5.1a: a phone-recorded MP4
+    (5.1a.12) and a real UTM clip. The rest of §5.1a, including Key frames with loads
+    (5.1a.16), passes on a Pixel 6 with synthetic clips (2026-09-26). MP4 and codec AVI
+    frames are now stretched to full range (TD-134), not yet re-measured on a phone. The Galaxy S21+'s demo account is over its cap (45 / 25), so a new
+    analysis there needs a licensed key or deletes first.
+  - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
+    first-semester student audience ([CHANGELOG](CHANGELOG.md) 2026-09-24).
+  - **Own app (ADR-009, TD-133; id since ADR-020).** The released builds install as
+    `com.indicvision.semper.materialtesting` beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
+    (#82), with Asset Links on Hosting. One phone per app ([ADR-010](../adr/ADR-010-device-binding-per-app.md),
+    TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
+    sends `X-App-Id` and signed in licensed on a Pixel 6, which now runs `v1.2-beta.3`
+    (`528afdfc`, versionCode 4). Don't hand out `main`'s CI APK: its versionCode is
+    CI's run number, above every release (TD-148). Signed out (a debug build with no
+    API URL), Home's Beta notice is acked once per phone, no longer on every launch
+    (#106, TD-149; Pixel 6 2026-09-30); each account still acks once. A release
+    installed over a debug build is a new phone to the backend (`ANDROID_ID` follows
+    the signing key): reset this app's device first. Owed: signing in where Semper is
+    signed in too, and App Check for this app (its attestation fails; production runs
+    it `off`). A `sync/` merge keeps this repo's `applicationId` and
+    `google-services.json` client.
+  - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
+- **Look it up; this list rots.** `gh pr list --state open`; history in
+  [CHANGELOG.md](CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](FUTURE_IMPROVEMENTS.md).
+
+## 2026-10-05 — material_testing: synced with semperdic-app `dfc28e1` and #341–#343, new app id
 
 The merge of the parent's quality program and rebrand (#310–#340), then a rename pass over
-this repo's own code. Not released.
+this repo's own code; then the heads of three parent PRs not yet on its `main`, so the next
+sync is trivial (material_testing#121). Not released.
 
 - **App id `com.sempermechanics.materialtesting`**
   ([ADR-020](../adr/ADR-020-sempermechanics-materialtesting-id.md)). It installs beside the
@@ -35,6 +114,16 @@ this repo's own code. Not released.
   video extraction takes the parent's `ExtractionRequest`.
 - **Formats unchanged.** Metadata stays `indic.session.metadata/6`; the lab's Intent
   extras, wizard Bundle keys and share kinds keep their names.
+- **#341: a restored analysis keeps its own date.** `metadata.json` gains `createdAtUtc` (the
+  row's `createdAt`); a restore onto a placeholder row dates it from that, else
+  `capturedAtUtc`, else the clock. Schema stays `/6`; the shared writer and reader carry it,
+  and the goldens match the parent's.
+- **#343: naming section D**, replayed on this repo's files too: `AppSettings`, `IntentKeys`,
+  `AccountCache`, the `Sweep*` plot and study types (with this repo's `SweepPlotMarks`),
+  `BatchAnalysis.kt`, `SweepAnalysis.kt`, `SettingsUsedSheet` and the rest of its
+  [FORK_SYNC](FORK_SYNC.md) table; "Log Out" reads "Sign out". Persisted names do not change
+  (prefs files and keys, Intent extra values, the wizard Bundle's `vsgFrameIndex`).
+  #342 is CONTEXT only; this repo keeps its own.
 - **Registers.** ADR-015–019 and TD-153–177 are the parent's; ADR-020 is ours; the next
   free row is TD-178.
 
