@@ -48,7 +48,6 @@
     <string name="curve_bias_invalid">Enter a number, e.g. -0.12</string>
     <string name="curve_reset">Reset</string>
     <string name="exit">Exit</string>
-    <string name="find">Find</string>
     <string name="auto_scale">Auto-Scale</string>
 
     <!-- ROI draw studio -->
@@ -68,22 +67,21 @@
     <string name="save_roi">Save ROI</string>
     <string name="roi_decode_failed">Failed to decode image.</string>
     <string name="roi_image_not_found">Image file not found.</string>
-    <string name="roi_hud_mode_switched">Switched to %1$s mode</string>
+    <string name="roi_hud_mode_switched_fmt">Switched to %1$s mode</string>
     <string name="roi_hud_mode_erase">Mode: Erase</string>
     <string name="roi_hud_mode_crop">Mode: Crop</string>
     <string name="roi_hud_mode_manual">Mode: Manual entry</string>
     <string name="roi_hud_canvas_cleared">Canvas cleared</string>
     <string name="roi_hud_zoom_hint">Mode: Crop · pinch or double-tap to zoom</string>
-    <string name="roi_hud_zoom">Zoom %1$.1f× · two fingers pan · double-tap to fit</string>
+    <string name="roi_hud_zoom_fmt">Zoom %1$.1f× · two fingers pan · double-tap to fit</string>
     <string name="roi_hud_zoom_fit">Zoom: fit</string>
-    <string name="roi_hud_dimensions">ROI: %1$d × %2$d px  |  Pos: (%3$d, %4$d)</string>
+    <string name="roi_hud_dimensions_fmt">ROI: %1$d × %2$d px  |  Pos: (%3$d, %4$d)</string>
     <string name="roi_full_image_selected">Full image selected</string>
     <string name="roi_invalid_size">Invalid ROI size</string>
 
     <!-- Static analysis -->
-    <string name="analysis_running_back_blocked">Analysis running. Please wait or cancel first.</string>
-    <string name="exit_indic_title">Exit Semper?</string>
-    <string name="exit_indic_message">Are you sure you want to exit the app?</string>
+    <string name="exit_semper_title">Exit Semper?</string>
+    <string name="exit_semper_message">Are you sure you want to exit the app?</string>
     <string name="exit_analysis_title">Exit analysis?</string>
     <string name="exit_analysis_message">Are you sure you want to leave? All uncalculated setup and ROI definitions will be lost.</string>
     <string name="no_images_selected">No images selected</string>
@@ -93,37 +91,27 @@
     <string name="failed_load_reference">Failed to load reference image. Please try another file.</string>
     <string name="roi_too_small">ROI is too small. It must be larger than the subset size.</string>
     <string name="analysis_failed_title">Analysis failed</string>
-    <string name="analysis_no_data_title">No data produced</string>
-    <string name="analysis_no_data">The engine ran but every point was rejected, so there is no field to show.
-
-That is usually the speckle or the region: too little contrast for correlation to lock on, or an ROI sitting over something featureless. Try a larger subset, or redraw the region over well-speckled surface.</string>
     <string name="analysis_unexpected_title">Analysis stopped unexpectedly</string>
+    <string name="analysis_not_saved_title">Analysis not saved</string>
+    <string name="analysis_index_unavailable_body">The analysis ran, but this phone\'s list of analyses could not be read or updated, so the result was not saved. Check that the phone has free storage, then run it again.</string>
     <string name="analysis_unexpected_fmt">The run ended with an error it could not describe:
 
 %1$s
 
 A large region at a small step can exhaust memory — try a coarser step or a smaller ROI. If it repeats on the same images, send them to support.</string>
     <string name="video_read_failed">Could not read this video.</string>
-    <string name="video_codec_unsupported">This AVI holds %1$s video, which this device has no decoder for. Re-save it as MP4 (H.264), or export the frames as PNG and import them as images.</string>
     <string name="video_extract_insufficient">Could not extract enough frames from this segment.</string>
-    <string name="video_read_error">Failed to read video: %1$s</string>
-    <string name="video_extracting_progress_fmt">Extracting frame %1$d of %2$d</string>
-    <string name="error_loading_images">Error loading images: %1$s</string>
+    <string name="video_read_error_fmt">Failed to read video: %1$s</string>
+    <string name="video_codec_unsupported_fmt">This AVI holds %1$s video, which this device has no decoder for. Re-save it as MP4 (H.264), or export the frames as PNG and import them as images.</string>
+    <string name="error_loading_images_fmt">Error loading images: %1$s</string>
     
 
     <!-- Result viewer -->
-    <string name="toggle_inspect">Inspect</string>
-    <string name="toggle_max_min">Max/Min</string>
     <string name="no_batch_data">No valid batch data found.</string>
     <string name="viewer_frame_oom">Not enough memory to open this frame. Try closing other apps, or view a smaller analysis.</string>
-    <string name="coord_dialog_title">Go to pixel coordinate</string>
-    <string name="coord_hint_x">X coordinate (0 to %1$d)</string>
-    <string name="coord_hint_y">Y coordinate (0 to %1$d)</string>
-    <string name="coord_out_of_bounds">Coordinates are out of bounds.</string>
-    <string name="invalid_input">Invalid input.</string>
-    <string name="scale_dialog_title">Custom scale: %1$s</string>
-    <string name="scale_max_value">Maximum value (%1$s)</string>
-    <string name="scale_min_value">Minimum value (%1$s)</string>
+    <string name="scale_dialog_title_fmt">Custom scale: %1$s</string>
+    <string name="scale_max_value_fmt">Maximum value (%1$s)</string>
+    <string name="scale_min_value_fmt">Minimum value (%1$s)</string>
     <string name="scale_unit_px">px</string>
     <string name="scale_unit_strain">mε</string>
     <string name="invalid_scale_inputs">Invalid scale inputs.</string>
@@ -135,8 +123,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="auth_toggle_to_register">Need an account? Create one</string>
     <string name="auth_toggle_to_login">Have an account? Sign in</string>
     <string name="auth_email_link">Email me a sign-in link (no password)</string>
-    <string name="auth_link_sent">Sign-in link sent to %1$s. Open it on this device to finish.</string>
-    <string name="auth_reset_sent">If an account exists for %1$s, a password-reset link is on its way.</string>
+    <string name="auth_link_sent_fmt">Sign-in link sent to %1$s. Open it on this device to finish.</string>
+    <string name="auth_reset_sent_fmt">If an account exists for %1$s, a password-reset link is on its way.</string>
     <string name="auth_reset_failed">Could not send the reset email.</string>
     <string name="auth_reset_body">Choose a new password for your account.</string>
     <string name="auth_reset_password">Reset password</string>
@@ -151,7 +139,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="forgot_password">Forgot Password?</string>
     <string name="or">or</string>
     <string name="continue_with_google">Continue with Google</string>
-    <string name="x_y">X, Y</string>
     <string name="min_0_0">Min: 0.0</string>
     <string name="max_0_0">Max: 0.0</string>
     <string name="frame_1_1">Frame: 1 / 1</string>
@@ -159,10 +146,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Result viewer: summary animation and frame jump -->
     <string name="summary_title">Summary</string>
     <string name="summary_gif">Summary GIF</string>
-    <plurals name="summary_counter_fmt">
-        <item quantity="one">Summary GIF</item>
-        <item quantity="other">Summary GIF</item>
-    </plurals>
     <!-- The scale bar's colour mapping is clamped to the 2nd/98th percentile
          (VisualizationEngine.computeSigmaClampedRange), not the field's true
          extrema: measured on real sessions, that clamp discards real signal
@@ -180,8 +163,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="summary_needs_android_9">Showing the first frame — animation needs Android 9 or newer.</string>
     <string name="frame_number_hint">#</string>
     <string name="frame_total_fmt">" / %1$d"</string>
-    <string name="tap_image_to_inspect">Tap image to inspect</string>
-    <string name="max_nmin">Max: --\nMin: --</string>
     <string name="video">Video</string>
     <string name="reference_image">Reference Image</string>
     <string name="reference_image_preview">Reference image preview</string>
@@ -266,59 +247,51 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="delete_device_only_done">Removed from this phone. Tap the row to restore it from the cloud.</string>
     <string name="download_analysis_title">Restore this analysis?</string>
     <string name="download_analysis_body">This analysis is only in the cloud on this phone. Restore it to open the results.</string>
-    <string name="download_analysis_save_body">Choose where to save the Session.zip. The analysis already on this phone is left unchanged.</string>
-    <string name="download_analysis_save_title">Download to files?</string>
     <string name="download_local_action">Download</string>
     <string name="download_analysis_working">Downloading…</string>
     <string name="download_analysis_already">This analysis is already downloading.</string>
     <string name="download_analysis_failed">Couldn\'t download this analysis. Check your connection and try again.</string>
-    <string name="viewer_settings_used_desc">Show the settings used for this analysis</string>
     <string name="viewer_details_desc">Frame stats and settings used</string>
     <string name="viewer_details_title">Details</string>
-    <string name="viewer_details_home">Go to Home</string>
     <string name="viewer_edge_title_fmt">%1$s · %2$s</string>
     <string name="settings_used_title">Settings used</string>
-    <string name="setting_test_type">Test type</string>
-    <string name="setting_cross_section">Cross-section</string>
-    <string name="setting_load">Machine load</string>
-    <string name="setting_load_bending">Load</string>
-    <string name="setting_stress">Stress</string>
-    <string name="setting_stress_flexural">Flexural stress</string>
-    <string name="setting_span">Support span</string>
-    <string name="setting_width">Width</string>
-    <string name="setting_thickness">Thickness</string>
-    <string name="setting_mm2_fmt">%1$s mm²</string>
-    <string name="setting_mm_fmt">%1$s mm</string>
-    <string name="setting_n_fmt">%1$s N</string>
-    <string name="setting_kg_fmt">%1$s kg</string>
-    <string name="setting_mpa_fmt">%1$s MPa</string>
-    <string name="setting_subset">Subset size</string>
-    <string name="setting_step">Step size</string>
-    <string name="setting_strain_window">Strain window</string>
-    <string name="setting_strain_method">Strain method</string>
-    <string name="setting_stopped_early">Stopped early</string>
-    <string name="setting_frames_solved">Frames solved</string>
-    <string name="setting_roi">Region of interest</string>
-    <string name="setting_image_size">Image size</string>
-    <string name="setting_px_fmt">%1$d px</string>
+    <string name="settings_used_test_type">Test type</string>
+    <string name="settings_used_cross_section">Cross-section</string>
+    <string name="settings_used_load">Machine load</string>
+    <string name="settings_used_load_bending">Load</string>
+    <string name="settings_used_stress">Stress</string>
+    <string name="settings_used_stress_flexural">Flexural stress</string>
+    <string name="settings_used_span">Support span</string>
+    <string name="settings_used_width">Width</string>
+    <string name="settings_used_thickness">Thickness</string>
+    <string name="settings_used_mm2_fmt">%1$s mm²</string>
+    <string name="settings_used_mm_fmt">%1$s mm</string>
+    <string name="settings_used_n_fmt">%1$s N</string>
+    <string name="settings_used_kg_fmt">%1$s kg</string>
+    <string name="settings_used_mpa_fmt">%1$s MPa</string>
+    <string name="settings_used_subset">Subset size</string>
+    <string name="settings_used_step">Step size</string>
+    <string name="settings_used_strain_window">Strain window</string>
+    <string name="settings_used_strain_method">Strain method</string>
+    <string name="settings_used_stopped_early">Stopped early</string>
+    <string name="settings_used_frames_solved">Frames solved</string>
+    <string name="settings_used_roi">Region of interest</string>
+    <string name="settings_used_image_size">Image size</string>
+    <string name="settings_used_px_fmt">%1$d px</string>
     
-    <string name="setting_roi_fmt">%1$d × %2$d at (%3$d, %4$d)</string>
-    <string name="setting_size_fmt">%1$d × %2$d px</string>
+    <string name="settings_used_roi_fmt">%1$d × %2$d at (%3$d, %4$d)</string>
+    <string name="settings_used_size_fmt">%1$d × %2$d px</string>
     <string name="export_data">Export my data</string>
-    <string name="export_data_share">Share your Semper session export</string>
-    <string name="export_data_working">Preparing your session export…</string>
     <string name="export_progress_fmt">Exporting session %1$d of %2$d</string>
     <string name="export_data_failed">Couldn\'t prepare the export. Free up some storage and try again.</string>
     <!-- Cloud account export (GDPR portability) — distinct from the local session
          zip above: this is what the backend holds, not what is on this phone. -->
     <string name="export_cloud_data">Download my cloud account data</string>
-    <string name="export_cloud_data_working">Downloading your account data…</string>
-    <string name="export_cloud_data_share">Share your Semper account data</string>
     <string name="export_cloud_data_failed">Couldn\'t download your account data. Check your connection and try again.</string>
     <string name="export_cloud_data_offline">Cloud sync isn\'t set up on this build, so there\'s no cloud data to download.</string>
     <!-- Diagnostics consent -->
-    <string name="setting_diagnostics">Send crash reports and usage data</string>
-    <string name="setting_diagnostics_sub">Share anonymous crash diagnostics and coarse usage events — which features ran, and whether they succeeded — so we can fix problems. Off by default; your images, results, specimen names, file paths and analysis data are never sent.</string>
+    <string name="settings_diagnostics">Send crash reports and usage data</string>
+    <string name="settings_diagnostics_sub">Share anonymous crash diagnostics and coarse usage events — which features ran, and whether they succeeded — so we can fix problems. Off by default; your images, results, specimen names, file paths and analysis data are never sent.</string>
     <string name="diagnostics_prompt_title">Help improve Semper?</string>
     <string name="diagnostics_prompt_body">Semper can send anonymous crash reports when something goes wrong, and coarse usage events such as whether an analysis started, finished or failed.\n\nThis never includes your images, results, specimen names, file paths or analysis data. You can change this at any time in Settings.</string>
     <string name="diagnostics_prompt_accept">Send reports</string>
@@ -337,21 +310,21 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="action_cancel">Cancel</string>
     <string name="transfer_banner_prev">Previous transfer</string>
     <string name="transfer_banner_next">Next transfer</string>
-    <string name="transfer_banner_page">%1$d / %2$d</string>
+    <string name="transfer_banner_page_fmt">%1$d / %2$d</string>
     <string name="transfer_banner_working">Working…</string>
-    <string name="transfer_banner_percent">%1$d%%</string>
+    <string name="transfer_banner_percent_fmt">%1$d%%</string>
     <string name="transfer_banner_export_local">Export my data</string>
     <string name="transfer_banner_export_cloud">Cloud account export</string>
     <string name="transfer_banner_download">Downloading…</string>
     <string name="transfer_banner_restore">Restoring…</string>
     <string name="help_support_feedback_action">Send feedback</string>
-    <string name="help_support_feedback_subject">Semper feedback (v%1$s / %2$d)</string>
-    <string name="help_support_feedback_body">Describe your feedback below.\n\n---\nApp: %1$s (%2$d)\nDevice: %3$s\nAndroid: %4$d\nBuild: %5$s\n</string>
-    <string name="setting_save_cloud">Save to cloud</string>
-    <string name="setting_save_cloud_sub">New analyses upload when a network is available</string>
-    <string name="setting_save_cloud_sub_off">New analyses stay on this phone. Existing cloud copies remain until you delete them</string>
-    <string name="setting_wifi_only">Wi‑Fi only</string>
-    <string name="setting_wifi_only_sub">Wait for unmetered Wi‑Fi before uploading</string>
+    <string name="help_support_feedback_subject_fmt">Semper feedback (v%1$s / %2$d)</string>
+    <string name="help_support_feedback_body_fmt">Describe your feedback below.\n\n---\nApp: %1$s (%2$d)\nDevice: %3$s\nAndroid: %4$d\nBuild: %5$s\n</string>
+    <string name="settings_save_cloud">Save to cloud</string>
+    <string name="settings_save_cloud_sub">New analyses upload when a network is available</string>
+    <string name="settings_save_cloud_sub_off">New analyses stay on this phone. Existing cloud copies remain until you delete them</string>
+    <string name="settings_wifi_only">Wi‑Fi only</string>
+    <string name="settings_wifi_only_sub">Wait for unmetered Wi‑Fi before uploading</string>
     <string name="account_section">Account</string>
     <string name="account_device_id_fmt">Device ID · %1$s</string>
     <!-- The key prefix, never the key. It is what support asks for on the
@@ -374,7 +347,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="storage_free_up_sub_fmt">%1$s can be released from backed-up analyses</string>
     <string name="storage_free_up_none">Nothing to release — no analysis is backed up yet</string>
     <string name="storage_free_up_title">Free up space?</string>
-    <string name="storage_free_up_body">This removes the local images and results for every analysis that is already backed up, freeing about %1$s.\n\nNothing is deleted from the cloud. Opening one of these analyses downloads it again.</string>
+    <string name="storage_free_up_body_fmt">This removes the local images and results for every analysis that is already backed up, freeing about %1$s.\n\nNothing is deleted from the cloud. Opening one of these analyses downloads it again.</string>
     <string name="storage_free_up_confirm">Free up space</string>
     <plurals name="storage_freed_fmt">
         <item quantity="one">Freed %1$s from %2$d analysis.</item>
@@ -405,7 +378,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_backup_failed_missing_files">This analysis\'s results are no longer on this device, so it can\'t be backed up.</string>
     <string name="cloud_delete_backup">Delete from backup</string>
     <string name="cloud_delete_forever_title">Delete this backup forever?</string>
-    <string name="cloud_delete_forever_body">This permanently erases the cloud copy of \"%1$s\" — raw images, results and report. It cannot be undone, and it can never be restored to this or any other device.\n\nAnalyses still on this phone are not touched.</string>
+    <string name="cloud_delete_forever_body_fmt">This permanently erases the cloud copy of \"%1$s\" — raw images, results and report. It cannot be undone, and it can never be restored to this or any other device.\n\nAnalyses still on this phone are not touched.</string>
     <string name="cloud_delete_forever_confirm">Delete forever</string>
     
     <string name="cloud_backfill_title">Back up local analyses?</string>
@@ -423,16 +396,13 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="download_not_licensed">Downloading from the cloud isn\'t available in demo mode.</string>
     <string name="share_licensed_only">Sharing exports needs an active licence.</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
-    <string name="home_empty_restore">Restore from cloud</string>
     <string name="home_empty_start">Start analysis</string>
-    <string name="delete_device_kept_snackbar">Kept in the cloud</string>
-    <string name="delete_device_restore_action">Restore…</string>
-    <string name="setting_max_frames">Max frames</string>
-    <string name="setting_max_frames_info">A ceiling, not a target: it can only reduce a run, never add frames. It caps imported frames and frames sampled from a video. More frames = longer analysis and more memory.</string>
+    <string name="settings_max_frames">Max frames</string>
+    <string name="settings_max_frames_info">A ceiling, not a target: it can only reduce a run, never add frames. It caps imported frames and frames sampled from a video. More frames = longer analysis and more memory.</string>
     <string name="info">Info</string>
     <string name="action_sign_out">Sign out</string>
     <string name="about_title">About</string>
-    <string name="about_message">Semper v%1$s (%2$d)\n\nPrivacy Policy and Terms of Service are available from the links below.</string>
+    <string name="about_message_fmt">Semper v%1$s (%2$d)\n\nPrivacy Policy and Terms of Service are available from the links below.</string>
     <string name="legal_privacy">Privacy Policy</string>
     <string name="legal_terms">Terms of Service</string>
     <!-- Public legal pages on the product site. -->
@@ -512,7 +482,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_fail_features">The engine couldn\'t match the two images (AKAZE feature extraction failed). \n\nThe image pair:During the test, specimen might have moved or too much deformation could have decorrelated with the reference.</string>
     <string name="sweep_fail_roi">The region of interest contains no valid points. Redraw it over the speckled area or use a different image.</string>
     <string name="sweep_fail_init">The engine couldn\'t start — an image failed to decode. Re-import them as PNG or TIFF.</string>
-    <string name="sweep_fail_unknown">The engine returned error %1$d.</string>
+    <string name="sweep_fail_unknown_fmt">The engine returned error %1$d.</string>
     <string name="run_stopped_early_title">Stopped early</string>
     <string name="run_stopped_early_fmt">⚠️ Stopped at frame %1$d of %2$d</string>
     <plurals name="run_stopped_early_body">
@@ -529,13 +499,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_decode">Image could not be decoded</string>
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
+    <string name="run_reason_cancelled">Cancelled before every frame was solved</string>
+    <string name="run_fail_cancelled">The analysis was cancelled before every frame was solved. The frames solved before the cancel are kept.</string>
     <!-- A single run whose first frame kept no points (engine code 0), split by how many points ICGN accepted there. -->
     <plurals name="run_fail_strain_window_fmt">
         <item quantity="one">%1$d point correlated, but it did not have enough solved neighbours to fill the strain window (VSG %2$d px at step %3$d px), so no strain could be fitted. Use a smaller strain window, a smaller step, or a larger region of interest.</item>
         <item quantity="other">%1$d points correlated, but none had enough solved neighbours to fill the strain window (VSG %2$d px at step %3$d px), so no strain could be fitted. Use a smaller strain window, a smaller step, or a larger region of interest.</item>
     </plurals>
     <string name="run_fail_no_correlation">No point in the first frame correlated with the reference. Check that both images show the same speckled area, then try a larger subset or a different region of interest.</string>
-    <string name="sweep_reason_unknown">Unknown engine error (code %1$d)</string>
+    <string name="sweep_reason_unknown_fmt">Unknown engine error (code %1$d)</string>
     <string name="sweep_node_title_fmt">S%1$d · St%2$d · %3$s</string>
     <string name="sweep_node_skipped">This combination was skipped</string>
     <!-- Which frame a failure happened on; prefixes the reason above. -->
@@ -563,11 +535,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Compact lattice: unit folded onto the rightmost subset tick instead of a
          separate axis title (see VsgLatticeView.compact). -->
     <string name="vsg_lattice_axis_subset_unit_fmt">%1$d px</string>
-    <string name="vsg_lattice_view_results">View results</string>
-    <string name="vsg_lattice_open_analysis">Open analysis</string>
     <string name="vsg_lattice_param_fmt">ss:%1$d · st:%2$d · %3$s</string>
     <string name="vsg_lattice_param_labeled_fmt">subset size %1$d · step size %2$d · %3$s</string>
-    <string name="vsg_lattice_scrub_x_fmt">x=%1$.1f</string>
     <string name="vsg_lattice_scrub_xy_fmt">x=%1$.1f  y=%2$.4g</string>
     <string name="vsg_lattice_scrub_x_multi_fmt">x=%1$.1f  %2$s</string>
     <string name="vsg_lattice_curves_all">All</string>
@@ -591,7 +560,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     </plurals>
     <string name="action_paste_params">Paste params</string>
 
-    <string name="setting_vsg">Virtual strain gauge</string>
+    <string name="settings_used_vsg">Virtual strain gauge</string>
     <string name="line_cut_title">Strain along the centre line cut</string>
     <string name="line_cut_title_axis_fmt">Strain along %1$s axis</string>
     <string name="line_cut_legend_prefix_fmt">Cut along %1$s through the ROI centre at %2$.0f px.</string>
@@ -621,7 +590,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="use_full_image">Use full image</string>
     <string name="region_of_interest">Region of interest</string>
     <string name="lossy_format_warning_fmt">%1$s detected, use lossless formats (eg. PNG, TIFF) to improve accuracy</string>
-    <string name="subset_low_texture_fmt">Speckle contrast is low, consider using a large subset or selecting a small RoI</string>
+    <string name="subset_low_texture">Speckle contrast is low, consider using a large subset or selecting a small RoI</string>
 
     <!-- Speckle-size feedback, from the iDICs Good Practices Guide's 3-9 px
          band. Measured on the reference frame; see SpeckleScale. -->
@@ -863,7 +832,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_analysis_mode">Single solve or parameter sweep?</string>
     <string name="coach_analysis_roi">Choose RoI or defaults to full image.</string>
     <string name="coach_analysis_advanced">Change parameters when you need finer control.</string>
-    <string name="coach_sweep_subset">Set the subset size range for sweep granularity.</string>
     <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
     <string name="coach_sweep_line_cut">Strain will be read along this centre line of the region of interest.</string>
     <string name="coach_sweep_graph">Each node is one combination: subset size across, strain window up. Filled nodes solved — tap one to focus its curve, double-tap to open it. Hollow ones failed; tap for the reason.</string>
@@ -904,9 +872,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="field_exx">Exx</string>
     <string name="field_eyy">Eyy</string>
     <string name="field_exy">Exy</string>
-    <string name="stat_max">MAX</string>
-    <string name="stat_min">MIN</string>
-    <string name="stat_mean">MEAN</string>
     <string name="stat_empty">--</string>
     <string name="viewer_stats_fmt">max %1$s at (%2$d, %3$d)\nmin %4$s at (%5$d, %6$d)\nmean %7$s %8$s</string>
     <string name="viewer_stats_plain_fmt">max %1$s · min %2$s · mean %3$s %4$s</string>
@@ -967,7 +932,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_check_failed_fmt">Couldn\'t check your cloud backups (%1$s). Backup status shown may be out of date.</string>
     <string name="badge_not_backed_up">Not backed up</string>
     <string name="restore_action">Restore</string>
-    <string name="restore_load_error">Couldn\'t load backups: %1$s</string>
+    <string name="restore_load_error_fmt">Couldn\'t load backups: %1$s</string>
     <string name="restore_background_note">Restore continues even if you leave this screen.</string>
     <string name="download_background_note">Download continues even if you leave this screen.</string>
     <string name="admin_pending_requests">Pending access requests</string>
@@ -975,10 +940,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="admin_approve">Approve</string>
     <string name="admin_deny">Deny</string>
     <string name="admin_empty">No pending requests.</string>
-    <string name="admin_load_error">Couldn\'t load requests: %1$s</string>
-    <string name="admin_approved_toast">Approved %1$s</string>
-    <string name="admin_denied_toast">Denied %1$s</string>
-    <string name="admin_action_error">Action failed: %1$s</string>
+    <string name="admin_load_error_fmt">Couldn\'t load requests: %1$s</string>
+    <string name="admin_approved_toast_fmt">Approved %1$s</string>
+    <string name="admin_denied_toast_fmt">Denied %1$s</string>
+    <string name="admin_action_error_fmt">Action failed: %1$s</string>
     <string name="support_email">support@sempermechanics.com</string>
     <string name="request_access_subject">Semper access request</string>
 
@@ -1021,7 +986,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Session/analysis quota limit screen -->
     <string name="limit_title">Analysis limit reached</string>
-    <string name="limit_body">You\'ve reached the maximum number of saved analyses on your account. New cloud analyses are blocked until the limit is raised.\n\nPlease email %1$s to request a higher limit. You can also delete an existing analysis, then tap Re-check limit.</string>
+    <string name="limit_body_fmt">You\'ve reached the maximum number of saved analyses on your account. New cloud analyses are blocked until the limit is raised.\n\nPlease email %1$s to request a higher limit. You can also delete an existing analysis, then tap Re-check limit.</string>
     
     <string name="limit_email_support">Email support@sempermechanics.com</string>
     <string name="limit_recheck">Re-check limit</string>
@@ -1051,10 +1016,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- License expiry notice on Home. Advisory only — nothing is withdrawn
          while the renewal is outstanding. -->
-    <string name="license_expiring_today">License expires today — email %1$s to renew</string>
-    <string name="license_expired">License expired — email %1$s to renew</string>
-    <string name="license_grace">License expired — still working, email %1$s to renew</string>
-    <string name="request_access_none">No email app found. Please email %1$s to request access.</string>
+    <string name="license_expiring_today_fmt">License expires today — email %1$s to renew</string>
+    <string name="license_expired_fmt">License expired — email %1$s to renew</string>
+    <string name="license_grace_fmt">License expired — still working, email %1$s to renew</string>
+    <string name="request_access_none_fmt">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>
     <string name="error_email_invalid">That does not look like an email address</string>
     <string name="error_password_short">Password needs at least 6 characters</string>
@@ -1067,6 +1032,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="video_keyframes_note">Key frames are stored whole, not predicted from their neighbours, so they are the sharpest frames for DIC. Phones record about one a second.</string>
     <string name="video_keyframes_estimate_fmt">%1$d key frames: 1 reference + %2$d deformed%3$s</string>
     <string name="video_keyframes_too_few">Fewer than two key frames in this segment. Widen it, or use Frame rate.</string>
+    <string name="video_extracting_progress_fmt">Extracting frame %1$d of %2$d</string>
+    <string name="video_fps_fmt">%1$.0f fps</string>
+    <string name="video_resolution_fmt">%1$d×%2$d</string>
+    <string name="video_info_separator">"   ·   "</string>
+    <string name="video_segment_fmt">%1$s – %2$s</string>
+    <plurals name="video_estimate_fmt">
+        <item quantity="one">≈ %1$d frame: 1 reference + %2$d deformed%3$s</item>
+        <item quantity="other">≈ %1$d frames: 1 reference + %2$d deformed%3$s</item>
+    </plurals>
     <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients.</string>
     <string name="info_step">Spacing between tracked points, in pixels. Smaller means denser results but longer analysis time. Linked to subset overlap: overlap = 1 − step / subset.</string>
     <string name="info_strain_window">How many data points across each strain value averages over. The virtual strain gauge (VSG) it gives, in pixels, is (window − 1) × step + 1, shown under the slider. Bigger means smoother strain but less local detail. Bending starts at 9 points: its deflection and E come from displacement, so here strain only draws the maps, and a wider window makes them much less noisy.</string>
@@ -1224,10 +1198,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <plurals name="def_count_fmt">
         <item quantity="one">1 deformed frame</item>
         <item quantity="other">%1$d deformed frames</item>
-    </plurals>
-    <plurals name="inputs_meta_fmt">
-        <item quantity="one">Reference · 1 deformed frame</item>
-        <item quantity="other">Reference · %1$d deformed frames</item>
     </plurals>
     <plurals name="share_caption_fmt">
         <item quantity="one">frame %1$d of %2$d shown · photos share the current frame</item>

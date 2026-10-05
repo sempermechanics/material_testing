@@ -1,7 +1,7 @@
 # Semper — Production Cloud Architecture (Pure GCP, Keyless)
 
 **You probably don't need this document.** Analysis is fully offline and the
-cloud is off unless someone builds with `INDIC_API_BASE_URL` set. Read it if
+cloud is off unless someone builds with `SEMPER_API_BASE_URL` set. Read it if
 you are changing `backend/` or the sync path in `app/.../data/`.
 
 | If you want to… | Go to |
@@ -556,7 +556,7 @@ sessions/{sessionId}
                                   at create, not what is stored)
   metrics: { pointsConverged, avgIterations, executionTimeMs, frameCount,
              isSweep, sweepSkipped }  // small scalars, from the device
-                                  (`DicUploadWorker.createSession`)
+                                  (`UploadSessionPlanner.createSession`)
   createdAt, updatedAt, completedAt
 
 files/{fileId}                    (fileId = deterministic sid_role_name)
@@ -753,20 +753,20 @@ instead of failing the client.
 
 | Concern | File |
 |---|---|
-| Google sign-in, session state | [`data/AuthRepository.kt`](../../app/src/main/java/com/indicvision/semper/data/AuthRepository.kt) |
-| Credential Manager helper | [`ui/auth/GoogleSignInHelper.kt`](../../app/src/main/java/com/indicvision/semper/ui/auth/GoogleSignInHelper.kt) |
-| EC P-256 Keystore device key | [`data/DeviceKeyManager.kt`](../../app/src/main/java/com/indicvision/semper/data/DeviceKeyManager.kt) |
-| Backend HTTP client | [`data/net/IndicApi.kt`](../../app/src/main/java/com/indicvision/semper/data/net/IndicApi.kt) |
-| Token storage / refresh | [`data/net/TokenStore.kt`](../../app/src/main/java/com/indicvision/semper/data/net/TokenStore.kt) · [`TokenProvider.kt`](../../app/src/main/java/com/indicvision/semper/data/net/TokenProvider.kt) |
-| Resumable upload worker | [`data/DicUploadWorker.kt`](../../app/src/main/java/com/indicvision/semper/data/DicUploadWorker.kt) |
-| Restore / download | [`data/DicRestoreWorker.kt`](../../app/src/main/java/com/indicvision/semper/data/DicRestoreWorker.kt) · [`CloudRestore.kt`](../../app/src/main/java/com/indicvision/semper/data/CloudRestore.kt) |
+| Google sign-in, session state | [`data/account/AuthRepository.kt`](../../app/src/main/java/com/sempermechanics/semper/data/account/AuthRepository.kt) |
+| Credential Manager helper | [`ui/auth/GoogleSignInHelper.kt`](../../app/src/main/java/com/sempermechanics/semper/ui/auth/GoogleSignInHelper.kt) |
+| EC P-256 Keystore device key | [`data/account/DeviceKeyManager.kt`](../../app/src/main/java/com/sempermechanics/semper/data/account/DeviceKeyManager.kt) |
+| Backend HTTP client | [`data/net/SemperApi.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/SemperApi.kt) |
+| Token storage / refresh | [`data/net/TokenStore.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/TokenStore.kt) · [`TokenProvider.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/TokenProvider.kt) |
+| Resumable upload worker | [`data/DicUploadWorker.kt`](../../app/src/main/java/com/sempermechanics/semper/data/DicUploadWorker.kt) |
+| Restore / download | [`data/DicRestoreWorker.kt`](../../app/src/main/java/com/sempermechanics/semper/data/DicRestoreWorker.kt) · [`CloudRestore.kt`](../../app/src/main/java/com/sempermechanics/semper/data/cloud/restore/CloudRestore.kt) |
 
 The upload worker speaks the resumable protocol from §4: `PUT` with a
 `Content-Range` header, `308` means keep going, `200`/`201` means the file
 landed. It runs under WorkManager with a network constraint and exponential
 backoff, so an upload survives losing connectivity or the app being killed.
 
-Cloud sync stays off entirely unless `INDIC_API_BASE_URL` is set at build time
+Cloud sync stays off entirely unless `SEMPER_API_BASE_URL` is set at build time
 — see [BACKEND_SETUP_GCP.md](BACKEND_SETUP_GCP.md) step C1.
 
 **A row reads PENDING only while an upload is coming.** A build with no
@@ -794,7 +794,7 @@ up.
 Two service accounts, least-privilege:
 
 ```bash
-PROJECT=indic-prod   # placeholder GCP project id — replace with yours
+PROJECT=semper-prod   # placeholder GCP project id — replace with yours
 API_SA=indic-api@$PROJECT.iam.gserviceaccount.com
 DEPLOY_SA=indic-deployer@$PROJECT.iam.gserviceaccount.com
 ```
@@ -846,7 +846,7 @@ as the staging runs of 2026-09-24 and 2026-09-25 did after the TD-71 clean-up. I
 grants no object access, so CI still cannot read or change the Firestore export bucket.
 
 **Drive membership (the only Workspace-side step, done by you, not the SA):**
-add `indic-api@indic-prod.iam.gserviceaccount.com` as **Manager** of the
+add `indic-api@semper-prod.iam.gserviceaccount.com` as **Manager** of the
 `Semper-Research-Storage` Shared Drive. If Workspace blocks adding a
 service-account principal, a Workspace admin must one-time-allow it (Admin
 console → Drive & Docs → Sharing → allow members outside org / add to the
@@ -2034,7 +2034,7 @@ substituted host fails that check.
 
 **The same Hosting site carries the app's auth continue links.** They live
 under `/auth/` on `app.sempermechanics.com` (`AUTH_HOST` in
-`data/AuthRepository.kt`). The `…-auth.firebaseapp.com` host stays accepted as
+`data/account/AuthRepository.kt`). The `…-auth.firebaseapp.com` host stays accepted as
 `LEGACY_AUTH_HOST` for every installed build that declares only it, and is
 still the password-reset action URL, until Play vitals show no such build
 ([TD-29](../ops/TECH_DEBT.md)). On the CORS side, `allowCors` in
@@ -2370,7 +2370,7 @@ entitlement. So a revoke counts as settled only when the record has caught up
 responses: `still_licensed` is repaired by revoking the seat again, which is
 idempotent and re-runs the demotion; `no_checkin_since_revoke` is waited out,
 and the four-hourly background `/v1/config` refresh
-([`LicenseConfigWorker`](../../app/src/main/java/com/indicvision/semper/data/LicenseConfigWorker.kt))
+([`LicenseConfigWorker`](../../app/src/main/java/com/sempermechanics/semper/data/LicenseConfigWorker.kt))
 is what bounds it — §20.7's 30-minute lease heartbeat is a different clock,
 keeping a floating seat alive while the app is open.
 
@@ -2424,7 +2424,7 @@ that keep the phone from contradicting it.
 - **A seat check parallel to the quota check.** An institution member without
   a live lease is not over any quota — a licensed account never is — so
   `TokenStore.isSessionLimitReached` would let them through every existing
-  gate. `LicenseEntitlements.seatRequiredToStart` is a separate predicate. It
+  gate. `LicenseEntitlements.isSeatRequiredToStart` is a separate predicate. It
   gates the Home **+** before the source menu opens (`HomeActivity`) and both
   compute paths (`AnalysisNavHelper`), guarded by
   `AnalysisViewModel.wouldCreateNewSession()` so a run already in flight is

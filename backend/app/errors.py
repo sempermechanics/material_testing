@@ -1,7 +1,7 @@
 """Stable error codes returned as FastAPI's `{"detail": "<code>"}`.
 
 These strings are a wire contract, not messages: the Android client branches on
-them (`app/src/main/java/com/indicvision/semper/data/net/ApiErrors.kt`) to tell a
+them (`app/src/main/java/com/sempermechanics/semper/data/net/ApiErrors.kt`) to tell a
 device conflict from a quota rejection inside the same status code. Naming them
 here means a rename is one edit that `tests/test_error_codes.py` then holds
 against the client's copy, instead of a literal typed in a router that silently
@@ -242,5 +242,11 @@ CLIENT_BRANCHED = frozenset(
         LICENSE_DEVICE_MISMATCH,
         APP_CHECK_REQUIRED,
         DRIVE_FILE_GONE,
+        # The upload worker rebuilds the session on the first and restages on
+        # the other two (`UploadErrors.kt`), rather than failing as "too large"
+        # or retrying the same bytes forever.
+        SIZE_OR_STATE_MISMATCH,
+        CHECKSUM_MISMATCH,
+        SIZE_MISMATCH,
     }
 )

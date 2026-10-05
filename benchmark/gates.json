@@ -1,5 +1,5 @@
 {
-  "_doc": "Real-device benchmark gates, checked by scripts/ci_test_report.py --gates. Keyed by the benchmark JSON's context.build.device; a device not listed (CI's emulator, other phones) is reported, never gated. A gate is the reference median (or percentile) times (1 + margin). References: docs/app/TESTING.md, 'Pixel 6 against the CI emulator'.",
+  "_doc": "Real-device benchmark gates, checked by scripts/ci_test_report.py --gates. Keyed by the benchmark JSON's context.build.device; a device not listed (CI's emulator, other phones) is reported, never gated. A gate is the reference median (or percentile) times (1 + margin). oriole's references were measured on this fork's app as com.indicvision.semper.materialtesting (2026-09-25), before the com.sempermechanics.materialtesting id; upstream semperdic-app's own Pixel 6 numbers are not copied here. References: docs/app/TESTING.md, 'Pixel 6 against the CI emulator'.",
   "margin": 0.30,
   "_state": "A result is gated only if its test ran at or below maxThermalStatus (PowerManager; 0 = none) and on a charger, at start and end, as recorded in *deviceState.json (TD-135). abMargin: scripts/startup_ab.py fails a candidate whose pooled median is more than this over the reference build's, run interleaved on the same phone.",
   "state": { "maxThermalStatus": 0, "requirePlugged": true },

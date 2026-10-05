@@ -197,7 +197,9 @@ The analysis is saved as a plain DIC analysis: no **Results** page, no lab repor
 | Sweep | The result lattice |
 | Engine failed | A dialog naming the cause, the frame and the image |
 
-Re-running the same inputs updates the same analysis. Different inputs make a new one.
+Re-running the same inputs updates the same analysis. Different inputs make a new one, which counts
+towards your quota. Picking the reference again counts as different inputs, even when it is the same
+image, and so does importing the frames again.
 
 ---
 
@@ -344,7 +346,7 @@ Long exports carry on in the background.
 | **Help & support** | The manual, feedback, support email (carries device and build) |
 
 - **Transfers keep going when you leave the screen.** A permanent failure shows a dialog with **Try again**.
-- **Quota:** the Home chip reads `N / M analyses used` and turns red at the cap. Email support, or delete an analysis and tap **Re-check**.
+- **Quota:** the Home chip reads `N / M analyses used` and turns red at the cap. Only a run that makes a new analysis is checked against it: a re-run of the same inputs is not, but one after picking a new reference or new frames is. Email support, or delete an analysis and tap **Re-check**.
 
 ---
 

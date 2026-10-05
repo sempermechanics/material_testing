@@ -41,21 +41,21 @@ Use these words. Do not invent synonyms.
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (`native/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
+Engine pipeline (`engine/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 
 ```
-app/          Android UI (Kotlin). Gradle builds ../native/CMakeLists.txt;
+app/          Android UI (Kotlin). Gradle builds ../engine/CMakeLists.txt;
               app/src/main/cpp/ holds only a redirect CMakeLists.txt
-native/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
-              docs, and the JNI adapter in native/adapters/android/)
+engine/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
+              docs, and the JNI adapter in engine/adapters/android/)
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
               access in backend/app/repo/ behind the firestore_repo facade
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 ```
 
-Bump the engine by changing the `native` gitlink. Its host / sanitizer / DICe suites run
+Bump the engine by changing the `engine` gitlink. Its host / sanitizer / DICe suites run
 in the engine repo; this CI only proves the pin **links** (emulator x86_64, release arm64).
 
 ## Runtime
@@ -85,8 +85,12 @@ Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`
 Backend: `backend/app/main.py` (app, middleware, lifespan), `routers/` (`/v1/*` by
 prefix), `session_provision.py` (`provision_session` / `purge_session`).
 
-Kotlin helpers are plain `object` / small classes; no Hilt/Dagger. Keep `lifecycleScope`
-and Activity Result launchers on the Activity. Cloud logic under test takes a defaulted
+Kotlin helpers are plain `object` / small classes; no Hilt/Dagger. Activity Result
+launchers are registered before the Activity starts: as a property, or by a part built
+there (`WizardMediaPickers`, `RoiStudioLauncher`, `ViewerShareController`). Work that must
+outlive the screen follows [ADR-016](docs/adr/ADR-016-work-that-outlives-the-activity.md);
+views go through ViewBinding and the `ui/common` kit ([ADR-017](docs/adr/ADR-017-viewbinding-and-ui-kit.md));
+failures are typed outcomes ([ADR-018](docs/adr/ADR-018-error-convention.md)). Cloud logic under test takes a defaulted
 `api: CloudApi` / `tokens: TokenSource`; tests pass `FakeCloudApi` ([ADR-002](docs/adr/ADR-002-cloudapi-seam.md)).
 The wizard (`StaticAnalysisActivity`, ViewStub steps) has full `configChanges`: rotation
 does not recreate it, process death does (see Traps). Home **+** opens `MediaPickerSheet` (shared with the wizard dropzones). Uploads,
@@ -99,9 +103,14 @@ non-modal `TransferBannerController` strip.
   oracles unless the engine contract major-bumps. GIF bytes are pinned 0-delta.
 - **JNI buffer is bounded.** Allocate to the ROI grid; a point count over capacity
   is an engine failure, never a read past the buffer.
-- **Do not split** VisualizationEngine loops, GifEncoder LZW, ReportBuilder fusion,
-  `DicResult.decodeDatFile`, `DicUploadWorker.doWork`, `prefetchAround` /
-  `ScrubFrameCache`, `PointSpatialIndex.build`.
+- **Hot loops stay fused.** VisualizationEngine pixel loops, GifEncoder LZW, the
+  ReportBuilder fusion pass, `DicResult.decodeDatFile`, `prefetchAround` and
+  `PointSpatialIndex.build` each keep their loop body whole in one function. The
+  files around them may be split; a split proves itself with the `.dat` / GIF
+  oracles and no regression in `HotPathMicroBenchmark` / `ViewerScrubBenchmark`.
+- **Upload staging is repeatable.** `DicUploadWorker.doWork` may be broken into
+  named steps, but the staged bytes must be identical across attempts: Drive's
+  resumable URI and the reconcile check the declared size and sha256.
 - **Scrub cache** is byte-bounded and filled by **one** serialized worker.
 - **Whole-batch** summary / spatial index start on demand, never on viewer open.
 - **Batch progress** is a buffered `SharedFlow` (`DROP_OLDEST`), not a `StateFlow`.
@@ -112,8 +121,8 @@ non-modal `TransferBannerController` strip.
 - **Analytics and crash reporting share one consent flag** (`DicSettings.diagnosticsEnabled`).
   Events stay PII-free — buckets and enums only, never images, results, session ids
   or specimen names.
-- **Release** builds require HTTPS `INDIC_API_BASE_URL`. Debug emulator boots
-  local-only unless `INDIC_DEV_AUTH_BYPASS=false`.
+- **Release** builds require HTTPS `SEMPER_API_BASE_URL`. Debug emulator boots
+  local-only unless `SEMPER_DEV_AUTH_BYPASS=false`.
 - **Legal pages** are generated: edit `docs/legal/`, run `scripts/render_legal_pages.py`,
   never hand-edit `firebase-hosting/public/{privacy,terms}/`.
 
@@ -123,11 +132,11 @@ Baselines, `targetSdk`, Kover and the backend lock: see CLAUDE.md. `OldTargetApi
 disabled until the `targetSdk` bump. Settings / wizard XML stay under `TooManyViews` via
 `SettingsScrollContentView` / `WizardStepSettingsContentView`. Macrobenchmark CI is smoke,
 no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchmark/gates.json`,
-[ADR-008](docs/adr/ADR-008-startup-gates-phone-state.md)) list no device yet (TD-155); the engine floor (≥ 4557 solves/s,
+[ADR-008](docs/adr/ADR-008-startup-gates-phone-state.md)) list the Pixel 6 for five metrics; its startup cold and warm start and wizard cold start are owed (TD-155); the engine floor (≥ 4557 solves/s,
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-01)
+## Current state (2026-10-05)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
@@ -228,13 +237,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Backup stamps PENDING before `CloudSync.enqueueUpload`; reversing it lets a late PENDING overwrite SYNCED — [§8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - A 429 that consumes the nonce makes the app's retry a 401 replay: keep a signed route's bucket in `dependencies=[deps.rate_limited(...)]`, never in the handler; unsigned routes call `rate_limit.enforce` — `test_rate_limit_before_nonce.py`.
 - Activities are `@MainThread` at class level, so a private helper that runs on `Dispatchers.IO` needs `@WorkerThread` (or `@AnyThread`) or lint fails — TD-24 in [TECH_DEBT.md](docs/ops/TECH_DEBT.md).
-- `SessionStore`'s parser uses `ignoreUnknownKeys` so old `index.json` fields load; keep it — [SessionStoreLegacyFloorTest](app/src/test/java/com/indicvision/semper/data/SessionStoreLegacyFloorTest.kt).
-- `SubsetRecommender` runs on the paper's `NOISE_VARIANCE`; no import supplies a measured floor — [SubsetRecommender.kt](app/src/main/java/com/indicvision/semper/ui/analysis/SubsetRecommender.kt).
+- `SessionStore`'s parser uses `ignoreUnknownKeys` so old `index.json` fields load; keep it — [SessionStoreLegacyFloorTest](app/src/test/java/com/sempermechanics/semper/data/session/SessionStoreLegacyFloorTest.kt).
+- `SubsetRecommender` runs on the paper's `NOISE_VARIANCE`; no import supplies a measured floor — [SubsetRecommender.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/recommend/SubsetRecommender.kt).
 - Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(DicKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
 - A new wizard input must survive a kill: scalars go in `WizardState`'s Bundle, bytes and lists in `WizardDraft`; and `cacheDir/temp_deformed` is only safe from the janitor while the draft is live — [ADR-005](docs/adr/ADR-005-wizard-process-death.md).
 - After Compute, read the run's `RunSpec` / `RunResult` (`spec`, `settings`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
-- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolve_bitIdentical`, `native/tests/integration/test_full_field_determinism.cpp`.
-- `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/indicvision/semper/ui/analysis/ConvergenceGate.kt).
+- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
+- `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/run/ConvergenceGate.kt).
 - The backend, console and Firestore rules deploy from `semperdic-app` only; the deploy workflows here fail if run. Keep `TERMS_VERSION` equal to the parent's.
 - A new lab input goes in `MechanicalTestInputs`, `RunSpec.mechanical`, `ViewerArgs` (both sides) and `WizardState`; missing one gives a viewer or a restored wizard that quietly reads "no test" — `ViewerArgsTest`, `WizardStateTest`.
 

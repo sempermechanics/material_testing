@@ -17,7 +17,7 @@ build it. This page routes you to the rest.
 | Operate the app to analyse any DIC image set | [OPERATING_MANUAL.md](OPERATING_MANUAL.md) |
 | Check the app against published and synthetic test data (tensile and bending E) | [app/REAL_WORLD_VALIDATION.md](app/REAL_WORLD_VALIDATION.md) |
 | Understand lighting / measurement-floor accuracy | [app/NOISE_FLOOR_STRAIN_ACCURACY.md](app/NOISE_FLOOR_STRAIN_ACCURACY.md) · short FAQ [app/FAQ.md — lighting-and-accuracy](app/FAQ.md#lighting-and-accuracy) |
-| Change the correlation engine (C++) | [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md) — the engine is a submodule, so this points into `native/docs/` |
+| Change the correlation engine (C++) | [engine/ARCHITECTURE.md](engine/ARCHITECTURE.md) — the engine is a submodule, so this points into `engine/docs/` |
 | Know what the app may assume of the engine | [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md) |
 | Check the math, or write it up | [engine/MATHEMATICS.md](engine/MATHEMATICS.md) |
 | Add or run app tests | [app/TESTING.md](app/TESTING.md) |
@@ -33,6 +33,8 @@ build it. This page routes you to the rest.
 | Know why a structural choice was made | [adr/](adr/README.md) — architecture decision records |
 | See what changed and when (history moved out of CONTEXT.md) | [ops/CHANGELOG.md](ops/CHANGELOG.md) |
 | Pick up a proposed improvement | [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md) |
+| Compare code-quality metrics with the 2026-10 baseline | [ops/QUALITY_BASELINE_2026-10-01.md](ops/QUALITY_BASELINE_2026-10-01.md) |
+| What the 2026-10 quality program fixed, split and deferred | [ops/QUALITY_PROGRAM_RESULTS.md](ops/QUALITY_PROGRAM_RESULTS.md) |
 | Work on the cloud backend | [backend/CLOUD_ARCHITECTURE_GCP.md](backend/CLOUD_ARCHITECTURE_GCP.md) |
 | Deploy the backend myself | [backend/BACKEND_SETUP_GCP.md](backend/BACKEND_SETUP_GCP.md) (CLI) or [BACKEND_SETUP_CONSOLE.md](backend/BACKEND_SETUP_CONSOLE.md) (browser) |
 | Fix sign-in / set up auth | [backend/AUTH_SETUP.md](backend/AUTH_SETUP.md) |
@@ -61,7 +63,7 @@ docs/
 ```
 
 `docs/engine/` is mostly signposts: the engine lives in its own repository, and
-its architecture, math and test docs are canonical at `native/docs/`. The one
+its architecture, math and test docs are canonical at `engine/docs/`. The one
 real document here is
 [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md), which states what
 the app is allowed to assume across the JNI boundary.
@@ -85,7 +87,7 @@ Digital Image Correlation measures deformation from photographs:
 
 That is enough theory for most contributions. The full pipeline — AKAZE feature
 seeding → Delaunay mesh → RGDIC propagation → ICGN refinement → VSG strain — is
-in `native/docs/ARCHITECTURE.md` inside the engine submodule.
+in `engine/docs/ARCHITECTURE.md` inside the engine submodule.
 
 ## Terms you'll meet in the code
 
@@ -113,6 +115,6 @@ in the project README — it is maintained in one place so the two cannot drift.
   legitimately moves results, say so explicitly and update the contract on both
   sides.
 - Lint and detekt baselines are empty — new findings fail CI. Size and
-  complexity findings are silenced per file with `@file:Suppress` (81 files as
-  of 2026-09-23); prefer extracts over widening those lists.
+  complexity findings are silenced per file with `@file:Suppress` (58 files as
+  of 2026-10-03); prefer extracts over widening those lists.
 - Run `./gradlew spotlessApply` before pushing.

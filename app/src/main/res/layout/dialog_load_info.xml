@@ -50,7 +50,7 @@
             android:layout_marginTop="16dp"
             tools:text="@string/info_load_diagram_heading_tensile" />
 
-        <com.indicvision.semper.ui.analysis.LoadInfoDiagramView
+        <com.sempermechanics.semper.ui.analysis.LoadInfoDiagramView
             android:id="@+id/loadInfoDiagram"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

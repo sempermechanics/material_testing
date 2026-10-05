@@ -2,7 +2,7 @@
 
 One map for the whole product: the app's screens, the work that keeps running
 after you leave a screen, and every backend request. The engine is deliberately
-absent — it lives in the `native/` submodule and has its own docs
+absent — it lives in the `engine/` submodule and has its own docs
 ([engine/ARCHITECTURE.md](engine/ARCHITECTURE.md),
 [engine/ENGINE_APP_CONTRACT.md](engine/ENGINE_APP_CONTRACT.md)).
 
@@ -33,7 +33,7 @@ Ids are stable — quote them in commits, issues and code comments.
 | `D1`–`D7` | Ops / CI | This file only |
 
 Paths are relative to the repo root. App classes are shown short — every one is
-under `app/src/main/java/com/indicvision/semper/`. Backend modules are under
+under `app/src/main/java/com/sempermechanics/semper/`. Backend modules are under
 `backend/`.
 
 ## Two rules this map exists to protect
@@ -70,7 +70,7 @@ SplashActivity ─ session restore ─┬─ no session ────────
 | Field | Value |
 |---|---|
 | Entry | `ui/auth/SplashActivity` |
-| Chain | `data/AuthRepository` → `data/net/IndicApi.me` (with `getConfig` in parallel, fetched again once if its `mode` disagrees with `me.license.mode`, as when the invite claim landed between the two) → `ui/auth/AccessRouter` (+ `data/AccessStatus`), `data/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
+| Chain | `data/account/AuthRepository` → `data/net/SemperApi.me` (with `getConfig` in parallel, fetched again once if its `mode` disagrees with `me.license.mode`, as when the invite claim landed between the two) → `ui/auth/AccessRouter` (+ `data/account/AccessStatus`), `data/account/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
 | Writes | `data/net/TokenStore` cached uid / email / status / role |
 | Fails as | Routing error passed on as `DicKeys.ROUTING_ERROR`, shown by A1 as a red pill |
 | Tests | `auth/AccessRouterTest`, `auth/StatusRecheckTest` |
@@ -84,7 +84,7 @@ One screen, four credential paths plus two deep links.
 
 ```
 AuthActivity ─┬─ Google SSO ............ ui/auth/GoogleSignInHelper
-              ├─ email + password ...... data/AuthRepository
+              ├─ email + password ...... data/account/AuthRepository
               ├─ create account ........ + ui/auth/PasswordPolicy
               ├─ email sign-in link .... /finishSignIn App Link
               └─ forgot password ....... /finishReset App Link → in-app reset form
@@ -93,9 +93,9 @@ AuthActivity ─┬─ Google SSO ............ ui/auth/GoogleSignInHelper
 | Field | Value |
 |---|---|
 | Entry | `ui/auth/AuthActivity` |
-| Chain | `data/AuthRepository` (Firebase Auth) → `data/net/IndicApi.me` / `registerDevice` → `ui/auth/AccessRouter` |
+| Chain | `data/account/AuthRepository` (Firebase Auth) → `data/net/SemperApi.me` / `registerDevice` → `ui/auth/AccessRouter` |
 | Writes | Firebase session; `TokenStore` identity; device registration flag |
-| Fails as | `ui/common/CrispToast` pill; policy failures inline from `PasswordPolicy` |
+| Fails as | `ui/common/dialog/CrispToast` pill; policy failures inline from `PasswordPolicy` |
 | Tests | `auth/PasswordPolicyTest`, `auth/ReauthFlowTest`, `auth/FirebaseAuthIntegrationTest` (instrumented) |
 
 Email verification is enforced for password accounts only; Google and email-link
@@ -107,7 +107,7 @@ verified at the Firebase host — see [backend/AUTH_SETUP.md](backend/AUTH_SETUP
 | Field | Value |
 |---|---|
 | Entry | `ui/auth/PendingApprovalActivity` |
-| Chain | `data/AuthRepository` + `data/DeviceKeyManager` (device id shown) → `IndicApi.me` on **Check status** |
+| Chain | `data/account/AuthRepository` + `data/account/DeviceKeyManager` (device id shown) → `SemperApi.me` on **Check status** |
 | Server side | The PENDING account was mailed to support at creation by `C1` → `backend/app/notify.py` |
 | Note | It does not poll, despite the KDoc; only the button checks |
 
@@ -117,17 +117,17 @@ verified at the Firebase host — see [backend/AUTH_SETUP.md](backend/AUTH_SETUP
 HomeActivity ─┬─ beta notice + diagnostics prompt (first run) ......... B10
               ├─ session list ...... ui/home/SessionListAdapter → ui/home/SessionOpenHelper → A7 / A8
               ├─ selection mode .... ui/home/SessionSelectionController → B4 / B12
-              ├─ pull to refresh ... data/CloudSync.reconcile(deep = true) ....... B7
+              ├─ pull to refresh ... data/cloud/CloudSync.reconcile(deep = true) ....... B7
               ├─ row badges ........ WorkInfo from B1 / B2
               ├─ quota chip ........ data/net/TokenStore + AppRemoteConfig → A9
-              └─ FAB ............... ui/common/MediaPickerSheet (A3a) → A5
+              └─ FAB ............... ui/common/media/MediaPickerSheet (A3a) → A5
 ```
 
 | Field | Value |
 |---|---|
 | Entry | `ui/home/HomeActivity` |
-| Chain | `data/SessionStore.list` (local index) ⋈ `data/CloudSync.reconcile` (cloud) |
-| Writes | Session index (rename, delete, sync state), coach-mark flags in `data/CoachPrefs` |
+| Chain | `data/session/SessionStore.list` (local index) ⋈ `data/cloud/CloudSync.reconcile` (cloud) |
+| Writes | Session index (rename, delete, sync state), coach-mark flags in `data/prefs/CoachPrefs` |
 | Fails as | Message pill + a "why + retry" dialog on the sync badge, fed by the worker's `DicKeys.UPLOAD_FAIL_REASON` / `DicRestoreWorker.KEY_ERROR` |
 | Tests | `session/SessionStoreAtomicTest`, `cloud/QuotaGateTest` |
 
@@ -135,10 +135,10 @@ HomeActivity ─┬─ beta notice + diagnostics prompt (first run) ......... B1
 
 | Field | Value |
 |---|---|
-| Entry | `ui/common/MediaPickerSheet` (shared by the Home FAB and both wizard dropzones) |
-| Chain | `ui/common/MediaStoreBrowser` + `MediaGridAdapter` for the Images tab; `ui/common/MediaSourceChooser` for the Files (SAF) tab |
+| Entry | `ui/common/media/MediaPickerSheet` (shared by the Home FAB and both wizard dropzones) |
+| Chain | `ui/common/media/MediaStoreBrowser` + `MediaGridAdapter` for the Images tab; `ui/common/media/MediaSourceChooser` for the Files (SAF) tab |
 | Permissions | `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO`, asked only when the Images tab needs them |
-| Tests | `ui/MediaStoreBrowserTest` |
+| Tests | `ui/common/media/MediaStoreBrowserTest`, `ui/common/media/MediaPickerSheetTest` |
 
 ### A4 Settings 🔒
 
@@ -148,14 +148,14 @@ delete stay on the Activity.
 | Section | File | Workflow |
 |---|---|---|
 | Account (+ admin) | `ui/settings/SettingsAccountSection` | → A4.1 |
-| Cloud backup | `ui/settings/SettingsPreferencesSection` | B1 |
-| Analyses data management | `ui/settings/SettingsActivity` + `AnalysisEntries` / `AnalysisDataAdapter` | B2, B3, B4 |
+| Cloud backup | `ui/settings/SettingsCloudSection` | B1 |
+| Analyses data management | `ui/settings/SettingsAnalysesSection` + `AnalysisEntries` / `AnalysisDataAdapter`; open, restore, download and delete on `SettingsActivity` | B2, B3, B4 |
 | Storage | `ui/settings/SettingsStorageSection` | B5, B6 |
 | Your data 🔒 | `ui/settings/SettingsYourDataSection` | B8, B9, B10 |
-| Analysis preferences | `ui/settings/SettingsPreferencesSection` | `data/DicSettings` + `data/net/AppRemoteConfig` |
+| Analysis preferences | `ui/settings/SettingsPreferencesSection` | `data/prefs/DicSettings` + `data/net/AppRemoteConfig` |
 | Help & support | `ui/settings/SettingsHelpSupportSection` | mailto / hosted pages |
 
-Long jobs are non-modal: `ui/common/TransferBannerController` carries restores,
+Long jobs are non-modal: `ui/common/transfer/TransferBannerController` carries restores,
 bundle downloads and both exports. Terminal restore failures are observed here
 as well as on Home.
 
@@ -165,30 +165,32 @@ Tests: `settings/AnalysisEntriesTest`, `settings/HelpSupportSectionTest`,
 
 ### A4.1 Admin `[admin]` 🔒
 
-`ui/admin/AdminActivity` → `IndicApi.listUsers` / `setUserStatus` → `C14`.
+`ui/admin/AdminActivity` → `SemperApi.listUsers` / `setUserStatus` → `C14`.
 Visible only when `TokenStore.isAdmin` (backend-reported role).
 
 ### A5 Analysis wizard
 
-One Activity, three pages; pages 2 and 3 inflate from ViewStubs and `goToStep`
-stays on the Activity.
+One Activity, three pages (`WizardStep`); pages 2 and 3 inflate from ViewStubs.
+`StaticAnalysisActivity.goToStep(WizardStep)` hands the page change to
+`AnalysisWizardChrome.applyStep`; the steps' parts live in `ui/analysis/frames`,
+`roi`, `recommend`, `run`, `sweep` and `wizard`.
 
 | Id | Step | Entry | Chain |
 |---|---|---|---|
-| A5.1 | Load frames | `StaticAnalysisActivity` + `AnalysisWizardSlots` / `AnalysisWizardCoach` | `ui/common/MediaPickerSheet` → `ui/analysis/FrameImportHelper` → `imaging/BitmapDecode`; ordering via `AnalysisFrameOrderMenuHelper` + `FrameOrderHelper` / `FrameOrderAdapter` |
-| A5.1a | Video source | same | `AnalysisVideoExtractHelper` → `VideoFrameExtractor` |
-| A5.1b | Machine load log + specimen dimensions (every test) | same, `AnalysisLoadCard` (ViewStub `stubLoadCard`) + `SpecimenGeometryFields` | `data/DocumentText` → `data/MachineLoadCsv` (parse) → `data/MachineLoadMapper` (rows → frames, re-run from `checkReady()`); dimensions in `data/SpecimenGeometry`; gate in `AnalysisReadyGate` (`StressStrain.Model.isComplete`); tests `MachineLoadCsvTest`, `MachineLoadMapperTest`, `StressStrainTest` |
-| A5.2 | Confirm settings | same | `AnalysisSettingsSheetHelper`, `SubsetRecommender` (SSSIG seed), `data/ParamClipboard` (Paste params), ROI card → A6, `AnalysisReadyGate` |
-| A5.3 | Sweep summary `[sweep]` | same | `SweepSetupHelper` + `VsgStudy` (plan) + `LineCutPreviewView` |
-| A5.4 | Running | `BatchRunController` + `ComputeOverlayHelper` | `AnalysisViewModel.launchBatchAnalysis` → `runBatchAnalysis` → `DicBatchRunner` → `DicFieldIo` → JNI `SemperNativeLib.computeFullFieldDirect`; sweeps go `runVsgSweep` → `VsgStudyRunner` |
-| A5.5 | Terminal states | `EngineFailure` + `ui/common/FaqRedirect` | `AnalysisRunCodes`, `ConvergenceGate`, `AnalysisCancelGate` |
+| A5.1 | Load frames | `StaticAnalysisActivity` + `AnalysisWizardSlots` / `AnalysisWizardCoach` | `ui/common/media/MediaPickerSheet` → `ui/analysis/frames/FrameImportHelper` → `imaging/BitmapDecoder`; ordering via `AnalysisFrameOrderMenuHelper` + `FrameOrderHelper` / `FrameOrderAdapter` |
+| A5.1a | Video source | same | `AnalysisVideoExtractController` → `VideoFrameExtractor` |
+| A5.1b | Machine load log + specimen dimensions (every test) | same, `AnalysisLoadCard` (ViewStub `stubLoadCard`) + `SpecimenGeometryFields` (`ui/analysis/load`) | `util/DocumentText` → `data/mechanical/MachineLoadCsv` (parse) → `data/mechanical/MachineLoadMapper` (rows → frames, re-run from `checkReady()` via `WizardLoadInputs.refreshMachineLoads`); dimensions in `data/mechanical/SpecimenGeometry`; gate in `AnalysisReadyGate` (`mechanicalInputsReady`, `StressStrain.Model.isComplete`); tests `MachineLoadCsvTest`, `MachineLoadMapperTest`, `StressStrainTest`, `AnalysisViewModelLabTest` |
+| A5.2 | Confirm settings | same | `AnalysisSettingsSheetController`, `SubsetRecommender` (SSSIG seed), `data/prefs/ParamClipboard` (Paste params), ROI card → A6, `AnalysisReadyGate` |
+| A5.3 | Sweep summary `[sweep]` | same | `SweepSetupController` + `VsgStudy` (plan) + `LineCutPreviewView` |
+| A5.4 | Running | `BatchRunController` + `ComputeOverlayController` | `RunChannels.launchBatchAnalysis` → `runBatchAnalysis` → `DicBatchRunner.runBatchAnalysisBody` → `DicFieldIo` → JNI `SemperNativeLib.computeFullFieldDirect`; sweeps go `RunChannels.launchVsgSweep` → `SweepRunner.runVsgSweep` → `VsgStudyRunner` |
+| A5.5 | Terminal states | `EngineFailure` + `ui/common/dialog/FaqRedirect` | `field/RunStop`, `ConvergenceGate`, `AnalysisCancelGate` |
 
 | Field | Value |
 |---|---|
-| Writes | `<sessionDir>/frame_%04d.dat` (`data/SessionPaths`), `raw_deformed/`, reference copy and the index row via `data/SessionRepository.buildSessionRecord` → `data/SessionStore.upsert` |
-| Then | `SessionRepository` calls `data/CloudSync.enqueueUpload` → B1 when cloud backup is on |
+| Writes | `<sessionDir>/frame_%04d.dat` (`data/session/SessionPaths`), `raw_deformed/`, reference copy and the index row via `data/session/SessionRepository.buildSessionRecord` → `ui/analysis/run/RunRecordSave.saveRunRecord` → `data/session/SessionStore.save` |
+| Then | Once the row is saved, `saveRunRecord` calls `data/cloud/CloudSync.enqueueUpload` → B1 when cloud backup is on. `afterSave` reads the save's `UpsertOutcome` for both, a sweep's through `SweepRunner.finishSolvedSweep` → `persistSweepSession`: a full quota ends the run at the session limit and opens the session-limit screen; an index that could not be read or written shows **Analysis not saved**. Either way a sweep's lattice does not open, and the sweep records `analysis_failed` with reason `session_limit` or `index_unavailable` (`SweepRunner.sweepEndEvent`) |
 | Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart, and in the backup's `metadata.json` `metrics` so it survives a restore. A re-run that saves nothing updates or drops its Home row to match what is left on disk (`DicBatchRunner.afterUnsavedRerun`); a cancelled re-run is saved as a partial run |
-| Signals | Timber; `android.os.Trace` sections; `analytics/SemperAnalytics` analysis started / completed / failed (consent-gated, buckets only) |
+| Signals | Timber; `android.os.Trace` sections; `diagnostics/SemperAnalytics` analysis started / completed / failed (consent-gated, buckets only) |
 | Tests | `analysis/VsgStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
 
 **Accuracy invariants** (do not "clean up"): the JNI output buffer is sized to
@@ -201,7 +203,7 @@ progress is a buffered `SharedFlow`, not a `StateFlow`.
 | Field | Value |
 |---|---|
 | Entry | `ui/analysis/RoiDrawActivity` (started for result by A5.2) |
-| Chain | `ui/analysis/StudioOverlayView` (draw / hit-test / mask) → `StudioOverlayMaskEncoder` → `util/OverlayFormats`; resolved back by `ui/analysis/RoiResolveHelper` |
+| Chain | `ui/analysis/roi/StudioOverlayView` (draw / hit-test / mask) → `StudioOverlayMaskEncoder` → `util/OverlayFormats`; resolved back by `ui/analysis/roi/RoiResolveHelper` |
 | Writes | Mask file at `DicKeys.MASK_FILE_PATH`; ROI rect in `DicKeys.ROI_*` |
 | Tests | `util/OverlayFormatsTest` |
 
@@ -215,7 +217,7 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 | Entry | `ui/analysis/VsgLatticeActivity` (a sweep opens here, not in the viewer) |
 | Chain | `VsgLatticeView` (nodes) + `VsgPlotView` (line-cut plot) + `VsgStudy` (plan maths); node open → A8 |
 | Reads | `DicKeys.SWEEP_*` extras packed by `AnalysisNavHelper.openResults` or `ui/home/SessionOpenHelper.intentFor` |
-| Writes | `data/ParamClipboard` on a parameter-chip copy |
+| Writes | `data/prefs/ParamClipboard` on a parameter-chip copy |
 | Fails as | Hollow node → `EngineFailure.shortReasonRes` + FAQ |
 | Tests | `analysis/VsgStudyTest`, `EngineFailureTest` |
 
@@ -224,11 +226,11 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 | Field | Value |
 |---|---|
 | Entry | `ui/viewer/ResultViewerActivity` (+ `ResultViewerViewModel`) |
-| Reads | `.dat` frames via `DicResult.decodeDatFile` (memory-mapped) and `data/DatCodec` |
-| Renders | `report/VisualizationEngine` heatmaps, `ui/viewer/HeatmapFit` rest-fit, `TouchImageView` zoom/pan, `ViewerFieldPills`, `ScrubFrameCache` look-ahead; single-setting only: `ViewerSummaryHelper` + `SummaryAnimation` + `report/GifEncoder` |
-| Probe | `ViewerInspectHelper` + `PointSpatialIndex` (built lazily on first tap) + `InspectOverlayView` |
+| Reads | `.dat` frames via `DicResult.decodeDatFile` (memory-mapped) and `data/session/DatCodec` |
+| Renders | `report/VisualizationEngine` heatmaps, `ui/viewer/HeatmapFit` rest-fit, `TouchImageView` zoom/pan, `ViewerFieldPills`, `ScrubFrameCache` look-ahead; single-setting only: `ViewerSummaryController` + `SummaryAnimation` + `report/GifEncoder` |
+| Probe | `ViewerInspectController` + `PointSpatialIndex` (built lazily on first tap) + `InspectOverlayView` |
 | Details | `ViewerSettingsSheet` (ⓘ). On a frame: true extrema plus a Scott-binned histogram of accepted values (`FieldHistogramView`). On the summary: min of every frame's colour-bar min and max of every frame's colour-bar max, matching the GIF; no mean, no histogram. With a load per frame: `ViewerStressStrainHelper` adds the test's dimension / load / stress rows and the `report/StressStrain` curve for its `Model` (built on first open, cached in the ViewModel) |
-| Exports | `ShareCenter` → `ViewerReportFactory` / `report/ReportBuilder` / `PdfReportGenerator` / `AnalysisCsvWriter` / `data/SessionEverythingExporter` → `SendToSheet` → `SaveExportActivity` (SAF) |
+| Exports | `ShareCenter` → `ViewerReportFactory` / `report/ReportBuilder` / `PdfReportGenerator` / `AnalysisCsvWriter` / `data/session/SessionEverythingExporter` → `SendToSheet` → `SaveExportActivity` (SAF); a typed test with loads adds the stress–strain page and the Lab report (`share/LabExport` → `LabReportExporter`) |
 | Fails as | Snackbar + **Why?** FAQ (`no_batch_data`, OOM, scale) |
 | Tests | `results/*` (decode, histogram, CSV, heatmap, PDF, GIF, summary), `report/StressStrainTest`, `viewer/ScrubFrameCacheTest`, `viewer/FrameNumberEntryTest`, `HeatmapFitTest`, `ViewerFieldPillsTest` |
 
@@ -244,6 +246,13 @@ demand, never on open; report compositing is capped at
 start, the FAB, the quota chip, a pre-run check (`AnalysisNavHelper.ensureSessionQuota`)
 or a quota rejection during B1. Not a paywall: the way past it is an email.
 
+The pre-run check (and the seat check, `ensureSeat`) applies only to a run
+that would start a new Home row, `AnalysisViewModel.wouldCreateNewSession`
+(`workingLocalId == null`). A re-run of the same inputs passes. Picking a
+reference (`applyNewReference`, image or video, even the same file) or
+importing frames calls `clearPreviousResults`, which drops `workingLocalId`,
+so the next run is a new row and is checked.
+
 ---
 
 ## B. App — background and data workflows
@@ -256,26 +265,28 @@ leaving the app; the rest run on `lifecycleScope` or at process start.
 ### B1 Back up an analysis to the cloud 🔒
 
 ```
-CloudSync.enqueueUpload → DicUploadWorker.doWork
-    ├─ prepare: SessionUploadBundler → ReportBuilder / VisualizationEngine / GifEncoder
+CloudSync.enqueueUpload → DicUploadWorker.doWork → backUp
+    ├─ stage  : UploadStaging → SessionUploadBundler → ReportBuilder / VisualizationEngine / GifEncoder
     │            → SessionZip (+ ZipDirectory) → Session.zip + .sha256 in upload_staging/
-    ├─ declare: SessionUploadMetadata → IndicApi.createSession ................ C5
-    ├─ resume : IndicApi.sessionUploads (poll while PROVISIONING) ............. C6
-    ├─ bytes  : DriveTransfer → Drive resumable URI (never through Cloud Run)
-    └─ finish : IndicApi.completeFile (size + md5 verified server-side) ....... C7
+    ├─ declare: UploadSessionPlanner.ensureSession → SessionUploadMetadata
+    │            → SemperApi.createSession ......................................... C5
+    ├─ resume : UploadSessionPlanner → SemperApi.listSessionUploads (poll while PROVISIONING) C6
+    ├─ bytes  : uploadFiles → DriveUploader → Drive resumable URI (never through Cloud Run)
+    ├─ finish : SemperApi.completeFile (size + md5 verified server-side) ....... C7
+    └─ failure: every refusal and exception is mapped by UploadFailures
 ```
 
 | Field | Value |
 |---|---|
-| Triggered by | `SessionRepository.saveSession` after a run, the Home badge retry, Settings **Back up now**, turning **Save to cloud** on, and each reconcile that lists the cloud, for rows still PENDING (`CloudSync.reconcile`) |
-| Decisions | `data/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip`, incomplete staging (`classifyIncompleteStaging`: retry while the reference/`.dat` inputs exist, the row was saved < 15 min ago, or they have been missing < 10 min by the `<sessionDir>/upload_inputs_missing_since` marker; else terminal `inputs_missing`) |
+| Triggered by | `saveRunRecord` after a run, the Home badge retry, Settings **Back up now**, turning **Save to cloud** on, and each reconcile that lists the cloud, for rows still PENDING (`CloudSync.reconcile`) |
+| Decisions | `data/cloud/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip`, incomplete staging (`classifyIncompleteStaging`: retry while the reference/`.dat` inputs exist, the row was saved < 15 min ago, or they have been missing < 10 min by the `<sessionDir>/upload_inputs_missing_since` marker; else terminal `inputs_missing`) |
 | Writes | `<sessionDir>/upload_staging/`, sync state + `cloudSessionId` on the index row; `StorageBudget.enforce` runs at the end |
 | Fails as | Terminal: `DicKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + badge dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
-| Signals | `data/TransferNotifications` foreground notification; `DicKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
+| Signals | `data/cloud/TransferNotifications` foreground notification; `DicKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
 | Tests | `cloud/UploadResumableTest`, `cloud/DicUploadWorkerOutcomesTest`, `cloud/UploadChunkSizingTest`, `cloud/BackupSplitTest`, `cloud/SessionZipTest`, `cloud/WaitingUploadsTest` |
 
-Do not split `doWork`: the resume contract depends on the staged bytes being
-**identical** across attempts (the declared size and sha256 are what Drive's
+`doWork` may be broken into named steps, but the resume contract depends on
+the staged bytes being **identical** across attempts (the declared size and sha256 are what Drive's
 resumable URI and `C7` reconcile against).
 
 ### B2 Restore an analysis from the cloud 🔒
@@ -283,10 +294,10 @@ resumable URI and `C7` reconcile against).
 | Field | Value |
 |---|---|
 | Entry | `CloudRestore.enqueueRestore` (Home row tap, or Settings **Restore**) → `data/DicRestoreWorker` |
-| Chain | `CloudRestore.restore` → `IndicApi.listSessionFiles` (C9) → `IndicApi.downloadFile` / `downloadRange` → `DriveTransfer` → `SessionZip` unpack → `SessionStore.upsert` |
+| Chain | `CloudRestore.restore` → `SemperApi.listSessionFiles` (C9) → `RestoreBundleFetcher` → `SemperApi.downloadFile` / `downloadRange` → `DriveDownloader` → `RestoreUnpacker` (`SessionZip` entries) → `SessionStore.save` |
 | Writes | A fresh `<sessionDir>` with `.dat` frames + `raw_deformed/`; `*.part` files while in flight |
 | Fails as | `DicRestoreWorker.KEY_ERROR` (carries the `ApiException` message, and with it the backend `ref:` id) → pill on Home **and** Settings |
-| Retry rules | `data/RestoreDownloadOutcomes` — 5xx/timeout Range-resumes, `ZipException`/corrupt transfer is terminal |
+| Retry rules | `data/cloud/restore/RestoreDownloadOutcomes` — 5xx/timeout Range-resumes, `ZipException`/corrupt transfer is terminal |
 | Tests | `cloud/RestoreAndImportSafetyTest`, `cloud/RestoreDownloadOutcomesTest`, `cloud/DriveTransferDownloadTest`, `cloud/DownloadWindowSizingTest` |
 
 ### B3 Download a session bundle to a file
@@ -298,35 +309,35 @@ failed download deletes the empty destination rather than leaving a 0-byte file.
 
 ### B4 Erase a cloud backup 🔒
 
-`ui/home/SessionSelectionController` or `SettingsActivity` → `data/SessionDeletes.enqueue`
+`ui/home/SessionSelectionController` or `SettingsActivity` → `data/cloud/SessionDeletes.enqueue`
 (one unique `session-delete` chain, so a second confirm queues behind the first) →
 5-second undo → `data/BackupDeleteWorker` → one analysis at a time through
-`CloudSync.eraseCloudBackup` / `eraseEverywhere` → `IndicApi.deleteSession` (C11).
+`CloudSync.eraseCloudBackup` / `eraseEverywhere` → `SemperApi.deleteSession` (C11).
 A 429 waits 5 s and retries that analysis (up to six tries) instead of reporting it
 as still in the cloud; a cloud delete clears the row's `cloudSessionId`, so a later
-delete of the phone copy sends nothing. `ui/common/DeleteFeedback` shows Undo,
+delete of the phone copy sends nothing. `ui/common/transfer/DeleteFeedback` shows Undo,
 "Deleting x of y…" and the outcome, with **Try again** for what is left. Settings
 re-lists with `CloudRestore.listCompleted`, which is uncached, so the list stops
 offering what no longer exists.
 
 ### B5 Reclaim local space
 
-`data/StorageBudget` — `enforce` at `SemperApp.onCreate` (before any screen),
-`freeAllBackedUpAsync` / `enforceAsync` from `ui/settings/SettingsStorageSection`.
+`data/session/StorageBudget` — `enforce` at `SemperApp.onCreate` (before any screen),
+`freeAllBackedUpOnIo` / `enforceOnIo` from `ui/settings/SettingsStorageSection`.
 It frees local frames of **backed-up** analyses only; a row whose frames were
 freed becomes "Only in cloud", not "data gone".
 Pinned by `session/LocalStorageFootprintTest`.
 
 ### B6 Clear the cache
 
-`data/CacheJanitor` from `SettingsStorageSection` — regenerable files only
+`data/session/CacheJanitor` from `SettingsStorageSection` — regenerable files only
 (previews, GIF cache, staging leftovers). Also provides the size measurement the
 Storage section shows.
 
 ### B7 Reconcile with the cloud 🔒
 
 `CloudSync.reconcile(deep = …)` from Home pull-to-refresh and the limit screen →
-`IndicApi.listSessions` (paged, `verify=true` on a deep refresh) → C8. Repairs
+`SemperApi.listSessions` (paged, `verify=true` on a deep refresh) → C8. Repairs
 sync state, re-enqueues B1 for local-only rows, refreshes the quota in
 `TokenStore` / `AppRemoteConfig`.
 
@@ -338,17 +349,17 @@ only when the backend *confirms* a blob is missing (`C8` returns `MISSING`, not
 
 | Export | Entry | Chain |
 |---|---|---|
-| Everything on this phone | Settings **Export my data** | `data/SessionEverythingExporter` → `SessionZip` / `ZipDirectory` → `SendToSheet` |
-| Everything in the cloud | Settings **Download my cloud account data** | `IndicApi.exportAccount` (streamed) → C12 → `SendToSheet` |
-| Viewer exports | A8 Share | `ui/viewer/ShareCenter` → `report/*` → `SendToSheet` |
+| Everything on this phone | Settings **Export my data** | `data/session/SessionEverythingExporter` → `SessionZip` / `ZipDirectory` → `SendToSheet` |
+| Everything in the cloud | Settings **Download my cloud account data** | `SemperApi.exportAccount` (streamed) → C12 → `SendToSheet` |
+| Viewer exports | A8 Share | `ui/viewer/share/ShareCenter` → `report/*` → `SendToSheet` |
 
-All three run behind `ui/common/TransferBannerController`, not a modal dialog.
+All three run behind `ui/common/transfer/TransferBannerController`, not a modal dialog.
 Tests: `cloud/SessionEverythingExporterTest`, `results/*`.
 
 ### B9 Delete the account 🔒
 
-`ui/settings/SettingsYourDataSection` → re-authentication via `ui/common/AuthRoute`
-(password, Google or email link) → `CloudSync.deleteAccount` → `IndicApi.deleteAccount`
+`ui/settings/SettingsYourDataSection` → re-authentication via `ui/common/auth/AuthRoute`
+(password, Google or email link) → `CloudSync.deleteAccount` → `SemperApi.deleteAccount`
 (C13) → **only on success** the local wipe (`SessionStore`, `TokenStore`,
 `DicSettings`) and Firebase `delete()`. Backend first, deliberately: a local wipe
 on a failed server call would strand the cloud copy.
@@ -360,7 +371,7 @@ One flag, two consumers:
 
 ```
 DicSettings.diagnosticsEnabled ─┬─ Diagnostics.apply/setEnabled → Crashlytics + CrashReportingTree
-                                └─ analytics/SemperAnalytics.event (dropped, not queued, when off)
+                                └─ diagnostics/SemperAnalytics.event (dropped, not queued, when off)
 ```
 
 Asked once on first run (after the beta notice, defaulting to **off**), mirrored
@@ -369,21 +380,21 @@ buckets and enums only — never images, results, session ids, specimen names or
 paths. The label, its subtitle, the first-run prompt and
 [legal/PRIVACY_POLICY.md](legal/PRIVACY_POLICY.md) §2.4 all name both halves;
 keep them in step if the event set changes.
-Tests: `analytics/SemperAnalyticsTest`.
+Tests: `diagnostics/SemperAnalyticsTest`.
 
 ### B11 Device identity and attestation 🔒
 
 | Field | Value |
 |---|---|
-| Key | `data/DeviceKeyManager` — EC P-256 in the AndroidKeyStore, private key never leaves it |
-| Register | `IndicApi.registerDevice` → C2 (409 = this account or device is bound elsewhere) |
-| Per call | `IndicApi.fetchChallenge` → C3, then `signedHeaders` signs `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → verified by `C4` |
+| Key | `data/account/DeviceKeyManager` — EC P-256 in the AndroidKeyStore, private key never leaves it |
+| Register | `SemperApi.registerDevice` → C2 (409 = this account or device is bound elsewhere) |
+| Per call | `SemperApi.fetchChallenge` → C3, then `signedHeaders` signs `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → verified by `C4` |
 | Tokens | `data/net/TokenProvider` / `TokenStore` — Firebase ID tokens are held in memory, never persisted |
 
 ### B12 Local session index
 
-`data/SessionStore` (atomic index write, `synchronized`, corruption flag) +
-`data/SessionRecord` + `data/SessionQuotaGate` + `data/SessionPaths` (the one
+`data/session/SessionStore` (atomic index write, `synchronized`, corruption flag) +
+`data/SessionRecord` + `data/session/SessionQuotaGate` + `data/session/SessionPaths` (the one
 place that knows `frame_%04d.dat` and `raw_deformed/`).
 Tests: `session/SessionStoreAtomicTest`, `upgrade/PrefsUpgradeSmokeTest`.
 
@@ -395,12 +406,12 @@ falling back to compile-time defaults when it has never been fetched.
 
 ### B14 Parameter clipboard
 
-`data/ParamClipboard` — one subset/step/VSG (px) triple, copied from the A7
+`data/prefs/ParamClipboard` — one subset/step/VSG (px) triple, copied from the A7
 parameter chip and pasted in A5.2. In memory only.
 
 ### B15 Transfer progress surfaces
 
-One notification channel (`semper_transfers`, `data/TransferNotifications`)
+One notification channel (`semper_transfers`, `data/cloud/TransferNotifications`)
 carrying upload, restore and download; per-row badges and bars on Home; the
 `TransferBannerController` strip in Settings and the viewer. There are no
 completion notifications by design — terminal failures surface in-app.
@@ -499,14 +510,14 @@ Details and failure triage: [ops/CI.md](ops/CI.md).
 | Symptom | Start here |
 |---|---|
 | A message, label or dialog text on screen | `rg "<the phrase>" app/src/main/res/values/strings.xml` → then `rg "R.string.<name>"`. Every user-facing string is in `strings.xml`; a phrase you cannot find there is either formatted (`_fmt`, plurals) or comes from an exception message |
-| An error with a **Why?** action | `ui/common/FaqRedirect` and [app/FAQ_LINKS.md](app/FAQ_LINKS.md) — the FAQ url resource names the case |
+| An error with a **Why?** action | `ui/common/dialog/FaqRedirect` and [app/FAQ_LINKS.md](app/FAQ_LINKS.md) — the FAQ url resource names the case |
 | A wrong number in the viewer or ⓘ sheet | The extras it was opened with: `AnalysisNavHelper.openResults` (fresh run) or `ui/home/SessionOpenHelper.intentFor` (reopen) → read in `ResultViewerActivity` / `ViewerSettingsSheet` / `ViewerReportFactory`. **Check which of the two packed it** — see E2.1 |
 | A wrong number in an export | `report/ReportBuilder` (fusion), `report/AnalysisCsvWriter`, `report/VisualizationEngine`; the source of truth is `DicResult.decodeDatFile` over `frame_%04d.dat` |
-| "Analysis failed" wording | `ui/analysis/EngineFailure` (code → string) + `AnalysisRunCodes`; the code itself comes from the engine or `ConvergenceGate` |
-| A backup that failed | Home badge dialog text = `DicKeys.UPLOAD_FAIL_REASON` from `DicUploadWorker.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
+| "Analysis failed" wording | `ui/analysis/run/EngineFailure` (code → string) + `field/RunStop` (the stop codes); the code itself comes from the engine or `ConvergenceGate` |
+| A backup that failed | Home badge dialog text = `DicKeys.UPLOAD_FAIL_REASON` from `UploadRun.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
 | A restore that failed | `DicRestoreWorker.KEY_ERROR` (the `ApiException` message) → `CloudRestore` → `RestoreDownloadOutcomes` for retry vs terminal |
 | Any cloud 4xx/5xx | The reason carries `(ref: <id>)` — that is the backend's `X-Request-Id`. Search the Cloud Run log for `requestId="<id>"` to get the exact access line (`opClass`, `routeTemplate`, `errorCode`, latency) |
-| A cloud call that is rejected consistently | `backend/app/errors.py` names the `detail` code; the client's branch is in `data/net/ApiErrors.kt` + `IndicApi.failSigned` |
+| A cloud call that is rejected consistently | `backend/app/errors.py` names the `detail` code; the client's branch is in `data/net/ApiErrors.kt` + `SemperApi.failSigned` |
 | Something the user says vanished | `CloudSync.reconcile` (B7) and `C8`'s `MISSING` vs `UNKNOWN` rule, then `StorageBudget` (B5) — "Only in cloud" is not "gone" |
 | Work that never started | It is WorkManager: `adb shell dumpsys jobscheduler`, plus the unique work names in `CloudRestore.workName` / `bundleDownloadWorkName` |
 | A backend behaviour with no obvious owner | `backend/app/observability.py` `classify_route` gives the `opClass`, which names the workflow group in §C |
