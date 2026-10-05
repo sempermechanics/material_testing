@@ -175,9 +175,11 @@ It prints `GATE ok …` per reference, an `::error` per breach, and exits 1 if a
 is over. Gates are keyed by the device the JSON records (`context.build.device`,
 `oriole` for a Pixel 6); a device the file does not list, CI's emulator included, is
 reported and never gated, and CI does not pass `--gates`. Without `--gates` the script
-only reports and always exits 0. **No device is listed yet:** Semper's Pixel 6
-references are owed (TD-155). material_testing's were taken on its own app and are not
-copied. Microbenchmark times are not gated: debuggable and not AOT-compiled, they are
+only reports and always exits 0. **The Pixel 6 (`oriole`)** has references from
+2026-10-05 for the tests that stayed in the reference state: Settings cold start and
+scroll, and both viewer scrubs. Startup cold and warm start and the wizard cold start
+reached thermal status 1 and have none yet (TD-155). material_testing's were taken on
+its own app and are not copied. Microbenchmark times are not gated: debuggable and not AOT-compiled, they are
 relative numbers only.
 
 **The phone's state ([ADR-008](../adr/ADR-008-startup-gates-phone-state.md)).**
