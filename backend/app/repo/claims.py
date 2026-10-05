@@ -10,6 +10,7 @@ from ..licenses import (
     MODE_LICENSED,
     normalize_duration,
     normalize_seating,
+    normalize_email,
 )
 
 from . import _base
@@ -37,8 +38,7 @@ def _public_claim_error(err: str) -> str:
 
 
 def _emails_match(left, right) -> bool:
-    a = (left or "").strip().lower()
-    b = (right or "").strip().lower()
+    a, b = normalize_email(left), normalize_email(right)
     return bool(a and b and a == b)
 
 
@@ -240,7 +240,7 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
                 locks[apps.field("deviceIdLock", app)] = device_id
             tx.set(seat_ref, {
                 "uid": uid,
-                "email": (email or "").strip().lower(),
+                "email": normalize_email(email),
                 **locks,
                 "status": "active",
                 "createdAt": _base.firestore.SERVER_TIMESTAMP,

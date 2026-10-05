@@ -2,7 +2,7 @@
 """
 from datetime import timedelta
 
-from .. import apps, errors, statuses
+from .. import apps, errors
 from ..config import settings
 from ..errors import Refusal
 from ..licenses import (
@@ -25,8 +25,7 @@ from ._base import (
     _seat_ref,
 )
 from .devices import (
-    _release_patch,
-    _retire_device,
+    _release_devices,
 )
 from .license_admin import (
     _drop_user_to_demo_if_licensed,
@@ -125,20 +124,13 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str,
         **_mode_patch(_license_mode(lic)),
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
     }
-    released = dict(none)
-    batch = db().batch()
+    releasing = {}
     for app, lock in locks.items():
         active = user.get(apps.field("activeDeviceId", app)) or ""
-        if not active or (lock and lock != active):
-            continue
-        released[app] = active
-        patch.update(_release_patch(active, app))
-        device_ref = db().collection("devices").document(active)
-        if device_ref.get().exists:
-            _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
-    batch.update(user_ref, patch)
-    batch.commit()
-    return released
+        if active and (not lock or lock == active):
+            releasing[app] = active
+    _release_devices(user_ref, releasing, patch)
+    return {**none, **releasing}
 
 
 def clear_device_lock(license_id: str, uid: str = "", *,
@@ -149,7 +141,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
 
     One primitive with three callers — Semper staff, institution IT, and the
     holder — because there is one operation. Since Gap A, clearing the lock is
-    the *whole* device change: an empty lock reads as `_LOCK_UNBOUND`, and
+    the *whole* device change: an empty lock reads as `_Lock.UNBOUND`, and
     `revalidate_device_lock` binds it to whatever signs in next, first writer
     wins. Nothing is re-activated and nothing is typed.
 

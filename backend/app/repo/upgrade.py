@@ -14,6 +14,8 @@ from ..licenses import (
     KIND_INDIVIDUAL,
     MODE_DEMO,
     normalize_kind,
+    email_domain,
+    normalize_email,
 )
 
 from . import _base
@@ -40,11 +42,6 @@ from .license_admin import (
     get_license_public,
     revoke_license,
 )
-
-
-def _email_domain(email: str) -> str:
-    email = (email or "").strip().lower()
-    return email.rsplit("@", 1)[-1] if "@" in email else ""
 
 
 def convert_to_institution(
@@ -82,8 +79,8 @@ def convert_to_institution(
     if holder and (holder.get("licenseId") or "") != license_id:
         # They have moved to another licence since; this one is theirs no more.
         holder = None
-    address = ((holder or {}).get("email") or lic.get("emailLock") or "").strip().lower()
-    if address and _email_domain(address) != domain_lock:
+    address = normalize_email((holder or {}).get("email") or lic.get("emailLock"))
+    if address and email_domain(address) != domain_lock:
         raise Refusal(errors.CONVERT_DOMAIN_MISMATCH)
 
     minted = create_institution_license(

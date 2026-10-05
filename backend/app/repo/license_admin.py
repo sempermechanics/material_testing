@@ -20,6 +20,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    _apply_patch,
     _is_institution,
     _is_revoked,
     _cursor_page,
@@ -307,7 +308,7 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
 
     # The sentinels are for Firestore; the mirror and the response read the
     # licence as it now stands.
-    merged = {k: v for k, v in {**lic, **update}.items() if v is not _base.firestore.DELETE_FIELD}
+    merged = _apply_patch(lic, update)
     left_floating = old_seating == SEATING_FLOATING and "seating" in update
     if left_floating:
         _clear_seat_leases(ref)

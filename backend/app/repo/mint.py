@@ -126,7 +126,7 @@ def _write_license(
         # Pre-rename mirror; see _mode_patch.
         "plan": legacy_plan(mode),
         "status": status,
-        "emailLock": (email_lock or "").strip().lower(),
+        "emailLock": normalize_email(email_lock),
         "deviceIdLock": device_id_lock,
         "createdAt": _base.firestore.SERVER_TIMESTAMP,
         "createdByUid": created_by_uid,
@@ -136,7 +136,7 @@ def _write_license(
     if kind == KIND_INSTITUTION:
         stored["domainLock"] = (domain_lock or "").strip().lower()
         stored["adminEmails"] = [
-            (e or "").strip().lower() for e in (admin_emails or []) if (e or "").strip()
+            normalize_email(e) for e in (admin_emails or []) if normalize_email(e)
         ]
         if max_seats is not None:
             stored["maxSeats"] = int(max_seats)
@@ -192,7 +192,7 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
         return user
     if not user.get("emailVerified"):
         return user
-    email = (user.get("email") or "").strip().lower()
+    email = normalize_email(user.get("email"))
     device = device_id or user.get("activeDeviceId") or user.get("claimedDeviceId")
     if not email or not device:
         return user

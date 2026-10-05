@@ -27,6 +27,7 @@ from ..licenses import (
     MODE_DEMO,
     STATUS_REVOKED,
     as_utc,
+    normalize_email,
 )
 
 from . import _base
@@ -212,7 +213,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
     _update_refs([(users.document(uid), patch) for uid in back])
     # The Demo keys the accounts were given while this licence was gone.
     _drop_superseded_demos(back, license_id)
-    address = (lic.get("emailLock") or "").strip().lower()
+    address = normalize_email(lic.get("emailLock"))
     if live and not institution and lic["status"] == "unused" and address \
             and not licence_held_by(address, exclude_id=license_id):
         # Still waiting for its first sign-in: promise it to the address again.

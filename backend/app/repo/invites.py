@@ -27,7 +27,7 @@ def find_user_by_email(email: str) -> dict | None:
     place, and it means no invite records, no email-keyed documents and no
     second identity space to keep consistent.
     """
-    wanted = (email or "").strip().lower()
+    wanted = normalize_email(email)
     if not wanted:
         return None
     q = db().collection("users").where("email", "==", wanted).limit(1)

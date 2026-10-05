@@ -10,6 +10,7 @@ from ..config import settings
 from ..licenses import (
     MODE_LICENSED,
     as_utc,
+    normalize_email,
 )
 
 from . import _base
@@ -20,7 +21,7 @@ from ._base import (
     SCHEMA_VERSION,
 )
 from .devices import (
-    _release_patch,
+    _release_devices,
     _retire_device,
     get_device,
 )
@@ -79,9 +80,7 @@ def _emails_conflict(left, right) -> bool:
     claim an account by device id alone. Two address-less identities still
     match, which is the only case that form got right.
     """
-    a = (left or "").strip().lower()
-    b = (right or "").strip().lower()
-    return a != b
+    return normalize_email(left) != normalize_email(right)
 
 
 def _link_auth_uid(canonical_uid: str, firebase_sub: str) -> None:
@@ -285,15 +284,7 @@ def release_account_device(uid: str) -> dict[str, str]:
     released = {app: device for app, device in released.items() if device}
     if not released:
         return {}
-    batch = db().batch()
-    patch = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
-    for app, device in released.items():
-        patch.update(_release_patch(device, app))
-        device_ref = db().collection("devices").document(device)
-        if device_ref.get().exists:
-            _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
-    batch.update(user_ref, patch)
-    batch.commit()
+    _release_devices(user_ref, released, {"updatedAt": _base.firestore.SERVER_TIMESTAMP})
     return released
 
 

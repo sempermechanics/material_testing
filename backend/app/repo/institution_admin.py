@@ -1,6 +1,7 @@
 """Institution licence self-service for the licence's own IT admins.
 """
 from .. import apps, errors
+from ..licenses import normalize_email
 from ..errors import Refusal
 
 from ._base import (
@@ -34,8 +35,8 @@ from .mint import (
 # the existing device-attested admin path in routers/admin.py.
 
 def is_institution_admin(license_doc: dict, email: str) -> bool:
-    admin_emails = {e.strip().lower() for e in (license_doc.get("adminEmails") or [])}
-    return bool(email) and email.strip().lower() in admin_emails
+    admin_emails = {normalize_email(e) for e in (license_doc.get("adminEmails") or [])}
+    return bool(email) and normalize_email(email) in admin_emails
 
 
 def list_licenses_administered_by(email: str) -> list[dict]:
@@ -53,7 +54,7 @@ def list_licenses_administered_by(email: str) -> list[dict]:
 
     Same redaction as `institution_license_summary` — no key plaintext.
     """
-    wanted = (email or "").strip().lower()
+    wanted = normalize_email(email)
     if not wanted:
         return []
     out = []

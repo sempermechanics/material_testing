@@ -152,7 +152,7 @@ def export_account(ctx=Depends(verified_device)):
     Device-signed (like DELETE /v1/me): a full-account export is high-consequence
     enough that a stolen ID token alone must not be able to trigger it.
     """
-    user = ctx["user"]
+    user = ctx.user
     uid = user["uid"]
     profile = repo.get_user(uid) or {}
 
@@ -230,7 +230,7 @@ def delete_account(ctx=Depends(verified_device)):
     must sign out afterwards: any further authenticated call would create a
     fresh, empty profile.
     """
-    user, device = ctx["user"], ctx["device"]
+    user = ctx.user
     uid = user["uid"]
     started = time.monotonic()
     token = drive.access_token()
@@ -275,7 +275,7 @@ def delete_account(ctx=Depends(verified_device)):
         "firestoreMs": total_ms - drive_ms,
         "totalMs": total_ms,
     }
-    audit.record(uid, device.get("deviceId"), action="ACCOUNT_DELETE",
+    audit.record(uid, ctx.device_id, action="ACCOUNT_DELETE",
                  target={"type": "user", "id": uid}, detail=detail)
     log.info("Erased account %s: %s", uid, detail)
     return {"deleted": uid, **detail}

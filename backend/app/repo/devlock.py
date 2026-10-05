@@ -1,6 +1,7 @@
 """The device lock on a licence or seat: bind on first use, check, and revalidate.
 """
 import logging
+from enum import Enum
 import random
 import time
 from datetime import timedelta
@@ -32,19 +33,20 @@ from .user_config import (
 log = logging.getLogger("semper.firestore")
 
 
-# Verdicts from _device_lock_state. "Unbound" is deliberately distinct from
-# "matches": both let the request through, but only one of them is a
-# instruction to write. The two refusals differ in what they say about the
-# account: "revoked" is the entitlement itself ending, "mismatch" is only this
-# device not being the one the lock names.
-_LOCK_OK = "ok"
-_LOCK_UNBOUND = "unbound"
-_LOCK_REVOKED = "revoked"
-_LOCK_MISMATCH = "mismatch"
+class _Lock(Enum):
+    """`_device_lock_state`'s verdict. Unbound is deliberately distinct from
+    a match: both let the request through, but only one of them is an
+    instruction to write. The two refusals differ in what they say about the
+    account: a revoke is the entitlement itself ending, a mismatch is only
+    this device not being the one the lock names."""
+    OK = "ok"
+    UNBOUND = "unbound"
+    REVOKED = "revoked"
+    MISMATCH = "mismatch"
 
 
 def _device_lock_state(user: dict, device_id: str,
-                       app: str = apps.SEMPER) -> tuple[str, object | None]:
+                       app: str = apps.SEMPER) -> tuple[_Lock, object | None]:
     """Judge `device_id` against this account's entitlement.
 
     Returns the verdict and, when the lock is still empty, the document that
@@ -65,33 +67,33 @@ def _device_lock_state(user: dict, device_id: str,
     """
     license_id = user.get("licenseId")
     if not license_id:
-        return _LOCK_OK, None
+        return _Lock.OK, None
     ref = db().collection("licenses").document(license_id)
     snap = ref.get()
     if not snap.exists:
-        return _LOCK_OK, None
+        return _Lock.OK, None
     lic = snap.to_dict() or {}
     if _is_revoked(lic):
-        return _LOCK_REVOKED, None
+        return _Lock.REVOKED, None
     if not _is_institution(lic):
         return _lock_verdict(lic.get(apps.field("deviceIdLock", app)), device_id, ref)
     seat_ref = _seat_ref(license_id, user.get("uid") or "")
     seat_snap = seat_ref.get()
     if not seat_snap.exists:
-        return _LOCK_OK, None
+        return _Lock.OK, None
     seat = seat_snap.to_dict() or {}
     if seat.get("status") in ("revoked", "disabled"):
-        return _LOCK_REVOKED, None
+        return _Lock.REVOKED, None
     return _lock_verdict(seat.get(apps.field("deviceIdLock", app)), device_id, seat_ref)
 
 
-def _lock_verdict(locked, device_id: str, ref) -> tuple[str, object | None]:
+def _lock_verdict(locked, device_id: str, ref) -> tuple[_Lock, object | None]:
     """The individual and institution branches differ only in which document
     carries the lock, so the comparison itself lives in one place."""
     locked = locked or ""
     if not locked:
-        return _LOCK_UNBOUND, ref
-    return (_LOCK_OK, None) if locked == device_id else (_LOCK_MISMATCH, None)
+        return _Lock.UNBOUND, ref
+    return (_Lock.OK, None) if locked == device_id else (_Lock.MISMATCH, None)
 
 
 #: Whole bind transactions tried before giving up, each with the client's own
@@ -235,7 +237,7 @@ def revalidate_device_lock(user: dict, device_id: str | None,
     if effective_mode(user) != MODE_LICENSED:
         return user
     verdict, ref = _device_lock_state(user, device_id, app)
-    if verdict == _LOCK_UNBOUND:
+    if verdict == _Lock.UNBOUND:
         if not _may_bind(user, device_id, app):
             # Proceeds, but leaves the lock for the phone that may take it.
             return user
@@ -264,9 +266,9 @@ def revalidate_device_lock(user: dict, device_id: str | None,
                 detail={"deviceId": device_id, "app": app},
             )
         return user
-    if verdict == _LOCK_OK:
+    if verdict == _Lock.OK:
         return user
-    if verdict == _LOCK_MISMATCH:
+    if verdict == _Lock.MISMATCH:
         log.info("device lock mismatch uid=%s license=%s app=%s: demo for this request",
                  user.get("uid"), user.get("licenseId"), app)
         return {**user, **_mode_patch(MODE_DEMO)}

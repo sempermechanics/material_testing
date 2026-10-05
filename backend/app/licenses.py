@@ -207,6 +207,12 @@ def normalize_email(email: str) -> str:
     return (email or "").strip().lower()
 
 
+def email_domain(email: str) -> str:
+    """The domain an address is at, normalised; "" for no address."""
+    address = normalize_email(email)
+    return address.rsplit("@", 1)[-1] if "@" in address else ""
+
+
 def invite_id(email: str) -> str:
     """Document id for a pending institution invite.
 

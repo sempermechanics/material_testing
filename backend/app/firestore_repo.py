@@ -146,6 +146,7 @@ from .repo.account import (  # noqa: F401
 from .repo.sessions import (  # noqa: F401
     bump_session_progress,
     complete_file,
+    Completion,
     count_user_sessions,
     create_files_batch,
     create_session,
@@ -167,6 +168,7 @@ from .repo.sessions import (  # noqa: F401
     session_app,
     set_file_upload_url,
     set_session_folder,
+    set_new_session_status,
     set_session_status,
     upload_target,
 )

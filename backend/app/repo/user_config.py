@@ -19,6 +19,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    _apply_patch,
     db,
     _license_mode,
     _mode_patch,
@@ -315,7 +316,5 @@ def set_user_config(uid: str, patch: dict) -> dict | None:
         deletes["plan"] = _base.firestore.DELETE_FIELD
     if update or deletes:
         ref.update({**update, **deletes, "updatedAt": _base.firestore.SERVER_TIMESTAMP})
-    user = {**(snap.to_dict() or {}), **update, "uid": uid}
-    for k in deletes:
-        user.pop(k, None)
-    return resolve_user_config(user)
+    return resolve_user_config(_apply_patch({**(snap.to_dict() or {}), "uid": uid},
+                                            {**update, **deletes}))

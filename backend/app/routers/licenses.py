@@ -5,6 +5,7 @@ from .. import rate_limit
 from ..deps import attested_or_mfa_user, current_user, rate_limited, request_app
 from ..models import LicenseActivate
 from ..validation import require_header_identifier
+from ._shared import named_app
 
 router = APIRouter()
 
@@ -114,13 +115,8 @@ def unbind_device(
     from a browser, which cannot send that header, `?app=materialtesting`.
     Each app has its own cooldown. No app named is Semper.
     """
-    if app:
-        named = apps.from_name(app)
-        if named is None:
-            raise HTTPException(400, errors.UNKNOWN_APP)
-    else:
-        named = header_app
-    user = ctx["user"]
+    named = named_app(app, header_app)
+    user = ctx.user
     license_id = user.get("licenseId") or ""
     if not license_id:
         raise HTTPException(404, errors.NO_LICENSE)

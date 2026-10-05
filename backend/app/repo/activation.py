@@ -5,6 +5,7 @@ from ..errors import Refusal
 from ..licenses import (
     key_hash,
     key_prefix,
+    email_domain,
 )
 
 from ._base import (
@@ -32,11 +33,6 @@ from .claims import (
     _member_patch,
     _public_claim_error,
 )
-
-
-def _email_domain(email: str) -> str:
-    email = (email or "").strip().lower()
-    return email.rsplit("@", 1)[-1] if "@" in email else ""
 
 
 def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: dict, ref,
@@ -79,7 +75,7 @@ def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic:
     if _is_revoked(lic):
         raise Refusal(errors.LICENSE_REVOKED)
     domain_lock = (lic.get("domainLock") or "").strip().lower()
-    if not domain_lock or _email_domain(email) != domain_lock:
+    if not domain_lock or email_domain(email) != domain_lock:
         raise Refusal(errors.LICENSE_EMAIL_MISMATCH)
     patch = _member_patch(ref.id, lic)
     err = claim_seat(ref.id, uid, email, device_id, patch, app=app)

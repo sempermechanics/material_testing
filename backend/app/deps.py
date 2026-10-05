@@ -5,6 +5,7 @@ import hashlib
 import logging
 import re
 import time
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 
 from cryptography.exceptions import InvalidSignature
@@ -21,6 +22,25 @@ from .validation import require_header_identifier
 from . import observability as obs
 
 log = logging.getLogger("semper.auth")
+
+
+@dataclass(frozen=True)
+class Caller:
+    """Who an attested or stepped-up request comes from.
+
+    `device` is the registered device a signed request came from, empty for
+    a browser that stepped up with a second factor. `via` says how the caller
+    proved themselves: "device", "mfa", "dev" (DEV_INSECURE_AUTH), or "" for a
+    plain device-signed route.
+    """
+    user: dict
+    device: dict = field(default_factory=dict)
+    via: str = ""
+    second_factor: str = ""
+
+    @property
+    def device_id(self) -> str | None:
+        return self.device.get("deviceId") or None
 
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
              "access_status": statuses.ACCESS_APPROVED, "activeDeviceId": "dev-device",
@@ -251,14 +271,14 @@ async def verified_device(
     x_device_id: str = Header(default=""),
     x_nonce: str = Header(default=""),
     x_signature: str = Header(default=""),
-) -> dict:
+) -> Caller:
     """Device-attested caller: active device + single-use nonce + ECDSA signature.
 
     Keeps `async` only for `await request.body()`. Firestore device/nonce lookups
     run in the threadpool so they do not stall the event loop.
     """
     if settings.DEV_INSECURE_AUTH:
-        return {"user": user, "device": _DEV_DEVICE}
+        return Caller(user, _DEV_DEVICE)
 
     x_device_id = require_header_identifier(
         x_device_id, name="device_id", maximum=128
@@ -317,7 +337,7 @@ async def verified_device(
         raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
     request.state.device_id = x_device_id
     obs.bind_device(x_device_id)
-    return {"user": user, "device": dev}
+    return Caller(user, dev)
 
 
 _CLIENT_NONCE = re.compile(r"t1\.(\d{9,11})\.[A-Za-z0-9_-]{22,86}")
@@ -375,7 +395,7 @@ def _step_up(base, window: str, doc: str):
         x_device_id: str = Header(default=""),
         x_nonce: str = Header(default=""),
         x_signature: str = Header(default=""),
-    ) -> dict:
+    ) -> Caller:
         return await step_up_check(request, user, x_device_id, x_nonce, x_signature,
                                    max_age_seconds=getattr(settings, window))
 
@@ -423,7 +443,7 @@ async def step_up_check(
     x_signature: str,
     *,
     max_age_seconds: int,
-) -> dict:
+) -> Caller:
     """The step-up itself, shared by the admin, user and institution tiers.
 
     Institution IT calls it directly, after its membership check, so a
@@ -437,11 +457,11 @@ async def step_up_check(
     withdraws the browser path should withdraw all of it.
     """
     if settings.DEV_INSECURE_AUTH:
-        return {"user": user, "device": _DEV_DEVICE, "via": "dev"}
+        return Caller(user, _DEV_DEVICE, via="dev")
 
     if x_device_id or x_nonce or x_signature:
         ctx = await verified_device(request, user, x_device_id, x_nonce, x_signature)
-        return {**ctx, "via": "device"}
+        return replace(ctx, via="device")
 
     if not settings.ADMIN_WEB_MFA_ENABLED:
         # No device headers and no browser path: this is the attestation-only
@@ -462,4 +482,4 @@ async def step_up_check(
         raise HTTPException(403, errors.REAUTH_REQUIRED)
 
     request.state.device_id = ""
-    return {"user": user, "device": {}, "via": "mfa", "secondFactor": factor}
+    return Caller(user, via="mfa", second_factor=factor)

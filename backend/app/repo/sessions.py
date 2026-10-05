@@ -1,6 +1,8 @@
 """Cloud analyses: sessions, their files, paging, provisioning and completion.
 """
 
+from enum import StrEnum
+
 from google.api_core.exceptions import NotFound
 
 from .. import apps, statuses
@@ -10,6 +12,7 @@ from . import _base
 from ._base import (
     _BATCH_LIMIT,
     _cursor_page,
+    _scan,
     db,
     _delete_query_until_empty,
     _run_tx,
@@ -65,19 +68,25 @@ def replace_file_content(sid: str, file_id: str, size_bytes: int, sha256: str, d
     db().collection("sessions").document(sid).update({"updatedAt": _base.firestore.SERVER_TIMESTAMP})
 
 
-def _session_file_docs(sid: str, page_size: int):
+def _session_file_docs(sid: str, page_size: int = _BATCH_LIMIT):
     """Every file document in a session, fetched [page_size] at a time."""
-    query = db().collection("files").where("sessionId", "==", sid).order_by("__name__")
-    cursor = None
-    while True:
-        page_q = query.limit(page_size)
-        if cursor is not None:
-            page_q = page_q.start_after(cursor)
-        docs = list(page_q.stream())
-        yield from docs
-        if len(docs) < page_size:
-            return
-        cursor = docs[-1]
+    col = db().collection("files")
+    return _scan(col, col.where("sessionId", "==", sid), chunk=page_size)
+
+
+def _file_view(doc_id: str, f: dict, *fields: str) -> dict:
+    """A file as a listing shows it: id, name, role and size, plus `fields`."""
+    return {
+        "fileId": doc_id,
+        "name": f.get("name"),
+        "role": f.get("role"),
+        "sizeBytes": f.get("sizeBytes", 0),
+        **{k: f.get(k) for k in fields},
+    }
+
+
+#: What a restore manifest and the export carry for each file.
+_MANIFEST_FIELDS = ("sha256", "status")
 
 
 def _page_session_files(sid: str, limit: int, page_token: str | None):
@@ -140,23 +149,20 @@ def list_session_files(
     Returns (page, next_page_token_or_None).
     """
     docs, next_token = _page_session_files(sid, limit, page_token)
-    out = []
-    for d in docs:
-        f = d.to_dict()
-        out.append({
-            "fileId": d.id,
-            "name": f.get("name"),
-            "role": f.get("role"),
-            "sizeBytes": f.get("sizeBytes", 0),
-            "sha256": f.get("sha256"),
-            "status": f.get("status"),
-        })
-    return out, next_token
+    return [_file_view(d.id, d.to_dict(), *_MANIFEST_FIELDS) for d in docs], next_token
 
 
 # ---------------- async provisioning ----------------
-def set_session_status(sid: str, status: str, error_code: str | None = None,
-                       *, keep_completed: bool = True) -> None:
+def _status_patch(status: str, error_code: str | None) -> dict:
+    patch = {"status": status, "updatedAt": _base.firestore.SERVER_TIMESTAMP}
+    if error_code:
+        patch["provisionError"] = error_code
+    elif status != statuses.SESSION_PROVISION_FAILED:
+        patch["provisionError"] = _base.firestore.DELETE_FIELD
+    return patch
+
+
+def set_session_status(sid: str, status: str, error_code: str | None = None) -> None:
     """Move a session to `status`. COMPLETED is terminal and is never left.
 
     Every caller is provisioning, and a Cloud Tasks retry of it can land
@@ -165,23 +171,9 @@ def set_session_status(sid: str, status: str, error_code: str | None = None,
     read and the write share a transaction, so a completion that lands
     between them — `bump_session_progress` writes the same document — makes
     this retry and see it.
-
-    `keep_completed=False` is a plain write, for the inline create: its
-    upload targets have not left the request yet, so nothing can have
-    completed, and the guard's read would be paid on every analysis.
     """
-    patch = {"status": status, "updatedAt": _base.firestore.SERVER_TIMESTAMP}
-    if error_code:
-        patch["provisionError"] = error_code
-    elif status != statuses.SESSION_PROVISION_FAILED:
-        patch["provisionError"] = _base.firestore.DELETE_FIELD
+    patch = _status_patch(status, error_code)
     ref = db().collection("sessions").document(sid)
-    if not keep_completed:
-        try:
-            ref.update(patch)
-        except NotFound:
-            pass
-        return
 
     def _open(snap) -> bool:
         return snap.exists and (snap.to_dict() or {}).get("status") != statuses.SESSION_COMPLETED
@@ -203,6 +195,16 @@ def set_session_status(sid: str, status: str, error_code: str | None = None,
     _run_tx(_set, on_contended=_guarded_write)
 
 
+def set_new_session_status(sid: str, status: str) -> None:
+    """`set_session_status` for a session this request created, as a plain
+    write: its upload targets have not left the request yet, so nothing can
+    have completed, and the guard's read would be paid on every analysis."""
+    try:
+        db().collection("sessions").document(sid).update(_status_patch(status, None))
+    except NotFound:
+        pass
+
+
 def iter_unprovisioned_files(sid: str):
     """Files in a session that still have no resumable URI.
 
@@ -210,23 +212,10 @@ def iter_unprovisioned_files(sid: str):
     halfway re-runs and picks up only what is left, so a retry never mints a
     second upload URI for a file that already has one.
     """
-    page_token = None
-    while True:
-        docs, page_token = _page_session_files(sid, _BATCH_LIMIT, page_token)
-        if not docs:
-            return
-        for d in docs:
-            f = d.to_dict()
-            if f.get("status") == statuses.FILE_COMPLETED or f.get("uploadUrl"):
-                continue
-            yield {
-                "fileId": d.id,
-                "name": f.get("name"),
-                "role": f.get("role"),
-                "sizeBytes": f.get("sizeBytes", 0),
-            }
-        if not page_token:
-            return
+    for d in _session_file_docs(sid):
+        f = d.to_dict()
+        if f.get("status") != statuses.FILE_COMPLETED and not f.get("uploadUrl"):
+            yield _file_view(d.id, f)
 
 
 def set_file_upload_url(file_id: str, url: str) -> None:
@@ -262,28 +251,6 @@ def _listed_session(doc_id: str, s: dict) -> dict:
     }
 
 
-def _scan_user_sessions(uid: str, page_token: str | None, chunk: int):
-    """Every session of `uid` after `page_token`, in document-id order,
-    fetched `chunk` at a time. A token naming a deleted document restarts
-    from the beginning, as `_cursor_page` does."""
-    col = db().collection("sessions")
-    query = col.where("uid", "==", uid).order_by("__name__")
-    cursor = None
-    if page_token:
-        snap = col.document(page_token).get()
-        if snap.exists:
-            cursor = snap
-    while True:
-        page_q = query.limit(chunk)
-        if cursor is not None:
-            page_q = page_q.start_after(cursor)
-        docs = list(page_q.stream())
-        yield from docs
-        if len(docs) < chunk:
-            return
-        cursor = docs[-1]
-
-
 def list_user_sessions(
     uid: str,
     limit: int = 50,
@@ -313,7 +280,8 @@ def list_user_sessions(
     out: list = []
     # limit + 1 per read, as `_cursor_page` reads: when every session is this
     # app's, the filtered page costs what the unfiltered one does.
-    scan = _scan_user_sessions(uid, page_token, limit + 1)
+    col = db().collection("sessions")
+    scan = _scan(col, col.where("uid", "==", uid), page_token, chunk=limit + 1)
     for d in scan:
         s = d.to_dict()
         if session_app(s) != app:
@@ -337,18 +305,8 @@ def iter_all_user_sessions(uid: str, *, page_size: int = 100):
 
 def list_session_files_all(sid: str, *, page_size: int = 200) -> list:
     """Every file in a session, paging past the soft list cap."""
-    out = []
-    for d in _session_file_docs(sid, page_size):
-        f = d.to_dict()
-        out.append({
-            "fileId": d.id,
-            "name": f.get("name"),
-            "role": f.get("role"),
-            "sizeBytes": f.get("sizeBytes", 0),
-            "sha256": f.get("sha256"),
-            "status": f.get("status"),
-        })
-    return out
+    return [_file_view(d.id, d.to_dict(), *_MANIFEST_FIELDS)
+            for d in _session_file_docs(sid, page_size)]
 
 
 def list_session_artifacts(sid: str, *, page_size: int = 200) -> list:
@@ -363,21 +321,11 @@ def list_session_artifacts(sid: str, *, page_size: int = 200) -> list:
     Pending files are skipped: they have no `driveFileId` yet, and an archive
     is of what was stored, not of what was promised.
     """
-    out = []
-    for d in _session_file_docs(sid, page_size):
-        f = d.to_dict()
-        if f.get("status") != statuses.FILE_COMPLETED or not f.get("driveFileId"):
-            continue
-        out.append({
-            "fileId": d.id,
-            "name": f.get("name"),
-            "role": f.get("role"),
-            "sizeBytes": f.get("sizeBytes", 0),
-            "sha256": f.get("sha256"),
-            "driveFileId": f.get("driveFileId"),
-            "createdAt": f.get("createdAt"),
-        })
-    return out
+    return [
+        _file_view(d.id, f, "sha256", "driveFileId", "createdAt")
+        for d in _session_file_docs(sid, page_size)
+        if (f := d.to_dict()).get("status") == statuses.FILE_COMPLETED and f.get("driveFileId")
+    ]
 
 
 def iter_user_sessions(uid: str):
@@ -456,7 +404,7 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate,
         "deviceId": device.get("deviceId"),
         "specimen": body.specimen,
         "localSessionId": body.localSessionId,
-        # Reserved, but no upload targets yet. set_session_status moves it to
+        # Reserved, but no upload targets yet. Provisioning moves it to
         # PROVISIONING → UPLOADING (or PROVISION_FAILED).
         "status": statuses.SESSION_PROVISIONING,
         "driveFolderId": None,
@@ -512,14 +460,22 @@ def create_files_batch(sid: str, uid: str, files: list[tuple[str, FileSpec]]) ->
         batch.commit()
 
 
-def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
-    """Record a file's Drive pointer. Returns "ok", "already" (a retry of a
-    completion that landed — idempotent, must NOT bump the session counter
-    again) or "" (rejected).
+class Completion(StrEnum):
+    """What `complete_file` did. The values are what it used to return."""
+    #: This call recorded the completion: advance the session's counter.
+    DONE = "ok"
+    #: A retry of a completion that landed. Idempotent; must NOT bump again.
+    ALREADY = "already"
+    #: Not this caller's file, the wrong size, or no such file.
+    REJECTED = ""
+
+
+def complete_file(file_id: str, uid: str, body: FileComplete) -> Completion:
+    """Record a file's Drive pointer, as one `Completion`.
 
     Read-status→update runs in a transaction so two concurrent completions of
     the same PENDING file yield exactly one "ok" (the other sees COMPLETED and
-    returns "already"). Without this, both could bump the session counter.
+    returns ALREADY). Without this, both could bump the session counter.
     """
     ref = db().collection("files").document(file_id)
 
@@ -527,12 +483,12 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
     def _complete(tx):
         snap = ref.get(transaction=tx)
         if not snap.exists:
-            return ""
+            return Completion.REJECTED
         d = snap.to_dict()
         if d["uid"] != uid or d["sizeBytes"] != body.bytes:
-            return ""
+            return Completion.REJECTED
         if d.get("status") == statuses.FILE_COMPLETED:
-            return "already"
+            return Completion.ALREADY
         tx.update(
             ref,
             {
@@ -543,19 +499,19 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> str:
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             },
         )
-        return "ok"
+        return Completion.DONE
 
-    def _lost_race() -> str:
+    def _lost_race() -> Completion:
         # A concurrent completion of this same file won the race. That is the
         # idempotent case the transaction exists to produce — re-read and answer
-        # it precisely rather than 500ing on the loser. "already" is important:
+        # it precisely rather than 500ing on the loser. ALREADY is important:
         # it stops the caller bumping the session counter a second time.
         snap = ref.get()
         current = snap.to_dict() if snap.exists else None
         if (current and current.get("uid") == uid
                 and current.get("status") == statuses.FILE_COMPLETED):
-            return "already"
-        return ""
+            return Completion.ALREADY
+        return Completion.REJECTED
 
     return _run_tx(_complete, on_contended=_lost_race)
 
@@ -579,7 +535,7 @@ def bump_session_progress(sid: str):
     An increment needs no read, so concurrent completions no longer contend.
 
     Trusting the counter is safe because complete_file is idempotent: a retried
-    completion returns "already" and never reaches this function.
+    completion returns ALREADY and never reaches this function.
     """
     ref = db().collection("sessions").document(sid)
     try:

@@ -55,6 +55,24 @@ def _retire_device(batch, device_ref, status: str) -> None:
 
 
 
+def _release_devices(user_ref, devices: dict[str, str], patch: dict) -> None:
+    """Release each `{app: device id}` from the account, in one batch with
+    `patch`: the app's binding dropped and the id held off (`_release_patch`),
+    and the device retired as superseded. Shared by a lock clear
+    (`repo.seats._settle_holder`) and a staff phone release
+    (`repo.users.release_account_device`), so the two cannot release a phone
+    differently."""
+    patch = dict(patch)
+    batch = db().batch()
+    for app, device in devices.items():
+        patch.update(_release_patch(device, app))
+        device_ref = db().collection("devices").document(device)
+        if device_ref.get().exists:
+            _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
+    batch.update(user_ref, patch)
+    batch.commit()
+
+
 def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER) -> dict:
     dev = {
         "uid": uid,

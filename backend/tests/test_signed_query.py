@@ -46,7 +46,7 @@ async def _verify(priv, query: str, signed_target: str):
 
 async def test_signature_over_the_encoded_query_is_accepted(wired):
     ctx = await _verify(wired, QUERY, f"{PATH}?{QUERY}")
-    assert ctx["device"]["deviceId"] == "d1"
+    assert ctx.device["deviceId"] == "d1"
 
 
 async def test_signature_over_the_bare_path_is_refused_when_a_query_is_sent(wired):

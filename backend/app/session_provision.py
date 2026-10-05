@@ -115,8 +115,10 @@ def provision_session(sid: str, *, purge_on_failure: bool = False,
 
     # Inline, the upload targets are still in this response, so nothing can
     # have completed yet and the COMPLETED guard (one more read) is skipped.
-    repo.set_session_status(sid, statuses.SESSION_UPLOADING,
-                            keep_completed=not purge_on_failure)
+    if purge_on_failure:
+        repo.set_new_session_status(sid, statuses.SESSION_UPLOADING)
+    else:
+        repo.set_session_status(sid, statuses.SESSION_UPLOADING)
     obs.log_event(log, logging.INFO, "session_provisioned", outcome="ok",
                   count=provisioned, latencyMs=round((time.monotonic() - started) * 1000, 1),
                   folderMs=round(folder_ms, 1))

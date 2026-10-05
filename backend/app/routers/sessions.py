@@ -11,7 +11,7 @@ import requests
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from .. import apps, audit, drive, errors, firestore_repo as repo, statuses
+from .. import audit, drive, errors, firestore_repo as repo, statuses
 from .. import observability as obs
 from .. import rate_limit
 from .. import tasks
@@ -26,7 +26,7 @@ from ..deps import (
 from ..models import SessionCreate
 from ..session_provision import provision_session
 from ..validation import PageToken, SessionId
-from ._shared import clamp_page_size, json_dumps, page_block
+from ._shared import clamp_page_size, drive_failure, json_dumps, named_app, page_block
 
 log = logging.getLogger("semper")
 router = APIRouter()
@@ -49,14 +49,9 @@ def _listed_app(app: str, header_app: str) -> str | None:
     """Which app's sessions `GET /v1/sessions` lists: the caller's (by
     `X-App-Id`) when `?app=` is absent, the named one, or None for `all`.
     Anything else is 400 `unknown_app`, as `?app=` on `/v1/licenses/unbind`."""
-    if not app:
-        return header_app
-    if app.strip().lower() == _ALL_APPS:
+    if app and app.strip().lower() == _ALL_APPS:
         return None
-    named = apps.from_name(app)
-    if named is None:
-        raise HTTPException(400, errors.UNKNOWN_APP)
-    return named
+    return named_app(app, header_app)
 
 
 @router.get("/v1/sessions")
@@ -151,7 +146,7 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
     user's email, device id and engine parameters). Nothing is soft-deleted; the
     only trace kept is the audit record that the erasure happened.
     """
-    user, device = ctx["user"], ctx["device"]
+    user = ctx.user
     session = _owned_session(sid, user)
 
     folder = session.get("driveFolderId")
@@ -159,7 +154,7 @@ def delete_session(sid: SessionId, ctx=Depends(verified_device)):
         drive.delete_file(drive.access_token(), folder)
     removed = repo.delete_session(sid)
 
-    audit.record(user["uid"], device.get("deviceId"), action="SESSION_DELETE",
+    audit.record(user["uid"], ctx.device_id, action="SESSION_DELETE",
                  target={"type": "session", "id": sid},
                  detail={"filesRemoved": removed, "localSessionId": session.get("localSessionId", "")})
     log.info("Erased session %s for uid %s (%d files)", sid, user["uid"], removed)
@@ -187,7 +182,7 @@ def session_uploads(
     ID-token-only read was accepted during the fleet migration; retired
     2026-09-26 after 30 days of logs showed no such caller — TD-45.)
     """
-    user = ctx["user"]
+    user = ctx.user
     session = _owned_session(sid, user)
     page_size = clamp_page_size(page_size, 1000)
     uploads, next_token = repo.list_pending_uploads(
@@ -263,7 +258,7 @@ def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depe
     so the restore's size check and the bundle manifest stay true.
     Device-signed like every other write.
     """
-    user, device = ctx["user"], ctx["device"]
+    user = ctx.user
     session = _owned_session(sid, user)
     if session.get("status") != statuses.SESSION_COMPLETED:
         raise HTTPException(409, errors.SESSION_NOT_COMPLETE)
@@ -286,17 +281,14 @@ def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depe
     try:
         written = drive.replace_content(drive.access_token(), rec["driveFileId"], data)
     except requests.RequestException as e:
-        if isinstance(e, requests.HTTPError) and e.response is not None and e.response.status_code == 404:
-            log.error("metadata replace %s: object gone from Drive", rec["driveFileId"])
-            raise HTTPException(409, errors.DRIVE_FILE_GONE) from e
-        log.error("metadata replace %s failed: %s", rec["driveFileId"], e)
-        raise HTTPException(502, errors.DRIVE_WRITE_FAILED) from e
+        raise drive_failure(e, "metadata replace", rec["driveFileId"],
+                            gone=409, failed=errors.DRIVE_WRITE_FAILED) from e
     if written["size"] is not None and written["size"] != len(data):
         log.error("metadata replace %s: Drive holds %s bytes, sent %d", rec["driveFileId"], written["size"], len(data))
         raise HTTPException(502, errors.DRIVE_WRITE_FAILED)
 
     repo.replace_file_content(sid, file_id, len(data), hashlib.sha256(data).hexdigest(), written["md5"])
-    audit.record(user["uid"], device.get("deviceId"), action="SESSION_METADATA_REPLACE",
+    audit.record(user["uid"], ctx.device_id, action="SESSION_METADATA_REPLACE",
                  target={"type": "session", "id": sid}, detail={"bytes": len(data)})
     return {"sessionId": sid, "sizeBytes": len(data)}
 
@@ -382,7 +374,7 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     written first and why the zip's central directory — written last — is the
     signal that the transfer completed.
     """
-    user = ctx["user"]
+    user = ctx.user
     session = _owned_session(sid, user)
     if not repo.cloud_backup_enabled(user):
         raise HTTPException(403, errors.feature_not_licensed_detail())
@@ -410,10 +402,10 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     }).encode()
 
     audit.record(
-        user["uid"], (ctx.get("device") or {}).get("deviceId"),
+        user["uid"], ctx.device_id,
         action="SESSION_BUNDLE_DOWNLOAD",
         target={"type": "session", "id": sid},
-        detail={"fileCount": len(artifacts), "via": ctx.get("via") or ""},
+        detail={"fileCount": len(artifacts), "via": ctx.via},
     )
 
     def stream():
@@ -485,7 +477,7 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     retry a 403 from this route forever, which is one more reason the gate
     would be the wrong shape.
     """
-    user, device = ctx["user"], ctx["device"]
+    user = ctx.user
     cfg = repo.resolve_user_config(user)
 
     # Idempotent retry: same localSessionId + still in flight → return existing.
@@ -521,7 +513,7 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     # accepted deliberately (a transactional cross-doc count is not modelled by
     # the Firestore client uniformly and adds no security value here).
     # Tagged with the asking app (ADR-014), so each app lists only its own.
-    session = repo.create_session(sid, user, device, body, app)
+    session = repo.create_session(sid, user, ctx.device, body, app)
 
     # Write the file docs (cheap, no Drive I/O) so the manifest is durable before
     # any upload target exists. Provisioning then only has to fill in uploadUrl,
@@ -536,7 +528,7 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     counts = obs.metrics_counts(body.metrics, file_count=len(body.files))
     audit.record(
         user["uid"],
-        device.get("deviceId"),
+        ctx.device_id,
         action="SESSION_CREATE",
         target={"type": "session", "id": sid},
         detail={**counts, "app": app},
