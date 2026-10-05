@@ -53,7 +53,7 @@
 
         <!-- compact=true (VsgLatticeActivity): no separate axis-title lines, the
              coach mark already explains both axes on first open. -->
-        <com.indicvision.semper.ui.analysis.sweep.VsgLatticeView
+        <com.sempermechanics.semper.ui.analysis.sweep.VsgLatticeView
             android:id="@+id/latticeView"
             android:layout_width="match_parent"
             android:layout_height="136dp"
@@ -158,14 +158,14 @@
                      group-level one; both still rendered fully square). The two
                      buttons inside are plain flat rectangles. -->
                 <FrameLayout
-                    android:id="@+id/togglePlotModeClip"
+                    android:id="@+id/plotModeClip"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="8dp"
                     android:background="@drawable/bg_pill_clip_mask">
 
                     <com.google.android.material.button.MaterialButtonToggleGroup
-                        android:id="@+id/togglePlotMode"
+                        android:id="@+id/rgPlotMode"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         app:checkedButton="@id/btnPlotHighlight"
@@ -221,7 +221,7 @@
 
             <!-- compactAxes=true (VsgLatticeActivity): no separate axis-title
                  lines, the unit folds onto the outermost tick instead. -->
-            <com.indicvision.semper.ui.analysis.sweep.VsgPlotView
+            <com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
                 android:id="@+id/plotLatticeStrain"
                 android:layout_width="match_parent"
                 android:layout_height="300dp"

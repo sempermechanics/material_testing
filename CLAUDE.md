@@ -12,7 +12,7 @@ Windows: `gradlew.bat`. Quote `-Pandroid.testInstrumentationRunnerArguments…` 
 | `./gradlew ciReleaseGate` | Spotless, detekt, lintDebug, unit tests, R8, assembleRelease |
 | `./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug` | Tier 1 without R8 |
 | `./gradlew :app:koverLog :app:koverVerify` | Coverage log + floor (49; measured 75.1 % on 2026-10-03; enforced in CI tier 1 and `ciReleaseGate`) |
-| `./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.indicvision.semper.benchmark"` | Emulator instrumented; exclude benchmark package on debug |
+| `./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.sempermechanics.semper.benchmark"` | Emulator instrumented; exclude benchmark package on debug |
 | `cd backend && python -m pytest tests/ -q --cov=app --cov-fail-under=75` | Backend (install lock + `requirements-test.txt`) |
 | `python scripts/render_legal_pages.py --check` | Hosted legal pages match `docs/legal/` |
 | `python scripts/check_console.py` | Console pages: wiring, CSP, placeholders, gateway paths |
@@ -36,11 +36,11 @@ Engine tests are **not** this CI. From the submodule: see [docs/engine/TESTING.m
 | Cloud backup (upload) | `DicUploadWorker.backUp`: `UploadStaging` → `UploadSessionPlanner.ensureSession` → `uploadFiles` → `complete`; every failure goes through `UploadFailures` |
 | Work that must outlive a screen | [ADR-016](docs/adr/ADR-016-work-that-outlives-the-activity.md): ViewModel, an app-lifetime run, or WorkManager |
 | A toast, dialog, sheet, thumbnail or latest-wins job | The `ui/common` kit ([ADR-017](docs/adr/ADR-017-viewbinding-and-ui-kit.md)); views through ViewBinding |
-| A failure result or a catch | [ADR-018](docs/adr/ADR-018-error-convention.md): `Authed` / `HttpFailure`, `RunStop`, `DownloadFailure`, `UploadFailures`, `UpsertResult`; rethrow cancellation |
+| A failure result or a catch | [ADR-018](docs/adr/ADR-018-error-convention.md): `Authed` / `HttpFailure`, `RunStop`, `DownloadFailure`, `UploadFailures`, `UpsertOutcome`; rethrow cancellation |
 | Session paths | `SessionPaths` only |
 | Backend routes | `backend/app/routers/`; app/middleware in `main.py` |
 | Firestore access | `backend/app/repo/<aggregate>.py`; routers call it through `firestore_repo` ([ADR-001](docs/adr/ADR-001-firestore-repo-package.md)) |
-| Engine math / solver | `native/` submodule + [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
+| Engine math / solver | `engine/` submodule + [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
 
 ## Guardrails
 

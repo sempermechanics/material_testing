@@ -32,7 +32,7 @@ apps. The deploy and Firestore workflows only run in this repo
    `applicationId` (ADR-008), so nothing else names the app.
 3. Docs conflicts are the norm: keep its CONTEXT and TECH_DEBT, both sides of
    CHANGELOG, and both sides of any ADR both repos added to.
-4. An engine bump (the `native` gitlink) means re-running its real-data checks
+4. An engine bump (the `engine` gitlink) means re-running its real-data checks
    (its `real_data_steel_tensile.py` and `real_data_pmma_bending.py` scripts); its JVM
    tests use arrays recorded on the old engine and stay green either way.
 
@@ -107,7 +107,7 @@ three things the merge will not do on its own.
    Then steps 3 and 4 above (`--compile`, `--kdoc`, `--docs`,
    `check_doc_paths.py`) once, after both.
 2. **Watch one collision.** The second mapping moves
-   `com.indicvision.semper.ui.analysis.VideoSamplingSheet` to
+   `com.sempermechanics.semper.ui.analysis.VideoSamplingSheet` to
    `ui/analysis/frames/`. The fork has its own `ui/analysis/VideoSamplingSheet`
    (step 2 above suggests the same package), and this repository now has
    `ui/analysis/frames/VideoSamplingSheet.kt` as well. Decide which one the
@@ -126,7 +126,7 @@ three things the merge will not do on its own.
    | `originalNameOr` in `ui/analysis/run` (`DicFieldIo.kt`) | `List<String>.originalNameOr(index, fallback)` in `data/session/SessionNaming.kt`. It is **not** in either mapping, so add the import by hand |
    | `VisualizationEngine` results as `Pair` / `Triple` | `ImageSize` and `BakedHeatmap` |
    | `AnalysisRunCodes`, `BatchAnalysisParams` | Removed; the run's codes are `RunStop` (`field/RunStop.kt`) and its inputs `RunSpec` |
-   | `IndicApiHttp.apiException`, `Refusal` | `ApiAnswer` (`data/net/IndicApiHttp.kt`) |
+   | `SemperApiHttp.apiException`, `Refusal` | `ApiAnswer` (`data/net/SemperApiHttp.kt`) |
    | `CloudRestore.recordFrom`, `SkippedNode.fromMetadata`, `SkippedNode.toMetadataJsonArray` | `SessionMetadataDoc` (`data/cloud/SessionMetadataDoc.kt`) reads and writes a backup's `metadata.json` |
    | `SessionStore.upsertAsync` | Removed; call `SessionStore.save` / `upsert` off the main thread |
    | `ZipDirectory.centralDirectoryOffset` | Removed |
@@ -140,6 +140,117 @@ three things the merge will not do on its own.
 Here, a PR that mixes moves with fixes is merged with a merge commit, never a
 squash ([ADR-015](../adr/ADR-015-package-layout.md)), so its pure-move commits
 stay in `git log` for the fork to review one at a time.
+
+### The app id and package move (ADR-019, 2026-10)
+
+[ADR-019](../adr/ADR-019-sempermechanics-app-id.md) moved this app to
+`com.sempermechanics.semper` and renamed the engine submodule's folder from
+`native/` to `engine/`. Take it in **one** merge on the fork, together with the
+fork's own id change:
+
+1. Set `applicationId = "com.sempermechanics.materialtesting"` and register that
+   app in Firebase (new `google-services.json` client). The backend already maps
+   it to `materialtesting` (`backend/app/apps.py`), and `assetlinks.json` lists it.
+2. Merge. Git moves the Kotlin tree (`com/indicvision/semper` →
+   `com/sempermechanics/semper`) and the submodule path; then run
+   `git submodule sync && git submodule update --init --recursive`, and delete
+   `app/.cxx` (its CMake cache holds the old `native/` path).
+3. Rewrite the fork-only files' `package` and `import` lines:
+   `com.indicvision.semper` → `com.sempermechanics.semper`. Same for
+   `IndicApi*` → `SemperApi*` and the `INDIC_*` build keys → `SEMPER_*` (the old
+   keys are still read).
+
+Do not take this code under the old id: the prefs files (`semper_*`) and the
+Keystore alias (`SemperDeviceKeyEc`) are renamed, so an install that upgrades in
+place would find them empty and lose sign-in, settings and its device key.
+
+### The naming scheme (2026-10)
+
+A set of pure renames brought the code in line with the naming rules in
+[CONTRIBUTING](../../CONTRIBUTING.md#code-style). They move no packages, so no
+mapping replays them: after the merge, the fork's own files that use an old
+name fail to compile, and this table is the fix. Persisted values did not
+change (prefs files and keys, intent extras, WorkManager names, `index.json` and
+metadata fields, analytics events, the `StrainMethod` wire value), and no
+Worker, Activity, `SemperNativeLib` or `ProgressCallback` was renamed. Each
+group is one commit, reviewable with `git diff -M`.
+
+| Was | Now |
+|---|---|
+| **Backend exceptions** | |
+| `SemperApi.ApiException`, `.NotApprovedException`, `.CloudNotConfiguredException`, `.TermsVersionMismatchException`, `.DeviceConflictException`, `.DeviceInUseException`, `.NoSeatAvailableException`, `.DeviceNotActiveException`, `.UploadLinkExpiredException` (nested) | The same names, top-level in `data/net/ApiExceptions.kt` (the typealiases there are gone): import `com.sempermechanics.semper.data.net.<Name>` |
+| **Stateful `*Helper` → `*Controller`** | |
+| `AnalysisDeformedBatchHelper`, `AnalysisVideoExtractHelper` (`ui/analysis/frames/`) | `AnalysisDeformedBatchController`, `AnalysisVideoExtractController` |
+| `ComputeOverlayHelper` (`ui/analysis/run/`) | `ComputeOverlayController` |
+| `SweepSetupHelper` (`ui/analysis/sweep/`), `SweepSetupHelperTest` | `SweepSetupController`, `SweepSetupControllerTest` |
+| `AnalysisSettingsSheetHelper` (`ui/analysis/wizard/`) | `AnalysisSettingsSheetController` |
+| `ViewerInspectHelper` (`ui/viewer/inspect/`), `ViewerSummaryHelper` (`ui/viewer/summary/`) | `ViewerInspectController`, `ViewerSummaryController` |
+| Parameters / properties `overlayHelper`, `sweepHelper` | `overlayController`, `sweepController` |
+| **Files and types** | |
+| `util/OrgJsonLenient.kt` | `util/OrgJson.kt` (object `OrgJson` unchanged) |
+| `ui/common/KeyboardExt.kt` | `ui/common/Keyboard.kt` (`hideKeyboard`, `commitOnDone`, `showUnlessEditing`) + `ui/common/ToggleGroups.kt` (`onButtonChecked`); the functions keep their names and package |
+| `ui/common/ViewExt.kt` | `ui/common/Dp.kt` (`View.dp`) |
+| `data/session/SessionRecordExt.kt` | `data/session/SessionRecordFields.kt` |
+| `DriveDownload` in `data/net/drive/DriveDownloader.kt` | `data/net/drive/DriveDownload.kt` |
+| `ImageEncode`, `BitmapDecode` (`imaging/`) | `ImageEncoder`, `BitmapDecoder` |
+| `GoogleSignInHelper.NotConfigured` | `GoogleSignInHelper.NotConfiguredException` |
+| `CloudSync.EraseResult` | `CloudSync.EraseOutcome` |
+| `CloudRestore.ListResult` | `CloudRestore.ListOutcome` |
+| `SessionStore.UpsertResult` | `SessionStore.UpsertOutcome` |
+| `StagingResult` (`data/UploadStaging.kt`) | `StagingOutcome` |
+| `RestoreStart.Result` | `RestoreStart.Outcome` |
+| `SessionEverythingExporter.Result` | `SessionEverythingExporter.Export` |
+| `SubsetRecommender.Result` | `SubsetRecommender.Recommendation` |
+| `VsgStudyRunner.Result` | `VsgStudyRunner.SweepResult` |
+| `TermsAcceptanceBody`, `ConsentUpdateBody`, `ListSessionsResponse` (`data/net/ApiDtos.kt`) | `TermsAcceptRequest`, `ConsentUpdateRequest`, `SessionsResponse` |
+| Tests: `RestoreFakeApi`, `SpeckleScaleInstrumentedTest`, `ExifOrientedSizeInstrumentedTest`, `BitmapDecodeTest`, `KeyboardExtTest`, `SessionRecordExtTest` | `FakeRestoreApi`, `SpeckleScaleDeviceTest`, `ExifOrientedSizeDeviceTest`, `BitmapDecoderTest`, `KeyboardTest`, `SessionRecordFieldsTest` |
+| **Functions** | |
+| `DicUploadWorker` `appInForeground()`, `DicBundleDownloadWorker` `mayPackInstead()`, `UploadStaging` `inputsGoneForGood()` | `isAppInForeground()`, `canPackInstead()`, `areInputsGoneForGood()` |
+| `LicenseEntitlements.seatRequiredToStart`, `.unlimitedAnalysis`, `.inGrace` | `isSeatRequiredToStart`, `hasUnlimitedAnalysis`, `isInGrace` |
+| `AppRemoteConfig.inGrace` | `AppRemoteConfig.isInGrace` |
+| `UploadWorkOutcomes.bundleArtifactsReady`, `.stagingInputsOnDisk`, `.stagingReusable` | `areBundleArtifactsReady`, `areStagingInputsOnDisk`, `isStagingReusable` |
+| `ClientNonce.usable()` | `ClientNonce.isUsable()` |
+| `DicSettings.diagnosticsAsked` | `DicSettings.wasDiagnosticsAsked` |
+| `DicSettings.saveToCloud` / `setSaveToCloud` | `saveToCloudEnabled` / `setSaveToCloudEnabled` |
+| `DicSettings.uploadWifiOnly` / `setUploadWifiOnly` | `wifiOnlyUploadEnabled` / `setWifiOnlyUploadEnabled` |
+| `SessionStore.sameMetadataInputs` | `SessionStore.haveSameMetadataInputs` |
+| `RigidBodyFit` `notable()` | `isNotable()` |
+| `VsgLatticeActivity.lineCutHorizontal()` (private) | `isLineCutHorizontal()`; the `lineCutHorizontal` property elsewhere is unchanged |
+| `WizardParamFields.useKeysInterpolator()` | `isKeysInterpolatorSelected()` |
+| `AuthActivity.validEmail` | `isValidEmail` |
+| `CloudApi.me`, `CloudApi.sessionUploads` (and every implementation, including fakes) | `getMe`, `listSessionUploads` |
+| `GoogleSignInHelper.getIdToken` | `GoogleSignInHelper.requestIdToken` |
+| `CloudBackupListing.load` | `CloudBackupListing.read` |
+| `loadSweepFrameProfiles` (`ui/analysis/sweep/LatticeProfiles.kt`) | `readSweepFrameProfiles` |
+| `StrainMethod.wireName` | `StrainMethod.wire` (value `"VSG"` unchanged) |
+| `SessionStore.listAsync`, `.setSyncStateAsync` | `listOnIo`, `setSyncStateOnIo` |
+| `StorageBudget.enforceAsync`, `.freeAllBackedUpAsync` | `enforceOnIo`, `freeAllBackedUpOnIo` |
+| **Properties and constants** | |
+| `ResultViewerActivity.viewerVm` (internal; its parts use `host.viewerVm`) | `ResultViewerActivity.viewModel` |
+| `AppRemoteConfig.fetchedAtMillis`, `.licenseExpiresAtMillis` | `fetchedAtMs`, `licenseExpiresAtMs` |
+| `SettingsActivity.PERCENT_MAX` (and the private copies in `UploadProgressSampler`, `TransferBannerController`, `ComputeOverlayController`, `SessionListAdapter`) | `PERCENT` |
+| `VideoSamplingSheet.MIN_SEGMENT_SEC` | `MIN_SEGMENT_SECONDS` |
+| Private: `MILLIS_PER_SECOND`, `*_TIMEOUT_S`, `TOKEN_TIMEOUT_S`, `mScaleDetector`, `mutableState`, `runningState` | `MS_PER_SECOND`, `*_TIMEOUT_SECONDS`, `TOKEN_TIMEOUT_SECONDS`, `scaleDetector`, `_state`, `_running` |
+| **Layouts and drawables** (ViewBinding classes follow) | |
+| `layout/dialog_video_sampling.xml` (`DialogVideoSamplingBinding`) | `layout/sheet_video_sampling.xml` (`SheetVideoSamplingBinding`) |
+| `layout/warn_chip_row.xml` | `layout/view_warn_chip.xml` |
+| `layout/settings_section_header.xml` (`SettingsSectionHeaderBinding`) | `layout/view_settings_section_header.xml` (`ViewSettingsSectionHeaderBinding`) |
+| `layout/settings_scroll_content.xml` (`SettingsScrollContentBinding`) | `layout/view_settings_scroll_content.xml` (`ViewSettingsScrollContentBinding`) |
+| `drawable/badge_bg.xml` | `drawable/bg_badge.xml` |
+| **View ids** (binding fields follow) | |
+| `wizard_step_settings_content.xml`: `tvSubsetValue`, `etSubsetSize`, `etStepSize`, `tvStepValue`, `tvOverlapValue`, `etOverlap`, `tvStrainValue`, `etStrainWindow`, `tvSweepOverlapValue` | `etSubsetValue`, `sliderSubsetSize`, `sliderStepSize`, `etStepValue`, `etOverlapValue`, `sliderOverlap`, `etStrainValue`, `sliderStrainWindow`, `etSweepOverlapValue` |
+| `activity_static_analysis.xml`: `ivRefThumb`, `ivDefIcon` | `imgRefThumb`, `imgDefIcon` |
+| `item_frame_order.xml`: `ivFrameThumb`; `dialog_sweep_frame_pick.xml`: `ivSweepFrameDialogPreview`; `view_settings_section_header.xml`: `ivSectionChevron` | `imgFrameThumb`, `imgSweepFramePreview`, `imgSectionChevron` |
+| `activity_auth.xml`: `layoutEmail`, `layoutPassword`, `layoutConfirmPassword`, `layoutTotp`, `cardCredentials`, `cardTotp` | `tilEmail`, `tilPassword`, `tilConfirmPassword`, `tilTotp`, `credentialsCard`, `totpCard` |
+| `toggleExtractMode` (`sheet_video_sampling.xml`), `togglePlotMode` and `togglePlotModeClip` (`activity_vsg_lattice.xml`), `toggleMediaSource` (`sheet_media_picker.xml`) | `rgExtractMode`, `rgPlotMode`, `plotModeClip`, `rgMediaSource` |
+| `menu/menu_frame_order.xml`: `menu_frame_order_date_asc`, `_date_desc`, `_manual`, `_name_asc`, `_name_desc` | `menuFrameOrderDateAsc`, `menuFrameOrderDateDesc`, `menuFrameOrderManual`, `menuFrameOrderNameAsc`, `menuFrameOrderNameDesc` |
+| **String keys** (text unchanged) | |
+| `roi_hud_mode_switched`, `roi_hud_zoom`, `roi_hud_dimensions`, `video_read_error`, `video_codec_unsupported`, `error_loading_images`, `scale_dialog_title`, `scale_max_value`, `scale_min_value`, `auth_link_sent`, `auth_reset_sent`, `transfer_banner_page`, `transfer_banner_percent`, `help_support_feedback_subject`, `help_support_feedback_body`, `storage_free_up_body`, `cloud_delete_forever_body`, `about_message`, `sweep_fail_unknown`, `sweep_reason_unknown`, `restore_load_error`, `admin_load_error`, `admin_approved_toast`, `admin_denied_toast`, `admin_action_error`, `limit_body`, `license_expiring_today`, `license_expired`, `license_grace`, `request_access_none` | The same key + `_fmt` |
+| `subset_low_texture_fmt` | `subset_low_texture` |
+| `setting_subset`, `setting_step`, `setting_strain_window`, `setting_strain_method`, `setting_stopped_early`, `setting_frames_solved`, `setting_roi`, `setting_image_size`, `setting_px_fmt`, `setting_roi_fmt`, `setting_size_fmt`, `setting_vsg` (the settings-used sheet) | `settings_used_` + the rest (`settings_used_subset`, …) |
+| `setting_diagnostics`, `setting_diagnostics_sub`, `setting_save_cloud`, `setting_save_cloud_sub`, `setting_save_cloud_sub_off`, `setting_wifi_only`, `setting_wifi_only_sub`, `setting_max_frames`, `setting_max_frames_info` (the Settings screen) | `settings_` + the rest (`settings_diagnostics`, …) |
+| **Instrumented test methods** | |
+| 27 snake_case or `subject_condition` names in `SpeckleScaleDeviceTest`, `ExifOrientedSizeDeviceTest`, `FirebaseAuthIntegrationTest`, `AnalysisWizardSmokeTest`, `EnginePipelineSmokeTest` | camelCase sentences (`repeatSolve_bitIdentical` → `repeatSolveIsBitIdentical`, `analysisActivity_showsToolbar` → `wizardShowsToolbar`, …); benchmark methods keep their names |
 
 ## Porting back
 
