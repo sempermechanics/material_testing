@@ -98,7 +98,7 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
 
 ## Action items
 
-1. [x] `RunSpec` + builders (`ui/analysis/run/RunSpec.kt`); `BatchAnalysisParams`
+1. [x] `RunSpec` + builders (`ui/analysis/RunSpec.kt`); `BatchAnalysisParams`
        derived from it.
 2. [x] `RunResult.spec` and `RunResult.settings`; the nav helper and both
        record builders read them.
