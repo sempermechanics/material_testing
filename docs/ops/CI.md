@@ -123,6 +123,12 @@ Hosting-only PRs match `backend` so they cannot skip Tier 4.
 
 ### Dependabot cheap path
 
+Version updates run monthly, one grouped PR per ecosystem. For pip, Gradle and
+Actions only major releases (X.0.0) arrive; minor and patch bumps are ignored
+(`dependabot.yml`). That rule does not filter Dependabot **security** updates, which
+are a repository setting (Settings → Code security). Docker keeps digest and patch
+updates for the base image's OS fixes.
+
 When `github.head_ref` starts with `dependabot/`:
 
 | Ecosystem (from branch name) | Tiers |
