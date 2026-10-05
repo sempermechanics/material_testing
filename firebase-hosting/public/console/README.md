@@ -13,6 +13,32 @@ dead. `auth.js` and `config.js` are shared by all four. `util.js` holds the
 DOM-free helpers (`esc`, `when`, and the roster cells both seat tables render),
 so `node --test` can run them; `auth.js` re-exports `esc` and `when`.
 
+Shared beside them:
+- `roster.js` — one institution roster: the table, its actions, adding a
+  member, and what each refusal says. The institution page drives it on the IT
+  routes (`/v1/institutions/licenses/{id}`), the operator desk on the staff
+  routes (`/v1/admin/licenses/{id}`); the backend serves both from
+  `routers/roster.py`. It reads a paged roster to the end.
+- `messages.js` — `explain(error, sentences, fallback)`: a page's own sentence
+  for a refusal code, else a common one, else the raw text.
+
+The operator desk is split by card: `operator.js` (sign-in and the row-button
+routing), `state.js` (the loaded licences, shared as one object), `licences.js`
+(the table), `mint.js`, `edit.js` (Edit and To institution), `verify.js`,
+`lifecycle.js` (revoke, delete, restore), `people.js` and `roster-card.js`.
+`licences.js` imports none of the cards; the seat check hears about a re-read
+licence through `onLicenceRead`.
+
+### Refusals
+
+`api()` and `apiBlob()` throw an `ApiError` with `status`, `code` (the
+backend's code, `backend/app/errors.py`) and `rest` (what follows a
+`code: …` suffix). Pages branch on `e.code`, never on the message text, which
+used to miss every suffixed code. A gateway refusal that is not JSON still
+yields an `ApiError`, coded `http_<status>`.
+`scripts/check_console.py` fails a page that matches a code the backend does
+not declare.
+
 | Path | Who | What it can do |
 |---|---|---|
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
@@ -265,15 +291,22 @@ that reads them instead, and runs as the **Console pages** CI job:
 |---|---|
 | No inline script or `on*=` handler | The CSP above forbids both; such code never executes |
 | Every module loads and parses as an ES module | A typo in one is otherwise found by a browser, in production |
-| Every `$("id")` is an id its own page defines | Renaming an element silently unwires the code that used it |
+| Every `$("id")` is an id its own page defines, in the page's module and every module it imports | Renaming an element silently unwires the code that used it |
 | `__API_BASE_URL__`, `__API_ORIGIN__` still hold placeholders | A deploy that fails to restore them commits a live hostname |
 | Both console CSPs carry `frame-src 'self'` | `authDomain` is the page's own host; the auth iframe is same-origin |
 | Every rewrite destination exists | `/login` pointing at a missing file 404s |
 | The two console CSPs are identical | The rewrite addresses would otherwise be served a different policy |
 | Every `/v1` path a console calls is in `gateway/openapi.yaml` | ESPv2 is an allowlist; an undeclared route 404s in production |
+| Every refusal code a page matches (`e.code === "…"`, or a key of a sentence map) is declared in `backend/app/errors.py` | A renamed code leaves the page's sentence unreachable, and the page shows the raw code instead |
 
 Run it directly with `python scripts/check_console.py`. Node is used for the
 syntax check when it is on `PATH` and skipped with a note when it is not.
+
+A page's modules are followed through their relative imports, so a split page
+is checked as a whole. Each test loads a page afresh with `?load=N`;
+`tests/firebase-hooks.mjs` gives the modules in the page's own folder the same
+query, so their state starts empty as well. The shared modules one folder up
+stay one copy, as in a browser.
 
 The same job runs `node --test "firebase-hosting/tests/*.test.mjs"` (Node 22,
 no `npm install`). `util.test.mjs` covers `util.js`: escaping, dates, and the
@@ -283,12 +316,12 @@ fake Firebase SDK:
 
 | File | Pins |
 |---|---|
-| `auth.test.mjs` | `api()` sends `Bearer <ID token>` to `API_BASE_URL + path` and throws the backend's code; `reauth_required` leaves for Google once and never retries with the stale token; a step-up that completes retries once with a force-refreshed token; `allowStepUp: false` and `mfa_required` are handed back untouched; a cancelled code is `ERR_CANCELLED`; the 120 s redirect-loop guard and `operatorAsked`; `apiBlob()`; a resolved challenge adopts the re-authenticated user; `sessionHasSecondFactor` reads the token claim; TOTP enrolment in the page; `stepUpForRevoke`'s 90 s window and password-versus-Google choice; `confirmByTyping` |
+| `auth.test.mjs` | `api()` sends `Bearer <ID token>` to `API_BASE_URL + path` and throws the backend's code; `reauth_required` leaves for Google once and never retries with the stale token; a step-up that completes retries once with a force-refreshed token; `allowStepUp: false` and `mfa_required` are handed back untouched; a cancelled code is `ERR_CANCELLED`; the 120 s redirect-loop guard and `operatorAsked`; `apiBlob()`; a resolved challenge adopts the re-authenticated user; `sessionHasSecondFactor` reads the token claim; TOTP enrolment in the page; `stepUpForRevoke`'s 90 s window and password-versus-Google choice; `confirmByTyping`; a refusal carries its `code`, the `rest` after it, and the `status` |
 | `signin.test.mjs` | `requireSignIn`: nothing reaches `onReady` signed out or without this session's second factor; one start per account; the return leg hands `resume` over once, or marks it `reauthFailed`; declining to enrol signs out; a redirect that keeps failing stops with a message |
 | `router.test.mjs` | `/login` forwards staff, IT contacts (deep-linked to one licence) and everyone else, and offers a switcher when it cannot or should not choose |
-| `operator.test.mjs` | The desk only for `role=admin`; licence rows (seats, term, cap, state, which actions apply — no Delete on a system Demo key, only Delete on a revoked row); Show revoked / Show Demo refetch; Load more without duplicates; the filter, and the backend search after a 300 ms pause; revoke and delete: who-is-affected confirmation, typed key, `stepUpForRevoke` (a stale session goes to Google carrying the licence, nothing sent), the sent request and its message, each refusal's wording; the return leg finishes a revoke or delete after one plain confirmation, once, reads a licence past the first page first, refuses a gone or already-revoked one, and says a failed leg sent nothing; Edit prefill, a later end without a typed key, an earlier one only with it, clearing the cap, a Demo key's cap locked, a Demo key's hand-off to Issue (address filled, Individual ticked, nothing sent), each `editError` code in the dialog; New device |
+| `operator.test.mjs` | The desk only for `role=admin`; licence rows (seats, term, cap, state, which actions apply — no Delete on a system Demo key, only Delete on a revoked row); Show revoked / Show Demo refetch; Load more without duplicates; the filter, and the backend search after a 300 ms pause; revoke and delete: who-is-affected confirmation, typed key, `stepUpForRevoke` (a stale session goes to Google carrying the licence, nothing sent), the sent request and its message, each refusal's wording; the return leg finishes a revoke or delete after one plain confirmation, once, reads a licence past the first page first, refuses a gone or already-revoked one, and says a failed leg sent nothing; Edit prefill, a later end without a typed key, an earlier one only with it, clearing the cap, a Demo key's cap locked, a Demo key's hand-off to Issue (address filled, Individual ticked, nothing sent), each `editError` code in the dialog; New device; the roster card on the staff routes, with the same actions as IT, and a refusal said in the card |
 | `account.test.mjs` | Licence pills and explanation (licensed, Demo, perpetual, expired past grace, ended in grace, shared seat held or not, a backend without `held`); Move licence hidden without a held licence; "N of M", "N analyses stored", and the inactive-licence wording, also when the analyses answer first; each analysis row's state, file count and stored size ("—" for failed or nothing, "… when done" while uploading), Download disabled until something finished, a specimen name never markup; Show more; give a seat back and move the licence (confirmation, request, the cooldown instant from `device_change_too_soon: <ISO>`, each refusal); Download saves `semper-analysis-<id>.zip`, and its refusals |
-| `institution.test.mjs` | Nothing of the roster for an address no licence names (or an unverified one); a failed check leaves the page usable; the deep link; "N of M seats taken" / "in use right now" with invites counted apart; member rows (New device, Hold / Resume, Remove; nothing for a removed member; invites with Withdraw); not-found wording; Hold / Resume / New device bodies and reload; Remove and Withdraw confirm first; `ACT_ERRORS`; adding a member (on now vs invited, each refusal, `claim_contended`) |
+| `institution.test.mjs` | Nothing of the roster for an address no licence names (or an unverified one); a failed check leaves the page usable; the deep link; "N of M seats taken" / "in use right now" with invites counted apart; member rows (New device, Hold / Resume, Remove; nothing for a removed member; invites with Withdraw); not-found wording; Hold / Resume / New device bodies and reload; Remove and Withdraw confirm first; `ACT_ERRORS`; adding a member (on now vs invited, each refusal, `claim_contended`); the licence picker; a roster longer than one page read to the end |
 
 How the fake gets in: `tests/harness.mjs` calls `module.register` with
 `tests/firebase-hooks.mjs`, whose `resolve` hook maps the two

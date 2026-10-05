@@ -178,6 +178,9 @@ INVITE_EXISTS = "invite_exists"
 EMAIL_ALREADY_LICENSED = "email_already_licensed"
 ALREADY_LICENSED = "already_licensed"
 MEMBER_ALREADY_LICENSED = "member_already_licensed"
+#: Not a refusal: a staff mint's `claimError` when the address already holds a
+#: live licence, so the new one is minted but not attached (repo/mint.py).
+HOLDER_ALREADY_LICENSED = "holder_already_licensed"
 INVITE_NOT_FOUND = "invite_not_found"
 INVALID_EMAIL = "invalid_email"
 

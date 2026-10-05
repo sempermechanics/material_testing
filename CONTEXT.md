@@ -145,6 +145,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   material_testing#120, before the quality program), with its own app id (TD-133).
   Shared code and backend changes land here first; after the quality program it replays two package mappings
   ([FORK_SYNC.md](docs/ops/FORK_SYNC.md)).
+- **Backend and console restructuring (branch `ccr-6575f0b3-7g5yvz`, not merged).** One
+  refusal model ([ADR-020](docs/adr/ADR-020-backend-refusal-model.md)), the `firestore_repo`
+  facade retired ([ADR-021](docs/adr/ADR-021-retire-firestore-repo-facade.md)), one roster
+  for IT and staff (`routers/roster.py`, new staff paths: gateway config deploy owed), and
+  the consoles on `ApiError`, `roster.js` and a split operator desk (TD-178–TD-194).
 - **Dependabot** opens monthly PRs for major versions only (pip, Gradle, Actions; #337);
   minor and patch fixes arrive as Dependabot security updates, which are on.
 - **Owed.** The public release of `v1.2-beta.3` (website / Play); a licensed-account smoke

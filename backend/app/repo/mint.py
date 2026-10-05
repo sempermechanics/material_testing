@@ -3,7 +3,7 @@ and institution keys.
 """
 import logging
 
-from .. import apps, statuses
+from .. import apps, errors, statuses
 from ..config import settings
 from ..licenses import (
     DURATION_PERPETUAL,
@@ -331,7 +331,7 @@ def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[
     if holder.get("access_status") != statuses.ACCESS_APPROVED or not holder.get("emailVerified"):
         return "", ""
     if not _holds_only_a_demo_key(holder):
-        return "", "holder_already_licensed"
+        return "", errors.HOLDER_ALREADY_LICENSED
     err = claim_individual_license(
         license_id, holder["uid"], address,
         _member_patch(license_id, lic), invite_ref=_invite_ref(address),
