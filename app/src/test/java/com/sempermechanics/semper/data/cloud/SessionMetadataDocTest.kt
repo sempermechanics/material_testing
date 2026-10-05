@@ -3,6 +3,7 @@ package com.sempermechanics.semper.data.cloud
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
+import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
@@ -159,8 +160,8 @@ class SessionMetadataDocTest {
         val keys = Json.parseToJsonElement(text).jsonObject.keys.toList()
         assertEquals(
             listOf(
-                "schema", "localSessionId", "name", "specimen", "capturedAtUtc", "frameCount", "analysisKind",
-                "csv", "frames", "app", "device", "user", "engine", "metrics",
+                "schema", "localSessionId", "name", "specimen", "capturedAtUtc", "createdAtUtc", "frameCount",
+                "analysisKind", "csv", "frames", "app", "device", "user", "engine", "metrics",
             ),
             keys,
         )
@@ -194,6 +195,26 @@ class SessionMetadataDocTest {
     fun `every pinned record is exercised`() {
         val labels = written.map { it.id } + listOf("existing", "blank existing name") + LEGACY_AND_ODD.map { it.first }
         assertEquals(PINNED.keys, labels.toSet())
+    }
+
+    @Test
+    fun `a restore into a placeholder row dates it when the analysis was made`() {
+        val made = 1_690_000_000_000L
+        val placeholder = RestoreStart.newRow(context, "cloud-1", "r1", "Beam", now = now)
+        val text = SessionUploadMetadata.buildMetadataJson(batch.copy(createdAt = made), context)
+
+        assertEquals(made, toRecord(SessionMetadataDoc.decode(text), placeholder).createdAt)
+        assertEquals(made, toRecord(SessionMetadataDoc.decode(text), null).createdAt)
+    }
+
+    @Test
+    fun `a file without createdAtUtc falls back to capturedAtUtc, then the clock`() {
+        val placeholder = RestoreStart.newRow(context, "cloud-1", "r1", "Beam", now = now)
+        val captured = """{"capturedAtUtc":"2023-11-14T22:13:20Z"}"""
+        val unreadable = """{"createdAtUtc":"yesterday","capturedAtUtc":""}"""
+
+        assertEquals(1_700_000_000_000L, toRecord(SessionMetadataDoc.decode(captured), placeholder).createdAt)
+        assertEquals(now, toRecord(SessionMetadataDoc.decode(unreadable), placeholder).createdAt)
     }
 
     @Test

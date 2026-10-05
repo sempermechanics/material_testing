@@ -109,6 +109,13 @@ object RestoreStart {
             syncState = SessionRecord.SyncState.SYNCED,
         )
 
+    /**
+     * Whether [row] is still [newRow]'s placeholder: no frames, no reference.
+     * A real analysis always has its reference image.
+     */
+    internal fun isPlaceholder(row: SessionRecord): Boolean =
+        row.frameCount == 0 && row.refPath.isEmpty() && row.defNames.isEmpty()
+
     /** A row for a backup this phone has never had, filled in when the restore lands. */
     internal fun newRow(context: Context, cloudSessionId: String, targetLocalId: String, name: String, now: Long) =
         SessionRecord(
