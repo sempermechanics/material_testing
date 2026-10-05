@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * The viewer's running share/export jobs, held by [ResultViewerViewModel] so a
  * rotation does not cancel one (the viewer has no `configChanges`).
  *
- * The screen side ([ShareExportUi]) watches [running] for progress and takes
+ * The screen side ([ShareExportController]) watches [running] for progress and takes
  * each finished job from [outcomes]; a recreated viewer re-attaches to both.
  *
  * What survives what:

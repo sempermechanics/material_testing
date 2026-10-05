@@ -11,7 +11,7 @@ import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.field.ImageSizeExtras
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.getRoiExtras
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.RoiDrawActivity
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.common.dialog.Feedback
@@ -81,7 +81,7 @@ class RoiStudioLauncher(
                 return@launch
             }
             val intent = Intent(activity, RoiDrawActivity::class.java)
-            intent.putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
+            intent.putExtra(IntentKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
             ImageSizeExtras.ROI_EDITOR.put(intent, viewModel.refSize)
             launcher.launch(intent)
         }
@@ -107,7 +107,7 @@ class RoiStudioLauncher(
         // A selection covering the whole image counts as no custom ROI.
         viewModel.hasCustomRoi = !drawn.coversFrameOf(viewModel.refSize)
 
-        val maskPath = data.getStringExtra(DicKeys.MASK_FILE_PATH)
+        val maskPath = data.getStringExtra(IntentKeys.MASK_FILE_PATH)
         activity.lifecycleScope.launch {
             val mask = maskPath?.let { path -> withContext(io) { readMask(File(path)) } }
             if (mask != null) viewModel.roiMaskBytes = mask

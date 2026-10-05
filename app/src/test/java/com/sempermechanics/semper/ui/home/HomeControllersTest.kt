@@ -23,15 +23,15 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import androidx.work.workDataOf
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.WorkTags
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.TokenStore
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.sessionRecord
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.limit.SessionLimitActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -104,7 +104,7 @@ class HomeControllersTest {
     @Test
     fun `the quota line counts the phone's analyses and turns red at the ceiling`() {
         AppRemoteConfig.apply(context, AppConfigDto(maxSessions = 5))
-        TokenStore.setQuota(context, used = 2)
+        AccountCache.setQuota(context, used = 2)
 
         card.render(localSessionCount = 3)
         assertEquals(View.VISIBLE, quotaView.visibility)
@@ -124,7 +124,7 @@ class HomeControllersTest {
         assertEquals(1, settingsOpened)
         assertNull(startedScreen())
 
-        TokenStore.setSessionLimitReached(context, true)
+        AccountCache.setSessionLimitReached(context, true)
         quotaView.performClick()
         assertEquals(1, settingsOpened)
         assertEquals(SessionLimitActivity::class.java.name, startedScreen())
@@ -139,7 +139,7 @@ class HomeControllersTest {
 
         runBlocking { card.recordReconciled(quotaUsed = 6) }
         assertNull("already held at the limit", startedScreen())
-        assertEquals(6, TokenStore.quotaUsed(context))
+        assertEquals(6, AccountCache.quotaUsed(context))
     }
 
     // ── HomeFabLayout ────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ class HomeControllersTest {
 
     @Test
     fun `a synced row, or a phone-only one with backup off, goes to Settings`() {
-        DicSettings.setSaveToCloudEnabled(context, false)
+        AppSettings.setSaveToCloudEnabled(context, false)
 
         badge.retryOrBackup(record(SessionRecord.SyncState.SYNCED))
         badge.retryOrBackup(record(SessionRecord.SyncState.LOCAL_ONLY))
@@ -188,7 +188,7 @@ class HomeControllersTest {
     @Test
     fun `a failed row explains the retained failure before offering a retry`() {
         val failed = OneTimeWorkRequestBuilder<FailingWorker>()
-            .setInputData(workDataOf(DicKeys.UPLOAD_FAIL_REASON to "Too large (ref r9)"))
+            .setInputData(workDataOf(IntentKeys.UPLOAD_FAIL_REASON to "Too large (ref r9)"))
             .build()
         val workManager = WorkManager.getInstance(context)
         workManager.enqueueUniqueWork(WorkTags.uploadName("a"), ExistingWorkPolicy.REPLACE, failed).result.get()

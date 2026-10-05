@@ -30,7 +30,7 @@ import com.sempermechanics.semper.ui.common.dp
  * one-finger gesture is a horizontal scrub that reports values through [onScrub].
  */
 @Suppress("TooManyFunctions") // one small method per gesture phase and draw layer
-class VsgPlotView @JvmOverloads constructor(
+class SweepPlotView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0,
@@ -67,10 +67,10 @@ class VsgPlotView @JvmOverloads constructor(
     companion object {
         /** Colour for the n-th series of a multi-line plot; safe for any index
          *  (a skipped lattice node has frameIndex -1). */
-        fun paletteColor(context: Context, index: Int): Int = VsgPlotPalette.series(context, index)
+        fun paletteColor(context: Context, index: Int): Int = SweepPlotPalette.series(context, index)
 
         /** Colour for the n-th of the line-cut's 3 concurrent strain components. */
-        fun lineCutColor(context: Context, slot: Int): Int = VsgPlotPalette.lineCut(context, slot)
+        fun lineCutColor(context: Context, slot: Int): Int = SweepPlotPalette.lineCut(context, slot)
 
         const val AXIS_LABEL_SP = PlotStyle.AXIS_LABEL_SP
         const val LINE_WIDTH_DP = 2f
@@ -124,8 +124,8 @@ class VsgPlotView @JvmOverloads constructor(
     private val textPaint = PlotStyle.axisTextPaint(context)
     private val path = Path()
 
-    private val axes = VsgPlotAxes(this, textPaint)
-    private val markLayer = VsgPlotMarks(this)
+    private val axes = SweepPlotAxes(this, textPaint)
+    private val markLayer = SweepPlotMarks(this)
 
     private var series: List<Series> = emptyList()
     private var marks: List<Mark> = emptyList()
@@ -160,7 +160,7 @@ class VsgPlotView @JvmOverloads constructor(
     private var dataBounds: PlotBounds? = null
 
     /** The zoomed window into [dataBounds], or none to show all of it. */
-    private val viewport = VsgPlotViewport(MIN_SPAN_FRACTION)
+    private val viewport = SweepPlotViewport(MIN_SPAN_FRACTION)
 
     /**
      * When true, pinch-zoom and two-finger pan are active (lattice strain plot).
@@ -323,7 +323,7 @@ class VsgPlotView @JvmOverloads constructor(
      * Each series as a polyline, with its markers. Emphasis (dataviz skill):
      * the focused series keeps its real hue; every muted one shares a single
      * neutral instead of its own dimmed hue, so at most one categorical colour
-     * is ever on screen at once -- see [VsgPlotPalette]'s per-slot (not
+     * is ever on screen at once -- see [SweepPlotPalette]'s per-slot (not
      * pairwise) validation.
      */
     private fun drawSeries(canvas: Canvas, b: PlotBounds) {
@@ -354,11 +354,11 @@ class VsgPlotView @JvmOverloads constructor(
         val py = sy(yVal, b).coerceIn(frame.top, frame.bottom)
         valueDotPaint.color = target.color
         canvas.drawCircle(px, py, dp(MARKER_RADIUS_DP), valueDotPaint)
-        val label = VsgPlotAxes.scrubLabel(scrub, yVal, xUnit, yUnit)
+        val label = SweepPlotAxes.scrubLabel(scrub, yVal, xUnit, yUnit)
         valuePaint.textAlign = Paint.Align.LEFT
         canvas.drawText(
             label,
-            VsgPlotAxes.scrubLabelX(
+            SweepPlotAxes.scrubLabelX(
                 px,
                 valuePaint.measureText(label),
                 dp(MARKER_RADIUS_DP) + dp(TICK_GAP_DP),

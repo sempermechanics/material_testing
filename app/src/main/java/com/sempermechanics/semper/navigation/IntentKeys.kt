@@ -7,9 +7,9 @@ package com.sempermechanics.semper.navigation
  *
  * Same-file keys (e.g. savedInstanceState) intentionally stay local.
  */
-object DicKeys {
+object IntentKeys {
     // Auth routing (e.g. PendingApproval → AuthActivity) uses [ROUTING_ERROR]
-    // below; identity lives in Firebase Auth / TokenStore, not Intent extras.
+    // below; identity lives in Firebase Auth / AccountCache, not Intent extras.
 
     // ── HomeActivity → StaticAnalysisActivity (media picker hand-off)
     const val PICKED_REF_URI = "PICKED_REF_URI"
@@ -107,7 +107,7 @@ object DicKeys {
     const val ROI_W = "ROI_W"
     const val ROI_H = "ROI_H"
 
-    // ── Parameter sweep (VsgStudy) → ResultViewerActivity
+    // ── Parameter sweep (SweepStudy) → ResultViewerActivity
     // A sweep varies the settings instead of the image, so each frame of the
     // result carries its own subset/step/strain window. Absent for an ordinary
     // analysis, which is what tells the viewer it is not looking at a sweep.

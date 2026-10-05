@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.annotation.VisibleForTesting
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.account.DevAuth
-import com.sempermechanics.semper.data.account.DeviceKeyManager
+import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.net.drive.DriveTransfer
 import com.sempermechanics.semper.data.net.drive.DriveUpload
 import com.sempermechanics.semper.data.net.drive.DriveUploader
@@ -46,10 +46,10 @@ class SemperApi @VisibleForTesting internal constructor(
 
     private val appContext = context.applicationContext
 
-    // Lazy: DeviceKeyManager touches the AndroidKeyStore in its constructor,
+    // Lazy: DeviceKeys touches the AndroidKeyStore in its constructor,
     // which only exists on a device. Deferring it keeps every non-signed path
     // (uploads, downloads, probes) constructible in JVM unit tests.
-    private val device by lazy { DeviceKeyManager(appContext) }
+    private val device by lazy { DeviceKeys(appContext) }
     private val json = SemperApiHttp.json
 
     private val base = baseUrl.trimEnd('/').also { url ->
@@ -412,7 +412,7 @@ class SemperApi @VisibleForTesting internal constructor(
         private var instance: SemperApi? = null
 
         /**
-         * Process-wide client. Shares OkHttp pools and DeviceKeyManager; call sites
+         * Process-wide client. Shares OkHttp pools and DeviceKeys; call sites
          * must not construct [SemperApi] directly.
          */
         fun get(context: Context): SemperApi {

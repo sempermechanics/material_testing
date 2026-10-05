@@ -23,7 +23,7 @@ class SweepFrameProfilesTest {
         const val GRID = 4
         const val STEP = 4
         val EXX = intArrayOf(DicResult.IDX_EXX)
-        val LINE = VsgStudy.StudyLine(horizontal = true, position = STEP.toFloat())
+        val LINE = SweepStudy.StudyLine(horizontal = true, position = STEP.toFloat())
     }
 
     /** A frame whose every point has Exx = (frame + 1) millistrain. */
@@ -76,7 +76,7 @@ class SweepFrameProfilesTest {
         val dir = temp.newFolder("sweep")
         val files = listOf(frame(dir, 0), frame(dir, 1))
         // Frame 1's step is so small the half-step band misses the row at y = 4.
-        val profiles = sweepFrameProfiles(files, listOf(STEP, 1), STEP, EXX, VsgStudy.StudyLine(true, 5.4f))
+        val profiles = sweepFrameProfiles(files, listOf(STEP, 1), STEP, EXX, SweepStudy.StudyLine(true, 5.4f))
 
         assertEquals(GRID, profiles.getValue(0).getValue(DicResult.IDX_EXX).size)
         assertEquals(0, profiles.getValue(1).getValue(DicResult.IDX_EXX).size)

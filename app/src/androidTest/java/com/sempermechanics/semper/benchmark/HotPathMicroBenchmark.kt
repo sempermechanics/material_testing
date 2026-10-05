@@ -14,7 +14,7 @@ import com.sempermechanics.semper.report.GifEncoder
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.RoiData
 import com.sempermechanics.semper.report.VisualizationEngine
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.viewer.inspect.PointSpatialIndex
 import org.junit.Rule
 import org.junit.Test
@@ -123,10 +123,10 @@ class HotPathMicroBenchmark {
 
     @Test
     fun profileAlong_threeComponents() {
-        val line = VsgStudy.centreLine(0, 0, IMG_W, IMG_H, horizontal = true)
+        val line = SweepStudy.centreLine(0, 0, IMG_W, IMG_H, horizontal = true)
         benchmarkRule.measureRepeated {
-            for (c in VsgStudy.STRAIN_COMPONENTS) {
-                VsgStudy.profileAlong(oneFrame, c, line, STEP / 2f)
+            for (c in SweepStudy.STRAIN_COMPONENTS) {
+                SweepStudy.profileAlong(oneFrame, c, line, STEP / 2f)
             }
         }
     }

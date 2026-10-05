@@ -3,7 +3,7 @@ package com.sempermechanics.semper.diagnostics
 import android.content.Context
 import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import timber.log.Timber
 
 /**
@@ -19,7 +19,7 @@ class CrashReportingTree(context: Context) : Timber.Tree() {
 
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         val safeTag = tag?.take(MAX_TAG_LEN) ?: "Semper"
-        if (DicSettings.diagnosticsEnabled(appContext)) {
+        if (AppSettings.diagnosticsEnabled(appContext)) {
             if (t != null) {
                 Log.println(priority, safeTag, message)
                 Log.println(priority, safeTag, Log.getStackTraceString(t))

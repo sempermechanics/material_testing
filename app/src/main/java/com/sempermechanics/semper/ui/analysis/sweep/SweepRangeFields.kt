@@ -100,8 +100,8 @@ internal class SweepRangeFields(
         val (lo, hi) = suggestedSubsetWindow(rec, ceiling)
         viewModel.subsetMin = lo
         viewModel.subsetMax = hi
-        viewModel.strainWinMin = VsgStudy.DEFAULT_SWEEP_WINDOW_MIN
-        viewModel.strainWinMax = VsgStudy.DEFAULT_SWEEP_WINDOW_MAX
+        viewModel.strainWinMin = SweepStudy.DEFAULT_SWEEP_WINDOW_MIN
+        viewModel.strainWinMax = SweepStudy.DEFAULT_SWEEP_WINDOW_MAX
         writeSubsetRange(lo, hi)
         writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
     }
@@ -174,7 +174,7 @@ internal class SweepRangeFields(
         onChanged()
     }
 
-    private fun oddWindow(raw: Int): Int = VsgStudy.oddWindowPoints(raw)
+    private fun oddWindow(raw: Int): Int = SweepStudy.oddWindowPoints(raw)
 
     private fun commitStrainWinRange(rawLo: Int, rawHi: Int) {
         val lo = oddWindow(rawLo)
@@ -206,20 +206,20 @@ internal class SweepRangeFields(
     }
 
     private fun commitStepDepth(raw: Int) {
-        viewModel.stepDenominator = raw.coerceIn(VsgStudy.STEP_DENOM_MIN, VsgStudy.STEP_DENOM_MAX)
-        viewModel.subsetOverlap = VsgStudy.overlapForDenominator(viewModel.stepDenominator)
+        viewModel.stepDenominator = raw.coerceIn(SweepStudy.STEP_DENOM_MIN, SweepStudy.STEP_DENOM_MAX)
+        viewModel.subsetOverlap = SweepStudy.overlapForDenominator(viewModel.stepDenominator)
         writeStepDepth(viewModel.stepDenominator)
         onChanged()
     }
 
     private fun commitOverlap(raw: Double) {
-        commitStepDepth(VsgStudy.denominatorForOverlap(raw))
+        commitStepDepth(SweepStudy.denominatorForOverlap(raw))
     }
 
     private fun writeStepDepth(denominator: Int) {
-        val n = denominator.coerceIn(VsgStudy.STEP_DENOM_MIN, VsgStudy.STEP_DENOM_MAX)
+        val n = denominator.coerceIn(SweepStudy.STEP_DENOM_MIN, SweepStudy.STEP_DENOM_MAX)
         viewModel.stepDenominator = n
-        viewModel.subsetOverlap = VsgStudy.overlapForDenominator(n)
+        viewModel.subsetOverlap = SweepStudy.overlapForDenominator(n)
         if (!etStepDepthValue.hasFocus()) {
             callbacks.renderParamField(etStepDepthValue, n)
         }
@@ -242,13 +242,13 @@ internal class SweepRangeFields(
     }
 
     private fun commitSubsetSamples(raw: Int) {
-        viewModel.subsetSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
+        viewModel.subsetSamples = raw.coerceIn(SweepStudy.MIN_SAMPLES, SweepStudy.MAX_SAMPLES)
         callbacks.renderParamField(etSubsetSamplesValue, viewModel.subsetSamples)
         onChanged()
     }
 
     private fun commitStrainWinSamples(raw: Int) {
-        viewModel.strainWinSamples = raw.coerceIn(VsgStudy.MIN_SAMPLES, VsgStudy.MAX_SAMPLES)
+        viewModel.strainWinSamples = raw.coerceIn(SweepStudy.MIN_SAMPLES, SweepStudy.MAX_SAMPLES)
         callbacks.renderParamField(etStrainWinSamplesValue, viewModel.strainWinSamples)
         onChanged()
     }

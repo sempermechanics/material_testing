@@ -2,10 +2,10 @@ package com.sempermechanics.semper.data.account
 
 import android.content.Context
 import com.sempermechanics.semper.BuildConfig
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.TokenStore
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import timber.log.Timber
 
 /**
@@ -49,22 +49,22 @@ object DevAuth {
      */
     fun install(context: Context) {
         if (!active) return
-        TokenStore.saveIdentity(context, DEV_UID, DEV_EMAIL)
-        TokenStore.setStatus(context, AccessStatus.APPROVED)
-        TokenStore.setRole(context, "user")
+        AccountCache.saveIdentity(context, DEV_UID, DEV_EMAIL)
+        AccountCache.setStatus(context, AccessStatus.APPROVED)
+        AccountCache.setRole(context, "user")
         AppRemoteConfig.apply(
             context,
             AppConfigDto(
                 maxSessions = DEV_QUOTA_MAX,
                 maxFilesPerSession = 600,
-                maxFrames = DicSettings.MAX_MAX_FRAMES,
+                maxFrames = AppSettings.MAX_MAX_FRAMES,
                 mode = LicenseEntitlements.MODE_LICENSED,
                 plan = "professional",
                 cloudBackupEnabled = true,
                 shareEnabled = true,
             ),
         )
-        TokenStore.setSessionLimitReached(context, false)
+        AccountCache.setSessionLimitReached(context, false)
         Timber.w("DEV AUTH BYPASS active (debug build on an emulator) — cloud is off")
     }
 }

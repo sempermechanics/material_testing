@@ -24,9 +24,9 @@ is scheduled; take one deliberately, with its own PR.
 
 **Affects** A7, A8 · §E2.1 · *accuracy, debuggability*
 
-~25 `DicKeys` extras were packed in two places — `AnalysisNavHelper.openResults`
+~25 `IntentKeys` extras were packed in two places — `AnalysisNavHelper.openResults`
 (fresh run) and `ui/home/SessionOpenHelper.intentFor` (reopen) — and are read in
-four (`ResultViewerActivity`, `VsgLatticeActivity`, `ViewerSettingsSheet`,
+four (`ResultViewerActivity`, `VsgLatticeActivity`, `SettingsUsedSheet`,
 `ViewerReportFactory`). The two packers did not write the same set, and a missing
 extra silently defaults, so the ⓘ sheet, the report header and the export
 filename could differ by entry path with nothing logged.
@@ -124,7 +124,7 @@ twice.
   `404 || 403 → give up` catch ladder (with raw literals, though
   `HttpStatus.NOT_FOUND`/`FORBIDDEN` exist and the package already imports
   them), a byte-identical `publishProgress`, and four WorkManager `Data` keys
-  re-declared verbatim — which is precisely what `DicKeys` exists to prevent
+  re-declared verbatim — which is precisely what `IntentKeys` exists to prevent
   ("so a typo becomes a compile error instead of a silent fallback").
 - **`SettingsYourDataSection.exportCloudAccountData` and `exportMyData`** are the
   same function twice; only the producer, two string resources and the MIME type
@@ -140,7 +140,7 @@ twice.
 - **The `tmp → renameTo → copy-fallback` promote idiom** exists six times
   exactly (`DriveTransfer.kt:350,497`, `SemperApi.kt:219`,
   `SessionEverythingExporter.kt:91`, `SessionStore.kt:467`, `SessionZip.kt:231`)
-  plus two variants (`SessionRepository.kt:105`, `DicBatchRunner.kt:182`).
+  plus two variants (`SessionRepository.kt:105`, `BatchAnalysis.kt:182`).
   One `util/AtomicFiles.promote(tmp, dest)` covers all of them.
 - **Cache filenames** (`semper-account-export.json`, `roi_mask_cache.bin`,
   `temp_roi_ref.bin`) are spelled in both their writer and `CacheJanitor`'s
@@ -156,14 +156,14 @@ twice.
 **Done** (TD-54 in the backend-dedupe PR, the rest in the app-reuse PR):
 
 - `data/cloud/restore/DownloadProgress` publishes both workers' progress; their keys are
-  `DicKeys.PHASE_DOWNLOAD` / `DicKeys.DOWNLOAD_ERROR`, and both give up on
+  `IntentKeys.PHASE_DOWNLOAD` / `IntentKeys.DOWNLOAD_ERROR`, and both give up on
   `HttpStatus.NOT_FOUND` / `FORBIDDEN`.
 - `SettingsYourDataSection.runExport(kind, produce)` runs both exports; the dead
   `CancellationException` catch is gone.
 - `ui/common/auth/SupportMail` builds the intent, the fallback toast and the
   diagnostics lines for all four screens.
 - `util/AtomicFiles` owns `PART_SUFFIX` / `FULL_SUFFIX`, `deleteSidecars` and
-  `promote(tmp, dest)`, used at every site above except `DicBatchRunner`, which
+  `promote(tmp, dest)`, used at every site above except `BatchAnalysis`, which
   keeps `writeBytes` so the `.dat` is not read a second time.
 - `CacheJanitor.SHARE_SUBDIR`, `shareDir()` and the reclaimable file names are
   public, and their writers use them.

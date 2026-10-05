@@ -9,6 +9,7 @@ import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.cloud.FakeTokens
 import com.sempermechanics.semper.data.cloud.SessionUploadBundlerTest
 import com.sempermechanics.semper.data.cloud.UploadErrors
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.DeviceConflictException
@@ -21,13 +22,12 @@ import com.sempermechanics.semper.data.net.SessionCreateResponse
 import com.sempermechanics.semper.data.net.SessionUploadsResponse
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.navigation.AppIntents
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.util.Digests
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
@@ -211,7 +211,7 @@ class DicUploadWorkerTest {
 
     private fun run(): ListenableWorker.Result = runBlocking {
         TestListenableWorkerBuilder<DicUploadWorker>(context)
-            .setInputData(workDataOf(DicKeys.SESSION_LOCAL_ID to ID))
+            .setInputData(workDataOf(IntentKeys.SESSION_LOCAL_ID to ID))
             .build()
             .doWork()
     }
@@ -323,7 +323,7 @@ class DicUploadWorkerTest {
         val result = run()
 
         assertTrue(result is ListenableWorker.Result.Failure)
-        val reason = (result as ListenableWorker.Result.Failure).outputData.getString(DicKeys.UPLOAD_FAIL_REASON)!!
+        val reason = (result as ListenableWorker.Result.Failure).outputData.getString(IntentKeys.UPLOAD_FAIL_REASON)!!
         val tooLarge = context.getString(com.sempermechanics.semper.R.string.cloud_backup_failed_too_large)
         assertFalse(reason.contains(tooLarge))
         assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
@@ -356,14 +356,17 @@ class DicUploadWorkerTest {
         seed()
         api.onCreateSession = { throw apiError(409, "session_quota_exceeded: 25/25 analyses stored.") }
         DicUploadSeams.inForeground = { false }
-        assertFalse(TokenStore.isSessionLimitReached(context))
+        assertFalse(AccountCache.isSessionLimitReached(context))
 
         val result = run()
 
         assertTrue(result is ListenableWorker.Result.Failure)
         assertEquals(UploadErrors.FAIL_KIND_QUOTA, result.outputData.getString(UploadErrors.UPLOAD_FAIL_KIND))
-        assertNull("no reason: Home shows no snackbar for it", result.outputData.getString(DicKeys.UPLOAD_FAIL_REASON))
-        assertTrue(TokenStore.isSessionLimitReached(context))
+        assertNull(
+            "no reason: Home shows no snackbar for it",
+            result.outputData.getString(IntentKeys.UPLOAD_FAIL_REASON),
+        )
+        assertTrue(AccountCache.isSessionLimitReached(context))
         // Background activity starts are blocked on targetSdk 36; Home opens the
         // limit screen from the gate instead.
         assertNull(shadowOf(context).nextStartedActivity)
@@ -380,7 +383,7 @@ class DicUploadWorkerTest {
 
         val started = shadowOf(context).nextStartedActivity
         assertEquals(AppIntents.sessionLimit(context).component, started?.component)
-        assertTrue(TokenStore.isSessionLimitReached(context))
+        assertTrue(AccountCache.isSessionLimitReached(context))
     }
 
     @Test
@@ -500,7 +503,7 @@ class DicUploadWorkerTest {
     // ── the paths doWork's steps must keep ──────────────────────────────────
 
     private fun failReason(result: ListenableWorker.Result): String? =
-        (result as? ListenableWorker.Result.Failure)?.outputData?.getString(DicKeys.UPLOAD_FAIL_REASON)
+        (result as? ListenableWorker.Result.Failure)?.outputData?.getString(IntentKeys.UPLOAD_FAIL_REASON)
 
     private fun string(id: Int) = context.getString(id)
 
@@ -530,7 +533,7 @@ class DicUploadWorkerTest {
     fun `an unknown analysis fails`() {
         val result = runBlocking {
             TestListenableWorkerBuilder<DicUploadWorker>(context)
-                .setInputData(workDataOf(DicKeys.SESSION_LOCAL_ID to "nobody"))
+                .setInputData(workDataOf(IntentKeys.SESSION_LOCAL_ID to "nobody"))
                 .build()
                 .doWork()
         }
@@ -595,7 +598,7 @@ class DicUploadWorkerTest {
         assertEquals(ListenableWorker.Result.retry(), run())
 
         assertTrue("registerDevice" in api.base.calls)
-        assertTrue(TokenStore.isDeviceRegistered(context))
+        assertTrue(AccountCache.isDeviceRegistered(context))
         assertTrue(File(staging, "Session.zip").isFile)
     }
 

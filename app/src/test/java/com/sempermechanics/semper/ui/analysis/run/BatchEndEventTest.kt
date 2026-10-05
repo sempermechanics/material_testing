@@ -2,7 +2,7 @@ package com.sempermechanics.semper.ui.analysis.run
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
@@ -27,13 +27,13 @@ class BatchEndEventTest {
     @Before
     fun setUp() {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, name, params -> recorded += name to params }
-        DicSettings.setDiagnosticsEnabled(context, true)
+        AppSettings.setDiagnosticsEnabled(context, true)
     }
 
     @After
     fun tearDown() {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, _, _ -> }
-        DicSettings.setDiagnosticsEnabled(context, false)
+        AppSettings.setDiagnosticsEnabled(context, false)
     }
 
     private fun outcome(points: Int, frames: Int = 3, indexUnavailable: Boolean = false) = BatchAnalysisOutcome(

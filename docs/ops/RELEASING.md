@@ -238,7 +238,7 @@ Engine host and sanitizer suites are not part of this repo's gate — they run i
 - **Upgrade smoke (manual):** install the previous Release APK → create a local
   analysis (and optionally enqueue upload/restore) → install the new APK
   *without uninstalling* → open Home, reopen the session, confirm queued
-  WorkManager unique work still resolves. Prefs migrate via `DicSettings.migrate`
+  WorkManager unique work still resolves. Prefs migrate via `AppSettings.migrate`
   on cold start.
 - Watch Firestore (sessions collection) and Cloud Logging for the first synced sessions.
 - Paste the GitHub Release changelog into Play / website **What’s new** when

@@ -6,7 +6,7 @@ import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.home.SessionOpenHelper
@@ -54,7 +54,7 @@ class RunSpecTest {
 
     @Test
     fun `the saved record gets the settings the engine solved with`() {
-        // What DicBatchRunner built from the params before ADR-004.
+        // What BatchAnalysis built from the params before ADR-004.
         val before = SessionRecordSettings(
             subset = 21,
             step = 5,
@@ -78,7 +78,7 @@ class RunSpecTest {
 
     @Test
     fun `a sweep's first combination stands in for the scalar settings`() {
-        val plan = listOf(VsgStudy.Point(31, 10, 9), VsgStudy.Point(41, 14, 15))
+        val plan = listOf(SweepStudy.Point(31, 10, 9), SweepStudy.Point(41, 14, 15))
         val sweep = RunSpec.Sweep(plan, listOf("a", "b"), lineCutHorizontal = false, frameIndex = 1)
 
         val spec = RunSpec.sweep(sweep, Roi.fromXywh(resolved)!!, mask, use6x6 = false, debugDir = null)
@@ -161,7 +161,7 @@ class RunSpecTest {
 
     @Test
     fun `a sweep that solved nothing shows its plan's settings`() {
-        val plan = listOf(VsgStudy.Point(31, 10, 9))
+        val plan = listOf(SweepStudy.Point(31, 10, 9))
         val sweep = RunSpec.Sweep(plan, listOf("a"), lineCutHorizontal = false, frameIndex = 0)
         val vm = AnalysisViewModel().apply {
             lastStop = RunStop.Other(-7) // a previous run's

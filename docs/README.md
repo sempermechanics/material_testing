@@ -107,7 +107,7 @@ in the project README — it is maintained in one place so the two cannot drift.
 ## Conventions
 
 - UI strings belong in `strings.xml`, never hardcoded.
-- Shared intent keys live in `DicKeys.kt`; binary-format constants in
+- Shared intent keys live in `IntentKeys.kt`; binary-format constants in
   `DicResult.kt`.
 - Engine changes happen in the engine repository and must keep `dic_tests`
   green there. Results must stay inside the tolerance contract in

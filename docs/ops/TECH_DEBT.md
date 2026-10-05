@@ -217,7 +217,7 @@ the `benchmark` label.
 ## User-facing consent copy (fixed 2026-08-24)
 
 **Send crash reports** understated its scope: the same flag
-(`DicSettings.diagnosticsEnabled`) gates `diagnostics/SemperAnalytics` as well as
+(`AppSettings.diagnosticsEnabled`) gates `diagnostics/SemperAnalytics` as well as
 Crashlytics. The toggle now reads **Send crash reports and usage data**, and its
 subtitle and the first-run prompt name the usage events explicitly alongside what
 is never sent. `docs/legal/PRIVACY_POLICY.md` §2.4 names the new label and the

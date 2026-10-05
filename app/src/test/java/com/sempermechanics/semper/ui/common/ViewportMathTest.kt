@@ -4,7 +4,7 @@ import android.app.Activity
 import android.app.Application
 import android.graphics.Matrix
 import android.view.ScaleGestureDetector
-import com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -180,7 +180,7 @@ class ViewportMathTest {
         assertEquals(ViewportMath.ScaleStep(6f, 1.5f), ViewportMath.clampScale(4f, 1.5f, 1f, 10f))
     }
 
-    // ── RoiViewport and VsgPlotView: captured from the originals ──
+    // ── RoiViewport and SweepPlotView: captured from the originals ──
     //
     // Both views now call ViewportMath themselves, so their own clamps are gone.
     // Each case below is the value the original returned for it, captured
@@ -214,10 +214,10 @@ class ViewportMathTest {
     }
 
     @Test
-    fun `clampWindow matches VsgPlotView's original clampViewport on both axes`() {
-        val rows = oracle("vsg_plot_clamp_viewport.txt").iterator()
+    fun `clampWindow matches SweepPlotView's original clampViewport on both axes`() {
+        val rows = oracle("sweep_plot_clamp_viewport.txt").iterator()
         val fulls = listOf(0f to 10f, -5f to 3.3f, 1f to 1.0001f, -0.002f to 0.0035f)
-        val fraction = VsgPlotView.MIN_SPAN_FRACTION
+        val fraction = SweepPlotView.MIN_SPAN_FRACTION
         var cases = 0
         for ((fullMin, fullMax) in fulls) {
             val extent = fullMax - fullMin

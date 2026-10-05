@@ -5,7 +5,7 @@ import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.data.account.SeatHeartbeat
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.StorageBudget
 import com.sempermechanics.semper.diagnostics.CrashReportingTree
@@ -34,7 +34,7 @@ class SemperApp : Application() {
             Timber.plant(CrashReportingTree(this))
         }
         installAppCheck()
-        DicSettings.migrate(this)
+        AppSettings.migrate(this)
         // Manifest disables Crashlytics/Analytics collection, so a fresh install
         // sends nothing until the user opts in. This re-applies their choice on
         // every launch — including turning collection back OFF after a withdrawal.

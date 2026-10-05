@@ -3,13 +3,13 @@ package com.sempermechanics.semper.diagnostics
 import android.content.Context
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import timber.log.Timber
 
 /**
  * Consent-gated product analytics.
  *
- * Events fire only when [DicSettings.diagnosticsEnabled] is true (same opt-in as
+ * Events fire only when [AppSettings.diagnosticsEnabled] is true (same opt-in as
  * Crashlytics / Firebase Analytics collection). Params must stay PII-free:
  * enums, coarse buckets, and success/fail — never emails, session ids, specimen
  * names, paths, or image content.
@@ -37,14 +37,14 @@ object SemperAnalytics {
     }
 
     fun event(context: Context, name: String, params: Map<String, String> = emptyMap()) {
-        if (!DicSettings.diagnosticsEnabled(context)) return
+        if (!AppSettings.diagnosticsEnabled(context)) return
         sink.log(context.applicationContext, name, params)
     }
 
     fun durationBucket(ms: Long): String = when {
-        ms < MS_1S -> "lt_1s"
-        ms < MS_5S -> "1_5s"
-        ms < MS_30S -> "5_30s"
+        ms < ONE_SECOND_MS -> "lt_1s"
+        ms < FIVE_SECONDS_MS -> "1_5s"
+        ms < THIRTY_SECONDS_MS -> "5_30s"
         else -> "gt_30s"
     }
 
@@ -76,9 +76,9 @@ object SemperAnalytics {
 
     private const val MAX_EVENT_LEN = 40
     private const val MAX_PARAM_LEN = 100
-    private const val MS_1S = 1_000L
-    private const val MS_5S = 5_000L
-    private const val MS_30S = 30_000L
+    private const val ONE_SECOND_MS = 1_000L
+    private const val FIVE_SECONDS_MS = 5_000L
+    private const val THIRTY_SECONDS_MS = 30_000L
     private const val FRAMES_1 = 1
     private const val FRAMES_5 = 5
     private const val FRAMES_20 = 20

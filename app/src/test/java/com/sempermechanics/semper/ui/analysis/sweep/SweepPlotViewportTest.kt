@@ -18,12 +18,12 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
-class VsgPlotViewportTest {
+class SweepPlotViewportTest {
 
     private val full = PlotBounds(0f, 10f, 0f, 10f)
     private val frame = RectF(0f, 0f, 100f, 100f)
 
-    private fun series(vararg points: Pair<Float, Float>) = VsgPlotView.Series("s", 0, points.toList())
+    private fun series(vararg points: Pair<Float, Float>) = SweepPlotView.Series("s", 0, points.toList())
 
     private fun assertBounds(xMin: Float, xMax: Float, yMin: Float, yMax: Float, actual: PlotBounds?) {
         requireNotNull(actual)
@@ -57,30 +57,30 @@ class VsgPlotViewportTest {
         assertBounds(0f, 1f, 1.9872f, 2.0128f, plotBoundsOf(listOf(series(0f to 2f, 1f to 2f)), MARGIN))
     }
 
-    // ── VsgPlotViewport ──
+    // ── SweepPlotViewport ──
 
     @Test
     fun `with no zoom the full extent is shown`() {
-        assertSame(full, VsgPlotViewport(MIN_SPAN).visible(full))
+        assertSame(full, SweepPlotViewport(MIN_SPAN).visible(full))
     }
 
     @Test
     fun `a pinch zooms about its focus`() {
-        val viewport = VsgPlotViewport(MIN_SPAN)
+        val viewport = SweepPlotViewport(MIN_SPAN)
         viewport.zoomAbout(full, 50f, 50f, 2f, frame)
         assertBounds(2.5f, 7.5f, 2.5f, 7.5f, viewport.visible(full))
     }
 
     @Test
     fun `zoom stops at the minimum span`() {
-        val viewport = VsgPlotViewport(MIN_SPAN)
+        val viewport = SweepPlotViewport(MIN_SPAN)
         viewport.zoomAbout(full, 50f, 50f, 1000f, frame)
         assertBounds(4.75f, 5.25f, 4.75f, 5.25f, viewport.visible(full))
     }
 
     @Test
     fun `a pan follows the fingers`() {
-        val viewport = VsgPlotViewport(MIN_SPAN)
+        val viewport = SweepPlotViewport(MIN_SPAN)
         viewport.zoomAbout(full, 50f, 50f, 2f, frame)
         // Fingers left and down: the data moves with them, so the window moves right and up.
         viewport.panByPx(full, -20f, 20f, frame)
@@ -89,7 +89,7 @@ class VsgPlotViewportTest {
 
     @Test
     fun `a pan stops at the edge of the data`() {
-        val viewport = VsgPlotViewport(MIN_SPAN)
+        val viewport = SweepPlotViewport(MIN_SPAN)
         viewport.zoomAbout(full, 50f, 50f, 2f, frame)
         viewport.panByPx(full, -1000f, 1000f, frame)
         assertBounds(5f, 10f, 5f, 10f, viewport.visible(full))
@@ -97,7 +97,7 @@ class VsgPlotViewportTest {
 
     @Test
     fun `reset goes back to the full extent`() {
-        val viewport = VsgPlotViewport(MIN_SPAN)
+        val viewport = SweepPlotViewport(MIN_SPAN)
         viewport.zoomAbout(full, 50f, 50f, 2f, frame)
         viewport.reset()
         assertSame(full, viewport.visible(full))

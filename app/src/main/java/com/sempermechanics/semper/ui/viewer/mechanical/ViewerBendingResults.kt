@@ -6,7 +6,7 @@ import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.LabReportFormat.gpa
 import com.sempermechanics.semper.report.StressStrain
-import com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import java.util.Locale
 import kotlin.math.abs
 
@@ -28,19 +28,19 @@ object ViewerBendingResults {
         context.getString(R.string.bending_axis_deflection) to context.getString(R.string.bending_axis_load)
 
     /** Load (kg, [TypedLoads.loadsInKg]) on deflection, and the fitted slope as a muted line across the measured δ. */
-    fun plotSeries(context: Context, curve: StressStrain.Curve): List<VsgPlotView.Series> = buildList {
+    fun plotSeries(context: Context, curve: StressStrain.Curve): List<SweepPlotView.Series> = buildList {
         add(
-            VsgPlotView.Series(
+            SweepPlotView.Series(
                 label = context.getString(R.string.bending_curve_title),
-                color = VsgPlotView.paletteColor(context, 0),
+                color = SweepPlotView.paletteColor(context, 0),
                 points = TypedLoads.loadsInKg(curve.plotPoints()),
             ),
         )
         val line = BeamDeflection.summarize(curve)?.slopeLine() ?: return@buildList
         add(
-            VsgPlotView.Series(
+            SweepPlotView.Series(
                 label = context.getString(R.string.bending_slope_label),
-                color = VsgPlotView.paletteColor(context, 1),
+                color = SweepPlotView.paletteColor(context, 1),
                 points = TypedLoads.loadsInKg(line),
                 markers = false,
                 muted = true,

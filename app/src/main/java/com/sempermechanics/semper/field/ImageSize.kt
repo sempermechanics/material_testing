@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.field
 
 import android.content.Intent
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import org.json.JSONObject
 
 /**
@@ -53,18 +53,18 @@ data class ImageSize(val width: Int, val height: Int) {
 
 /**
  * The two Intent-extra pairs an [ImageSize] travels under. The key strings are
- * the existing [DicKeys]; an Intent already in a back stack keeps reading.
+ * the existing [IntentKeys]; an Intent already in a back stack keeps reading.
  *
  * Write-only: the viewer reads its pair through `ViewerArgs.Reader` (extra,
  * then the session record, then a default, logged), which a plain read cannot
  * replace. The ROI editor's read is [getRoiEditorImageSize].
  */
 enum class ImageSizeExtras(val widthKey: String, val heightKey: String) {
-    /** Viewer launch (`ViewerArgs`): [DicKeys.IMG_W] / [DicKeys.IMG_H]. */
-    VIEWER(DicKeys.IMG_W, DicKeys.IMG_H),
+    /** Viewer launch (`ViewerArgs`): [IntentKeys.IMG_W] / [IntentKeys.IMG_H]. */
+    VIEWER(IntentKeys.IMG_W, IntentKeys.IMG_H),
 
-    /** Wizard → ROI editor: [DicKeys.IMAGE_WIDTH] / [DicKeys.IMAGE_HEIGHT]. */
-    ROI_EDITOR(DicKeys.IMAGE_WIDTH, DicKeys.IMAGE_HEIGHT),
+    /** Wizard → ROI editor: [IntentKeys.IMAGE_WIDTH] / [IntentKeys.IMAGE_HEIGHT]. */
+    ROI_EDITOR(IntentKeys.IMAGE_WIDTH, IntentKeys.IMAGE_HEIGHT),
     ;
 
     /** Puts [size] as two `Int` extras. */

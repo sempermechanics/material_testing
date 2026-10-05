@@ -77,7 +77,7 @@ class BenchmarkSeedActivity : Activity() {
      * landed in `MemoryUsageMetric` — i.e. the harness would have been measuring its own
      * fabrication cost instead of the viewer's.
      *
-     * The per-frame ranges come from the same scratch array, as `DicBatchRunner`
+     * The per-frame ranges come from the same scratch array, as `BatchAnalysis`
      * computes them from each frame it has just solved. A dir cached before the sidecar
      * existed is seeded again, so no device keeps a session without one.
      */

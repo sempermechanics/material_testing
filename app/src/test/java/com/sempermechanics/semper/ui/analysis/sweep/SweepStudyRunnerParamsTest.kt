@@ -14,7 +14,7 @@ import java.nio.ByteBuffer
  * strainWindow)` as three bare `Int`s, so a swap compiles; these pin each
  * value to its slot, with every value distinct so any swap shows.
  */
-class VsgStudyRunnerParamsTest {
+class SweepStudyRunnerParamsTest {
 
     private val native = SemperEngine.solver
 
@@ -24,7 +24,7 @@ class VsgStudyRunnerParamsTest {
     }
 
     private val mask = byteArrayOf(1, 2, 3)
-    private val params = VsgStudyRunner.Params(
+    private val params = SweepStudyRunner.Params(
         plan = emptyList(),
         defFramePath = "",
         roiX = 10,
@@ -36,14 +36,14 @@ class VsgStudyRunnerParamsTest {
         debugDir = null,
         outputDir = File("unused"),
     )
-    private val point = VsgStudy.Point(subset = 31, step = 7, window = 5)
+    private val point = SweepStudy.Point(subset = 31, step = 7, window = 5)
 
     @Before
     fun valuesAreDistinct() {
         assertEquals("step, subset and VSG must differ for a swap to show", 3, setOf(7, 31, point.vsg).size)
     }
 
-    private fun engineParams() = with(VsgStudyRunner) { params.engineParams(point) }
+    private fun engineParams() = with(SweepStudyRunner) { params.engineParams(point) }
 
     @Test
     fun `a combination's step, subset and VSG become the engine's step, subset and window`() {

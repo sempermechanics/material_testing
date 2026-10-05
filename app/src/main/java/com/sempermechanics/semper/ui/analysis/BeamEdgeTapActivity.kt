@@ -12,7 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.load.BeamEdgeTapOverlay
 import com.sempermechanics.semper.ui.analysis.load.BeamTapPlacement
 import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
@@ -36,7 +36,7 @@ import kotlin.math.roundToInt
  * pixels is the photo's mm per pixel, and the midpoint is where
  * [com.sempermechanics.semper.report.BeamDeflection] reads δ. Pinch and pan to
  * zoom in; a tap after both are placed moves the mark nearer in height. Returns
- * [DicKeys.BEAM_EDGE_TAPS] in true reference pixels.
+ * [IntentKeys.BEAM_EDGE_TAPS] in true reference pixels.
  */
 class BeamEdgeTapActivity : AppCompatActivity() {
 
@@ -62,11 +62,11 @@ class BeamEdgeTapActivity : AppCompatActivity() {
         Insets.padTop(findViewById(R.id.headerChrome))
         Insets.padBottom(findViewById(R.id.bottomToolbar))
 
-        thicknessMm = intent.getFloatExtra(DicKeys.BEAM_THICKNESS_MM, 0f)
-        imageWidth = intent.getIntExtra(DicKeys.IMAGE_WIDTH, 0)
-        imageHeight = intent.getIntExtra(DicKeys.IMAGE_HEIGHT, 0)
-        val saved = savedInstanceState?.getFloatArray(DicKeys.BEAM_EDGE_TAPS)
-            ?: intent.getFloatArrayExtra(DicKeys.BEAM_EDGE_TAPS)
+        thicknessMm = intent.getFloatExtra(IntentKeys.BEAM_THICKNESS_MM, 0f)
+        imageWidth = intent.getIntExtra(IntentKeys.IMAGE_WIDTH, 0)
+        imageHeight = intent.getIntExtra(IntentKeys.IMAGE_HEIGHT, 0)
+        val saved = savedInstanceState?.getFloatArray(IntentKeys.BEAM_EDGE_TAPS)
+            ?: intent.getFloatArrayExtra(IntentKeys.BEAM_EDGE_TAPS)
         restore(saved)
 
         findViewById<MaterialButton>(R.id.btnBeamCancel).setOnClickListener { finish() }
@@ -82,7 +82,7 @@ class BeamEdgeTapActivity : AppCompatActivity() {
     }
 
     private fun loadPhoto() {
-        val file = intent.getStringExtra(DicKeys.IMAGE_FILE_PATH)?.let(::File)?.takeIf(File::exists)
+        val file = intent.getStringExtra(IntentKeys.IMAGE_FILE_PATH)?.let(::File)?.takeIf(File::exists)
         if (file == null) {
             Toast.makeText(this, R.string.roi_image_not_found, Toast.LENGTH_SHORT).show()
             finish()
@@ -167,7 +167,7 @@ class BeamEdgeTapActivity : AppCompatActivity() {
         val taps = taps()?.takeIf { it.isSet } ?: return
         setResult(
             Activity.RESULT_OK,
-            Intent().putExtra(DicKeys.BEAM_EDGE_TAPS, taps.toArray()),
+            Intent().putExtra(IntentKeys.BEAM_EDGE_TAPS, taps.toArray()),
         )
         finish()
     }
@@ -183,7 +183,7 @@ class BeamEdgeTapActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        taps()?.let { outState.putFloatArray(DicKeys.BEAM_EDGE_TAPS, it.toArray()) }
+        taps()?.let { outState.putFloatArray(IntentKeys.BEAM_EDGE_TAPS, it.toArray()) }
     }
 
     private fun format(mm: Float): String =

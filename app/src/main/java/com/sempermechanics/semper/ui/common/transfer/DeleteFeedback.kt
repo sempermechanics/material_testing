@@ -106,12 +106,12 @@ class DeleteFeedback(
     private companion object {
         val UNDO_WINDOW_MS = TimeUnit.SECONDS.toMillis(SessionDeletes.UNDO_WINDOW_SECONDS).toInt()
 
-        fun prefs(context: Context) = privatePrefs(context, PrefFiles.SessionDeletes.NAME)
+        fun prefs(context: Context) = privatePrefs(context, PrefFiles.SessionDeletesPrefs.NAME)
 
-        fun shownOutcomes(context: Context): Set<String> = prefs(context)[PrefFiles.SessionDeletes.SHOWN_OUTCOMES]
+        fun shownOutcomes(context: Context): Set<String> = prefs(context)[PrefFiles.SessionDeletesPrefs.SHOWN_OUTCOMES]
 
         fun saveShownOutcomes(context: Context, ids: Set<String>) {
-            prefs(context).edit { put(PrefFiles.SessionDeletes.SHOWN_OUTCOMES, ids) }
+            prefs(context).edit { put(PrefFiles.SessionDeletesPrefs.SHOWN_OUTCOMES, ids) }
         }
     }
 }

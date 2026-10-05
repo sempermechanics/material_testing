@@ -108,7 +108,7 @@ below is the user's own nudge on top of that, not the only signal.
 | [ ] 2.4 | Tap **Check status** while still pending | "Account is still pending approval." and you stay put |
 | [ ] 2.5 | Have an admin approve, then tap **Check status** | "Access granted" and you land on Home |
 | [ ] 2.6 | Wait on this screen without touching it | Nothing happens — approval is *not* polled |
-| [ ] 2.7 | Tap **Log out** → confirm | Login screen, back stack cleared |
+| [ ] 2.7 | Tap **Sign out** → confirm | Login screen, back stack cleared |
 
 ---
 
@@ -1117,7 +1117,7 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 | Feature | Where | Why unreachable |
 |---|---|---|
 | **Circle, ellipse and freeform ROI** | `StudioOverlayView` — full draw, hit-test and mask generation | `activity_roi_draw.xml` only exposes Rect and Square; everything else collapses to Rectangle |
-| **Convergence view** (peak strain and noise vs VSG) | documented in `VsgPlotView` / `VsgStudy` | Never built — only line-cut plots exist |
+| **Convergence view** (peak strain and noise vs VSG) | documented in `SweepPlotView` / `SweepStudy` | Never built — only line-cut plots exist |
 | Frame-order *picker* mode | `FrameOrderHelper` | Only the initial state; the sort menu offers no way back once you sort |
 
 ### Behavioural gaps worth knowing
@@ -1160,7 +1160,7 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   Firebase Analytics events for analysis started / completed / failed, the two
   data exports and Send feedback — all buckets and enums, never images, results,
   session ids or specimen names — and every one of them is dropped unless
-  `DicSettings.diagnosticsEnabled` is on. The consent copy names both halves —
+  `AppSettings.diagnosticsEnabled` is on. The consent copy names both halves —
   **Send crash reports and usage data** — matching
   [the privacy policy](../legal/PRIVACY_POLICY.md) §2.4.
 - **An interrupted solve cannot be resumed** — it is a foreground coroutine, so

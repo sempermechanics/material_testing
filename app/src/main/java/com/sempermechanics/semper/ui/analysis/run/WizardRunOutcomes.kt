@@ -7,7 +7,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudyRunner
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.sweep.toSkippedNode
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -87,7 +87,7 @@ class WizardRunOutcomes(
 
     override fun clearEngineFailFaq() = status.setFaq(null)
 
-    override fun onSweepProgress(progress: VsgStudyRunner.Progress) {
+    override fun onSweepProgress(progress: SweepStudyRunner.Progress) {
         chrome.overlay.update(
             percent = progress.percent.toFloat(),
             status = activity.getString(

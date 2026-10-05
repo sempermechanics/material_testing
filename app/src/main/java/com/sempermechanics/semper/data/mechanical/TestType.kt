@@ -26,7 +26,7 @@ private const val DIC_2D_STRAIN_WINDOW_POINTS = 5
  *
  * [defaultStrainWindow] is where the wizard's strain-window slider starts
  * (and what Reset returns it to), in data points; the VSG in pixels follows
- * from the step (`VsgStudy.vsgFor`). At the default step of 5 px, tensile's
+ * from the step (`SweepStudy.vsgFor`). At the default step of 5 px, tensile's
  * 5 points is a 21 px VSG and bending's 9 points is 41 px. Bending reads its
  * results from displacement at the load point, so its strain only draws the
  * maps; a wider window makes them far less noisy. On the published PMMA beam

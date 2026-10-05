@@ -4,7 +4,7 @@ import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
 import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.Roi
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.toDicParams
 import java.io.File
 
@@ -44,7 +44,7 @@ data class RunSpec(
      * @param frameIndex the deformed frame every combination is solved against
      */
     data class Sweep(
-        val plan: List<VsgStudy.Point>,
+        val plan: List<SweepStudy.Point>,
         val labels: List<String>,
         val lineCutHorizontal: Boolean,
         val frameIndex: Int,

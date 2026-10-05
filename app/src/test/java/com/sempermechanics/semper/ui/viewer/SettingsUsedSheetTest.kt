@@ -30,7 +30,7 @@ import java.nio.ByteOrder
  * setting instead of the frame's, or hides why a run stopped, misleads.
  */
 @RunWith(RobolectricTestRunner::class)
-class ViewerSettingsSheetTest {
+class SettingsUsedSheetTest {
 
     @get:Rule
     val temp = TemporaryFolder()
@@ -69,12 +69,12 @@ class ViewerSettingsSheetTest {
         return activity
     }
 
-    private fun ResultViewerActivity.rows(): Map<String, String> = ViewerSettingsSheet.entriesFor(this).toMap()
+    private fun ResultViewerActivity.rows(): Map<String, String> = SettingsUsedSheet.entriesFor(this).toMap()
 
     @Test
     fun `a plain run lists its settings, ROI and image size in order`() {
         val host = viewer()
-        val entries = ViewerSettingsSheet.entriesFor(host)
+        val entries = SettingsUsedSheet.entriesFor(host)
 
         assertEquals(
             listOf(
@@ -100,7 +100,7 @@ class ViewerSettingsSheetTest {
     fun `a run that stopped early says why and how far it got`() {
         val code = 3
         val host = viewer(baseArgs().copy(stopCode = code, plannedFrames = 5))
-        val entries = ViewerSettingsSheet.entriesFor(host)
+        val entries = SettingsUsedSheet.entriesFor(host)
         val labels = entries.map { it.first }
         val rows = entries.toMap()
 
@@ -154,10 +154,10 @@ class ViewerSettingsSheetTest {
     @Test
     fun `the sheet shows the specimen and one row per entry, divided`() {
         val host = viewer()
-        ViewerSettingsSheet.show(host)
+        SettingsUsedSheet.show(host)
         val sheet = ShadowDialog.getLatestDialog()
         val rows = sheet.findViewById<LinearLayout>(R.id.settingsUsedRows)
-        val entries = ViewerSettingsSheet.entriesFor(host)
+        val entries = SettingsUsedSheet.entriesFor(host)
 
         assertTrue(sheet.isShowing)
         assertEquals("Dogbone A", sheet.findViewById<TextView>(R.id.tvSettingsUsedSpecimen).text.toString())
@@ -175,7 +175,7 @@ class ViewerSettingsSheetTest {
     @Test
     fun `a sweep's sheet adds the line cut through the ROI centre`() {
         val host = viewer(sweepArgs(startFrame = 0))
-        ViewerSettingsSheet.show(host)
+        SettingsUsedSheet.show(host)
         val sheet = ShadowDialog.getLatestDialog()
 
         assertEquals(View.VISIBLE, sheet.findViewById<View>(R.id.lineCutSection).visibility)
@@ -187,7 +187,7 @@ class ViewerSettingsSheetTest {
     @Test
     fun `the line cut legend gives each strain component its own swatch`() {
         val host = viewer()
-        val legend = ViewerSettingsSheet.lineCutLegend(host, "y", 12f)
+        val legend = SettingsUsedSheet.lineCutLegend(host, "y", 12f)
         val text = legend.toString()
 
         assertTrue(text, text.startsWith("Cut along y through the ROI centre at 12 px."))

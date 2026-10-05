@@ -18,7 +18,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.databinding.ActivityStaticAnalysisBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsBinding
@@ -26,7 +26,7 @@ import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
 import com.sempermechanics.semper.databinding.WizardStepSweepBinding
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.video.ExtractionRequest
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportController
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderController
 import com.sempermechanics.semper.ui.analysis.frames.ReferenceImportController
@@ -45,7 +45,7 @@ import com.sempermechanics.semper.ui.analysis.run.RunStatusLine
 import com.sempermechanics.semper.ui.analysis.run.WizardRunLauncher
 import com.sempermechanics.semper.ui.analysis.run.WizardRunOutcomes
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisLeaveController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisReadyGate
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -122,7 +122,7 @@ class StaticAnalysisActivity :
         // The test type stays on the Intent (not consumed): a recreation
         // after process death re-reads it, and the ViewModel is authoritative
         // once set.
-        TestType.fromWire(intent.getStringExtra(DicKeys.TEST_TYPE))?.let { viewModel.testType = it }
+        TestType.fromWire(intent.getStringExtra(IntentKeys.TEST_TYPE))?.let { viewModel.testType = it }
         // Later wizard pages live in ViewStubs so the host layout stays under
         // lint's TooManyViews cap.
         settingsPage = WizardStepSettingsBinding.bind(binding.stubStepSettings.inflate())
@@ -247,7 +247,7 @@ class StaticAnalysisActivity :
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         }
-        val maxFrames = DicSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
+        val maxFrames = AppSettings.maxFrames(this, AppRemoteConfig.maxFrames(this))
         binding.tvDefDropHint.text =
             resources.getQuantityString(R.plurals.def_formats_hint_fmt, maxFrames, maxFrames)
         Insets.padBottom(binding.bottomNav)
@@ -265,10 +265,10 @@ class StaticAnalysisActivity :
         // Activity. Without this teardown a solve in flight when the screen is
         // destroyed keeps burning CPU and holding frame bytes, the progress
         // ticker reposts against dead views, and KEEP_SCREEN_ON leaks.
-        viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancelGate
+        viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancel
         if (::imports.isInitialized) imports.cancel()
         if (::reference.isInitialized) reference.cancel()
-        // VsgStudyRunner observes the same gate — no separate flag.
+        // SweepStudyRunner observes the same gate — no separate flag.
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::chrome.isInitialized) chrome.overlay.release()
         if (::frameOrder.isInitialized) frameOrder.release()
@@ -349,13 +349,13 @@ class StaticAnalysisActivity :
 
     override fun resetSweepInputs() {
         if (!::sweepController.isInitialized) return
-        viewModel.stepDenominator = VsgStudy.DEFAULT_STEP_DENOM
-        viewModel.subsetOverlap = VsgStudy.overlapForDenominator(VsgStudy.DEFAULT_STEP_DENOM)
+        viewModel.stepDenominator = SweepStudy.DEFAULT_STEP_DENOM
+        viewModel.subsetOverlap = SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM)
         sweepController.resetUserModified()
         sweepController.seedSweepSuggestions()
     }
 
-    override fun startVsgSweep() = runs.startSweep(params.isKeysInterpolatorSelected())
+    override fun startSweep() = runs.startSweep(params.isKeysInterpolatorSelected())
 
     override fun confirmOpenFaq(url: String) {
         FaqRedirect.confirm(this, url)
@@ -428,16 +428,16 @@ class StaticAnalysisActivity :
     }
 
     private fun consumePickerHandOff() {
-        intent.getStringExtra(DicKeys.PICKED_REF_URI)?.let {
-            intent.removeExtra(DicKeys.PICKED_REF_URI)
+        intent.getStringExtra(IntentKeys.PICKED_REF_URI)?.let {
+            intent.removeExtra(IntentKeys.PICKED_REF_URI)
             reference.load(it.toUri())
         }
-        intent.getStringExtra(DicKeys.PICKED_VIDEO_URI)?.let {
-            intent.removeExtra(DicKeys.PICKED_VIDEO_URI)
+        intent.getStringExtra(IntentKeys.PICKED_VIDEO_URI)?.let {
+            intent.removeExtra(IntentKeys.PICKED_VIDEO_URI)
             VideoSamplingSheet(this, onExtract = ::extractVideoFrames).open(it.toUri())
         }
-        intent.getStringArrayListExtra(DicKeys.PICKED_DEF_URIS)?.let { list ->
-            intent.removeExtra(DicKeys.PICKED_DEF_URIS)
+        intent.getStringArrayListExtra(IntentKeys.PICKED_DEF_URIS)?.let { list ->
+            intent.removeExtra(IntentKeys.PICKED_DEF_URIS)
             if (list.isNotEmpty()) importDeformed(list.map { it.toUri() })
         }
     }

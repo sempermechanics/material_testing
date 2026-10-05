@@ -8,14 +8,14 @@ import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.report.LabReport
 import com.sempermechanics.semper.report.LabReportPdf
 import com.sempermechanics.semper.report.StressStrain
-import com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
  * The share sheet's "Lab report (PDF)": the student write-up [LabReport]
- * lays out, with its graphs drawn by the same off-screen [VsgPlotView] the
+ * lays out, with its graphs drawn by the same off-screen [SweepPlotView] the
  * full report uses and the reference photo as the setup figure — for bending
  * with the two thickness taps and the ring deflection is read in.
  */
@@ -52,12 +52,12 @@ class LabReportExporter(private val context: Context) {
 
     private fun render(graph: LabReport.Block.Graph): Bitmap {
         val print = ViewerStressStrainHelper.printContext(context)
-        return VsgPlotView(print).run {
+        return SweepPlotView(print).run {
             setData(
                 graph.series.map { series ->
-                    VsgPlotView.Series(
+                    SweepPlotView.Series(
                         label = graph.title,
-                        color = VsgPlotView.paletteColor(print, if (series.isFit) 1 else 0),
+                        color = SweepPlotView.paletteColor(print, if (series.isFit) 1 else 0),
                         points = series.points,
                         markers = !series.isFit,
                         muted = series.isFit,
@@ -65,7 +65,9 @@ class LabReportExporter(private val context: Context) {
                 },
                 graph.xLabel,
                 graph.yLabel,
-                marks = graph.marks.map { VsgPlotView.Mark(it.x, it.y, it.label, VsgPlotView.paletteColor(print, 1)) },
+                marks = graph.marks.map {
+                    SweepPlotView.Mark(it.x, it.y, it.label, SweepPlotView.paletteColor(print, 1))
+                },
             )
             renderToBitmap(PLOT_W, PLOT_H)
         }

@@ -5,7 +5,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.slider.Slider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.StorageBudget
@@ -47,14 +47,14 @@ class SettingsStorageSection(
 
         val valueLabel = views.tvAutoFreeValue
         views.sliderAutoFree.apply {
-            valueTo = DicSettings.MAX_AUTO_FREE_GB.toFloat()
-            value = DicSettings.autoFreeBudgetGb(activity)
+            valueTo = AppSettings.MAX_AUTO_FREE_GB.toFloat()
+            value = AppSettings.autoFreeBudgetGb(activity)
                 .toFloat().coerceIn(valueFrom, valueTo)
             valueLabel.text = autoFreeText(value.toInt())
             addOnChangeListener { _, v, fromUser ->
                 valueLabel.text = autoFreeText(v.toInt())
                 if (!fromUser) return@addOnChangeListener
-                DicSettings.setAutoFreeBudgetGb(activity, v.toInt())
+                AppSettings.setAutoFreeBudgetGb(activity, v.toInt())
                 // Applying on release rather than on every tick: dragging past a
                 // low value would otherwise start dropping sessions mid-gesture.
             }
@@ -70,7 +70,7 @@ class SettingsStorageSection(
     }
 
     private fun autoFreeText(gb: Int): String =
-        if (gb <= DicSettings.AUTO_FREE_OFF) {
+        if (gb <= AppSettings.AUTO_FREE_OFF) {
             activity.getString(R.string.storage_auto_free_off)
         } else {
             activity.getString(R.string.storage_auto_free_on_fmt, gb)

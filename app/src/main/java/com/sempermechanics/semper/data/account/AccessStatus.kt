@@ -2,7 +2,7 @@ package com.sempermechanics.semper.data.account
 
 /**
  * Access-gate status strings returned by [AuthRepository] and cached in
- * [com.sempermechanics.semper.data.net.TokenStore]. UI routing lives in
+ * [com.sempermechanics.semper.data.net.AccountCache]. UI routing lives in
  * [com.sempermechanics.semper.ui.auth.AccessRouter].
  */
 object AccessStatus {

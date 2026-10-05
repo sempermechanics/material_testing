@@ -27,7 +27,7 @@ import java.util.UUID
  * - [signMessage] produces an ECDSA-SHA256 signature the backend verifies with
  *   the stored public key (see backend/app/deps.py).
  */
-class DeviceKeyManager(private val context: Context) {
+class DeviceKeys(private val context: Context) {
 
     private val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
 
@@ -46,7 +46,7 @@ class DeviceKeyManager(private val context: Context) {
          * none is stored, writes `and-{ANDROID_ID}` (app-scoped, survives
          * reinstall) or a `dev-{uuid}` fallback.
          *
-         * Needs no Keystore, unlike constructing a [DeviceKeyManager] (which
+         * Needs no Keystore, unlike constructing a [DeviceKeys] (which
          * loads the Keystore and may generate a key): screens that only show or
          * mail the id call this, so a Keystore fault cannot crash them.
          */

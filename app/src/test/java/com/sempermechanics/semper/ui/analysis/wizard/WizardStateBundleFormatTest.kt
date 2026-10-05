@@ -5,7 +5,7 @@ import android.os.Bundle
 import androidx.lifecycle.SavedStateHandle
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.TestType
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -112,7 +112,7 @@ class WizardStateBundleFormatTest {
             putBoolean("fromVideo", false)
             putBoolean("sweepMode", false)
             putIntArray("sweepRanges", intArrayOf(0, 0, 0, 0, 3, 3, 3))
-            putDouble("subsetOverlap", VsgStudy.overlapForDenominator(VsgStudy.DEFAULT_STEP_DENOM))
+            putDouble("subsetOverlap", SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM))
             putBoolean("lineCutHorizontal", true)
             putInt("vsgFrameIndex", -1)
             putString("workingLocalId", null)

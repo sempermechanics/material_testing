@@ -8,12 +8,12 @@ import com.sempermechanics.semper.report.newMetrics
 import java.nio.ByteBuffer
 
 /**
- * One full-field solve for the single-shot callers: the VSG sweep's per-node
+ * One full-field solve for the single-shot callers: the parameter sweep's per-node
  * solve and the noise-floor probe. Both cleared the output buffer, passed a
  * silent progress callback and handed back the engine's point count, around
  * the same JNI call; this is that wrapper.
  *
- * Not for the batch run: `DicBatchRunner` keeps its
+ * Not for the batch run: `BatchAnalysis` keeps its
  * [SemperNativeLib.computeFullFieldDirect] call inline in its one loop (it
  * reports progress, and its buffer handling is pinned there).
  *

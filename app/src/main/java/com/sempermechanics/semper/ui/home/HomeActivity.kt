@@ -18,12 +18,12 @@ import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.mechanical.TestType
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
@@ -130,7 +130,7 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        pendingTestType?.let { outState.putString(DicKeys.TEST_TYPE, it.wireName) }
+        pendingTestType?.let { outState.putString(IntentKeys.TEST_TYPE, it.wireName) }
     }
 
     /**
@@ -143,11 +143,11 @@ class HomeActivity : AppCompatActivity() {
         if (uri == null) return
         val mime = contentResolver.getType(uri) ?: ""
         val intent = Intent(this, StaticAnalysisActivity::class.java)
-        pendingTestType?.let { intent.putExtra(DicKeys.TEST_TYPE, it.wireName) }
+        pendingTestType?.let { intent.putExtra(IntentKeys.TEST_TYPE, it.wireName) }
         if (mime.startsWith("video/")) {
-            intent.putExtra(DicKeys.PICKED_VIDEO_URI, uri.toString())
+            intent.putExtra(IntentKeys.PICKED_VIDEO_URI, uri.toString())
         } else {
-            intent.putExtra(DicKeys.PICKED_REF_URI, uri.toString())
+            intent.putExtra(IntentKeys.PICKED_REF_URI, uri.toString())
         }
         startActivity(intent)
     }
@@ -156,7 +156,7 @@ class HomeActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        pendingTestType = TestType.fromWire(savedInstanceState?.getString(DicKeys.TEST_TYPE))
+        pendingTestType = TestType.fromWire(savedInstanceState?.getString(IntentKeys.TEST_TYPE))
         window.decorView.post { reportFullyDrawn() }
 
         // Edge-to-edge (enforced on API 35+): drop the header below the status
@@ -307,7 +307,7 @@ class HomeActivity : AppCompatActivity() {
             val localCount = withContext(Dispatchers.IO) {
                 SessionStore.list(this@HomeActivity).size
             }
-            TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
+            AccountCache.refreshSessionLimit(this@HomeActivity, localCount)
             quotaCard.openLimitScreenIfReached()
         }
     }
@@ -371,7 +371,7 @@ class HomeActivity : AppCompatActivity() {
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
-            TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
+            AccountCache.refreshSessionLimit(this@HomeActivity, sessions.size)
         }
     }
 

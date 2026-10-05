@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.fixtures.sessionRecord
@@ -49,7 +49,7 @@ class SessionMetadataDocTest {
     private val now = 1_700_000_000_000L
 
     @After
-    fun tearDown() = TokenStore.clear(context)
+    fun tearDown() = AccountCache.clear(context)
 
     // ── Records the writer is fed ──────────────────────────────────────────
 
@@ -113,7 +113,7 @@ class SessionMetadataDocTest {
 
     @Test
     fun `the uploader's file decodes and re-encodes to the same JSON`() {
-        TokenStore.saveIdentity(context, "uid-1", "a@b.c")
+        AccountCache.saveIdentity(context, "uid-1", "a@b.c")
         for (record in written) {
             val original = SessionUploadMetadata.buildMetadataJson(record, context)
 
@@ -126,7 +126,7 @@ class SessionMetadataDocTest {
     @Test
     fun `forUpload builds the uploader's document, signed in or out`() {
         for (signedIn in listOf(true, false)) {
-            if (signedIn) TokenStore.saveIdentity(context, "uid-1", "a@b.c") else TokenStore.clear(context)
+            if (signedIn) AccountCache.saveIdentity(context, "uid-1", "a@b.c") else AccountCache.clear(context)
             for (record in written) {
                 val original = SessionUploadMetadata.buildMetadataJson(record, context)
                 val decoded = SessionMetadataDoc.decode(original)
@@ -142,7 +142,7 @@ class SessionMetadataDocTest {
 
     @Test
     fun `a signed-out upload writes an empty user object`() {
-        TokenStore.clear(context)
+        AccountCache.clear(context)
         val text = SessionMetadataDoc.forUpload(batch, context).encode()
         val uploaded = SessionUploadMetadata.buildMetadataJson(batch, context)
         assertEquals(JsonObject(emptyMap()), Json.parseToJsonElement(text).jsonObject["user"])
@@ -172,7 +172,7 @@ class SessionMetadataDocTest {
 
     @Test
     fun `today's files restore to the record the reader built`() {
-        TokenStore.saveIdentity(context, "uid-1", "a@b.c")
+        AccountCache.saveIdentity(context, "uid-1", "a@b.c")
         for (record in written) {
             assertPinnedRecord(record.id, SessionUploadMetadata.buildMetadataJson(record, context))
         }

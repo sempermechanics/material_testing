@@ -6,7 +6,7 @@ import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommender
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -41,7 +41,7 @@ class WizardParamFieldsTest {
         bed.settings.sliderStepSize.value = 4f
         bed.settings.sliderStrainWindow.value = 7f
 
-        assertEquals(DicParams(31, 4, VsgStudy.vsgFor(7, 4)), fields.dicParams())
+        assertEquals(DicParams(31, 4, SweepStudy.vsgFor(7, 4)), fields.dicParams())
         assertEquals(31, fields.subsetSize())
     }
 

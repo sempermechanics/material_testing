@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.data.cloud
 
 import androidx.work.Data
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -33,13 +33,13 @@ class UploadProgressSamplerTest {
 
         sampler.done.set(5)
         awaitCount(published, 2)
-        assertEquals(50, published[1].getInt(DicKeys.UPLOAD_PERCENT, -1))
+        assertEquals(50, published[1].getInt(IntentKeys.UPLOAD_PERCENT, -1))
 
         sampler.phase.set("upload")
         sampler.done.set(0)
         awaitCount(published, 3)
-        assertEquals("upload", published[2].getString(DicKeys.UPLOAD_PHASE))
-        assertEquals("local-1", published[2].getString(DicKeys.SESSION_LOCAL_ID))
+        assertEquals("upload", published[2].getString(IntentKeys.UPLOAD_PHASE))
+        assertEquals("local-1", published[2].getString(IntentKeys.SESSION_LOCAL_ID))
         job.cancel()
     }
 

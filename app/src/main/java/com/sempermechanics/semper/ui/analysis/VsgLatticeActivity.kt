@@ -14,14 +14,14 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityVsgLatticeBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.Roi
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.recommend.StrainWindowText
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
-import com.sempermechanics.semper.ui.analysis.sweep.LatticeGraphExport
 import com.sempermechanics.semper.ui.analysis.sweep.StrainProfiles
-import com.sempermechanics.semper.ui.analysis.sweep.VsgLatticeView
-import com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepGraphExport
+import com.sempermechanics.semper.ui.analysis.sweep.SweepLatticeView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.animateCopyConfirmation
 import com.sempermechanics.semper.ui.analysis.sweep.bindCopyGestures
 import com.sempermechanics.semper.ui.analysis.sweep.latticeSummary
@@ -81,10 +81,10 @@ class VsgLatticeActivity : AppCompatActivity() {
     private var frameProfiles: Map<Int, StrainProfiles> = emptyMap()
 
     /** Solved nodes in lattice order (ascending subset, then window). */
-    private var solvedNodes: List<VsgLatticeView.Node> = emptyList()
+    private var solvedNodes: List<SweepLatticeView.Node> = emptyList()
 
     /** [solvedNodes] keyed by frame index — see the loop in [buildFrameSeries]. */
-    private var nodeByFrame: Map<Int, VsgLatticeView.Node> = emptyMap()
+    private var nodeByFrame: Map<Int, SweepLatticeView.Node> = emptyMap()
 
     /** The solved frame currently selected; always a solved index when any exist. */
     private var focusedFrameIndex: Int = -1
@@ -99,7 +99,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     /** The sweep's arguments, parsed once (ADR-003); the record is read only for an Intent missing a key. */
     private val args: ViewerArgs by lazy {
         ViewerArgs.from(intent) {
-            intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)?.let { SessionStore.get(this, it) }
+            intent.getStringExtra(IntentKeys.SESSION_LOCAL_ID)?.let { SessionStore.get(this, it) }
         }
     }
 
@@ -109,13 +109,13 @@ class VsgLatticeActivity : AppCompatActivity() {
     private var syncingSlider = false
 
     /** The series + axis labels last drawn, reused to render the shared graph. */
-    private var exportSeries: List<VsgPlotView.Series> = emptyList()
+    private var exportSeries: List<SweepPlotView.Series> = emptyList()
     private var exportXLabel: String = ""
     private var exportYLabel: String = ""
 
-    private data class FrameSeries(val frameIndex: Int, val series: VsgPlotView.Series)
+    private data class FrameSeries(val frameIndex: Int, val series: SweepPlotView.Series)
 
-    private val graphExport = LatticeGraphExport(this)
+    private val graphExport = SweepGraphExport(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -232,7 +232,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         }
     }
 
-    private fun showSummary(nodes: List<VsgLatticeView.Node>, solvedCount: Int, skippedCount: Int) {
+    private fun showSummary(nodes: List<SweepLatticeView.Node>, solvedCount: Int, skippedCount: Int) {
         val summary = binding.tvLatticeSummary
         if (solvedCount == 0) {
             summary.text = getString(R.string.vsg_lattice_all_failed)
@@ -247,7 +247,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         summary.text = latticeSummary(resources, nodes, solvedCount, skippedCount, args.plannedFrames)
     }
 
-    private fun showSkipReason(node: VsgLatticeView.Node) {
+    private fun showSkipReason(node: SweepLatticeView.Node) {
         val reason = node.failureReason.ifEmpty { getString(R.string.sweep_node_skipped) }
         val faqRes = node.failureCode?.let { EngineFailure.faqUrlRes(it) }
             ?: R.string.url_faq_engine_vsg
@@ -264,7 +264,7 @@ class VsgLatticeActivity : AppCompatActivity() {
         val steps = args.sweep?.steps?.takeIf { it.isNotEmpty() } ?: return
         val line = centreLine()
         val baseStep = args.step.coerceAtLeast(1)
-        val components = VsgStudy.STRAIN_COMPONENTS.toIntArray()
+        val components = SweepStudy.STRAIN_COMPONENTS.toIntArray()
 
         lifecycleScope.launch {
             val loaded = withContext(Dispatchers.IO) {
@@ -277,8 +277,8 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     /** The ROI centre line every profile is cut along — fixed for the activity's lifetime. */
-    private fun centreLine(): VsgStudy.StudyLine =
-        VsgStudy.centreLine(Roi(args.roiX, args.roiY, args.roiW, args.roiH), isLineCutHorizontal())
+    private fun centreLine(): SweepStudy.StudyLine =
+        SweepStudy.centreLine(Roi(args.roiX, args.roiY, args.roiW, args.roiH), isLineCutHorizontal())
 
     private fun isLineCutHorizontal(): Boolean = args.sweep?.lineCutHorizontal ?: true
 
@@ -358,9 +358,9 @@ class VsgLatticeActivity : AppCompatActivity() {
             }
             FrameSeries(
                 frameIndex = index,
-                series = VsgPlotView.Series(
+                series = SweepPlotView.Series(
                     label = label,
-                    color = VsgPlotView.paletteColor(this, index),
+                    color = SweepPlotView.paletteColor(this, index),
                     points = points,
                     markers = false,
                     muted = index != focusedFrameIndex,
@@ -404,9 +404,9 @@ class VsgLatticeActivity : AppCompatActivity() {
         binding.btnSaveGraph.isEnabled = true
     }
 
-    private fun windowText(node: VsgLatticeView.Node): String = StrainWindowText.of(this, node.vsg, node.step)
+    private fun windowText(node: SweepLatticeView.Node): String = StrainWindowText.of(this, node.vsg, node.step)
 
-    private fun selectedNode(): VsgLatticeView.Node? =
+    private fun selectedNode(): SweepLatticeView.Node? =
         solvedNodes.find { it.frameIndex == focusedFrameIndex }
 
     private fun copySelectedParams(animateOn: View) {
@@ -441,7 +441,7 @@ class VsgLatticeActivity : AppCompatActivity() {
     }
 
     /** Study type, image names, and settings for the export header. */
-    private fun exportHeaderLines(series: List<VsgPlotView.Series>): List<String> {
+    private fun exportHeaderLines(series: List<SweepPlotView.Series>): List<String> {
         val lines = mutableListOf<String>()
         val horizontal = isLineCutHorizontal()
         val axis = getString(if (horizontal) R.string.axis_x else R.string.axis_y)

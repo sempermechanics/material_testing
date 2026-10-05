@@ -9,12 +9,12 @@ import androidx.core.graphics.withClip
 import com.sempermechanics.semper.ui.common.dp
 
 /**
- * The [VsgPlotView.Mark]s of a plot (the tensile yield point, say): a diamond
+ * The [SweepPlotView.Mark]s of a plot (the tensile yield point, say): a diamond
  * at each mark inside the viewport, and a legend for them in the plot's
  * bottom-right corner, which a rising curve leaves empty. A mark outside the
  * axes is not drawn and does not widen them.
  */
-internal class VsgPlotMarks(private val plot: View) {
+internal class SweepPlotMarks(private val plot: View) {
 
     private val path = Path()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
@@ -33,7 +33,7 @@ internal class VsgPlotMarks(private val plot: View) {
     @Suppress("LongParameterList") // the plot's frame, its mapping and its two paints
     fun draw(
         canvas: Canvas,
-        marks: List<VsgPlotView.Mark>,
+        marks: List<SweepPlotView.Mark>,
         b: PlotBounds,
         frame: RectF,
         sx: (Float) -> Float,
@@ -44,7 +44,7 @@ internal class VsgPlotMarks(private val plot: View) {
         val shown = marks.filter { it.x in b.xMin..b.xMax && it.y in b.yMin..b.yMax }
         if (shown.isEmpty()) return
         val r = plot.dp(MARK_RADIUS_DP)
-        val gap = plot.dp(VsgPlotView.TICK_GAP_DP)
+        val gap = plot.dp(SweepPlotView.TICK_GAP_DP)
         canvas.withClip(frame) { shown.forEach { diamond(this, sx(it.x), sy(it.y), r, it.color) } }
         val rowHeight = maxOf(rowTextPaint.textSize, r * 2f) + gap
         var baseline = frame.bottom - gap - rowHeight * (shown.size - 1)
@@ -53,7 +53,7 @@ internal class VsgPlotMarks(private val plot: View) {
             val textRight = frame.right - gap
             canvas.drawText(it.label, textRight, baseline, legendPaint)
             val cx = textRight - legendPaint.measureText(it.label) - gap - r
-            diamond(canvas, cx, baseline - legendPaint.textSize * VsgPlotView.TICK_BASELINE, r, it.color)
+            diamond(canvas, cx, baseline - legendPaint.textSize * SweepPlotView.TICK_BASELINE, r, it.color)
             baseline += rowHeight
         }
     }

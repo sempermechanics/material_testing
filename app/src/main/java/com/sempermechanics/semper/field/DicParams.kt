@@ -1,19 +1,19 @@
 package com.sempermechanics.semper.field
 
 import android.content.Intent
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import org.json.JSONObject
 
 /**
  * The solver parameters one frame is computed with: [subset] (px, odd), grid
  * [step] (px) and [strainWindow], the VSG diameter in **px** that the engine is
- * handed (`VsgStudy.vsgFor(points, step)`), never the window in data points.
+ * handed (`SweepStudy.vsgFor(points, step)`), never the window in data points.
  *
  * The same three ints travel today as `subset/step/strainWindow` (`RunSpec`,
  * `SessionRecord`, `SkippedNode`, CSV frames), `subset/step/strainWin`
  * (`SessionRecordSettings`, the JNI call),
  * `subsetSize/step/strainWindow` (`ViewerArgs`, `ReportBuildParams`),
- * `subset/step/vsg` (`VsgStudy.Point`, `ParamClipboard`, lattice nodes), the
+ * `subset/step/vsg` (`SweepStudy.Point`, `ParamClipboard`, lattice nodes), the
  * `SUBSET_SIZE` / `STEP` / `STRAIN_WINDOW` extras and the `engine` object of
  * `metadata.json`. This is a view over those fields; it writes the same keys.
  *
@@ -34,14 +34,14 @@ data class DicParams(val subset: Int, val step: Int, val strainWindow: Int) {
         .put(JSON_STRAIN_WINDOW, strainWindow)
 
     /**
-     * Puts the viewer's three extras, [DicKeys.SUBSET_SIZE], [DicKeys.STEP],
-     * [DicKeys.STRAIN_WINDOW]. Write-only: the viewer reads them through
+     * Puts the viewer's three extras, [IntentKeys.SUBSET_SIZE], [IntentKeys.STEP],
+     * [IntentKeys.STRAIN_WINDOW]. Write-only: the viewer reads them through
      * `ViewerArgs.Reader`, which falls back to the session record.
      */
     fun putViewerExtras(intent: Intent): Intent = intent
-        .putExtra(DicKeys.SUBSET_SIZE, subset)
-        .putExtra(DicKeys.STEP, step)
-        .putExtra(DicKeys.STRAIN_WINDOW, strainWindow)
+        .putExtra(IntentKeys.SUBSET_SIZE, subset)
+        .putExtra(IntentKeys.STEP, step)
+        .putExtra(IntentKeys.STRAIN_WINDOW, strainWindow)
 
     companion object {
         /** `ViewerArgs.DEFAULT_SUBSET` and `CloudRestore`'s fallback. */

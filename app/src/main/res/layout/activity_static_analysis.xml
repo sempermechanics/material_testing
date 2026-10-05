@@ -475,7 +475,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:text="@string/label_0"
+                        tools:text="0%"
                         android:textColor="@color/sky_primary"
                         android:textSize="24sp"
                         android:textStyle="bold" />
@@ -526,7 +526,7 @@
                             android:id="@+id/tvRunPoints"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/label_0"
+                            tools:text="0%"
                             android:textColor="@color/text_primary"
                             android:textSize="16sp"
                             android:textStyle="bold" />
@@ -553,7 +553,7 @@
                             android:id="@+id/tvRunConvergence"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/label_0"
+                            tools:text="0%"
                             android:textColor="@color/text_primary"
                             android:textSize="16sp"
                             android:textStyle="bold" />

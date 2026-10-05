@@ -2,7 +2,7 @@ package com.sempermechanics.semper.data.cloud
 
 import androidx.work.Data
 import androidx.work.workDataOf
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -51,9 +51,9 @@ internal class UploadProgressSampler(
             if (pct != lastPct || current != lastPhase) {
                 publish(
                     workDataOf(
-                        DicKeys.SESSION_LOCAL_ID to localId,
-                        DicKeys.UPLOAD_PHASE to current,
-                        DicKeys.UPLOAD_PERCENT to pct,
+                        IntentKeys.SESSION_LOCAL_ID to localId,
+                        IntentKeys.UPLOAD_PHASE to current,
+                        IntentKeys.UPLOAD_PERCENT to pct,
                     ),
                 )
                 lastPct = pct

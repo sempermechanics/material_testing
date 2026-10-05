@@ -8,7 +8,7 @@ import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudSessionDto
 import com.sempermechanics.semper.data.net.QuotaDto
 import com.sempermechanics.semper.data.net.SessionsResponse
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord.SyncState
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.fixtures.sessionRecord
@@ -53,7 +53,7 @@ class WaitingUploadsTest {
     fun tearDown() {
         CloudSync.queueUpload = CloudSync::enqueueUpload
         AppRemoteConfig.clear(context)
-        DicSettings.setSaveToCloudEnabled(context, true)
+        AppSettings.setSaveToCloudEnabled(context, true)
     }
 
     // ── No backend ──────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ class WaitingUploadsTest {
     @Test
     fun `a licensed account with save-to-cloud off keeps its waiting rows waiting`() {
         AppRemoteConfig.apply(context, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
-        DicSettings.setSaveToCloudEnabled(context, false)
+        AppSettings.setSaveToCloudEnabled(context, false)
         store("s1", SyncState.PENDING)
 
         reconcile(api)

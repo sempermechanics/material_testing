@@ -567,7 +567,7 @@ result to compare with.
 The run stops after frame 2 with **Stopped early**. Only 41% of the points
 converged in frame 1. Two frames in a row below 50% stop a batch
 (`ui/analysis/wizard/AnalysisViewModel.kt:84`, `:91`; `ConvergenceGate`, called at
-`ui/analysis/run/DicBatchRunner.kt:275`) with code −96
+`ui/analysis/run/BatchAnalysis.kt:275`) with code −96
 (`ui/analysis/AnalysisRunCodes.kt:15`). The session list shows "2 of 7 frames"
 and "Convergence collapsed before this combination". The two frames it keeps
 give a line through two points, which says nothing about E.

@@ -7,7 +7,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.databinding.SheetVideoSamplingBinding
 import com.sempermechanics.semper.imaging.video.ExtractionRequest
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
@@ -71,7 +71,7 @@ class VideoSamplingSheet(
     /** Sampling by frame rate or key frames over a time segment, with a metadata summary. */
     internal fun show(uri: Uri, meta: VideoMeta, syncTimesUs: List<Long> = emptyList()): BottomSheetDialog {
         val form = SheetVideoSamplingBinding.inflate(activity.layoutInflater)
-        val plan = SamplingPlan(meta, syncTimesUs, DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity)))
+        val plan = SamplingPlan(meta, syncTimesUs, AppSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity)))
         form.tvVideoInfo.text = infoLine(meta)
         form.rgExtractMode.isVisible = plan.hasKeyframes
 

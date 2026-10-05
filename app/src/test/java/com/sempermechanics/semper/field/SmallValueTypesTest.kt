@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import com.sempermechanics.semper.data.net.drive.DriveUpload
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.report.BakedHeatmap
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.toDicParams
 import com.sempermechanics.semper.ui.analysis.sweep.toSkippedNode
 import org.junit.Assert.assertArrayEquals
@@ -74,7 +74,7 @@ class SmallValueTypesTest {
 
     @Test
     fun `a skipped node of a sweep point records its VSG in px, as the view model builds it`() {
-        val point = VsgStudy.Point(subset = 41, step = 10, window = 5)
+        val point = SweepStudy.Point(subset = 41, step = 10, window = 5)
         val code = -2
         assertEquals(SkippedNode(point.subset, point.step, point.vsg, code), point.toSkippedNode(code))
         assertEquals(41, point.vsg)

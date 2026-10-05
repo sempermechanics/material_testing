@@ -7,7 +7,7 @@ import com.sempermechanics.semper.data.prefs.ParamClipboard
 import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 
 /**
  * The settings page's parameter sliders: the value fields are editable, so
@@ -52,7 +52,7 @@ class WizardParamFields(
     fun dicParams(): DicParams = DicParams(subsetSize(), stepSize(), strainWindow())
 
     /** The VSG in px handed to the engine: the slider's window is in data points. */
-    private fun strainWindow(): Int = VsgStudy.vsgFor(settings.sliderStrainWindow.value.toInt(), stepSize())
+    private fun strainWindow(): Int = SweepStudy.vsgFor(settings.sliderStrainWindow.value.toInt(), stepSize())
 
     fun isKeysInterpolatorSelected(): Boolean = settings.rgInterpolator.checkedButtonId == R.id.rbKeys
 
@@ -90,7 +90,7 @@ class WizardParamFields(
         settings.sliderSubsetSize.value = snapToSlider(settings.sliderSubsetSize, params.subset).toFloat()
         settings.sliderStepSize.value = snapToSlider(settings.sliderStepSize, params.step).toFloat()
         // The clipboard holds a VSG in px; the slider takes points at the pasted step.
-        settings.sliderStrainWindow.value = VsgStudy.nearestWindowPoints(params.vsg, stepSize()).toFloat()
+        settings.sliderStrainWindow.value = SweepStudy.nearestWindowPoints(params.vsg, stepSize()).toFloat()
         sheet.syncFromStep()
         subsets.showSpeckleFeedback()
         host.onSweepInputsChanged()

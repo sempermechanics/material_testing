@@ -16,7 +16,7 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.BeamEdgeTapActivity
 import com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
 import org.junit.After
@@ -63,10 +63,10 @@ class BeamTapEditorGestureTest {
 
     private fun launch(): ActivityScenario<BeamEdgeTapActivity> {
         val intent = Intent(context, BeamEdgeTapActivity::class.java)
-            .putExtra(DicKeys.IMAGE_FILE_PATH, photo.absolutePath)
-            .putExtra(DicKeys.IMAGE_WIDTH, IMG_W)
-            .putExtra(DicKeys.IMAGE_HEIGHT, IMG_H)
-            .putExtra(DicKeys.BEAM_THICKNESS_MM, THICKNESS_MM)
+            .putExtra(IntentKeys.IMAGE_FILE_PATH, photo.absolutePath)
+            .putExtra(IntentKeys.IMAGE_WIDTH, IMG_W)
+            .putExtra(IntentKeys.IMAGE_HEIGHT, IMG_H)
+            .putExtra(IntentKeys.BEAM_THICKNESS_MM, THICKNESS_MM)
         val scenario = ActivityScenario.launchActivityForResult<BeamEdgeTapActivity>(intent)
         awaitOn(scenario, "the photo") { photoView(it).drawable != null }
         return scenario
@@ -152,7 +152,7 @@ class BeamTapEditorGestureTest {
         }
         val result = scenario.result
         assertEquals(Activity.RESULT_OK, result.resultCode)
-        return BeamEdgeTaps.fromArray(result.resultData.getFloatArrayExtra(DicKeys.BEAM_EDGE_TAPS))
+        return BeamEdgeTaps.fromArray(result.resultData.getFloatArrayExtra(IntentKeys.BEAM_EDGE_TAPS))
     }
 
     private fun awaitOn(

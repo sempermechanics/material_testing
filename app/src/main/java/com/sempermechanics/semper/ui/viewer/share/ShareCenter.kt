@@ -120,7 +120,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
 
     /**
      * Starts an export of [kind] in the viewer's [ShareExportJobs], which outlive a
-     * rotation; [ShareExportUi] shows its progress and delivers the result.
+     * rotation; [ShareExportController] shows its progress and delivers the result.
      *
      * The job is given data only — the snapshot taken here on the main thread,
      * the application's resources and the cache dir — so it never holds this

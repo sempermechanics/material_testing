@@ -44,7 +44,7 @@ number (the `versionCode`) is far below Semper's, which makes it a downgrade.
 ## Trade-off analysis
 
 A phone can hold both apps, but Android scopes `ANDROID_ID` to the signing
-key, so each app has its own device id (`and-{ANDROID_ID}`, `DeviceKeyManager`)
+key, so each app has its own device id (`and-{ANDROID_ID}`, `DeviceKeys`)
 and the backend sees two devices. Until the backend binds per app, the whole
 account has one registered device and one licence or seat lock: whichever app
 signs in first takes the phone, and the other is refused at sign-in with

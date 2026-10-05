@@ -12,14 +12,14 @@ import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudErase.accountGone
 import com.sempermechanics.semper.data.cloud.CloudErase.toEraseResult
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.Authed
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.net.authed
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.PrefFiles
 import com.sempermechanics.semper.data.prefs.get
 import com.sempermechanics.semper.data.prefs.privatePrefs
@@ -27,7 +27,7 @@ import com.sempermechanics.semper.data.prefs.put
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -113,8 +113,8 @@ object CloudSync {
                 // Every screen resume lands here, and each check costs one Firestore
                 // read per cloud session. A successful check stays fresh for a few
                 // minutes; an explicit pull-to-refresh (deep) always goes through.
-                val prefs = privatePrefs(appContext, PrefFiles.CloudSync.NAME)
-                val sinceLast = System.currentTimeMillis() - prefs[PrefFiles.CloudSync.LAST_RECONCILE_AT]
+                val prefs = privatePrefs(appContext, PrefFiles.CloudSyncPrefs.NAME)
+                val sinceLast = System.currentTimeMillis() - prefs[PrefFiles.CloudSyncPrefs.LAST_RECONCILE_AT]
                 val throttled = !deep && sinceLast in 0 until RECONCILE_MIN_INTERVAL_MS
 
                 val listed = api.authed(tokens) { token ->
@@ -151,7 +151,7 @@ object CloudSync {
                     reupload,
                     requeue = reupload && uploadsEnabled(appContext, api),
                 )
-                prefs.edit { put(PrefFiles.CloudSync.LAST_RECONCILE_AT, System.currentTimeMillis()) }
+                prefs.edit { put(PrefFiles.CloudSyncPrefs.LAST_RECONCILE_AT, System.currentTimeMillis()) }
                 Outcome.Ok(cloud.sessions.size, cloud.quota.used, cloud.quota.max, repaired)
             }
         }
@@ -325,7 +325,7 @@ object CloudSync {
      * waiting for an upload that can never run.
      */
     fun uploadsEnabled(context: Context, api: CloudApi = SemperApi.get(context)): Boolean =
-        api.enabled && (!LicenseEntitlements.cloudBackupEnabled(context) || DicSettings.saveToCloudEnabled(context))
+        api.enabled && (!LicenseEntitlements.cloudBackupEnabled(context) || AppSettings.saveToCloudEnabled(context))
 
     /**
      * This build has no backend, so a row waiting to upload never will. It goes
@@ -349,9 +349,9 @@ object CloudSync {
      * [SessionStore], so only the id travels in the input Data.
      *
      * Uses [ExistingWorkPolicy.KEEP] so a reconcile pass cannot cancel an
-     * in-flight upload. Network constraint follows [DicSettings.wifiOnlyUploadEnabled].
+     * in-flight upload. Network constraint follows [AppSettings.wifiOnlyUploadEnabled].
      *
-     * No-op until the server quota is known ([TokenStore.isQuotaKnown]): the
+     * No-op until the server quota is known ([AccountCache.isQuotaKnown]): the
      * analysis is already saved locally and its [SessionRecord] stays PENDING, so
      * the next reconcile, which fetches config first, queues it again once the
      * ceiling arrives. This is the single point that gates
@@ -363,20 +363,20 @@ object CloudSync {
     ) {
         // Deliberately not gated on the licence: recording an analysis is open
         // to every account (see [uploadsEnabled]); only restore is licensed.
-        if (!TokenStore.isQuotaKnown(context)) {
+        if (!AccountCache.isQuotaKnown(context)) {
             Timber.i("Upload deferred for %s — cloud quota not yet known", localSessionId)
             return
         }
         // One policy for post-analysis and repair: Wi‑Fi-only when opted in;
         // otherwise any connected network.
-        val network = if (DicSettings.wifiOnlyUploadEnabled(context)) {
+        val network = if (AppSettings.wifiOnlyUploadEnabled(context)) {
             NetworkType.UNMETERED
         } else {
             NetworkType.CONNECTED
         }
         val work = oneTimeWork<DicUploadWorker>(
             tags = listOf(WorkTags.UPLOAD),
-            input = workDataOf(DicKeys.SESSION_LOCAL_ID to localSessionId),
+            input = workDataOf(IntentKeys.SESSION_LOCAL_ID to localSessionId),
             network = network,
             expedited = true,
         )

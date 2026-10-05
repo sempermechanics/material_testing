@@ -1,6 +1,6 @@
 package com.sempermechanics.semper.ui.analysis.run
 
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudyRunner
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 
 /**
@@ -15,7 +15,7 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
  * The batch path only. A sweep runs its whole plan: its consecutive solves are
  * parameter combinations on one frame pair, not successive frames, so "the next
  * one will be no better" does not follow — and the plan starts at the smallest
- * subset, the one most likely to under-converge. See [VsgStudyRunner.run].
+ * subset, the one most likely to under-converge. See [SweepStudyRunner.run].
  */
 class ConvergenceGate(
     private val minPercent: Float = AnalysisViewModel.MIN_CONVERGENCE_PERCENT,

@@ -19,7 +19,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.RoiDrawActivity
 import com.sempermechanics.semper.ui.analysis.roi.StudioOverlayView
 import org.junit.After
@@ -182,10 +182,10 @@ class RoiEditorGestureTest {
             assertRect(expected, roi(scenario), DRAW_TOLERANCE)
 
             val result = save(scenario)
-            assertEquals(expected.left.roundToInt().toFloat(), result.getIntExtra(DicKeys.ROI_X, -1).toFloat(), DRAW_TOLERANCE)
-            assertEquals(expected.top.roundToInt().toFloat(), result.getIntExtra(DicKeys.ROI_Y, -1).toFloat(), DRAW_TOLERANCE)
-            assertEquals(expected.width(), result.getIntExtra(DicKeys.ROI_W, -1).toFloat(), DRAW_TOLERANCE)
-            assertEquals(expected.height(), result.getIntExtra(DicKeys.ROI_H, -1).toFloat(), DRAW_TOLERANCE)
+            assertEquals(expected.left.roundToInt().toFloat(), result.getIntExtra(IntentKeys.ROI_X, -1).toFloat(), DRAW_TOLERANCE)
+            assertEquals(expected.top.roundToInt().toFloat(), result.getIntExtra(IntentKeys.ROI_Y, -1).toFloat(), DRAW_TOLERANCE)
+            assertEquals(expected.width(), result.getIntExtra(IntentKeys.ROI_W, -1).toFloat(), DRAW_TOLERANCE)
+            assertEquals(expected.height(), result.getIntExtra(IntentKeys.ROI_H, -1).toFloat(), DRAW_TOLERANCE)
         }
     }
 
@@ -193,9 +193,9 @@ class RoiEditorGestureTest {
 
     private fun launch(): ActivityScenario<RoiDrawActivity> {
         val intent = Intent(context, RoiDrawActivity::class.java)
-            .putExtra(DicKeys.IMAGE_FILE_PATH, photo.absolutePath)
-            .putExtra(DicKeys.IMAGE_WIDTH, IMG_W)
-            .putExtra(DicKeys.IMAGE_HEIGHT, IMG_H)
+            .putExtra(IntentKeys.IMAGE_FILE_PATH, photo.absolutePath)
+            .putExtra(IntentKeys.IMAGE_WIDTH, IMG_W)
+            .putExtra(IntentKeys.IMAGE_HEIGHT, IMG_H)
         val scenario = ActivityScenario.launchActivityForResult<RoiDrawActivity>(intent)
         awaitOn(scenario, "the photo") { overlay(it).imageView?.drawable != null }
         instrumentation.waitForIdleSync()

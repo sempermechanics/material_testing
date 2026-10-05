@@ -7,7 +7,7 @@ import com.sempermechanics.semper.report.ElasticRegion
 import com.sempermechanics.semper.report.LabReportFormat
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.report.YieldStrength
-import com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import java.util.Locale
 
 /**
@@ -24,11 +24,11 @@ object ViewerStressStrainResults {
         context: Context,
         curve: StressStrain.Curve,
         modulus: ElasticModulus.Fit?,
-    ): List<VsgPlotView.Series> = buildList {
+    ): List<SweepPlotView.Series> = buildList {
         add(
-            VsgPlotView.Series(
+            SweepPlotView.Series(
                 label = context.getString(R.string.stress_strain_title),
-                color = VsgPlotView.paletteColor(context, 0),
+                color = SweepPlotView.paletteColor(context, 0),
                 points = curve.plotPoints(),
             ),
         )
@@ -37,9 +37,9 @@ object ViewerStressStrainResults {
             val from = fitted.minOf { it.strainMilli }
             val to = fitted.maxOf { it.strainMilli }
             add(
-                VsgPlotView.Series(
+                SweepPlotView.Series(
                     label = context.getString(R.string.modulus_fit_label),
-                    color = VsgPlotView.paletteColor(context, 1),
+                    color = SweepPlotView.paletteColor(context, 1),
                     points = listOf(from to modulus.stressAt(from), to to modulus.stressAt(to)),
                     markers = false,
                     muted = true,
@@ -52,15 +52,15 @@ object ViewerStressStrainResults {
      * The elastic region zoomed in ([ElasticRegion]): the curve there, and the
      * fitted line across it — the viewer's copy of the lab report's elastic graph.
      */
-    fun elasticPlotSeries(context: Context, region: ElasticRegion.Plot): List<VsgPlotView.Series> = listOf(
-        VsgPlotView.Series(
+    fun elasticPlotSeries(context: Context, region: ElasticRegion.Plot): List<SweepPlotView.Series> = listOf(
+        SweepPlotView.Series(
             label = context.getString(R.string.stress_strain_title),
-            color = VsgPlotView.paletteColor(context, 0),
+            color = SweepPlotView.paletteColor(context, 0),
             points = region.points,
         ),
-        VsgPlotView.Series(
+        SweepPlotView.Series(
             label = context.getString(R.string.modulus_fit_label),
-            color = VsgPlotView.paletteColor(context, 1),
+            color = SweepPlotView.paletteColor(context, 1),
             points = region.line,
             markers = false,
             muted = true,
@@ -68,17 +68,17 @@ object ViewerStressStrainResults {
     )
 
     /**
-     * The 0.2 % offset yield point as a plot [VsgPlotView.Mark], or null
+     * The 0.2 % offset yield point as a plot [SweepPlotView.Mark], or null
      * without a fit or before the curve yields. The plot drops it when the
      * view (the elastic region) does not reach it.
      */
-    fun yieldMark(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): VsgPlotView.Mark? {
+    fun yieldMark(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): SweepPlotView.Mark? {
         val point = modulus?.let { YieldStrength.offset(curve, it) } ?: return null
-        return VsgPlotView.Mark(
+        return SweepPlotView.Mark(
             x = point.strainMilli,
             y = point.stressMPa,
             label = context.getString(R.string.results_yield_mark_fmt, one(point.stressMPa)),
-            color = VsgPlotView.paletteColor(context, 1),
+            color = SweepPlotView.paletteColor(context, 1),
         )
     }
 

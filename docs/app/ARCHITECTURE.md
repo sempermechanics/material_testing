@@ -29,7 +29,7 @@ Do not re-encode `"APPROVED"` / `"PENDING"` switches in new screens — call the
 router.
 
 Intent extras shared across Activities live in
-[`DicKeys`](../../app/src/main/java/com/sempermechanics/semper/navigation/DicKeys.kt).
+[`IntentKeys`](../../app/src/main/java/com/sempermechanics/semper/navigation/IntentKeys.kt).
 
 ## Package map
 
@@ -42,17 +42,17 @@ on 2026-10-03.
 
 | Package | Files | Role |
 |---|---|---|
-| `ui/auth/` | 11 | Splash, sign-in (`AuthActivity` with `AuthTotpUi` and `AuthPasswordReset`), pending approval, terms, `AccessRouter`, `GoogleSignInHelper`, `PasswordPolicy` |
+| `ui/auth/` | 11 | Splash, sign-in (`AuthActivity` with `AuthTotpController` and `AuthPasswordReset`), pending approval, terms, `AccessRouter`, `GoogleSignInHelper`, `PasswordPolicy` |
 | `ui/home/` | 11 | `HomeActivity` and its parts: session list and selection, `HomeQuotaCard`, `CloudBackupsCard`, `FirstRunPrompts`, `HomeFabLayout`, `HomeTransferWatch` (backup and restore jobs), `BackupBadgeActions` |
 | `ui/analysis/` | 3 | The three analysis Activities only: `StaticAnalysisActivity` (the wizard), `RoiDrawActivity`, `VsgLatticeActivity` |
-| `ui/analysis/wizard/` | 22 | `AnalysisViewModel` with `RunChannels` (launch batch and sweep) and `SweepRunner`; `WizardStep`, `AnalysisWizardChrome.applyStep`, `AnalysisWizardHost`; `WizardState` / `WizardDraftBinding` (process death, [ADR-005](../adr/ADR-005-wizard-process-death.md)); slots, coach, nav, ready / cancel / leave gates; parameter fields and sliders; settings sheet |
-| `ui/analysis/run/` | 16 | `DicBatchRunner.kt` (`runBatchAnalysisBody`, the one JNI loop, and `afterSave`) + `DicFieldIo`; `RunRecordSave` (`saveRunRecord`); `BatchRunController`, `WizardRunLauncher`, `WizardRunOutcomes`, `RunStatusLine`, `RunChrome`; `RunSpec` ([ADR-004](../adr/ADR-004-runspec.md)); `EngineFailure`, `ConvergenceGate`, `UnsavedRerun`, `SemperEngine` |
+| `ui/analysis/wizard/` | 22 | `AnalysisViewModel` with `RunChannels` (launch batch and sweep) and `SweepAnalysis`; `WizardStep`, `AnalysisWizardChrome.applyStep`, `AnalysisWizardHost`; `WizardState` / `WizardDraftBinding` (process death, [ADR-005](../adr/ADR-005-wizard-process-death.md)); slots, coach, nav, ready / cancel / leave gates; parameter fields and sliders; settings sheet |
+| `ui/analysis/run/` | 16 | `BatchAnalysis.kt` (`runBatchAnalysisBody`, the one JNI loop, and `afterSave`) + `DicFieldIo`; `RunRecordSave` (`saveRunRecord`); `BatchRunController`, `WizardRunLauncher`, `WizardRunOutcomes`, `RunStatusLine`, `RunChrome`; `RunSpec` ([ADR-004](../adr/ADR-004-runspec.md)); `EngineFailure`, `ConvergenceGate`, `UnsavedRerun`, `SemperEngine` |
 | `ui/analysis/frames/` | 12 | Reference and frame import (`ReferenceImportController`, `FrameImportController`, `WizardMediaPickers`), ordering (`FrameOrderController`, adapter, menu), deformed batch, video (`VideoSamplingSheet`, extract controller) |
 | `ui/analysis/roi/` | 7 | ROI studio: `StudioOverlayView` with its geometry, viewport and mask encoder; `RoiViewport`, `RoiResolveHelper`, `RoiStudioLauncher` |
 | `ui/analysis/recommend/` | 9 | `SubsetRecommender` and `SubsetRecommendationController`, speckle scale, noise floor, good-practice and strain-window copy, EXIF patch map |
-| `ui/analysis/sweep/` | 17 | VSG sweep: `SweepSetupController` with `SweepRangeFields` / `SweepFramePicker`, `VsgStudy` / `VsgStudyRunner`, the lattice (`LatticeControls`, `LatticeProfiles`, `LatticeGraphExport`) and plot views (`VsgPlotView` with viewport, axes, palette; `PlotStyle`), line-cut preview |
+| `ui/analysis/sweep/` | 17 | Parameter sweep: `SweepSetupController` with `SweepRangeFields` / `SweepFramePicker`, `SweepStudy` / `SweepStudyRunner`, the lattice (`SweepControls`, `SweepProfiles`, `SweepGraphExport`) and plot views (`SweepPlotView` with viewport, axes, palette; `PlotStyle`), line-cut preview |
 | `ui/viewer/` | 19 | `ResultViewerActivity` and its controllers (`ViewerChromeController`, `ViewerImageLoader`, `ViewerFrameLoader`, `ViewerScaleController`, `FrameJumpController`, `ViewerCaptions`, `ViewerShareController`, `FieldPopup`), `SaveExportActivity`, their ViewModels, `ViewerArgs` ([ADR-003](../adr/ADR-003-viewerargs-read-side.md)), scrub cache, `ViewerFieldPills`, the ⓘ details sheet; heatmaps draw each frame on its own photo at the displaced positions ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md)) |
-| `ui/viewer/share/` | 11 | `ShareCenter` → `ShareExportJobs` (held by `ResultViewerViewModel`) → `ShareExportBuilder` (`FieldImageExport`, `BundleExport`, `DataExport`); `ShareExportUi`, `ShareKind`, `SendToSheet`, `ViewerReportFactory` |
+| `ui/viewer/share/` | 11 | `ShareCenter` → `ShareExportJobs` (held by `ResultViewerViewModel`) → `ShareExportBuilder` (`FieldImageExport`, `BundleExport`, `DataExport`); `ShareExportController`, `ShareKind`, `SendToSheet`, `ViewerReportFactory` |
 | `ui/viewer/summary/` | 3 | Summary GIF (`SummaryAnimation`), caption, `ViewerSummaryController` |
 | `ui/viewer/inspect/` | 5 | Tap-to-probe: `InspectOverlayView`, `PointSpatialIndex`, `TouchImageView`, field histogram view |
 | `ui/settings/` | 15 | `SettingsActivity` (restore, download, delete) and its sections: account, cloud, analyses, storage, preferences, your data, help, footer; `AccountDeletionRun`, `BusyTransfers`; scroll body via `SettingsScrollContentView` |
@@ -68,7 +68,7 @@ on 2026-10-03.
 | `data/cloud/` | 18 | `CloudSync` with `CloudErase` / `CloudReconcile`, upload bundling / metadata / outcomes, `SessionMetadataDoc`, deletes, backup listing, account export, `WorkTags` / `TransferWork`, transfer log and notifications |
 | `data/cloud/restore/` | 10 | `CloudRestore` with `RestoreBundleFetcher`, `RestoreUnpacker`, `RestoreZipVerifier`; `DownloadFailure`, restore start, download outcomes and progress |
 | `data/account/` | 15 | `AuthRepository` with `AuthLinks`, `AccessStatusResolver`, `FirebaseOp`, `ReauthCredentials`; device key and env, licence entitlements / errors, seat lease and heartbeat, legal terms, TOTP |
-| `data/prefs/` | 6 | `DicSettings`, `CoachPrefs`, `ParamClipboard`, `WizardDraft`, `PrefKey` / `PrefFiles` |
+| `data/prefs/` | 6 | `AppSettings`, `CoachPrefs`, `ParamClipboard`, `WizardDraft`, `PrefKey` / `PrefFiles` |
 | `data/net/` | 23 | `SemperApi` with `SemperApiCalls`, `SemperApiSigning`, `SemperApiClients` (the shared OkHttp clients), `Paging`, `ApiHost`; the interceptors; `Authed` / `HttpFailure`; token store/provider; remote config |
 | `data/net/drive/` | 5 | `DriveTransfer` over `DriveUploader` and `DriveDownloader` (one `DriveDownload` per call) — bytes straight to and from Drive |
 | `report/` | 22 | PDF (`ReportBuilder` with extrema, annotations, colour bar; `PdfReportGenerator`), CSV, GIF, heatmaps (`VisualizationEngine` over `HeatmapColorScale`, `HeatmapRenderer`, `DeformedHeatmap`) |
@@ -76,7 +76,7 @@ on 2026-10-03.
 | `imaging/video/` | 7 | Video frame extraction: hardware / AVI decoders, keyframes, `FrameSink`, `ImageLuma` |
 | `field/` | 12 | `DicResult`, `DatDecoder`, `FieldHistogram`, and the small value types: `ImageSize`, `Roi`, `RunStop`, `DicParams` / `FrameParams`, `ValueRange`, `FieldStats` |
 | `diagnostics/` | 4 | `Diagnostics`, `CrashReportingTree`, `EngineDebug`, `SemperAnalytics` (consent-gated Firebase Analytics events) |
-| `navigation/` | 2 | `AppIntents` — intent factories so `data` / `report` never import a `ui` Activity — and `DicKeys`, the shared intent extras |
+| `navigation/` | 2 | `AppIntents` — intent factories so `data` / `report` never import a `ui` Activity — and `IntentKeys`, the shared intent extras |
 | `util/` | 12 | `AtomicFiles` / `AtomicWrites`, `Streams`, `Zips`, `Digests`, `Mime`, `suspendRunCatching` and caller cancellation, `BrandAssets`, `OverlayFormats` |
 | *(root)* | 2 | `SemperApp`, `SemperNativeLib` / `ProgressCallback` (JNI symbol names; never move) |
 
@@ -107,7 +107,7 @@ Each saved analysis lives under the app's session directory (see
 ```
 
 The constants `SessionPaths.RAW_DEFORMED_SUBDIR`, `FRAME_DAT_FMT`, and
-`SessionPaths.frameDat` are shared by the ViewModel / `DicBatchRunner`,
+`SessionPaths.frameDat` are shared by the ViewModel / `BatchAnalysis`,
 [`DicUploadWorker`](../../app/src/main/java/com/sempermechanics/semper/data/DicUploadWorker.kt),
 and cloud restore so path segments and `frame_0000.dat` names never diverge.
 
@@ -198,7 +198,7 @@ with no framework behind it:
 |---|---|---|
 | Local disk budget | `data/session/StorageBudget.kt`, `data/session/CacheJanitor.kt` | Measures analyses and cache; frees the local frames of **backed-up** analyses only. A user-set GB budget is enforced from `SemperApp.onCreate`, so it runs before any screen |
 | Crash reporting | `Diagnostics.kt`, `CrashReportingTree.kt` | Crashlytics collection is **off in the manifest** and enabled only on consent (first-run prompt or the Settings toggle). `CrashReportingTree` is a release-only Timber tree feeding breadcrumbs and non-fatals |
-| Product analytics | `diagnostics/SemperAnalytics.kt` | Same consent flag as Crashlytics (`DicSettings.diagnosticsEnabled`) — events are dropped, not queued, when it is off. Params must stay PII-free: enums, coarse buckets, success/fail. The consent copy names both halves (**Send crash reports and usage data**) — keep it and [PRIVACY_POLICY.md](../legal/PRIVACY_POLICY.md) §2.4 in step with the event set |
+| Product analytics | `diagnostics/SemperAnalytics.kt` | Same consent flag as Crashlytics (`AppSettings.diagnosticsEnabled`) — events are dropped, not queued, when it is off. Params must stay PII-free: enums, coarse buckets, success/fail. The consent copy names both halves (**Send crash reports and usage data**) — keep it and [PRIVACY_POLICY.md](../legal/PRIVACY_POLICY.md) §2.4 in step with the event set |
 | Parameter hand-off | `data/prefs/ParamClipboard.kt` | Holds one subset/step/VSG (px) triple, copied from the sweep lattice's parameter chip and pasted into the analysis wizard's advanced parameters |
 
 An analysis whose local frames were freed becomes a **cloud-only row**: Home
@@ -229,7 +229,7 @@ and prev/next paging — hosted by both `ResultViewerActivity` and
 Non-obvious rules the analysis and transfer paths depend on. Breaking one tends to
 show up as an OOM, a mid-run crash, or a "nothing happened" report:
 
-- **JNI output buffer is bounded.** `DicBatchRunner` / `VsgStudyRunner` allocate
+- **JNI output buffer is bounded.** `BatchAnalysis` / `SweepStudyRunner` allocate
   one direct `ByteBuffer` via `DicFieldIo` sized to the ROI grid (`(w/step)·(h/step)`
   points). The engine's returned point count is checked against that capacity
   *before* the buffer is read back — a count over capacity is treated as an engine
@@ -263,7 +263,7 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
   Save-to-Files downloads. Quota-full is the one exclusion —
   it routes to its own screen. Progress from the same `WorkInfo` drives the
   per-row badge and progress bar on Home, for downloads as well as uploads.
-- **Cancelling a sweep abandons the sweep.** `VsgStudyRunner` checks the cancel
+- **Cancelling a sweep abandons the sweep.** `SweepStudyRunner` checks the cancel
   token *between* combinations as well as inside a solve, so Cancel does not merely
   skip to the next parameter set.
 - **A Drive outage must not look like deleted data.** A verifying refresh drops
@@ -277,12 +277,12 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 | Change sign-in providers / access gate | `data/account/AuthRepository.kt`, `docs/backend/AUTH_SETUP.md` |
 | Change post-auth navigation | `ui/auth/AccessRouter.kt` |
 | Change the analysis wizard UI | `StaticAnalysisActivity.goToStep(WizardStep)` → `AnalysisWizardChrome.applyStep`; slot chrome / coach in `AnalysisWizardSlots` / `AnalysisWizardCoach`; later steps inflate through ViewStubs; each step's controllers sit in `ui/analysis/frames`, `roi`, `recommend`, `run`, `sweep` |
-| Change the full-field batch loop | `DicBatchRunner` + `DicFieldIo` (shared with VSG). Do not split `computeFullFieldDirect` out of that loop |
+| Change the full-field batch loop | `BatchAnalysis` + `DicFieldIo` (shared with the sweep). Do not split `computeFullFieldDirect` out of that loop |
 | Change Home list / settings | `ui/home/HomeActivity.kt` + `Session*`, `HomeQuotaCard`, `HomeTransferWatch` / `ui/settings/SettingsActivity` + `Settings*Section` |
 | Change import / video extraction | `FrameImportController` / `ReferenceImportController` → `FrameImportHelper`, `VideoSamplingSheet`, `VideoFrameExtractor` (three rungs: `AviVideoDecoder` → `HardwareVideoDecoder` → `MediaMetadataRetriever`; all write through `FrameSink`, which records each frame's time on its `DeformedFrame` for load mapping). The sheet's `SamplingPlan` picks the instants — evenly at a rate (`imaging/video/VideoSampling`) or the file's own key frames (`imaging/video/VideoKeyframes`: the AVI `idx1` flags, else `MediaExtractor` sync samples) — and every rung receives that list as `ExtractionRequest.timesMs`, so estimate and extraction cannot disagree |
 | Change AVI support | `imaging/AviReader` (demuxer), `imaging/AviLuma` (uncompressed layouts), `imaging/MjpegHuffman` (table repair), `AviCodecDecoder` (`MediaCodec` for Xvid/H.264) |
-| Change parameter-sweep setup UI | `SweepSetupController` + `SweepRangeFields` / `SweepFramePicker`; the run is `SweepRunner.runVsgSweep` → `VsgStudyRunner` |
-| Change the sweep result lattice | `ui/analysis/VsgLatticeActivity.kt` + `LatticeControls` / `LatticeProfiles` / `LatticeGraphExport`, `VsgLatticeView`, `VsgPlotView` |
+| Change parameter-sweep setup UI | `SweepSetupController` + `SweepRangeFields` / `SweepFramePicker`; the run is `SweepAnalysis.runSweep` → `SweepStudyRunner` |
+| Change the sweep result lattice | `ui/analysis/VsgLatticeActivity.kt` + `SweepControls` / `SweepProfiles` / `SweepGraphExport`, `SweepLatticeView`, `SweepPlotView` |
 | Change heatmap / probe | `ui/viewer/ViewerScaleController.kt` (heatmap, colour scale), `ViewerImageLoader.kt` (photo under the map), `inspect/ViewerInspectController.kt` (probe); wired in `ResultViewerActivity.kt` |
 | Change how exports are handed off | `ui/viewer/share/ShareCenter.kt` → `ShareExportJobs.kt` → `ShareExportBuilder.kt`, `SendToSheet.kt`, `SaveExportActivity.kt` |
 | Change the stress–strain curve or where it appears | `report/StressStrain.kt` (pure: `Model` per test — axial `P/A`, flexural `3PL/2bh²` — strain in mε, signed). Viewer Results: `ui/viewer/mechanical/ViewerStressStrainHelper.kt` — `fill(Views)` draws into the summary slot (`ViewerSummaryController.showsResults`, sessions with loads) and the ⓘ sheet from one build, cached in `ResultViewerViewModel`; `plotSeries` / `resultsText` (in `ViewerStressStrainResults.kt`) are shared with the share path, `printContext` gives PDF plots the day palette. CSV: `AnalysisCsvWriter.mechanicalSuffixColumns`, and the `# mechanical_results` trailer written from `Appender.close`. PDF: `ReportData.mechanical` (cover) and `PdfReportGenerator.generateBatch(stressStrain = …)` (closing page); `share/LabExport.stressStrainPage` renders the plot off screen with the application context |

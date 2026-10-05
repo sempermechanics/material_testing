@@ -11,7 +11,7 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.launchBatchAnalysis
-import com.sempermechanics.semper.ui.analysis.wizard.launchVsgSweep
+import com.sempermechanics.semper.ui.analysis.wizard.launchSweep
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import kotlinx.coroutines.launch
 
@@ -90,7 +90,7 @@ class WizardRunLauncher(
             // solve per combination, long enough that a rotation mid-run used to
             // cancel it and leave the half-written session behind.
             // BatchRunController tears the chrome down when it ends.
-            viewModel.launchVsgSweep(activity.applicationContext, spec)
+            viewModel.launchSweep(activity.applicationContext, spec)
         }
     }
 

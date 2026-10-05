@@ -6,7 +6,7 @@ import androidx.work.workDataOf
 import com.sempermechanics.semper.data.cloud.TransferPhase
 import com.sempermechanics.semper.data.cloud.TransferWork
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -34,10 +34,10 @@ class TransferWorkObserverTest {
     private fun legacyUploadRows(list: List<WorkInfo>): Map<String, Pair<String, Int>> = list
         .filter { it.state == WorkInfo.State.RUNNING }
         .mapNotNull { info ->
-            val id = info.progress.getString(DicKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
-            val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, -1)
+            val id = info.progress.getString(IntentKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
+            val pct = info.progress.getInt(IntentKeys.UPLOAD_PERCENT, -1)
             if (pct < 0) return@mapNotNull null
-            val phase = info.progress.getString(DicKeys.UPLOAD_PHASE) ?: "upload"
+            val phase = info.progress.getString(IntentKeys.UPLOAD_PHASE) ?: "upload"
             id to (phase to pct)
         }
         .toMap()
@@ -46,10 +46,10 @@ class TransferWorkObserverTest {
     private fun legacyRestoreRows(list: List<WorkInfo>): Map<String, Pair<String, Int>> = list
         .filter { it.state == WorkInfo.State.RUNNING }
         .mapNotNull { info ->
-            val id = info.progress.getString(DicKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
-            val pct = info.progress.getInt(DicKeys.UPLOAD_PERCENT, -1)
+            val id = info.progress.getString(IntentKeys.SESSION_LOCAL_ID) ?: return@mapNotNull null
+            val pct = info.progress.getInt(IntentKeys.UPLOAD_PERCENT, -1)
             if (pct < 0) return@mapNotNull null
-            id to (DicKeys.PHASE_DOWNLOAD to pct)
+            id to (IntentKeys.PHASE_DOWNLOAD to pct)
         }
         .toMap()
 
@@ -64,15 +64,27 @@ class TransferWorkObserverTest {
         TransferWorkObserver(kind).update(list).rowProgress().mapValues { (_, p) -> p.phase to p.percent }
 
     private val progressCases: List<WorkInfo> = listOf(
-        running(DicKeys.SESSION_LOCAL_ID to "a", DicKeys.UPLOAD_PERCENT to 42),
-        running(DicKeys.SESSION_LOCAL_ID to "b", DicKeys.UPLOAD_PERCENT to 0, DicKeys.UPLOAD_PHASE to "prepare"),
-        running(DicKeys.SESSION_LOCAL_ID to "c", DicKeys.UPLOAD_PERCENT to 7, DicKeys.UPLOAD_PHASE to "download"),
-        running(DicKeys.SESSION_LOCAL_ID to "d", DicKeys.UPLOAD_PERCENT to 9, DicKeys.UPLOAD_PHASE to "verify"),
-        running(DicKeys.SESSION_LOCAL_ID to "e", DicKeys.UPLOAD_PERCENT to -1),
-        running(DicKeys.SESSION_LOCAL_ID to "f"),
-        running(DicKeys.SESSION_LOCAL_ID to "g", DicKeys.UPLOAD_PERCENT to 5L),
-        running(DicKeys.UPLOAD_PERCENT to 50),
-        info(WorkInfo.State.ENQUEUED, progress = workDataOf(DicKeys.SESSION_LOCAL_ID to "h")),
+        running(IntentKeys.SESSION_LOCAL_ID to "a", IntentKeys.UPLOAD_PERCENT to 42),
+        running(
+            IntentKeys.SESSION_LOCAL_ID to "b",
+            IntentKeys.UPLOAD_PERCENT to 0,
+            IntentKeys.UPLOAD_PHASE to "prepare",
+        ),
+        running(
+            IntentKeys.SESSION_LOCAL_ID to "c",
+            IntentKeys.UPLOAD_PERCENT to 7,
+            IntentKeys.UPLOAD_PHASE to "download",
+        ),
+        running(
+            IntentKeys.SESSION_LOCAL_ID to "d",
+            IntentKeys.UPLOAD_PERCENT to 9,
+            IntentKeys.UPLOAD_PHASE to "verify",
+        ),
+        running(IntentKeys.SESSION_LOCAL_ID to "e", IntentKeys.UPLOAD_PERCENT to -1),
+        running(IntentKeys.SESSION_LOCAL_ID to "f"),
+        running(IntentKeys.SESSION_LOCAL_ID to "g", IntentKeys.UPLOAD_PERCENT to 5L),
+        running(IntentKeys.UPLOAD_PERCENT to 50),
+        info(WorkInfo.State.ENQUEUED, progress = workDataOf(IntentKeys.SESSION_LOCAL_ID to "h")),
         info(WorkInfo.State.SUCCEEDED),
         info(WorkInfo.State.FAILED),
     )
@@ -118,8 +130,8 @@ class TransferWorkObserverTest {
     @Test
     fun `failure reasons come from each kind's own key`() {
         val reason = "Backup gone"
-        val restoreFailed = info(WorkInfo.State.FAILED, output = workDataOf(DicKeys.DOWNLOAD_ERROR to reason))
-        val uploadFailed = info(WorkInfo.State.FAILED, output = workDataOf(DicKeys.UPLOAD_FAIL_REASON to reason))
+        val restoreFailed = info(WorkInfo.State.FAILED, output = workDataOf(IntentKeys.DOWNLOAD_ERROR to reason))
+        val uploadFailed = info(WorkInfo.State.FAILED, output = workDataOf(IntentKeys.UPLOAD_FAIL_REASON to reason))
         val quotaStop = info(WorkInfo.State.FAILED)
 
         val restore = TransferWorkObserver(TransferWork.Kind.RESTORE).update(listOf(restoreFailed)).jobs.single()

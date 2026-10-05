@@ -56,7 +56,7 @@ settings and its device key.
   `materialtesting`, so it keeps its device slot.
 - Persisted formats are the parent's: prefs files and keys, Intent extras,
   WorkManager names, `index.json` and `metadata.json` fields. This fork's own
-  additions keep their names (`DicKeys.TEST_TYPE` and the other lab extras, the
+  additions keep their names (`IntentKeys.TEST_TYPE` and the other lab extras, the
   wizard Bundle's lab keys, the `test` object and `loadN` of metadata schema
   `indic.session.metadata/6`, the `lab_pdf` share kind).
 - The old id's fallbacks (old ids in `apps.py` and `assetlinks.json`) stay

@@ -4,7 +4,7 @@ import androidx.work.Data
 import androidx.work.WorkInfo
 import androidx.work.workDataOf
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -23,7 +23,7 @@ class TransferWorkTest {
     fun `phases keep their stored strings`() {
         assertEquals("prepare", TransferPhase.PREPARE.wire)
         assertEquals("upload", TransferPhase.UPLOAD.wire)
-        assertEquals(DicKeys.PHASE_DOWNLOAD, TransferPhase.DOWNLOAD.wire)
+        assertEquals(IntentKeys.PHASE_DOWNLOAD, TransferPhase.DOWNLOAD.wire)
         assertEquals("download", TransferPhase.DOWNLOAD.wire)
         TransferPhase.entries.forEach { assertEquals(it, TransferPhase.fromWire(it.wire)) }
         // Home reads a missing phase as "upload"; the row badge does the same for anything unknown.
@@ -36,9 +36,9 @@ class TransferWorkTest {
         val running = info(
             WorkInfo.State.RUNNING,
             progress = workDataOf(
-                DicKeys.SESSION_LOCAL_ID to "L1",
-                DicKeys.UPLOAD_PERCENT to 40,
-                DicKeys.UPLOAD_PHASE to "prepare",
+                IntentKeys.SESSION_LOCAL_ID to "L1",
+                IntentKeys.UPLOAD_PERCENT to 40,
+                IntentKeys.UPLOAD_PHASE to "prepare",
             ),
         )
 
@@ -56,7 +56,7 @@ class TransferWorkTest {
 
     @Test
     fun `restores and downloads always run in the download phase`() {
-        val progress = workDataOf(DicKeys.UPLOAD_PERCENT to 0, DicKeys.UPLOAD_PHASE to "upload")
+        val progress = workDataOf(IntentKeys.UPLOAD_PERCENT to 0, IntentKeys.UPLOAD_PHASE to "upload")
         listOf(TransferWork.Kind.RESTORE, TransferWork.Kind.BUNDLE_DOWNLOAD).forEach { kind ->
             assertEquals(
                 TransferWork.State.Running(TransferPhase.DOWNLOAD, 0, null),
@@ -76,8 +76,8 @@ class TransferWorkTest {
 
     @Test
     fun `a failure carries the reason its kind writes`() {
-        val upload = info(WorkInfo.State.FAILED, output = workDataOf(DicKeys.UPLOAD_FAIL_REASON to "too large"))
-        val restore = info(WorkInfo.State.FAILED, output = workDataOf(DicKeys.DOWNLOAD_ERROR to "gone"))
+        val upload = info(WorkInfo.State.FAILED, output = workDataOf(IntentKeys.UPLOAD_FAIL_REASON to "too large"))
+        val restore = info(WorkInfo.State.FAILED, output = workDataOf(IntentKeys.DOWNLOAD_ERROR to "gone"))
 
         assertEquals(TransferWork.State.Failed("too large"), TransferWork.classify(upload, TransferWork.Kind.UPLOAD))
         assertEquals(TransferWork.State.Failed("gone"), TransferWork.classify(restore, TransferWork.Kind.RESTORE))

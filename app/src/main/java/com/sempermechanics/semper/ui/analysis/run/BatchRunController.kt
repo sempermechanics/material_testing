@@ -10,7 +10,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudyRunner
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
@@ -50,7 +50,7 @@ class BatchRunController(
 
         fun clearEngineFailFaq()
 
-        fun onSweepProgress(progress: VsgStudyRunner.Progress)
+        fun onSweepProgress(progress: SweepStudyRunner.Progress)
 
         /** A sweep's end; null when it failed. */
         fun onSweepFinished(outcome: BatchAnalysisOutcome?)

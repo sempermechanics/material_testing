@@ -18,9 +18,9 @@ import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.isTrustedAuthLink
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.databinding.ActivityAuthBinding
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
@@ -49,7 +49,7 @@ class AuthActivity : AppCompatActivity() {
     /** The email/password just submitted, pending the outcome that validates it. */
     internal var pendingCredential: Pair<String, String>? = null
 
-    private lateinit var totp: AuthTotpUi
+    private lateinit var totp: AuthTotpController
     private lateinit var passwordReset: AuthPasswordReset
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,7 +59,7 @@ class AuthActivity : AppCompatActivity() {
         binding = ActivityAuthBinding.inflate(layoutInflater)
         setContentView(binding.root)
         window.decorView.post { reportFullyDrawn() }
-        totp = AuthTotpUi(this, binding)
+        totp = AuthTotpController(this, binding)
         passwordReset = AuthPasswordReset(this, binding)
 
         binding.btnGeneratePassword.setOnClickListener {
@@ -77,7 +77,7 @@ class AuthActivity : AppCompatActivity() {
             // Re-auth must prove *this* account, so the address is fixed. Read
             // from the cached session rather than Firebase: it is only shown, and
             // the re-auth calls take the address from the live user themselves.
-            binding.etEmail.setText(TokenStore.cachedEmail(this).orEmpty())
+            binding.etEmail.setText(AccountCache.cachedEmail(this).orEmpty())
             binding.etEmail.isEnabled = false
         }
 
@@ -99,7 +99,7 @@ class AuthActivity : AppCompatActivity() {
         maybeCompleteEmailLink(intent)
         passwordReset.handleLink(intent)
 
-        intent.getStringExtra(DicKeys.ROUTING_ERROR)?.let { showMessage(it) }
+        intent.getStringExtra(IntentKeys.ROUTING_ERROR)?.let { showMessage(it) }
     }
 
     /** The email sign-in / reset link may arrive while this activity is already open. */
@@ -327,7 +327,7 @@ class AuthActivity : AppCompatActivity() {
         )
     }
 
-    /** Shows the authenticator form with no live resolver; for tests ([AuthTotpUi.enterChallengeUi]). */
+    /** Shows the authenticator form with no live resolver; for tests ([AuthTotpController.enterChallengeUi]). */
     internal fun enterTotpChallengeUi() = totp.enterChallengeUi()
 
     /**

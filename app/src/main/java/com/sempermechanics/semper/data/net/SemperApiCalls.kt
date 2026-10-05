@@ -11,7 +11,7 @@ import okhttp3.Response
  * How [SemperApi] sends a call and reads the answer: token-authenticated
  * ([bearer]) or device-signed ([signed]), on the IO dispatcher.
  *
- * [deviceId] and [sign] are this device's key (`DeviceKeyManager`), as
+ * [deviceId] and [sign] are this device's key (`DeviceKeys`), as
  * functions so the AndroidKeyStore is only touched once a call is made.
  */
 internal class SemperApiCalls(

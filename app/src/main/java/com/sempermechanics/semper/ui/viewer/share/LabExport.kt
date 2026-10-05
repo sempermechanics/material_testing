@@ -12,7 +12,7 @@ import com.sempermechanics.semper.report.MechanicalCover
 import com.sempermechanics.semper.report.PdfReportGenerator
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.report.VisualizationEngine
-import com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import com.sempermechanics.semper.ui.viewer.mechanical.LabReportExporter
 import com.sempermechanics.semper.ui.viewer.mechanical.ViewerStressStrainHelper
 import kotlinx.coroutines.Dispatchers
@@ -76,7 +76,7 @@ data class LabSnapshot(
 /**
  * The lab parts of a [ShareExportBuilder] job: the full report's closing
  * stress–strain page and the student lab report ([ShareKind.LAB_PDF]). The
- * plots are [VsgPlotView]s drawn off screen with the application [context],
+ * plots are [SweepPlotView]s drawn off screen with the application [context],
  * never the viewer, so the job keeps no Activity alive.
  */
 internal class LabExport(
@@ -91,7 +91,7 @@ internal class LabExport(
      * The report's closing stress–strain page, or null for a session without
      * loads. Reuses the curve the viewer already built when it has one;
      * otherwise walks the batch here (one decode per frame, before the report
-     * starts its own). The plot is a [VsgPlotView] drawn off screen, which
+     * starts its own). The plot is a [SweepPlotView] drawn off screen, which
      * must happen on the main thread.
      */
     suspend fun stressStrainPage(report: (Int, String) -> Unit): PdfReportGenerator.StressStrainPage? {
@@ -105,7 +105,7 @@ internal class LabExport(
         val modulus = ViewerStressStrainHelper.modulusOf(curve)
         val plot = withContext(Dispatchers.Main) {
             val print = ViewerStressStrainHelper.printContext(context)
-            VsgPlotView(print).run {
+            SweepPlotView(print).run {
                 setData(
                     ViewerStressStrainHelper.plotSeries(print, curve, modulus),
                     axisLabels.first,

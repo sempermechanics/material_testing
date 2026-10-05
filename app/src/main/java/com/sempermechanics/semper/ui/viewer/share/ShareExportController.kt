@@ -23,7 +23,7 @@ import java.io.File
  * (dialog or banner, as the user left them) and delivers their results.
  * Main thread only.
  */
-internal class ShareExportUi(
+internal class ShareExportController(
     private val host: ResultViewerActivity,
     private val jobs: ShareExportJobs,
 ) {

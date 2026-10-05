@@ -19,7 +19,7 @@ import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicResult
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -84,7 +84,7 @@ class RestoreWorkersTest {
 
     private fun failureReason(result: ListenableWorker.Result): String? {
         assertTrue("expected a failure, got $result", result is ListenableWorker.Result.Failure)
-        return result.outputData.getString(DicKeys.DOWNLOAD_ERROR)
+        return result.outputData.getString(IntentKeys.DOWNLOAD_ERROR)
     }
 
     @Test

@@ -13,7 +13,7 @@ import com.sempermechanics.semper.data.cloud.restore.DownloadFailure
 import com.sempermechanics.semper.data.cloud.restore.DownloadProgress
 import com.sempermechanics.semper.data.cloud.restore.RestoreDownloadOutcomes
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -118,7 +118,7 @@ class DicRestoreWorker internal constructor(
     }
 
     /**
-     * End the work with [DicKeys.DOWNLOAD_ERROR] set to [message].
+     * End the work with [IntentKeys.DOWNLOAD_ERROR] set to [message].
      *
      * For this worker the value is **display-ready, localised text**: Home and
      * Settings toast it verbatim (falling back to `restore_failed_generic` when it
@@ -127,7 +127,7 @@ class DicRestoreWorker internal constructor(
      * code its observer translates; see its `fail`.
      */
     private fun failWith(message: String): Result =
-        Result.failure(workDataOf(DicKeys.DOWNLOAD_ERROR to message))
+        Result.failure(workDataOf(IntentKeys.DOWNLOAD_ERROR to message))
 
     private suspend fun publishProgress(localId: String, done: Long, total: Long) {
         setProgress(DownloadProgress.data(done, total, localId))

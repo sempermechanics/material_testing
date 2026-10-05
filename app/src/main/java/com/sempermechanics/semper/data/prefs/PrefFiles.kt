@@ -11,18 +11,18 @@ package com.sempermechanics.semper.data.prefs
  */
 object PrefFiles {
 
-    /** [DicSettings]. */
+    /** [AppSettings]. */
     object Settings {
         const val NAME = "dic_settings"
         val SCHEMA = PrefKey.int("schema")
         val SAVE_TO_CLOUD = PrefKey.boolean("save_to_cloud", default = true)
         val UPLOAD_WIFI_ONLY = PrefKey.boolean("upload_wifi_only")
-        val MAX_FRAMES = PrefKey.int("max_frames", DicSettings.DEFAULT_MAX_FRAMES)
-        val AUTO_FREE_GB = PrefKey.int("auto_free_gb", DicSettings.AUTO_FREE_OFF)
+        val MAX_FRAMES = PrefKey.int("max_frames", AppSettings.DEFAULT_MAX_FRAMES)
+        val AUTO_FREE_GB = PrefKey.int("auto_free_gb", AppSettings.AUTO_FREE_OFF)
         val DIAGNOSTICS_ENABLED = PrefKey.boolean("diagnostics_enabled")
         val DIAGNOSTICS_ASKED = PrefKey.boolean("diagnostics_asked")
 
-        /** Retired; [DicSettings.migrate] removes it. */
+        /** Retired; [AppSettings.migrate] removes it. */
         val KEEP_EVERY_RERUN = PrefKey.boolean("keep_every_rerun")
     }
 
@@ -57,7 +57,7 @@ object PrefFiles {
         }
     }
 
-    /** [com.sempermechanics.semper.data.net.TokenStore]'s session file; cleared on sign-out. */
+    /** [com.sempermechanics.semper.data.net.AccountCache]'s session file; cleared on sign-out. */
     object Session {
         const val NAME = "semper_session"
         val UID = PrefKey.string("uid")
@@ -82,7 +82,7 @@ object PrefFiles {
         val IMPROVEMENT_CONSENT = PrefKey.string("improvement_consent")
     }
 
-    /** TokenStore's onboarding file, which outlives sign-out. */
+    /** AccountCache's onboarding file, which outlives sign-out. */
     object Onboarding {
         const val NAME = "semper_onboarding"
         const val BETA_ACKED_PREFIX = "beta_notice_acked_"
@@ -121,7 +121,7 @@ object PrefFiles {
         val LEGACY_PLAN = PrefKey.string("plan")
     }
 
-    /** `DeviceKeyManager.deviceId`. */
+    /** `DeviceKeys.deviceId`. */
     object Device {
         const val NAME = "semper_device"
         val DEVICE_ID = PrefKey.string("device_id")
@@ -137,7 +137,7 @@ object PrefFiles {
     }
 
     /** `CloudSync.reconcile`'s throttle. */
-    object CloudSync {
+    object CloudSyncPrefs {
         const val NAME = "semper_cloudsync"
         val LAST_RECONCILE_AT = PrefKey.long("last_reconcile_at")
     }
@@ -157,7 +157,7 @@ object PrefFiles {
     }
 
     /** `DeleteFeedback`: delete outcomes already shown. */
-    object SessionDeletes {
+    object SessionDeletesPrefs {
         const val NAME = "session_deletes"
         val SHOWN_OUTCOMES = PrefKey.stringSet("shown_outcomes")
     }
@@ -172,9 +172,9 @@ object PrefFiles {
         RemoteConfig.NAME,
         Device.NAME,
         CloudListing.NAME,
-        CloudSync.NAME,
+        CloudSyncPrefs.NAME,
         RestoreOutcomes.NAME,
         EmailLink.NAME,
-        SessionDeletes.NAME,
+        SessionDeletesPrefs.NAME,
     )
 }

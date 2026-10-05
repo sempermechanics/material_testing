@@ -16,12 +16,12 @@ import com.google.firebase.auth.MultiFactorResolver
 import com.google.firebase.auth.TotpMultiFactorGenerator
 import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TermsVersionMismatchException
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.util.rethrowIfCallerCancelled
 import kotlinx.coroutines.Dispatchers
@@ -254,12 +254,12 @@ class AuthRepository(
         SeatLease.releaseBestEffort(appContext)
         LicenseConfigWorker.cancel(appContext)
         auth.signOut()
-        TokenStore.clear(appContext)
+        AccountCache.clear(appContext)
         // The next account's backups are not these.
         CloudBackupListing.clear(appContext)
     }
 
-    fun cachedEmail(): String? = auth.currentUser?.email ?: TokenStore.cachedEmail(appContext)
+    fun cachedEmail(): String? = auth.currentUser?.email ?: AccountCache.cachedEmail(appContext)
 
     fun hasSession(): Boolean = signedIn()
 
@@ -271,15 +271,15 @@ class AuthRepository(
      */
     fun canOpenFromCache(): Boolean =
         signedIn() &&
-            TokenStore.cachedStatus(appContext) == AccessStatus.APPROVED &&
-            TokenStore.isDeviceRegistered(appContext)
+            AccountCache.cachedStatus(appContext) == AccessStatus.APPROVED &&
+            AccountCache.isDeviceRegistered(appContext)
 
     /**
      * The cached approval turned out to be wrong: forget it, so the next launch
      * asks the server before showing Home.
      */
     fun forgetCachedApproval() {
-        TokenStore.setStatus(appContext, "")
+        AccountCache.setStatus(appContext, "")
     }
 
     // ------------------------------------------------------------ legal / consent
@@ -297,19 +297,19 @@ class AuthRepository(
         withContext(Dispatchers.IO) {
             val token = if (api.enabled) tokens.usableIdToken() else null
             if (token == null) {
-                TokenStore.setTermsAccepted(appContext, version, synced = false)
-                TokenStore.setImprovementConsent(appContext, improvementConsent)
+                AccountCache.setTermsAccepted(appContext, version, synced = false)
+                AccountCache.setImprovementConsent(appContext, improvementConsent)
                 return@withContext Result.success(Unit)
             }
             try {
                 api.acceptTerms(token, version)
-                TokenStore.setTermsAccepted(appContext, version, synced = true)
+                AccountCache.setTermsAccepted(appContext, version, synced = true)
             } catch (e: TermsVersionMismatchException) {
                 Timber.w(e, "Server requires a newer Terms version than this build carries")
                 return@withContext Result.failure(e)
             } catch (e: IOException) {
                 Timber.d(e, "Terms acceptance not synced; will retry on next status refresh")
-                TokenStore.setTermsAccepted(appContext, version, synced = false)
+                AccountCache.setTermsAccepted(appContext, version, synced = false)
             }
             setImprovementConsent(improvementConsent)
             Result.success(Unit)
@@ -321,7 +321,7 @@ class AuthRepository(
      * so a failed sync is reported rather than hidden.
      */
     suspend fun setImprovementConsent(granted: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
-        TokenStore.setImprovementConsent(appContext, granted)
+        AccountCache.setImprovementConsent(appContext, granted)
         val token = (if (api.enabled) tokens.usableIdToken() else null)
             ?: return@withContext Result.success(Unit)
         try {
@@ -364,7 +364,7 @@ class AuthRepository(
         val user = auth.currentUser
             ?: return@withContext signInFailed(method, "incomplete", Exception("Sign-in did not complete."))
         unverifiedEmailError(user)?.let { return@withContext signInFailed(method, "unverified_email", it) }
-        TokenStore.saveIdentity(appContext, user.uid, user.email)
+        AccountCache.saveIdentity(appContext, user.uid, user.email)
         access.resolve()
             .onSuccess {
                 SemperAnalytics.event(appContext, SemperAnalytics.SIGN_IN, mapOf("method" to method.analyticsName))

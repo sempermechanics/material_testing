@@ -17,8 +17,8 @@ import com.sempermechanics.semper.field.FieldHistogram
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.analysis.recommend.StrainWindowText
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
-import com.sempermechanics.semper.ui.analysis.sweep.VsgPlotView
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.common.dialog.inflateSheet
 import com.sempermechanics.semper.ui.home.TestTypeSheet
 import com.sempermechanics.semper.ui.viewer.mechanical.ViewerFrameRows
@@ -30,7 +30,7 @@ import kotlin.math.roundToInt
  * colour-bar ends only — no mean, no histogram. Then the parameter rows that
  * produced the result (and the sweep line-cut).
  */
-object ViewerSettingsSheet {
+object SettingsUsedSheet {
 
     private const val SETTINGS_ROW_SP = 13f
     private const val SETTINGS_ROW_PAD_V = 11
@@ -185,15 +185,15 @@ object ViewerSettingsSheet {
         val section = sheetView.lineCutSection
         val plot = sheetView.plotLineCut
         val roi = host.roi
-        val line = VsgStudy.centreLine(roi.x, roi.y, roi.w, roi.h, host.lineCutHorizontal)
+        val line = SweepStudy.centreLine(roi.x, roi.y, roi.w, roi.h, host.lineCutHorizontal)
         val tolerance = host.step / 2f
 
         val labels = listOf(R.string.field_exx, R.string.field_eyy, R.string.field_exy)
-        val profiles = VsgStudy.profileAlong(data, VsgStudy.STRAIN_COMPONENTS.toIntArray(), line, tolerance)
-        val series = VsgStudy.STRAIN_COMPONENTS.mapIndexed { slot, component ->
-            VsgPlotView.Series(
+        val profiles = SweepStudy.profileAlong(data, SweepStudy.STRAIN_COMPONENTS.toIntArray(), line, tolerance)
+        val series = SweepStudy.STRAIN_COMPONENTS.mapIndexed { slot, component ->
+            SweepPlotView.Series(
                 label = host.getString(labels[slot]),
-                color = VsgPlotView.lineCutColor(host, slot),
+                color = SweepPlotView.lineCutColor(host, slot),
                 points = profiles[component].orEmpty(),
                 markers = false,
             )
@@ -239,9 +239,9 @@ object ViewerSettingsSheet {
     ): CharSequence {
         val prefix = host.getString(R.string.line_cut_legend_prefix_fmt, axis, position)
         val parts = listOf(
-            host.getString(R.string.line_cut_legend_exx) to VsgPlotView.lineCutColor(host, 0),
-            host.getString(R.string.line_cut_legend_eyy) to VsgPlotView.lineCutColor(host, 1),
-            host.getString(R.string.line_cut_legend_exy) to VsgPlotView.lineCutColor(host, 2),
+            host.getString(R.string.line_cut_legend_exx) to SweepPlotView.lineCutColor(host, 0),
+            host.getString(R.string.line_cut_legend_eyy) to SweepPlotView.lineCutColor(host, 1),
+            host.getString(R.string.line_cut_legend_exy) to SweepPlotView.lineCutColor(host, 2),
         )
         val spanned = SpannableStringBuilder(prefix).append(' ')
         parts.forEachIndexed { index, (label, color) ->

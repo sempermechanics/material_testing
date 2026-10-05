@@ -10,7 +10,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.field.ImageSizeExtras
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.BeamEdgeTapActivity
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.common.dialog.Feedback
@@ -37,7 +37,7 @@ class BeamEdgeTapLauncher(
 ) {
     private val launcher: ActivityResultLauncher<Intent> =
         activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val taps = result.data?.getFloatArrayExtra(DicKeys.BEAM_EDGE_TAPS)
+            val taps = result.data?.getFloatArrayExtra(IntentKeys.BEAM_EDGE_TAPS)
             if (result.resultCode == Activity.RESULT_OK) onPicked(BeamEdgeTaps.fromArray(taps))
         }
 
@@ -73,9 +73,9 @@ class BeamEdgeTapLauncher(
                 return@launch
             }
             val intent = Intent(activity, BeamEdgeTapActivity::class.java)
-                .putExtra(DicKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
-                .putExtra(DicKeys.BEAM_THICKNESS_MM, thicknessMm)
-                .putExtra(DicKeys.BEAM_EDGE_TAPS, viewModel.geometry.loadPoint.toArray())
+                .putExtra(IntentKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
+                .putExtra(IntentKeys.BEAM_THICKNESS_MM, thicknessMm)
+                .putExtra(IntentKeys.BEAM_EDGE_TAPS, viewModel.geometry.loadPoint.toArray())
             ImageSizeExtras.ROI_EDITOR.put(intent, viewModel.refSize)
             launcher.launch(intent)
         }

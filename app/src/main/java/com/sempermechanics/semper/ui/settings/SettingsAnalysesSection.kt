@@ -15,7 +15,7 @@ import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.TransferWork
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.net.SemperApi
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
@@ -237,7 +237,7 @@ internal class SettingsAnalysesSection(
         return when (record.syncState) {
             SessionRecord.SyncState.FAILED, SessionRecord.SyncState.PENDING -> R.string.cloud_retry_backup
             SessionRecord.SyncState.LOCAL_ONLY ->
-                if (DicSettings.saveToCloudEnabled(activity)) R.string.cloud_backup_now else null
+                if (AppSettings.saveToCloudEnabled(activity)) R.string.cloud_backup_now else null
             // Backed up, but this run could not list the cloud: offer nothing
             // rather than a "back up" that would duplicate an existing copy.
             SessionRecord.SyncState.SYNCED -> null

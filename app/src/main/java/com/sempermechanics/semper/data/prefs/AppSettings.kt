@@ -14,7 +14,7 @@ import com.sempermechanics.semper.data.prefs.PrefFiles.Settings
  * `AppRemoteConfig.maxFrames`), keeping the dependency pointing UI/net → data.
  */
 @Suppress("TooManyFunctions") // one getter/setter pair per setting; splitting would scatter them
-object DicSettings {
+object AppSettings {
 
     const val DEFAULT_MAX_FRAMES = 50
     const val MIN_MAX_FRAMES = 10

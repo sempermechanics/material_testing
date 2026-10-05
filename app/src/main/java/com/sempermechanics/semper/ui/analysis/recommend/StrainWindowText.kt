@@ -2,7 +2,7 @@ package com.sempermechanics.semper.ui.analysis.recommend
 
 import android.content.Context
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 
 /**
  * How a strain window reads on screen. Sessions store the VSG in px
@@ -15,10 +15,10 @@ object StrainWindowText {
 
     /** "VSG 41 px at step 5 px": what a window of [points] gives at [step], under the slider. */
     fun vsgAt(context: Context, points: Int, step: Int): String =
-        context.getString(R.string.strain_window_vsg_fmt, VsgStudy.vsgFor(points, step), step)
+        context.getString(R.string.strain_window_vsg_fmt, SweepStudy.vsgFor(points, step), step)
 
     fun of(context: Context, vsgPx: Int, step: Int): String {
-        val points = VsgStudy.windowPointsFor(vsgPx, step)
+        val points = SweepStudy.windowPointsFor(vsgPx, step)
         return if (points != null) {
             context.getString(R.string.strain_window_points_vsg_fmt, points, vsgPx)
         } else {

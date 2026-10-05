@@ -13,7 +13,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -201,7 +201,7 @@ object PdfReportGenerator {
         layout.drawKeyValue("Step Size:", "${data.stepSize} px")
         layout.drawKeyValue("Strain Method:", data.strainMethod)
         // strainWindow is the VSG in px; sessions since the window was entered in points also get the count.
-        val windowPoints = VsgStudy.windowPointsFor(data.strainWindow, data.stepSize)
+        val windowPoints = SweepStudy.windowPointsFor(data.strainWindow, data.stepSize)
         layout.drawKeyValue(
             "Strain Window:",
             if (windowPoints != null) {

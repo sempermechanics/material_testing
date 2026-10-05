@@ -64,7 +64,7 @@ data class SessionRecord(
      */
     val metadataStale: Boolean = false,
 
-    // ── Parameter sweep (VsgStudy)
+    // ── Parameter sweep (SweepStudy)
     // A sweep varies the settings instead of the image, so [subset], [step] and
     // [strainWindow] above only describe its first frame. These carry the rest,
     // and their emptiness is what marks an ordinary analysis.
