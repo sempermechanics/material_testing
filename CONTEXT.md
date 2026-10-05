@@ -132,7 +132,8 @@ Baselines, `targetSdk`, Kover and the backend lock: see CLAUDE.md. `OldTargetApi
 disabled until the `targetSdk` bump. Settings / wizard XML stay under `TooManyViews` via
 `SettingsScrollContentView` / `WizardStepSettingsContentView`. Macrobenchmark CI is smoke,
 no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchmark/gates.json`,
-[ADR-008](docs/adr/ADR-008-startup-gates-phone-state.md)) list the Pixel 6 for five metrics; its startup cold and warm start and wizard cold start are owed (TD-155); the engine floor (≥ 4557 solves/s,
+[ADR-008](docs/adr/ADR-008-startup-gates-phone-state.md)) hold this app's own Pixel 6 references, measured
+2026-09-25 on its old id (the parent's TD-155 numbers are not copied); the engine floor (≥ 4557 solves/s,
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
@@ -140,15 +141,27 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`; last `dc13351`, 2026-10-01; rules in the parent's
-  `docs/ops/FORK_SYNC.md`). The parent deploys, and its TD rows jump to TD-122. General
-  fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
-  upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
+  --grep=semperdic-app`; rules in [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). Last:
+  `dfc28e13` on `sync/semperdic-dfc28e1` (2026-10-05, not yet a PR), which takes the
+  parent's quality program (ADR-015–018: feature packages, ViewBinding, file splits,
+  typed outcomes) and its app id move (ADR-019). The lab code now lives in
+  `data/mechanical`, `ui/analysis/load`, `ui/viewer/mechanical` and `ui/viewer/share/LabExport`;
+  per-frame lab values (video time, capture time, typed mass) ride `DeformedFrame`.
+  General fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab
+  inputs ride upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
-  ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
-  TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
+  ADR and TD numbers are shared: ADR-008, 009, 011, 012 and 020 and TD-133–135,
+  TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–177 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-157; check both before taking one.
+  free in both registers is TD-178; check both before taking one.
+- **New app id `com.sempermechanics.materialtesting`** ([ADR-020](docs/adr/ADR-020-sempermechanics-materialtesting-id.md),
+  in the sync above; Kotlin package `com.sempermechanics.semper`, engine submodule `engine/`).
+  The backend maps it to `materialtesting` and `assetlinks.json` lists it (both deployed by
+  the parent 2026-10-05). Owed: the Firebase Android app for it (release and debug
+  fingerprints, App Check) and its client in `app/google-services.json`, which still holds
+  the old id's client; until then a local build needs an uncommitted copy with a client for
+  the new id. Then a phone check (sign in, restore a backup, App Link) and a release; it
+  installs beside the old build, not over it.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
@@ -203,8 +216,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     analysis there needs a licensed key or deletes first.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
-  - **Own app (ADR-009, TD-133).** Installs as `com.indicvision.semper.materialtesting`
-    beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
+  - **Own app (ADR-009, TD-133; id since ADR-020 above).** The released builds install as
+    `com.indicvision.semper.materialtesting` beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
     (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
     TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
     sends `X-App-Id` and signed in licensed on a Pixel 6, which now runs `v1.2-beta.3`
@@ -216,7 +229,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     the signing key): reset this app's device first. Owed: signing in where Semper is
     signed in too, and App Check for this app (its attestation fails; production runs
     it `off`). A `sync/` merge keeps this repo's `applicationId` and
-    `google-services.json`.
+    `google-services.json` client.
   - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).

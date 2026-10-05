@@ -12,6 +12,32 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-05 — material_testing: synced with semperdic-app `dfc28e1`, new app id
+
+The merge of the parent's quality program and rebrand (#310–#340), then a rename pass over
+this repo's own code. Not released.
+
+- **App id `com.sempermechanics.materialtesting`**
+  ([ADR-020](../adr/ADR-020-sempermechanics-materialtesting-id.md)). It installs beside the
+  old `com.indicvision.semper.materialtesting` build. The backend maps it to
+  `materialtesting` and `assetlinks.json` lists it; the Firebase Android app and its
+  client in `app/google-services.json` are owed.
+- **The parent's code layout and names.** The Kotlin package is `com.sempermechanics.semper`,
+  `SEMPER_*` build keys, `engine/` submodule (ADR-019), feature packages (ADR-015),
+  ViewBinding (ADR-017) and typed outcomes (ADR-018). The lab code moved with it:
+  `data/mechanical` (test types, geometry, loads, machine CSV), `ui/analysis/load` (the
+  load card, typed loads, beam taps; `WizardLoadInputs` and `BeamEdgeTapLauncher` are new),
+  `imaging/video` (keyframes and sampling), `ui/viewer/mechanical` (Results, corrections,
+  lab report). Lab exports go through `LabSnapshot` / `LabExport` in `ui/viewer/share`
+  (`ShareKind.LAB_PDF`, wire `lab_pdf`), and the stress–strain CSV and PDF pages through
+  `report/AnalysisCsvMechanical` and `report/PdfMechanicalPages`.
+- **Per-frame lab values ride `DeformedFrame`** (video time, capture time, typed mass), and
+  video extraction takes the parent's `ExtractionRequest`.
+- **Formats unchanged.** Metadata stays `indic.session.metadata/6`; the lab's Intent
+  extras, wizard Bundle keys and share kinds keep their names.
+- **Registers.** ADR-015–019 and TD-153–177 are the parent's; ADR-020 is ours; the next
+  free row is TD-178.
+
 ## 2026-10-05 — Backend deploy: the new app ids (#333)
 
 Staging (`semper-api-staging`, run 37277292633) and production (`semper-api`, run

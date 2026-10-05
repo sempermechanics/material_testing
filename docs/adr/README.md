@@ -26,6 +26,7 @@ record that replaced it.
 | [017](ADR-017-viewbinding-and-ui-kit.md) | ViewBinding for every screen, and one `ui/common` helper per UI job | Accepted, built | — |
 | [018](ADR-018-error-convention.md) | One typed outcome per failure domain; cancellation is never a failure | Accepted, built | TD-41, TD-171 |
 | [019](ADR-019-sempermechanics-app-id.md) | The app is `com.sempermechanics.semper`; "indic" leaves the code, and the engine submodule is `engine/` | Accepted, built (not released) | TD-176 |
+| [020](ADR-020-sempermechanics-materialtesting-id.md) | Material Testing is `com.sempermechanics.materialtesting`; amends ADR-009's package | Accepted, built (Firebase app and `google-services.json` owed; not released) | — |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md). ADR-008, ADR-009,
-ADR-011, ADR-012 and ADR-013 are material_testing's; ADR-010 and ADR-014 are semperdic-app's (ADR-008's harness, ADR-011's viewer and ADR-013's route are in both). The numbers are shared so they do not collide.
+ADR-011, ADR-012, ADR-013 and ADR-020 are material_testing's; ADR-010, ADR-014 and ADR-015–019 are semperdic-app's (ADR-008's harness, ADR-011's viewer and ADR-013's route are in both). The numbers are shared so they do not collide.

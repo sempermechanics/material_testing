@@ -1,6 +1,8 @@
 # ADR-009: Material Testing is its own Android app on Semper's backend
 
-**Status:** Accepted, built (App Check owed)
+**Status:** Accepted, built (App Check owed); package amended by
+[ADR-020](ADR-020-sempermechanics-materialtesting-id.md) to
+`com.sempermechanics.materialtesting`
 **Date:** 2026-09-28
 **Deciders:** app owner
 
