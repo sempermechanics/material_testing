@@ -75,7 +75,11 @@ Two ways to reach the cloud copy were weighed:
 
 - A correction set after the backup survives a restore on another phone.
 - The metadata's `capturedAtUtc` becomes the time of the last send, as it
-  already was for a session uploaded again after a repair.
+  already was for a session uploaded again after a repair. So the file also
+  carries `createdAtUtc`, the analysis's own creation time (added
+  2026-10-05). A restore onto a new phone dates the row from it, and from
+  `capturedAtUtc` for files written before that; it used to date the row from
+  the restore itself.
 - **The route must be deployed before it does anything.** The backend deploys
   from semperdic-app only, so this change goes upstream first. Until then the
   app's send gets the gateway's 404 and leaves the row marked. Nothing is

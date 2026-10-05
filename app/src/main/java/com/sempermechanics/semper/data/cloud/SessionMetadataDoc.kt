@@ -7,6 +7,7 @@ import android.os.Build
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.account.DeviceKeyManager
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
+import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.session.SessionHeadline
 import com.sempermechanics.semper.data.session.SessionPaths
@@ -71,6 +72,12 @@ data class SessionMetadataDoc(
     @Serializable(with = OptStringSerializer::class) val name: String? = null,
     @Serializable(with = OptStringSerializer::class) val specimen: String? = null,
     @Serializable(with = OptStringSerializer::class) val capturedAtUtc: String? = null,
+    /**
+     * When the analysis was made (the row's `createdAt`), in [utcStamp]'s shape.
+     * [capturedAtUtc] is restamped by every metadata re-upload, so a restore
+     * reads this first. Absent from files written before 2026-10-05.
+     */
+    @Serializable(with = OptStringSerializer::class) val createdAtUtc: String? = null,
     @Serializable(with = OptIntSerializer::class) val frameCount: Int? = null,
     /** `batch` or `vsg_study`; absent before the sweep. */
     @Serializable(with = OptStringSerializer::class) val analysisKind: String? = null,
@@ -223,7 +230,9 @@ data class SessionMetadataDoc(
     /**
      * The index row a restore writes for this file, as the removed org.json
      * reader built it: [existing] keeps its name, creation time and rename flag;
-     * everything else comes from the file, under the reader's defaults.
+     * everything else comes from the file, under the reader's defaults. A
+     * placeholder row ([RestoreStart.isPlaceholder]) was made when the restore
+     * started, so its creation time is the backup's ([madeAt]), not its own.
      * Throws, as the reader does, when legacy skip lists disagree in length.
      */
     @Suppress("LongParameterList") // the restore target's fields, plus the clock
@@ -241,7 +250,8 @@ data class SessionMetadataDoc(
         val record = SessionRecord(
             id = localId,
             name = restoredName(existing),
-            createdAt = existing?.createdAt ?: now,
+            createdAt = existing?.takeUnless(RestoreStart::isPlaceholder)?.createdAt
+                ?: madeAt() ?: existing?.createdAt ?: now,
             updatedAt = now,
             frameCount = frameCount ?: defNames.size,
             subset = engine.subset ?: DEFAULT_SUBSET,
@@ -264,6 +274,15 @@ data class SessionMetadataDoc(
         )
         return withRun(record, engine, defNames)
     }
+
+    /**
+     * When the backed-up analysis was made: [createdAtUtc], else, for older
+     * files, [capturedAtUtc] (its upload or last metadata re-upload); null if
+     * neither parses.
+     */
+    internal fun madeAt(): Long? = sequenceOf(createdAtUtc, capturedAtUtc)
+        .mapNotNull { stamp -> stamp?.takeIf(String::isNotBlank)?.let(::parseUtcStamp) }
+        .firstOrNull()
 
     /** The row's name: the existing row's, else the file's, else the specimen's, else "Restored". */
     private fun restoredName(existing: SessionRecord?): String =
@@ -349,10 +368,14 @@ data class SessionMetadataDoc(
         fun decode(text: String): SessionMetadataDoc = READER.decodeFromString(serializer(), text)
 
         /** `capturedAtUtc` as the uploader stamps it: second precision, `Z`. */
-        fun utcStamp(millis: Long = System.currentTimeMillis()): String =
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-                .apply { timeZone = TimeZone.getTimeZone("UTC") }
-                .format(Date(millis))
+        fun utcStamp(millis: Long = System.currentTimeMillis()): String = utcFormat().format(Date(millis))
+
+        /** [utcStamp]'s inverse; null for text in any other shape. */
+        fun parseUtcStamp(stamp: String): Long? =
+            runCatching { utcFormat().apply { isLenient = false }.parse(stamp)?.time }.getOrNull()
+
+        private fun utcFormat() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            .apply { timeZone = TimeZone.getTimeZone("UTC") }
 
         /**
          * What [SessionUploadMetadata.buildMetadataJson] writes for [record],
@@ -396,6 +419,7 @@ data class SessionMetadataDoc(
                 name = record.name,
                 specimen = record.refName,
                 capturedAtUtc = capturedAtUtc,
+                createdAtUtc = utcStamp(record.createdAt),
                 frameCount = record.frameCount,
                 analysisKind = if (record.isSweep) "vsg_study" else "batch",
                 csv = "analysis_data.csv",
