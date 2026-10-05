@@ -3,7 +3,7 @@ package com.sempermechanics.semper.ui.settings
 import android.os.Build
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.DeviceKeyManager
+import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
@@ -59,7 +59,7 @@ class SettingsHelpSupportSection(
             ?: activity.getString(R.string.pending_unknown_account)
         // The Keystore-free lookup: a Keystore that refuses to open must not
         // cost the user their way of reaching support.
-        val deviceId = DeviceKeyManager.deviceId(activity)
+        val deviceId = DeviceKeys.deviceId(activity)
         // The blank lines leave the cursor above the diagnostics, so the user
         // writes their question first and the context travels underneath it.
         val body = "\n\n---\n" + SupportMail.contextLines(account, deviceId)

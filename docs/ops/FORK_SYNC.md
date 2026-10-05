@@ -273,6 +273,10 @@ group is one commit, reviewable with `git diff -M`.
 | `data/net/TokenStore` | `data/net/AccountCache` (it caches identity, role, status and quota; Firebase holds the token) |
 | **Placeholder strings** (always overwritten before the view is first drawn) | |
 | `label_41`, `label_5`, `label_0`, `label_10_fps`, `label_0_00_0_00`, `label_0_frames` (`android:text` in `wizard_step_settings_content.xml`, `activity_static_analysis.xml`, `sheet_video_sampling.xml`) | Deleted; the layouts carry the same text as `tools:text` |
+| **`*Ui` and friends** | |
+| `ui/auth/AuthTotpUi`, `ui/viewer/share/ShareExportUi` | `AuthTotpController`, `ShareExportController` |
+| `ui/analysis/wizard/AnalysisCancelGate` | `AnalysisCancel` (a shared flag, not a `*Gate`) |
+| `data/account/DeviceKeyManager` | `DeviceKeys` (Keystore alias `SemperDeviceKeyEc` unchanged) |
 
 ## Porting back
 

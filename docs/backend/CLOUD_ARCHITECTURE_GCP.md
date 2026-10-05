@@ -749,7 +749,7 @@ instead of failing the client.
 |---|---|
 | Google sign-in, session state | [`data/account/AuthRepository.kt`](../../app/src/main/java/com/sempermechanics/semper/data/account/AuthRepository.kt) |
 | Credential Manager helper | [`ui/auth/GoogleSignInHelper.kt`](../../app/src/main/java/com/sempermechanics/semper/ui/auth/GoogleSignInHelper.kt) |
-| EC P-256 Keystore device key | [`data/account/DeviceKeyManager.kt`](../../app/src/main/java/com/sempermechanics/semper/data/account/DeviceKeyManager.kt) |
+| EC P-256 Keystore device key | [`data/account/DeviceKeys.kt`](../../app/src/main/java/com/sempermechanics/semper/data/account/DeviceKeys.kt) |
 | Backend HTTP client | [`data/net/SemperApi.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/SemperApi.kt) |
 | Account cache / token refresh | [`data/net/AccountCache.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/AccountCache.kt) · [`TokenProvider.kt`](../../app/src/main/java/com/sempermechanics/semper/data/net/TokenProvider.kt) |
 | Resumable upload worker | [`data/DicUploadWorker.kt`](../../app/src/main/java/com/sempermechanics/semper/data/DicUploadWorker.kt) |

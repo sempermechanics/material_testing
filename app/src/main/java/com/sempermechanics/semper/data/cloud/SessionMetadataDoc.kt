@@ -5,7 +5,7 @@ package com.sempermechanics.semper.data.cloud
 import android.content.Context
 import android.os.Build
 import com.sempermechanics.semper.BuildConfig
-import com.sempermechanics.semper.data.account.DeviceKeyManager
+import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionHeadline
@@ -363,7 +363,7 @@ data class SessionMetadataDoc(
             capturedAtUtc = utcStamp(),
             app = App(versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE),
             device = Device(
-                id = DeviceKeyManager.deviceId(context),
+                id = DeviceKeys.deviceId(context),
                 manufacturer = Build.MANUFACTURER,
                 model = Build.MODEL,
                 os = "Android ${Build.VERSION.RELEASE}",

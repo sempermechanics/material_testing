@@ -107,7 +107,7 @@ verified at the Firebase host — see [backend/AUTH_SETUP.md](backend/AUTH_SETUP
 | Field | Value |
 |---|---|
 | Entry | `ui/auth/PendingApprovalActivity` |
-| Chain | `data/account/AuthRepository` + `data/account/DeviceKeyManager` (device id shown) → `SemperApi.me` on **Check status** |
+| Chain | `data/account/AuthRepository` + `data/account/DeviceKeys` (device id shown) → `SemperApi.me` on **Check status** |
 | Server side | The PENDING account was mailed to support at creation by `C1` → `backend/app/notify.py` |
 | Note | It does not poll, despite the KDoc; only the button checks |
 
@@ -182,7 +182,7 @@ One Activity, three pages (`WizardStep`); pages 2 and 3 inflate from ViewStubs.
 | A5.2 | Confirm settings | same | `AnalysisSettingsSheetController`, `SubsetRecommender` (SSSIG seed), `data/prefs/ParamClipboard` (Paste params), ROI card → A6, `AnalysisReadyGate` |
 | A5.3 | Sweep summary `[sweep]` | same | `SweepSetupController` + `SweepStudy` (plan) + `LineCutPreviewView` |
 | A5.4 | Running | `BatchRunController` + `ComputeOverlayController` | `RunChannels.launchBatchAnalysis` → `runBatchAnalysis` → `BatchAnalysis.runBatchAnalysisBody` → `DicFieldIo` → JNI `SemperNativeLib.computeFullFieldDirect`; sweeps go `RunChannels.launchSweep` → `SweepAnalysis.runSweep` → `SweepStudyRunner` |
-| A5.5 | Terminal states | `EngineFailure` + `ui/common/dialog/FaqRedirect` | `field/RunStop`, `ConvergenceGate`, `AnalysisCancelGate` |
+| A5.5 | Terminal states | `EngineFailure` + `ui/common/dialog/FaqRedirect` | `field/RunStop`, `ConvergenceGate`, `AnalysisCancel` |
 
 | Field | Value |
 |---|---|
@@ -385,7 +385,7 @@ Tests: `diagnostics/SemperAnalyticsTest`.
 
 | Field | Value |
 |---|---|
-| Key | `data/account/DeviceKeyManager` — EC P-256 in the AndroidKeyStore, private key never leaves it |
+| Key | `data/account/DeviceKeys` — EC P-256 in the AndroidKeyStore, private key never leaves it |
 | Register | `SemperApi.registerDevice` → C2 (409 = this account or device is bound elsewhere) |
 | Per call | `SemperApi.fetchChallenge` → C3, then `signedHeaders` signs `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → verified by `C4` |
 | Tokens | `data/net/TokenProvider` / `AccountCache` — Firebase ID tokens are held in memory, never persisted |

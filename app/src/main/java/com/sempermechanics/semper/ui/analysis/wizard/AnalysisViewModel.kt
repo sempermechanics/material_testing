@@ -406,12 +406,12 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * Cooperative cancel: checked between frames here, and forwarded to the
      * engine, which polls it inside its point loops. Setting it therefore stops
      * the solve already running rather than only the ones after it.
-     * Shared with [SweepStudyRunner] via [AnalysisCancelGate].
+     * Shared with [SweepStudyRunner] via [AnalysisCancel].
      */
     var cancelRequested: Boolean
-        get() = AnalysisCancelGate.requested
+        get() = AnalysisCancel.requested
         set(value) {
-            AnalysisCancelGate.requested = value
+            AnalysisCancel.requested = value
         }
 
     // Process death (ADR-005): the scalars in [saved], the rest in the draft

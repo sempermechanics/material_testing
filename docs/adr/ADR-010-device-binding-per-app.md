@@ -13,7 +13,7 @@ Material Testing became its own Android app on 2026-09-28
 (`com.indicvision.semper.materialtesting`, material_testing ADR-009) and
 shares this backend and Firebase project. Android scopes `ANDROID_ID` to the
 signing key, so Semper and Material Testing on the same phone report two
-different device ids (`and-{ANDROID_ID}`, `DeviceKeyManager`).
+different device ids (`and-{ANDROID_ID}`, `DeviceKeys`).
 
 The backend bound an account to **one** device: `users.activeDeviceId`
 (`repo/devices.py`), the licence or seat `deviceIdLock`, and `_may_bind`
@@ -102,7 +102,7 @@ support, and nothing is migrated.
   device is reset (account page or operator console). Only testers meet this:
   users only ever install release builds. Seen on a Pixel 6 moving to Material
   Testing v1.2-beta.2 (2026-09-29); its release notes say so. The id itself is
-  kept in shared preferences (`DeviceKeyManager.deviceId`), which
+  kept in shared preferences (`DeviceKeys.deviceId`), which
   `backup_rules.xml` and `data_extraction_rules.xml` exclude, so it never
   moves to another phone with a backup.
 

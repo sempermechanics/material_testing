@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.account.DeviceKeyManager
+import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.restore.RestoreFailureLedger
 import com.sempermechanics.semper.data.net.AccountCache
@@ -368,12 +368,12 @@ class PrefKeyTest {
     }
 
     @Test
-    fun `semper_device holds the device id DeviceKeyManager reads`() {
+    fun `semper_device holds the device id DeviceKeys reads`() {
         val d = PrefFiles.Device
         val p = prefs(d.NAME)
         assertEquals("semper_device", d.NAME)
         p.edit(commit = true) { put(d.DEVICE_ID, "dev-123") }
-        assertEquals("dev-123", DeviceKeyManager.deviceId(context))
+        assertEquals("dev-123", DeviceKeys.deviceId(context))
         assertEquals("dev-123", p.getString("device_id", null))
     }
 

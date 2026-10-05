@@ -9,7 +9,7 @@ import com.sempermechanics.semper.report.newMetrics
 import com.sempermechanics.semper.ui.analysis.run.DicFieldIo
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
 import com.sempermechanics.semper.ui.analysis.run.SemperEngine
-import com.sempermechanics.semper.ui.analysis.wizard.AnalysisCancelGate
+import com.sempermechanics.semper.ui.analysis.wizard.AnalysisCancel
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import timber.log.Timber
 import java.io.File
@@ -90,12 +90,12 @@ object SweepStudyRunner {
     /**
      * Cooperative cancel, polled between solves here and inside the engine's own
      * point loops, so it stops the combination already running too.
-     * Observes [AnalysisCancelGate] owned by [AnalysisViewModel].
+     * Observes [AnalysisCancel] owned by [AnalysisViewModel].
      */
     var cancelRequested: Boolean
-        get() = AnalysisCancelGate.requested
+        get() = AnalysisCancel.requested
         set(value) {
-            AnalysisCancelGate.requested = value
+            AnalysisCancel.requested = value
         }
 
     /**

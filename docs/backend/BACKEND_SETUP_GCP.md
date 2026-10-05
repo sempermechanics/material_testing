@@ -22,7 +22,7 @@ without a backend; do this only if you are deploying the cloud side yourself.
 >   Firestore, keyless Drive resumable uploads. You can deploy and smoke-test it
 >   with `curl` right now (Parts A + B).
 > - ✅ The **Android client is implemented** — `data/net/` (SemperApi, AccountCache,
->   TokenProvider), `DeviceKeyManager`, `AuthRepository`, and
+>   TokenProvider), `DeviceKeys`, `AuthRepository`, and
 >   `DicUploadWorker` (resumable PUT straight to Drive). Part C is the
 >   operational path to point the app at your deployment and test it.
 > - Cloud sync stays off entirely until `SEMPER_API_BASE_URL` is set (C1), so
@@ -543,7 +543,7 @@ Then use `URL=http://localhost:8080` in the B2 steps.
 ## Part C — Connect & test the Android app
 
 > **The client code is implemented.** `data/net/` (SemperApi, AccountCache,
-> TokenProvider, ApiDtos), the EC-P256 `DeviceKeyManager` (challenge-response),
+> TokenProvider, ApiDtos), the EC-P256 `DeviceKeys` (challenge-response),
 > `AuthRepository` (Google, email/password, or email-link sign-in) and `DicUploadWorker` (resumable PUT
 > direct to Drive) are all in the app. This part is the **operational** steps
 > to point the app at your live backend and test it.

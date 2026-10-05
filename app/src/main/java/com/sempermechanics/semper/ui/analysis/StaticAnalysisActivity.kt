@@ -240,7 +240,7 @@ class StaticAnalysisActivity :
         // Activity. Without this teardown a solve in flight when the screen is
         // destroyed keeps burning CPU and holding frame bytes, the progress
         // ticker reposts against dead views, and KEEP_SCREEN_ON leaks.
-        viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancelGate
+        viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancel
         if (::imports.isInitialized) imports.cancel()
         if (::reference.isInitialized) reference.cancel()
         // SweepStudyRunner observes the same gate — no separate flag.

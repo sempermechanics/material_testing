@@ -35,7 +35,7 @@ import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.home.HomeActivity
 import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
-import com.sempermechanics.semper.ui.viewer.share.ShareExportUi
+import com.sempermechanics.semper.ui.viewer.share.ShareExportController
 import com.sempermechanics.semper.ui.viewer.share.ShareKind
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
 import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
@@ -76,7 +76,7 @@ class ResultViewerActivity : AppCompatActivity() {
     internal lateinit var shareBanner: TransferBannerController
 
     /** Shows the running exports, which live in [viewModel] and outlive this screen's rotations. */
-    internal lateinit var shareExports: ShareExportUi
+    internal lateinit var shareExports: ShareExportController
 
     /** Run once the frame set is read; see [whenFrameSetLoaded]. */
     private val afterFrameSet = mutableListOf<() -> Unit>()
@@ -187,7 +187,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         shareBanner = TransferBannerController(binding.transferBannerRoot.root)
         // Re-attaches any export a rotation left running.
-        shareExports = ShareExportUi(this, viewModel.exports).also { it.attach() }
+        shareExports = ShareExportController(this, viewModel.exports).also { it.attach() }
 
         Insets.padTop(binding.viewerTopStack)
         // Lifted, not padded, above the keyboard: the image is fitted to the

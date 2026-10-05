@@ -3,7 +3,7 @@ package com.sempermechanics.semper.ui.settings
 import android.content.Intent
 import androidx.core.view.isVisible
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.DeviceKeyManager
+import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
@@ -19,7 +19,7 @@ class SettingsAccountSection(
 ) {
     fun wire() {
         views.tvAccountEmail.text = AccountCache.cachedEmail(activity).orEmpty()
-        val deviceId = DeviceKeyManager.deviceId(activity)
+        val deviceId = DeviceKeys.deviceId(activity)
         views.tvAccountDevice.text = activity.getString(R.string.account_device_id_fmt, deviceId)
 
         // The prefix is the only part of a key the app is ever told, and it is

@@ -44,7 +44,7 @@ internal class SignedCall(val method: String, val path: String, val body: ByteAr
  * The nonce is a [ClientNonce] when one is usable, which saves the
  * `POST /v1/challenge` round-trip, and a server challenge otherwise.
  *
- * [deviceId] and [sign] are this device's key (`DeviceKeyManager`), passed as
+ * [deviceId] and [sign] are this device's key (`DeviceKeys`), passed as
  * functions so the AndroidKeyStore is only touched when a signed call is made.
  */
 internal class SemperApiSigning(

@@ -7,7 +7,7 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
  * Single cancel channel for batch analysis and parameter sweeps.
  * [AnalysisViewModel] owns the public API; [SweepStudyRunner] observes the same flag.
  */
-object AnalysisCancelGate {
+object AnalysisCancel {
     @Volatile
     var requested: Boolean = false
         set(value) {

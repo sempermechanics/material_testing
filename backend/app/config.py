@@ -183,7 +183,7 @@ class Settings:
     # The Firebase Web API key ships inside the APK (google-services.json) and
     # is an identifier, not a secret, so anyone can mint a genuine ID token from
     # a script. For the routes behind `verified_device` or a step-up tier that
-    # buys an attacker nothing — a DeviceKeyManager signature is a stronger
+    # buys an attacker nothing — a DeviceKeys signature is a stronger
     # proof than App Check. The exposed set is the ID-token-only routes, and
     # `POST /v1/licenses/checkout` is the one worth abusing: it reads the device
     # id from a *header* and doubles as the seat heartbeat, so a scripted client

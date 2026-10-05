@@ -121,7 +121,7 @@ object PrefFiles {
         val LEGACY_PLAN = PrefKey.string("plan")
     }
 
-    /** `DeviceKeyManager.deviceId`. */
+    /** `DeviceKeys.deviceId`. */
     object Device {
         const val NAME = "semper_device"
         val DEVICE_ID = PrefKey.string("device_id")

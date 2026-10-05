@@ -41,7 +41,7 @@ on 2026-10-03.
 
 | Package | Files | Role |
 |---|---|---|
-| `ui/auth/` | 11 | Splash, sign-in (`AuthActivity` with `AuthTotpUi` and `AuthPasswordReset`), pending approval, terms, `AccessRouter`, `GoogleSignInHelper`, `PasswordPolicy` |
+| `ui/auth/` | 11 | Splash, sign-in (`AuthActivity` with `AuthTotpController` and `AuthPasswordReset`), pending approval, terms, `AccessRouter`, `GoogleSignInHelper`, `PasswordPolicy` |
 | `ui/home/` | 11 | `HomeActivity` and its parts: session list and selection, `HomeQuotaCard`, `CloudBackupsCard`, `FirstRunPrompts`, `HomeFabLayout`, `HomeTransferWatch` (backup and restore jobs), `BackupBadgeActions` |
 | `ui/analysis/` | 3 | The three analysis Activities only: `StaticAnalysisActivity` (the wizard), `RoiDrawActivity`, `VsgLatticeActivity` |
 | `ui/analysis/wizard/` | 22 | `AnalysisViewModel` with `RunChannels` (launch batch and sweep) and `SweepAnalysis`; `WizardStep`, `AnalysisWizardChrome.applyStep`, `AnalysisWizardHost`; `WizardState` / `WizardDraftBinding` (process death, [ADR-005](../adr/ADR-005-wizard-process-death.md)); slots, coach, nav, ready / cancel / leave gates; parameter fields and sliders; settings sheet |
@@ -51,7 +51,7 @@ on 2026-10-03.
 | `ui/analysis/recommend/` | 9 | `SubsetRecommender` and `SubsetRecommendationController`, speckle scale, noise floor, good-practice and strain-window copy, EXIF patch map |
 | `ui/analysis/sweep/` | 17 | Parameter sweep: `SweepSetupController` with `SweepRangeFields` / `SweepFramePicker`, `SweepStudy` / `SweepStudyRunner`, the lattice (`SweepControls`, `SweepProfiles`, `SweepGraphExport`) and plot views (`SweepPlotView` with viewport, axes, palette; `PlotStyle`), line-cut preview |
 | `ui/viewer/` | 19 | `ResultViewerActivity` and its controllers (`ViewerChromeController`, `ViewerImageLoader`, `ViewerFrameLoader`, `ViewerScaleController`, `FrameJumpController`, `ViewerCaptions`, `ViewerShareController`, `FieldPopup`), `SaveExportActivity`, their ViewModels, `ViewerArgs` ([ADR-003](../adr/ADR-003-viewerargs-read-side.md)), scrub cache, `ViewerFieldPills`, the ⓘ details sheet; heatmaps draw each frame on its own photo at the displaced positions ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md)) |
-| `ui/viewer/share/` | 11 | `ShareCenter` → `ShareExportJobs` (held by `ResultViewerViewModel`) → `ShareExportBuilder` (`FieldImageExport`, `BundleExport`, `DataExport`); `ShareExportUi`, `ShareKind`, `SendToSheet`, `ViewerReportFactory` |
+| `ui/viewer/share/` | 11 | `ShareCenter` → `ShareExportJobs` (held by `ResultViewerViewModel`) → `ShareExportBuilder` (`FieldImageExport`, `BundleExport`, `DataExport`); `ShareExportController`, `ShareKind`, `SendToSheet`, `ViewerReportFactory` |
 | `ui/viewer/summary/` | 3 | Summary GIF (`SummaryAnimation`), caption, `ViewerSummaryController` |
 | `ui/viewer/inspect/` | 5 | Tap-to-probe: `InspectOverlayView`, `PointSpatialIndex`, `TouchImageView`, field histogram view |
 | `ui/settings/` | 15 | `SettingsActivity` (restore, download, delete) and its sections: account, cloud, analyses, storage, preferences, your data, help, footer; `AccountDeletionRun`, `BusyTransfers`; scroll body via `SettingsScrollContentView` |

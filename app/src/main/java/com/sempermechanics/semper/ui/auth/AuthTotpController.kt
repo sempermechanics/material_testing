@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  * after a first factor that Firebase answers with a TOTP challenge, and its
  * submit, for a sign-in or a re-authentication alike.
  */
-internal class AuthTotpUi(
+internal class AuthTotpController(
     private val activity: AuthActivity,
     private val binding: ActivityAuthBinding,
 ) {

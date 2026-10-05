@@ -7,7 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.DeviceKeyManager
+import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionStore
@@ -58,7 +58,7 @@ class SessionLimitActivity : AppCompatActivity() {
     private fun emailSupport() {
         val email = AccountCache.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
         val quota = "Quota: ${AccountCache.quotaUsed(this)}/${AccountCache.quotaMax(this)}"
-        val context = SupportMail.contextLines(email, DeviceKeyManager.deviceId(this), extra = listOf(quota))
+        val context = SupportMail.contextLines(email, DeviceKeys.deviceId(this), extra = listOf(quota))
         val body = "I've reached my Semper analysis limit and would like it raised.\n\n$context"
         SupportMail.open(
             this,

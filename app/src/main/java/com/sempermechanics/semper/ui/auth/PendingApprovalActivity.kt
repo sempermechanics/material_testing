@@ -7,7 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.AuthRepository
-import com.sempermechanics.semper.data.account.DeviceKeyManager
+import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.databinding.ActivityPendingApprovalBinding
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.AuthRoute
@@ -57,7 +57,7 @@ class PendingApprovalActivity : AppCompatActivity() {
     private fun requestAccessByEmail() {
         val email = authRepo.cachedEmail() ?: getString(R.string.pending_unknown_account)
         val body = "I'd like access to Semper.\n\n" +
-            SupportMail.contextLines(account = email, deviceId = DeviceKeyManager.deviceId(this))
+            SupportMail.contextLines(account = email, deviceId = DeviceKeys.deviceId(this))
         SupportMail.open(
             this,
             subject = getString(R.string.request_access_subject) + " — " + email,
@@ -69,7 +69,7 @@ class PendingApprovalActivity : AppCompatActivity() {
     private fun loadProfileData() {
         // Identity comes from the cached backend session (ID-token claims).
         val email = authRepo.cachedEmail()
-        val deviceId = DeviceKeyManager.deviceId(this)
+        val deviceId = DeviceKeys.deviceId(this)
 
         binding.tvUserEmail.text = email ?: getString(R.string.pending_unknown_user)
         binding.tvDeviceId.text =
