@@ -255,7 +255,8 @@ them:
 17. Reach a view through `binding.<id>`; an unavoidable alias uses the id's exact
     name. No `m` prefix. A backing property is `_name` beside `name`.
 18. Units go in a suffix: `Ms`, `Us`, `Seconds` / `SECONDS`, `Minutes`, `Bytes`,
-    `Px`, `Dp`, `Pt`.
+    `Px`, `Dp`, `Pt`. Seconds are spelled out: never `S`, `Sec`, `_S` or `_SEC`
+    (`TOKEN_TIMEOUT_SECONDS`, `ONE_SECOND_MS`).
 19. One constant name per concept (`MS_PER_SECOND`, `PERCENT`).
 
 **Resources**
