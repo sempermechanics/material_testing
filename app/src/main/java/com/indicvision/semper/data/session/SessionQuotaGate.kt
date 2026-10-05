@@ -1,7 +1,9 @@
 package com.indicvision.semper.data.session
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import com.indicvision.semper.data.account.LicenseEntitlements
+import com.indicvision.semper.data.net.CloudApi
 import com.indicvision.semper.data.net.IndicApi
 import com.indicvision.semper.data.net.TokenStore
 import timber.log.Timber
@@ -16,6 +18,14 @@ import timber.log.Timber
 object SessionQuotaGate {
 
     /**
+     * How the gate reaches the backend client. A JVM test build has no API URL,
+     * so the real client reads as disabled; tests swap in `FakeCloudApi` and put
+     * the original back.
+     */
+    @VisibleForTesting
+    internal var api: (Context) -> CloudApi = { IndicApi.get(it) }
+
+    /**
      * Whether a *new* session may be persisted.
      *
      * A quota that is *known and full* is a hard stop; an *unknown* quota
@@ -26,17 +36,15 @@ object SessionQuotaGate {
      * @param existingCount current index size (used as a floor on "used").
      * @return false if the insert must be refused.
      */
-    @Suppress("ReturnCount") // early-outs for disabled / unlimited / full / allow
     fun allowNewSession(context: Context, existingCount: Int): Boolean {
-        if (!IndicApi.get(context).enabled) return true
-        if (LicenseEntitlements.unlimitedAnalysis(context)) return true
+        if (!api(context).enabled || LicenseEntitlements.unlimitedAnalysis(context)) return true
         val max = LicenseEntitlements.analysisCap(context)
         val used = maxOf(TokenStore.quotaUsed(context), existingCount)
-        if (used >= max) {
+        val full = used >= max
+        if (full) {
             TokenStore.refreshSessionLimit(context, existingCount)
             Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
-            return false
         }
-        return true
+        return !full
     }
 }
