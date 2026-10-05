@@ -7,8 +7,10 @@ import androidx.core.graphics.createBitmap
 import com.indicvision.semper.data.cloud.SessionUploadBundler
 import com.indicvision.semper.data.session.SessionRecord
 import com.indicvision.semper.field.DicResult
+import com.indicvision.semper.field.ImageSize
 import com.indicvision.semper.fixtures.sessionRecord
 import com.indicvision.semper.ui.viewer.ViewerArgs
+import com.indicvision.semper.ui.viewer.ViewerSweepArgs
 import com.indicvision.semper.ui.viewer.share.ViewerReportFactory
 import com.indicvision.semper.ui.viewer.share.nameIndexAt
 import com.indicvision.semper.ui.viewer.share.toReportSource
@@ -54,11 +56,21 @@ class ReportSourceTest {
 
     // ── EngineStats helpers ────────────────────────────────────────────────
 
+    /**
+     * The cloud bundle's own rule before it moved onto [EngineStats.fromList]:
+     * every stored slot kept, never padded past what was stored, short lists
+     * padded to the core slots.
+     */
+    private fun bundleRuleStats(stats: List<Float>): EngineStats {
+        val size = stats.size.coerceIn(EngineStats.CORE_SLOT_COUNT, EngineStats.SLOT_COUNT)
+        return EngineStats.fromArray(FloatArray(size) { stats.getOrElse(it) { 0f } })
+    }
+
     @Test
-    fun `fromList is the cloud bundle's reportEngineStats for every stored length`() {
+    fun `fromList is the cloud bundle's former stats rule for every stored length`() {
         for (n in 0..EngineStats.SLOT_COUNT + 3) {
             val stats = List(n) { it * 1.5f + 1f }
-            assertEquals("n=$n", SessionUploadBundler.reportEngineStats(stats), EngineStats.fromList(stats))
+            assertEquals("n=$n", bundleRuleStats(stats), EngineStats.fromList(stats))
         }
         assertEquals(EngineStats.EMPTY, EngineStats.fromList(null))
     }
@@ -83,30 +95,9 @@ class ReportSourceTest {
 
     // ── The cloud bundle ───────────────────────────────────────────────────
 
-    /** `SessionUploadBundler.renderFrame`'s params, copied as the oracle (the function is private). */
-    private fun bundlerParams(
-        record: SessionRecord,
-        frameIndex: Int,
-        data: FloatArray,
-    ) = ReportBuilder.ReportBuildParams(
-        data = data,
-        baseImg = base,
-        defImgForCover = cover,
-        imgW = record.imgW,
-        imgH = record.imgH,
-        step = record.sweepSteps.getOrElse(frameIndex) { record.step },
-        sessionId = record.id,
-        specimenName = ReportImageNames.specimen(record.refName),
-        analysisDate = date,
-        subsetSize = record.sweepSubsets.getOrElse(frameIndex) { record.subset },
-        strainWindow = record.sweepStrainWindows.getOrElse(frameIndex) { record.strainWindow },
-        strainMethod = record.strainMethod.ifBlank { "VSG" },
-        roiData = RoiData(record.roiX, record.roiY, record.roiW, record.roiH),
-        engineStats = SessionUploadBundler.reportEngineStats(record.engineStats),
-        referenceImageName = ReportImageNames.reference(record.refName),
-        deformedImageName = ReportImageNames.deformed(record.frameNames, frameIndex),
-        drawMinMarker = false,
-    )
+    /** The live cloud bundle's params for [record]'s frame [frameIndex], stamped with the test's date. */
+    private fun bundlerParams(record: SessionRecord, frameIndex: Int, data: FloatArray) =
+        SessionUploadBundler.reportParams(record, frameIndex, data, base, cover).copy(analysisDate = date)
 
     @Test
     fun `forRecord builds the cloud bundle's params, batch and sweep`() {
@@ -129,15 +120,29 @@ class ReportSourceTest {
             sweepLabels = listOf("first", "second"),
             strainMethod = "LSQ",
         )
-        for (record in listOf(batch, sweep)) {
+        // Every page names the analysis, its specimen, its reference and its ROI.
+        for ((record, id) in listOf(batch to "b1", sweep to "s1")) {
             for (i in 0..2) {
-                assertEquals(
-                    "${record.id} frame $i",
-                    bundlerParams(record, i, data),
-                    ReportSource.forRecord(record).forFrame(i, data, base, cover, analysisDate = date),
-                )
+                val params = bundlerParams(record, i, data)
+                assertEquals("$id frame $i", id, params.sessionId)
+                assertEquals("spec", params.specimenName)
+                assertEquals("spec.tif", params.referenceImageName)
+                assertEquals(RoiData(3, 4, 40, 30), params.roiData)
             }
         }
+        // What the bundle prints, spelled out: the MAX marker only, the default
+        // method for a record that stored none, the session value past a short
+        // per-frame list, and every stored stats slot.
+        val batch0 = bundlerParams(batch, 0, data)
+        assertEquals("a.tif", batch0.deformedImageName)
+        assertEquals(listOf(41, 5, 15), listOf(batch0.subsetSize, batch0.step, batch0.strainWindow))
+        assertFalse(batch0.drawMinMarker)
+        assertEquals("VSG", batch0.strainMethod)
+        assertEquals(EngineStats.fromArray(FloatArray(17) { it.toFloat() }), batch0.engineStats)
+        val sweep2 = bundlerParams(sweep, 2, data)
+        assertEquals(listOf(41, 5, 99), listOf(sweep2.subsetSize, sweep2.step, sweep2.strainWindow))
+        assertEquals("LSQ", sweep2.strainMethod)
+        assertEquals("second", bundlerParams(sweep, 1, data).deformedImageName)
     }
 
     // ── The viewer ─────────────────────────────────────────────────────────
@@ -150,7 +155,7 @@ class ReportSourceTest {
             refName = "spec.png",
             refPath = "",
             batchDirPath = null,
-            frameNames = listOf("f0.png", "f1.png", "f2.png"),
+            frameNames = if (sweep) listOf("S21", "S31", "S41") else listOf("f0.png", "f1.png", "f2.png"),
             stopCode = 0,
             plannedFrames = 3,
             sessionId = sessionId,
@@ -162,16 +167,20 @@ class ReportSourceTest {
             roiY = 0,
             roiW = cols * step,
             roiH = rows * step,
+            sweep = if (sweep) {
+                ViewerSweepArgs(
+                    subsets = listOf(21, 31),
+                    steps = listOf(step, step),
+                    strainWindows = listOf(41),
+                    lineCutHorizontal = true,
+                    skippedJson = "[]",
+                )
+            } else {
+                null
+            },
             strainMethod = "VSG",
         ),
-        imgW = cols * step,
-        imgH = rows * step,
-        baseStep = step,
-        sweepSteps = if (sweep) intArrayOf(step, step) else null,
-        sweepSubsets = if (sweep) intArrayOf(21, 31) else null,
-        sweepStrainWins = if (sweep) intArrayOf(41) else null,
-        roi = RoiData(0, 0, cols * step, rows * step),
-        frameNames = if (sweep) listOf("S21", "S31", "S41") else listOf("f0.png", "f1.png", "f2.png"),
+        imageSize = ImageSize(cols * step, rows * step),
         plannedFrames = if (sweep) emptyList() else listOf(0, 2, 5),
         defImagePaths = emptyList(),
         displayBase = base,
