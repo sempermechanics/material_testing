@@ -45,18 +45,25 @@ pinned name where it is.
 | `diagnostics/` | `Diagnostics`, `CrashReportingTree`, `EngineDebug`, `SemperAnalytics` (the old `analytics/` package) |
 | `navigation/` | `AppIntents`, `DicKeys` |
 | `data/` | The six workers only (pinned): `BackupDeleteWorker`, `DicBundleDownloadWorker`, `DicRestoreWorker`, `DicUploadWorker`, `LicenseConfigWorker`, `SessionMetadataWorker` |
-| `data/session/` | Session store, paths, repository, zip and `.dat` codecs, storage budget, cache janitor |
-| `data/cloud/` | Cloud sync, upload bundling / metadata / outcomes, deletes, listing, transfer log and notifications |
-| `data/cloud/restore/` | Cloud restore, restore start, download outcomes and progress |
-| `data/account/` | Auth, access status, device key, licence, seat, legal terms, TOTP |
+| `data/session/` | Local sessions: `SessionStore` (with `SessionRecord`), `SessionPaths`, `SessionRepository`, `SessionHeadline`, `SessionQuotaGate`, `SessionZip`, `ZipDirectory`, `DatCodec`, `LocalArtifacts`, `SkippedNode`, `StorageBudget`, `CacheJanitor`, `SessionEverythingExporter` |
+| `data/cloud/` | Backup and sync: `CloudSync`, `CloudBackupListing`, `CloudAccountExport`, `SessionDeletes`, `SessionMetadataSync`, `SessionUploadBundler`, `SessionUploadMetadata`, `UploadWorkOutcomes`, `UploadProgressSampler`, `UploadErrors`, `TransferLog`, `TransferNotifications`, `CorruptTransferException` |
+| `data/cloud/restore/` | `CloudRestore`, `RestoreStart`, `RestoreDownloadOutcomes`, `DownloadProgress`, `UnrestorableBackupException` |
+| `data/account/` | `AuthRepository`, `AccessStatus`, `DevAuth`, `DeviceEnv`, `DeviceKeyManager`, `LicenseEntitlements`, `LicenseErrors`, `SeatLease`, `SeatHeartbeat`, `LegalTerms`, `TotpMfa` |
 | `data/prefs/` | `DicSettings`, `CoachPrefs`, `ParamClipboard`, `WizardDraft` |
 | `data/net/` | Unchanged |
-| `imaging/video/` | Video frame extraction and decoders, `ImageLuma` (previously in `ui/analysis/`) |
-| `ui/analysis/` | The three Activities only (pinned) |
-| `ui/analysis/{wizard,run,frames,roi,recommend,sweep}/` | Wizard state and chrome; the batch run; frame import and order; the ROI studio; subset and noise recommendation; the VSG sweep |
-| `ui/viewer/` | The two Activities, their ViewModels, `ViewerArgs`, the scrub cache, pills, the settings sheet |
-| `ui/viewer/{share,summary,inspect}/` | Exports; the summary GIF; tap-to-probe and its views |
-| `util/` | Adds `CallerCancellation` |
+| `imaging/video/` | `VideoFrameExtractor`, `VideoFrameBatchWriter`, `VideoKeyframeHelper`, `HardwareVideoDecoder`, `AviCodecDecoder`, `AviVideoDecoder`, `ImageLuma` (all previously in `ui/analysis/`) |
+| `ui/analysis/` | The three Activities only (pinned): `StaticAnalysisActivity`, `RoiDrawActivity`, `VsgLatticeActivity` |
+| `ui/analysis/wizard/` | `AnalysisViewModel`, `WizardState`, `AnalysisWizardChrome`, `AnalysisWizardCoach`, `AnalysisWizardSlots`, `AnalysisNavHelper`, `AnalysisReadyGate`, `AnalysisCancelGate`, `AnalysisSettingsSheetHelper`, `WizardStepSettingsContentView`, `ReferencePreviewLoader`, `LossyFormatCheck` |
+| `ui/analysis/run/` | `DicBatchRunner`, `DicFieldIo`, `BatchRunController`, `ComputeOverlayHelper`, `ConvergenceGate`, `EngineFailure`, `AnalysisRunCodes`, `RunSpec`, `RunSummaryText` |
+| `ui/analysis/frames/` | `FrameImportHelper`, `FrameOrderAdapter`, `FrameOrderHelper`, `AnalysisFrameOrderMenuHelper`, `AnalysisDeformedBatchHelper`, `AnalysisVideoExtractHelper` |
+| `ui/analysis/roi/` | `StudioOverlayView`, `StudioOverlayMaskEncoder`, `RoiViewport`, `RoiResolveHelper` |
+| `ui/analysis/recommend/` | `SubsetRecommender`, `SpeckleScale`, `DicGoodPractice`, `StrainWindowText`, `NoiseFloorPixels`, `NoiseFloorProbe`, `NoiseFloorStats`, `ExifPatchMap` |
+| `ui/analysis/sweep/` | `SweepSetupHelper`, `VsgStudy`, `VsgStudyRunner`, `VsgLatticeView`, `VsgPlotView`, `LineCutPreviewView` |
+| `ui/viewer/` | The two Activities (pinned) and what they share: `ResultViewerActivity`, `SaveExportActivity`, `ResultViewerViewModel`, `SaveExportViewModel`, `ViewerArgs`, `ScrubFrameCache`, `ViewerFieldPills`, `ViewerSettingsSheet`, `CustomScalePrefill`, `HeatmapFit` |
+| `ui/viewer/share/` | `ShareCenter`, `ShareExportBuilder`, `ShareExportJobs`, `ShareExportUi`, `SendToSheet`, `ViewerReportFactory` |
+| `ui/viewer/summary/` | `SummaryAnimation`, `SummaryCaption`, `ViewerSummaryHelper` |
+| `ui/viewer/inspect/` | `InspectOverlayView`, `ViewerInspectHelper`, `PointSpatialIndex`, `FieldHistogramView`, `TouchImageView` |
+| `util/` | Adds `CallerCancellation` (previously in `data/`) |
 
 `imaging/`, `report/`, `ui/home`, `ui/settings`, `ui/auth`, `ui/common`,
 `ui/admin` and `ui/limit` are unchanged. The largest new packages are
