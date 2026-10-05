@@ -9,7 +9,7 @@ comes back. These tests pin which of those count as settled and which do not.
 from datetime import datetime, timedelta, timezone
 
 
-from app import firestore_repo as repo
+import repo_view as repo
 from refusals import attempt
 
 NOW = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
@@ -84,7 +84,7 @@ def test_an_unlanded_revoke_shows_as_still_running_then_clears_on_revalidation(
     would still answer "licensed" for the account.
     """
     license_id = _roster(store, "u1", "u2")
-    monkeypatch.setattr(repo, "_drop_user_to_demo_if_licensed", lambda *a, **k: None)
+    repo.patch(monkeypatch, "_drop_user_to_demo_if_licensed", lambda *a, **k: None)
     assert repo.revoke_institution_seat(license_id, "u1") is True
 
     # IT's number has already moved; nothing told the holder.
@@ -265,7 +265,7 @@ def test_entitled_is_exactly_the_accounts_this_licence_still_answers_for(
     _add_unclaimed_seat(license_id)
     # One revoke that landed, one that did not.
     assert repo.revoke_institution_seat(license_id, "u2") is True
-    monkeypatch.setattr(repo, "_drop_user_to_demo_if_licensed", lambda *a, **k: None)
+    repo.patch(monkeypatch, "_drop_user_to_demo_if_licensed", lambda *a, **k: None)
     assert repo.revoke_institution_seat(license_id, "u3") is True
 
     report = _report(license_id)

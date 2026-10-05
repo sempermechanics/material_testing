@@ -17,7 +17,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 import fake_firestore
-from app import audit, deps, firestore_repo as repo, rate_limit
+from app import audit, deps, rate_limit
+import repo_view as repo
 from app.config import settings
 
 ROUTERS = pathlib.Path(__file__).resolve().parents[1] / "app" / "routers"
@@ -50,7 +51,7 @@ def signed_user(monkeypatch):
         deps, "verify_id_token",
         lambda _t: {"sub": "u1", "email": "u1@example.com", "email_verified": True},
     )
-    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: dict(user))
+    repo.patch(monkeypatch, "get_or_create_user", lambda claims, device_id=None: dict(user))
     return priv
 
 
@@ -70,7 +71,7 @@ async def test_a_rate_limited_erase_can_be_resent_unchanged(signed_user, client,
         claimed.append(nonce)
         return real_claim(nonce, *a, **k)
 
-    monkeypatch.setattr(repo, "claim_client_nonce", spy)
+    repo.patch(monkeypatch, "claim_client_nonce", spy)
     path = "/v1/sessions/s-gone"
     headers = _headers(signed_user, "DELETE", path, f"t1.{int(time.time())}.{'A' * 22}")
 
@@ -96,8 +97,7 @@ async def test_a_rate_limited_erase_can_be_resent_unchanged(signed_user, client,
 @pytest.mark.asyncio
 async def test_a_rate_limited_request_never_reaches_the_challenge_store(signed_user, client, monkeypatch):
     """Same for a server-issued challenge, which is deleted when consumed."""
-    monkeypatch.setattr(
-        repo, "consume_nonce", lambda *a, **k: pytest.fail("challenge consumed before the limit"),
+    repo.patch(monkeypatch, "consume_nonce", lambda *a, **k: pytest.fail("challenge consumed before the limit"),
     )
     monkeypatch.setattr(rate_limit.session_bucket, "allow", lambda key: False)
     path = "/v1/sessions"

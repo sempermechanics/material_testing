@@ -19,7 +19,7 @@ membership is checked before MFA so a probe learns nothing about the factor.
 """
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from .. import apps, audit, errors, firestore_repo as repo
+from .. import apps, audit, errors, repo
 from .. import rate_limit
 from ..config import settings
 from ..deps import current_user, rate_limited, step_up_check

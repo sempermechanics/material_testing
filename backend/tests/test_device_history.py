@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app import audit, deps, firestore_repo as repo
+from app import audit, deps
+import repo_view as repo
 from app.config import settings
 
 
@@ -16,8 +17,7 @@ def store(store, monkeypatch):
         lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com",
                     "email_verified": True},
     )
-    monkeypatch.setattr(
-        repo, "get_or_create_user",
+    repo.patch(monkeypatch, "get_or_create_user",
         lambda claims, device_id=None: {
             "uid": "admin-1", "email": "admin@sempermechanics.com",
             "role": "admin", "access_status": "APPROVED",

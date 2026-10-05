@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from fastapi import Depends, Header, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from . import apps, audit, errors, firestore_repo as repo, rate_limit, statuses
+from . import apps, audit, errors, repo, rate_limit, statuses
 from .config import settings
 from .google_auth import verify_app_check_token, verify_id_token
 from .validation import require_header_identifier

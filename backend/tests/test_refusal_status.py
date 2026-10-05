@@ -8,7 +8,8 @@ consoles branch on both halves.
 """
 import pytest
 
-from app import deps, errors, firestore_repo as repo
+from app import deps, errors
+import repo_view as repo
 
 INSTITUTION = {"kind": "institution", "status": "active", "mode": "licensed",
                "adminEmails": ["dev@local"], "keyPrefix": "SEMP-TEST"}
@@ -96,7 +97,7 @@ def staged(store, monkeypatch):
     """The dev caller holds L1, administers it, and the routes reach the repo."""
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "licenseId": "L1"})
     store._data["licenses"] = {"L1": dict(INSTITUTION)}
-    monkeypatch.setattr(repo, "find_user_by_email", lambda _e: {"uid": "u1", "email": "a@b.org"})
+    repo.patch(monkeypatch, "find_user_by_email", lambda _e: {"uid": "u1", "email": "a@b.org"})
     return store
 
 
@@ -105,7 +106,7 @@ def staged(store, monkeypatch):
                          ids=[f"{c[0]} {c[1]} {c[4]}" for c in CASES])
 async def test_a_refusal_keeps_its_status(staged, client, monkeypatch,
                                           method, path, body, fn, code, status):
-    monkeypatch.setattr(repo, fn, _refusing(code))
+    repo.patch(monkeypatch, fn, _refusing(code))
     resp = await client.request(method, path, json=body, headers={"X-Device-Id": "dev-device"})
     assert (resp.status_code, resp.json()["detail"]) == (status, code)
 
@@ -120,7 +121,7 @@ async def test_a_device_change_too_soon_says_when(staged, client, monkeypatch):
     def too_soon(*_a, **_k):
         raise errors.Refusal(errors.DEVICE_CHANGE_TOO_SOON, when.isoformat(), retry_at=when)
 
-    monkeypatch.setattr(repo, "clear_device_lock", too_soon)
+    repo.patch(monkeypatch, "clear_device_lock", too_soon)
     resp = await client.post("/v1/licenses/unbind")
     assert resp.status_code == 429
     assert resp.json()["detail"] == f"device_change_too_soon: {when.isoformat()}"

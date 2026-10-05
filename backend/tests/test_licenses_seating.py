@@ -5,7 +5,8 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps
+import repo_view as repo
 from app.config import settings
 from license_helpers import (  # noqa: F401
     _mint_individual,
@@ -294,7 +295,7 @@ def test_a_starved_invite_claim_mints_no_demo_key(store, monkeypatch):
     demo_before = {k for k, v in store._data["licenses"].items() if v.get("mode") == "demo"}
 
     real_claim = repo.claim_seat
-    monkeypatch.setattr(repo, "claim_seat", lambda *a, **k: repo._CONTENDED)
+    repo.patch(monkeypatch, "claim_seat", lambda *a, **k: repo._CONTENDED)
     out = repo.ensure_entitlement(dict(user), "dev-1")
 
     assert not out.get("licenseId")
@@ -302,7 +303,7 @@ def test_a_starved_invite_claim_mints_no_demo_key(store, monkeypatch):
     assert {k for k, v in store._data["licenses"].items() if v.get("mode") == "demo"} == demo_before
     assert len(repo.list_institution_invites(license_id)) == 1, "the invite must stay pending"
 
-    monkeypatch.setattr(repo, "claim_seat", real_claim)
+    repo.patch(monkeypatch, "claim_seat", real_claim)
     out = repo.ensure_entitlement(dict(store._data["users"]["busy-1"], uid="busy-1"), "dev-1")
     assert out["licenseId"] == license_id
     assert out["mode"] == "licensed"
@@ -318,7 +319,7 @@ def test_a_non_transient_claim_failure_still_mints_demo(store, monkeypatch):
     user = {"uid": "full-1", "email": "full@university.edu",
             "access_status": "APPROVED", "emailVerified": True}
     store._data["users"]["full-1"] = dict(user)
-    monkeypatch.setattr(repo, "claim_seat", lambda *a, **k: "license_seats_exhausted")
+    repo.patch(monkeypatch, "claim_seat", lambda *a, **k: "license_seats_exhausted")
     out = repo.ensure_entitlement(dict(user), "dev-1")
     assert out["licenseId"] and out["licenseId"] != license_id
     assert out["mode"] == "demo"

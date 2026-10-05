@@ -5,7 +5,8 @@ import pytest
 
 import fake_firestore
 
-from app import deps, errors, firestore_repo as repo
+from app import deps, errors
+import repo_view as repo
 from app.config import settings
 from license_helpers import (  # noqa: F401
     _mint_individual,
@@ -139,7 +140,7 @@ def test_grace_boundary_is_the_last_moment_of_grace(store, monkeypatch):
         (ends, "demo"),
         (ends + timedelta(seconds=1), "demo"),
     ]:
-        monkeypatch.setattr(repo, "_now", lambda now=now: now)
+        repo.patch(monkeypatch, "_now", lambda now=now: now)
         assert repo.effective_mode(user) == expected, now
 
 

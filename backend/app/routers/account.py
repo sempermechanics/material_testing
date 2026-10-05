@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import audit, drive, errors, firestore_repo as repo, legal
+from .. import audit, drive, errors, repo, legal
 from .. import rate_limit
 from ..deps import any_status_user, current_user, rate_limited, verified_device
 from ._shared import json_dumps

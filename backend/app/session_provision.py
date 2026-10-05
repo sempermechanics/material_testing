@@ -2,7 +2,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from . import drive, firestore_repo as repo, statuses
+from . import drive, repo, statuses
 from . import observability as obs
 from .config import settings
 

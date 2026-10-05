@@ -13,7 +13,8 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 import fake_firestore
-from app import audit, firestore_repo as repo, rate_limit
+from app import audit, rate_limit
+import repo_view as repo
 from app.main import app
 
 

@@ -18,7 +18,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from app import drive, firestore_repo as repo
+from app import drive
+import repo_view as repo
 from app.config import settings
 from app.models import FileComplete, FileSpec, SessionCreate
 from refusals import attempt, attempt_add
@@ -33,10 +34,10 @@ pytestmark = pytest.mark.skipif(
 def emulator_repo(monkeypatch):
     # Force a fresh client pointed at the emulator (Client picks up the env var).
     monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", True)
-    monkeypatch.setattr(repo, "_DB", None)
+    repo.patch(monkeypatch, "_DB", None)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     yield repo
-    monkeypatch.setattr(repo, "_DB", None)
+    repo.patch(monkeypatch, "_DB", None)
 
 
 def test_create_complete_list_delete_roundtrip(emulator_repo, monkeypatch):

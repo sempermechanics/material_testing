@@ -39,7 +39,7 @@ Engine tests are **not** this CI. From the submodule: see [docs/engine/TESTING.m
 | A failure result or a catch | [ADR-018](docs/adr/ADR-018-error-convention.md): `Authed` / `HttpFailure`, `RunStop`, `DownloadFailure`, `UploadFailures`, `UpsertOutcome`; rethrow cancellation |
 | Session paths | `SessionPaths` only |
 | Backend routes | `backend/app/routers/`; app/middleware in `main.py` |
-| Firestore access | `backend/app/repo/<aggregate>.py`; routers call it through `firestore_repo` ([ADR-001](docs/adr/ADR-001-firestore-repo-package.md)) |
+| Firestore access | `backend/app/repo/<aggregate>.py`; routers call the package, `repo.<name>` ([ADR-021](docs/adr/ADR-021-retire-firestore-repo-facade.md)); tests patch with `repo_view.patch` |
 | Engine math / solver | `engine/` submodule + [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
 
 ## Guardrails

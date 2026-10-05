@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from google.cloud import firestore
 
-from .firestore_repo import SCHEMA_VERSION, db
+from .repo._base import SCHEMA_VERSION, db
 
 log = logging.getLogger("audit")
 

@@ -39,7 +39,7 @@ app/          Android UI (Kotlin). Gradle builds ../engine/CMakeLists.txt;
 engine/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
               docs, and the JNI adapter in engine/adapters/android/)
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
-              access in backend/app/repo/ behind the firestore_repo facade
+              access in the backend/app/repo/ package (ADR-021)
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 ```
 

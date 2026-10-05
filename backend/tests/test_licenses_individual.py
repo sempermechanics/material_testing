@@ -4,7 +4,7 @@ import pytest
 
 from google.api_core.exceptions import Aborted
 
-from app import firestore_repo as repo
+import repo_view as repo
 from license_helpers import (  # noqa: F401
     _mint_individual,
     _mint_institution,
@@ -261,7 +261,7 @@ def _contended_binds(monkeypatch, starved, rival=None):
     With `rival`, the first aborted round is the one another device won: its
     lock is committed before this caller's transaction gives up.
     """
-    monkeypatch.setattr(repo, "_BIND_BACKOFF_S", 0)
+    repo.patch(monkeypatch, "_BIND_BACKOFF_S", 0)
     real = repo.firestore.transactional
     calls = {"n": 0}
 

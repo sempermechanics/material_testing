@@ -4,7 +4,8 @@ import threading
 import fake_firestore
 import pytest
 
-from app import audit, drive, firestore_repo as repo, observability as obs, rate_limit
+from app import audit, drive, observability as obs, rate_limit
+import repo_view as repo
 from app.config import settings
 from app.models import FileSpec, SessionCreate
 
@@ -12,7 +13,7 @@ from app.models import FileSpec, SessionCreate
 @pytest.mark.asyncio
 async def test_readyz_ok(client, monkeypatch):
     monkeypatch.setattr(rate_limit.health_bucket, "allow", lambda key: True)
-    monkeypatch.setattr(repo, "ping", lambda: None)
+    repo.patch(monkeypatch, "ping", lambda: None)
     monkeypatch.setattr(drive, "ping", lambda: None)
     r = await client.get("/readyz")
     assert r.status_code == 200
@@ -27,7 +28,7 @@ async def test_readyz_firestore_failure_is_stable_503(client, monkeypatch):
     def boom():
         raise obs.DependencyError("firestore_unreachable", "firestore")
 
-    monkeypatch.setattr(repo, "ping", boom)
+    repo.patch(monkeypatch, "ping", boom)
     r = await client.get("/readyz")
     assert r.status_code == 503
     assert r.json() == {"detail": "firestore_unreachable"}
@@ -36,7 +37,7 @@ async def test_readyz_firestore_failure_is_stable_503(client, monkeypatch):
 @pytest.mark.asyncio
 async def test_readyz_drive_failure_is_stable_503(client, monkeypatch):
     monkeypatch.setattr(rate_limit.health_bucket, "allow", lambda key: True)
-    monkeypatch.setattr(repo, "ping", lambda: None)
+    repo.patch(monkeypatch, "ping", lambda: None)
 
     def boom():
         raise obs.DependencyError("drive_unhealthy", "drive")
@@ -177,15 +178,15 @@ async def test_quota_race_accepts_soft_overshoot_window(client, monkeypatch):
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "maxSessions": 1})
     # A licensed ceiling is floored at demo's, so demo's has to be 1 as well.
     monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 1)
-    monkeypatch.setattr(repo, "count_user_sessions", lambda uid: 0)
+    repo.patch(monkeypatch, "count_user_sessions", lambda uid: 0)
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
     monkeypatch.setattr(
         drive, "ensure_session_folders",
         lambda *a, **k: {"userFolderId": "u", "sessionFolderId": "s", "bundle": "s", "metadata": "s"},
     )
     monkeypatch.setattr(drive, "init_resumable", lambda *a, **k: "https://upload")
-    monkeypatch.setattr(repo, "remember_user_folder", lambda *a, **k: None)
-    monkeypatch.setattr(repo, "set_session_folder", lambda *a, **k: None)
+    repo.patch(monkeypatch, "remember_user_folder", lambda *a, **k: None)
+    repo.patch(monkeypatch, "set_session_folder", lambda *a, **k: None)
 
     body = {
         "specimen": "x",
@@ -212,8 +213,8 @@ async def test_unicode_specimen_and_device_model(client, monkeypatch):
         lambda *a, **k: {"userFolderId": "u", "sessionFolderId": "s", "bundle": "s", "metadata": "s"},
     )
     monkeypatch.setattr(drive, "init_resumable", lambda *a, **k: "https://upload")
-    monkeypatch.setattr(repo, "remember_user_folder", lambda *a, **k: None)
-    monkeypatch.setattr(repo, "set_session_folder", lambda *a, **k: None)
+    repo.patch(monkeypatch, "remember_user_folder", lambda *a, **k: None)
+    repo.patch(monkeypatch, "set_session_folder", lambda *a, **k: None)
 
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives import serialization

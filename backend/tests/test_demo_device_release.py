@@ -8,7 +8,8 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps
+import repo_view as repo
 from key_helpers import _ec_pem
 from license_helpers import _mint_individual, _signed_in
 from refusals import attempt

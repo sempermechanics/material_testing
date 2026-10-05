@@ -6,7 +6,7 @@ import random
 import time
 from datetime import timedelta
 
-from .. import apps, errors
+from .. import apps, audit, errors
 from ..config import settings
 from ..licenses import (
     as_utc,
@@ -253,13 +253,9 @@ def revalidate_device_lock(user: dict, device_id: str | None,
         if bound:
             log.info("device lock bound uid=%s license=%s app=%s",
                      user.get("uid"), user.get("licenseId"), app)
-            # Imported here rather than at module scope: `audit` imports `db`
-            # through the firestore_repo facade, which imports this module, so
-            # the two cannot import each other eagerly.
             # The record matters because it is the second half of a device
             # change — `clear_device_lock` writes the device that was given
             # up, and this writes the one that took its place.
-            from .. import audit
             audit.record(
                 user.get("uid"), device_id, action="LICENSE_DEVICE_BIND",
                 target={"type": "license", "id": user.get("licenseId")},

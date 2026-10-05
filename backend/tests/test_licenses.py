@@ -5,7 +5,8 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps
+import repo_view as repo
 from app.licenses import canonicalize, generate_key, key_hash, key_prefix
 from license_helpers import (  # noqa: F401
     _mint_individual,

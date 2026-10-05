@@ -5,7 +5,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from .. import audit, drive, errors, firestore_repo as repo, statuses
+from .. import audit, drive, errors, repo, statuses
 from .. import rate_limit
 from ..deps import rate_limited, verified_device
 from ..models import FileComplete

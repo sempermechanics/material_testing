@@ -5,7 +5,8 @@ import pytest
 import requests
 
 import fake_firestore
-from app import audit, drive, firestore_repo as repo
+from app import audit, drive
+import repo_view as repo
 
 
 class _Streamed:

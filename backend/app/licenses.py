@@ -1,6 +1,6 @@
 """License key format, hashing, and the entitlement-mode vocabulary.
 
-Firestore persistence lives in firestore_repo.
+Firestore persistence lives in `app.repo`.
 
 `mode` is the account's enforcement state: `licensed` (a valid, unexpired
 license is attached) or `demo` (everything else — no license, expired past

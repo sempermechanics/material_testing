@@ -224,7 +224,7 @@ def test_claim_client_nonce_is_single_use(monkeypatch):
 
     import fake_firestore
 
-    from app import firestore_repo as repo
+    import repo_view as repo
 
     fake_firestore.install(monkeypatch)
     exp = datetime.now(timezone.utc)

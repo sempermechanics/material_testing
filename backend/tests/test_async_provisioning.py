@@ -9,7 +9,7 @@ polls the /uploads endpoint it already uses for resume.
 import pytest
 
 from app import audit, drive, main, rate_limit, tasks
-from app import firestore_repo as repo
+import repo_view as repo
 from app.config import settings
 
 DEV_UID = "dev-user"
@@ -251,7 +251,7 @@ async def test_inline_create_hands_back_what_the_uploads_listing_would(
 def test_one_listing_page_holds_a_whole_session():
     """create_session returns the first page of upload targets. That page is
     the whole manifest only while the file cap stays below the page size."""
-    from app import firestore_repo as repo
+    import repo_view as repo
     from app.config import settings
 
     assert settings.MAX_FILES_PER_SESSION <= repo._LIST_SOFT_LIMIT
@@ -298,7 +298,7 @@ async def test_folder_ids_are_stored_then_reused(store, client, monkeypatch):
         writes.append(a)
         real(*a)
 
-    monkeypatch.setattr(repo, "remember_user_folder", remember)
+    repo.patch(monkeypatch, "remember_user_folder", remember)
 
     for name in ("s1", "s2"):
         await client.post("/v1/sessions", json={"specimen": name, "files": [_file("a")]})

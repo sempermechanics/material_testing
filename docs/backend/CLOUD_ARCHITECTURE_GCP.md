@@ -698,7 +698,7 @@ the way it does.
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
 | Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
 | Async provisioning | [`backend/app/tasks.py`](../../backend/app/tasks.py) | Cloud Tasks enqueue + OIDC callback auth (§4.1) |
-| Firestore access | [`backend/app/repo/`](../../backend/app/repo/__init__.py), one module per aggregate behind the [`firestore_repo.py`](../../backend/app/firestore_repo.py) facade ([ADR-001](../adr/ADR-001-firestore-repo-package.md)) | Schema in §5; contention retries (`_run_tx` in `repo/_base.py`); device settlement (§3) |
+| Firestore access | [`backend/app/repo/`](../../backend/app/repo/__init__.py), one module per aggregate; routers call the package ([ADR-001](../adr/ADR-001-firestore-repo-package.md), [ADR-021](../adr/ADR-021-retire-firestore-repo-facade.md)) | Schema in §5; contention retries (`_run_tx` in `repo/_base.py`); device settlement (§3) |
 | Input validation | [`backend/app/validation.py`](../../backend/app/validation.py) | Page cursors and document ids — see below |
 | Rate limiting | [`backend/app/rate_limit.py`](../../backend/app/rate_limit.py) | Per-uid token buckets (§12) |
 | Structured logging | [`backend/app/observability.py`](../../backend/app/observability.py) | JSON log records with request correlation (§17) |
@@ -1283,7 +1283,7 @@ before and after.
 Every authed request that carries `X-Device-Id` re-validates the license/seat
 device lock, not just the one that activated it —
 `deps.current_user`/`deps.verified_device` both call
-`firestore_repo.revalidate_device_lock` on every such request. If the key was
+`repo.revalidate_device_lock` on every such request. If the key was
 revoked or the seat was disabled/revoked, the account drops to Demo
 **immediately** and stored, fails closed, and — same guarantee as activation —
 never touches stored sessions/files. See
@@ -1457,7 +1457,7 @@ call it.
 | 5 | ~~`/v1/campus/*` seat routes (4)~~ | `routers/institutions.py` **and** `gateway/openapi.yaml` | **Retired 2026-09-26.** Removed from both; the access log no longer classes `/v1/campus/` as `institution` | 0 requests under `/v1/campus` in 30 days across all services |
 | 6 | App reads `config.plan` when `mode` is empty | `AppRemoteConfig.resolveMode`, `ApiDtos.AppConfigDto.plan` | Every backend the app can meet emits `mode` (true since the rename deployed) | None needed; ship with #7 |
 | 7 | App falls back to the old `plan` pref key | `AppRemoteConfig.mode()` | One release after the rename build, so every install has cached `mode` | Play Console version distribution |
-| 8 | `plan` mirror in `/v1/config`, licence summaries and user documents | `firestore_repo` (`_mode_patch`, `resolve_user_config`, `_license_public`), `licenses.legacy_plan` | A `mode`-reading build is the fleet (the same judgement `DAT_CODEC_ENCODING_ENABLED` needs) | Play Console version distribution; old builds fail closed to demo without it |
+| 8 | `plan` mirror in `/v1/config`, licence summaries and user documents | `app.repo` (`_mode_patch`, `resolve_user_config`, `_license_public`), `licenses.legacy_plan` | A `mode`-reading build is the fleet (the same judgement `DAT_CODEC_ENCODING_ENABLED` needs) | Play Console version distribution; old builds fail closed to demo without it |
 | 9 | `normalize_mode` / `normalize_kind` accept `plan` / `campus` values in stored documents | `licenses.py` | Migration 002 has reached every `users` and `licenses` document **and** #8 stopped writing the mirror | A Firestore count of documents with no `mode` (users) or `kind == "campus"` (licenses) is zero |
 
 `plan` is not written into new audit rows: `LICENSE_ACTIVATE` records `mode`.
@@ -2066,7 +2066,7 @@ until now only one of them could do it. The table is the whole feature:
 | The holder | `POST /v1/licenses/unbind` | `USER_STEPUP` |
 | Semper staff, a Demo account | `POST /v1/admin/device-releases` `{"email": …}` | `ADMIN_STEPUP` |
 
-The first four reach one primitive, `firestore_repo.clear_device_lock`, which takes
+The first four reach one primitive, `repo.clear_device_lock`, which takes
 an `actor` — `ACTOR_STAFF`, `ACTOR_IT`, `ACTOR_SELF` — and selects the seat or
 the licence document by kind. The staff seat route exists because the operator
 console previously called the institution-tier one, which returns

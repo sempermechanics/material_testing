@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import apps, audit, errors, firestore_repo as repo, statuses
+from .. import apps, audit, errors, repo, statuses
 from .. import rate_limit
 from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited

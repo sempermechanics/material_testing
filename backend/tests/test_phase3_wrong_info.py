@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app import audit, deps, drive, main, rate_limit, statuses, tasks
-from app import firestore_repo as repo
+import repo_view as repo
 from app.config import settings
 from license_helpers import _mint_individual, _mint_institution, _signed_in
 from refusals import attempt

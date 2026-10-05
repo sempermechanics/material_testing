@@ -244,7 +244,7 @@ async def test_signed_request_reads_the_licence_and_seat_once(world, client, mon
     and erase.
     """
     priv, meter = world
-    from app import firestore_repo as repo
+    import repo_view as repo
     data = repo._DB._data
     data["licenses"] = {"L1": {"kind": "institution", "status": "active", "mode": "licensed",
                                "seating": "assigned", "keyPrefix": "SEMP-TEST"}}

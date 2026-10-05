@@ -426,7 +426,7 @@ because Drive has no anonymous signed read.
 
 Handlers stay plain `def` (Firestore and Drive calls are blocking, so Starlette
 runs them in its threadpool). Every route is in `backend/app/routers/`; shared
-pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade over `repo/`),
+pieces are `deps.py` (auth), `repo/` (all Firestore access, one module per aggregate),
 `drive.py` (all Drive access), `errors.py` (the `detail` codes),
 `validation.py`, `rate_limit.py`, `audit.py`, `observability.py`.
 
@@ -446,9 +446,9 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade
 
 | Id | Workflow | Entry | Chain |
 |---|---|---|---|
-| C1 | Identify the caller | `deps.current_user` | `google_auth.verify_id_token` → `firestore_repo.get_or_create_user` (auto-approve rules, device binding, `DeviceInUseError` → 409) → 403 unless APPROVED. First PENDING user triggers C19 |
+| C1 | Identify the caller | `deps.current_user` | `google_auth.verify_id_token` → `repo.get_or_create_user` (auto-approve rules, device binding, `DeviceInUseError` → 409) → 403 unless APPROVED. First PENDING user triggers C19 |
 | C2 | Register a device | `POST /v1/devices/register` (`routers/devices.py`) | One account per device and one device per account: a different bound device is `device_conflict`, a device owned by another uid is `device_in_use` (audited). Re-registering the same id heals the stored public key |
-| C3 | Mint a nonce | `POST /v1/challenge` | `firestore_repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
+| C3 | Mint a nonce | `POST /v1/challenge` | `repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
 | C4 | Verify a device-signed call | `deps.verified_device` | ACTIVE device → `consume_nonce` (replay = 401) → ECDSA P-256 over `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → `bad_signature` audited on failure |
 | C14 | Admin | `routers/admin.py` | Listing and **device-history** need only an admin ID token; **approve / revoke / config-patch / mint additionally require a step-up** — a device attestation, or a second factor plus a recent sign-in for the staff console — so a stolen ID token alone cannot change access. Whole-licence revoke uses a tighter freshness window. All audited |
 

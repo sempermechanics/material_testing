@@ -1,12 +1,12 @@
 # ADR-001: Split `firestore_repo.py` into a package behind a facade
 
-**Status:** Accepted
+**Status:** Accepted; the facade (Decision 2) superseded by [ADR-021](ADR-021-retire-firestore-repo-facade.md) on 2026-10-05
 **Date:** 2026-09-23
 **Deciders:** backend owner
 
 ## Context
 
-`backend/app/firestore_repo.py` is 3,432 lines and 138 functions. Roughly two
+`firestore_repo.py` is 3,432 lines and 138 functions. Roughly two
 thirds of it is licensing (mint, claims, invites, leases, seats, device lock,
 reconciliation), written as the licensing work landed. Every router imports it
 as `from .. import firestore_repo as repo` and calls about 70 public names

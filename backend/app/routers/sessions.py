@@ -11,7 +11,7 @@ import requests
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from .. import audit, drive, errors, firestore_repo as repo, statuses
+from .. import audit, drive, errors, repo, statuses
 from .. import observability as obs
 from .. import rate_limit
 from .. import tasks

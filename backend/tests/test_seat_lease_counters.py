@@ -11,7 +11,8 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps
+import repo_view as repo
 from license_helpers import (  # noqa: F401
     _mint_individual,
     _mint_institution,
@@ -87,7 +88,7 @@ def test_taking_up_an_expired_unswept_lease_again_counts_it_once(store, monkeypa
     license_id = _leased_pool(store, max_seats=2)
     _expire_unswept(store, license_id, "u1")
     # The sweep is bounded and runs outside the claim; model the lease it missed.
-    monkeypatch.setattr(repo, "_sweep_expired_leases", lambda *a: 0)
+    repo.patch(monkeypatch, "_sweep_expired_leases", lambda *a: 0)
 
     err, _ = attempt(repo.checkout_lease, _user(store, "u1"), "dev-1")
 
@@ -266,7 +267,7 @@ def test_a_blocked_invite_is_not_retried_on_every_request(store, monkeypatch):
     repo.revoke_institution_seat(license_id, "u1")
     calls = []
     real = repo._invite_ref
-    monkeypatch.setattr(repo, "_invite_ref",
+    repo.patch(monkeypatch, "_invite_ref",
                         lambda address: calls.append(address) or real(address))
 
     out = repo.ensure_entitlement(_user(store, "n1"), "dev-n")

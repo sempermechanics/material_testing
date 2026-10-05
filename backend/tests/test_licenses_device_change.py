@@ -5,7 +5,8 @@ import pytest
 
 import fake_firestore
 
-from app import deps, errors, firestore_repo as repo
+from app import deps, errors
+import repo_view as repo
 from app.config import settings
 from key_helpers import _ec_pem
 from license_helpers import (  # noqa: F401
