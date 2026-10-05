@@ -123,10 +123,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   2026-10-05).** A new app; "indic" leaves the code and the engine submodule is `engine/`
   ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)); naming rules in CONTRIBUTING
   "Code style". Firebase app, App Check and `google-services.json` done; backend
-  (new ids in `apps.py`) and Hosting (`assetlinks.json`) deployed 2026-10-05. Owed: a phone
-  check of the new app (sign in, restore an old backup, App Link). material_testing moves to
+  (new ids in `apps.py`) and Hosting (`assetlinks.json`) deployed 2026-10-05. Pixel 6 check
+  of the new app passed 2026-10-05: sign-in, licence after **New device**, App Links, a
+  restore of an old-app backup, and a new analysis backed up. The restore dated the row
+  from the restore itself (fix #341). material_testing moves to
   `com.sempermechanics.materialtesting` in the same merge that takes this code
-  ([FORK_SYNC](docs/ops/FORK_SYNC.md)).
+  ([FORK_SYNC](docs/ops/FORK_SYNC.md)); its Firebase app is not registered yet.
 - **Deployed.** Cloud Run `semper-api` (image `semper-api-37277643509-1` from `67d2ad35`,
   2026-10-05; scales to zero) behind API Gateway `semper-gw` (config `v202610010948-83`,
   deployed by CI, ADR-006); staging `semper-api-staging` behind `semper-gw-staging` (CI
@@ -136,19 +138,20 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   tagged by app ([ADR-014](docs/adr/ADR-014-session-app-tag.md)) are live; consoles on
   `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)); what went out
   when is in [CHANGELOG](docs/ops/CHANGELOG.md).
-- **Owed on the backend side.** Material Testing signed in beside a signed-in Semper on
-  one phone, and App Check for it; the Pixel 6 account demoted on 2026-09-26 (#264) still
-  needs one **New device** to get its licence back (not verified here).
 - **App release `v1.2-beta.3`** (beta, private GitHub Release, versionCode 35, from
   `ae05bb87`); Pixel 6 smoke on 2026-09-26 was clean. Next release also carries the
   material_testing ports #298–#302 (manual keyboard / ROI dock / viewer checks owed).
-- **material_testing shares this history** and merges this `main` (last at `a735582`,
-  material_testing#115), with its own app id (TD-133). Shared code and backend changes land
-  here first; after the quality program it replays two package mappings
+- **material_testing shares this history** and merges this `main` (last at `dc133510`,
+  material_testing#120, before the quality program), with its own app id (TD-133).
+  Shared code and backend changes land here first; after the quality program it replays two package mappings
   ([FORK_SYNC.md](docs/ops/FORK_SYNC.md)).
+- **Dependabot** opens monthly PRs for major versions only (pip, Gradle, Actions; #337);
+  minor and patch fixes arrive as Dependabot security updates, which are on.
 - **Owed.** The public release of `v1.2-beta.3` (website / Play); a licensed-account smoke
-  of the paths a Demo account cannot reach (share and PDF, Delete everywhere, Restore, the
-  backups card); AVI import has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a);
+  of share and PDF and Delete everywhere (Restore and the backups card were checked on the
+  new app 2026-10-05; a backup hidden from the card comes back only through Settings);
+  Material Testing signed in beside a signed-in Semper on one phone,
+  and App Check for it; AVI import has run only on emulators ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a);
   unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
