@@ -116,18 +116,17 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ([ADR-015](docs/adr/ADR-015-package-layout.md)), ViewBinding and the `ui/common` kit
   ([ADR-017](docs/adr/ADR-017-viewbinding-and-ui-kit.md)), typed outcomes
   ([ADR-018](docs/adr/ADR-018-error-convention.md)) and no main file over 500 lines.
-  Owed before release: the emulator passes in each PR's test plan, the Pixel 6
-  benchmark write-up (a wizard cold-start regression is being checked), and ADR-015's
-  queued-work upgrade check. Results: [QUALITY_PROGRAM_RESULTS.md](docs/ops/QUALITY_PROGRAM_RESULTS.md).
-- **App id `com.sempermechanics.semper` (open PR).** A new app;
-  "indic" leaves the code and the engine submodule is `engine/`
-  ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)). The Firebase app and its
-  App Check are registered and its `google-services.json` committed (2026-10-05). The engine
-  gitlink is semper-dic-engine#5's merge commit. Owed before release: a backend and
-  Hosting deploy. material_testing moves to `com.sempermechanics.materialtesting` in
-  the same merge that takes this code. Stacked on it: the naming-scheme renames
-  (branch `naming/scheme`; rules in CONTRIBUTING "Code style", every rename in
-  [FORK_SYNC](docs/ops/FORK_SYNC.md)).
+  Owed before release: the emulator passes in each PR's test plan and ADR-015's
+  queued-work upgrade check. Pixel 6 A/B done (§7.1 of the results; small slowdowns in
+  TD-177). Results: [QUALITY_PROGRAM_RESULTS.md](docs/ops/QUALITY_PROGRAM_RESULTS.md).
+- **App id `com.sempermechanics.semper` (on `main`, #333 and the naming scheme #334,
+  2026-10-05).** A new app; "indic" leaves the code and the engine submodule is `engine/`
+  ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)); naming rules in CONTRIBUTING
+  "Code style". Firebase app, App Check and `google-services.json` done; Hosting
+  (`assetlinks.json`) deployed 2026-10-05. Owed before a build under the new id ships: the
+  backend deploy (new ids in `apps.py`). material_testing moves to
+  `com.sempermechanics.materialtesting` in the same merge that takes this code
+  ([FORK_SYNC](docs/ops/FORK_SYNC.md)).
 - **Deployed.** Cloud Run `semper-api` (image `semper-api-36844645753-1` from `9230f444`,
   2026-10-01; scales to zero) behind API Gateway `semper-gw` (config `v202610010948-83`,
   deployed by CI, ADR-006); staging `semper-api-staging` behind `semper-gw-staging` (CI

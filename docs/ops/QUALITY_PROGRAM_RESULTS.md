@@ -493,9 +493,64 @@ in the program fixed were re-pointed to their new files rather than closed.
 
 ## 7. Benchmarks
 
-All numbers are from one x86_64 emulator (`Semper_Smoke` AVD), so they are
-only good for comparing builds with each other. The Pixel 6 runs of both
-suites are still to do.
+### 7.1 Pixel 6
+
+Both suites on the Pixel 6 (`oriole`, wireless adb), 2026-10-05: the baseline
+`ff0cfc3d` against the program's last head `691fbdd5` (#332, before the app id
+moved). Two rounds with the order reversed: round 1 ran base then after, round
+2 ran after then base, each round the micro suite for both builds and then the
+three macro classes for both. The phone was on the charger at thermal status 0
+or 1 (1 is "light"; the charger alone keeps it there), except that round 2's
+after `StartupBenchmark` began on battery for about a minute. The micro suite
+is the debuggable app's androidTest, so its times compare builds and are not
+release speeds. Method tracing was off (`androidx.benchmark.profiling.mode
+none`). Medians:
+
+| Suite | Benchmark | Base r1 | After r1 | Base r2 | After r2 | Change, both rounds |
+|---|---|---:|---:|---:|---:|---|
+| micro | `buildReport_oneFrame`, ms | 193.9 | 198.1 | 193.2 | 198.2 | **+2.2 %, +2.6 %** |
+| micro | `computeFieldExtrema_oneFrame`, ms | 2.53 | 2.49 | 2.54 | 2.48 | −1.7 %, −2.3 % |
+| micro | `decodeDatFile_oneFrame`, ms | 0.595 | 0.501 | 0.497 | 0.495 | −16 %, 0 % |
+| micro | `generateHeatmap_oneFrame`, ms | 18.99 | 19.72 | 19.01 | 20.17 | **+3.8 %, +6.1 %** |
+| micro | `gifEncode_10frames`, ms | 22.3 | 22.4 | 22.3 | 22.3 | 0 % |
+| micro | `gifEncode_150frames`, ms | 304.9 | 303.6 | 304.8 | 304.0 | −0.4 % |
+| micro | `pointSpatialIndexBuild_oneFrame`, ms | 98.1 | 102.4 | 99.6 | 99.9 | +4.4 %, +0.3 % |
+| micro | `profileAlong_threeComponents`, ms | 5.15 | 5.12 | 5.15 | 5.19 | ±1 % |
+| micro | `valueRanges_oneFrame`, ms | 9.63 | 9.53 | 9.59 | 9.59 | −1 %, 0 % |
+| micro | `valueRanges_150frames`, ms | 1,455 | 1,456 | 1,444 | 1,449 | 0 % |
+| macro | cold start, TTID ms | 785 | 745 | 701 | 490 | order (see below) |
+| macro | warm start, TTID ms | 62.1 | 75.3 | 58.7 | 72.4 | **+21 %, +23 %** |
+| macro | wizard cold start, TTID ms | 357 | 535 | 703 | 339 | order |
+| macro | Settings cold start, TTID ms | 465 | 518 | 668 | 322 | order |
+| macro | Settings scroll, frame CPU p50 ms | 6.39 | 6.22 | 6.36 | 6.48 | ±3 % |
+| macro | scrub 10 frames, `.dat` decodes / ms | 4 / 8.64 | 4 / 9.09 | 4 / 9.09 | 4 / 9.31 | +5 %, +2 % |
+| macro | scrub 150 frames, `.dat` decodes / ms | 7 / 13.2 | 7 / 13.5 | 7 / 13.1 | 7 / 13.9 | +2 %, +6 % |
+| macro | scrub 150 frames, frame CPU p50 ms | 5.55 | 5.60 | 5.25 | 5.46 | +1 %, +4 % |
+| macro | scrub 150 frames, max heap KB | 21,365 | 21,985 | 22,493 | 21,557 | +3 %, −4 % |
+
+Allocation counts are the same in both builds (the heatmap's 22 → 20 is the
+only change), and the scrub decodes the same frames.
+
+**Cold starts follow the run order, not the build.** In each round the build
+that ran its macro classes second was the slow one on every cold start: after
+in round 1 (the wizard +50 %, every one of its 15 launches slower), base in
+round 2 (base's wizard 703 ms against after's 339 ms). A read of everything the
+wizard and Settings do before their first frame found no new main-thread work
+in the after build. Cold starts are therefore not compared here; ADR-008's
+interleaved `scripts/startup_ab.py` is the tool for them.
+
+**What held in both rounds, whichever build ran first:** warm start's first
+frame is about 13 ms slower (+22 %), `generateHeatmap` about 1 ms (+5 %) and
+`buildReport` about 5 ms (+2.3 %) slower. They are recorded as TD-177. Nothing
+else moved past run-to-run noise. These runs are not gate references
+(TD-155): several steps ended at thermal status 1 and the builds used the old
+app id. The raw JSON is kept outside the repo
+(`pixel_backups/semper-bench-oriole-2026-10-05`).
+
+### 7.2 Emulator
+
+All numbers in this section are from one x86_64 emulator (`Semper_Smoke` AVD),
+so they are only good for comparing builds with each other.
 
 **ViewerScrubBenchmark** (macro, medians, one run per build, 2026-10-02). The
 builds are the baseline (`ff0cfc3d`); `e4b40b96`, which adds the bug fixes, the
@@ -519,7 +574,8 @@ The decode counts are identical, so the scrub cache still decodes the same
 frames. Frame times move both ways between runs, within emulator noise. The
 150-frame heap is about 1.1 MB (5 %) higher after the second half, plausibly
 the viewer's controller objects and the field-metrics cache that now lives in
-the ViewModel; recheck it on the Pixel 6.
+the ViewModel. On the Pixel 6 (§7.1) the 150-frame heap moved +3 % and −4 % in
+the two rounds, so there is no consistent increase on the phone.
 
 **HotPathMicroBenchmark** (micro), before and after the viewer and report
 split (#328):
@@ -550,16 +606,16 @@ the splits and pass on the #331 branch.
 
 ## 8. The PRs and their merge order
 
-Merged: [#310](https://github.com/sempermechanics/semperdic-app/pull/310)
-(test dependencies, ViewBinding on, the baseline) and
+All merged by 2026-10-05: [#310](https://github.com/sempermechanics/semperdic-app/pull/310)
+(test dependencies, ViewBinding on, the baseline),
 [#315](https://github.com/sempermechanics/semperdic-app/pull/315) (shared
-test fixtures).
-
-Open, in merge order: #311 → #312, #316 → #313 → #314 → #317 → #318–#321 →
-#322 → #323–#326 → #327–#330 → #331 → this docs PR. A PR that mixes moves
-with fixes merges with a merge commit, never a squash
-([ADR-015](../adr/ADR-015-package-layout.md)). Each later PR was built on an
-integration of the ones before it, so retarget it to `main` once those land.
+test fixtures), then #311 → #312, #316 → #313 → #314 → #317 → #318–#321 →
+#322 → #323–#326 → #327–#330 → #331 → #332 (this document). PRs that mix
+moves with fixes merged with a merge commit, never a squash
+([ADR-015](../adr/ADR-015-package-layout.md)). On `main`, three quota tests
+(#326, #330, #331) failed in CI and not locally, because a build with no API URL
+has the cloud off and the quota gate then lets every save through; they now
+switch the cloud on through `SessionQuotaGate.api`.
 
 | PR | What |
 |---|---|
@@ -584,6 +640,6 @@ integration of the ones before it, so retarget it to `main` once those land.
 | [#330](https://github.com/sempermechanics/semperdic-app/pull/330) | The wizard: ViewBinding, value types, one host interface, four fixes, splits |
 | [#331](https://github.com/sempermechanics/semperdic-app/pull/331) | The second package move, cross-area fixes, the suppression sweep |
 
-Still owed before release: the emulator passes listed in each PR's test plan,
-the Pixel 6 benchmark runs, and ADR-015's upgrade check (queued work from the
-previous APK must still run after installing this one).
+Still owed before release: the emulator passes listed in each PR's test plan
+and ADR-015's upgrade check (queued work from the previous APK must still run
+after installing this one). The Pixel 6 runs are §7.1.

@@ -12,6 +12,20 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-05 — Hosting deploy: App Links for the new app ids (#333)
+
+Hosting only, from `67d2ad35` (`main` after #333/#334) with
+`scripts/deploy-console.sh` against `semper-gw`. One file changed:
+`/.well-known/assetlinks.json` now lists `com.sempermechanics.semper` and
+`com.sempermechanics.materialtesting` beside the old ids
+([ADR-019](../adr/ADR-019-sempermechanics-app-id.md)); every console file already
+matched `main` before the deploy. The backend deploy with the new ids in
+`backend/app/apps.py` is owed: until it runs, the backend refuses the new
+`X-App-Id` as `unknown_app`. The Firebase Android app
+`1:171818100029:android:db984f1bba569a38161154` (same debug and release
+fingerprints as the old app) and its App Check (Play Integrity) were registered
+the same day.
+
 ## 2026-10-01 — Backend and console deploy: cloud sessions tagged by app (#303)
 
 From `9230f444`. Staging first: `deploy-backend.yml` run 36843745324 →
