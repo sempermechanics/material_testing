@@ -5,9 +5,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkManager
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.indicvision.semper.cloud.FakeCloudApi
 import com.indicvision.semper.data.net.AppConfigDto
 import com.indicvision.semper.data.net.AppRemoteConfig
 import com.indicvision.semper.data.net.TokenStore
+import com.indicvision.semper.data.session.SessionQuotaGate
 import com.indicvision.semper.data.session.SessionStore
 import com.indicvision.semper.fixtures.CleanAppState
 import com.indicvision.semper.fixtures.sessionRecord
@@ -80,8 +82,14 @@ class RunRecordSaveTest {
     @Test
     fun `a quota that filled after the pre-check is a full quota, and queues nothing`() {
         TokenStore.setQuota(ctx, used = 2)
-
-        assertEquals(SessionStore.UpsertResult.QUOTA_FULL, saveRunRecord(ctx, record("b"), cloudEnabled = true))
-        assertEquals(0, uploadsQueuedFor("b"))
+        // Cloud on: a build with no API URL (CI) would otherwise skip the quota.
+        val realApi = SessionQuotaGate.api
+        SessionQuotaGate.api = { FakeCloudApi() }
+        try {
+            assertEquals(SessionStore.UpsertResult.QUOTA_FULL, saveRunRecord(ctx, record("b"), cloudEnabled = true))
+            assertEquals(0, uploadsQueuedFor("b"))
+        } finally {
+            SessionQuotaGate.api = realApi
+        }
     }
 }
