@@ -17,12 +17,12 @@ import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
@@ -131,9 +131,9 @@ class HomeActivity : AppCompatActivity() {
         val mime = contentResolver.getType(uri) ?: ""
         val intent = Intent(this, StaticAnalysisActivity::class.java)
         if (mime.startsWith("video/")) {
-            intent.putExtra(DicKeys.PICKED_VIDEO_URI, uri.toString())
+            intent.putExtra(IntentKeys.PICKED_VIDEO_URI, uri.toString())
         } else {
-            intent.putExtra(DicKeys.PICKED_REF_URI, uri.toString())
+            intent.putExtra(IntentKeys.PICKED_REF_URI, uri.toString())
         }
         startActivity(intent)
     }
@@ -286,7 +286,7 @@ class HomeActivity : AppCompatActivity() {
             val localCount = withContext(Dispatchers.IO) {
                 SessionStore.list(this@HomeActivity).size
             }
-            TokenStore.refreshSessionLimit(this@HomeActivity, localCount)
+            AccountCache.refreshSessionLimit(this@HomeActivity, localCount)
             quotaCard.openLimitScreenIfReached()
         }
     }
@@ -350,7 +350,7 @@ class HomeActivity : AppCompatActivity() {
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
             // Local count alone can trip the hard-stop flag (before cloud reconcile).
-            TokenStore.refreshSessionLimit(this@HomeActivity, sessions.size)
+            AccountCache.refreshSessionLimit(this@HomeActivity, sessions.size)
         }
     }
 

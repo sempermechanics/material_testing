@@ -26,7 +26,7 @@ import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.ValueRange
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
@@ -35,7 +35,7 @@ import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.home.HomeActivity
 import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
-import com.sempermechanics.semper.ui.viewer.share.ShareExportUi
+import com.sempermechanics.semper.ui.viewer.share.ShareExportController
 import com.sempermechanics.semper.ui.viewer.share.ShareKind
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
 import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
@@ -76,7 +76,7 @@ class ResultViewerActivity : AppCompatActivity() {
     internal lateinit var shareBanner: TransferBannerController
 
     /** Shows the running exports, which live in [viewModel] and outlive this screen's rotations. */
-    internal lateinit var shareExports: ShareExportUi
+    internal lateinit var shareExports: ShareExportController
 
     /** Run once the frame set is read; see [whenFrameSetLoaded]. */
     private val afterFrameSet = mutableListOf<() -> Unit>()
@@ -187,7 +187,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         shareBanner = TransferBannerController(binding.transferBannerRoot.root)
         // Re-attaches any export a rotation left running.
-        shareExports = ShareExportUi(this, viewModel.exports).also { it.attach() }
+        shareExports = ShareExportController(this, viewModel.exports).also { it.attach() }
 
         Insets.padTop(binding.viewerTopStack)
         // Lifted, not padded, above the keyboard: the image is fitted to the
@@ -283,7 +283,7 @@ class ResultViewerActivity : AppCompatActivity() {
         binding.btnViewerHome.setOnClickListener { goHome() }
         binding.btnViewerSettingsInfo.setOnClickListener {
             bumpChrome()
-            ViewerSettingsSheet.show(this)
+            SettingsUsedSheet.show(this)
         }
 
         binding.layoutColorScale.setOnClickListener {
@@ -463,7 +463,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * session index per report page would be a file read per page.
      */
     internal val sessionRecord: SessionRecord? by lazy {
-        intent.getStringExtra(DicKeys.SESSION_LOCAL_ID)
+        intent.getStringExtra(IntentKeys.SESSION_LOCAL_ID)
             ?.let { runCatching { SessionStore.get(this, it) }.getOrNull() }
     }
 

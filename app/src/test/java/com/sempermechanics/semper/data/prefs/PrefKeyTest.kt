@@ -4,13 +4,13 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.account.DeviceKeyManager
+import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.restore.RestoreFailureLedger
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudSessionDto
-import com.sempermechanics.semper.data.net.TokenStore
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -122,17 +122,17 @@ class PrefKeyTest {
     }
 
     @Test
-    fun `dic_settings keys are DicSettings' own`() {
+    fun `dic_settings keys are AppSettings' own`() {
         val s = PrefFiles.Settings
         val p = prefs(s.NAME)
         assertEquals("dic_settings", s.NAME)
         // Defaults agree with the owner's on an empty file.
-        assertEquals(DicSettings.saveToCloudEnabled(context), p[s.SAVE_TO_CLOUD])
-        assertEquals(DicSettings.wifiOnlyUploadEnabled(context), p[s.UPLOAD_WIFI_ONLY])
-        assertEquals(DicSettings.maxFrames(context, 0), p[s.MAX_FRAMES])
-        assertEquals(DicSettings.autoFreeBudgetGb(context), p[s.AUTO_FREE_GB])
-        assertEquals(DicSettings.diagnosticsEnabled(context), p[s.DIAGNOSTICS_ENABLED])
-        assertEquals(DicSettings.wasDiagnosticsAsked(context), p[s.DIAGNOSTICS_ASKED])
+        assertEquals(AppSettings.saveToCloudEnabled(context), p[s.SAVE_TO_CLOUD])
+        assertEquals(AppSettings.wifiOnlyUploadEnabled(context), p[s.UPLOAD_WIFI_ONLY])
+        assertEquals(AppSettings.maxFrames(context, 0), p[s.MAX_FRAMES])
+        assertEquals(AppSettings.autoFreeBudgetGb(context), p[s.AUTO_FREE_GB])
+        assertEquals(AppSettings.diagnosticsEnabled(context), p[s.DIAGNOSTICS_ENABLED])
+        assertEquals(AppSettings.wasDiagnosticsAsked(context), p[s.DIAGNOSTICS_ASKED])
 
         // Written through the key, read by the owner.
         p.edit(commit = true) {
@@ -141,24 +141,24 @@ class PrefKeyTest {
             put(s.MAX_FRAMES, 77)
             put(s.AUTO_FREE_GB, 5)
         }
-        assertFalse(DicSettings.saveToCloudEnabled(context))
-        assertTrue(DicSettings.wifiOnlyUploadEnabled(context))
-        assertEquals(77, DicSettings.maxFrames(context, 0))
-        assertEquals(5, DicSettings.autoFreeBudgetGb(context))
+        assertFalse(AppSettings.saveToCloudEnabled(context))
+        assertTrue(AppSettings.wifiOnlyUploadEnabled(context))
+        assertEquals(77, AppSettings.maxFrames(context, 0))
+        assertEquals(5, AppSettings.autoFreeBudgetGb(context))
         assertFalse(p.getBoolean("save_to_cloud", true))
         assertTrue(p.getBoolean("upload_wifi_only", false))
         assertEquals(77, p.getInt("max_frames", 0))
         assertEquals(5, p.getInt("auto_free_gb", -1))
 
         // Written by the owner, read through the key.
-        DicSettings.setDiagnosticsEnabled(context, true)
+        AppSettings.setDiagnosticsEnabled(context, true)
         assertTrue(p[s.DIAGNOSTICS_ENABLED])
         assertTrue(p[s.DIAGNOSTICS_ASKED])
         assertTrue(p.getBoolean("diagnostics_enabled", false))
         assertTrue(p.getBoolean("diagnostics_asked", false))
 
         p.edit(commit = true) { put(s.KEEP_EVERY_RERUN, true) }
-        DicSettings.migrate(context)
+        AppSettings.migrate(context)
         assertFalse(s.KEEP_EVERY_RERUN in p)
         assertFalse(p.contains("keep_every_rerun"))
         assertEquals(1, p[s.SCHEMA])
@@ -215,19 +215,19 @@ class PrefKeyTest {
     }
 
     @Test
-    fun `semper_session keys are TokenStore's own`() {
+    fun `semper_session keys are AccountCache's own`() {
         val s = PrefFiles.Session
         val p = prefs(s.NAME)
         assertEquals("semper_session", s.NAME)
 
-        TokenStore.saveIdentity(context, "u1", "a@b.c")
-        TokenStore.setStatus(context, "APPROVED")
-        TokenStore.setRole(context, "admin")
-        TokenStore.setDeviceRegistered(context, true)
-        TokenStore.setQuota(context, used = 3, localCount = 4)
-        TokenStore.setTermsRequiredVersion(context, "2026-09")
-        TokenStore.setTermsAccepted(context, "2026-08", synced = true)
-        TokenStore.setImprovementConsent(context, false)
+        AccountCache.saveIdentity(context, "u1", "a@b.c")
+        AccountCache.setStatus(context, "APPROVED")
+        AccountCache.setRole(context, "admin")
+        AccountCache.setDeviceRegistered(context, true)
+        AccountCache.setQuota(context, used = 3, localCount = 4)
+        AccountCache.setTermsRequiredVersion(context, "2026-09")
+        AccountCache.setTermsAccepted(context, "2026-08", synced = true)
+        AccountCache.setImprovementConsent(context, false)
         assertEquals("u1", p[s.UID])
         assertEquals("a@b.c", p[s.EMAIL])
         assertEquals("APPROVED", p[s.STATUS])
@@ -260,29 +260,29 @@ class PrefKeyTest {
             put(s.LIMIT_FORCED, true)
             put(s.IMPROVEMENT_CONSENT, "true")
         }
-        assertNull(TokenStore.cachedRole(context))
-        assertEquals(true, TokenStore.improvementConsent(context))
+        assertNull(AccountCache.cachedRole(context))
+        assertEquals(true, AccountCache.improvementConsent(context))
         assertTrue(p.getBoolean("session_limit_forced", false))
-        TokenStore.clear(context)
+        AccountCache.clear(context)
     }
 
     @Test
-    fun `semper_onboarding beta acks follow TokenStore's key rule`() {
+    fun `semper_onboarding beta acks follow AccountCache's key rule`() {
         val o = PrefFiles.Onboarding
         val p = prefs(o.NAME)
         assertEquals("semper_onboarding", o.NAME)
 
-        TokenStore.clear(context)
-        TokenStore.setBetaNoticeAcked(context)
+        AccountCache.clear(context)
+        AccountCache.setBetaNoticeAcked(context)
         assertTrue(p[o.betaAcked(null)])
         assertTrue(p.getBoolean("signed_out_beta_notice_acked", false))
 
-        TokenStore.saveIdentity(context, "u9", null)
-        assertFalse(TokenStore.hasAckedBetaNotice(context))
+        AccountCache.saveIdentity(context, "u9", null)
+        assertFalse(AccountCache.hasAckedBetaNotice(context))
         p.edit(commit = true) { put(o.betaAcked("u9"), true) }
-        assertTrue(TokenStore.hasAckedBetaNotice(context))
+        assertTrue(AccountCache.hasAckedBetaNotice(context))
         assertTrue(p.getBoolean("beta_notice_acked_u9", false))
-        TokenStore.clear(context)
+        AccountCache.clear(context)
     }
 
     @Test
@@ -368,12 +368,12 @@ class PrefKeyTest {
     }
 
     @Test
-    fun `semper_device holds the device id DeviceKeyManager reads`() {
+    fun `semper_device holds the device id DeviceKeys reads`() {
         val d = PrefFiles.Device
         val p = prefs(d.NAME)
         assertEquals("semper_device", d.NAME)
         p.edit(commit = true) { put(d.DEVICE_ID, "dev-123") }
-        assertEquals("dev-123", DeviceKeyManager.deviceId(context))
+        assertEquals("dev-123", DeviceKeys.deviceId(context))
         assertEquals("dev-123", p.getString("device_id", null))
     }
 
@@ -416,7 +416,7 @@ class PrefKeyTest {
     @Test
     fun `the remaining files keep their names and keys`() {
         // Owners with no public reader for these: the raw value is the check.
-        val sync = PrefFiles.CloudSync
+        val sync = PrefFiles.CloudSyncPrefs
         assertEquals("semper_cloudsync", sync.NAME)
         prefs(sync.NAME).edit(commit = true) { put(sync.LAST_RECONCILE_AT, 99L) }
         assertEquals(99L, prefs("semper_cloudsync").getLong("last_reconcile_at", 0L))
@@ -427,7 +427,7 @@ class PrefKeyTest {
         prefs(link.NAME).edit(commit = true) { put(link.PENDING_EMAIL, "a@b.c") }
         assertEquals("a@b.c", prefs("semper_emaillink").getString("pending_email", null))
 
-        val deletes = PrefFiles.SessionDeletes
+        val deletes = PrefFiles.SessionDeletesPrefs
         assertEquals("session_deletes", deletes.NAME)
         prefs(deletes.NAME).edit(commit = true) { put(deletes.SHOWN_OUTCOMES, setOf("w1")) }
         assertEquals(setOf("w1"), prefs("session_deletes").getStringSet("shown_outcomes", null))

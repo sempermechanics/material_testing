@@ -89,7 +89,7 @@ object AccountDeletionRun {
                 if (api.cloudErased) Outcome.PHONE_NOT_CLEARED else Outcome.CLOUD_NOT_REACHED
             }
             // A wipe that threw skipped the sign-out after it, and the account
-            // is gone: do not leave Firebase and the token store signed in.
+            // is gone: do not leave Firebase and the account cache signed in.
             if (outcome == Outcome.PHONE_NOT_CLEARED) signOutAfterErase(app)
             _state.value = State.Done(outcome)
         }

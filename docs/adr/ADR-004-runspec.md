@@ -29,7 +29,7 @@ reads `roiMaskBytes` directly from the ViewModel mid-run
 (`AnalysisViewModel.kt:450`) rather than from its request.
 
 Constraint: the JNI `computeFullFieldDirect` call stays inside the one batch
-loop in `DicBatchRunner.kt`, and `.dat` output is bit-exact against oracles.
+loop in `BatchAnalysis.kt` (was `DicBatchRunner.kt`), and `.dat` output is bit-exact against oracles.
 
 ## Decision
 
@@ -65,7 +65,7 @@ data class RunSpec(
 | Dimension | Assessment |
 |-----------|------------|
 | Complexity | Medium |
-| Cost | ViewModel, `DicBatchRunner.kt`, sweep body, nav helper, record builder |
+| Cost | ViewModel, `BatchAnalysis.kt` (was `DicBatchRunner.kt`), sweep body, nav helper, record builder |
 | Scalability | New run parameters get one home |
 | Team familiarity | Plain Kotlin data class, like `BatchAnalysisParams` |
 

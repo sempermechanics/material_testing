@@ -28,7 +28,7 @@ Engine tests are **not** this CI. From the submodule: see [docs/engine/TESTING.m
 | Change | Start |
 |--------|-------|
 | Wizard chrome / steps | `StaticAnalysisActivity` + `ui/analysis/wizard/*`; pages are `WizardStep`, shown by `goToStep(WizardStep)` → `AnalysisWizardChrome.applyStep`; its parts sit in `ui/analysis/frames`, `run`, `roi`, `recommend`, `sweep` |
-| Full-field batch / `.dat` write | `DicBatchRunner.runBatchAnalysisBody` (the one JNI loop) + `DicFieldIo`; the save → stop mapping is `afterSave`, next to it. Launched by `RunChannels.launchBatchAnalysis` |
+| Full-field batch / `.dat` write | `BatchAnalysis.runBatchAnalysisBody` (the one JNI loop) + `DicFieldIo`; the save → stop mapping is `afterSave`, next to it. Launched by `RunChannels.launchBatchAnalysis` |
 | A structural change | Check [docs/adr/](docs/adr/README.md) for a decision first |
 | A new Kotlin file / package split | Feature subpackage per [ADR-015](docs/adr/ADR-015-package-layout.md) (~15 files, ~500 lines a file; a split stays in its package); never move Workers, `SemperNativeLib`, Activities |
 | Viewer / exports | `ResultViewerActivity` + its controllers (`ViewerFrameLoader`, `ViewerScaleController`, `ViewerImageLoader`, `FrameJumpController`, `ViewerShareController`, `ViewerChromeController`, `ViewerCaptions`); exports `ShareCenter` → `ShareExportJobs` (held by `ResultViewerViewModel`) → `ShareExportBuilder` |

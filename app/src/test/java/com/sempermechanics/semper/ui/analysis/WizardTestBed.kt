@@ -107,8 +107,8 @@ internal class FakeWizardHost : AnalysisWizardHost {
         }
     }
 
-    override fun startVsgSweep() {
-        calls += "startVsgSweep"
+    override fun startSweep() {
+        calls += "startSweep"
     }
 
     override fun currentSubsetSize(): Int = SUBSET

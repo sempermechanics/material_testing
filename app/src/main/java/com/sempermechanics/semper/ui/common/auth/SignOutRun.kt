@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * A user-chosen sign-out (Settings, a declined Terms gate, Pending's log out),
+ * A user-chosen sign-out (Settings, a declined Terms gate, Pending's sign-out),
  * run to completion outside any screen.
  *
  * Sign-out first releases a floating seat over the network, then signs out of

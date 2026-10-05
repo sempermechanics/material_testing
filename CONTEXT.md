@@ -25,7 +25,7 @@ Use these words. Do not invent synonyms.
 | step | Grid spacing between tracked points, px |
 | ZNSSD | Match score; 0 = perfect, ≤ 0.15 accepted, < 0 failed-point sentinel |
 | ICGN | Iterative Gauss-Newton sub-pixel solver |
-| VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd, 3–31); VSG = `(window − 1) × step + 1` px is what the engine and sessions get (`VsgStudy.vsgFor`) |
+| VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd, 3–31); VSG = `(window − 1) × step + 1` px is what the engine and sessions get (`SweepStudy.vsgFor`) |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
@@ -53,7 +53,7 @@ Splash → Auth / Pending / Home → StaticAnalysisActivity (wizard) → ResultV
 Home → open session → ResultViewerActivity | VsgLatticeActivity
 ```
 
-Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `DicKeys`.
+Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `IntentKeys`.
 Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`).
 
 Backend: `backend/app/main.py` (app, middleware, lifespan), `routers/` (`/v1/*` by
@@ -92,7 +92,7 @@ non-modal `TransferBannerController` strip.
 - **Drive unknown ≠ deleted.** Drop local metadata only when the backend confirms
   a blob is missing.
 - **Storage reclaim** frees local frames of **backed-up** sessions only.
-- **Analytics and crash reporting share one consent flag** (`DicSettings.diagnosticsEnabled`).
+- **Analytics and crash reporting share one consent flag** (`AppSettings.diagnosticsEnabled`).
   Events stay PII-free — buckets and enums only, never images, results, session ids
   or specimen names.
 - **Release** builds require HTTPS `SEMPER_API_BASE_URL`. Debug emulator boots
@@ -173,7 +173,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Activities are `@MainThread` at class level, so a private helper that runs on `Dispatchers.IO` needs `@WorkerThread` (or `@AnyThread`) or lint fails — TD-24 in [TECH_DEBT.md](docs/ops/TECH_DEBT.md).
 - `SessionStore`'s parser uses `ignoreUnknownKeys` so old `index.json` fields load; keep it — [SessionStoreLegacyFloorTest](app/src/test/java/com/sempermechanics/semper/data/session/SessionStoreLegacyFloorTest.kt).
 - `SubsetRecommender` runs on the paper's `NOISE_VARIANCE`; no import supplies a measured floor — [SubsetRecommender.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/recommend/SubsetRecommender.kt).
-- Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(DicKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
+- Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(IntentKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
 - A new wizard input must survive a kill: scalars go in `WizardState`'s Bundle, bytes and lists in `WizardDraft`; and `cacheDir/temp_deformed` is only safe from the janitor while the draft is live — [ADR-005](docs/adr/ADR-005-wizard-process-death.md).
 - After Compute, read the run's `RunSpec` / `RunResult` (`spec`, `settings`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
 - Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolveIsBitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.

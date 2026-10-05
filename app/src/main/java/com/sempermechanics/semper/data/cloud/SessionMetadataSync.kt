@@ -16,7 +16,7 @@ import com.sempermechanics.semper.data.net.TokenSource
 import com.sempermechanics.semper.data.net.authed
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import timber.log.Timber
 
 /**
@@ -134,7 +134,7 @@ object SessionMetadataSync {
     fun enqueue(context: Context, localSessionId: String) {
         val work = oneTimeWork<SessionMetadataWorker>(
             tags = listOf(WorkTags.METADATA),
-            input = workDataOf(DicKeys.SESSION_LOCAL_ID to localSessionId),
+            input = workDataOf(IntentKeys.SESSION_LOCAL_ID to localSessionId),
         )
         enqueueUnique(context, WorkTags.metadataName(localSessionId), ExistingWorkPolicy.KEEP, work)
     }

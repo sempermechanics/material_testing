@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -84,7 +85,7 @@
                 android:id="@+id/tvFpsValue"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/label_10_fps"
+                tools:text="10 fps"
                 android:textColor="@color/sky_primary"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -116,7 +117,7 @@
             android:id="@+id/tvSegmentValue"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/label_0_00_0_00"
+            tools:text="0:00 – 0:00"
             android:textColor="@color/sky_primary"
             android:textStyle="bold" />
     </LinearLayout>
@@ -133,7 +134,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:text="@string/label_0_frames"
+        tools:text="≈ 0 frames"
         android:textAppearance="@style/TextAppearance.Semper.Caption" />
 
     <TextView

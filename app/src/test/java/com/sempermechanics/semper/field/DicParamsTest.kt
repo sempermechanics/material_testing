@@ -6,7 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.cloud.SessionMetadataDoc
 import com.sempermechanics.semper.data.cloud.SessionUploadMetadata
 import com.sempermechanics.semper.fixtures.sessionRecord
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -59,13 +59,13 @@ class DicParamsTest {
     @Test
     fun `viewer extras are the keys ViewerArgs writes and reads`() {
         val intent = params.putViewerExtras(Intent())
-        assertEquals(31, intent.getIntExtra(DicKeys.SUBSET_SIZE, 0))
-        assertEquals(7, intent.getIntExtra(DicKeys.STEP, 0))
-        assertEquals(29, intent.getIntExtra(DicKeys.STRAIN_WINDOW, 0))
+        assertEquals(31, intent.getIntExtra(IntentKeys.SUBSET_SIZE, 0))
+        assertEquals(7, intent.getIntExtra(IntentKeys.STEP, 0))
+        assertEquals(29, intent.getIntExtra(IntentKeys.STRAIN_WINDOW, 0))
 
         val args = ViewerArgs.ofFrames("/b", 100, 100, step = 7).copy(subsetSize = 31, strainWindow = 29)
         val written = args.toIntent(context)
-        for (key in listOf(DicKeys.SUBSET_SIZE, DicKeys.STEP, DicKeys.STRAIN_WINDOW)) {
+        for (key in listOf(IntentKeys.SUBSET_SIZE, IntentKeys.STEP, IntentKeys.STRAIN_WINDOW)) {
             assertEquals(key, written.getIntExtra(key, -1), intent.getIntExtra(key, -2))
         }
         val read = ViewerArgs.from(intent)

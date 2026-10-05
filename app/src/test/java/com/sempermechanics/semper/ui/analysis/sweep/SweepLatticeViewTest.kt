@@ -28,15 +28,15 @@ import java.time.Duration
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
-class VsgLatticeViewTest {
+class SweepLatticeViewTest {
 
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val density = context.resources.displayMetrics.density
-    private lateinit var view: VsgLatticeView
+    private lateinit var view: SweepLatticeView
 
-    private val clicks = mutableListOf<VsgLatticeView.Node>()
-    private val doubles = mutableListOf<VsgLatticeView.Node>()
-    private val longs = mutableListOf<VsgLatticeView.Node>()
+    private val clicks = mutableListOf<SweepLatticeView.Node>()
+    private val doubles = mutableListOf<SweepLatticeView.Node>()
+    private val longs = mutableListOf<SweepLatticeView.Node>()
 
     /** Two subsets, three VSGs each; one combination the engine skipped. */
     private val nodes = listOf(
@@ -52,7 +52,7 @@ class VsgLatticeViewTest {
 
     @Before
     fun setUp() {
-        view = VsgLatticeView(context).apply {
+        view = SweepLatticeView(context).apply {
             compact = true
             interactionEnabled = true
             onNodeClick = { clicks += it }
@@ -65,7 +65,7 @@ class VsgLatticeViewTest {
     }
 
     private fun node(subset: Int, vsg: Int, frame: Int, solved: Boolean = true) =
-        VsgLatticeView.Node(subset = subset, step = 5, window = null, vsg = vsg, solved = solved, frameIndex = frame)
+        SweepLatticeView.Node(subset = subset, step = 5, window = null, vsg = vsg, solved = solved, frameIndex = frame)
 
     private fun layoutAndDraw(wDp: Int, hDp: Int) {
         val w = (wDp * density).toInt()

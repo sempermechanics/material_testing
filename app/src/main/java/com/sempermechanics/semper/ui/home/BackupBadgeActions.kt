@@ -9,7 +9,7 @@ import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.TransferWork
 import com.sempermechanics.semper.data.cloud.WorkTags
 import com.sempermechanics.semper.data.net.SemperApi
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
@@ -37,7 +37,7 @@ internal class BackupBadgeActions(
             // upload every tap.
             SessionRecord.SyncState.FAILED -> showFailedBackupDialog(record)
             SessionRecord.SyncState.PENDING -> enqueueBackup(record, R.string.cloud_retry_backup)
-            SessionRecord.SyncState.LOCAL_ONLY -> if (DicSettings.saveToCloudEnabled(activity)) {
+            SessionRecord.SyncState.LOCAL_ONLY -> if (AppSettings.saveToCloudEnabled(activity)) {
                 enqueueBackup(record, R.string.cloud_backup_now)
             } else {
                 openSettings()

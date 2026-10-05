@@ -3,9 +3,9 @@ package com.sempermechanics.semper.session
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.cloud.FakeCloudApi
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.data.session.SessionQuotaGate
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
@@ -158,7 +158,7 @@ class SessionStoreAtomicTest {
         try {
             AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 1, maxFilesPerSession = 600, maxFrames = 150))
             assertEquals(SessionStore.UpsertOutcome.SAVED, SessionStore.save(ctx, record("a", 1)))
-            TokenStore.setQuota(ctx, used = 1)
+            AccountCache.setQuota(ctx, used = 1)
 
             assertEquals(SessionStore.UpsertOutcome.QUOTA_FULL, SessionStore.save(ctx, record("b", 2)))
             assertEquals(null, SessionStore.get(ctx, "b"))
@@ -169,7 +169,7 @@ class SessionStoreAtomicTest {
             )
         } finally {
             SessionQuotaGate.api = realApi
-            TokenStore.clear(ctx)
+            AccountCache.clear(ctx)
         }
     }
 

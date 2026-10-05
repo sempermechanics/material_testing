@@ -9,8 +9,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.net.TokenStore
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.net.AccountCache
+import com.sempermechanics.semper.data.prefs.AppSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,7 +67,7 @@ class HomeFirstRunPromptsTest {
         (first.single() as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         shadowOf(activity.mainLooper).idle()
 
-        assertTrue(TokenStore.hasAckedBetaNotice(activity))
+        assertTrue(AccountCache.hasAckedBetaNotice(activity))
         val second = showing()
         assertEquals("one prompt at a time", 1, second.size)
         assertEquals(activity.getString(R.string.diagnostics_prompt_body), second.single().message())
@@ -75,7 +75,7 @@ class HomeFirstRunPromptsTest {
 
     @Test
     fun `with the notice acked the diagnostics prompt comes straight up`() {
-        TokenStore.setBetaNoticeAcked(context)
+        AccountCache.setBetaNoticeAcked(context)
 
         val activity = home()
 
@@ -86,9 +86,9 @@ class HomeFirstRunPromptsTest {
 
     @Test
     fun `nothing is asked once both are answered`() {
-        TokenStore.setBetaNoticeAcked(context)
-        DicSettings.setDiagnosticsEnabled(context, false)
-        assertTrue("setting the choice records it as asked", DicSettings.wasDiagnosticsAsked(context))
+        AccountCache.setBetaNoticeAcked(context)
+        AppSettings.setDiagnosticsEnabled(context, false)
+        assertTrue("setting the choice records it as asked", AppSettings.wasDiagnosticsAsked(context))
 
         home()
 

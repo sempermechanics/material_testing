@@ -6,6 +6,7 @@ import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.cloud.FakeTokens
 import com.sempermechanics.semper.data.account.AccessStatus
 import com.sempermechanics.semper.data.account.AuthRepository
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
@@ -18,7 +19,6 @@ import com.sempermechanics.semper.data.net.NoSeatAvailableException
 import com.sempermechanics.semper.data.net.NotApprovedException
 import com.sempermechanics.semper.data.net.TermsDto
 import com.sempermechanics.semper.data.net.TermsVersionMismatchException
-import com.sempermechanics.semper.data.net.TokenStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,8 +71,8 @@ class AuthRepositoryTest {
         assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
         assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
 
-        assertEquals("admin", TokenStore.cachedRole(context))
-        assertTrue(TokenStore.isDeviceRegistered(context))
+        assertEquals("admin", AccountCache.cachedRole(context))
+        assertTrue(AccountCache.isDeviceRegistered(context))
         assertEquals(1, api.calls.count { it == "registerDevice" })
     }
 
@@ -115,7 +115,7 @@ class AuthRepositoryTest {
         api.onGetConfig = { throw IOException("config down") }
 
         assertEquals(AccessStatus.PENDING, repo.refreshStatus().getOrThrow())
-        assertEquals(AccessStatus.PENDING, TokenStore.cachedStatus(context))
+        assertEquals(AccessStatus.PENDING, AccountCache.cachedStatus(context))
     }
 
     @Test
@@ -177,11 +177,11 @@ class AuthRepositoryTest {
         for (failure in notAnAnswer) {
             api.onMe = { failure() }
             api.onGetConfig = { throw IOException("config down") }
-            TokenStore.setStatus(context, AccessStatus.PENDING)
+            AccountCache.setStatus(context, AccessStatus.PENDING)
             val unknown = repo.refreshStatus().exceptionOrNull()
             assertTrue("got $unknown", unknown != null && unknown !is AuthRepository.AccessLostException)
 
-            TokenStore.setStatus(context, AccessStatus.APPROVED)
+            AccountCache.setStatus(context, AccessStatus.APPROVED)
             assertEquals(AccessStatus.OFFLINE_CACHE_APPROVED, repo.refreshStatus().getOrThrow())
         }
     }
@@ -193,14 +193,14 @@ class AuthRepositoryTest {
 
         assertTrue(repo.refreshStatus().isFailure)
 
-        TokenStore.setStatus(context, AccessStatus.APPROVED)
+        AccountCache.setStatus(context, AccessStatus.APPROVED)
         assertEquals(AccessStatus.OFFLINE_CACHE_APPROVED, repo.refreshStatus().getOrThrow())
     }
 
     @Test
     fun `no token is treated like offline`() = runBlocking {
         tokens.token = null
-        TokenStore.setStatus(context, AccessStatus.APPROVED)
+        AccountCache.setStatus(context, AccessStatus.APPROVED)
 
         assertEquals(AccessStatus.OFFLINE_CACHE_APPROVED, repo.refreshStatus().getOrThrow())
         assertEquals(emptyList<String>(), api.calls)
@@ -215,7 +215,7 @@ class AuthRepositoryTest {
 
         assertTrue(repo.refreshStatus().isFailure)
 
-        TokenStore.setStatus(context, AccessStatus.APPROVED)
+        AccountCache.setStatus(context, AccessStatus.APPROVED)
         assertEquals(AccessStatus.OFFLINE_CACHE_APPROVED, repo.refreshStatus().getOrThrow())
         assertEquals(emptyList<String>(), api.calls)
     }
@@ -226,8 +226,8 @@ class AuthRepositoryTest {
     fun `terms accepted offline open the gate and sync on the next status check`() = runBlocking {
         api.enabled = false
         assertTrue(repo.acceptTerms("2026-09", improvementConsent = false).isSuccess)
-        assertEquals("2026-09", TokenStore.termsAcceptedVersion(context))
-        assertFalse(TokenStore.isTermsAcceptanceSynced(context))
+        assertEquals("2026-09", AccountCache.termsAcceptedVersion(context))
+        assertFalse(AccountCache.isTermsAcceptanceSynced(context))
         assertEquals(emptyList<String>(), api.calls)
 
         api.enabled = true
@@ -237,7 +237,7 @@ class AuthRepositoryTest {
         repo.refreshStatus().getOrThrow()
 
         assertEquals(listOf("2026-09"), sent)
-        assertTrue(TokenStore.isTermsAcceptanceSynced(context))
+        assertTrue(AccountCache.isTermsAcceptanceSynced(context))
     }
 
     @Test
@@ -247,7 +247,7 @@ class AuthRepositoryTest {
         val result = repo.acceptTerms("2025-01", improvementConsent = true)
 
         assertTrue(result.exceptionOrNull() is TermsVersionMismatchException)
-        assertNull(TokenStore.termsAcceptedVersion(context))
+        assertNull(AccountCache.termsAcceptedVersion(context))
         assertFalse("consent is not sent for refused terms", "setImprovementConsent" in api.calls)
     }
 
@@ -258,9 +258,9 @@ class AuthRepositoryTest {
 
         assertTrue(repo.acceptTerms("2026-09", improvementConsent = true).isSuccess)
 
-        assertEquals("2026-09", TokenStore.termsAcceptedVersion(context))
-        assertFalse(TokenStore.isTermsAcceptanceSynced(context))
-        assertEquals(true, TokenStore.improvementConsent(context))
+        assertEquals("2026-09", AccountCache.termsAcceptedVersion(context))
+        assertFalse(AccountCache.isTermsAcceptanceSynced(context))
+        assertEquals(true, AccountCache.improvementConsent(context))
     }
 
     @Test
@@ -269,9 +269,9 @@ class AuthRepositoryTest {
 
         repo.refreshStatus().getOrThrow()
 
-        assertEquals("2026-09", TokenStore.termsAcceptedVersion(context))
-        assertTrue(TokenStore.isTermsAcceptanceSynced(context))
-        assertEquals(true, TokenStore.improvementConsent(context))
+        assertEquals("2026-09", AccountCache.termsAcceptedVersion(context))
+        assertTrue(AccountCache.isTermsAcceptanceSynced(context))
+        assertEquals(true, AccountCache.improvementConsent(context))
     }
 
     @Test
@@ -280,6 +280,6 @@ class AuthRepositoryTest {
 
         assertTrue(repo.setImprovementConsent(true).isFailure)
         // The switch still shows what the user chose.
-        assertEquals(true, TokenStore.improvementConsent(context))
+        assertEquals(true, AccountCache.improvementConsent(context))
     }
 }

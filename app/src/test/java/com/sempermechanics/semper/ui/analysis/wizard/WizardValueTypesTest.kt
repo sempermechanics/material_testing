@@ -10,7 +10,7 @@ import com.sempermechanics.semper.field.getRoi
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -99,7 +99,7 @@ class WizardValueTypesTest {
         override fun updateWizardChrome() = Unit
         override fun checkReady() = Unit
         override fun commitParamFields() = Unit
-        override fun startVsgSweep() = Unit
+        override fun startSweep() = Unit
         override fun currentSubsetSize(): Int = 21
         override fun maxSubsetForRoi(): Int = max
         override fun refPreviewBitmap(): Bitmap? = null
@@ -111,9 +111,9 @@ class WizardValueTypesTest {
      * `SweepSetupController.currentPlan` as it was before it called [SweepRanges.plan]:
      * the body verbatim, its ceiling passed in rather than read from the callbacks.
      */
-    private fun legacyCurrentPlan(viewModel: AnalysisViewModel, ceiling: Int): List<VsgStudy.Point> {
+    private fun legacyCurrentPlan(viewModel: AnalysisViewModel, ceiling: Int): List<SweepStudy.Point> {
         if (viewModel.subsetMin > ceiling) return emptyList()
-        return VsgStudy.plan(
+        return SweepStudy.plan(
             subsetMin = viewModel.subsetMin,
             subsetMax = viewModel.subsetMax.coerceAtMost(ceiling),
             subsetSamples = viewModel.subsetSamples,
@@ -136,7 +136,7 @@ class WizardValueTypesTest {
             assertEquals("currentPlan, ceiling $max", expected, helper.currentPlan())
             assertEquals("plan, ceiling $max", expected, vm.sweepRanges.plan(subsetCeiling = max))
         }
-        assertEquals(emptyList<VsgStudy.Point>(), vm.sweepRanges.plan(subsetCeiling = 20))
+        assertEquals(emptyList<SweepStudy.Point>(), vm.sweepRanges.plan(subsetCeiling = 20))
         assertEquals(41, vm.sweepRanges.plan(subsetCeiling = 41).maxOf { it.subset })
     }
 

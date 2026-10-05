@@ -2,7 +2,7 @@ package com.sempermechanics.semper.diagnostics
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -23,13 +23,13 @@ class SemperAnalyticsTest {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, name, params ->
             recorded += name to params
         }
-        DicSettings.setDiagnosticsEnabled(context, false)
+        AppSettings.setDiagnosticsEnabled(context, false)
     }
 
     @After
     fun tearDown() {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, _, _ -> }
-        DicSettings.setDiagnosticsEnabled(context, false)
+        AppSettings.setDiagnosticsEnabled(context, false)
     }
 
     @Test
@@ -40,7 +40,7 @@ class SemperAnalyticsTest {
 
     @Test
     fun `emits events when diagnostics are on`() {
-        DicSettings.setDiagnosticsEnabled(context, true)
+        AppSettings.setDiagnosticsEnabled(context, true)
         SemperAnalytics.event(context, SemperAnalytics.SIGN_IN, mapOf("method" to "google"))
         assertEquals(1, recorded.size)
         assertEquals(SemperAnalytics.SIGN_IN, recorded[0].first)

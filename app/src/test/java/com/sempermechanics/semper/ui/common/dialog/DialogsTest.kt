@@ -128,8 +128,8 @@ class DialogsTest {
     fun `sign-out confirm starts the run for this screen only when confirmed`() {
         var signedOut = 0
         val dialog = SignOutRun.confirm(activity) { signedOut++ }
-        assertEquals(activity.getString(R.string.logout_confirm_title), dialog.title())
-        assertEquals(activity.getString(R.string.logout_confirm_body), dialog.body())
+        assertEquals(activity.getString(R.string.sign_out_confirm_title), dialog.title())
+        assertEquals(activity.getString(R.string.sign_out_confirm_body), dialog.body())
         assertEquals(activity.getString(R.string.action_sign_out), dialog.label(DialogInterface.BUTTON_POSITIVE))
         assertEquals(activity.getString(R.string.action_cancel), dialog.label(DialogInterface.BUTTON_NEGATIVE))
 
@@ -137,8 +137,8 @@ class DialogsTest {
         idle()
         assertSame(SignOutRun.State.Idle, SignOutRun.state.value)
 
-        val again = SignOutRun.confirm(activity, R.string.action_log_out) { signedOut++ }
-        assertEquals(activity.getString(R.string.action_log_out), again.label(DialogInterface.BUTTON_POSITIVE))
+        val again = SignOutRun.confirm(activity, R.string.action_sign_out) { signedOut++ }
+        assertEquals(activity.getString(R.string.action_sign_out), again.label(DialogInterface.BUTTON_POSITIVE))
         again.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
         idle()
         assertEquals(1, signedOut)

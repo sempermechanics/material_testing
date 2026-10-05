@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
@@ -44,7 +44,7 @@ class LocalStorageFootprintTest {
     @Before
     fun setUp() {
         ctx = ApplicationProvider.getApplicationContext()
-        DicSettings.setAutoFreeBudgetGb(ctx, DicSettings.AUTO_FREE_OFF)
+        AppSettings.setAutoFreeBudgetGb(ctx, AppSettings.AUTO_FREE_OFF)
         ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
         // Eviction presumes the cloud copy can be pulled back, which is the
         // licensed half of cloud; the demo case has its own test below.
@@ -236,7 +236,7 @@ class LocalStorageFootprintTest {
     @Test
     fun `budget of off never drops anything`() {
         seedSession("synced", SessionRecord.SyncState.SYNCED)
-        DicSettings.setAutoFreeBudgetGb(ctx, DicSettings.AUTO_FREE_OFF)
+        AppSettings.setAutoFreeBudgetGb(ctx, AppSettings.AUTO_FREE_OFF)
 
         val outcome = StorageBudget.enforce(ctx)
 
@@ -250,7 +250,7 @@ class LocalStorageFootprintTest {
         // no restore, so this phone still holds the only reachable copy.
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", cloudBackupEnabled = false))
         val synced = seedSession("synced", SessionRecord.SyncState.SYNCED)
-        DicSettings.setAutoFreeBudgetGb(ctx, 1)
+        AppSettings.setAutoFreeBudgetGb(ctx, 1)
 
         assertEquals(0L, StorageBudget.reclaimableBytes(ctx))
         assertEquals(0, StorageBudget.freeAllBackedUp(ctx).sessionsDropped)

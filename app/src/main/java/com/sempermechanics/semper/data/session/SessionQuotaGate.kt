@@ -3,9 +3,9 @@ package com.sempermechanics.semper.data.session
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.SemperApi
-import com.sempermechanics.semper.data.net.TokenStore
 import timber.log.Timber
 
 /**
@@ -39,10 +39,10 @@ object SessionQuotaGate {
     fun allowNewSession(context: Context, existingCount: Int): Boolean {
         if (!api(context).enabled || LicenseEntitlements.hasUnlimitedAnalysis(context)) return true
         val max = LicenseEntitlements.analysisCap(context)
-        val used = maxOf(TokenStore.quotaUsed(context), existingCount)
+        val used = maxOf(AccountCache.quotaUsed(context), existingCount)
         val full = used >= max
         if (full) {
-            TokenStore.refreshSessionLimit(context, existingCount)
+            AccountCache.refreshSessionLimit(context, existingCount)
             Timber.w("Hard stop: refusing new session (at %d/%d)", used, max)
         }
         return !full

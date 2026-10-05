@@ -11,8 +11,8 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.common.dp
 
 /**
- * The look the in-app charts share: the strain plot (`VsgPlotView`), the VSG
- * lattice (`VsgLatticeView`) and the viewer's histogram (`FieldHistogramView`).
+ * The look the in-app charts share: the strain plot (`SweepPlotView`), the VSG
+ * lattice (`SweepLatticeView`) and the viewer's histogram (`FieldHistogramView`).
  *
  * Each built the same 11 sp monospace axis text and 1 dp grid stroke in
  * `viewer_plot_*` colours. The values here are copied from them; where the

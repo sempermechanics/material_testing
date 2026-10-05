@@ -4,12 +4,12 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 import com.sempermechanics.semper.R
 
-/** The [VsgPlotView] series colours, behind [VsgPlotView.paletteColor] and [VsgPlotView.lineCutColor]. */
-internal object VsgPlotPalette {
+/** The [SweepPlotView] series colours, behind [SweepPlotView.paletteColor] and [SweepPlotView.lineCutColor]. */
+internal object SweepPlotPalette {
     // Resource-backed, not literal ints: each slot needs an independent night
     // value (see values-night/colors.xml) since this view is shared with the
     // dark-glass viewer peek sheet. Under emphasis (dataviz skill: onDraw draws
-    // every muted series in one neutral, see VsgPlotView's ALPHA_MUTED) at most one
+    // every muted series in one neutral, see SweepPlotView's ALPHA_MUTED) at most one
     // slot is ever shown in colour at a time, so these are validated per-slot
     // (lightness band, chroma floor, contrast) rather than for pairwise
     // separation -- scripts/validate_palette.js, run against both surfaces.

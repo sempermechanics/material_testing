@@ -6,7 +6,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.prefs.ParamClipboard
 import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
 import com.sempermechanics.semper.ui.analysis.recommend.StrainWindowText
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.common.commitOnDone
 import com.sempermechanics.semper.ui.common.dialog.bindInfo
 import com.sempermechanics.semper.ui.common.showUnlessEditing
@@ -127,7 +127,7 @@ class AnalysisSettingsSheetController(
     }
 
     private fun applyStepRangeForSubset() {
-        val maxStep = VsgStudy.maxStepFor(subset.value.toInt()).toFloat()
+        val maxStep = SweepStudy.maxStepFor(subset.value.toInt()).toFloat()
         if (step.value > maxStep) step.value = maxStep
         if (step.valueTo != maxStep) step.valueTo = maxStep
     }
@@ -135,7 +135,7 @@ class AnalysisSettingsSheetController(
     private fun syncOverlapFromStep() {
         bindingOverlap = true
         overlap.value = overlapSliderValue(
-            VsgStudy.overlapFor(subset.value.toInt(), step.value.toInt()),
+            SweepStudy.overlapFor(subset.value.toInt(), step.value.toInt()),
         )
         renderOverlapField()
         bindingOverlap = false
@@ -144,9 +144,9 @@ class AnalysisSettingsSheetController(
     private fun applyOverlapToStep(overlapVal: Double) {
         bindingOverlap = true
         applyStepRangeForSubset()
-        step.value = VsgStudy.stepSizeFor(subset.value.toInt(), overlapVal).toFloat()
+        step.value = SweepStudy.stepSizeFor(subset.value.toInt(), overlapVal).toFloat()
         overlap.value = overlapSliderValue(
-            VsgStudy.overlapFor(subset.value.toInt(), step.value.toInt()),
+            SweepStudy.overlapFor(subset.value.toInt(), step.value.toInt()),
         )
         renderOverlapField()
         stepValue.showUnlessEditing(step.value.toInt().toString())
@@ -170,15 +170,15 @@ class AnalysisSettingsSheetController(
 
     /** The overlap slider counts hundredths. */
     private fun overlapSliderValue(raw: Double): Float {
-        val hundredths = (VsgStudy.clampOverlap(raw) * HUNDREDTHS).roundToInt()
+        val hundredths = (SweepStudy.clampOverlap(raw) * HUNDREDTHS).roundToInt()
         return hundredths.coerceIn(
-            (VsgStudy.MIN_OVERLAP * HUNDREDTHS).toInt(),
-            (VsgStudy.MAX_OVERLAP * HUNDREDTHS).toInt(),
+            (SweepStudy.MIN_OVERLAP * HUNDREDTHS).toInt(),
+            (SweepStudy.MAX_OVERLAP * HUNDREDTHS).toInt(),
         ).toFloat()
     }
 
     private fun overlapFromSlider(sliderValue: Float): Double =
-        VsgStudy.clampOverlap(sliderValue.toDouble() / HUNDREDTHS)
+        SweepStudy.clampOverlap(sliderValue.toDouble() / HUNDREDTHS)
 
     private companion object {
         const val HUNDREDTHS = 100.0

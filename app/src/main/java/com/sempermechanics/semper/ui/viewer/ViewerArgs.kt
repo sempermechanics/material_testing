@@ -8,7 +8,7 @@ import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.VsgLatticeActivity
 import timber.log.Timber
 
@@ -33,7 +33,7 @@ data class ViewerSweepArgs(
  *
  * Two callers open the viewer — `SessionOpenHelper` from the Home list and a
  * finished run from `AnalysisNavHelper` — and four places read it:
- * `ResultViewerActivity`, `VsgLatticeActivity`, `ViewerSettingsSheet` and
+ * `ResultViewerActivity`, `VsgLatticeActivity`, `SettingsUsedSheet` and
  * `ViewerReportFactory`. All of them go through this type: writers through
  * [toIntent], readers through [from]. A missing extra used to read as whatever
  * default each reader picked (subset 41 in one place, 0 in another); now it is
@@ -41,7 +41,7 @@ data class ViewerSweepArgs(
  *
  * Deliberately **not** a `Parcelable` under a single extra: an Intent already
  * in the back stack across an update must keep opening, so the wire format is
- * the same twenty-odd [DicKeys] it always was.
+ * the same twenty-odd [IntentKeys] it always was.
  */
 data class ViewerArgs(
     val imgW: Int,
@@ -84,37 +84,37 @@ data class ViewerArgs(
             ResultViewerActivity::class.java
         }
         return Intent(context, target).apply {
-            putExtra(DicKeys.IMG_W, imgW)
-            putExtra(DicKeys.IMG_H, imgH)
-            putExtra(DicKeys.STEP, step)
-            putExtra(DicKeys.REF_NAME, refName)
-            putExtra(DicKeys.REF_PATH, refPath)
-            defPath?.let { putExtra(DicKeys.DEF_PATH, it) }
-            putExtra(DicKeys.BATCH_DIR_PATH, batchDirPath)
-            putStringArrayListExtra(DicKeys.DEF_FILE_NAMES, ArrayList(frameNames))
+            putExtra(IntentKeys.IMG_W, imgW)
+            putExtra(IntentKeys.IMG_H, imgH)
+            putExtra(IntentKeys.STEP, step)
+            putExtra(IntentKeys.REF_NAME, refName)
+            putExtra(IntentKeys.REF_PATH, refPath)
+            defPath?.let { putExtra(IntentKeys.DEF_PATH, it) }
+            putExtra(IntentKeys.BATCH_DIR_PATH, batchDirPath)
+            putStringArrayListExtra(IntentKeys.DEF_FILE_NAMES, ArrayList(frameNames))
             if (defFilePaths.isNotEmpty()) {
-                putStringArrayListExtra(DicKeys.DEF_FILE_PATHS, ArrayList(defFilePaths))
+                putStringArrayListExtra(IntentKeys.DEF_FILE_PATHS, ArrayList(defFilePaths))
             }
             if (sweep != null) {
-                putExtra(DicKeys.SWEEP_SUBSETS, sweep.subsets.toIntArray())
-                putExtra(DicKeys.SWEEP_STEPS, sweep.steps.toIntArray())
-                putExtra(DicKeys.SWEEP_STRAIN_WINS, sweep.strainWindows.toIntArray())
-                putExtra(DicKeys.LINE_CUT_HORIZONTAL, sweep.lineCutHorizontal)
-                putExtra(DicKeys.SWEEP_SKIPPED, sweep.skippedJson)
+                putExtra(IntentKeys.SWEEP_SUBSETS, sweep.subsets.toIntArray())
+                putExtra(IntentKeys.SWEEP_STEPS, sweep.steps.toIntArray())
+                putExtra(IntentKeys.SWEEP_STRAIN_WINS, sweep.strainWindows.toIntArray())
+                putExtra(IntentKeys.LINE_CUT_HORIZONTAL, sweep.lineCutHorizontal)
+                putExtra(IntentKeys.SWEEP_SKIPPED, sweep.skippedJson)
             }
-            putExtra(DicKeys.STOP_CODE, stopCode)
-            putExtra(DicKeys.PLANNED_FRAMES, plannedFrames)
-            putExtra(DicKeys.SESSION_ID, sessionId)
-            putExtra(DicKeys.SESSION_LOCAL_ID, sessionLocalId)
-            putExtra(DicKeys.SUBSET_SIZE, subsetSize)
-            putExtra(DicKeys.STRAIN_WINDOW, strainWindow)
-            putExtra(DicKeys.STRAIN_METHOD, strainMethod)
-            putExtra(DicKeys.ENGINE_STATS, engineStats?.toFloatArray())
-            putExtra(DicKeys.ROI_X, roiX)
-            putExtra(DicKeys.ROI_Y, roiY)
-            putExtra(DicKeys.ROI_W, roiW)
-            putExtra(DicKeys.ROI_H, roiH)
-            startFrame?.let { putExtra(DicKeys.START_FRAME, it) }
+            putExtra(IntentKeys.STOP_CODE, stopCode)
+            putExtra(IntentKeys.PLANNED_FRAMES, plannedFrames)
+            putExtra(IntentKeys.SESSION_ID, sessionId)
+            putExtra(IntentKeys.SESSION_LOCAL_ID, sessionLocalId)
+            putExtra(IntentKeys.SUBSET_SIZE, subsetSize)
+            putExtra(IntentKeys.STRAIN_WINDOW, strainWindow)
+            putExtra(IntentKeys.STRAIN_METHOD, strainMethod)
+            putExtra(IntentKeys.ENGINE_STATS, engineStats?.toFloatArray())
+            putExtra(IntentKeys.ROI_X, roiX)
+            putExtra(IntentKeys.ROI_Y, roiY)
+            putExtra(IntentKeys.ROI_W, roiW)
+            putExtra(IntentKeys.ROI_H, roiH)
+            startFrame?.let { putExtra(IntentKeys.START_FRAME, it) }
         }
     }
 
@@ -229,41 +229,42 @@ data class ViewerArgs(
             fill(key, ofRecord, default) { it.getStringExtra(key) }
 
         fun read(): ViewerArgs {
-            val imgW = int(DicKeys.IMG_W, { it.imgW }, 0)
-            val imgH = int(DicKeys.IMG_H, { it.imgH }, 0)
+            val imgW = int(IntentKeys.IMG_W, { it.imgW }, 0)
+            val imgH = int(IntentKeys.IMG_H, { it.imgH }, 0)
             val sweep = readSweep()
             val args = ViewerArgs(
                 imgW = imgW,
                 imgH = imgH,
-                step = int(DicKeys.STEP, { it.step }, DEFAULT_STEP),
-                refName = string(DicKeys.REF_NAME, { it.refName }, "").orEmpty(),
-                refPath = string(DicKeys.REF_PATH, { it.refPath }, "").orEmpty(),
-                batchDirPath = string(DicKeys.BATCH_DIR_PATH, { it.sessionDir }, null),
+                step = int(IntentKeys.STEP, { it.step }, DEFAULT_STEP),
+                refName = string(IntentKeys.REF_NAME, { it.refName }, "").orEmpty(),
+                refPath = string(IntentKeys.REF_PATH, { it.refPath }, "").orEmpty(),
+                batchDirPath = string(IntentKeys.BATCH_DIR_PATH, { it.sessionDir }, null),
                 frameNames = fill(
-                    DicKeys.DEF_FILE_NAMES,
+                    IntentKeys.DEF_FILE_NAMES,
                     { if (it.isSweep) it.sweepLabels else it.defNames },
                     emptyList(),
-                ) { it.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES) },
-                stopCode = int(DicKeys.STOP_CODE, { it.stopCode }, 0),
-                plannedFrames = int(DicKeys.PLANNED_FRAMES, { it.plannedFrameCount }, 0),
-                sessionId = string(DicKeys.SESSION_ID, { it.id }, null),
-                sessionLocalId = intent.getStringExtra(DicKeys.SESSION_LOCAL_ID),
-                subsetSize = int(DicKeys.SUBSET_SIZE, { it.subset }, DEFAULT_SUBSET),
-                strainWindow = int(DicKeys.STRAIN_WINDOW, { it.strainWindow }, DEFAULT_STRAIN_WINDOW),
+                ) { it.getStringArrayListExtra(IntentKeys.DEF_FILE_NAMES) },
+                stopCode = int(IntentKeys.STOP_CODE, { it.stopCode }, 0),
+                plannedFrames = int(IntentKeys.PLANNED_FRAMES, { it.plannedFrameCount }, 0),
+                sessionId = string(IntentKeys.SESSION_ID, { it.id }, null),
+                sessionLocalId = intent.getStringExtra(IntentKeys.SESSION_LOCAL_ID),
+                subsetSize = int(IntentKeys.SUBSET_SIZE, { it.subset }, DEFAULT_SUBSET),
+                strainWindow = int(IntentKeys.STRAIN_WINDOW, { it.strainWindow }, DEFAULT_STRAIN_WINDOW),
                 engineStats = fill(
-                    DicKeys.ENGINE_STATS,
+                    IntentKeys.ENGINE_STATS,
                     { it.engineStats.ifEmpty { null } },
                     null,
-                ) { it.getFloatArrayExtra(DicKeys.ENGINE_STATS)?.toList() },
-                roiX = int(DicKeys.ROI_X, { it.roiX }, 0),
-                roiY = int(DicKeys.ROI_Y, { it.roiY }, 0),
-                roiW = int(DicKeys.ROI_W, { it.roiW }, imgW),
-                roiH = int(DicKeys.ROI_H, { it.roiH }, imgH),
+                ) { it.getFloatArrayExtra(IntentKeys.ENGINE_STATS)?.toList() },
+                roiX = int(IntentKeys.ROI_X, { it.roiX }, 0),
+                roiY = int(IntentKeys.ROI_Y, { it.roiY }, 0),
+                roiW = int(IntentKeys.ROI_W, { it.roiW }, imgW),
+                roiH = int(IntentKeys.ROI_H, { it.roiH }, imgH),
                 sweep = sweep,
-                defPath = intent.getStringExtra(DicKeys.DEF_PATH),
-                defFilePaths = intent.getStringArrayListExtra(DicKeys.DEF_FILE_PATHS).orEmpty(),
-                startFrame = intent.takeIf { it.hasExtra(DicKeys.START_FRAME) }?.getIntExtra(DicKeys.START_FRAME, 0),
-                strainMethod = intent.getStringExtra(DicKeys.STRAIN_METHOD) ?: STRAIN_METHOD_VSG,
+                defPath = intent.getStringExtra(IntentKeys.DEF_PATH),
+                defFilePaths = intent.getStringArrayListExtra(IntentKeys.DEF_FILE_PATHS).orEmpty(),
+                startFrame = intent.takeIf { it.hasExtra(IntentKeys.START_FRAME) }
+                    ?.getIntExtra(IntentKeys.START_FRAME, 0),
+                strainMethod = intent.getStringExtra(IntentKeys.STRAIN_METHOD) ?: STRAIN_METHOD_VSG,
             )
             if (fromRecord.isNotEmpty() || defaulted.isNotEmpty()) {
                 Timber.w("Viewer Intent missing keys; from record: %s; defaulted: %s", fromRecord, defaulted)
@@ -272,20 +273,20 @@ data class ViewerArgs(
         }
 
         private fun readSweep(): ViewerSweepArgs? {
-            val subsets = intent.getIntArrayExtra(DicKeys.SWEEP_SUBSETS) ?: return null
+            val subsets = intent.getIntArrayExtra(IntentKeys.SWEEP_SUBSETS) ?: return null
             val skipped = SkippedNode.decodeFromExtras(
-                intent.getStringExtra(DicKeys.SWEEP_SKIPPED),
-                intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_SUBSETS),
-                intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STEPS),
-                intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS),
-                intent.getIntArrayExtra(DicKeys.SWEEP_SKIP_CODES),
+                intent.getStringExtra(IntentKeys.SWEEP_SKIPPED),
+                intent.getIntArrayExtra(IntentKeys.SWEEP_SKIP_SUBSETS),
+                intent.getIntArrayExtra(IntentKeys.SWEEP_SKIP_STEPS),
+                intent.getIntArrayExtra(IntentKeys.SWEEP_SKIP_STRAIN_WINS),
+                intent.getIntArrayExtra(IntentKeys.SWEEP_SKIP_CODES),
             )
             return ViewerSweepArgs(
                 subsets = subsets.toList(),
-                steps = intent.getIntArrayExtra(DicKeys.SWEEP_STEPS)?.toList().orEmpty(),
-                strainWindows = intent.getIntArrayExtra(DicKeys.SWEEP_STRAIN_WINS)?.toList().orEmpty(),
-                lineCutHorizontal = fill(DicKeys.LINE_CUT_HORIZONTAL, { it.lineCutHorizontal }, true) {
-                    it.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true)
+                steps = intent.getIntArrayExtra(IntentKeys.SWEEP_STEPS)?.toList().orEmpty(),
+                strainWindows = intent.getIntArrayExtra(IntentKeys.SWEEP_STRAIN_WINS)?.toList().orEmpty(),
+                lineCutHorizontal = fill(IntentKeys.LINE_CUT_HORIZONTAL, { it.lineCutHorizontal }, true) {
+                    it.getBooleanExtra(IntentKeys.LINE_CUT_HORIZONTAL, true)
                 },
                 skippedJson = SkippedNode.encodeJson(skipped),
             )

@@ -255,7 +255,8 @@ them:
 17. Reach a view through `binding.<id>`; an unavoidable alias uses the id's exact
     name. No `m` prefix. A backing property is `_name` beside `name`.
 18. Units go in a suffix: `Ms`, `Us`, `Seconds` / `SECONDS`, `Minutes`, `Bytes`,
-    `Px`, `Dp`, `Pt`.
+    `Px`, `Dp`, `Pt`. Seconds are spelled out: never `S`, `Sec`, `_S` or `_SEC`
+    (`TOKEN_TIMEOUT_SECONDS`, `ONE_SECOND_MS`).
 19. One constant name per concept (`MS_PER_SECOND`, `PERCENT`).
 
 **Resources**
@@ -275,6 +276,14 @@ them:
     placeholders. Button verbs are `action_*`, links `url_*`, errors `error_*`. A
     key is never named after its own text.
 24. No company name in identifiers or resource names.
+
+**Vocabulary**
+
+25. One word per user-facing concept, in copy and in code. "Sign out", never
+    "log out" (keys `sign_out_*`, `action_sign_out`).
+    The UI's "Parameter sweep" is `Sweep*` in code (`SweepStudy`, `SweepPlotView`,
+    `runSweep`); "lattice" names only the grid of combinations, and VSG only the
+    virtual strain gauge size. `VsgLatticeActivity` is pinned.
 
 **Never renamed:** persisted values keep their exact strings (prefs files and
 keys, intent extras, Bundle / SavedState keys, WorkManager names, tags and Data

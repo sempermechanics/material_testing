@@ -6,7 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
 import com.sempermechanics.semper.ui.analysis.run.ComputeOverlayController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
@@ -24,7 +24,7 @@ import timber.log.Timber
 
 /**
  * Deformed-frame batch import extracted from [StaticAnalysisActivity].
- * Caps to [DicSettings.maxFrames], caches via [FrameImportHelper] on [io],
+ * Caps to [AppSettings.maxFrames], caches via [FrameImportHelper] on [io],
  * then applies ViewModel state on the main thread.
  */
 class AnalysisDeformedBatchController(
@@ -96,7 +96,7 @@ class AnalysisDeformedBatchController(
 
     /** [rawUris] cut to the frame cap, saying so when it cut. */
     private fun capped(rawUris: List<Uri>): List<Uri> {
-        val cap = DicSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity))
+        val cap = AppSettings.maxFrames(activity, AppRemoteConfig.maxFrames(activity))
         if (rawUris.size <= cap) return rawUris
         Feedback.toast(
             activity,

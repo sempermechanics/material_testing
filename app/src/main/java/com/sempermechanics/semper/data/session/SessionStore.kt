@@ -8,7 +8,7 @@ package com.sempermechanics.semper.data.session
 import android.content.Context
 import androidx.annotation.WorkerThread
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.util.AtomicFiles
 import com.sempermechanics.semper.util.writeVia
 import kotlinx.coroutines.Dispatchers
@@ -121,7 +121,7 @@ object SessionStore {
         }
         val next = existing.filterNot { it.id == record.id } + record
         if (!write(context, next)) return@synchronized UpsertOutcome.INDEX_UNAVAILABLE
-        TokenStore.refreshSessionLimit(context, next.size)
+        AccountCache.refreshSessionLimit(context, next.size)
         UpsertOutcome.SAVED
     }
 
@@ -225,7 +225,7 @@ object SessionStore {
     /** Drops row [id] and tells the quota how many remain; false when the index refused the write. */
     private fun removeRow(context: Context, id: String): Boolean {
         if (!mutateIndex(context) { it.filterNot { r -> r.id == id } }) return false
-        TokenStore.onLocalSessionsRemoved(context, readRows(context)?.size ?: 0)
+        AccountCache.onLocalSessionsRemoved(context, readRows(context)?.size ?: 0)
         return true
     }
 
@@ -254,7 +254,7 @@ object SessionStore {
         root(context).deleteRecursively()
         root(context).mkdirs()
         indexCorrupt = false
-        TokenStore.onLocalSessionsRemoved(context, 0)
+        AccountCache.onLocalSessionsRemoved(context, 0)
     }
 
     private fun decodeFile(f: File): List<SessionRecord>? = try {

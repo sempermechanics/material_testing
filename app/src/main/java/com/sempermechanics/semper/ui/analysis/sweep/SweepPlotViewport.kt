@@ -14,7 +14,7 @@ internal class PlotBounds(val xMin: Float, val xMax: Float, val yMin: Float, val
  * above and below so markers are not clipped; null when there are no points.
  * One primitive pass over every point, no intermediate lists.
  */
-internal fun plotBoundsOf(series: List<VsgPlotView.Series>, yMarginFraction: Float): PlotBounds? {
+internal fun plotBoundsOf(series: List<SweepPlotView.Series>, yMarginFraction: Float): PlotBounds? {
     var xMin = Float.POSITIVE_INFINITY
     var xMax = Float.NEGATIVE_INFINITY
     var yMin = Float.POSITIVE_INFINITY
@@ -42,7 +42,7 @@ internal fun plotBoundsOf(series: List<VsgPlotView.Series>, yMarginFraction: Flo
  * full extent. Every change is clamped by [ViewportMath.clampWindow]: never
  * narrower than [minSpanFraction] of the extent, never outside it.
  */
-internal class VsgPlotViewport(private val minSpanFraction: Float) {
+internal class SweepPlotViewport(private val minSpanFraction: Float) {
 
     /** Null = show the full extent; otherwise the zoomed window. */
     private var window: PlotBounds? = null

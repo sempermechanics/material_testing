@@ -7,7 +7,7 @@ import android.widget.CheckBox
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LegalTerms
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.ui.auth.AccessRouter
 import com.sempermechanics.semper.ui.auth.AuthActivity
 import com.sempermechanics.semper.ui.auth.PendingApprovalActivity
@@ -44,7 +44,7 @@ class TermsGateTest {
 
     @Before
     fun freshDevice() {
-        TokenStore.clear(context)
+        AccountCache.clear(context)
         SignOutRun.resetForTest()
     }
 
@@ -75,7 +75,7 @@ class TermsGateTest {
 
     @Test
     fun `an accepted current version goes straight through`() {
-        TokenStore.setTermsAccepted(context, LegalTerms.TERMS_VERSION, synced = true)
+        AccountCache.setTermsAccepted(context, LegalTerms.TERMS_VERSION, synced = true)
 
         assertFalse(LegalTerms.needsAcceptance(context))
         val intent = AccessRouter.intentFor(context, HomeActivity::class.java)
@@ -84,8 +84,8 @@ class TermsGateTest {
 
     @Test
     fun `a server-side version bump re-gates an already accepted user`() {
-        TokenStore.setTermsAccepted(context, LegalTerms.TERMS_VERSION, synced = true)
-        TokenStore.setTermsRequiredVersion(context, "2099-01-01")
+        AccountCache.setTermsAccepted(context, LegalTerms.TERMS_VERSION, synced = true)
+        AccountCache.setTermsRequiredVersion(context, "2099-01-01")
 
         assertEquals("2099-01-01", LegalTerms.requiredVersion(context))
         assertTrue(LegalTerms.needsAcceptance(context))
@@ -132,7 +132,7 @@ class TermsGateTest {
         assertTrue(activity.isFinishing)
         val next = shadowOf(activity).nextStartedActivity
         assertEquals(AuthActivity::class.java.name, next.component?.className)
-        assertNull("no acceptance may be recorded on decline", TokenStore.termsAcceptedVersion(context))
+        assertNull("no acceptance may be recorded on decline", AccountCache.termsAcceptedVersion(context))
     }
 
     @Test

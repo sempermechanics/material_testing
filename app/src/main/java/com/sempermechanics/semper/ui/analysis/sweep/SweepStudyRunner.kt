@@ -9,14 +9,14 @@ import com.sempermechanics.semper.report.newMetrics
 import com.sempermechanics.semper.ui.analysis.run.DicFieldIo
 import com.sempermechanics.semper.ui.analysis.run.EngineFailure
 import com.sempermechanics.semper.ui.analysis.run.SemperEngine
-import com.sempermechanics.semper.ui.analysis.wizard.AnalysisCancelGate
+import com.sempermechanics.semper.ui.analysis.wizard.AnalysisCancel
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import timber.log.Timber
 import java.io.File
 import java.nio.ByteBuffer
 
 /**
- * Executes the sweep a [VsgStudy] plans: solves one deformed frame once per
+ * Executes the sweep a [SweepStudy] plans: solves one deformed frame once per
  * parameter combination and writes each result as its own `.dat` file.
  *
  * Every combination in the plan is attempted. Only a cancel ends a sweep early
@@ -30,12 +30,12 @@ import java.nio.ByteBuffer
  * All calls here are JNI: the caller must already be on
  * [SemperNativeLib.nativeDispatcher].
  */
-object VsgStudyRunner {
+object SweepStudyRunner {
 
     private const val PERCENT = 100
 
     data class Params(
-        val plan: List<VsgStudy.Point>,
+        val plan: List<SweepStudy.Point>,
         /** The single deformed frame every combination is solved against. */
         val defFramePath: String,
         val roiX: Int,
@@ -54,14 +54,14 @@ object VsgStudyRunner {
         val runIndex: Int,
         val totalRuns: Int,
         val percent: Int,
-        val point: VsgStudy.Point,
+        val point: SweepStudy.Point,
         val pointsSolved: Int,
         val convergencePercent: Float,
     )
 
     /** One completed combination and the file holding its field. */
     data class RunOutcome(
-        val point: VsgStudy.Point,
+        val point: SweepStudy.Point,
         val datFile: File,
         val pointsSolved: Int,
     )
@@ -82,7 +82,7 @@ object VsgStudyRunner {
         val runs: List<RunOutcome>,
         val firstMetrics: FloatArray?,
         val engineErrorCode: Int,
-        val skipped: List<VsgStudy.Point> = emptyList(),
+        val skipped: List<SweepStudy.Point> = emptyList(),
         /** Engine code per skipped combination, index-aligned with [skipped]. */
         val skippedCodes: List<Int> = emptyList(),
     )
@@ -90,12 +90,12 @@ object VsgStudyRunner {
     /**
      * Cooperative cancel, polled between solves here and inside the engine's own
      * point loops, so it stops the combination already running too.
-     * Observes [AnalysisCancelGate] owned by [AnalysisViewModel].
+     * Observes [AnalysisCancel] owned by [AnalysisViewModel].
      */
     var cancelRequested: Boolean
-        get() = AnalysisCancelGate.requested
+        get() = AnalysisCancel.requested
         set(value) {
-            AnalysisCancelGate.requested = value
+            AnalysisCancel.requested = value
         }
 
     /**
@@ -139,7 +139,7 @@ object VsgStudyRunner {
         var errorCode = 0
         val total = params.plan.size
 
-        val skipped = ArrayList<VsgStudy.Point>()
+        val skipped = ArrayList<SweepStudy.Point>()
         val skippedCodes = ArrayList<Int>()
         var lastEngineError = 0
 
@@ -204,9 +204,9 @@ object VsgStudyRunner {
      * it into the same wording the failure dialog uses.
      */
     private fun recordSkip(
-        point: VsgStudy.Point,
+        point: SweepStudy.Point,
         engineCode: Int,
-        skipped: MutableList<VsgStudy.Point>,
+        skipped: MutableList<SweepStudy.Point>,
         skippedCodes: MutableList<Int>,
     ) {
         Timber.w(
@@ -258,7 +258,7 @@ object VsgStudyRunner {
      * The engine settings for one full-field solve of [point] over this sweep's
      * ROI and mask: the point's step, subset and VSG (in px) as the strain window.
      */
-    internal fun Params.engineParams(point: VsgStudy.Point) = SemperEngine.Params(
+    internal fun Params.engineParams(point: SweepStudy.Point) = SemperEngine.Params(
         roiX = roiX,
         roiY = roiY,
         roiW = roiW,

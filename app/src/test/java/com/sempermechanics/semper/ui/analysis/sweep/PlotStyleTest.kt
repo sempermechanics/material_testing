@@ -46,7 +46,7 @@ class PlotStyleTest {
 
     @Test
     fun `the strain plot's grid, axis text and value text`() {
-        val plot = VsgPlotView(context)
+        val plot = SweepPlotView(context)
         assertSamePaint(plot.paint("gridPaint"), PlotStyle.gridPaint(context))
         assertSamePaint(plot.paint("textPaint"), PlotStyle.axisTextPaint(context))
         assertSamePaint(plot.paint("valuePaint"), PlotStyle.valueTextPaint(context))
@@ -54,7 +54,7 @@ class PlotStyleTest {
 
     @Test
     fun `the lattice's grid and axis text`() {
-        val lattice = VsgLatticeView(context)
+        val lattice = SweepLatticeView(context)
         assertSamePaint(lattice.paint("gridPaint"), PlotStyle.gridPaint(context))
         assertSamePaint(lattice.paint("textPaint"), PlotStyle.axisTextPaint(context))
     }

@@ -71,8 +71,8 @@ SplashActivity ─ session restore ─┬─ no session ────────
 |---|---|
 | Entry | `ui/auth/SplashActivity` |
 | Chain | `data/account/AuthRepository` → `data/net/SemperApi.me` (with `getConfig` in parallel, fetched again once if its `mode` disagrees with `me.license.mode`, as when the invite claim landed between the two) → `ui/auth/AccessRouter` (+ `data/account/AccessStatus`), `data/account/DevAuth` for the emulator bypass. A device approved and bound last time opens Home without waiting; `ui/auth/StatusRecheck` runs the same check behind it and moves the user only on PENDING or a refused sign-in (`AuthRepository.AccessLostException`), never on a timeout or 5xx |
-| Writes | `data/net/TokenStore` cached uid / email / status / role |
-| Fails as | Routing error passed on as `DicKeys.ROUTING_ERROR`, shown by A1 as a red pill |
+| Writes | `data/net/AccountCache` cached uid / email / status / role |
+| Fails as | Routing error passed on as `IntentKeys.ROUTING_ERROR`, shown by A1 as a red pill |
 | Tests | `auth/AccessRouterTest`, `auth/StatusRecheckTest` |
 
 The quota check is **not** here — it runs in `HomeActivity.onCreate` (A3), which
@@ -94,7 +94,7 @@ AuthActivity ─┬─ Google SSO ............ ui/auth/GoogleSignInHelper
 |---|---|
 | Entry | `ui/auth/AuthActivity` |
 | Chain | `data/account/AuthRepository` (Firebase Auth) → `data/net/SemperApi.me` / `registerDevice` → `ui/auth/AccessRouter` |
-| Writes | Firebase session; `TokenStore` identity; device registration flag |
+| Writes | Firebase session; `AccountCache` identity; device registration flag |
 | Fails as | `ui/common/dialog/CrispToast` pill; policy failures inline from `PasswordPolicy` |
 | Tests | `auth/PasswordPolicyTest`, `auth/ReauthFlowTest`, `auth/FirebaseAuthIntegrationTest` (instrumented) |
 
@@ -107,7 +107,7 @@ verified at the Firebase host — see [backend/AUTH_SETUP.md](backend/AUTH_SETUP
 | Field | Value |
 |---|---|
 | Entry | `ui/auth/PendingApprovalActivity` |
-| Chain | `data/account/AuthRepository` + `data/account/DeviceKeyManager` (device id shown) → `SemperApi.me` on **Check status** |
+| Chain | `data/account/AuthRepository` + `data/account/DeviceKeys` (device id shown) → `SemperApi.me` on **Check status** |
 | Server side | The PENDING account was mailed to support at creation by `C1` → `backend/app/notify.py` |
 | Note | It does not poll, despite the KDoc; only the button checks |
 
@@ -119,7 +119,7 @@ HomeActivity ─┬─ beta notice + diagnostics prompt (first run) ......... B1
               ├─ selection mode .... ui/home/SessionSelectionController → B4 / B12
               ├─ pull to refresh ... data/cloud/CloudSync.reconcile(deep = true) ....... B7
               ├─ row badges ........ WorkInfo from B1 / B2
-              ├─ quota chip ........ data/net/TokenStore + AppRemoteConfig → A9
+              ├─ quota chip ........ data/net/AccountCache + AppRemoteConfig → A9
               └─ FAB ............... ui/common/media/MediaPickerSheet (A3a) → A5
 ```
 
@@ -128,7 +128,7 @@ HomeActivity ─┬─ beta notice + diagnostics prompt (first run) ......... B1
 | Entry | `ui/home/HomeActivity` |
 | Chain | `data/session/SessionStore.list` (local index) ⋈ `data/cloud/CloudSync.reconcile` (cloud) |
 | Writes | Session index (rename, delete, sync state), coach-mark flags in `data/prefs/CoachPrefs` |
-| Fails as | Message pill + a "why + retry" dialog on the sync badge, fed by the worker's `DicKeys.UPLOAD_FAIL_REASON` / `DicRestoreWorker.KEY_ERROR` |
+| Fails as | Message pill + a "why + retry" dialog on the sync badge, fed by the worker's `IntentKeys.UPLOAD_FAIL_REASON` / `DicRestoreWorker.KEY_ERROR` |
 | Tests | `session/SessionStoreAtomicTest`, `cloud/QuotaGateTest` |
 
 ### A3a New-analysis media picker
@@ -152,7 +152,7 @@ delete stay on the Activity.
 | Analyses data management | `ui/settings/SettingsAnalysesSection` + `AnalysisEntries` / `AnalysisDataAdapter`; open, restore, download and delete on `SettingsActivity` | B2, B3, B4 |
 | Storage | `ui/settings/SettingsStorageSection` | B5, B6 |
 | Your data 🔒 | `ui/settings/SettingsYourDataSection` | B8, B9, B10 |
-| Analysis preferences | `ui/settings/SettingsPreferencesSection` | `data/prefs/DicSettings` + `data/net/AppRemoteConfig` |
+| Analysis preferences | `ui/settings/SettingsPreferencesSection` | `data/prefs/AppSettings` + `data/net/AppRemoteConfig` |
 | Help & support | `ui/settings/SettingsHelpSupportSection` | mailto / hosted pages |
 
 Long jobs are non-modal: `ui/common/transfer/TransferBannerController` carries restores,
@@ -160,13 +160,13 @@ bundle downloads and both exports. Terminal restore failures are observed here
 as well as on Home.
 
 Tests: `settings/AnalysisEntriesTest`, `settings/HelpSupportSectionTest`,
-`settings/DeleteAccountReauthTest`, `settings/DicSettingsMigrateTest`,
+`settings/DeleteAccountReauthTest`, `settings/AppSettingsMigrateTest`,
 `settings/TransferBannerControllerTest`.
 
 ### A4.1 Admin `[admin]` 🔒
 
 `ui/admin/AdminActivity` → `SemperApi.listUsers` / `setUserStatus` → `C14`.
-Visible only when `TokenStore.isAdmin` (backend-reported role).
+Visible only when `AccountCache.isAdmin` (backend-reported role).
 
 ### A5 Analysis wizard
 
@@ -180,17 +180,17 @@ One Activity, three pages (`WizardStep`); pages 2 and 3 inflate from ViewStubs.
 | A5.1 | Load frames | `StaticAnalysisActivity` + `AnalysisWizardSlots` / `AnalysisWizardCoach` | `ui/common/media/MediaPickerSheet` → `ui/analysis/frames/FrameImportHelper` → `imaging/BitmapDecoder`; ordering via `AnalysisFrameOrderMenuHelper` + `FrameOrderHelper` / `FrameOrderAdapter` |
 | A5.1a | Video source | same | `AnalysisVideoExtractController` → `VideoFrameExtractor` |
 | A5.2 | Confirm settings | same | `AnalysisSettingsSheetController`, `SubsetRecommender` (SSSIG seed), `data/prefs/ParamClipboard` (Paste params), ROI card → A6, `AnalysisReadyGate` |
-| A5.3 | Sweep summary `[sweep]` | same | `SweepSetupController` + `VsgStudy` (plan) + `LineCutPreviewView` |
-| A5.4 | Running | `BatchRunController` + `ComputeOverlayController` | `RunChannels.launchBatchAnalysis` → `runBatchAnalysis` → `DicBatchRunner.runBatchAnalysisBody` → `DicFieldIo` → JNI `SemperNativeLib.computeFullFieldDirect`; sweeps go `RunChannels.launchVsgSweep` → `SweepRunner.runVsgSweep` → `VsgStudyRunner` |
-| A5.5 | Terminal states | `EngineFailure` + `ui/common/dialog/FaqRedirect` | `field/RunStop`, `ConvergenceGate`, `AnalysisCancelGate` |
+| A5.3 | Sweep summary `[sweep]` | same | `SweepSetupController` + `SweepStudy` (plan) + `LineCutPreviewView` |
+| A5.4 | Running | `BatchRunController` + `ComputeOverlayController` | `RunChannels.launchBatchAnalysis` → `runBatchAnalysis` → `BatchAnalysis.runBatchAnalysisBody` → `DicFieldIo` → JNI `SemperNativeLib.computeFullFieldDirect`; sweeps go `RunChannels.launchSweep` → `SweepAnalysis.runSweep` → `SweepStudyRunner` |
+| A5.5 | Terminal states | `EngineFailure` + `ui/common/dialog/FaqRedirect` | `field/RunStop`, `ConvergenceGate`, `AnalysisCancel` |
 
 | Field | Value |
 |---|---|
 | Writes | `<sessionDir>/frame_%04d.dat` (`data/session/SessionPaths`), `raw_deformed/`, reference copy and the index row via `data/session/SessionRepository.buildSessionRecord` → `ui/analysis/run/RunRecordSave.saveRunRecord` → `data/session/SessionStore.save` |
-| Then | Once the row is saved, `saveRunRecord` calls `data/cloud/CloudSync.enqueueUpload` → B1 when cloud backup is on. `afterSave` reads the save's `UpsertOutcome` for both, a sweep's through `SweepRunner.finishSolvedSweep` → `persistSweepSession`: a full quota ends the run at the session limit and opens the session-limit screen; an index that could not be read or written shows **Analysis not saved**. Either way a sweep's lattice does not open, and the sweep records `analysis_failed` with reason `session_limit` or `index_unavailable` (`SweepRunner.sweepEndEvent`) |
-| Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart, and in the backup's `metadata.json` `metrics` so it survives a restore. A re-run that saves nothing updates or drops its Home row to match what is left on disk (`DicBatchRunner.afterUnsavedRerun`); a cancelled re-run is saved as a partial run |
+| Then | Once the row is saved, `saveRunRecord` calls `data/cloud/CloudSync.enqueueUpload` → B1 when cloud backup is on. `afterSave` reads the save's `UpsertOutcome` for both, a sweep's through `SweepAnalysis.finishSolvedSweep` → `persistSweepSession`: a full quota ends the run at the session limit and opens the session-limit screen; an index that could not be read or written shows **Analysis not saved**. Either way a sweep's lattice does not open, and the sweep records `analysis_failed` with reason `session_limit` or `index_unavailable` (`SweepAnalysis.sweepEndEvent`) |
+| Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart, and in the backup's `metadata.json` `metrics` so it survives a restore. A re-run that saves nothing updates or drops its Home row to match what is left on disk (`BatchAnalysis.afterUnsavedRerun`); a cancelled re-run is saved as a partial run |
 | Signals | Timber; `android.os.Trace` sections; `diagnostics/SemperAnalytics` analysis started / completed / failed (consent-gated, buckets only) |
-| Tests | `analysis/VsgStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
+| Tests | `analysis/SweepStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
 
 **Accuracy invariants** (do not "clean up"): the JNI output buffer is sized to
 the ROI grid and the returned point count is checked against that capacity
@@ -203,7 +203,7 @@ progress is a buffered `SharedFlow`, not a `StateFlow`.
 |---|---|
 | Entry | `ui/analysis/RoiDrawActivity` (started for result by A5.2) |
 | Chain | `ui/analysis/roi/StudioOverlayView` (draw / hit-test / mask) → `StudioOverlayMaskEncoder` → `util/OverlayFormats`; resolved back by `ui/analysis/roi/RoiResolveHelper` |
-| Writes | Mask file at `DicKeys.MASK_FILE_PATH`; ROI rect in `DicKeys.ROI_*` |
+| Writes | Mask file at `IntentKeys.MASK_FILE_PATH`; ROI rect in `IntentKeys.ROI_*` |
 | Tests | `util/OverlayFormatsTest` |
 
 Circle / ellipse / freeform are implemented in `StudioOverlayView` but not
@@ -214,11 +214,11 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 | Field | Value |
 |---|---|
 | Entry | `ui/analysis/VsgLatticeActivity` (a sweep opens here, not in the viewer) |
-| Chain | `VsgLatticeView` (nodes) + `VsgPlotView` (line-cut plot) + `VsgStudy` (plan maths); node open → A8 |
-| Reads | `DicKeys.SWEEP_*` extras packed by `AnalysisNavHelper.openResults` or `ui/home/SessionOpenHelper.intentFor` |
+| Chain | `SweepLatticeView` (nodes) + `SweepPlotView` (line-cut plot) + `SweepStudy` (plan maths); node open → A8 |
+| Reads | `IntentKeys.SWEEP_*` extras packed by `AnalysisNavHelper.openResults` or `ui/home/SessionOpenHelper.intentFor` |
 | Writes | `data/prefs/ParamClipboard` on a parameter-chip copy |
 | Fails as | Hollow node → `EngineFailure.shortReasonRes` + FAQ |
-| Tests | `analysis/VsgStudyTest`, `EngineFailureTest` |
+| Tests | `analysis/SweepStudyTest`, `EngineFailureTest` |
 
 ### A8 Result viewer
 
@@ -228,7 +228,7 @@ exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFL
 | Reads | `.dat` frames via `DicResult.decodeDatFile` (memory-mapped) and `data/session/DatCodec` |
 | Renders | `report/VisualizationEngine` heatmaps, `ui/viewer/HeatmapFit` rest-fit, `TouchImageView` zoom/pan, `ViewerFieldPills`, `ScrubFrameCache` look-ahead; single-setting only: `ViewerSummaryController` + `SummaryAnimation` + `report/GifEncoder` |
 | Probe | `ViewerInspectController` + `PointSpatialIndex` (built lazily on first tap) + `InspectOverlayView` |
-| Details | `ViewerSettingsSheet` (ⓘ). On a frame: true extrema plus a Scott-binned histogram of accepted values (`FieldHistogramView`). On the summary: min of every frame's colour-bar min and max of every frame's colour-bar max, matching the GIF; no mean, no histogram |
+| Details | `SettingsUsedSheet` (ⓘ). On a frame: true extrema plus a Scott-binned histogram of accepted values (`FieldHistogramView`). On the summary: min of every frame's colour-bar min and max of every frame's colour-bar max, matching the GIF; no mean, no histogram |
 | Exports | `ShareCenter` → `ViewerReportFactory` / `report/ReportBuilder` / `PdfReportGenerator` / `AnalysisCsvWriter` / `data/session/SessionEverythingExporter` → `SendToSheet` → `SaveExportActivity` (SAF) |
 | Fails as | Snackbar + **Why?** FAQ (`no_batch_data`, OOM, scale) |
 | Tests | `results/*` (decode, histogram, CSV, heatmap, PDF, GIF, summary), `viewer/ScrubFrameCacheTest`, `viewer/FrameNumberEntryTest`, `HeatmapFitTest`, `ViewerFieldPillsTest` |
@@ -241,7 +241,7 @@ demand, never on open; report compositing is capped at
 ### A9 Session limit
 
 `ui/limit/SessionLimitActivity` → `CloudSync.reconcile(deep = true)` +
-`TokenStore` quota → back to A3 when the cap clears. Reached from Home cold
+`AccountCache` quota → back to A3 when the cap clears. Reached from Home cold
 start, the FAB, the quota chip, a pre-run check (`AnalysisNavHelper.ensureSessionQuota`)
 or a quota rejection during B1. Not a paywall: the way past it is an email.
 
@@ -280,8 +280,8 @@ CloudSync.enqueueUpload → DicUploadWorker.doWork → backUp
 | Triggered by | `saveRunRecord` after a run, the Home badge retry, Settings **Back up now**, turning **Save to cloud** on, and each reconcile that lists the cloud, for rows still PENDING (`CloudSync.reconcile`) |
 | Decisions | `data/cloud/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip`, incomplete staging (`classifyIncompleteStaging`: retry while the reference/`.dat` inputs exist, the row was saved < 15 min ago, or they have been missing < 10 min by the `<sessionDir>/upload_inputs_missing_since` marker; else terminal `inputs_missing`) |
 | Writes | `<sessionDir>/upload_staging/`, sync state + `cloudSessionId` on the index row; `StorageBudget.enforce` runs at the end |
-| Fails as | Terminal: `DicKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + badge dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
-| Signals | `data/cloud/TransferNotifications` foreground notification; `DicKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
+| Fails as | Terminal: `IntentKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + badge dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
+| Signals | `data/cloud/TransferNotifications` foreground notification; `IntentKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
 | Tests | `cloud/UploadResumableTest`, `cloud/DicUploadWorkerOutcomesTest`, `cloud/UploadChunkSizingTest`, `cloud/BackupSplitTest`, `cloud/SessionZipTest`, `cloud/WaitingUploadsTest` |
 
 `doWork` may be broken into named steps, but the resume contract depends on
@@ -338,7 +338,7 @@ Storage section shows.
 `CloudSync.reconcile(deep = …)` from Home pull-to-refresh and the limit screen →
 `SemperApi.listSessions` (paged, `verify=true` on a deep refresh) → C8. Repairs
 sync state, re-enqueues B1 for local-only rows, refreshes the quota in
-`TokenStore` / `AppRemoteConfig`.
+`AccountCache` / `AppRemoteConfig`.
 
 **A Drive outage must not look like deleted data**: local metadata is dropped
 only when the backend *confirms* a blob is missing (`C8` returns `MISSING`, not
@@ -359,8 +359,8 @@ Tests: `cloud/SessionEverythingExporterTest`, `results/*`.
 
 `ui/settings/SettingsYourDataSection` → re-authentication via `ui/common/auth/AuthRoute`
 (password, Google or email link) → `CloudSync.deleteAccount` → `SemperApi.deleteAccount`
-(C13) → **only on success** the local wipe (`SessionStore`, `TokenStore`,
-`DicSettings`) and Firebase `delete()`. Backend first, deliberately: a local wipe
+(C13) → **only on success** the local wipe (`SessionStore`, `AccountCache`,
+`AppSettings`) and Firebase `delete()`. Backend first, deliberately: a local wipe
 on a failed server call would strand the cloud copy.
 Tests: `cloud/AccountDeletionTest`, `settings/DeleteAccountReauthTest`.
 
@@ -369,7 +369,7 @@ Tests: `cloud/AccountDeletionTest`, `settings/DeleteAccountReauthTest`.
 One flag, two consumers:
 
 ```
-DicSettings.diagnosticsEnabled ─┬─ Diagnostics.apply/setEnabled → Crashlytics + CrashReportingTree
+AppSettings.diagnosticsEnabled ─┬─ Diagnostics.apply/setEnabled → Crashlytics + CrashReportingTree
                                 └─ diagnostics/SemperAnalytics.event (dropped, not queued, when off)
 ```
 
@@ -385,10 +385,10 @@ Tests: `diagnostics/SemperAnalyticsTest`.
 
 | Field | Value |
 |---|---|
-| Key | `data/account/DeviceKeyManager` — EC P-256 in the AndroidKeyStore, private key never leaves it |
+| Key | `data/account/DeviceKeys` — EC P-256 in the AndroidKeyStore, private key never leaves it |
 | Register | `SemperApi.registerDevice` → C2 (409 = this account or device is bound elsewhere) |
 | Per call | `SemperApi.fetchChallenge` → C3, then `signedHeaders` signs `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → verified by `C4` |
-| Tokens | `data/net/TokenProvider` / `TokenStore` — Firebase ID tokens are held in memory, never persisted |
+| Tokens | `data/net/TokenProvider` / `AccountCache` — Firebase ID tokens are held in memory, never persisted |
 
 ### B12 Local session index
 
@@ -510,10 +510,10 @@ Details and failure triage: [ops/CI.md](ops/CI.md).
 |---|---|
 | A message, label or dialog text on screen | `rg "<the phrase>" app/src/main/res/values/strings.xml` → then `rg "R.string.<name>"`. Every user-facing string is in `strings.xml`; a phrase you cannot find there is either formatted (`_fmt`, plurals) or comes from an exception message |
 | An error with a **Why?** action | `ui/common/dialog/FaqRedirect` and [app/FAQ_LINKS.md](app/FAQ_LINKS.md) — the FAQ url resource names the case |
-| A wrong number in the viewer or ⓘ sheet | The extras it was opened with: `AnalysisNavHelper.openResults` (fresh run) or `ui/home/SessionOpenHelper.intentFor` (reopen) → read in `ResultViewerActivity` / `ViewerSettingsSheet` / `ViewerReportFactory`. **Check which of the two packed it** — see E2.1 |
+| A wrong number in the viewer or ⓘ sheet | The extras it was opened with: `AnalysisNavHelper.openResults` (fresh run) or `ui/home/SessionOpenHelper.intentFor` (reopen) → read in `ResultViewerActivity` / `SettingsUsedSheet` / `ViewerReportFactory`. **Check which of the two packed it** — see E2.1 |
 | A wrong number in an export | `report/ReportBuilder` (fusion), `report/AnalysisCsvWriter`, `report/VisualizationEngine`; the source of truth is `DicResult.decodeDatFile` over `frame_%04d.dat` |
 | "Analysis failed" wording | `ui/analysis/run/EngineFailure` (code → string) + `field/RunStop` (the stop codes); the code itself comes from the engine or `ConvergenceGate` |
-| A backup that failed | Home badge dialog text = `DicKeys.UPLOAD_FAIL_REASON` from `UploadRun.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
+| A backup that failed | Home badge dialog text = `IntentKeys.UPLOAD_FAIL_REASON` from `UploadRun.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
 | A restore that failed | `DicRestoreWorker.KEY_ERROR` (the `ApiException` message) → `CloudRestore` → `RestoreDownloadOutcomes` for retry vs terminal |
 | Any cloud 4xx/5xx | The reason carries `(ref: <id>)` — that is the backend's `X-Request-Id`. Search the Cloud Run log for `requestId="<id>"` to get the exact access line (`opClass`, `routeTemplate`, `errorCode`, latency) |
 | A cloud call that is rejected consistently | `backend/app/errors.py` names the `detail` code; the client's branch is in `data/net/ApiErrors.kt` + `SemperApi.failSigned` |
@@ -527,11 +527,11 @@ Ranked by how often it costs someone an afternoon. Each has a proposed fix in
 [ops/FUTURE_IMPROVEMENTS.md](ops/FUTURE_IMPROVEMENTS.md).
 
 **E2.1 The viewer's input state is packed in two places and read in four.**
-~25 `DicKeys` extras are built by `AnalysisNavHelper.openResults` (fresh run) and
+~25 `IntentKeys` extras are built by `AnalysisNavHelper.openResults` (fresh run) and
 again by `SessionOpenHelper.intentFor` (reopen from Home / Settings), and the two
 sets are not identical — `DEF_PATH` and `DEF_FILE_PATHS`, for instance, exist
 only on the fresh-run path. They are then read in `ResultViewerActivity` (~20
-sites), `VsgLatticeActivity` (~16), `ViewerSettingsSheet` (~12) and
+sites), `VsgLatticeActivity` (~16), `SettingsUsedSheet` (~12) and
 `ViewerReportFactory` (~8). A missing extra is not an error: it silently becomes
 a default, so the same session can render differently depending on how it was
 opened, with nothing in the log. → **FI-1**

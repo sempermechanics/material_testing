@@ -10,7 +10,7 @@ import com.sempermechanics.semper.data.net.TokenSource
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import timber.log.Timber
 import java.io.File
 
@@ -74,8 +74,8 @@ internal class UploadRun(
     /** Terminal failure carrying a reason the UI can show; [requestId] joins it to the backend's access line. */
     fun failure(reason: String, requestId: String? = null): ListenableWorker.Result = ListenableWorker.Result.failure(
         workDataOf(
-            DicKeys.UPLOAD_FAIL_REASON to SemperApiHttp.withRef(reason, requestId),
-            DicKeys.SESSION_LOCAL_ID to localId,
+            IntentKeys.UPLOAD_FAIL_REASON to SemperApiHttp.withRef(reason, requestId),
+            IntentKeys.SESSION_LOCAL_ID to localId,
         ),
     )
 }

@@ -58,7 +58,7 @@ internal object WizardState {
     private const val SWEEP_RANGES = "sweepRanges"
     private const val SUBSET_OVERLAP = "subsetOverlap"
     private const val LINE_CUT_HORIZONTAL = "lineCutHorizontal"
-    private const val VSG_FRAME_INDEX = "vsgFrameIndex"
+    private const val SWEEP_FRAME_INDEX = "vsgFrameIndex"
     private const val WORKING_LOCAL_ID = "workingLocalId"
 
     /** Index-aligned lists behind the deformed-frames card; `-1` = size not measured. */
@@ -97,7 +97,7 @@ internal object WizardState {
         putIntArray(SWEEP_RANGES, viewModel.sweepRanges.toIntArray())
         putDouble(SUBSET_OVERLAP, viewModel.subsetOverlap)
         putBoolean(LINE_CUT_HORIZONTAL, viewModel.lineCutHorizontal)
-        putInt(VSG_FRAME_INDEX, viewModel.vsgFrameIndex)
+        putInt(SWEEP_FRAME_INDEX, viewModel.sweepFrameIndex)
         putString(WORKING_LOCAL_ID, viewModel.workingLocalId)
         putString(FRAMES_FINGERPRINT, fingerprint(framesJson))
     }
@@ -121,7 +121,7 @@ internal object WizardState {
         SweepRanges.fromIntArray(b.getIntArray(SWEEP_RANGES))?.let { viewModel.sweepRanges = it }
         viewModel.subsetOverlap = b.getDouble(SUBSET_OVERLAP, viewModel.subsetOverlap)
         viewModel.lineCutHorizontal = b.getBoolean(LINE_CUT_HORIZONTAL, true)
-        viewModel.vsgFrameIndex = b.getInt(VSG_FRAME_INDEX, -1)
+        viewModel.sweepFrameIndex = b.getInt(SWEEP_FRAME_INDEX, -1)
         viewModel.workingLocalId = b.getString(WORKING_LOCAL_ID)
     }
 

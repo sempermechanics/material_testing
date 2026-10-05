@@ -7,8 +7,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.DeviceKeyManager
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.account.DeviceKeys
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.ui.auth.PendingApprovalActivity
 import com.sempermechanics.semper.ui.common.auth.SupportMail
 import com.sempermechanics.semper.ui.limit.SessionLimitActivity
@@ -38,7 +38,7 @@ class SupportMailBodiesTest {
 
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
     private val unknown = context.getString(R.string.pending_unknown_account)
-    private val deviceId get() = DeviceKeyManager.deviceId(context)
+    private val deviceId get() = DeviceKeys.deviceId(context)
 
     /** Pending reads the signed-in address through Firebase Auth, which needs an app; nobody is signed in. */
     @Before
@@ -64,7 +64,7 @@ class SupportMailBodiesTest {
     fun `session limit mail names the account, its quota, then the device`() {
         val mail = mailFrom(SessionLimitActivity::class.java, R.id.btnEmailSupport)
 
-        val quota = "${TokenStore.quotaUsed(context)}/${TokenStore.quotaMax(context)}"
+        val quota = "${AccountCache.quotaUsed(context)}/${AccountCache.quotaMax(context)}"
         assertEquals(
             "I've reached my Semper analysis limit and would like it raised.\n\n" +
                 "Account: $unknown\n" +

@@ -3,7 +3,7 @@ package com.sempermechanics.semper.settings
 import android.content.Context
 import androidx.core.content.edit
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Before
@@ -15,7 +15,7 @@ import org.robolectric.RobolectricTestRunner
  * Prefs schema upgrades must drop retired keys once and stamp the current schema.
  */
 @RunWith(RobolectricTestRunner::class)
-class DicSettingsMigrateTest {
+class AppSettingsMigrateTest {
 
     private lateinit var ctx: Context
 
@@ -32,7 +32,7 @@ class DicSettingsMigrateTest {
             putInt("schema", 0)
         }
 
-        DicSettings.migrate(ctx)
+        AppSettings.migrate(ctx)
 
         val prefs = ctx.getSharedPreferences("dic_settings", Context.MODE_PRIVATE)
         assertFalse(prefs.contains("keep_every_rerun"))
@@ -46,7 +46,7 @@ class DicSettingsMigrateTest {
             putInt("schema", 1)
         }
 
-        DicSettings.migrate(ctx)
+        AppSettings.migrate(ctx)
 
         val prefs = ctx.getSharedPreferences("dic_settings", Context.MODE_PRIVATE)
         // Already stamped — do not re-run the remove (legacy key may linger only

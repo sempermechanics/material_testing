@@ -251,6 +251,38 @@ group is one commit, reviewable with `git diff -M`.
 | `setting_diagnostics`, `setting_diagnostics_sub`, `setting_save_cloud`, `setting_save_cloud_sub`, `setting_save_cloud_sub_off`, `setting_wifi_only`, `setting_wifi_only_sub`, `setting_max_frames`, `setting_max_frames_info` (the Settings screen) | `settings_` + the rest (`settings_diagnostics`, …) |
 | **Instrumented test methods** | |
 | 27 snake_case or `subject_condition` names in `SpeckleScaleDeviceTest`, `ExifOrientedSizeDeviceTest`, `FirebaseAuthIntegrationTest`, `AnalysisWizardSmokeTest`, `EnginePipelineSmokeTest` | camelCase sentences (`repeatSolve_bitIdentical` → `repeatSolveIsBitIdentical`, `analysisActivity_showsToolbar` → `wizardShowsToolbar`, …); benchmark methods keep their names |
+| **Sign out wording** (the one copy change: "Log Out" → "Sign out") | |
+| `logout_confirm_title`, `logout_confirm_body`, `logout_success` | `sign_out_confirm_title` ("Sign out?"), `sign_out_confirm_body`, `sign_out_success` ("You have been signed out.") |
+| `action_log_out` ("Log Out") | `action_sign_out` (the existing key, same text now) |
+| **Sweep vocabulary** (`ui/analysis/sweep/` unless noted; "lattice" stays only for the grid of combinations) | |
+| `VsgStudy`, `VsgStudyRunner` (with its nested `SweepResult`) | `SweepStudy`, `SweepStudyRunner`; `SweepStudy.vsgFor` / `DEFAULT_VSG_SAMPLES` keep VSG (the quantity) |
+| `VsgPlotView`, `VsgPlotAxes`, `VsgPlotPalette`, `VsgPlotViewport` | `SweepPlotView`, `SweepPlotAxes`, `SweepPlotPalette`, `SweepPlotViewport` |
+| `VsgLatticeView` | `SweepLatticeView`; `VsgLatticeActivity`, `activity_vsg_lattice.xml` and its `vsg_lattice_*` strings keep their names (the Activity is pinned) |
+| `LatticeGraphExport`; files `LatticeControls.kt`, `LatticeProfiles.kt` | `SweepGraphExport`; `SweepControls.kt`, `SweepProfiles.kt` (the functions in them keep their names and package) |
+| `SweepSetupController.Callbacks.startVsgSweep`; `AnalysisViewModel.launchVsgSweep`, `.runVsgSweep` (`ui/analysis/wizard/`) | `startSweep`; `launchSweep`, `runSweep` |
+| `AnalysisViewModel.vsgFrameIndex` | `sweepFrameIndex` (saved-state key `"vsgFrameIndex"` unchanged) |
+| Tests: `VsgStudyTest`, `VsgStudyRunnerParamsTest`, `VsgPlotViewTest`, `VsgPlotViewportTest`, `VsgLatticeViewTest`, `LatticeControlsTest`; oracle `ui/common/vsg_plot_clamp_viewport.txt` | `SweepStudyTest`, `SweepStudyRunnerParamsTest`, `SweepPlotViewTest`, `SweepPlotViewportTest`, `SweepLatticeViewTest`, `SweepControlsTest`; `sweep_plot_clamp_viewport.txt` |
+| **`Dic` prefix** (prefs file `dic_settings` and every extra's value unchanged) | |
+| `data/prefs/DicSettings` | `data/prefs/AppSettings` |
+| `navigation/DicKeys` | `navigation/IntentKeys` |
+| Test `DicSettingsMigrateTest` | `AppSettingsMigrateTest` |
+| **Runner files** (`AnalysisViewModel` extension functions; the functions keep their names) | |
+| `ui/analysis/run/DicBatchRunner.kt`, test `DicBatchRunnerLimitTest` | `ui/analysis/run/BatchAnalysis.kt`, `BatchAnalysisLimitTest` |
+| `ui/analysis/wizard/SweepRunner.kt` | `ui/analysis/wizard/SweepAnalysis.kt` |
+| **Account cache** (prefs file `semper_session` and its keys unchanged) | |
+| `data/net/TokenStore` | `data/net/AccountCache` (it caches identity, role, status and quota; Firebase holds the token) |
+| **Placeholder strings** (always overwritten before the view is first drawn) | |
+| `label_41`, `label_5`, `label_0`, `label_10_fps`, `label_0_00_0_00`, `label_0_frames` (`android:text` in `wizard_step_settings_content.xml`, `activity_static_analysis.xml`, `sheet_video_sampling.xml`) | Deleted; the layouts carry the same text as `tools:text` |
+| **`*Ui` and friends** | |
+| `ui/auth/AuthTotpUi`, `ui/viewer/share/ShareExportUi` | `AuthTotpController`, `ShareExportController` |
+| `ui/analysis/wizard/AnalysisCancelGate` | `AnalysisCancel` (a shared flag, not a `*Gate`) |
+| `data/account/DeviceKeyManager` | `DeviceKeys` (Keystore alias `SemperDeviceKeyEc` unchanged) |
+| **Viewer sheet** | |
+| `ui/viewer/ViewerSettingsSheet`, test `ViewerSettingsSheetTest` | `SettingsUsedSheet`, `SettingsUsedSheetTest` (it inflates `sheet_settings_used.xml`; strings `settings_used_*`) |
+| **Nested `PrefFiles`** (file names and keys unchanged) | |
+| `PrefFiles.CloudSync`, `PrefFiles.SessionDeletes` | `PrefFiles.CloudSyncPrefs`, `PrefFiles.SessionDeletesPrefs` (they no longer shadow `data/cloud/CloudSync` and `SessionDeletes`); the other ten nested objects keep their names |
+| **Seconds suffix** | |
+| Private: `SemperAnalytics.MS_1S`, `MS_5S`, `MS_30S` | `ONE_SECOND_MS`, `FIVE_SECONDS_MS`, `THIRTY_SECONDS_MS` (bucket values `lt_1s` … unchanged) |
 
 ## Porting back
 

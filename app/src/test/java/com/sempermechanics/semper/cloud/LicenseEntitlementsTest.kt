@@ -6,7 +6,7 @@ import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,7 +43,7 @@ class LicenseEntitlementsTest {
     @After
     fun tearDown() {
         AppRemoteConfig.clear(ctx)
-        DicSettings.setSaveToCloudEnabled(ctx, true)
+        AppSettings.setSaveToCloudEnabled(ctx, true)
     }
 
     @Test
@@ -438,7 +438,7 @@ class LicenseEntitlementsTest {
 
     @Test
     fun `demo always records, even with the save-to-cloud toggle off`() {
-        DicSettings.setSaveToCloudEnabled(ctx, false)
+        AppSettings.setSaveToCloudEnabled(ctx, false)
         assertFalse(LicenseEntitlements.cloudBackupEnabled(ctx))
         assertTrue(CloudSync.uploadsEnabled(ctx, backend))
     }
@@ -446,9 +446,9 @@ class LicenseEntitlementsTest {
     @Test
     fun `a licensed account records only when the toggle is on`() {
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
-        DicSettings.setSaveToCloudEnabled(ctx, true)
+        AppSettings.setSaveToCloudEnabled(ctx, true)
         assertTrue(CloudSync.uploadsEnabled(ctx, backend))
-        DicSettings.setSaveToCloudEnabled(ctx, false)
+        AppSettings.setSaveToCloudEnabled(ctx, false)
         assertFalse(CloudSync.uploadsEnabled(ctx, backend))
     }
 
@@ -457,14 +457,14 @@ class LicenseEntitlementsTest {
         val none = FakeCloudApi(enabled = false)
         assertFalse(CloudSync.uploadsEnabled(ctx, none))
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
-        DicSettings.setSaveToCloudEnabled(ctx, true)
+        AppSettings.setSaveToCloudEnabled(ctx, true)
         assertFalse(CloudSync.uploadsEnabled(ctx, none))
     }
 
     @Test
     fun `a downgrade to demo resumes recording regardless of the old toggle`() {
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", cloudBackupEnabled = true))
-        DicSettings.setSaveToCloudEnabled(ctx, false)
+        AppSettings.setSaveToCloudEnabled(ctx, false)
         assertFalse(CloudSync.uploadsEnabled(ctx, backend))
         AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", cloudBackupEnabled = false))
         assertTrue(CloudSync.uploadsEnabled(ctx, backend))

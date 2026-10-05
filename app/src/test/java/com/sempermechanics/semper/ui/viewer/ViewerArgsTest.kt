@@ -9,7 +9,7 @@ import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.fixtures.sessionRecord
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.VsgLatticeActivity
 import com.sempermechanics.semper.ui.home.SessionOpenHelper
 import org.junit.Assert.assertEquals
@@ -91,7 +91,7 @@ class ViewerArgsTest {
         // The post-run launch adds the just-analysed run's temp paths. Home has
         // no use for them: its frames are the copies persisted under the
         // session dir, which the viewer prefers over these anyway.
-        assertEquals(setOf(DicKeys.DEF_PATH, DicKeys.DEF_FILE_PATHS), fromRun - fromHome)
+        assertEquals(setOf(IntentKeys.DEF_PATH, IntentKeys.DEF_FILE_PATHS), fromRun - fromHome)
         assertEquals(emptySet<String>(), fromHome - fromRun)
     }
 
@@ -107,14 +107,14 @@ class ViewerArgsTest {
         val intent = args(sweep).toIntent(context)
 
         assertEquals(VsgLatticeActivity::class.java.name, intent.component!!.className)
-        assertTrue(intArrayOf(41, 51).contentEquals(intent.getIntArrayExtra(DicKeys.SWEEP_SUBSETS)))
-        assertTrue(intArrayOf(5, 7).contentEquals(intent.getIntArrayExtra(DicKeys.SWEEP_STEPS)))
+        assertTrue(intArrayOf(41, 51).contentEquals(intent.getIntArrayExtra(IntentKeys.SWEEP_SUBSETS)))
+        assertTrue(intArrayOf(5, 7).contentEquals(intent.getIntArrayExtra(IntentKeys.SWEEP_STEPS)))
         assertTrue(
             intArrayOf(15, 21)
-                .contentEquals(intent.getIntArrayExtra(DicKeys.SWEEP_STRAIN_WINS)),
+                .contentEquals(intent.getIntArrayExtra(IntentKeys.SWEEP_STRAIN_WINS)),
         )
-        assertFalse(intent.getBooleanExtra(DicKeys.LINE_CUT_HORIZONTAL, true))
-        assertEquals("[]", intent.getStringExtra(DicKeys.SWEEP_SKIPPED))
+        assertFalse(intent.getBooleanExtra(IntentKeys.LINE_CUT_HORIZONTAL, true))
+        assertEquals("[]", intent.getStringExtra(IntentKeys.SWEEP_SKIPPED))
     }
 
     @Test
@@ -122,15 +122,15 @@ class ViewerArgsTest {
         val intent = args().toIntent(context)
 
         assertEquals(ResultViewerActivity::class.java.name, intent.component!!.className)
-        assertNull(intent.getIntArrayExtra(DicKeys.SWEEP_SUBSETS))
-        assertNull(intent.getStringExtra(DicKeys.SWEEP_SKIPPED))
+        assertNull(intent.getIntArrayExtra(IntentKeys.SWEEP_SUBSETS))
+        assertNull(intent.getStringExtra(IntentKeys.SWEEP_SKIPPED))
         // Geometry and identity survive the trip unchanged — the viewer's math
         // and its cloud lookups both read these.
-        assertEquals(1920, intent.getIntExtra(DicKeys.IMG_W, 0))
-        assertEquals(400, intent.getIntExtra(DicKeys.ROI_H, 0))
-        assertEquals("cloud-1", intent.getStringExtra(DicKeys.SESSION_ID))
-        assertEquals("local-1", intent.getStringExtra(DicKeys.SESSION_LOCAL_ID))
-        assertEquals(listOf("f1.png", "f2.png"), intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES))
+        assertEquals(1920, intent.getIntExtra(IntentKeys.IMG_W, 0))
+        assertEquals(400, intent.getIntExtra(IntentKeys.ROI_H, 0))
+        assertEquals("cloud-1", intent.getStringExtra(IntentKeys.SESSION_ID))
+        assertEquals("local-1", intent.getStringExtra(IntentKeys.SESSION_LOCAL_ID))
+        assertEquals(listOf("f1.png", "f2.png"), intent.getStringArrayListExtra(IntentKeys.DEF_FILE_NAMES))
     }
 
     @Test
@@ -138,7 +138,7 @@ class ViewerArgsTest {
         val intent = SessionOpenHelper.intentFor(context, record(sweepSteps = listOf(5, 7)))
 
         assertEquals(VsgLatticeActivity::class.java.name, intent.component!!.className)
-        assertEquals(listOf("41/5", "51/7"), intent.getStringArrayListExtra(DicKeys.DEF_FILE_NAMES))
+        assertEquals(listOf("41/5", "51/7"), intent.getStringArrayListExtra(IntentKeys.DEF_FILE_NAMES))
     }
 
     // ------------------------------------------------------ read side (ADR-003)
@@ -184,20 +184,20 @@ class ViewerArgsTest {
         val hop = ViewerArgs.from(lattice, ::noRecord).copy(startFrame = 1).toIntent(context)
 
         assertEquals(ResultViewerActivity::class.java.name, hop.component!!.className)
-        assertEquals(1, hop.getIntExtra(DicKeys.START_FRAME, -1))
+        assertEquals(1, hop.getIntExtra(IntentKeys.START_FRAME, -1))
         assertEquals(args(sweepArgs).copy(startFrame = 1), ViewerArgs.from(hop, ::noRecord))
     }
 
     @Test
     fun `an older build's skip arrays fold into the skipped list`() {
         val legacy = Intent(context, VsgLatticeActivity::class.java)
-            .putExtra(DicKeys.SWEEP_SUBSETS, intArrayOf(41))
-            .putExtra(DicKeys.SWEEP_STEPS, intArrayOf(5))
-            .putExtra(DicKeys.SWEEP_STRAIN_WINS, intArrayOf(15))
-            .putExtra(DicKeys.SWEEP_SKIP_SUBSETS, intArrayOf(61))
-            .putExtra(DicKeys.SWEEP_SKIP_STEPS, intArrayOf(9))
-            .putExtra(DicKeys.SWEEP_SKIP_STRAIN_WINS, intArrayOf(27))
-            .putExtra(DicKeys.SWEEP_SKIP_CODES, intArrayOf(-3))
+            .putExtra(IntentKeys.SWEEP_SUBSETS, intArrayOf(41))
+            .putExtra(IntentKeys.SWEEP_STEPS, intArrayOf(5))
+            .putExtra(IntentKeys.SWEEP_STRAIN_WINS, intArrayOf(15))
+            .putExtra(IntentKeys.SWEEP_SKIP_SUBSETS, intArrayOf(61))
+            .putExtra(IntentKeys.SWEEP_SKIP_STEPS, intArrayOf(9))
+            .putExtra(IntentKeys.SWEEP_SKIP_STRAIN_WINS, intArrayOf(27))
+            .putExtra(IntentKeys.SWEEP_SKIP_CODES, intArrayOf(-3))
 
         val sweep = ViewerArgs.from(legacy).sweep!!
 
@@ -207,7 +207,7 @@ class ViewerArgsTest {
     @Test
     fun `a missing key comes from the session record`() {
         val bare = Intent(context, ResultViewerActivity::class.java)
-            .putExtra(DicKeys.SESSION_LOCAL_ID, "local-1")
+            .putExtra(IntentKeys.SESSION_LOCAL_ID, "local-1")
 
         val read = ViewerArgs.from(bare) { record() }
 
@@ -224,8 +224,8 @@ class ViewerArgsTest {
     @Test
     fun `with no record each missing key takes its one default`() {
         val bare = Intent(context, ResultViewerActivity::class.java)
-            .putExtra(DicKeys.IMG_W, 800)
-            .putExtra(DicKeys.IMG_H, 600)
+            .putExtra(IntentKeys.IMG_W, 800)
+            .putExtra(IntentKeys.IMG_H, 600)
 
         val read = ViewerArgs.from(bare)
 

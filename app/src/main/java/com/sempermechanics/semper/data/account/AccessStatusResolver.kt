@@ -2,6 +2,7 @@ package com.sempermechanics.semper.data.account
 
 import android.content.Context
 import com.sempermechanics.semper.data.account.AuthRepository.AccessLostException
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
@@ -10,7 +11,6 @@ import com.sempermechanics.semper.data.net.HttpFailure
 import com.sempermechanics.semper.data.net.HttpFailure.Kind
 import com.sempermechanics.semper.data.net.MeResponse
 import com.sempermechanics.semper.data.net.TokenSource
-import com.sempermechanics.semper.data.net.TokenStore
 import com.sempermechanics.semper.util.suspendRunCatching
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -48,8 +48,8 @@ internal class AccessStatusResolver(
     /** `/v1/me` said yes (it throws otherwise): cache what it and `/v1/config` said, and bind the device. */
     private suspend fun approve(token: String): Result<String> {
         val (me, config) = meAndConfig(token)
-        TokenStore.setStatus(appContext, AccessStatus.APPROVED)
-        TokenStore.setRole(appContext, me.role ?: "user")
+        AccountCache.setStatus(appContext, AccessStatus.APPROVED)
+        AccountCache.setRole(appContext, me.role ?: "user")
         cacheLegalState(me)
         syncPendingTermsAcceptance(token)
         AppRemoteConfig.record(appContext, config)
@@ -82,7 +82,7 @@ internal class AccessStatusResolver(
     private fun refused(failure: HttpFailure): Result<String> = when (failure.kind) {
         Kind.NOT_APPROVED -> {
             Timber.d(failure.cause, "Account is pending approval")
-            TokenStore.setStatus(appContext, AccessStatus.PENDING)
+            AccountCache.setStatus(appContext, AccessStatus.PENDING)
             Result.success(AccessStatus.PENDING)
         }
         Kind.DEVICE_CONFLICT, Kind.DEVICE_IN_USE -> Result.failure(deviceBoundElsewhere(failure.cause))
@@ -119,7 +119,7 @@ internal class AccessStatusResolver(
     )
 
     private fun offlineOrExpired(): Result<String> =
-        if (TokenStore.cachedStatus(appContext) == AccessStatus.APPROVED) {
+        if (AccountCache.cachedStatus(appContext) == AccessStatus.APPROVED) {
             Result.success(AccessStatus.OFFLINE_CACHE_APPROVED)
         } else {
             Result.failure(Exception("Could not verify account. Check your connection and sign in again."))
@@ -132,27 +132,27 @@ internal class AccessStatusResolver(
      */
     private fun cacheLegalState(me: MeResponse) {
         val terms = me.terms ?: return
-        TokenStore.setTermsRequiredVersion(appContext, terms.requiredVersion)
+        AccountCache.setTermsRequiredVersion(appContext, terms.requiredVersion)
         val accepted = terms.acceptedVersion
-        if (accepted != null && TokenStore.termsAcceptedVersion(appContext) != accepted) {
-            TokenStore.setTermsAccepted(appContext, accepted, synced = true)
+        if (accepted != null && AccountCache.termsAcceptedVersion(appContext) != accepted) {
+            AccountCache.setTermsAccepted(appContext, accepted, synced = true)
         }
-        me.improvementConsent?.let { TokenStore.setImprovementConsent(appContext, it) }
+        me.improvementConsent?.let { AccountCache.setImprovementConsent(appContext, it) }
     }
 
     /** Push a locally recorded acceptance the backend has not confirmed yet. */
     private suspend fun syncPendingTermsAcceptance(token: String) {
-        if (TokenStore.isTermsAcceptanceSynced(appContext)) return
-        val version = TokenStore.termsAcceptedVersion(appContext) ?: return
+        if (AccountCache.isTermsAcceptanceSynced(appContext)) return
+        val version = AccountCache.termsAcceptedVersion(appContext) ?: return
         suspendRunCatching { api.acceptTerms(token, version) }
-            .onSuccess { TokenStore.setTermsAccepted(appContext, version, synced = true) }
+            .onSuccess { AccountCache.setTermsAccepted(appContext, version, synced = true) }
             .onFailure { Timber.d(it, "Terms acceptance still not synced") }
     }
 
     private suspend fun ensureDeviceRegistered(idToken: String) {
-        if (TokenStore.isDeviceRegistered(appContext)) return
+        if (AccountCache.isDeviceRegistered(appContext)) return
         api.registerDevice(idToken) // throws DeviceConflictException on 409
-        TokenStore.setDeviceRegistered(appContext, true)
+        AccountCache.setDeviceRegistered(appContext, true)
         Timber.d("Device registered with backend")
     }
 

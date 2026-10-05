@@ -2,7 +2,7 @@ package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.app.Activity
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.navigation.AppIntents
@@ -43,7 +43,7 @@ object AnalysisNavHelper {
      * Hard stop when this account holds no floating seat.
      *
      * A **separate** gate from the quota one rather than a widening of it: an
-     * institution member is licensed, so [TokenStore.isSessionLimitReached] is
+     * institution member is licensed, so [AccountCache.isSessionLimitReached] is
      * false for them by definition and they would otherwise pass every
      * existing check.
      *
@@ -78,8 +78,8 @@ object AnalysisNavHelper {
         val localCount = withContext(Dispatchers.IO) {
             SessionStore.list(host).size
         }
-        TokenStore.refreshSessionLimit(host, localCount)
-        if (!TokenStore.isSessionLimitReached(host)) return true
+        AccountCache.refreshSessionLimit(host, localCount)
+        if (!AccountCache.isSessionLimitReached(host)) return true
         openSessionLimit(host)
         return false
     }

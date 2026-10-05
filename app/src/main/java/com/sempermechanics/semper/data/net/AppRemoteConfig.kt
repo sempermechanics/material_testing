@@ -19,10 +19,10 @@ import java.util.TimeZone
  * The app never invents a session quota locally — until a successful fetch,
  * [isKnown] is false and cloud-backed gates fail closed.
  *
- * This is the **sole owner of the limit ceilings**. [TokenStore] reads the
+ * This is the **sole owner of the limit ceilings**. [AccountCache] reads the
  * session ceiling from here ([maxSessions]) rather than caching its own copy, so
- * the dependency runs one way (TokenStore → AppRemoteConfig) with no cycle. This
- * object never calls back into TokenStore.
+ * the dependency runs one way (AccountCache → AppRemoteConfig) with no cycle. This
+ * object never calls back into AccountCache.
  */
 @Suppress("TooManyFunctions")
 object AppRemoteConfig {
@@ -66,9 +66,9 @@ object AppRemoteConfig {
 
     /**
      * Persist a successful config response. The session-limit hard stop is
-     * recomputed live by [TokenStore.isSessionLimitReached] from the used count
+     * recomputed live by [AccountCache.isSessionLimitReached] from the used count
      * against [maxSessions], so storing the ceiling here is all that is needed —
-     * no write back into TokenStore, no [localSessionCount] to fold in.
+     * no write back into AccountCache, no [localSessionCount] to fold in.
      *
      * [now] is stored as the fetch time. Without it the cache has no age:
      * "the license expired" and "we have not asked in three weeks" look

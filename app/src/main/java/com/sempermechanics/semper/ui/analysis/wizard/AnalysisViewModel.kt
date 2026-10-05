@@ -19,8 +19,8 @@ import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommender
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudyRunner
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -266,7 +266,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     var subsetUserModified: Boolean = false
 
     // ------------------------------------------------------------------
-    // Virtual strain gauge study (see [VsgStudy])
+    // Virtual strain gauge study (see [SweepStudy])
     // ------------------------------------------------------------------
 
     /** True when Run should sweep the parameter space instead of solving once. */
@@ -335,7 +335,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * Subset overlap shared by every combination in a sweep (`1 − step/subset`).
      * Kept in sync with [stepDenominator] (`1 − 1/N`).
      */
-    var subsetOverlap: Double = VsgStudy.overlapForDenominator(VsgStudy.DEFAULT_STEP_DENOM)
+    var subsetOverlap: Double = SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM)
 
     /** True when the line cut runs along x; false for a cut along y. Editing state; a run reads its [RunSpec]. */
     var lineCutHorizontal: Boolean = true
@@ -344,15 +344,15 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * Frame index the sweep is solved against; -1 means the middle of the
      * sequence (1-based frame n/2+1, i.e. 0-based index n/2).
      */
-    var vsgFrameIndex: Int = -1
+    var sweepFrameIndex: Int = -1
 
     /** Parameter combination behind each frame of the last sweep, in order. */
-    var sweepPlan: List<VsgStudy.Point> = emptyList()
+    var sweepPlan: List<SweepStudy.Point> = emptyList()
 
     /** Combinations the engine could not solve in the last sweep. */
     var sweepSkippedNodes: List<SkippedNode> = emptyList()
 
-    val sweepProgress: SharedFlow<VsgStudyRunner.Progress?> = runs.sweepProgress.asSharedFlow()
+    val sweepProgress: SharedFlow<SweepStudyRunner.Progress?> = runs.sweepProgress.asSharedFlow()
     val sweepOutcome: SharedFlow<Result<BatchAnalysisOutcome>> = runs.sweepOutcome.asSharedFlow()
 
     fun isReadyToCompute(): Boolean = refBytes != null && defFilePaths.isNotEmpty()
@@ -406,12 +406,12 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * Cooperative cancel: checked between frames here, and forwarded to the
      * engine, which polls it inside its point loops. Setting it therefore stops
      * the solve already running rather than only the ones after it.
-     * Shared with [VsgStudyRunner] via [AnalysisCancelGate].
+     * Shared with [SweepStudyRunner] via [AnalysisCancel].
      */
     var cancelRequested: Boolean
-        get() = AnalysisCancelGate.requested
+        get() = AnalysisCancel.requested
         set(value) {
-            AnalysisCancelGate.requested = value
+            AnalysisCancel.requested = value
         }
 
     // Process death (ADR-005): the scalars in [saved], the rest in the draft

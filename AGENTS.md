@@ -56,7 +56,7 @@ invariant list, and none of them are drive-by changes.
 
 **Privacy and security** 🔒
 
-- One consent flag (`DicSettings.diagnosticsEnabled`) gates **both** Crashlytics
+- One consent flag (`AppSettings.diagnosticsEnabled`) gates **both** Crashlytics
   and product analytics, and it is off until accepted. Analytics params stay
   PII-free — enums and coarse buckets, never images, results, session ids,
   specimen names or paths (`B10`).

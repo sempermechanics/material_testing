@@ -6,10 +6,10 @@ import androidx.work.WorkManager
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.sempermechanics.semper.cloud.FakeCloudApi
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
-import com.sempermechanics.semper.data.net.TokenStore
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionQuotaGate
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
@@ -21,8 +21,8 @@ import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudy
-import com.sempermechanics.semper.ui.analysis.sweep.VsgStudyRunner
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -41,7 +41,7 @@ import java.io.File
  * `persistSweepSession` → `saveRunRecord` → [SessionStore]), and its outcome
  * says what that save did, in its outcome and its analytics event. Only the
  * engine's solve is skipped: the sweep is handed a finished
- * [VsgStudyRunner.SweepResult]. Uploads are on, so a refused save that still
+ * [SweepStudyRunner.SweepResult]. Uploads are on, so a refused save that still
  * queued one would show. The sweep used to ignore its save, so a full quota or
  * an unreadable index ended as a completed sweep with nothing on Home.
  */
@@ -59,16 +59,16 @@ class SweepSessionSaveTest {
     @Before
     fun setUp() {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, name, params -> events += name to params }
-        DicSettings.setDiagnosticsEnabled(ctx, true)
+        AppSettings.setDiagnosticsEnabled(ctx, true)
         WorkManagerTestInitHelper.initializeTestWorkManager(ctx)
         AppRemoteConfig.apply(ctx, AppConfigDto(maxSessions = 2, maxFilesPerSession = 600, maxFrames = 150))
-        TokenStore.setQuota(ctx, used = 0)
+        AccountCache.setQuota(ctx, used = 0)
     }
 
     @After
     fun tearDown() {
         SemperAnalytics.sink = SemperAnalytics.Sink { _, _, _ -> }
-        DicSettings.setDiagnosticsEnabled(ctx, false)
+        AppSettings.setDiagnosticsEnabled(ctx, false)
         WorkManagerTestInitHelper.closeWorkDatabase()
         WorkManagerImpl.setDelegate(null)
     }
@@ -86,7 +86,7 @@ class SweepSessionSaveTest {
         val frame = File(ctx.cacheDir, "0000_def.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         vm.deformedFrames = listOf(DeformedFrame(frame.absolutePath, "def.png"))
         val batchDir = SessionStore.dirFor(ctx, id)
-        val plan = listOf(VsgStudy.Point(21, 5, 3), VsgStudy.Point(31, 5, 3))
+        val plan = listOf(SweepStudy.Point(21, 5, 3), SweepStudy.Point(31, 5, 3))
         val spec = RunSpec.sweep(
             RunSpec.Sweep(plan, labels = listOf("a", "b"), lineCutHorizontal = true, frameIndex = 0),
             roi = Roi(0, 0, 100, 100),
@@ -94,8 +94,8 @@ class SweepSessionSaveTest {
             use6x6 = false,
             debugDir = null,
         )
-        val result = VsgStudyRunner.SweepResult(
-            runs = plan.mapIndexed { i, p -> VsgStudyRunner.RunOutcome(p, File(batchDir, "frame_000$i.dat"), 400) },
+        val result = SweepStudyRunner.SweepResult(
+            runs = plan.mapIndexed { i, p -> SweepStudyRunner.RunOutcome(p, File(batchDir, "frame_000$i.dat"), 400) },
             firstMetrics = null,
             engineErrorCode = 0,
         )
@@ -122,7 +122,7 @@ class SweepSessionSaveTest {
 
     @Test
     fun `a quota that filled before the save ends the sweep at the session limit, queueing nothing`() {
-        TokenStore.setQuota(ctx, used = 2)
+        AccountCache.setQuota(ctx, used = 2)
         // Cloud on: a build with no API URL (CI) would otherwise skip the quota.
         val realApi = SessionQuotaGate.api
         SessionQuotaGate.api = { FakeCloudApi() }

@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.data.cloud.restore
 
 import androidx.work.Data
-import com.sempermechanics.semper.navigation.DicKeys
+import com.sempermechanics.semper.navigation.IntentKeys
 
 /**
  * The progress both download workers publish: the restore and the bundle
@@ -21,8 +21,8 @@ internal object DownloadProgress {
     /** Progress [Data] for the UI; [localId] names the row a restore is filling. */
     fun data(done: Long, total: Long, localId: String? = null): Data =
         Data.Builder()
-            .putString(DicKeys.UPLOAD_PHASE, DicKeys.PHASE_DOWNLOAD)
-            .putInt(DicKeys.UPLOAD_PERCENT, percent(done, total))
-            .apply { if (localId != null) putString(DicKeys.SESSION_LOCAL_ID, localId) }
+            .putString(IntentKeys.UPLOAD_PHASE, IntentKeys.PHASE_DOWNLOAD)
+            .putInt(IntentKeys.UPLOAD_PERCENT, percent(done, total))
+            .apply { if (localId != null) putString(IntentKeys.SESSION_LOCAL_ID, localId) }
             .build()
 }

@@ -2,7 +2,7 @@ package com.sempermechanics.semper.fixtures
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.net.TokenStore
+import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionStore
 import org.junit.rules.ExternalResource
 
@@ -16,12 +16,12 @@ class CleanAppState : ExternalResource() {
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
     override fun before() {
-        TokenStore.clear(context)
+        AccountCache.clear(context)
         SessionStore.deleteAll(context)
     }
 
     override fun after() {
         SessionStore.deleteAll(context)
-        TokenStore.clear(context)
+        AccountCache.clear(context)
     }
 }

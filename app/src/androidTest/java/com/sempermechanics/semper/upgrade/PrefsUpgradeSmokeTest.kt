@@ -3,14 +3,14 @@ package com.sempermechanics.semper.upgrade
 import androidx.core.content.edit
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.sempermechanics.semper.data.prefs.DicSettings
+import com.sempermechanics.semper.data.prefs.AppSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * On-device smoke: prefs migrate when SemperApp would call [DicSettings.migrate].
+ * On-device smoke: prefs migrate when SemperApp would call [AppSettings.migrate].
  */
 @RunWith(AndroidJUnit4::class)
 class PrefsUpgradeSmokeTest {
@@ -24,7 +24,7 @@ class PrefsUpgradeSmokeTest {
             putInt("schema", 0)
         }
 
-        DicSettings.migrate(ctx)
+        AppSettings.migrate(ctx)
 
         val prefs = ctx.getSharedPreferences("dic_settings", 0)
         assertFalse(prefs.contains("keep_every_rerun"))
