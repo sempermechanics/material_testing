@@ -19,7 +19,7 @@ import fake_firestore
 from app import deps, errors, firestore_repo as repo
 from app.config import settings
 from app.repo import leases
-from app.repo.claims import _institution_member_patch
+from app.repo.claims import _member_patch
 from license_helpers import _mint_institution, _signed_in
 from refusals import attempt, attempt_add
 
@@ -349,7 +349,7 @@ def test_a_seat_claim_writes_the_terms_read_in_its_transaction(store):
     minted = _mint_institution(max_seats=5)
     license_id = minted["license"]["id"]
     stale = repo.get_license(license_id)
-    patch = _institution_member_patch(license_id, stale)
+    patch = _member_patch(license_id, stale)
 
     # Renewed between the caller's read and the claim.
     later = _now() + timedelta(days=400)
@@ -372,7 +372,7 @@ def test_an_individual_claim_writes_the_terms_read_in_its_transaction(store):
     )
     license_id = minted["license"]["id"]
     _signed_in(store, "solo-1", "solo@lab.org")
-    patch = repo._individual_member_patch(license_id, repo.get_license(license_id))
+    patch = repo._member_patch(license_id, repo.get_license(license_id))
 
     later = _now() + timedelta(days=400)
     repo.update_license(license_id, {"expiresAt": later}, "admin")

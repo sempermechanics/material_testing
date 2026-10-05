@@ -1,12 +1,13 @@
 """What an account may do: its mode, expiry and grace, and the resolved product limits.
 """
 
+from dataclasses import dataclass
+
 from ..config import settings
 from ..licenses import (
     SEATING_FLOATING,
     MODE_DEMO,
     MODE_LICENSED,
-    MODES,
     as_utc,
     grace_ends_at,
     legacy_plan,
@@ -19,6 +20,7 @@ from ..licenses import (
 from . import _base
 from ._base import (
     db,
+    _license_mode,
     _mode_patch,
     _now,
 )
@@ -42,15 +44,6 @@ def _bool_override(user: dict, key: str):
     input inherits rather than errors" contract."""
     raw = user.get(key)
     return raw if isinstance(raw, bool) else None
-
-
-def _stored_mode(user: dict) -> str:
-    """This account's recorded mode, reading `mode` and falling back to the
-    pre-rename `plan` for a document migration 002 has not reached yet."""
-    raw = user.get("mode")
-    if not (isinstance(raw, str) and raw.strip().lower() in MODES):
-        raw = user.get("plan")
-    return normalize_mode(raw)
 
 
 def _grace_days(user: dict) -> int:
@@ -114,48 +107,74 @@ def _lease_live(user: dict) -> bool:
         return False
 
 
-def effective_mode(user: dict) -> str:
-    """Licensed until the key expires past grace; anything else → demo.
-
-    Grace is inside the licensed branch on purpose: an account in grace keeps
-    every entitlement it had. Only the warning changes.
-
-    A floating seat adds one more condition: the member is entitled only while
-    holding a live lease. Without one they are demo — not blocked, not
-    revoked. That is the whole point of a pool; being between leases is the
-    ordinary state for most of the roster.
-    """
-    if _stored_mode(user) != MODE_LICENSED:
-        return MODE_DEMO
-    entitlement_over, _in_grace, _ends = _expiry_state(user)
-    if entitlement_over:
-        return MODE_DEMO
-    if normalize_seating(user.get("licenseSeating")) == SEATING_FLOATING:
-        return MODE_LICENSED if _lease_live(user) else MODE_DEMO
-    return MODE_LICENSED
-
-
-#: Why a licensed account is on demo limits right now; see `inactive_licence_reason`.
+#: Why a licensed account is on demo limits right now; see `Entitlement`.
 INACTIVE_LICENCE_ENDED = "licence_ended"
 INACTIVE_NO_SEAT = "no_seat"
 
 
-def inactive_licence_reason(user: dict) -> str:
-    """Why an account that holds a licence is resolving demo, or "".
+@dataclass(frozen=True)
+class Entitlement:
+    """What an account's licence grants right now — pure, read off the user
+    document once (`entitlement_of`), so every answer below agrees.
 
-    `effective_mode` answers demo for two accounts that are not demo users at
-    all: a licence past its grace, and a floating member between leases. Both
-    get the demo cap on their next request while every analysis they stored
-    stays, so a quota refusal that only told them to delete one blamed the
-    wrong thing. This names the actual cause so the refusal can.
+    `held` is whether a real licence is attached: false for a Demo key and
+    for a licence revoked out from under the account, true for one that is
+    merely expired or waiting on a floating seat. `mode` is what the account
+    gets: licensed until the key expires past grace, and on a floating seat
+    only while it holds a live lease. Grace is inside the licensed branch on
+    purpose: an account in grace keeps every entitlement it had; only the
+    warning changes. Being between leases is the ordinary state for most of a
+    floating roster — demo, not blocked, not revoked.
+
+    `inactive_reason` names why an account that holds a licence resolves
+    demo: a licence past its grace, or a floating member between leases. Both
+    get the demo cap while every analysis they stored stays, so a quota
+    refusal that only told them to delete one blamed the wrong thing.
     """
-    if _stored_mode(user) != MODE_LICENSED:
-        return ""
-    if _expiry_state(user)[0]:
-        return INACTIVE_LICENCE_ENDED
-    if normalize_seating(user.get("licenseSeating")) == SEATING_FLOATING and not _lease_live(user):
-        return INACTIVE_NO_SEAT
-    return ""
+    held: bool
+    mode: str
+    inactive_reason: str
+    expires_at: object
+    grace_ends_at: object
+    in_grace: bool
+    seating: str
+    lease_expires_at: object
+
+
+def entitlement_of(user: dict) -> Entitlement:
+    held = _license_mode(user) == MODE_LICENSED
+    over, in_grace, grace_ends = _expiry_state(user)
+    seating = normalize_seating(user.get("licenseSeating"))
+    if not held:
+        reason = ""
+    elif over:
+        reason = INACTIVE_LICENCE_ENDED
+    elif seating == SEATING_FLOATING and not _lease_live(user):
+        reason = INACTIVE_NO_SEAT
+    else:
+        reason = ""
+    return Entitlement(
+        held=held,
+        mode=MODE_LICENSED if held and not reason else MODE_DEMO,
+        inactive_reason=reason,
+        expires_at=as_utc(user.get("licenseExpiresAt")),
+        grace_ends_at=grace_ends,
+        in_grace=in_grace,
+        seating=seating,
+        # Null on an assigned seat, which never needs one. On a floating seat
+        # this is what the app renews before it lapses.
+        lease_expires_at=as_utc(user.get("leaseExpiresAt")),
+    )
+
+
+def effective_mode(user: dict) -> str:
+    """`entitlement_of(user).mode`: licensed or demo, right now."""
+    return entitlement_of(user).mode
+
+
+def inactive_licence_reason(user: dict) -> str:
+    """`entitlement_of(user).inactive_reason`: why a held licence resolves demo, or ""."""
+    return entitlement_of(user).inactive_reason
 
 
 def resolve_user_config(user: dict) -> dict:
@@ -236,28 +255,22 @@ def license_summary(user: dict) -> dict:
     resolve_user_config compute this without touching Firestore. Everything
     here is mirrored onto the user at activation; see _license_mirror_patch.
     """
-    expiry = as_utc(user.get("licenseExpiresAt"))
-    _over, in_grace, ends = _expiry_state(user)
+    ent = entitlement_of(user)
     return {
-        "mode": effective_mode(user),
+        "mode": ent.mode,
         "licenseKind": normalize_kind(user.get("licenseKind")) if user.get("licenseKind") else "",
         "duration": normalize_duration(
-            user.get("licenseDuration"), has_expiry=expiry is not None,
+            user.get("licenseDuration"), has_expiry=ent.expires_at is not None,
         ),
         "prefix": user.get("licensePrefix") or "",
-        "expiresAt": expiry,
-        "graceEndsAt": ends,
-        "inGrace": in_grace,
-        "seating": normalize_seating(user.get("licenseSeating")),
-        # Null on an assigned seat, which never needs one. On a floating seat
-        # this is what the app renews before it lapses.
-        "leaseExpiresAt": as_utc(user.get("leaseExpiresAt")),
-        # Whether a real licence is attached: false for a Demo key and for a
-        # licence revoked out from under the account, true for one that is
-        # merely expired or waiting on a floating seat. `mode` cannot say
-        # this — all four read demo — and the account page needs it to show
-        # licence details only to someone who has a licence.
-        "held": _stored_mode(user) == MODE_LICENSED,
+        "expiresAt": ent.expires_at,
+        "graceEndsAt": ent.grace_ends_at,
+        "inGrace": ent.in_grace,
+        "seating": ent.seating,
+        "leaseExpiresAt": ent.lease_expires_at,
+        # The account page shows licence details only to someone who has a
+        # licence; `mode` cannot say this — four different accounts read demo.
+        "held": ent.held,
     }
 
 

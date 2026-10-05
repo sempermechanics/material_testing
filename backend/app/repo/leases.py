@@ -14,6 +14,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    _is_revoked,
     db,
     get_license,
     _lease_clear_patch,
@@ -126,7 +127,7 @@ def checkout_lease(user: dict, device_id: str) -> dict:
         # An assigned seat is always entitled; there is nothing to check out,
         # and pretending otherwise would let a client invent a lease field.
         raise Refusal(errors.SEATING_NOT_FLOATING)
-    if (lic.get("status") or "active") == "revoked":
+    if _is_revoked(lic):
         raise Refusal(errors.LICENSE_REVOKED)
     if _license_past_grace(lic):
         raise Refusal(errors.LICENSE_EXPIRED)

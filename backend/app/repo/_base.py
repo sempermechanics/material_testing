@@ -13,9 +13,12 @@ from google.cloud import firestore
 from .. import errors
 from ..config import settings
 from ..licenses import (
+    KIND_INSTITUTION,
     MODES,
+    STATUS_REVOKED,
     grace_ends_at,
     legacy_plan,
+    normalize_kind,
     normalize_mode,
 )
 from ..observability import DependencyError
@@ -137,6 +140,28 @@ def _license_mode(data: dict) -> str:
     if not (isinstance(raw, str) and raw.strip().lower() in MODES):
         raw = data.get("plan")
     return normalize_mode(raw)
+
+
+def _apply_patch(doc: dict, patch: dict) -> dict:
+    """`doc` as it reads after `patch` is written: `DELETE_FIELD` removes a
+    field, anything else sets it. For answering with what was just stored
+    without reading it back."""
+    merged = {**doc, **patch}
+    for k, v in patch.items():
+        if v is firestore.DELETE_FIELD:
+            merged.pop(k, None)
+    return merged
+
+
+def _is_institution(lic: dict) -> bool:
+    """An institution licence (`campus` included), read off its document."""
+    return normalize_kind(lic.get("kind")) == KIND_INSTITUTION
+
+
+def _is_revoked(doc: dict) -> bool:
+    """A licence or seat that is revoked. Terminal for both; a missing status
+    is never revoked (an unused key, an active seat)."""
+    return (doc.get("status") or "") == STATUS_REVOKED
 
 
 def _seat_ref(license_id: str, uid: str):

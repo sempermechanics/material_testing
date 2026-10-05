@@ -35,6 +35,8 @@ from .repo.users import (  # noqa: F401
 from .repo.user_config import (  # noqa: F401
     cloud_backup_enabled,
     effective_mode,
+    Entitlement,
+    entitlement_of,
     _grace_days,
     INACTIVE_LICENCE_ENDED,
     INACTIVE_NO_SEAT,
@@ -46,7 +48,7 @@ from .repo.user_config import (  # noqa: F401
 from .repo.claims import (  # noqa: F401
     claim_individual_license,
     claim_seat,
-    _individual_member_patch,
+    _member_patch,
     _public_claim_error,
 )
 from .repo.holders import (  # noqa: F401

@@ -171,7 +171,7 @@ def test_an_individual_licence_is_claimed_once(store):
     license_id = _mint_individual()["license"]["id"]
     _signed_in(store, "first", "solo@lab.org")
     _signed_in(store, "second", "solo@lab.org")
-    patch = repo._individual_member_patch(
+    patch = repo._member_patch(
         license_id, store._data["licenses"][license_id],
     )
 
@@ -219,6 +219,33 @@ def test_a_key_typed_for_recovery_binds_an_unbound_licence(store):
     assert store._data["licenses"][minted["license"]["id"]]["deviceIdLock"] == "and-first"
     err2, _ = attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-second", minted["key"])
     assert err2 == "license_device_mismatch"
+
+
+def test_a_typed_key_replaces_the_demo_key_it_supersedes(store):
+    """A key typed in the app goes through the same claim as delivery does.
+
+    Activation used to write the account and the licence in a plain batch,
+    outside the claim transaction, and left the account's auto-minted Demo key
+    `redeemed` with nobody on it: the litter `_drop_superseded_demo` removes
+    on every other way onto a licence.
+    """
+    store._data["users"] = {}
+    demo_id = repo.ensure_entitlement(
+        _signed_in(store, "solo-1", "solo@lab.org"), "and-first")["licenseId"]
+    # Unverified by the time ops mints, so the mint leaves an invite rather
+    # than attaching, and the typed key is what moves the account.
+    store._data["users"]["solo-1"]["emailVerified"] = False
+    minted = _mint_individual()
+    license_id = minted["license"]["id"]
+    assert store._data["users"]["solo-1"]["licenseId"] == demo_id
+
+    err, cfg = attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-first", minted["key"])
+
+    assert err == ""
+    assert cfg["mode"] == "licensed"
+    assert store._data["users"]["solo-1"]["licenseId"] == license_id
+    assert store._data["licenses"][license_id]["redeemedByUid"] == "solo-1"
+    assert demo_id not in store._data["licenses"]
 
 
 # ================================================ a starved bind
@@ -378,7 +405,7 @@ def test_a_demo_key_minted_first_is_removed_when_the_licence_lands(store):
     )["licenseId"]
     assert demo_id != license_id
 
-    patch = repo._individual_member_patch(
+    patch = repo._member_patch(
         license_id, store._data["licenses"][license_id],
     )
     assert repo.claim_individual_license(license_id, "solo-1", "solo@lab.org", patch) == ""
@@ -528,7 +555,7 @@ def test_a_revoked_licence_a_demoted_holder_points_at_is_kept(store):
     assert store._data["users"]["solo-1"]["licenseId"] == first_id
 
     second_id = _mint_individual()["license"]["id"]
-    patch = repo._individual_member_patch(
+    patch = repo._member_patch(
         second_id, store._data["licenses"][second_id],
     )
     assert repo.claim_individual_license(second_id, "solo-1", "solo@lab.org", patch) == ""
@@ -547,7 +574,7 @@ def test_a_claim_that_loses_answers_with_the_account_as_stored(store, monkeypatc
     stale = _signed_in(store, "solo-1", "solo@lab.org")
     # What the request that beat us to it already committed.
     store._data["users"]["solo-1"].update(
-        repo._individual_member_patch(license_id, store._data["licenses"][license_id]),
+        repo._member_patch(license_id, store._data["licenses"][license_id]),
     )
     _always_contended(monkeypatch)
 

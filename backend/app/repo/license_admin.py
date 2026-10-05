@@ -6,7 +6,6 @@ from ..config import settings
 from ..licenses import (
     DURATION_PERPETUAL,
     DURATION_TIMED,
-    KIND_INSTITUTION,
     LIVE_STATUSES,
     MODE_DEMO,
     MODE_LICENSED,
@@ -15,13 +14,14 @@ from ..licenses import (
     as_utc,
     key_prefix,
     normalize_email,
-    normalize_kind,
     normalize_seating,
     seat_cap_below_roster,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     _cursor_page,
     db,
     _get_all,
@@ -94,7 +94,7 @@ def _search_licenses(col, q: str, include_demo: bool, include_revoked: bool) -> 
     rows = [
         (doc_id, lic) for doc_id, lic in found.items()
         if (include_demo or _license_mode(lic) != MODE_DEMO)
-        and (include_revoked or (lic.get("status") or "") != STATUS_REVOKED)
+        and (include_revoked or not _is_revoked(lic))
     ]
     # Newest first, like the table; a licence with no `createdAt` goes last.
     rows.sort(key=lambda row: str(row[1].get("createdAt") or ""), reverse=True)
@@ -126,13 +126,13 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
     if not snap.exists:
         return None
     lic = snap.to_dict() or {}
-    if (lic.get("status") or "") != STATUS_REVOKED:
+    if not _is_revoked(lic):
         ref.update({
             "status": STATUS_REVOKED,
             "revokedAt": _base.firestore.SERVER_TIMESTAMP,
             "revokedByUid": admin_uid,
         })
-    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+    if _is_institution(lic):
         seats = list(ref.collection("seats").stream())
         # Every seat's holder, revoked seats included: a seat revoke whose
         # demotion never landed (reconcile's `still_licensed`) is repaired here.
@@ -218,7 +218,7 @@ def license_edit_error(lic: dict, patch: dict) -> str:
     `patch` is the request as sent: `allowShorten` rides along with the
     fields it qualifies.
     """
-    institution = normalize_kind(lic.get("kind")) == KIND_INSTITUTION
+    institution = _is_institution(lic)
     if not institution and any(patch.get(f) is not None for f in _ROSTER_FIELDS):
         return errors.INSTITUTION_ONLY
     if patch.get("maxAnalyses") is not None:
@@ -333,13 +333,13 @@ def _clear_seat_leases(ref) -> None:
 
 def _license_holder_uids(ref, lic: dict) -> list[str]:
     """Everyone currently entitled by this license."""
-    if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+    if not _is_institution(lic):
         redeemer = lic.get("redeemedByUid")
         return [redeemer] if redeemer else []
     out = []
     for seat_doc in ref.collection("seats").stream():
         seat = seat_doc.to_dict() or {}
-        if seat.get("status") == STATUS_REVOKED:
+        if _is_revoked(seat):
             continue
         out.append(seat.get("uid") or seat_doc.id)
     return out

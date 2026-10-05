@@ -6,16 +6,15 @@ from .. import apps, errors, statuses
 from ..config import settings
 from ..errors import Refusal
 from ..licenses import (
-    KIND_INSTITUTION,
     MODE_LICENSED,
     STATUS_ACTIVE,
-    STATUS_REVOKED,
     as_utc,
-    normalize_kind,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     db,
     _lease_clear_patch,
     _license_mode,
@@ -50,7 +49,7 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     member, by then on Demo, register a different phone, a change Demo accounts
     do not otherwise get (TD-127).
     """
-    if (lic.get("status") or "") == STATUS_REVOKED:
+    if _is_revoked(lic):
         return None
     if scope == "seat":
         seat = ref.get()
@@ -193,7 +192,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     if not lic_snap.exists:
         raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = lic_snap.to_dict() or {}
-    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+    if _is_institution(lic):
         if not uid:
             raise Refusal(errors.SEAT_NOT_FOUND)
         ref, scope = _seat_ref(license_id, uid), "seat"
@@ -291,9 +290,9 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
         if not snap.exists:
             return errors.SEAT_NOT_FOUND
         seat = snap.to_dict() or {}
-        if seat.get("status") == "revoked":
+        if _is_revoked(seat):
             return errors.SEAT_REVOKED
-        if lic_snap.exists and (lic_snap.to_dict() or {}).get("status") == "revoked":
+        if lic_snap.exists and _is_revoked(lic_snap.to_dict() or {}):
             return errors.LICENSE_REVOKED
         patch = {
             "status": "active" if enabled else "disabled",
@@ -344,7 +343,7 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
         if not seat_snap.exists:
             return False
         seat = seat_snap.to_dict() or {}
-        if seat.get("status") == "revoked":
+        if _is_revoked(seat):
             return True  # idempotent: already revoked, counters already settled
         lic_snap = lic_ref.get(transaction=tx)
         seats_used = int((lic_snap.to_dict() or {}).get("seatsUsed") or 0) if lic_snap.exists else 0

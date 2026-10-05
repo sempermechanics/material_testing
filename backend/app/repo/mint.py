@@ -35,7 +35,7 @@ from ._base import (
 )
 from .claims import (
     claim_individual_license,
-    _individual_member_patch,
+    _member_patch,
     _public_claim_error,
 )
 from .holders import (
@@ -334,7 +334,7 @@ def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[
         return "", "holder_already_licensed"
     err = claim_individual_license(
         license_id, holder["uid"], address,
-        _individual_member_patch(license_id, lic), invite_ref=_invite_ref(address),
+        _member_patch(license_id, lic), invite_ref=_invite_ref(address),
     )
     if err:
         # A lost race here has no next request to fall back on — the holder's

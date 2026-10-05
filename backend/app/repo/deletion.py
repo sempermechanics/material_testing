@@ -24,15 +24,15 @@ from datetime import timedelta
 from .. import errors
 from ..errors import Refusal
 from ..licenses import (
-    KIND_INSTITUTION,
     MODE_DEMO,
     STATUS_REVOKED,
     as_utc,
-    normalize_kind,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     _BATCH_LIMIT,
     db,
     _delete_refs,
@@ -43,8 +43,7 @@ from ._base import (
 )
 from .claims import (
     _drop_superseded_demos,
-    _individual_member_patch,
-    _institution_member_patch,
+    _member_patch,
 )
 from .holders import (
     licence_held_by,
@@ -170,7 +169,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
     lic["status"] = tomb.get("priorStatus") or lic.get("status") or ""
     lic["restoredAt"] = _base.firestore.SERVER_TIMESTAMP
     lic["restoredByUid"] = admin_uid
-    institution = normalize_kind(lic.get("kind")) == KIND_INSTITUTION
+    institution = _is_institution(lic)
     seat_docs = list(tomb_ref.collection(DELETED_SEATS).stream())
 
     back: list[str] = []
@@ -187,7 +186,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
             seat = {k: v for k, v in (doc.to_dict() or {}).items()
                     if k != "purgeAt" and k not in _LEASE_FIELDS}
             uid = seat.get("uid") or doc.id
-            if live and seat.get("status") != STATUS_REVOKED:
+            if live and not _is_revoked(seat):
                 if _free(uid):
                     on_roster += 1
                     if seat.get("status") != "disabled":
@@ -208,7 +207,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
 
     ref.set(lic)
     _set_refs(seat_writes)
-    patch = (_institution_member_patch if institution else _individual_member_patch)(license_id, lic)
+    patch = _member_patch(license_id, lic)
     users = db().collection("users")
     _update_refs([(users.document(uid), patch) for uid in back])
     # The Demo keys the accounts were given while this licence was gone.

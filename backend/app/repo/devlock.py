@@ -9,15 +9,15 @@ from .. import apps, errors
 from ..config import settings
 from ..licenses import (
     as_utc,
-    KIND_INSTITUTION,
     MODE_DEMO,
     MODE_LICENSED,
-    normalize_kind,
 )
 from ..observability import DependencyError
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     db,
     _now,
     _mode_patch,
@@ -71,9 +71,9 @@ def _device_lock_state(user: dict, device_id: str,
     if not snap.exists:
         return _LOCK_OK, None
     lic = snap.to_dict() or {}
-    if (lic.get("status") or "") == "revoked":
+    if _is_revoked(lic):
         return _LOCK_REVOKED, None
-    if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+    if not _is_institution(lic):
         return _lock_verdict(lic.get(apps.field("deviceIdLock", app)), device_id, ref)
     seat_ref = _seat_ref(license_id, user.get("uid") or "")
     seat_snap = seat_ref.get()

@@ -2,19 +2,17 @@
 """
 from .. import apps, errors
 from ..errors import Refusal
-from ..licenses import (
-    KIND_INSTITUTION,
-    normalize_kind,
-)
 
 from ._base import (
+    _is_institution,
+    _is_revoked,
     db,
     get_license,
     _seat_ref,
 )
 from .claims import (
     claim_seat,
-    _institution_member_patch,
+    _member_patch,
     _public_claim_error,
 )
 from .holders import (
@@ -62,9 +60,9 @@ def list_licenses_administered_by(email: str) -> list[dict]:
     q = db().collection("licenses").where("adminEmails", "array_contains", wanted)
     for d in q.stream():
         data = d.to_dict() or {}
-        if normalize_kind(data.get("kind")) != KIND_INSTITUTION:
+        if not _is_institution(data):
             continue
-        if (data.get("status") or "") == "revoked":
+        if _is_revoked(data):
             continue
         out.append(_license_public(d.id, data))
     out.sort(key=lambda lic: lic["id"])
@@ -107,7 +105,7 @@ def add_institution_member(license_id: str, email: str,
     # No device lock: IT adds a member before that member has picked a device,
     # and the lock is set the first time they actually use the license.
     err = claim_seat(license_id, uid, user.get("email") or email, "",
-                     _institution_member_patch(license_id, lic))
+                     _member_patch(license_id, lic))
     if err:
         raise Refusal(_public_claim_error(err))
     return institution_seat(license_id, uid), None

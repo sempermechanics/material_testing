@@ -4,18 +4,18 @@
 from .. import errors
 from ..errors import Refusal
 from ..licenses import (
-    KIND_INSTITUTION,
     MODE_LICENSED,
     as_utc,
-    normalize_kind,
 )
 
 from ._base import (
+    _is_institution,
+    _is_revoked,
     db,
+    _license_mode,
 )
 from .user_config import (
     _expiry_state,
-    _stored_mode,
 )
 
 
@@ -84,7 +84,7 @@ def reconcile_institution_seats(license_id: str) -> dict:
     if not lic_snap.exists:
         raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = lic_snap.to_dict() or {}
-    if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+    if not _is_institution(lic):
         # An individual licence has one redeemer and no roster, so there are
         # no two counts to reconcile; saying so beats returning an empty
         # report that reads like a clean bill of health.
@@ -112,11 +112,11 @@ def reconcile_institution_seats(license_id: str) -> dict:
         user = holders.get(uid)
 
         on_this_license = bool(user) and user.get("licenseId") == license_id
-        holds = on_this_license and _stored_mode(user) == MODE_LICENSED
+        holds = on_this_license and _license_mode(user) == MODE_LICENSED
         revoked_at = _seat_revoked_at(seat)
         last_seen = user.get("lastSeenAt") if user else None
 
-        if seat.get("status") != "revoked":
+        if not _is_revoked(seat):
             bucket, reason = "active", _idle_reason(seat, user, on_this_license, holds)
             if reason:
                 counts["notEntitled"] += 1
@@ -143,9 +143,9 @@ def reconcile_institution_seats(license_id: str) -> dict:
             "status": seat.get("status") or "active",
             "bucket": bucket,
             "reason": reason,
-            "revokedAt": revoked_at if seat.get("status") == "revoked" else None,
+            "revokedAt": revoked_at if _is_revoked(seat) else None,
             "lastSeenAt": last_seen,
-            "userMode": _stored_mode(user) if user else "",
+            "userMode": _license_mode(user) if user else "",
             "userLicenseId": (user or {}).get("licenseId") or "",
         })
 

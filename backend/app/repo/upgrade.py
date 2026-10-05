@@ -13,12 +13,12 @@ from ..errors import Refusal
 from ..licenses import (
     KIND_INDIVIDUAL,
     MODE_DEMO,
-    STATUS_REVOKED,
     normalize_kind,
 )
 
 from . import _base
 from ._base import (
+    _is_revoked,
     db,
     get_license,
     _license_mode,
@@ -26,7 +26,7 @@ from ._base import (
 )
 from .claims import (
     claim_seat,
-    _institution_member_patch,
+    _member_patch,
     _public_claim_error,
 )
 from .invites import (
@@ -74,7 +74,7 @@ def convert_to_institution(
         raise Refusal(errors.LICENSE_NOT_FOUND)
     if normalize_kind(lic.get("kind")) != KIND_INDIVIDUAL or _license_mode(lic) == MODE_DEMO:
         raise Refusal(errors.LICENSE_NOT_CONVERTIBLE)
-    if (lic.get("status") or "") == STATUS_REVOKED:
+    if _is_revoked(lic):
         raise Refusal(errors.LICENSE_REVOKED)
 
     holder_uid = lic.get("redeemedByUid") or ""
@@ -105,7 +105,7 @@ def convert_to_institution(
         # Every app's device comes with the holder (ADR-010), so neither
         # app has to be signed in again on the phone it was already on.
         err = claim_seat(new_id, holder_uid, address, lic.get("deviceIdLock") or "",
-                         _institution_member_patch(new_id, get_license(new_id) or {}),
+                         _member_patch(new_id, get_license(new_id)),
                          carried_locks={a: lic.get(apps.field("deviceIdLock", a)) or ""
                                         for a in apps.ALL})
         if err:

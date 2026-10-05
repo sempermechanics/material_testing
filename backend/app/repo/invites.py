@@ -3,14 +3,14 @@
 from .. import errors
 from ..errors import Refusal
 from ..licenses import (
-    KIND_INSTITUTION,
     invite_id,
     normalize_email,
-    normalize_kind,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     db,
     get_license,
     SCHEMA_VERSION,
@@ -73,9 +73,9 @@ def invite_institution_member(
     taken when it is kept.
     """
     lic = get_license(license_id)
-    if not lic or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+    if not lic or not _is_institution(lic):
         raise Refusal(errors.LICENSE_NOT_FOUND)
-    if (lic.get("status") or "active") == "revoked":
+    if _is_revoked(lic):
         raise Refusal(errors.LICENSE_REVOKED)
     err, invite = _write_invite(license_id, email, invited_by_uid)
     if err:
@@ -93,7 +93,7 @@ def _invite_is_stale(license_id: str) -> bool:
     if not license_id:
         return True
     lic = get_license(license_id)
-    return not lic or (lic.get("status") or "active") == "revoked"
+    return not lic or _is_revoked(lic)
 
 
 def _delete_license_invites(license_id: str, email_lock: str = "") -> None:

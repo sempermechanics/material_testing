@@ -3,21 +3,17 @@
 from .. import apps, errors
 from ..errors import Refusal
 from ..licenses import (
-    KIND_INDIVIDUAL,
-    KIND_INSTITUTION,
-    MODE_LICENSED,
     key_hash,
     key_prefix,
-    normalize_kind,
 )
 
-from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
+    _apply_patch,
     db,
-    _license_mode,
     _license_past_grace,
     _load_user,
-    _mode_patch,
 )
 from .devlock import (
     bind_device_lock,
@@ -30,9 +26,10 @@ from .holders import (
     licence_held_by,
 )
 from .claims import (
+    claim_individual_license,
     claim_seat,
     _emails_match,
-    _license_mirror_patch,
+    _member_patch,
     _public_claim_error,
 )
 
@@ -42,10 +39,12 @@ def _email_domain(email: str) -> str:
     return email.rsplit("@", 1)[-1] if "@" in email else ""
 
 
-def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str,
-                         app: str):
-    status = lic.get("status") or "unused"
-    if status == "revoked":
+def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: dict, ref,
+                         app: str) -> dict:
+    # Asked before the device, so a revoked or someone else's licence says
+    # so rather than reading as a device mismatch. The claim asks again,
+    # inside its transaction.
+    if _is_revoked(lic):
         raise Refusal(errors.LICENSE_REVOKED)
     if not _emails_match(lic.get("emailLock"), email):
         raise Refusal(errors.LICENSE_EMAIL_MISMATCH)
@@ -65,70 +64,28 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         locked = (ref.get().to_dict() or {}).get(lock_field) or ""
     if locked != device_id:
         raise Refusal(errors.LICENSE_DEVICE_MISMATCH)
-    if status == "redeemed" and lic.get("redeemedByUid") != uid:
-        raise Refusal(errors.LICENSE_ALREADY_REDEEMED)
-
-    mode = _license_mode(lic)
-    license_id = ref.id
-    user_patch = {
-        **_mode_patch(mode),
-        "licenseId": license_id,
-        "licenseKind": KIND_INDIVIDUAL,
-        "licensePrefix": lic.get("keyPrefix") or key_prefix(key),
-        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-    }
-    user_patch.update(_license_mirror_patch(lic))
-
-    license_patch = {}
-    if status == "unused":
-        license_patch = {
-            "status": "redeemed",
-            "redeemedByUid": uid,
-            "redeemedAt": _base.firestore.SERVER_TIMESTAMP,
-        }
-
-    batch = db().batch()
-    batch.update(db().collection("users").document(uid), user_patch)
-    if license_patch:
-        batch.update(ref, license_patch)
-    batch.commit()
-
-    merged = _apply_patch(user, user_patch)
-    return resolve_user_config(merged)
+    # The same transaction an invite or a staff mint attaches through: the
+    # single-redeemer check, the licence's `redeemed` stamp and the account
+    # settle together, and the Demo key the account held goes with them.
+    patch = _member_patch(ref.id, lic)
+    err = claim_individual_license(ref.id, uid, email, patch)
+    if err:
+        raise Refusal(_public_claim_error(err))
+    return resolve_user_config(_apply_patch(user, patch))
 
 
-def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic: dict, ref, key: str,
-                          app: str):
-    if (lic.get("status") or "active") == "revoked":
+def _activate_institution(user: dict, uid: str, email: str, device_id: str, lic: dict, ref,
+                          app: str) -> dict:
+    if _is_revoked(lic):
         raise Refusal(errors.LICENSE_REVOKED)
     domain_lock = (lic.get("domainLock") or "").strip().lower()
     if not domain_lock or _email_domain(email) != domain_lock:
         raise Refusal(errors.LICENSE_EMAIL_MISMATCH)
-
-    license_id = ref.id
-    user_patch = {
-        **_mode_patch(MODE_LICENSED),
-        "licenseId": license_id,
-        "licenseKind": KIND_INSTITUTION,
-        "licensePrefix": lic.get("keyPrefix") or key_prefix(key),
-        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-    }
-    user_patch.update(_license_mirror_patch(lic))
-
-    err = claim_seat(license_id, uid, email, device_id, user_patch, app=app)
+    patch = _member_patch(ref.id, lic)
+    err = claim_seat(ref.id, uid, email, device_id, patch, app=app)
     if err:
         raise Refusal(_public_claim_error(err))
-
-    merged = _apply_patch(user, user_patch)
-    return resolve_user_config(merged)
-
-
-def _apply_patch(user: dict, patch: dict) -> dict:
-    merged = {**user, **{k: v for k, v in patch.items() if v is not _base.firestore.DELETE_FIELD}}
-    for k, v in patch.items():
-        if v is _base.firestore.DELETE_FIELD:
-            merged.pop(k, None)
-    return merged
+    return resolve_user_config(_apply_patch(user, patch))
 
 
 def activate_license(uid: str, email: str, device_id: str, key: str,
@@ -153,6 +110,8 @@ def activate_license(uid: str, email: str, device_id: str, key: str,
     if not snap.exists:
         raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = snap.to_dict() or {}
+    # A licence record that predates `keyPrefix` still shows the typed key's.
+    lic = {**lic, "keyPrefix": lic.get("keyPrefix") or key_prefix(key)}
     if _license_past_grace(lic):
         # Without this the activation "succeeds": the past expiry is mirrored
         # onto the user, effective_mode immediately resolves demo, and the
@@ -164,6 +123,6 @@ def activate_license(uid: str, email: str, device_id: str, key: str,
         # account held, and the licence it left stayed `redeemed` in their
         # name. Asked before the kind branch so both refuse alike.
         raise Refusal(errors.ALREADY_LICENSED)
-    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
-        return _activate_institution(user, uid, email, device_id, lic, ref, key, app)
-    return _activate_individual(user, uid, email, device_id, lic, ref, key, app)
+    if _is_institution(lic):
+        return _activate_institution(user, uid, email, device_id, lic, ref, app)
+    return _activate_individual(user, uid, email, device_id, lic, ref, app)

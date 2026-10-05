@@ -14,6 +14,8 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     _CONTENDED,
     db,
     _get_all,
@@ -197,11 +199,11 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
             # Revoked between the read that found it and this transaction.
             return "invite_not_found"
         lic = lic_snap.to_dict() or {}
-        if (lic.get("status") or "active") == "revoked":
+        if _is_revoked(lic):
             return "license_revoked"
 
         seat = seat_snap.to_dict() if seat_snap.exists else None
-        if seat and seat.get("status") == "revoked":
+        if seat and _is_revoked(seat):
             # revoke_institution_seat() already freed this slot. A revoked seat
             # is not a permanent ban — the holder may be re-admitted and takes
             # a fresh slot through the normal maxSeats check below.
@@ -257,24 +259,6 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
     if not err:
         _drop_superseded_demo(uid, license_id)
     return err
-
-
-def _individual_member_patch(license_id: str, lic: dict) -> dict:
-    """The user-document patch that attaches an individual licence.
-
-    The counterpart to `_institution_member_patch`, and shared for the same
-    reason: a licence reached by typing its key and one reached by signing in
-    at the invited address must entitle the holder identically.
-    """
-    patch = {
-        **_mode_patch(_license_mode(lic)),
-        "licenseId": license_id,
-        "licenseKind": KIND_INDIVIDUAL,
-        "licensePrefix": lic.get("keyPrefix") or "",
-        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-    }
-    patch.update(_license_mirror_patch(lic))
-    return patch
 
 
 def claim_individual_license(license_id: str, uid: str, email: str,
@@ -336,19 +320,21 @@ def claim_individual_license(license_id: str, uid: str, email: str,
     return err
 
 
-def _institution_member_patch(license_id: str, lic: dict) -> dict:
-    """The user-document patch that puts someone on an institution licence.
+def _member_patch(license_id: str, lic: dict) -> dict:
+    """The user-document patch that puts someone on `lic`.
 
-    Shared by the two ways onto a roster — IT adding an existing account, and
-    a newcomer redeeming an invite at sign-in — so the two cannot drift into
-    entitling people differently.
+    One patch for every way onto a licence — a key typed in the app, an
+    invite redeemed at sign-in, IT adding an existing account, staff minting
+    for one, a restore, a conversion — so they cannot drift into entitling
+    people differently. An institution seat is licensed whatever the key
+    record says; an individual licence grants the mode it carries.
     """
-    patch = {
-        **_mode_patch(MODE_LICENSED),
+    institution = _is_institution(lic)
+    return {
+        **_mode_patch(MODE_LICENSED if institution else _license_mode(lic)),
         "licenseId": license_id,
-        "licenseKind": KIND_INSTITUTION,
+        "licenseKind": KIND_INSTITUTION if institution else KIND_INDIVIDUAL,
         "licensePrefix": lic.get("keyPrefix") or "",
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+        **_license_mirror_patch(lic),
     }
-    patch.update(_license_mirror_patch(lic))
-    return patch
