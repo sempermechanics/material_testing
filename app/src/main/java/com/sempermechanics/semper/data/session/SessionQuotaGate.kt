@@ -37,7 +37,7 @@ object SessionQuotaGate {
      * @return false if the insert must be refused.
      */
     fun allowNewSession(context: Context, existingCount: Int): Boolean {
-        if (!api(context).enabled || LicenseEntitlements.unlimitedAnalysis(context)) return true
+        if (!api(context).enabled || LicenseEntitlements.hasUnlimitedAnalysis(context)) return true
         val max = LicenseEntitlements.analysisCap(context)
         val used = maxOf(TokenStore.quotaUsed(context), existingCount)
         val full = used >= max
