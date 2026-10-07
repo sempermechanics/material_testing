@@ -9,7 +9,8 @@ import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app import audit, deps, drive, firestore_repo as repo, statuses
+from app import audit, deps, drive, statuses
+import repo_view as repo
 from app.config import settings
 
 
@@ -77,8 +78,7 @@ async def test_pending_user_is_403(secure, client, monkeypatch):
             "email": "p@e.com", "role": "user", "access_status": "PENDING",
         },
     }
-    monkeypatch.setattr(
-        repo, "get_or_create_user",
+    repo.patch(monkeypatch, "get_or_create_user",
         lambda claims, device_id=None: {**secure._data["users"]["u-pending"], "uid": "u-pending"},
     )
     r = await client.get("/v1/me", headers={"Authorization": "Bearer ok"})
@@ -89,7 +89,7 @@ async def test_pending_user_is_403(secure, client, monkeypatch):
 @pytest.mark.asyncio
 async def test_non_admin_cannot_list_users(secure, client, monkeypatch):
     monkeypatch.setattr(deps, "verify_id_token", lambda _t: {"sub": "u1", "email": "u@e.com"})
-    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: _approved_user())
+    repo.patch(monkeypatch, "get_or_create_user", lambda claims, device_id=None: _approved_user())
     r = await client.get("/v1/admin/users", headers={"Authorization": "Bearer ok"})
     assert r.status_code == 403
     assert r.json()["detail"] == "not_admin"
@@ -98,7 +98,7 @@ async def test_non_admin_cannot_list_users(secure, client, monkeypatch):
 @pytest.mark.asyncio
 async def test_cross_user_session_is_404(secure, client, monkeypatch):
     monkeypatch.setattr(deps, "verify_id_token", lambda _t: {"sub": "u-approved", "email": "u@e.com"})
-    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: _approved_user())
+    repo.patch(monkeypatch, "get_or_create_user", lambda claims, device_id=None: _approved_user())
     secure._data["sessions"] = {
         "s-other": {"uid": "someone-else", "status": "COMPLETED", "localSessionId": "x"},
     }
@@ -114,8 +114,7 @@ def _admin_token(secure, monkeypatch, claims: dict):
         lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com",
                     "email_verified": True, **claims},
     )
-    monkeypatch.setattr(
-        repo, "get_or_create_user",
+    repo.patch(monkeypatch, "get_or_create_user",
         lambda c, device_id=None: {
             "uid": "admin-1", "email": "admin@sempermechanics.com",
             "role": "admin", "access_status": "APPROVED", "activeDeviceId": "adev",
@@ -230,8 +229,7 @@ async def test_admin_mutation_with_valid_device_attestation(secure, client, monk
         deps, "verify_id_token",
         lambda _t: {"sub": "admin-1", "email": "admin@sempermechanics.com", "email_verified": True},
     )
-    monkeypatch.setattr(
-        repo, "get_or_create_user",
+    repo.patch(monkeypatch, "get_or_create_user",
         lambda claims, device_id=None: {
             "uid": "admin-1", "email": "admin@sempermechanics.com",
             "role": "admin", "access_status": "APPROVED", "activeDeviceId": "adev",
@@ -246,7 +244,7 @@ async def test_admin_mutation_with_valid_device_attestation(secure, client, monk
     secure._data["devices"] = {
         "adev": {"uid": "admin-1", "status": "ACTIVE", "publicKeyPem": pem},
     }
-    monkeypatch.setattr(repo, "consume_nonce", lambda *a, **k: True)
+    repo.patch(monkeypatch, "consume_nonce", lambda *a, **k: True)
 
     path = "/v1/admin/users/target/approve"
     body = b""
@@ -294,7 +292,7 @@ def _holder_token(secure, monkeypatch, claims: dict) -> str:
         lambda _t: {"sub": "holder-1", "email": "holder@lab.org",
                     "email_verified": True, **claims},
     )
-    monkeypatch.setattr(repo, "get_or_create_user", lambda c, device_id=None: stored)
+    repo.patch(monkeypatch, "get_or_create_user", lambda c, device_id=None: stored)
     return license_id
 
 
@@ -523,8 +521,7 @@ def _institution_it_token(secure, monkeypatch, claims: dict) -> str:
             **claims,
         },
     )
-    monkeypatch.setattr(
-        repo, "get_or_create_user",
+    repo.patch(monkeypatch, "get_or_create_user",
         lambda c, device_id=None: {
             "uid": "it-1", "email": "it@university.edu", "role": "user",
             "access_status": "APPROVED", "emailVerified": True,

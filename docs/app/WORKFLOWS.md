@@ -108,7 +108,7 @@ below is the user's own nudge on top of that, not the only signal.
 | [ ] 2.4 | Tap **Check status** while still pending | "Account is still pending approval." and you stay put |
 | [ ] 2.5 | Have an admin approve, then tap **Check status** | "Access granted" and you land on Home |
 | [ ] 2.6 | Wait on this screen without touching it | Nothing happens — approval is *not* polled |
-| [ ] 2.7 | Tap **Log out** → confirm | Login screen, back stack cleared |
+| [ ] 2.7 | Tap **Sign out** → confirm | Login screen, back stack cleared |
 
 ---
 
@@ -419,13 +419,13 @@ offers **Type loads (kg)**: the hanger mass of each photo, typed on the phone
 | [ ] 5.1b.34 | Reopen by tapping the summary; type `1.2.3` in a box; **Done** | The box shows "Enter the mass in kg, e.g. 0.5" and the sheet stays open. Fix it or press back: back keeps every valid box and the bad box's old value |
 | [ ] 5.1b.35 | Compute; open Results and the lab report | Loads 0.50, 1.00, 1.50, 0 kg on the Results graph (4.90, 9.81, 14.71, 0 N in the maths and the CSV). The lab report's table lists the loaded steps only (0.50, 1.00, 1.50 kg): unloaded frames are left out of it by design; its row-1 calculation opens "W = m·g = 0.50 kg × 9.81 m/s² = 4.90 N". Scrubbing the graph shows the point as "(δ mm, kg)" beside the dot, clear of the scrub line; near the right edge it flips to the line's left |
 | [ ] 5.1b.36 | Re-sort the frames (Name ↓, or drag) after typing | Each mass stays with its photo: reopen the sheet and check |
-| [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.indicvision.semper.materialtesting` while backgrounded), return | The typed loads come back |
+| [ ] 5.1b.37 | Kill the process on step 1 with loads typed (`adb shell am kill com.sempermechanics.materialtesting` while backgrounded), return | The typed loads come back |
 | [ ] 5.1b.38 | Tap ✕ on the typed loads; import a CSV; tap ✕ on it | ✕ clears the typed loads and brings back the button and dropzone; with the CSV in, the typing sheet is never offered (no button, the summary does not open it); its ✕ brings the button back. Tensile never shows the button |
 | [ ] 5.1b.39 | With 0.5, 1, 1.5, 0 typed, pick **Incremental (added per photo)** under **Loads typed as** | The boxes become 0.5, 0.5, 0.5, -1.5, each with "Total n kg" under it (0.5, 1, 1.5, 0); the keypad now has a minus key and the subtitle explains increments. Change the last to -2, **Done**: refused, "This takes the hanger below 0 kg". Back to **Absolute**: the totals return unchanged; 1,5 typed with the keypad comma still reads 1.5. **Done** in Incremental, reopen: still Incremental; the loads are the same 4.90, 9.81, 14.71, 0 N |
 | [x] 5.1b.40 | Open a finished **Bending** analysis with the load point tapped; look at Results on the summary page and in Details | **Adjust deflection** beside the RESULTS title on the summary, and under the Results text in Details. Not on tensile, nor on bending without the tap. The wizard has no scale or bias boxes |
 | [ ] 5.1b.41 | Tap it; type scale 1.05 and bias -0.12; **Apply** | Both Results redraw at once, with no progress count: "Deflection corrected: δ = 1.050 × δ measured − 0.120 mm", and every δ in the graph, caption and table is 1.05 × δ − 0.12. E from the graph drops by 1/1.05 and does not move with the bias; the average E moves with both. Share the lab report and CSV: the report lists the correction under Observations, and the CSV's `# mechanical_results` block leads with `deflection_correction_scale` / `_bias_mm` |
 | [x] 5.1b.42 | Type scale 0, **Apply**; then a lone `-` as the bias (the number keypad blocks letters and a second point) | The dialog stays open with "Enter a number above 0, e.g. 1.05" (or "Enter a number in mm, e.g. -0.12") under the box; nothing changes. Blank boxes mean 1 and 0 |
-| [ ] 5.1b.43 | Back out to Home, reopen the analysis; then rotate; then kill it in the background (`adb shell am kill com.indicvision.semper`) and return | The correction is still applied each time, and the dialog opens with 1.05 and -0.12. **Reset** puts every number back to the camera's δ and saves that |
+| [ ] 5.1b.43 | Back out to Home, reopen the analysis; then rotate; then kill it in the background (`adb shell am kill com.sempermechanics.materialtesting`) and return | The correction is still applied each time, and the dialog opens with 1.05 and -0.12. **Reset** puts every number back to the camera's δ and saves that |
 
 **5.1b.32–38 on the Pixel 6 (`f4209a7f`, 2026-09-28)** pass on an offline lab
 build with `semper_test_data/2_bending_pmma_real` (pmma_00 as the reference,
@@ -646,6 +646,7 @@ extraction show determinate progress instead.
 | [ ] 5.5.6 | Hit the quota during a run | Session limit screen |
 | [ ] 5.5.7 | Re-run with the same inputs after changing a parameter | The same Home row is updated, not duplicated |
 | [ ] 5.5.8 | Change the inputs and run again | A new Home row is created |
+| [ ] 5.5.8a | Pick the reference again (even the same image) and run, with the quota full | The session limit screen: a new reference is new inputs, so the run would make a new Home row |
 
 ---
 
@@ -1014,7 +1015,7 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 is not meant to be one. A licence is minted against the customer's email
 address and attaches at their next sign-in — an individual licence directly, an
 institution seat through the roster — so nothing is read off a phone, dictated,
-or typed. `POST /v1/licenses/activate` and `IndicApi.activateLicense()` remain
+or typed. `POST /v1/licenses/activate` and `SemperApi.activateLicense()` remain
 for support recovery and have no caller in `app/src/`. What the app shows of a
 licence is its prefix, in Settings → Account (4.2a); the key itself never
 reaches the device. This screen's behaviour for a Professional account is
@@ -1099,7 +1100,7 @@ Not part of the test pass. Recorded so nobody rediscovers them the hard way.
 | **Google SSO** button and its divider | Hidden unless `default_web_client_id` is in the APK (from `google-services.json`). Release resource shrinking must not strip it — see [AUTH_SETUP.md](../backend/AUTH_SETUP.md). Separately, the build's signing SHA-1 must be registered in Firebase or the button shows but sign-in fails |
 | Settings → **Pending access requests** → Admin | Hidden unless the backend reports role `admin` |
 | Dev sign-in bypass (skips auth, disables cloud) | Debug build **and** the bypass flag **and** an emulator |
-| Splash → Home without auth | Debug build with no `INDIC_API_BASE_URL`. A *release* build with no base URL cannot get past sign-in at all |
+| Splash → Home without auth | Debug build with no `SEMPER_API_BASE_URL`. A *release* build with no base URL cannot get past sign-in at all |
 | `DebugViewerSeedActivity` | A 13th activity, declared only in `app/src/debug/AndroidManifest.xml` and exported so `adb` can drop straight into the result viewer for emulator screenshots. The "12 activities" count above is the **main** manifest |
 
 ### Blocked on external setup
@@ -1116,14 +1117,8 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
 | Feature | Where | Why unreachable |
 |---|---|---|
 | **Circle, ellipse and freeform ROI** | `StudioOverlayView` — full draw, hit-test and mask generation | `activity_roi_draw.xml` only exposes Rect and Square; everything else collapses to Rectangle |
-| **Convergence view** (peak strain and noise vs VSG) | documented in `VsgPlotView` / `VsgStudy` | Never built — only line-cut plots exist |
-| `VsgStudyRunner.ERROR_ENGINE_FAILED` | `VsgStudyRunner` | Declared, never assigned or matched |
+| **Convergence view** (peak strain and noise vs VSG) | documented in `SweepPlotView` / `SweepStudy` | Never built — only line-cut plots exist |
 | Frame-order *picker* mode | `FrameOrderHelper` | Only the initial state; the sort menu offers no way back once you sort |
-| `home_empty_restore` string | `strings.xml` | Orphaned when the empty state became **Start analysis** (§3.19) |
-| `download_analysis_save_title` / `_save_body` | `strings.xml` | Orphaned when Download started picking its SAF destination *before* enqueue — there is no confirm dialog left to title |
-| `delete_device_restore_action` string | `strings.xml` | Unused |
-| `viewer_details_home` ("Go to Home") | `strings.xml` | Orphaned when Home moved out of the ⓘ peek sheet into the viewer's top chrome (§8.4.7) |
-| `summary_counter_fmt` plurals | `strings.xml` | Orphaned when the summary counter became the flat "Summary GIF" (§8.2a.1) |
 
 ### Behavioural gaps worth knowing
 
@@ -1165,7 +1160,7 @@ verified, both are live; §1.13a covers the in-app reset form it opens.
   Firebase Analytics events for analysis started / completed / failed, the two
   data exports and Send feedback — all buckets and enums, never images, results,
   session ids or specimen names — and every one of them is dropped unless
-  `DicSettings.diagnosticsEnabled` is on. The consent copy names both halves —
+  `AppSettings.diagnosticsEnabled` is on. The consent copy names both halves —
   **Send crash reports and usage data** — matching
   [the privacy policy](../legal/PRIVACY_POLICY.md) §2.4.
 - **An interrupted solve cannot be resumed** — it is a foreground coroutine, so

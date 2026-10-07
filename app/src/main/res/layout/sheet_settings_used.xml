@@ -72,7 +72,7 @@
                 android:textSize="11sp"
                 android:textStyle="bold" />
 
-            <com.indicvision.semper.ui.viewer.FieldHistogramView
+            <com.sempermechanics.semper.ui.viewer.inspect.FieldHistogramView
                 android:id="@+id/plotFieldHistogram"
                 android:layout_width="match_parent"
                 android:layout_height="150dp"
@@ -126,7 +126,7 @@
                 android:textSize="11sp"
                 android:textStyle="bold" />
 
-            <com.indicvision.semper.ui.analysis.VsgPlotView
+            <com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
                 android:id="@+id/plotLineCut"
                 android:layout_width="match_parent"
                 android:layout_height="190dp"
@@ -202,7 +202,7 @@
                 </FrameLayout>
             </LinearLayout>
 
-            <com.indicvision.semper.ui.analysis.VsgPlotView
+            <com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
                 android:id="@+id/plotStressStrain"
                 android:layout_width="match_parent"
                 android:layout_height="190dp"

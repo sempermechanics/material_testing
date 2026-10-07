@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 
-from app import firestore_repo as repo
+import repo_view as repo
 from app.models import FileComplete
 
 

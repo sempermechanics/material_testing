@@ -8,8 +8,8 @@ polls the /uploads endpoint it already uses for resume.
 """
 import pytest
 
-from app import audit, drive, main, rate_limit, tasks
-from app import firestore_repo as repo
+from app import audit, drive, rate_limit, session_provision, tasks
+import repo_view as repo
 from app.config import settings
 
 DEV_UID = "dev-user"
@@ -79,7 +79,7 @@ async def test_worker_fills_in_every_upload_target(store, queued, client):
         "/v1/sessions", json={"specimen": "s", "files": [_file("a"), _file("b")]},
     )).json()["sessionId"]
 
-    result = main.provision_session(sid)
+    result = session_provision.provision_session(sid)
 
     assert result["provisioned"] == 2
     assert store._data["sessions"][sid]["status"] == "UPLOADING"
@@ -100,7 +100,7 @@ async def test_polling_uploads_reports_provisioning_then_the_targets(
     assert waiting["status"] == "PROVISIONING"
     assert waiting["uploads"] == []
 
-    main.provision_session(sid)
+    session_provision.provision_session(sid)
 
     ready = (await client.get(f"/v1/sessions/{sid}/uploads")).json()
     assert ready["status"] == "UPLOADING"
@@ -116,10 +116,10 @@ async def test_reprovisioning_does_not_remint_existing_targets(store, queued, cl
     sid = (await client.post(
         "/v1/sessions", json={"specimen": "s", "files": [_file("a"), _file("b")]},
     )).json()["sessionId"]
-    main.provision_session(sid)
+    session_provision.provision_session(sid)
     urls_before = {k: v["uploadUrl"] for k, v in store._data["files"].items()}
 
-    second = main.provision_session(sid)
+    second = session_provision.provision_session(sid)
 
     assert second["provisioned"] == 0, "already-provisioned files were re-minted"
     assert {k: v["uploadUrl"] for k, v in store._data["files"].items()} == urls_before
@@ -141,11 +141,11 @@ async def test_partial_provisioning_resumes_where_it_stopped(store, queued, clie
 
     monkeypatch.setattr(drive, "init_resumable", flaky)
     with pytest.raises(RuntimeError):
-        main.provision_session(sid)
+        session_provision.provision_session(sid)
     assert store._data["sessions"][sid]["status"] == "PROVISION_FAILED"
 
     monkeypatch.setattr(drive, "init_resumable", lambda *a, **k: "https://drive/resumable")
-    main.provision_session(sid)
+    session_provision.provision_session(sid)
 
     assert store._data["sessions"][sid]["status"] == "UPLOADING"
     assert all(f["uploadUrl"] for f in store._data["files"].values())
@@ -180,7 +180,7 @@ async def test_queued_failure_marks_the_session_not_deletes_it(
     )
 
     with pytest.raises(RuntimeError):
-        main.provision_session(sid)
+        session_provision.provision_session(sid)
 
     session = store._data["sessions"][sid]
     assert session["status"] == "PROVISION_FAILED"
@@ -251,7 +251,7 @@ async def test_inline_create_hands_back_what_the_uploads_listing_would(
 def test_one_listing_page_holds_a_whole_session():
     """create_session returns the first page of upload targets. That page is
     the whole manifest only while the file cap stays below the page size."""
-    from app import firestore_repo as repo
+    import repo_view as repo
     from app.config import settings
 
     assert settings.MAX_FILES_PER_SESSION <= repo._LIST_SOFT_LIMIT
@@ -298,7 +298,7 @@ async def test_folder_ids_are_stored_then_reused(store, client, monkeypatch):
         writes.append(a)
         real(*a)
 
-    monkeypatch.setattr(repo, "remember_user_folder", remember)
+    repo.patch(monkeypatch, "remember_user_folder", remember)
 
     for name in ("s1", "s2"):
         await client.post("/v1/sessions", json={"specimen": name, "files": [_file("a")]})
@@ -450,7 +450,7 @@ def test_enqueue_failure_is_an_error_event(monkeypatch, caplog):
     monkeypatch.setattr(settings, "GCP_PROJECT", "p")
     monkeypatch.setattr(tasks, "_tasks_client", lambda: Boom())
 
-    with caplog.at_level(logging.ERROR, logger="indic.tasks"):
+    with caplog.at_level(logging.ERROR, logger="semper.tasks"):
         assert tasks.enqueue_provision("s1") is False
 
     events = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
@@ -539,3 +539,66 @@ async def test_task_route_is_unreachable_with_a_user_token(store, client, monkey
         headers={"Authorization": "Bearer a-user-id-token"},
     )
     assert r.status_code in (401, 403)
+
+
+async def test_upload_targets_are_recorded_in_one_batch(store, queued, client, monkeypatch):
+    """Each upload URL used to be written as it was opened, one Firestore
+    round trip per file."""
+    import fake_firestore
+
+    sid = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file(f"f{i}") for i in range(12)]},
+    )).json()["sessionId"]
+    commits = []
+    real_commit = fake_firestore._Batch.commit
+    monkeypatch.setattr(fake_firestore._Batch, "commit",
+                        lambda b: commits.append(len(b._ops)) or real_commit(b))
+
+    session_provision.provision_session(sid)
+
+    assert commits == [12]
+    assert all(f["uploadUrl"] for f in store._data["files"].values())
+
+
+async def test_targets_opened_before_a_failure_are_kept_for_the_retry(
+    store, queued, client, monkeypatch,
+):
+    """A failed fan-out still records what it opened, so the retry opens a
+    session only for the files that have none."""
+    sid = (await client.post(
+        "/v1/sessions", json={"specimen": "s", "files": [_file("a"), _file("b"), _file("c")]},
+    )).json()["sessionId"]
+    opened = []
+
+    def init(token, folder, name, size):
+        if name == "b":
+            raise RuntimeError("drive 503")
+        opened.append(name)
+        return f"https://drive/{name}"
+
+    monkeypatch.setattr(drive, "init_resumable", init)
+    monkeypatch.setattr(settings, "TASKS_PROVISION_WORKERS", 1)
+    with pytest.raises(RuntimeError):
+        session_provision.provision_session(sid)
+    urls = {f["name"]: f["uploadUrl"] for f in store._data["files"].values()}
+    assert urls == {"a": "https://drive/a", "b": None, "c": None}
+
+    monkeypatch.setattr(drive, "init_resumable", lambda token, folder, name, size: f"https://drive/{name}")
+    session_provision.provision_session(sid)
+    urls = {f["name"]: f["uploadUrl"] for f in store._data["files"].values()}
+    assert urls == {"a": "https://drive/a", "b": "https://drive/b", "c": "https://drive/c"}
+
+
+def test_task_callbacks_share_one_certificate_transport(oidc, monkeypatch):
+    """A new transport per callback was a new connection to Google per task."""
+    from google.oauth2 import id_token as ga_id_token
+
+    seen = []
+    monkeypatch.setattr(
+        ga_id_token, "verify_oauth2_token",
+        lambda token, request, audience: seen.append(request) or {
+            "email": "tasks@project.iam.gserviceaccount.com"},
+    )
+    tasks.tasks_caller(authorization="Bearer a")
+    tasks.tasks_caller(authorization="Bearer b")
+    assert len(seen) == 2 and seen[0] is seen[1]

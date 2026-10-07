@@ -4,9 +4,9 @@ How a build goes from **`main`** to testers. Written for maintainers; nothing
 here is needed for day-to-day contributions. Secrets/vars layout:
 [ENVIRONMENTS.md](ENVIRONMENTS.md).
 
-This repo releases **Material Testing** (`com.indicvision.semper.materialtesting`),
+This repo releases **Material Testing** (`com.sempermechanics.materialtesting`, [ADR-019](../adr/ADR-019-sempermechanics-app-id.md)),
 not Semper: its signing secrets hold Material Testing's own key, and
-`INDIC_API_BASE_URL` is Semper's gateway, since both apps share one backend
+`SEMPER_API_BASE_URL` (or the older `INDIC_API_BASE_URL` var) is Semper's gateway, since both apps share one backend
 ([ADR-009](../adr/ADR-009-material-testing-app-identity.md)). The Asset Links
 check greps the whole file for the key's SHA-256, so add it to
 `assetlinks.json` in this repo and in `semperdic-app`, which deploys Hosting.
@@ -107,7 +107,7 @@ so none of the signing steps run if any of the above fails.
    the keystore is absent the variant stays **unsigned** rather than silently
    debug-signed. `assembleRelease` still runs R8 minify; the mapping upload
    fails the job if that file is missing.
-2. Requires variable **`INDIC_API_BASE_URL`** (HTTPS API Gateway or Cloud Run
+2. Requires variable **`SEMPER_API_BASE_URL`** (HTTPS API Gateway or Cloud Run
    URL) and builds with `-PrequireCloudApi=true`. A missing, empty or non-HTTPS
    URL fails the job — cloud sync must not ship silently disabled, and ID tokens
    must not go out in cleartext.
@@ -158,7 +158,7 @@ environment.
 
 | Variable | Description |
 |----------|-------------|
-| `INDIC_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
+| `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
 
 ### Backend staging / production
 
@@ -235,7 +235,7 @@ Engine host and sanitizer suites are not part of this repo's gate — they run i
 - **Upgrade smoke (manual):** install the previous Release APK → create a local
   analysis (and optionally enqueue upload/restore) → install the new APK
   *without uninstalling* → open Home, reopen the session, confirm queued
-  WorkManager unique work still resolves. Prefs migrate via `DicSettings.migrate`
+  WorkManager unique work still resolves. Prefs migrate via `AppSettings.migrate`
   on cold start.
 - Watch Firestore (sessions collection) and Cloud Logging for the first synced sessions.
 - Paste the GitHub Release changelog into Play / website **What’s new** when

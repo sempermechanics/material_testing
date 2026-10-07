@@ -12,6 +12,31 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-05 — Backend deploy: the new app ids (#333)
+
+Staging (`semper-api-staging`, run 37277292633) and production (`semper-api`, run
+37277643509) from `67d2ad35` through `deploy-backend.yml`, gateway `dry-run`: the
+rendered spec matched the live config, so no gateway change. Production's
+candidate passed the `/readyz` smoke and was promoted to 100 %; the serving and
+rollback images were re-pinned. What changed for callers: `backend/app/apps.py`
+accepts `com.sempermechanics.semper` and `com.sempermechanics.materialtesting`
+as the same `semper` / `materialtesting` slots as the old ids (device binding,
+ADR-010; backups, ADR-014), and the loggers are `semper.*` instead of
+`indic.*` (no log-based metric or alert in the repo filters on the name).
+
+## 2026-10-05 — Hosting deploy: App Links for the new app ids (#333)
+
+Hosting only, from `67d2ad35` (`main` after #333/#334) with
+`scripts/deploy-console.sh` against `semper-gw`. One file changed:
+`/.well-known/assetlinks.json` now lists `com.sempermechanics.semper` and
+`com.sempermechanics.materialtesting` beside the old ids
+([ADR-019](../adr/ADR-019-sempermechanics-app-id.md)); every console file already
+matched `main` before the deploy. The backend followed the same day (entry
+above). The Firebase Android app
+`1:171818100029:android:db984f1bba569a38161154` (same debug and release
+fingerprints as the old app) and its App Check (Play Integrity) were registered
+the same day.
+
 ## 2026-10-01 — material_testing: synced with semperdic-app `dc13351`
 
 A plain merge of the parent's #309, which records TD-65's arm64 check in its register

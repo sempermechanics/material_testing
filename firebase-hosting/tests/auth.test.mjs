@@ -82,6 +82,22 @@ test("api throws the backend's error code, or http_<status> when there is none",
   assert.deepEqual(await auth.api("/v1/d"), {});
 });
 
+test("api's refusal carries the code, what follows it, and the status", async () => {
+  signIn(readyUser());
+  const when = "2026-11-01T10:00:00+00:00";
+  net.reply(
+    json(429, { detail: `device_change_too_soon: ${when}` }),
+    new Response("<html>upstream request timeout", { status: 504 }),
+  );
+  const soon = await rejection(auth.api("/v1/licenses/unbind", { method: "POST" }));
+  assert.ok(soon instanceof auth.ApiError);
+  assert.deepEqual([soon.code, soon.rest, soon.status], ["device_change_too_soon", when, 429]);
+  assert.equal(soon.message, `device_change_too_soon: ${when}`);
+  // A gateway refusal is not JSON; it used to throw the JSON parser's error.
+  const gateway = await rejection(auth.api("/v1/me"));
+  assert.deepEqual([gateway.code, gateway.status], ["http_504", 504]);
+});
+
 test("reauth_required leaves for Google once and never retries with the stale token", async () => {
   signIn(readyUser());
   net.reply(json(403, { detail: "reauth_required" }));

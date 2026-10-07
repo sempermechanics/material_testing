@@ -541,3 +541,47 @@ test("New device asks, then clears the lock and says the next device takes it", 
   assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "PATCH").body), { clearDeviceLock: true });
   assert.deepEqual(status(), ["SEMP-IND1 unbound — the next device to sign in takes it.", "muted"]);
 });
+
+/* --------------------------------------------------------------- roster */
+
+const STAFF_SEATS = `/v1/admin/licenses/${UNI.id}/seats`;
+const UNI_ROSTER = {
+  license: { keyPrefix: "SEMP-UNI1" },
+  seats: [{ uid: "u1", email: "a@uni.edu", status: "active", deviceIdLock: "dev-1" }],
+  invites: [{ id: "inv-1", email: "b@uni.edu" }],
+};
+
+test("the roster is read and changed through the staff routes, whoever IT lists", async () => {
+  await open({ routes: {
+    [`GET ${STAFF_SEATS}`]: () => json(200, UNI_ROSTER),
+    [`DELETE ${STAFF_SEATS}/u1`]: () => json(200, { revoked: true }),
+    [`GET /v1/admin/licenses/${UNI.id}`]: () => json(200, UNI),
+  } });
+  rowButton("roster", UNI.id).click();
+  await settle();
+  assert.equal($("rosterCard").hidden, false);
+  // The same actions IT has: the desk used to offer only New device and Remove.
+  assert.deepEqual(
+    $("rosterRows").querySelectorAll("button").map((b) => b.textContent.trim()),
+    ["New device", "Hold", "Remove", "Withdraw"],
+  );
+  confirms.answer(true);
+  $("rosterRows").querySelector('button[data-act="remove"]').click();
+  await settle();
+  assert.deepEqual(sent(/licenses\/lic-uni-1/), [
+    `GET ${STAFF_SEATS}`, `DELETE ${STAFF_SEATS}/u1`, `GET ${STAFF_SEATS}`, `GET /v1/admin/licenses/${UNI.id}`,
+  ]);
+});
+
+test("a refused roster change is said in the roster card", async () => {
+  await open({ routes: {
+    [`GET ${STAFF_SEATS}`]: () => json(200, UNI_ROSTER),
+    [`PATCH ${STAFF_SEATS}/u1`]: () => json(409, { detail: "license_revoked" }),
+  } });
+  rowButton("roster", UNI.id).click();
+  await settle();
+  $("rosterRows").querySelector('button[data-act="hold"]').click();
+  await settle();
+  assert.deepEqual([$("rosterHint").textContent, $("rosterHint").className],
+    ["This licence has been revoked, so its seats cannot be changed.", "muted err"]);
+});

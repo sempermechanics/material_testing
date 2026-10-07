@@ -1,18 +1,20 @@
 """Institution licence self-service for the licence's own IT admins.
 """
-from .. import apps
-from ..licenses import (
-    KIND_INSTITUTION,
-    normalize_kind,
-)
+from .. import apps, errors
+from ..licenses import normalize_email
+from ..errors import Refusal
 
 from ._base import (
+    _cursor_page,
+    _is_institution,
+    _is_revoked,
     db,
     get_license,
+    _seat_ref,
 )
 from .claims import (
     claim_seat,
-    _institution_member_patch,
+    _member_patch,
     _public_claim_error,
 )
 from .holders import (
@@ -34,8 +36,8 @@ from .mint import (
 # the existing device-attested admin path in routers/admin.py.
 
 def is_institution_admin(license_doc: dict, email: str) -> bool:
-    admin_emails = {e.strip().lower() for e in (license_doc.get("adminEmails") or [])}
-    return bool(email) and email.strip().lower() in admin_emails
+    admin_emails = {normalize_email(e) for e in (license_doc.get("adminEmails") or [])}
+    return bool(email) and normalize_email(email) in admin_emails
 
 
 def list_licenses_administered_by(email: str) -> list[dict]:
@@ -53,16 +55,16 @@ def list_licenses_administered_by(email: str) -> list[dict]:
 
     Same redaction as `institution_license_summary` — no key plaintext.
     """
-    wanted = (email or "").strip().lower()
+    wanted = normalize_email(email)
     if not wanted:
         return []
     out = []
     q = db().collection("licenses").where("adminEmails", "array_contains", wanted)
     for d in q.stream():
         data = d.to_dict() or {}
-        if normalize_kind(data.get("kind")) != KIND_INSTITUTION:
+        if not _is_institution(data):
             continue
-        if (data.get("status") or "") == "revoked":
+        if _is_revoked(data):
             continue
         out.append(_license_public(d.id, data))
     out.sort(key=lambda lic: lic["id"])
@@ -70,8 +72,9 @@ def list_licenses_administered_by(email: str) -> list[dict]:
 
 
 def add_institution_member(license_id: str, email: str,
-                           invited_by_uid: str = "") -> tuple[str, dict | None, dict | None]:
-    """Put someone on an institution license's roster. Returns (error, seat, invite).
+                           invited_by_uid: str = "") -> tuple[dict | None, dict | None]:
+    """Put someone on an institution license's roster. Returns (seat, invite),
+    or raises `Refusal`.
 
     On an assigned license this entitles them immediately. On a floating one
     it makes them eligible; they still check out a lease to work, and adding
@@ -90,52 +93,72 @@ def add_institution_member(license_id: str, email: str,
     """
     lic = get_license(license_id)
     if not lic:
-        return "license_not_found", None, None
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     user = find_user_by_email(email)
     # One licence per person: someone who holds, or is promised, a different
     # live licence is refused rather than moved onto this roster. Their own
     # seat on this licence is excluded, so re-adding a member stays a no-op.
     if licence_held_by(email, user=user or {}, exclude_id=license_id):
-        return "member_already_licensed", None, None
+        raise Refusal(errors.MEMBER_ALREADY_LICENSED)
     if not user:
-        err, invite = invite_institution_member(license_id, email, invited_by_uid)
-        return err, None, invite
+        return None, invite_institution_member(license_id, email, invited_by_uid)
     uid = user["uid"]
 
     # No device lock: IT adds a member before that member has picked a device,
     # and the lock is set the first time they actually use the license.
     err = claim_seat(license_id, uid, user.get("email") or email, "",
-                     _institution_member_patch(license_id, lic))
+                     _member_patch(license_id, lic))
     if err:
-        return _public_claim_error(err, "claim_contended"), None, None
-    seats = list_institution_seats(license_id)
-    return "", next((s for s in seats if s["uid"] == uid), None), None
+        raise Refusal(_public_claim_error(err))
+    return institution_seat(license_id, uid), None
 
 
-def institution_license_summary(license_id: str) -> dict | None:
+def institution_license_summary(license_id: str, lic: dict | None = None) -> dict | None:
     """Public (no key plaintext) summary of one institution license, for IT
     self-service — same redaction as the Semper-staff admin listing, scoped to
-    callers who already passed the adminEmails membership check."""
-    lic = get_license(license_id)
+    callers who already passed the adminEmails membership check.
+
+    `lic` is the licence document when the caller has just read it (the
+    membership check does), so the roster listing does not read it twice."""
+    lic = lic if lic is not None else get_license(license_id)
     return _license_public(license_id, lic) if lic else None
 
 
+def institution_seat(license_id: str, uid: str) -> dict | None:
+    """One seat as the roster lists it, or None. One document read, where
+    finding it in `list_institution_seats` read the whole roster."""
+    snap = _seat_ref(license_id, uid).get()
+    return _seat_public(snap.id, snap.to_dict() or {}) if snap.exists else None
+
+
+def page_institution_seats(license_id: str, limit: int,
+                           page_token: str | None = None) -> tuple[list[dict], str | None]:
+    """One page of a roster, in uid order. Returns (seats, next_token)."""
+    col = db().collection("licenses").document(license_id).collection("seats")
+    docs, next_token = _cursor_page(col, col, limit, page_token)
+    return [_seat_public(d.id, d.to_dict() or {}) for d in docs], next_token
+
+
 def list_institution_seats(license_id: str) -> list[dict]:
-    out = []
-    for doc in db().collection("licenses").document(license_id).collection("seats").stream():
-        s = doc.to_dict() or {}
-        out.append({
-            "uid": doc.id,
-            "email": s.get("email") or "",
-            **{apps.field("deviceIdLock", app): s.get(apps.field("deviceIdLock", app)) or ""
-               for app in apps.ALL},
-            "status": s.get("status") or "active",
-            # The lease is the point of the floating roster view: without it
-            # IT cannot see who is actually using a seat right now, only who
-            # is allowed to. Null on an assigned licence, which has no leases.
-            "leaseExpiresAt": s.get("leaseExpiresAt"),
-            "lastHeartbeatAt": s.get("lastHeartbeatAt"),
-            "createdAt": s.get("createdAt"),
-            "updatedAt": s.get("updatedAt"),
-        })
-    return out
+    return [
+        _seat_public(doc.id, doc.to_dict() or {})
+        for doc in db().collection("licenses").document(license_id).collection("seats").stream()
+    ]
+
+
+def _seat_public(seat_id: str, s: dict) -> dict:
+    """A seat as the roster shows it."""
+    return {
+        "uid": seat_id,
+        "email": s.get("email") or "",
+        **{apps.field("deviceIdLock", app): s.get(apps.field("deviceIdLock", app)) or ""
+           for app in apps.ALL},
+        "status": s.get("status") or "active",
+        # The lease is the point of the floating roster view: without it
+        # IT cannot see who is actually using a seat right now, only who
+        # is allowed to. Null on an assigned licence, which has no leases.
+        "leaseExpiresAt": s.get("leaseExpiresAt"),
+        "lastHeartbeatAt": s.get("lastHeartbeatAt"),
+        "createdAt": s.get("createdAt"),
+        "updatedAt": s.get("updatedAt"),
+    }

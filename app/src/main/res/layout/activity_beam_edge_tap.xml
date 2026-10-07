@@ -64,13 +64,13 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/headerChrome">
 
-        <com.indicvision.semper.ui.viewer.TouchImageView
+        <com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
             android:id="@+id/imgBeamPhoto"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:contentDescription="@string/beam_tap_canvas" />
 
-        <com.indicvision.semper.ui.analysis.BeamEdgeTapOverlay
+        <com.sempermechanics.semper.ui.analysis.load.BeamEdgeTapOverlay
             android:id="@+id/overlayBeamTaps"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />

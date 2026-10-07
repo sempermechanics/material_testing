@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import migrations  # noqa: E402
-from app.firestore_repo import SCHEMA_VERSION  # noqa: E402
+from app.repo import SCHEMA_VERSION  # noqa: E402
 
 LEDGER = "_migrations"
 BATCH_LIMIT = 400
@@ -114,7 +114,7 @@ def main() -> None:
     chain = migrations.discover()
     if chain and chain[-1].to_version != SCHEMA_VERSION:
         raise SystemExit(
-            f"app.firestore_repo.SCHEMA_VERSION is {SCHEMA_VERSION} but the "
+            f"app.repo.SCHEMA_VERSION is {SCHEMA_VERSION} but the "
             f"migration chain ends at {chain[-1].to_version}. Deploying code and "
             "migrations that disagree writes documents at a version no migration "
             "produces. Fix one of them before running."

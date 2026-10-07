@@ -49,7 +49,7 @@ def _migration(**kw):
 
 def test_shipped_chain_is_valid_and_ends_at_the_code_version():
     """Guards the exact drift the runner refuses to run under."""
-    from app.firestore_repo import SCHEMA_VERSION
+    from app.repo import SCHEMA_VERSION
 
     chain = migrations.discover()
     assert chain, "no migrations discovered"

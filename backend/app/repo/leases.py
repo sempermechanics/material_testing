@@ -3,7 +3,9 @@
 import logging
 from datetime import timedelta
 
+from .. import errors
 from ..config import settings
+from ..errors import Refusal
 from ..licenses import (
     SEATING_FLOATING,
     as_utc,
@@ -12,6 +14,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    _is_revoked,
     db,
     get_license,
     _lease_clear_patch,
@@ -26,7 +29,7 @@ from .user_config import (
 )
 
 
-log = logging.getLogger("indic.firestore")
+log = logging.getLogger("semper.firestore")
 
 
 #: How many expired leases one checkout reclaims. A pool cannot have more live
@@ -103,8 +106,9 @@ def _reclaim_expired_lease(lic_ref, seat_ref, now) -> bool:
     return _run_tx(_reclaim, on_contended=lambda: False)
 
 
-def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
-    """Claim or extend a floating-seat lease. Returns (error_code, config).
+def checkout_lease(user: dict, device_id: str) -> dict:
+    """Claim or extend a floating-seat lease. Returns the config, or raises
+    `Refusal`.
 
     Re-checkout IS the heartbeat — extending an existing lease takes the same
     path and must not consume a second slot. There is deliberately no separate
@@ -115,18 +119,18 @@ def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
     uid = user.get("uid") or ""
     license_id = user.get("licenseId")
     if not license_id:
-        return "no_license", None
+        raise Refusal(errors.NO_LICENSE)
     lic = get_license(license_id)
     if not lic:
-        return "license_not_found", None
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     if normalize_seating(lic.get("seating")) != SEATING_FLOATING:
         # An assigned seat is always entitled; there is nothing to check out,
         # and pretending otherwise would let a client invent a lease field.
-        return "seating_not_floating", None
-    if (lic.get("status") or "active") == "revoked":
-        return "license_revoked", None
+        raise Refusal(errors.SEATING_NOT_FLOATING)
+    if _is_revoked(lic):
+        raise Refusal(errors.LICENSE_REVOKED)
     if _license_past_grace(lic):
-        return "license_expired", None
+        raise Refusal(errors.LICENSE_EXPIRED)
 
     lic_ref = db().collection("licenses").document(license_id)
     now = _now()
@@ -143,10 +147,10 @@ def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
         if not seat_snap.exists:
             # Not on the roster. Institution IT adds members; there is no
             # self-service path onto a floating license.
-            return "not_eligible"
+            return errors.NOT_ELIGIBLE
         seat = seat_snap.to_dict() or {}
         if seat.get("status") in ("revoked", "disabled"):
-            return "not_eligible"
+            return errors.NOT_ELIGIBLE
 
         # A lease still in the count — live, or run out and not swept yet —
         # already holds its slot, so taking it up again must not add another.
@@ -155,7 +159,7 @@ def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
             max_seats = (lic_snap.to_dict() or {}).get("maxSeats") if lic_snap.exists else None
             active = int((lic_snap.to_dict() or {}).get("leasesActive") or 0)
             if max_seats is not None and active >= int(max_seats):
-                return "no_floating_seat"
+                return errors.NO_FLOATING_SEAT
 
         tx.update(seat_ref, {
             "leaseExpiresAt": expires_at,
@@ -174,13 +178,13 @@ def checkout_lease(user: dict, device_id: str) -> tuple[str, dict | None]:
     # Fail closed on contention: granting a lease we could not commit is what
     # would overfill the pool. The client retries and wins as soon as there
     # is room.
-    err = _run_tx(_checkout, on_contended=lambda: "no_floating_seat")
+    err = _run_tx(_checkout, on_contended=lambda: errors.NO_FLOATING_SEAT)
     if err:
-        return err, None
-    return "", resolve_user_config({**user, "leaseExpiresAt": expires_at})
+        raise Refusal(err)
+    return resolve_user_config({**user, "leaseExpiresAt": expires_at})
 
 
-def release_lease(user: dict) -> tuple[str, dict | None]:
+def release_lease(user: dict) -> dict:
     """Give a floating slot back. Idempotent — releasing twice frees one slot.
 
     The user's mirror is cleared in the same commit, so the account resolves
@@ -190,7 +194,7 @@ def release_lease(user: dict) -> tuple[str, dict | None]:
     uid = user.get("uid") or ""
     license_id = user.get("licenseId")
     if not license_id:
-        return "no_license", None
+        raise Refusal(errors.NO_LICENSE)
 
     lic_ref = db().collection("licenses").document(license_id)
     seat_ref = _seat_ref(license_id, uid)
@@ -200,7 +204,7 @@ def release_lease(user: dict) -> tuple[str, dict | None]:
     def _release(tx) -> str:
         seat_snap = seat_ref.get(transaction=tx)
         if not seat_snap.exists:
-            return "not_eligible"
+            return errors.NOT_ELIGIBLE
         held = _seat_lease_counted(seat_snap.to_dict() or {})
         tx.update(seat_ref, {
             **_lease_clear_patch(),
@@ -222,9 +226,9 @@ def release_lease(user: dict) -> tuple[str, dict | None]:
     # it. Answer from the current state rather than reporting failure.
     err = _run_tx(
         _release,
-        on_contended=lambda: "" if seat_ref.get().exists else "not_eligible",
+        on_contended=lambda: "" if seat_ref.get().exists else errors.NOT_ELIGIBLE,
     )
     if err:
-        return err, None
+        raise Refusal(err)
     merged = {k: v for k, v in user.items() if k != "leaseExpiresAt"}
-    return "", resolve_user_config(merged)
+    return resolve_user_config(merged)

@@ -5,6 +5,7 @@ import hashlib
 import logging
 import re
 import time
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 
 from cryptography.exceptions import InvalidSignature
@@ -14,13 +15,32 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from fastapi import Depends, Header, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from . import apps, audit, errors, firestore_repo as repo, rate_limit, statuses
+from . import apps, audit, errors, repo, rate_limit, statuses
 from .config import settings
 from .google_auth import verify_app_check_token, verify_id_token
 from .validation import require_header_identifier
 from . import observability as obs
 
-log = logging.getLogger("indic.auth")
+log = logging.getLogger("semper.auth")
+
+
+@dataclass(frozen=True)
+class Caller:
+    """Who an attested or stepped-up request comes from.
+
+    `device` is the registered device a signed request came from, empty for
+    a browser that stepped up with a second factor. `via` says how the caller
+    proved themselves: "device", "mfa", "dev" (DEV_INSECURE_AUTH), or "" for a
+    plain device-signed route.
+    """
+    user: dict
+    device: dict = field(default_factory=dict)
+    via: str = ""
+    second_factor: str = ""
+
+    @property
+    def device_id(self) -> str | None:
+        return self.device.get("deviceId") or None
 
 _DEV_USER = {"uid": "dev-user", "email": "dev@local", "role": "admin",
              "access_status": statuses.ACCESS_APPROVED, "activeDeviceId": "dev-device",
@@ -118,10 +138,7 @@ def _authenticate(
     """
     claims: dict = _DEV_CLAIMS if settings.DEV_INSECURE_AUTH else {}
     app = _resolve_app(x_app_id)
-    try:
-        request.state.app = app
-    except Exception:  # noqa: BLE001
-        pass
+    request.state.app = app
     if settings.DEV_INSECURE_AUTH:
         user = _DEV_USER
     else:
@@ -162,20 +179,14 @@ def _authenticate(
         # lock of the app the request came from (ADR-010).
         if x_device_id:
             user = repo.revalidate_device_lock(user, x_device_id, app)
-    try:
-        request.state.uid = user["uid"]
-        obs.bind_uid(user["uid"])
-    except Exception:  # noqa: BLE001 - logging enrichment must never fail a request
-        pass
+    request.state.uid = user["uid"]
+    obs.bind_uid(user["uid"])
     # Verified claims, for dependencies that need to know *how* the caller
     # signed in rather than only who they are — today that is the console's
     # second-factor check. Stashed on request.state instead of merged into the
     # user dict: that dict is written back to Firestore by several callers, and
     # a token claim is not a user field.
-    try:
-        request.state.claims = claims
-    except Exception:  # noqa: BLE001
-        pass
+    request.state.claims = claims
     return user
 
 
@@ -260,14 +271,14 @@ async def verified_device(
     x_device_id: str = Header(default=""),
     x_nonce: str = Header(default=""),
     x_signature: str = Header(default=""),
-) -> dict:
+) -> Caller:
     """Device-attested caller: active device + single-use nonce + ECDSA signature.
 
     Keeps `async` only for `await request.body()`. Firestore device/nonce lookups
     run in the threadpool so they do not stall the event loop.
     """
     if settings.DEV_INSECURE_AUTH:
-        return {"user": user, "device": _DEV_DEVICE}
+        return Caller(user, _DEV_DEVICE)
 
     x_device_id = require_header_identifier(
         x_device_id, name="device_id", maximum=128
@@ -291,13 +302,11 @@ async def verified_device(
         # Stale or from a phone whose clock is off: no write, and the client
         # retries once with a server challenge.
         raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
-    # current_user already re-validated the lock for THIS x_device_id when it
-    # was present on the request — but device-attested routes are the ones
-    # that actually spend the entitlement (create a session, download a file),
-    # so re-check here too rather than trust a value resolved before the
-    # signature/nonce were even verified.
-    user = await run_in_threadpool(repo.revalidate_device_lock, user, x_device_id,
-                                   getattr(request.state, "app", None) or apps.SEMPER)
+    # No second lock check here. `current_user` ran `revalidate_device_lock`
+    # for this same X-Device-Id, user and app, and handed us its answer: a
+    # mismatch or a revoke is already Demo in `user`. Checking again read the
+    # licence and seat twice on every signed request and could not answer
+    # differently.
 
     body = await request.body()
     # The query string is inside the signature whenever there is one, so a
@@ -326,12 +335,9 @@ async def verified_device(
         ),
     ):
         raise HTTPException(401, errors.NONCE_INVALID_OR_REPLAYED)
-    try:
-        request.state.device_id = x_device_id
-        obs.bind_device(x_device_id)
-    except Exception:  # noqa: BLE001
-        pass
-    return {"user": user, "device": dev}
+    request.state.device_id = x_device_id
+    obs.bind_device(x_device_id)
+    return Caller(user, dev)
 
 
 _CLIENT_NONCE = re.compile(r"t1\.(\d{9,11})\.[A-Za-z0-9_-]{22,86}")
@@ -379,117 +385,57 @@ def _auth_age_seconds(claims: dict) -> float | None:
         return None
 
 
-async def attested_or_mfa_admin(
-    request: Request,
-    user: dict = Depends(admin_user),
-    x_device_id: str = Header(default=""),
-    x_nonce: str = Header(default=""),
-    x_signature: str = Header(default=""),
-) -> dict:
-    """State-changing Semper-staff caller: an attested device, or a 2FA browser.
+def _step_up(base, window: str, doc: str):
+    """A route dependency: `base`'s caller, held to `step_up_check` with the
+    freshness window `settings.<window>` (read per request, so a test or a
+    redeploy that changes it is honoured)."""
+    async def dependency(
+        request: Request,
+        user: dict = Depends(base),
+        x_device_id: str = Header(default=""),
+        x_nonce: str = Header(default=""),
+        x_signature: str = Header(default=""),
+    ) -> Caller:
+        return await step_up_check(request, user, x_device_id, x_nonce, x_signature,
+                                   max_age_seconds=getattr(settings, window))
 
-    The device path is unchanged and still preferred — if the request carries
-    any device header it is held to the full `verified_device` check, so the
-    phone admin screen keeps exactly the guarantee it had.
-
-    The browser path exists because a browser cannot produce an ECDSA
-    attestation, which is what kept the staff console read-only. It is
-    accepted on two conditions, and both are checked here rather than trusted
-    from the client:
-
-    * the ID token records a completed **second factor**, so a token stolen
-      from a password-only session is refused; and
-    * the sign-in behind it is **recent** (ADMIN_WEB_REAUTH_SECONDS), so a
-      token that leaks later stops working — the console re-authenticates
-      rather than holding authority for the token's full hour.
-
-    This is deliberately weaker than device attestation and is not a drop-in
-    equivalent: an attacker who phishes a live MFA session inside the window
-    can mint a licence, which the device path made impossible. It is enabled
-    because staff need to administer licences from a computer; set
-    ADMIN_WEB_MFA_ENABLED=0 to withdraw the browser path entirely.
-
-    Reads are not routed through here. Only the routes that change state are,
-    so an operator can browse the console on an ordinary session and is asked
-    to re-authenticate at the point of acting.
-    """
-    return await _attested_or_mfa(
-        request, user, x_device_id, x_nonce, x_signature,
-        max_age_seconds=settings.ADMIN_WEB_REAUTH_SECONDS,
-    )
+    dependency.__doc__ = doc
+    return dependency
 
 
-async def attested_or_mfa_admin_fresh(
-    request: Request,
-    user: dict = Depends(admin_user),
-    x_device_id: str = Header(default=""),
-    x_nonce: str = Header(default=""),
-    x_signature: str = Header(default=""),
-) -> dict:
-    """Semper-staff step-up with the tighter revoke window.
-
-    Whole-licence revoke asks for password (or Google re-auth) plus TOTP in
-    the console; this dependency refuses a session that is merely "still
-    inside the ordinary dashboard window". Device attestation still passes.
-    """
-    return await _attested_or_mfa(
-        request, user, x_device_id, x_nonce, x_signature,
-        max_age_seconds=settings.ADMIN_WEB_REVOKE_REAUTH_SECONDS,
-    )
-
-
-async def attested_or_mfa_user(
-    request: Request,
-    user: dict = Depends(current_user),
-    x_device_id: str = Header(default=""),
-    x_nonce: str = Header(default=""),
-    x_signature: str = Header(default=""),
-) -> dict:
-    """The same step-up, for an account holder acting on their own licence.
-
-    Identical machinery to `attested_or_mfa_admin` and deliberately so: the
-    question — has this caller proved themselves *now*, by an attested device
-    or by a second factor on a recent sign-in — does not change with who is
-    asking. Only the tier below it does, `current_user` rather than
-    `admin_user`, so this authorises nothing beyond what the holder already
-    holds.
-
-    It exists because two operations are worth more than an ID token and are
-    not staff work: changing which device a licence is bound to, and pulling
-    an analysis out through a browser. Both are reachable from a page rather
-    than the app, and a browser cannot produce an attestation.
-    """
-    return await _attested_or_mfa(
-        request, user, x_device_id, x_nonce, x_signature,
-        max_age_seconds=settings.ADMIN_WEB_REAUTH_SECONDS,
-    )
+#: State-changing Semper-staff caller: an attested device, or a 2FA browser.
+#:
+#: The device path is preferred: a request carrying any device header is held
+#: to the full `verified_device` check, so the phone admin screen keeps exactly
+#: the guarantee it had. The browser path exists because a browser cannot
+#: produce an ECDSA attestation. It needs a completed **second factor** on the
+#: ID token (so a token stolen from a password-only session is refused) and a
+#: **recent** sign-in (ADMIN_WEB_REAUTH_SECONDS, so a token that leaks later
+#: stops working). That is weaker than attestation — a phished live MFA
+#: session inside the window can mint a licence — and is enabled because staff
+#: administer licences from a computer; ADMIN_WEB_MFA_ENABLED=0 withdraws it.
+#: Reads do not go through here, only the routes that change state.
+attested_or_mfa_admin = _step_up(
+    admin_user, "ADMIN_WEB_REAUTH_SECONDS",
+    "Semper staff, attested device or a second factor on a recent sign-in.",
+)
+#: The same, with the tighter window whole-licence revoke and delete ask for:
+#: the console forces password (or Google re-auth) plus TOTP first.
+attested_or_mfa_admin_fresh = _step_up(
+    admin_user, "ADMIN_WEB_REVOKE_REAUTH_SECONDS",
+    "Semper staff, step-up within the revoke window.",
+)
+#: The same step-up for an account holder acting on their own licence: moving
+#: it to a new device, pulling an analysis out through a browser. The question
+#: does not change with who asks; only the tier below it does, so this
+#: authorises nothing beyond what the holder already holds.
+attested_or_mfa_user = _step_up(
+    current_user, "ADMIN_WEB_REAUTH_SECONDS",
+    "An account holder, attested device or a second factor on a recent sign-in.",
+)
 
 
-async def ensure_web_step_up(
-    request: Request,
-    user: dict,
-    x_device_id: str = "",
-    x_nonce: str = "",
-    x_signature: str = "",
-    *,
-    max_age_seconds: int | None = None,
-) -> dict:
-    """Shared browser/device step-up used by institution IT and the admin tiers.
-
-    Institution membership is checked by the caller *before* this, so a foreign
-    licence still 404s without disclosing that MFA was the next gate.
-    """
-    return await _attested_or_mfa(
-        request, user, x_device_id, x_nonce, x_signature,
-        max_age_seconds=(
-            settings.ADMIN_WEB_REAUTH_SECONDS
-            if max_age_seconds is None
-            else max_age_seconds
-        ),
-    )
-
-
-async def _attested_or_mfa(
+async def step_up_check(
     request: Request,
     user: dict,
     x_device_id: str,
@@ -497,8 +443,11 @@ async def _attested_or_mfa(
     x_signature: str,
     *,
     max_age_seconds: int,
-) -> dict:
-    """The step-up itself, shared by admin, user, and institution tiers.
+) -> Caller:
+    """The step-up itself, shared by the admin, user and institution tiers.
+
+    Institution IT calls it directly, after its membership check, so a
+    foreign licence 404s without disclosing that MFA was the next gate.
 
     A device attestation is preferred and checked in full whenever the request
     carries any device header, so the phone keeps exactly the guarantee it
@@ -508,11 +457,11 @@ async def _attested_or_mfa(
     withdraws the browser path should withdraw all of it.
     """
     if settings.DEV_INSECURE_AUTH:
-        return {"user": user, "device": _DEV_DEVICE, "via": "dev"}
+        return Caller(user, _DEV_DEVICE, via="dev")
 
     if x_device_id or x_nonce or x_signature:
         ctx = await verified_device(request, user, x_device_id, x_nonce, x_signature)
-        return {**ctx, "via": "device"}
+        return replace(ctx, via="device")
 
     if not settings.ADMIN_WEB_MFA_ENABLED:
         # No device headers and no browser path: this is the attestation-only
@@ -532,8 +481,5 @@ async def _attested_or_mfa(
                      detail={"stage": "reauth", "ageSeconds": age})
         raise HTTPException(403, errors.REAUTH_REQUIRED)
 
-    try:
-        request.state.device_id = ""
-    except Exception:  # noqa: BLE001
-        pass
-    return {"user": user, "device": {}, "via": "mfa", "secondFactor": factor}
+    request.state.device_id = ""
+    return Caller(user, via="mfa", second_factor=factor)

@@ -4,7 +4,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app import firestore_repo as repo
+import repo_view as repo
 from app.models import DeviceReg
 
 DEV_A = "dev-a-0001"

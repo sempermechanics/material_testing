@@ -18,9 +18,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from app import drive, firestore_repo as repo
+from app import drive
+import repo_view as repo
 from app.config import settings
 from app.models import FileComplete, FileSpec, SessionCreate
+from refusals import attempt, attempt_add
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("FIRESTORE_EMULATOR_HOST"),
@@ -32,10 +34,10 @@ pytestmark = pytest.mark.skipif(
 def emulator_repo(monkeypatch):
     # Force a fresh client pointed at the emulator (Client picks up the env var).
     monkeypatch.setattr(settings, "DEV_INSECURE_AUTH", True)
-    monkeypatch.setattr(repo, "_DB", None)
+    repo.patch(monkeypatch, "_DB", None)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     yield repo
-    monkeypatch.setattr(repo, "_DB", None)
+    repo.patch(monkeypatch, "_DB", None)
 
 
 def test_create_complete_list_delete_roundtrip(emulator_repo, monkeypatch):
@@ -71,9 +73,8 @@ def test_create_complete_list_delete_roundtrip(emulator_repo, monkeypatch):
     emulator_repo.create_session(sid, user, device, body)
     emulator_repo.set_session_folder(sid, "session-folder")
     file_id = f"{sid}_bundle_Session.zip"
-    emulator_repo.create_file(
-        sid, uid, file_id, body.files[0], "https://upload.example/session",
-    )
+    emulator_repo.create_files_batch(sid, uid, [(file_id, body.files[0])])
+    emulator_repo.set_file_upload_urls([(file_id, "https://upload.example/session")])
     outcome = emulator_repo.complete_file(
         file_id, uid, FileComplete(sessionId=sid, driveFileId="drive-1", bytes=10, md5="d" * 32),
     )
@@ -111,8 +112,10 @@ def _seed_session(repo_, uid, file_count):
     ids = []
     for spec in specs:
         file_id = f"{sid}_bundle_{spec.name}"
-        repo_.create_file(sid, uid, file_id, spec, "https://upload.example/s")
         ids.append(file_id)
+    repo_.create_files_batch(sid, uid, [(file_id, spec) for file_id, spec in zip(ids, specs)])
+    for file_id in ids:
+        repo_.set_file_upload_urls([(file_id, "https://upload.example/s")])
     return sid, ids
 
 
@@ -389,7 +392,7 @@ def test_a_floating_pool_never_hands_out_more_leases_than_it_has(emulator_repo):
 
     with ThreadPoolExecutor(max_workers=12) as pool:
         results = list(pool.map(
-            lambda u: emulator_repo.checkout_lease(u, f"dev-{u['uid']}"), users,
+            lambda u: attempt(emulator_repo.checkout_lease, u, f"dev-{u['uid']}"), users,
         ))
 
     granted = [cfg for err, cfg in results if err == ""]
@@ -418,14 +421,14 @@ def test_renewing_a_lease_does_not_consume_a_second_slot(emulator_repo):
     holder = {**user, "licenseId": license_id, "mode": "licensed"}
 
     for _ in range(5):
-        err, _cfg = emulator_repo.checkout_lease(holder, "dev-1")
+        err, _cfg = attempt(emulator_repo.checkout_lease, holder, "dev-1")
         assert err == ""
 
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
     # Concurrent heartbeats from the same holder must not inflate it either.
     with ThreadPoolExecutor(max_workers=6) as pool:
-        list(pool.map(lambda _: emulator_repo.checkout_lease(holder, "dev-1"), range(6)))
+        list(pool.map(lambda _: attempt(emulator_repo.checkout_lease, holder, "dev-1"), range(6)))
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
 
@@ -442,15 +445,15 @@ def test_releasing_a_lease_frees_exactly_one_slot(emulator_repo):
         holders.append({**user, "licenseId": license_id, "mode": "licensed"})
 
     first, second = holders
-    assert emulator_repo.checkout_lease(first, "dev-a")[0] == ""
-    assert emulator_repo.checkout_lease(second, "dev-b")[0] == "no_floating_seat"
+    assert attempt(emulator_repo.checkout_lease, first, "dev-a")[0] == ""
+    assert attempt(emulator_repo.checkout_lease, second, "dev-b")[0] == "no_floating_seat"
 
-    assert emulator_repo.release_lease(first)[0] == ""
+    assert attempt(emulator_repo.release_lease, first)[0] == ""
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 0
-    assert emulator_repo.checkout_lease(second, "dev-b")[0] == ""
+    assert attempt(emulator_repo.checkout_lease, second, "dev-b")[0] == ""
 
     # Releasing a lease that already lapsed frees nothing and still succeeds.
-    assert emulator_repo.release_lease(first)[0] == ""
+    assert attempt(emulator_repo.release_lease, first)[0] == ""
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
 
@@ -472,8 +475,8 @@ def test_an_expired_lease_is_reclaimed_by_the_next_claimant(emulator_repo):
         holders.append({**user, "licenseId": license_id, "mode": "licensed"})
     crashed, waiting = holders
 
-    assert emulator_repo.checkout_lease(crashed, "dev-crash")[0] == ""
-    assert emulator_repo.checkout_lease(waiting, "dev-wait")[0] == "no_floating_seat"
+    assert attempt(emulator_repo.checkout_lease, crashed, "dev-crash")[0] == ""
+    assert attempt(emulator_repo.checkout_lease, waiting, "dev-wait")[0] == "no_floating_seat"
 
     # Backdate the lease without releasing it — what a crashed client leaves.
     stale = emulator_repo._now() - timedelta(hours=1)
@@ -481,7 +484,7 @@ def test_an_expired_lease_is_reclaimed_by_the_next_claimant(emulator_repo):
     # The counter is now wrong, which is the condition the sweep exists for.
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
-    err, _cfg = emulator_repo.checkout_lease(waiting, "dev-wait")
+    err, _cfg = attempt(emulator_repo.checkout_lease, waiting, "dev-wait")
     assert err == "", "the expired lease was never reclaimed"
     assert int(emulator_repo.get_license(license_id).get("leasesActive") or 0) == 1
 
@@ -494,7 +497,7 @@ def test_an_invite_is_redeemed_at_most_once(emulator_repo):
     tag = uuid.uuid4().hex[:8]
     address = f"newcomer-{tag}@university.edu"
 
-    err, seat, invite = emulator_repo.add_institution_member(
+    err, seat, invite = attempt_add(emulator_repo.add_institution_member,
         license_id, address, invited_by_uid="emu-it",
     )
     assert err == "" and seat is None and invite is not None
@@ -520,7 +523,7 @@ def test_a_revoked_invite_loses_the_race_cleanly(emulator_repo):
     license_id = _emu_institution(emulator_repo, max_seats=10, seating="assigned")
     tag = uuid.uuid4().hex[:8]
     address = f"racer-{tag}@university.edu"
-    _err, _seat, invite = emulator_repo.add_institution_member(license_id, address)
+    _err, _seat, invite = attempt_add(emulator_repo.add_institution_member, license_id, address)
     uid = f"emu-{tag}"
     user = _emu_user(emulator_repo, uid, address)
 
@@ -546,10 +549,10 @@ def _race_until(race, settled, *, what: str, rounds: int = _RACE_ROUNDS):
     See `_race_entitlement` for why a race that granted nothing is re-run
     rather than asserted on.
     """
-    for attempt in range(1, rounds + 1):
+    for round_ in range(1, rounds + 1):
         result = race()
         if settled(result):
-            return result, attempt
+            return result, round_
     pytest.fail(f"{what} in none of {rounds} rounds — contention should not starve that long")
 
 
@@ -799,7 +802,7 @@ def test_reconcile_matches_each_seat_to_its_own_holder(emulator_repo):
     assert emulator_repo.revoke_institution_seat(license_id, gone["uid"]) is True
     emulator_repo.db().collection("users").document(gone["uid"]).delete()
 
-    err, report = emulator_repo.reconcile_institution_seats(license_id)
+    err, report = attempt(emulator_repo.reconcile_institution_seats, license_id)
 
     assert err == ""
     by_uid = {row["uid"]: row for row in report["seats"]}
@@ -844,3 +847,26 @@ def test_the_staff_list_pages_newest_first_through_the_real_query(emulator_repo)
     assert gone not in seen
     found = emulator_repo.list_licenses(q=f"page1-{tag}@lab.org")[0]
     assert [row["id"] for row in found] == [made[1]]
+
+
+def test_the_export_pairs_each_session_with_its_own_files(emulator_repo):
+    """The export merges the sessions (ordered by document id) with the
+    account's files (ordered by their `sessionId` field). The two orders
+    must agree in the real store, across page boundaries, or files would be
+    dropped silently."""
+    uid = f"emu-{uuid.uuid4().hex[:8]}"
+    db = emulator_repo.db()
+    # Ids that differ in case, digits and punctuation, so that an order on
+    # one side unlike the other's would show.
+    sids = ["A1", "a1", "B_0", "b-0", "Z", "z9", "0x", "_s"]
+    for sid in sids:
+        db.collection("sessions").document(f"{uid}-{sid}").set({"uid": uid, "status": "COMPLETED"})
+        for n in range(3):
+            db.collection("files").document(f"{uid}-{sid}-f{n}").set(
+                {"uid": uid, "sessionId": f"{uid}-{sid}", "name": f"f{n}", "role": "bundle"})
+    db.collection("files").document(f"{uid}-orphan").set(
+        {"uid": uid, "sessionId": f"{uid}-M", "name": "lost", "role": "bundle"})
+    out = list(emulator_repo.iter_sessions_with_files(uid, page_size=3, file_chunk=4))
+    assert sorted(s["sessionId"] for s in out) == sorted(f"{uid}-{sid}" for sid in sids)
+    for s in out:
+        assert [f["fileId"] for f in s["files"]] == [f"{s['sessionId']}-f{n}" for n in range(3)]

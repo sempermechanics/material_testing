@@ -58,8 +58,8 @@ reports: [docs/app/REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)
 
 > **Lineage.** This repo holds the full history of
 > [`sempermechanics/semperdic-app`](https://github.com/sempermechanics/semperdic-app) at `bfe00e5`
-> (2026-09-21), and merges the parent's `main` back in (last at `643462c`, 2026-09-24).
-> - **Own app, shared backend.** It installs as `com.indicvision.semper.materialtesting`, beside
+> (2026-09-21), and merges the parent's `main` back in (`git log --merges --grep=semperdic-app`).
+> - **Own app, shared backend.** It installs as `com.sempermechanics.materialtesting` (ADR-019; `com.indicvision.semper.materialtesting` before), beside
 >   Semper, with its own signing key, and signs in to Semper's Firebase project and backend
 >   ([ADR-009](docs/adr/ADR-009-material-testing-app-identity.md)).
 > - **Deploys.** The backend deploys from the parent repo only, so the deploy workflows here fail if run.
@@ -74,7 +74,7 @@ reports: [docs/app/REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)
 | **New developer** | This page → [docs/README.md](docs/README.md) (DIC primer) → clone below → [docs/app/ARCHITECTURE.md](docs/app/ARCHITECTURE.md) |
 | **Contributor** | [CONTRIBUTING.md](CONTRIBUTING.md) (build, test, PR rules) + [docs/ops/CI.md](docs/ops/CI.md) when a check fails |
 | **Maintainer** | [docs/ops/ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md) · [RELEASING.md](docs/ops/RELEASING.md) · [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md) |
-| **Engine author** | [`semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine) submodule at `native/` — app contract: [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
+| **Engine author** | [`semper-dic-engine`](https://github.com/sempermechanics/semper-dic-engine) submodule at `engine/` — app contract: [docs/engine/ENGINE_APP_CONTRACT.md](docs/engine/ENGINE_APP_CONTRACT.md) |
 | **Backend author** | [docs/backend/CLOUD_ARCHITECTURE_GCP.md](docs/backend/CLOUD_ARCHITECTURE_GCP.md) · deploy: [GCP](docs/backend/BACKEND_SETUP_GCP.md) or [Console](docs/backend/BACKEND_SETUP_CONSOLE.md) |
 
 PRs target **`main`**. UI and docs work need no C++ toolchain. Issues tagged
@@ -93,12 +93,12 @@ cd native && ./scripts/sparse-opencv.sh && cd ..   # Windows: .\scripts\sparse-o
 
 Open in Android Studio → **Run**. First build compiles OpenCV once (`app/.cxx/`
 cache). **No API keys required** for local analysis; without them cloud sync
-stays off. Release builds require HTTPS `INDIC_API_BASE_URL` in
+stays off. Release builds require HTTPS `SEMPER_API_BASE_URL` in
 `local.properties` (cloud cannot ship silently disabled).
 
 **Emulator (x86_64):** `./gradlew :app:installDebug -PabiFilters=x86_64` — debug
 boots straight to Home as a local dev account (no backend). Set
-`INDIC_DEV_AUTH_BYPASS=false` in `local.properties` to exercise real sign-in.
+`SEMPER_DEV_AUTH_BYPASS=false` in `local.properties` to exercise real sign-in.
 
 Full commands, engine bumps, disk hygiene, and backend setup:
 [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -108,7 +108,7 @@ Full commands, engine bumps, disk hygiene, and backend setup:
 ## Where — repository map
 
 > **The C++ engine is not in this repo.** It is pinned in
-> [`native/`](https://github.com/sempermechanics/semper-dic-engine) as a git
+> [`engine/`](https://github.com/sempermechanics/semper-dic-engine) as a git
 > submodule; engine CI proves that commit. This repo proves it still **links**.
 
 <p align="center">
@@ -117,7 +117,7 @@ Full commands, engine bumps, disk hygiene, and backend setup:
 
 | Path | What |
 |---|---|
-| `native/` | **Submodule** — solver, strain, seeding, JNI, engine tests & docs |
+| `engine/` | **Submodule** — solver, strain, seeding, JNI, engine tests & docs |
 | `app/src/main/cpp/` | App-side JNI boundary |
 | `app/src/main/java/.../ui/analysis/` | Setup wizard, ROI, parameter-sweep lattice |
 | `app/src/main/java/.../ui/viewer/` | Heatmaps, probe, exports |
@@ -143,7 +143,7 @@ Every user-facing flow: [docs/app/WORKFLOWS.md](docs/app/WORKFLOWS.md).
 
 Each tracked **subset** (odd-width window) is matched with **ICGN** (6-DOF warp)
 scored by **ZNSSD** (0 = perfect, ≤ 0.15 accepted — lighting-invariant). Engine
-detail: `native/docs/ARCHITECTURE.md` · [docs/engine/](docs/engine/).
+detail: `engine/docs/ARCHITECTURE.md` · [docs/engine/](docs/engine/).
 
 ### Parameters (Advanced in the wizard)
 

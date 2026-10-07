@@ -3,6 +3,7 @@
   "//ttl": "TTL policies are declared under fieldOverrides (\"ttl\": true), because the Firebase CLI lists every live TTL policy as a field override and, on `deploy --only firestore:indexes`, treats one missing from this file as a deletion (refused without --force; NEVER pass --force, it deletes the policy). Each override must also restate the field's live single-field indexes: an empty `indexes` there disables single-field indexing on the field. All three mirror the database default (ascending, descending, array-contains; `gcloud firestore indexes fields describe <field> --collection-group=<group>`), so a deploy against a project that already has them writes nothing. `challenges.expireAt`: consume_nonce deletes a nonce on use; TTL reclaims the ones never consumed.",
   "//ttl-deleted": "Deleted licences are held 30 days: `deleted_licenses.purgeAt` and `deleted_seats.purgeAt` (the seats under each) are TTL fields, declared in fieldOverrides (docs/backend/BACKEND_SETUP_CONSOLE.md step 3a). Without the policies a deleted licence is never purged; restore still refuses one past purgeAt.",
   "//licenses": "The staff desk lists licences newest first (createdAt DESC), filtered by mode unless Demo keys are shown and by status (an `in` filter) when revoked ones are hidden: repo/license_admin.list_licenses. One index per filter combination.",
+  "//files": "The account export streams the caller's files ordered by session (where uid ==, order by sessionId) and merges them with the sessions: repo/sessions.iter_sessions_with_files.",
   "indexes": [
     {
       "collectionGroup": "sessions",
@@ -18,6 +19,20 @@
         },
         {
           "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "files",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sessionId",
           "order": "ASCENDING"
         }
       ]

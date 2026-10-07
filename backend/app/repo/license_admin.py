@@ -1,11 +1,11 @@
 """Licence administration by Semper staff: listing, renewal fan-out, whole-key revoke.
 """
 from .. import errors
+from ..errors import Refusal
 from ..config import settings
 from ..licenses import (
     DURATION_PERPETUAL,
     DURATION_TIMED,
-    KIND_INSTITUTION,
     LIVE_STATUSES,
     MODE_DEMO,
     MODE_LICENSED,
@@ -14,13 +14,15 @@ from ..licenses import (
     as_utc,
     key_prefix,
     normalize_email,
-    normalize_kind,
     normalize_seating,
     seat_cap_below_roster,
 )
 
 from . import _base
 from ._base import (
+    _apply_patch,
+    _is_institution,
+    _is_revoked,
     _cursor_page,
     db,
     _get_all,
@@ -93,7 +95,7 @@ def _search_licenses(col, q: str, include_demo: bool, include_revoked: bool) -> 
     rows = [
         (doc_id, lic) for doc_id, lic in found.items()
         if (include_demo or _license_mode(lic) != MODE_DEMO)
-        and (include_revoked or (lic.get("status") or "") != STATUS_REVOKED)
+        and (include_revoked or not _is_revoked(lic))
     ]
     # Newest first, like the table; a licence with no `createdAt` goes last.
     rows.sort(key=lambda row: str(row[1].get("createdAt") or ""), reverse=True)
@@ -125,13 +127,13 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
     if not snap.exists:
         return None
     lic = snap.to_dict() or {}
-    if (lic.get("status") or "") != STATUS_REVOKED:
+    if not _is_revoked(lic):
         ref.update({
             "status": STATUS_REVOKED,
             "revokedAt": _base.firestore.SERVER_TIMESTAMP,
             "revokedByUid": admin_uid,
         })
-    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+    if _is_institution(lic):
         seats = list(ref.collection("seats").stream())
         # Every seat's holder, revoked seats included: a seat revoke whose
         # demotion never landed (reconcile's `still_licensed`) is repaired here.
@@ -160,14 +162,6 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
             _drop_user_to_demo_if_licensed(redeemer, license_id)
         _delete_license_invites(license_id, lic.get("emailLock") or "")
     return _license_public(license_id, {**lic, "status": STATUS_REVOKED})
-
-
-class LicenseTermsRejected(Exception):
-    """A licence edit `update_license` refuses. `code` is the 422 detail."""
-
-    def __init__(self, code: str):
-        super().__init__(code)
-        self.code = code
 
 
 def expiry_change_error(lic: dict, expires_at, *, allow_shorten: bool = False) -> str:
@@ -225,7 +219,7 @@ def license_edit_error(lic: dict, patch: dict) -> str:
     `patch` is the request as sent: `allowShorten` rides along with the
     fields it qualifies.
     """
-    institution = normalize_kind(lic.get("kind")) == KIND_INSTITUTION
+    institution = _is_institution(lic)
     if not institution and any(patch.get(f) is not None for f in _ROSTER_FIELDS):
         return errors.INSTITUTION_ONLY
     if patch.get("maxAnalyses") is not None:
@@ -268,7 +262,7 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     seat needs none.
 
     Returns the updated public license, or None if there is no such license.
-    Raises `LicenseTermsRejected`, before writing anything, for anything
+    Raises `Refusal`, before writing anything, for anything
     `license_edit_error` refuses.
     """
     ref = db().collection("licenses").document(license_id)
@@ -280,7 +274,7 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     update = {k: v for k, v in patch.items() if v is not None}
     err = license_edit_error(lic, update)
     if err:
-        raise LicenseTermsRejected(err)
+        raise Refusal(err)
     allow_shorten = update.pop("allowShorten", False)
     clear_cap = bool(update.pop("clearMaxAnalyses", False))
     if clear_cap:
@@ -314,7 +308,7 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
 
     # The sentinels are for Firestore; the mirror and the response read the
     # licence as it now stands.
-    merged = {k: v for k, v in {**lic, **update}.items() if v is not _base.firestore.DELETE_FIELD}
+    merged = _apply_patch(lic, update)
     left_floating = old_seating == SEATING_FLOATING and "seating" in update
     if left_floating:
         _clear_seat_leases(ref)
@@ -340,13 +334,13 @@ def _clear_seat_leases(ref) -> None:
 
 def _license_holder_uids(ref, lic: dict) -> list[str]:
     """Everyone currently entitled by this license."""
-    if normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+    if not _is_institution(lic):
         redeemer = lic.get("redeemedByUid")
         return [redeemer] if redeemer else []
     out = []
     for seat_doc in ref.collection("seats").stream():
         seat = seat_doc.to_dict() or {}
-        if seat.get("status") == STATUS_REVOKED:
+        if _is_revoked(seat):
             continue
         out.append(seat.get("uid") or seat_doc.id)
     return out

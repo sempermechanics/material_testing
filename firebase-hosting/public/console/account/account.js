@@ -9,6 +9,7 @@ import {
   requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when, day,
 } from "../auth.js";
 import { errorDetail } from "../util.js";
+import { explain as refusalText } from "../messages.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -151,16 +152,16 @@ $("release").addEventListener("click", async () => {
     await loadAccount();
     setStatus("Seat returned.");
   } catch (e) {
-    setStatus(`Could not return your seat: ${releaseError(e.message)}`, true);
+    setStatus(`Could not return your seat: ${releaseError(e)}`, true);
   }
 });
 
-function releaseError(code) {
-  return {
+function releaseError(e) {
+  return refusalText(e, {
     seating_not_floating: "your licence does not use shared seats.",
     no_license: "there is no licence on this account.",
     rate_limited: "too many requests just now — wait a moment.",
-  }[code] || code;
+  });
 }
 
 $("unbind").addEventListener("click", () => unbind("", "Semper"));
@@ -189,14 +190,14 @@ async function unbind(app, name) {
         : ""),
     );
   } catch (e) {
-    setStatus(unbindError(e.message), true);
+    setStatus(unbindError(e), true);
   }
 }
 
-function unbindError(detail) {
+function unbindError(e) {
   // The cooldown refusal carries the instant it ends after the code.
-  const { code, rest } = errorDetail(detail);
-  return {
+  const rest = e.rest || "";
+  return refusalText(e, {
     // Not a refusal of entitlement: a second factor proves who is asking,
     // not how often, so the cooldown is what stops one licence being
     // passed round a lab.
@@ -211,7 +212,7 @@ function unbindError(detail) {
     no_license: "There is no licence on this account to move.",
     seat_not_found: "Your seat is no longer on that licence — ask your IT contact.",
     license_not_found: "That licence no longer exists — ask your Semper contact.",
-  }[code] || `Could not move your licence: ${code}`;
+  }, (text) => `Could not move your licence: ${text}`);
 }
 
 /* ----------------------------------------------------------- analyses */
@@ -315,17 +316,16 @@ async function download(sid, button) {
     saveBlob(blob, `semper-analysis-${sid}.zip`);
     setStatus("Downloaded.");
   } catch (e) {
-    setStatus(downloadError(e.message), true);
+    setStatus(downloadError(e), true);
   } finally {
     button.disabled = false;
   }
 }
 
-function downloadError(detail) {
+function downloadError(e) {
   // The backend may suffix a code with ": <sentence>" (feature_not_licensed
-  // does, for pre-licensing phones); the map is keyed on the code alone.
-  const code = String(detail).split(":")[0].trim();
-  return {
+  // does, for pre-licensing phones); `refusalText` matches the code alone.
+  return refusalText(e, {
     mfa_required:
       "Set up two-factor authentication first — downloads from a browser need it.",
     feature_not_licensed:
@@ -335,7 +335,7 @@ function downloadError(detail) {
     rate_limited: "Too many downloads just now — wait a moment and try again.",
     drive_download_failed:
       "Storage did not answer. The analysis is intact; try again shortly.",
-  }[code] || `Could not download: ${code}`;
+  }, (text) => `Could not download: ${errorDetail(text).code}`);
 }
 
 /**

@@ -3,12 +3,12 @@ import time
 
 from fastapi import APIRouter, Request
 
-from .. import firestore_repo as repo
+from .. import repo
 from .. import drive, errors
 from .. import observability as obs
 from .. import rate_limit
 
-log = logging.getLogger("indic")
+log = logging.getLogger("semper")
 router = APIRouter()
 
 

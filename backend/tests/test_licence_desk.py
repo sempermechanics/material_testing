@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import firestore_repo as repo
+import repo_view as repo
 from license_helpers import _mint_individual, _mint_institution
+from refusals import attempt
 
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
@@ -113,7 +114,7 @@ def _two_seat_roster(store):
     }
     minted = _mint_institution()
     for i, uid in enumerate(("u1", "u2")):
-        err, _ = repo.activate_license(uid, store._data["users"][uid]["email"], f"dev-{i}",
+        err, _ = attempt(repo.activate_license, uid, store._data["users"][uid]["email"], f"dev-{i}",
                                        minted["key"])
         assert err == ""
     return minted["license"]["id"]
@@ -184,10 +185,10 @@ def test_revoking_again_keeps_the_first_revoke_dates(store):
 def test_revoke_repairs_a_seat_revoke_that_never_reached_its_holder(store, monkeypatch):
     license_id = _two_seat_roster(store)
     real_drop = repo._drop_user_to_demo_if_licensed
-    monkeypatch.setattr(repo, "_drop_user_to_demo_if_licensed", lambda *a, **k: None)
+    repo.patch(monkeypatch, "_drop_user_to_demo_if_licensed", lambda *a, **k: None)
     assert repo.revoke_institution_seat(license_id, "u1") is True
     assert store._data["users"]["u1"]["plan"] == "professional"
-    monkeypatch.setattr(repo, "_drop_user_to_demo_if_licensed", real_drop)
+    repo.patch(monkeypatch, "_drop_user_to_demo_if_licensed", real_drop)
 
     repo.revoke_license(license_id, "admin")
 

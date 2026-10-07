@@ -29,7 +29,7 @@ reads `roiMaskBytes` directly from the ViewModel mid-run
 (`AnalysisViewModel.kt:450`) rather than from its request.
 
 Constraint: the JNI `computeFullFieldDirect` call stays inside the one batch
-loop in `DicBatchRunner.kt`, and `.dat` output is bit-exact against oracles.
+loop in `BatchAnalysis.kt` (was `DicBatchRunner.kt`), and `.dat` output is bit-exact against oracles.
 
 ## Decision
 
@@ -65,7 +65,7 @@ data class RunSpec(
 | Dimension | Assessment |
 |-----------|------------|
 | Complexity | Medium |
-| Cost | ViewModel, `DicBatchRunner.kt`, sweep body, nav helper, record builder |
+| Cost | ViewModel, `BatchAnalysis.kt` (was `DicBatchRunner.kt`), sweep body, nav helper, record builder |
 | Scalability | New run parameters get one home |
 | Team familiarity | Plain Kotlin data class, like `BatchAnalysisParams` |
 
@@ -129,8 +129,9 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   to the spec for a sweep that solved nothing. The viewer therefore shows
   exactly what Home will show.
 - **`SweepRequest` is gone.** The sweep body reads the spec directly.
-  `BatchAnalysisParams` stays, because the batch loop reads it;
-  `RunSpec.batchParams` builds it.
+  `BatchAnalysisParams` stayed at first, because the batch loop read it;
+  it has since been deleted, and the loop reads the spec's `DicParams` and
+  `Roi` directly.
 - **`SESSION_ID` is the local id.** The `Pending_Cloud_Sync_…` placeholder was
   only ever passed to the viewer, never stored, so the PDF's Session ID line
   now matches a reopened session.
@@ -148,6 +149,11 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   (ADR-003), for a single run and for a sweep.
 - *Later (2026-10-01):* engine 0.2.3 made the Path B flood fill deterministic
   (TD-65), so a `.dat` hash comparison is a valid check again.
+- *Later (2026-10-03):* `RoiResolveHelper.resolve`, named in the sketch above
+  as the source of `roiResolved`, is deleted (#331); the run's ROI is
+  `Roi.forSolve` (`field/Roi.kt`). What `RunSpec` still leaves out (reference
+  bytes and size, frame paths) the batch loop reads from the view model:
+  TD-173.
 
 ## In material_testing (2026-09-24)
 

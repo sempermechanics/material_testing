@@ -9,13 +9,15 @@ import pytest
 
 import fake_firestore
 
-from app import apps, deps, firestore_repo as repo
+from app import apps, deps
+import repo_view as repo
 from key_helpers import _ec_pem
 from license_helpers import (  # noqa: F401
     _mint_individual,
     _mint_institution,
     _signed_in,
 )
+from refusals import attempt
 
 MT = apps.MATERIAL_TESTING
 MT_HEADER = {"X-App-Id": "com.indicvision.semper.materialtesting"}
@@ -35,6 +37,9 @@ def _licensed(store, uid="solo-1", email="solo@lab.org"):
 def test_the_header_names_the_app():
     assert apps.from_header("") == apps.SEMPER
     assert apps.from_header(None) == apps.SEMPER
+    assert apps.from_header("com.sempermechanics.semper") == apps.SEMPER
+    assert apps.from_header(" com.sempermechanics.materialtesting ") == MT
+    # The ids from before the move to com.sempermechanics name the same apps.
     assert apps.from_header("com.indicvision.semper") == apps.SEMPER
     assert apps.from_header(" com.indicvision.semper.materialtesting ") == MT
     # Not Semper: a build nobody registered must not take Semper's slot.
@@ -85,9 +90,9 @@ def test_one_apps_device_is_a_mismatch_in_the_other(store):
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-mt", MT)
     user = store._data["users"]["solo-1"]
 
-    assert repo.check_device_lock(user, "and-semper", MT) is False
-    assert repo.check_device_lock(user, "and-mt") is False
-    assert repo.check_device_lock(user, "and-mt", MT) is True
+    assert repo.revalidate_device_lock(user, "and-semper", MT)["mode"] == "demo"
+    assert repo.revalidate_device_lock(user, "and-mt")["mode"] == "demo"
+    assert repo.revalidate_device_lock(user, "and-mt", MT)["mode"] == "licensed"
 
 
 def test_a_seat_binds_one_device_per_app(store):
@@ -97,9 +102,9 @@ def test_a_seat_binds_one_device_per_app(store):
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
-    assert repo.activate_license("u1", "a@university.edu", "and-semper", minted["key"])[0] == ""
+    assert attempt(repo.activate_license, "u1", "a@university.edu", "and-semper", minted["key"])[0] == ""
 
-    err, config = repo.activate_license("u1", "a@university.edu", "and-mt", minted["key"], MT)
+    err, config = attempt(repo.activate_license, "u1", "a@university.edu", "and-mt", minted["key"], MT)
 
     assert err == ""
     assert config["mode"] == "licensed"
@@ -107,7 +112,7 @@ def test_a_seat_binds_one_device_per_app(store):
     assert seat["deviceIdLock"] == "and-semper"
     assert seat["deviceIdLockMaterialTesting"] == "and-mt"
     # A second phone typing the key in Material Testing is still refused.
-    assert repo.activate_license(
+    assert attempt(repo.activate_license,
         "u1", "a@university.edu", "and-mt-2", minted["key"], MT)[0] == "license_device_mismatch"
 
 
@@ -116,9 +121,9 @@ def test_a_typed_individual_key_binds_the_asking_apps_lock(store):
     minted = _mint_individual()
     license_id = minted["license"]["id"]
     _signed_in(store, "solo-1", "solo@lab.org")
-    assert repo.activate_license("solo-1", "solo@lab.org", "and-semper", minted["key"])[0] == ""
+    assert attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-semper", minted["key"])[0] == ""
 
-    err, _ = repo.activate_license("solo-1", "solo@lab.org", "and-mt", minted["key"], MT)
+    err, _ = attempt(repo.activate_license, "solo-1", "solo@lab.org", "and-mt", minted["key"], MT)
 
     assert err == ""
     assert store._data["licenses"][license_id]["deviceIdLockMaterialTesting"] == "and-mt"
@@ -142,7 +147,7 @@ def test_a_staff_clear_moves_both_apps(store):
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-mt", MT)
     _registered(store, "solo-1")
 
-    err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
+    err, cleared = attempt(repo.clear_device_lock, license_id, actor=repo.ACTOR_STAFF)
 
     assert err == ""
     assert cleared["previousDeviceId"] == "and-semper"
@@ -163,7 +168,7 @@ def test_the_holder_moves_one_app_with_its_own_cooldown(store):
     repo.revalidate_device_lock(store._data["users"]["solo-1"], "and-mt", MT)
     _registered(store, "solo-1")
 
-    err, cleared = repo.clear_device_lock(license_id, "solo-1", actor=repo.ACTOR_SELF, app=MT)
+    err, cleared = attempt(repo.clear_device_lock, license_id, "solo-1", actor=repo.ACTOR_SELF, app=MT)
 
     assert err == ""
     assert cleared["app"] == MT
@@ -176,8 +181,8 @@ def test_the_holder_moves_one_app_with_its_own_cooldown(store):
     assert "deviceChangedAtMaterialTesting" in lic and "deviceChangedAt" not in lic
     assert store._data["users"]["solo-1"]["activeDeviceId"] == "and-semper"
     # Moving Material Testing does not make Semper wait, and the reverse.
-    assert repo.clear_device_lock(license_id, "solo-1", actor=repo.ACTOR_SELF)[0] == ""
-    assert repo.clear_device_lock(
+    assert attempt(repo.clear_device_lock, license_id, "solo-1", actor=repo.ACTOR_SELF)[0] == ""
+    assert attempt(repo.clear_device_lock,
         license_id, "solo-1", actor=repo.ACTOR_SELF, app=MT)[0] == "device_change_too_soon"
 
 

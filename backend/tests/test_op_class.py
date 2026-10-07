@@ -57,18 +57,11 @@ def test_metrics_counts():
 
 
 def _declared_routes():
-    import app.main as main  # noqa: F401 — registers the route templates
+    from app.main import app, served_routes  # importing main registers the templates
 
-    from app.routers import (
-        account, admin, devices, files, health, institutions, licenses,
-        provision_tasks, sessions,
-    )
-
-    for mod in (health, account, devices, licenses, sessions, files,
-                provision_tasks, admin, institutions):
-        for route in mod.router.routes:
-            for method in route.methods - {"HEAD"}:
-                yield method, route.path_format
+    for route in served_routes(app):
+        for method in (route.methods or set()) - {"HEAD"}:
+            yield method, route.path_format
 
 
 def test_static_segments_are_not_ids():

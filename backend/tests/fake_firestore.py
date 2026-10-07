@@ -324,14 +324,17 @@ class FakeClient:
 
 
 def install(monkeypatch):
-    """Point firestore_repo at a fresh FakeClient and fake firestore sentinels.
+    """Point the repo at a fresh FakeClient and fake firestore sentinels.
+
+    Only `app.repo._base` holds the client and binds the `firestore` module;
+    every other repo module reads both from there at call time.
 
     Returns the FakeClient so a test can seed/inspect `client._data`.
     """
-    from app import firestore_repo as repo
+    from app.repo import _base
 
     client = FakeClient()
-    monkeypatch.setattr(repo, "_DB", client)
+    monkeypatch.setattr(_base, "_DB", client)
 
     class _FakeFirestore:
         SERVER_TIMESTAMP = SERVER_TIMESTAMP
@@ -343,5 +346,5 @@ def install(monkeypatch):
             ASCENDING = ASCENDING
             DESCENDING = DESCENDING
 
-    monkeypatch.setattr(repo, "firestore", _FakeFirestore)
+    monkeypatch.setattr(_base, "firestore", _FakeFirestore)
     return client

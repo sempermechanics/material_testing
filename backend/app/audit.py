@@ -4,19 +4,23 @@ from datetime import datetime, timezone
 
 from google.cloud import firestore
 
-from .firestore_repo import SCHEMA_VERSION, db
+from .repo._base import SCHEMA_VERSION, db
 
 log = logging.getLogger("audit")
 
-#: Actions that say which device a licence followed. Seat clears from IT are
-#: recorded as INSTITUTION_SEAT_PATCH with clearDeviceLock; staff clears as
-#: ADMIN_DEVICE_LOCK_CLEAR. Bind/unbind are the holder's own half of a move.
+#: Seat patches that are device moves only when they carry `clearDeviceLock`:
+#: IT's (INSTITUTION_SEAT_PATCH) and staff's on the roster (ADMIN_SEAT_PATCH).
+SEAT_PATCH_ACTIONS = frozenset({"INSTITUTION_SEAT_PATCH", "ADMIN_SEAT_PATCH"})
+
+#: Actions that say which device a licence followed. Staff clears are
+#: ADMIN_DEVICE_LOCK_CLEAR, or a roster seat patch with clearDeviceLock.
+#: Bind/unbind are the holder's own half of a move.
 DEVICE_HISTORY_ACTIONS = frozenset(
     {
         "LICENSE_DEVICE_BIND",
         "LICENSE_DEVICE_UNBIND",
         "ADMIN_DEVICE_LOCK_CLEAR",
-        "INSTITUTION_SEAT_PATCH",
+        *SEAT_PATCH_ACTIONS,
     }
 )
 
@@ -87,7 +91,7 @@ def list_license_device_history(license_id: str, *, limit: int = 50) -> list[dic
 
 
 def _is_device_history_row(row: dict) -> bool:
-    if row["action"] != "INSTITUTION_SEAT_PATCH":
+    if row["action"] not in SEAT_PATCH_ACTIONS:
         return True
     detail = row.get("detail") or {}
     return bool(detail.get("clearDeviceLock"))

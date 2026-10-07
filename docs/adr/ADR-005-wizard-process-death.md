@@ -111,13 +111,34 @@ the import, which on a 150-frame batch is minutes.
   caught on restore: any missing part (a frame, the reference, the mask)
   means **LOST**, with inputs reset to an empty step 1 and a snackbar. A
   partial restore would look ready and solve something else.
-- **Mirroring.** `refBytes` and `roiMaskBytes` setters write the draft on a
-  single-thread IO dispatcher, so writes land in order. The frame list is
-  written by the saved-state provider as the Activity stops.
+- **Mirroring.** All draft I/O runs on `WizardDraft.io`, one serial lane
+  shared by every wizard, so writes land in the order they were queued.
+  They are queued through `WizardDraft.queue`, on a process-lifetime scope,
+  not `viewModelScope`: "Don't keep activities" clears the view model right
+  after the stop, and that must not cancel the stop's write. The `refBytes`
+  and `roiMaskBytes` setters queue their write there. The saved-state
+  provider encodes the frame list on Main as the Activity stops, queues its
+  write on the same lane, and puts the SHA-256 of that JSON in the Bundle
+  (`framesFingerprint`). On restore, `frames.json` must match it, so a kill
+  before the write lands reports **LOST**, even when the previous list holds
+  as many frames. A Bundle without the key (saved by an older app) is
+  checked on the frame count alone.
+- **Ordering across wizards** is closed by a generation tag
+  (`WizardDraftBinding`). A finishing wizard queues its delete from
+  `onDestroy`, which can land after a new wizard's first writes. So each
+  fresh wizard takes the next value of a process-wide counter when it
+  attaches the draft, and every write or delete a wizard queues runs only
+  while the counter still holds that wizard's value: a stale delete finds a
+  newer owner and does nothing. A wizard restored from a Bundle takes the
+  counter's current value instead of the next one, so the writes its
+  predecessor queued before the process died or the Activity was recreated
+  still land for it.
 - **When the draft goes.** It is deleted when the wizard finishes
   (`onDestroy` with `isFinishing`), not when a run commits: the user
   re-runs from the same wizard, and a kill after a run must still restore.
-  `discard()` also blocks a write still queued behind it. `ViewModel.onCleared`
+  `discard()` does not block Main: it sets a `@Volatile` flag that turns
+  any write still queued into a no-op, then deletes the files on the same
+  lane. `ViewModel.onCleared`
   is not the signal, because "Don't keep activities" clears the view model
   on a destroy the system will restore.
 - **Hand-off extras.** Home's picked Uris are consumed only when

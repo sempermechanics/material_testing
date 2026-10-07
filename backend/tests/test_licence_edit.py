@@ -4,8 +4,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import firestore_repo as repo
+from app import errors
+import repo_view as repo
 from license_helpers import _mint_individual, _mint_institution, _signed_in
+from refusals import attempt, attempt_add
 
 
 def _in(days):
@@ -30,7 +32,7 @@ def _held(store, email="solo@lab.org", uid="solo-1", **kw):
 def test_shortening_is_refused_unless_asked_for(store):
     lid = _held(store, expires_at=_in(300))
 
-    with pytest.raises(repo.LicenseTermsRejected) as exc:
+    with pytest.raises(errors.Refusal) as exc:
         repo.update_license(lid, {"expiresAt": _in(30)}, "admin")
     assert exc.value.code == "expiry_before_current"
 
@@ -42,7 +44,7 @@ def test_shortening_is_refused_unless_asked_for(store):
 
 def test_a_past_date_is_refused_even_when_shortening(store):
     lid = _held(store, expires_at=_in(300))
-    with pytest.raises(repo.LicenseTermsRejected) as exc:
+    with pytest.raises(errors.Refusal) as exc:
         repo.update_license(lid, {"expiresAt": _in(-1), "allowShorten": True}, "admin")
     assert exc.value.code == "expiry_in_past"
 
@@ -51,7 +53,7 @@ def test_a_perpetual_licence_can_be_given_an_end_with_the_default_grace(store, m
     monkeypatch.setattr(repo.license_admin.settings, "LICENSE_GRACE_DAYS_DEFAULT", 9)
     lid = _held(store)
 
-    with pytest.raises(repo.LicenseTermsRejected) as exc:
+    with pytest.raises(errors.Refusal) as exc:
         repo.update_license(lid, {"expiresAt": _in(90)}, "admin")
     assert exc.value.code == "license_perpetual"
 
@@ -79,7 +81,7 @@ def test_making_a_licence_perpetual_drops_its_end(store):
 def test_roster_fields_are_refused_on_an_individual_licence(store):
     lid = _held(store)
     for patch in ({"maxSeats": 5}, {"seating": "floating"}, {"adminEmails": ["it@lab.org"]}):
-        with pytest.raises(repo.LicenseTermsRejected) as exc:
+        with pytest.raises(errors.Refusal) as exc:
             repo.update_license(lid, patch, "admin")
         assert exc.value.code == "institution_only"
 
@@ -96,13 +98,13 @@ def test_institution_it_contacts_can_be_replaced(store):
 def _roster(store, lid, n):
     for i in range(n):
         _signed_in(store, f"m-{i}", f"m{i}@university.edu")
-        assert repo.add_institution_member(lid, f"m{i}@university.edu")[0] == ""
+        assert attempt_add(repo.add_institution_member, lid, f"m{i}@university.edu")[0] == ""
 
 
 def test_switching_to_floating_needs_a_pool_size(store):
     store._data["users"] = {}
     lid = _mint_institution()["license"]["id"]
-    with pytest.raises(repo.LicenseTermsRejected) as exc:
+    with pytest.raises(errors.Refusal) as exc:
         repo.update_license(lid, {"seating": "floating"}, "admin")
     assert exc.value.code == "floating_needs_max_seats"
 
@@ -125,7 +127,7 @@ def test_switching_to_assigned_must_seat_the_whole_roster(store):
     repo.update_license(lid, {"seating": "floating", "maxSeats": 2}, "admin")
     _roster(store, lid, 3)
 
-    with pytest.raises(repo.LicenseTermsRejected) as exc:
+    with pytest.raises(errors.Refusal) as exc:
         repo.update_license(lid, {"seating": "assigned"}, "admin")
     assert exc.value.code == "max_seats_below_used"
 
@@ -138,7 +140,7 @@ def test_leaving_floating_clears_every_lease(store):
     lid = _mint_institution()["license"]["id"]
     repo.update_license(lid, {"seating": "floating", "maxSeats": 5}, "admin")
     _roster(store, lid, 2)
-    err, _ = repo.checkout_lease({**store._data["users"]["m-0"], "uid": "m-0"}, "dev-0")
+    err, _ = attempt(repo.checkout_lease, {**store._data["users"]["m-0"], "uid": "m-0"}, "dev-0")
     assert err == ""
     assert store._data["licenses"][lid]["leasesActive"] == 1
 
@@ -179,7 +181,7 @@ def test_converting_seats_the_holder_on_the_same_device_and_terms(store):
                 expires_at=_in(200), grace_days=4, max_analyses=500)
     store._data["licenses"][lid]["deviceIdLock"] = "phone-1"
 
-    err, out = repo.convert_to_institution(
+    err, out = attempt(repo.convert_to_institution,
         lid, domain_lock="university.edu", admin_emails=["it@university.edu"],
         max_seats=10, seating="assigned", admin_uid="admin")
 
@@ -205,7 +207,7 @@ def test_converting_before_first_sign_in_moves_the_invite(store):
     store._data["users"] = {}
     lid = _mint_individual(email="new@university.edu")["license"]["id"]
 
-    err, out = repo.convert_to_institution(
+    err, out = attempt(repo.convert_to_institution,
         lid, domain_lock="university.edu", admin_emails=["it@university.edu"],
         max_seats=None, seating="assigned", admin_uid="admin")
 
@@ -220,7 +222,7 @@ def test_converting_to_another_domain_is_refused_and_changes_nothing(store):
     lid = _held(store)
     before = set(store._data["licenses"])
 
-    err, out = repo.convert_to_institution(
+    err, out = attempt(repo.convert_to_institution,
         lid, domain_lock="university.edu", admin_emails=["it@university.edu"],
         max_seats=None, seating="assigned", admin_uid="admin")
 
@@ -236,9 +238,9 @@ def test_only_a_live_individual_licence_converts(store):
     repo.revoke_license(solo, "admin")
     kw = dict(domain_lock="university.edu", admin_emails=["it@university.edu"],
               max_seats=None, seating="assigned", admin_uid="admin")
-    assert repo.convert_to_institution(inst, **kw)[0] == "license_not_convertible"
-    assert repo.convert_to_institution(solo, **kw)[0] == "license_revoked"
-    assert repo.convert_to_institution("nope", **kw)[0] == "license_not_found"
+    assert attempt(repo.convert_to_institution, inst, **kw)[0] == "license_not_convertible"
+    assert attempt(repo.convert_to_institution, solo, **kw)[0] == "license_revoked"
+    assert attempt(repo.convert_to_institution, "nope", **kw)[0] == "license_not_found"
 
 
 @pytest.mark.asyncio

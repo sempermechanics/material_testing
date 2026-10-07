@@ -22,16 +22,18 @@ issued another.
 from datetime import timedelta
 
 from .. import errors
+from ..errors import Refusal
 from ..licenses import (
-    KIND_INSTITUTION,
     MODE_DEMO,
     STATUS_REVOKED,
     as_utc,
-    normalize_kind,
+    normalize_email,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     _BATCH_LIMIT,
     db,
     _delete_refs,
@@ -41,9 +43,8 @@ from ._base import (
     _update_refs,
 )
 from .claims import (
-    _drop_superseded_demo,
-    _individual_member_patch,
-    _institution_member_patch,
+    _drop_superseded_demos,
+    _member_patch,
 )
 from .holders import (
     licence_held_by,
@@ -97,15 +98,15 @@ def _deleted_public(license_id: str, tomb: dict) -> dict:
     }
 
 
-def delete_license(license_id: str, admin_uid: str) -> tuple[str, dict | None]:
+def delete_license(license_id: str, admin_uid: str) -> dict:
     """Delete a licence into the 30-day hold. Returns (error, deleted row)."""
     ref = db().collection("licenses").document(license_id)
     snap = ref.get()
     if not snap.exists:
-        return errors.LICENSE_NOT_FOUND, None
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = snap.to_dict() or {}
     if _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system":
-        return errors.DEMO_KEY_NOT_DELETABLE, None
+        raise Refusal(errors.DEMO_KEY_NOT_DELETABLE)
     seats = list(ref.collection("seats").stream())
     purge_at = _now() + timedelta(days=HOLD_DAYS)
 
@@ -132,7 +133,7 @@ def delete_license(license_id: str, admin_uid: str) -> tuple[str, dict | None]:
 
     _delete_refs([s.reference for s in seats])
     ref.delete()
-    return "", _deleted_public(license_id, {**tomb, "deletedAt": _now()})
+    return _deleted_public(license_id, {**tomb, "deletedAt": _now()})
 
 
 def list_deleted_licenses(limit: int = 50) -> list[dict]:
@@ -143,7 +144,7 @@ def list_deleted_licenses(limit: int = 50) -> list[dict]:
     return [_deleted_public(d.id, d.to_dict() or {}) for d in query.stream()]
 
 
-def restore_license(license_id: str, admin_uid: str) -> tuple[str, dict | None]:
+def restore_license(license_id: str, admin_uid: str) -> dict:
     """Bring a deleted licence back within its hold. Returns (error, licence).
 
     A licence that was live comes back live, with each holder re-attached
@@ -155,21 +156,21 @@ def restore_license(license_id: str, admin_uid: str) -> tuple[str, dict | None]:
     tomb_ref = db().collection(DELETED).document(license_id)
     snap = tomb_ref.get()
     if not snap.exists:
-        return errors.DELETED_LICENSE_NOT_FOUND, None
+        raise Refusal(errors.DELETED_LICENSE_NOT_FOUND)
     tomb = snap.to_dict() or {}
     purge_at = as_utc(tomb.get("purgeAt"))
     if purge_at is not None and purge_at <= _now():
-        return errors.DELETED_LICENSE_PURGED, None
+        raise Refusal(errors.DELETED_LICENSE_PURGED)
     ref = db().collection("licenses").document(license_id)
     if ref.get().exists:
-        return errors.LICENSE_EXISTS, None
+        raise Refusal(errors.LICENSE_EXISTS)
 
     lic = {k: v for k, v in tomb.items() if k not in _TOMBSTONE_FIELDS}
     live = (tomb.get("priorStatus") or "") != STATUS_REVOKED
     lic["status"] = tomb.get("priorStatus") or lic.get("status") or ""
     lic["restoredAt"] = _base.firestore.SERVER_TIMESTAMP
     lic["restoredByUid"] = admin_uid
-    institution = normalize_kind(lic.get("kind")) == KIND_INSTITUTION
+    institution = _is_institution(lic)
     seat_docs = list(tomb_ref.collection(DELETED_SEATS).stream())
 
     back: list[str] = []
@@ -186,7 +187,7 @@ def restore_license(license_id: str, admin_uid: str) -> tuple[str, dict | None]:
             seat = {k: v for k, v in (doc.to_dict() or {}).items()
                     if k != "purgeAt" and k not in _LEASE_FIELDS}
             uid = seat.get("uid") or doc.id
-            if live and seat.get("status") != STATUS_REVOKED:
+            if live and not _is_revoked(seat):
                 if _free(uid):
                     on_roster += 1
                     if seat.get("status") != "disabled":
@@ -207,13 +208,12 @@ def restore_license(license_id: str, admin_uid: str) -> tuple[str, dict | None]:
 
     ref.set(lic)
     _set_refs(seat_writes)
-    patch = (_institution_member_patch if institution else _individual_member_patch)(license_id, lic)
+    patch = _member_patch(license_id, lic)
     users = db().collection("users")
     _update_refs([(users.document(uid), patch) for uid in back])
-    for uid in back:
-        # The Demo key the account was given while this licence was gone.
-        _drop_superseded_demo(uid, license_id)
-    address = (lic.get("emailLock") or "").strip().lower()
+    # The Demo keys the accounts were given while this licence was gone.
+    _drop_superseded_demos(back, license_id)
+    address = normalize_email(lic.get("emailLock"))
     if live and not institution and lic["status"] == "unused" and address \
             and not licence_held_by(address, exclude_id=license_id):
         # Still waiting for its first sign-in: promise it to the address again.
@@ -221,4 +221,4 @@ def restore_license(license_id: str, admin_uid: str) -> tuple[str, dict | None]:
 
     _delete_refs([d.reference for d in seat_docs])
     tomb_ref.delete()
-    return "", get_license_public(license_id)
+    return get_license_public(license_id)

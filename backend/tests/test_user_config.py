@@ -3,7 +3,7 @@ import pytest
 
 import fake_firestore
 
-from app import firestore_repo as repo
+import repo_view as repo
 from app.config import settings
 
 
@@ -252,8 +252,8 @@ async def test_list_sessions_quota_uses_resolved_max(client, monkeypatch):
         "_DEV_USER",
         {**deps._DEV_USER, "maxSessions": 70},
     )
-    monkeypatch.setattr(repo, "list_user_sessions", lambda uid, limit=50, page_token=None, app=None: ([], None))
-    monkeypatch.setattr(repo, "count_user_sessions", lambda uid: 0)
+    repo.patch(monkeypatch, "list_user_sessions", lambda uid, limit=50, page_token=None, app=None: ([], None))
+    repo.patch(monkeypatch, "count_user_sessions", lambda uid: 0)
 
     resp = await client.get("/v1/sessions")
     assert resp.status_code == 200

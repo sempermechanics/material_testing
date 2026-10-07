@@ -17,7 +17,7 @@ the app at your deployment.
 ## 1. Select / create the project
 1. Open <https://console.cloud.google.com>.
 2. Top bar → **project picker** → **New Project** (or pick an existing one).
-   Name it e.g. `indic-prod`. Note the **Project ID**.
+   Name it e.g. `semper-prod`. Note the **Project ID**.
 
 ## 2. Enable the APIs
 1. Left menu (☰) → **APIs & Services → Enabled APIs & services**.
@@ -178,7 +178,7 @@ manual create or labs, not the pilot CD path:
      | `MAX_FILES_PER_SESSION` | `600` | Files in one analysis |
      | `MAX_FRAMES_PER_ANALYSIS` | `500` | Deformed-frame ceiling |
      | `ROOT_FOLDER_ID` | the Shared Drive | A folder inside the drive to root everything under |
-     | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
+     | `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions: how many of one session's calls run at once on the process-wide Drive pool (64 workers, the size of the Drive connection pool) |
 
    - **Container → Variables & Secrets → + Reference a secret** for the API key
      (it must not be a plain variable): name `RESEND_API_KEY`, secret

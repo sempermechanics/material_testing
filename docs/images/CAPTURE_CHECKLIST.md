@@ -3,7 +3,7 @@
 **2026-09-23 pass.** Setup:
 - a debug build on a Pixel 10 emulator;
 - **light theme**;
-- `INDIC_DEV_AUTH_BYPASS` on (local-only sessions);
+- `SEMPER_DEV_AUTH_BYPASS` on (local-only sessions);
 - SystemUI demo mode (09:30, full battery, no notifications).
 
 Screens are cropped to **460 px wide, ≤ 1022 tall**, and shown at `width="260"`. The inputs are the ones the validation uses:
@@ -52,7 +52,7 @@ The report strips are rendered from the exported PDFs (PyMuPDF, 110 dpi, 900 px 
 
 ## Still needs a real backend and account
 
-These need `INDIC_DEV_AUTH_BYPASS=false`, a live `INDIC_API_BASE_URL`, and an approved account with a cloud-backed analysis. Don't fake them.
+These need `SEMPER_DEV_AUTH_BYPASS=false`, a live `SEMPER_API_BASE_URL`, and an approved account with a cloud-backed analysis. Don't fake them.
 
 - **Home:** mixed **Synced** / **Pending** / **Only in cloud** badges.
 - **Delete dialog:** **Delete device** / **Delete cloud**, on a row with both copies.

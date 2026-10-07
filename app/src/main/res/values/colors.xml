@@ -92,7 +92,7 @@
     <color name="toast_crisp_prominent_bg">#F51A1A1A</color>
     <color name="toast_crisp_text">#FFFFFFFF</color>
 
-    <!-- VsgPlotView / VsgLatticeView: shared by the result lattice, the wizard's
+    <!-- SweepPlotView / SweepLatticeView: shared by the result lattice, the wizard's
          sweep preview, and the immersive viewer's peek-sheet line-cut, so these
          cannot be the light-locked text_*/surface_outline/sky_* tokens the two
          views used to read directly: that left the peek sheet's dark glass line-
@@ -113,7 +113,7 @@
     <color name="viewer_plot_node_skipped">@color/semantic_danger</color>
     <color name="viewer_plot_connector">@color/sky_container</color>
 
-    <!-- 8-slot categorical palette for the lattice curves (VsgPlotView.paletteColor,
+    <!-- 8-slot categorical palette for the lattice curves (SweepPlotView.paletteColor,
          keyed by solved-frame index). Under emphasis only one slot is ever shown
          in colour at a time (the focused curve; every other curve renders in
          viewer_plot_muted; see the dataviz skill's anti-patterns.md on "8

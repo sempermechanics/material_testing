@@ -2,19 +2,19 @@
 """
 from datetime import timedelta
 
-from .. import apps, errors, statuses
+from .. import apps, errors
 from ..config import settings
+from ..errors import Refusal
 from ..licenses import (
-    KIND_INSTITUTION,
     MODE_LICENSED,
     STATUS_ACTIVE,
-    STATUS_REVOKED,
     as_utc,
-    normalize_kind,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     db,
     _lease_clear_patch,
     _license_mode,
@@ -25,8 +25,7 @@ from ._base import (
     _seat_ref,
 )
 from .devices import (
-    _release_patch,
-    _retire_device,
+    _release_devices,
 )
 from .license_admin import (
     _drop_user_to_demo_if_licensed,
@@ -49,7 +48,7 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     member, by then on Demo, register a different phone, a change Demo accounts
     do not otherwise get (TD-127).
     """
-    if (lic.get("status") or "") == STATUS_REVOKED:
+    if _is_revoked(lic):
         return None
     if scope == "seat":
         seat = ref.get()
@@ -125,30 +124,24 @@ def _settle_holder(license_id: str, lic: dict, ref, scope: str, uid: str,
         **_mode_patch(_license_mode(lic)),
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
     }
-    released = dict(none)
-    batch = db().batch()
+    releasing = {}
     for app, lock in locks.items():
         active = user.get(apps.field("activeDeviceId", app)) or ""
-        if not active or (lock and lock != active):
-            continue
-        released[app] = active
-        patch.update(_release_patch(active, app))
-        device_ref = db().collection("devices").document(active)
-        if device_ref.get().exists:
-            _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
-    batch.update(user_ref, patch)
-    batch.commit()
-    return released
+        if active and (not lock or lock == active):
+            releasing[app] = active
+    _release_devices(user_ref, releasing, patch)
+    return {**none, **releasing}
 
 
 def clear_device_lock(license_id: str, uid: str = "", *,
                       actor: str = ACTOR_STAFF,
-                      app: str = apps.SEMPER) -> tuple[str, dict | None]:
-    """Unbind a licence or a seat from the device it is on. Error code, or "".
+                      app: str = apps.SEMPER) -> dict:
+    """Unbind a licence or a seat from the device it is on. Returns the audit
+    detail, or raises `Refusal`.
 
     One primitive with three callers — Semper staff, institution IT, and the
     holder — because there is one operation. Since Gap A, clearing the lock is
-    the *whole* device change: an empty lock reads as `_LOCK_UNBOUND`, and
+    the *whole* device change: an empty lock reads as `_Lock.UNBOUND`, and
     `revalidate_device_lock` binds it to whatever signs in next, first writer
     wins. Nothing is re-activated and nothing is typed.
 
@@ -175,24 +168,25 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     however recently the holder changed device themselves. Each app has its
     own stamp (`apps.field("deviceChangedAt", app)`).
 
-    On success the second element is the audit detail, including the device
+    The answer is the audit detail, including the device
     that was given up — the other half of the record `revalidate_device_lock`
     writes when the replacement binds. `previousDeviceId` is the lock's device
     and `releasedDeviceId` the registered one the account was signed out of;
     a registered phone the lock did not name is kept (`_settle_holder`), and either can be empty (a lock that never bound, an
-    account with nothing registered, or a holder `_settle_holder` skips). On `device_change_too_soon` it is
-    `{"nextChangeAllowedAt": <ISO instant>}`, so the refusal can say when.
+    account with nothing registered, or a holder `_settle_holder` skips). A
+    `device_change_too_soon` refusal carries the instant the next change is
+    allowed, so it can say when.
     Both device ids come once per app (`apps.spread`): `previousDeviceId` and
     `releasedDeviceId` are Semper's, `previousDeviceIdMaterialTesting` and so
     on the other app's, "" for an app the clear did not touch.
     """
     lic_snap = db().collection("licenses").document(license_id).get()
     if not lic_snap.exists:
-        return errors.LICENSE_NOT_FOUND, None
+        raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = lic_snap.to_dict() or {}
-    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+    if _is_institution(lic):
         if not uid:
-            return errors.SEAT_NOT_FOUND, None
+            raise Refusal(errors.SEAT_NOT_FOUND)
         ref, scope = _seat_ref(license_id, uid), "seat"
     else:
         ref, scope = db().collection("licenses").document(license_id), "license"
@@ -209,7 +203,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         # entirely.
         snap = ref.get()
         if not snap.exists:
-            return not_found, None
+            raise Refusal(not_found)
         doc = snap.to_dict() or {}
         previous = {a: doc.get(apps.field("deviceIdLock", a)) or "" for a in apps.ALL}
         ref.update({
@@ -217,55 +211,55 @@ def clear_device_lock(license_id: str, uid: str = "", *,
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
         released = _settle_holder(license_id, lic, ref, scope, uid, previous)
-        return "", {**detail, **apps.spread("previousDeviceId", previous),
-                    **apps.spread("releasedDeviceId", released)}
+        return {**detail, **apps.spread("previousDeviceId", previous),
+                **apps.spread("releasedDeviceId", released)}
 
     now = _now()
     cooldown = timedelta(days=max(0, settings.SELF_DEVICE_CHANGE_COOLDOWN_DAYS))
     lock_field = apps.field("deviceIdLock", app)
     changed_field = apps.field("deviceChangedAt", app)
 
+    def too_soon(next_allowed) -> Refusal:
+        # The refusal says when, as the success does: "not yet" with no date
+        # left the holder guessing how long to wait.
+        return Refusal(errors.DEVICE_CHANGE_TOO_SOON, next_allowed.isoformat(),
+                       retry_at=next_allowed)
+
     @_base.firestore.transactional
-    def _clear(tx) -> tuple[str, dict | None]:
+    def _clear(tx) -> dict:
         snap = ref.get(transaction=tx)
         if not snap.exists:
-            return not_found, None
+            raise Refusal(not_found)
         doc = snap.to_dict() or {}
         changed = as_utc(doc.get(changed_field))
         if cooldown and changed and now - changed < cooldown:
-            # The refusal says when, as the success does: "not yet" with no
-            # date left the holder guessing how long to wait.
-            return errors.DEVICE_CHANGE_TOO_SOON, {
-                "nextChangeAllowedAt": (changed + cooldown).isoformat(),
-            }
+            raise too_soon(changed + cooldown)
         tx.update(ref, {
             lock_field: "",
             changed_field: now,
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
-        return "", {
+        return {
             **detail,
             **apps.spread("previousDeviceId", {app: doc.get(lock_field) or ""}),
             "nextChangeAllowedAt": (now + cooldown).isoformat() if cooldown else "",
         }
 
-    # Two self-service clears at once is the only way to lose on contention,
-    # and the cooldown is exactly what one of them must lose. The winner has
-    # just stamped `now`, so the next change is a cooldown from here.
-    err, cleared = _run_tx(
-        _clear, on_contended=lambda: (errors.DEVICE_CHANGE_TOO_SOON, {
-            "nextChangeAllowedAt": (now + cooldown).isoformat(),
-        }),
-    )
-    if not err:
-        previous = (cleared or {}).get(apps.field("previousDeviceId", app)) or ""
-        released = _settle_holder(license_id, lic, ref, scope, uid, {app: previous})
-        cleared = {**(cleared or {}), **apps.spread("releasedDeviceId", released)}
-    return err, cleared
+    def _lost() -> dict:
+        # Two self-service clears at once is the only way to lose on
+        # contention, and the cooldown is exactly what one of them must lose.
+        # The winner has just stamped `now`, so the next change is a cooldown
+        # from here.
+        raise too_soon(now + cooldown)
+
+    cleared = _run_tx(_clear, on_contended=_lost)
+    previous = cleared.get(apps.field("previousDeviceId", app)) or ""
+    released = _settle_holder(license_id, lic, ref, scope, uid, {app: previous})
+    return {**cleared, **apps.spread("releasedDeviceId", released)}
 
 
-def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> str:
-    """Hold or resume a seat. Error code, or "".
+def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
+    """Hold or resume a seat, or raise `Refusal`.
 
     Hold drops the holder to Demo but does NOT free the slot — the seat still
     counts against maxSeats so IT can resume it without a fresh activation. A
@@ -288,9 +282,9 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> str:
         if not snap.exists:
             return errors.SEAT_NOT_FOUND
         seat = snap.to_dict() or {}
-        if seat.get("status") == "revoked":
+        if _is_revoked(seat):
             return errors.SEAT_REVOKED
-        if lic_snap.exists and (lic_snap.to_dict() or {}).get("status") == "revoked":
+        if lic_snap.exists and _is_revoked(lic_snap.to_dict() or {}):
             return errors.LICENSE_REVOKED
         patch = {
             "status": "active" if enabled else "disabled",
@@ -308,7 +302,7 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> str:
     # first. Nothing was written; IT tries again against the new state.
     err = _run_tx(_set, on_contended=lambda: errors.SEAT_BUSY)
     if err:
-        return err
+        raise Refusal(err)
     if not enabled:
         _drop_user_to_demo_if_licensed(uid, license_id)
     else:
@@ -319,7 +313,6 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> str:
                 **_mode_patch(MODE_LICENSED),
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             })
-    return ""
 
 
 def revoke_institution_seat(license_id: str, uid: str) -> bool:
@@ -342,7 +335,7 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
         if not seat_snap.exists:
             return False
         seat = seat_snap.to_dict() or {}
-        if seat.get("status") == "revoked":
+        if _is_revoked(seat):
             return True  # idempotent: already revoked, counters already settled
         lic_snap = lic_ref.get(transaction=tx)
         seats_used = int((lic_snap.to_dict() or {}).get("seatsUsed") or 0) if lic_snap.exists else 0

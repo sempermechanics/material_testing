@@ -37,25 +37,25 @@ Use these words. Do not invent synonyms.
 | step | Grid spacing between tracked points, px |
 | ZNSSD | Match score; 0 = perfect, ≤ 0.15 accepted, < 0 failed-point sentinel |
 | ICGN | Iterative Gauss-Newton sub-pixel solver |
-| VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd); VSG = `(window − 1) × step + 1` px (`VsgStudy.vsgFor`) is what the engine takes as its circle's diameter and what sessions store |
+| VSG | Strain window: least-squares plane fit over the points within (window − 1) / 2 steps. The window is entered in data points (odd); VSG = `(window − 1) × step + 1` px (`SweepStudy.vsgFor`) is what the engine takes as its circle's diameter and what sessions store |
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (`native/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
+Engine pipeline (`engine/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 
 ```
-app/          Android UI (Kotlin). Gradle builds ../native/CMakeLists.txt;
+app/          Android UI (Kotlin). Gradle builds ../engine/CMakeLists.txt;
               app/src/main/cpp/ holds only a redirect CMakeLists.txt
-native/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
-              docs, and the JNI adapter in native/adapters/android/)
+engine/       Pinned submodule: sempermechanics/semper-dic-engine (solver, tests,
+              docs, and the JNI adapter in engine/adapters/android/)
 backend/      FastAPI on Cloud Run — routers in backend/app/routers/, Firestore
-              access in backend/app/repo/ behind the firestore_repo facade
+              access in the backend/app/repo/ package (ADR-021)
 firebase-hosting/  Auth continue URLs, asset links, generated legal pages
 ```
 
-Bump the engine by changing the `native` gitlink. Its host / sanitizer / DICe suites run
+Bump the engine by changing the `engine` gitlink. Its host / sanitizer / DICe suites run
 in the engine repo; this CI only proves the pin **links** (emulator x86_64, release arm64).
 
 ## Runtime
@@ -66,8 +66,8 @@ Home → TestTypeSheet → StaticAnalysisActivity (wizard) → ResultViewerActiv
      → open session → ResultViewerActivity | VsgLatticeActivity
 ```
 
-The test type (`data/TestType`: tensile / bending / 2D DIC) is chosen on Home and rides
-`DicKeys.TEST_TYPE` into the wizard. 2D DIC has no load card and records no
+The test type (`data/mechanical/TestType`: tensile / bending / 2D DIC) is chosen on Home and rides
+`IntentKeys.TEST_TYPE` into the wizard. 2D DIC has no load card and records no
 type (`MechanicalTestInputs.NONE`), so its session is a plain, untyped DIC
 session. For the lab tests, at Compute the type, the specimen
 dimensions and the per-frame machine loads are snapshotted as
@@ -79,7 +79,7 @@ through `ViewerArgs`. Results are pure objects in `report/`: `StressStrain`
 write-ups), drawn by the viewer, `AnalysisCsvWriter` and `LabReportPdf` /
 `PdfReportGenerator`.
 
-Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `DicKeys`.
+Access routing is `AccessRouter` + `AccessStatus`. Intent extras are `IntentKeys`.
 Session dirs: `SessionStore` + `SessionPaths` (`raw_deformed/`, `frame_%04d.dat`).
 
 Backend: `backend/app/main.py` (app, middleware, lifespan), `routers/` (`/v1/*` by
@@ -109,11 +109,11 @@ non-modal `TransferBannerController` strip.
 - **Drive unknown ≠ deleted.** Drop local metadata only when the backend confirms
   a blob is missing.
 - **Storage reclaim** frees local frames of **backed-up** sessions only.
-- **Analytics and crash reporting share one consent flag** (`DicSettings.diagnosticsEnabled`).
+- **Analytics and crash reporting share one consent flag** (`AppSettings.diagnosticsEnabled`).
   Events stay PII-free — buckets and enums only, never images, results, session ids
   or specimen names.
-- **Release** builds require HTTPS `INDIC_API_BASE_URL`. Debug emulator boots
-  local-only unless `INDIC_DEV_AUTH_BYPASS=false`.
+- **Release** builds require HTTPS `SEMPER_API_BASE_URL`. Debug emulator boots
+  local-only unless `SEMPER_DEV_AUTH_BYPASS=false`.
 - **Legal pages** are generated: edit `docs/legal/`, run `scripts/render_legal_pages.py`,
   never hand-edit `firebase-hosting/public/{privacy,terms}/`.
 
@@ -127,19 +127,22 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-01)
+## Current state (2026-10-07)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`; last `dc13351`, 2026-10-01; rules in the parent's
-  `docs/ops/FORK_SYNC.md`). The parent deploys, and its TD rows jump to TD-122. General
+  --grep=semperdic-app`; last merged `dc13351`, 2026-10-01; rules in the parent's
+  `docs/ops/FORK_SYNC.md`). The sync of `85650da` (package move ADR-015, app id
+  ADR-019, engine at `engine/`) is PR #122 on branch `ccr-6575f0b3-7g5yvz`: it compiles
+  and passes Tier 1 here (2026-10-07), with this app id's Firebase client in
+  `google-services.json`; six files are over ADR-015's ~500 lines (TD-199). The parent deploys, and its TD rows jump to TD-122. General
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
   TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-157; check both before taking one.
+  free in both registers is TD-200; check both before taking one.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
@@ -195,7 +198,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
   - **Own app (ADR-009, TD-133).** Installs as `com.indicvision.semper.materialtesting`
-    beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
+    (`com.sempermechanics.materialtesting` once the 85650da sync lands, ADR-019: no
+    in-place upgrade) beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
     (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
     TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
     sends `X-App-Id` and signed in licensed on a Pixel 6, which now runs `v1.2-beta.3`
@@ -228,13 +232,13 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Backup stamps PENDING before `CloudSync.enqueueUpload`; reversing it lets a late PENDING overwrite SYNCED — [§8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - A 429 that consumes the nonce makes the app's retry a 401 replay: keep a signed route's bucket in `dependencies=[deps.rate_limited(...)]`, never in the handler; unsigned routes call `rate_limit.enforce` — `test_rate_limit_before_nonce.py`.
 - Activities are `@MainThread` at class level, so a private helper that runs on `Dispatchers.IO` needs `@WorkerThread` (or `@AnyThread`) or lint fails — TD-24 in [TECH_DEBT.md](docs/ops/TECH_DEBT.md).
-- `SessionStore`'s parser uses `ignoreUnknownKeys` so old `index.json` fields load; keep it — [SessionStoreLegacyFloorTest](app/src/test/java/com/indicvision/semper/data/SessionStoreLegacyFloorTest.kt).
-- `SubsetRecommender` runs on the paper's `NOISE_VARIANCE`; no import supplies a measured floor — [SubsetRecommender.kt](app/src/main/java/com/indicvision/semper/ui/analysis/SubsetRecommender.kt).
-- Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(DicKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
+- `SessionStore`'s parser uses `ignoreUnknownKeys` so old `index.json` fields load; keep it — [SessionStoreLegacyFloorTest](app/src/test/java/com/sempermechanics/semper/data/session/SessionStoreLegacyFloorTest.kt).
+- `SubsetRecommender` runs on the paper's `NOISE_VARIANCE`; no import supplies a measured floor — [SubsetRecommender.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/recommend/SubsetRecommender.kt).
+- Viewer screens read `ViewerArgs.from(intent, …)`, never `intent.get…Extra(IntentKeys…)`; a new viewer field goes in `ViewerArgs`, its default and its `SessionRecord` mapping — [ADR-003](docs/adr/ADR-003-viewerargs-read-side.md).
 - A new wizard input must survive a kill: scalars go in `WizardState`'s Bundle, bytes and lists in `WizardDraft`; and `cacheDir/temp_deformed` is only safe from the janitor while the draft is live — [ADR-005](docs/adr/ADR-005-wizard-process-death.md).
 - After Compute, read the run's `RunSpec` / `RunResult` (`spec`, `settings`), never the wizard's sliders or ROI vars: they stay editable and drift — [ADR-004](docs/adr/ADR-004-runspec.md).
-- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolve_bitIdentical`, `native/tests/integration/test_full_field_determinism.cpp`.
-- `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/indicvision/semper/ui/analysis/ConvergenceGate.kt).
+- Since engine 0.2.3 two runs of one build give bit-identical `.dat` whatever the thread count (TD-65), so a `.dat` hash can prove "engine unchanged" again and any run-to-run difference is a defect — `EnginePipelineSmokeTest.repeatSolve_bitIdentical`, `engine/tests/integration/test_full_field_determinism.cpp`.
+- `ConvergenceGate` is batch-only; a sweep runs its whole plan, smallest subset first — [ConvergenceGate.kt](app/src/main/java/com/sempermechanics/semper/ui/analysis/run/ConvergenceGate.kt).
 - The backend, console and Firestore rules deploy from `semperdic-app` only; the deploy workflows here fail if run. Keep `TERMS_VERSION` equal to the parent's.
 - A new lab input goes in `MechanicalTestInputs`, `RunSpec.mechanical`, `ViewerArgs` (both sides) and `WizardState`; missing one gives a viewer or a restored wizard that quietly reads "no test" — `ViewerArgsTest`, `WizardStateTest`.
 

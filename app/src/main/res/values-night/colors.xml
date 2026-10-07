@@ -39,7 +39,7 @@
     <color name="toast_crisp_prominent_bg">#FFFFFFFF</color>
     <color name="toast_crisp_text">#152430</color>
 
-    <!-- VsgPlotView / VsgLatticeView dark half: see values/colors.xml for why
+    <!-- SweepPlotView / SweepLatticeView dark half: see values/colors.xml for why
          these exist instead of reusing text_*/surface_outline/sky_* directly. -->
     <color name="viewer_plot_grid">#26FFFFFF</color>          <!-- faint hairline on a dark canvas -->
     <color name="info_code_bg">#2A3038</color>                <!-- sample-file box on the dark dialog -->

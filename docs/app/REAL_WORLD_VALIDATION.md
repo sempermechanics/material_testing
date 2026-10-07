@@ -187,7 +187,7 @@ The rule now tries every leading run and keeps the longest one that is
 straight enough. On the Experiment 2 lab table it still uses all 12 rows
 (194.03 GPa), and it still stops at the knee (`ElasticModulusTest`). The
 2026-09-29 ΔL / L₀ curve (the 35 frames on it) is pinned as a regression test
-in `app/src/test/java/com/indicvision/semper/report/RealSteelModulusTest.kt`:
+in `app/src/test/java/com/sempermechanics/semper/report/RealSteelModulusTest.kt`:
 E 148.85 GPa over frames 1–26, the first three frames alone at R² 0.897, and
 within 10% of the gauge-point E.
 
@@ -226,11 +226,11 @@ downloaded.
 5. Pull the session's results:
 
 ```bash
-adb shell run-as com.indicvision.semper.materialtesting ls files/sessions
+adb shell run-as com.sempermechanics.materialtesting ls files/sessions
 ```
 
 Copy each `files/sessions/<session>/frame_NNNN.dat` out with
-`adb exec-out run-as com.indicvision.semper.materialtesting cat …`, then:
+`adb exec-out run-as com.sempermechanics.materialtesting cat …`, then:
 
 ```bash
 python scripts/real_data_steel_tensile.py compare --data <zenodo folder> --dat <dat folder>
@@ -566,7 +566,7 @@ result to compare with.
 
 The run stops after frame 2 with **Stopped early**. Only 41% of the points
 converged in frame 1. Two frames in a row below 50% stop a batch
-(`ui/analysis/AnalysisViewModel.kt:84`, `:91`; `ConvergenceGate`, called at
+(`ui/analysis/wizard/AnalysisViewModel.kt:84`, `:91`; `ConvergenceGate`, called at
 `ui/analysis/DicBatchRunner.kt:275`) with code −96
 (`ui/analysis/AnalysisRunCodes.kt:15`). The session list shows "2 of 7 frames"
 and "Convergence collapsed before this combination". The two frames it keeps
@@ -599,7 +599,7 @@ without the sub-pixel step:
 | Points that pass | 30% | 37% | 49% | 58% |
 
 The gate needs half. The subset slider stops at 121 px
-(`SubsetRecommender.MAX_SUBSET`, `ui/analysis/SubsetRecommender.kt:81`), so no
+(`SubsetRecommender.MAX_SUBSET`, `ui/analysis/recommend/SubsetRecommender.kt:81`), so no
 setting in the app gets this set through.
 
 **Seating.** Between the reference (0.1 kN) and frame 1 (9.8 kN) the piston

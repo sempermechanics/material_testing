@@ -4,13 +4,13 @@ import logging
 
 from .. import apps
 from ..licenses import (
-    KIND_INSTITUTION,
     MODE_DEMO,
-    normalize_kind,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     db,
     _delete_query_until_empty,
     get_license,
@@ -25,7 +25,7 @@ from .seats import (
 )
 
 
-log = logging.getLogger("indic.firestore")
+log = logging.getLogger("semper.firestore")
 
 
 def remember_user_folder(uid: str, folder_id: str, sessions_folder_id: str | None = None) -> None:
@@ -118,9 +118,9 @@ def _give_back_license(uid: str) -> None:
         return
     license_id = (snap.to_dict() or {}).get("licenseId") or ""
     lic = get_license(license_id) if license_id else None
-    if not lic or (lic.get("status") or "") == "revoked":
+    if not lic or _is_revoked(lic):
         return
-    if normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
+    if _is_institution(lic):
         revoke_institution_seat(license_id, uid)
         return
     if (lic.get("redeemedByUid") or "") != uid or _license_mode(lic) == MODE_DEMO:

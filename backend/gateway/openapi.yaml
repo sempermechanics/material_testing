@@ -691,6 +691,109 @@ paths:
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '404': { description: "License or seat not found (license_not_found, seat_not_found)" }
         '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/seats:
+    get:
+      operationId: adminListSeats
+      description: >
+        Semper staff reading any institution licence's roster: the same answer
+        as the IT listing, without the adminEmails check. Paged like it.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: not_admin }
+        '404': { description: "license_not_found (unknown, or not an institution licence)" }
+        '429': { description: Rate limited }
+    post:
+      operationId: adminAddSeat
+      description: >
+        Semper staff putting someone on any institution licence's roster, by
+        email: a seat for an address with an account, an invite otherwise. The
+        same operation as the IT route, at the staff step-up tier.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: "OK — carries either seat or invite" }
+        '400': { description: invalid_email }
+        '403': { description: "not_admin, or the console's step-up is missing or stale (mfa_required, reauth_required)" }
+        '404': { description: license_not_found }
+        '409': { description: "license_seats_exhausted, license_seat_disabled, invite_exists, member_already_licensed" }
+        '429': { description: Rate limited }
+        '503': { description: "Lost the race for the seat; retry (claim_contended)" }
+  /v1/admin/licenses/{licenseId}/seats/{uid}:
+    patch:
+      operationId: adminPatchSeat
+      description: >
+        Semper staff holding, resuming or unbinding one institution seat
+        (clearDeviceLock, enabled), as IT can for their own licence.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: empty_patch }
+        '403': { description: "not_admin, or the console's step-up is missing or stale" }
+        '404': { description: license_not_found or seat_not_found }
+        '409': { description: "seat_revoked, license_revoked, seat_busy" }
+        '429': { description: Rate limited }
+    delete:
+      operationId: adminRevokeSeat
+      description: >
+        Semper staff removing one member from an institution roster: they drop
+        to demo in place and the slot is freed.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: "not_admin, or the console's step-up is missing or stale" }
+        '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/invites/{inviteKey}:
+    delete:
+      operationId: adminRevokeInvite
+      description: >
+        Semper staff withdrawing an unclaimed invite on an institution licence.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: inviteKey
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: "not_admin, or the console's step-up is missing or stale" }
+        '404': { description: license_not_found or invite_not_found }
+        '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/device-history:
     get:
       operationId: adminLicenseDeviceHistory
@@ -863,11 +966,21 @@ paths:
         that does not exist, so probing another institution's license ids
         learns nothing. Lists every seat: uid, email, device lock, status,
         plus the outstanding invites — addresses promised a place who have
-        not signed in yet. Never returns key plaintext.
+        not signed in yet, with the first page. Never returns key plaintext.
+        Paged: page_size (1..1000, default 500) and page_token; the answer's
+        page.nextPageToken names the next page.
       parameters:
         - name: licenseId
           in: path
           required: true
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+        - name: page_token
+          in: query
+          required: false
           type: string
       responses:
         '200': { description: OK }

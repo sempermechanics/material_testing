@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import audit, drive, errors, firestore_repo as repo, legal
+from .. import audit, drive, errors, repo, legal
 from .. import rate_limit
 from ..deps import any_status_user, current_user, rate_limited, verified_device
 from ._shared import json_dumps
 
-log = logging.getLogger("indic")
+log = logging.getLogger("semper")
 router = APIRouter()
 
 
@@ -152,7 +152,7 @@ def export_account(ctx=Depends(verified_device)):
     Device-signed (like DELETE /v1/me): a full-account export is high-consequence
     enough that a stolen ID token alone must not be able to trigger it.
     """
-    user = ctx["user"]
+    user = ctx.user
     uid = user["uid"]
     profile = repo.get_user(uid) or {}
 
@@ -185,7 +185,8 @@ def export_account(ctx=Depends(verified_device)):
         """Emit the document incrementally.
 
         The previous version built the whole account in memory first — every
-        session, plus a files query per session — before writing a byte. For a
+        session, plus a files query per session — before writing a byte. The
+        files are now one ordered stream beside the sessions'. For a
         busy account that is an unbounded allocation and a long silence before
         the first byte, on a request with a 60s budget. Streaming keeps memory
         flat and starts the response immediately; `"complete": true` is written
@@ -197,9 +198,7 @@ def export_account(ctx=Depends(verified_device)):
         yield b',"sessions":['
         first = True
         count = 0
-        for s in repo.iter_all_user_sessions(uid):
-            s = dict(s)
-            s["files"] = repo.list_session_files_all(s["sessionId"])
+        for s in repo.iter_sessions_with_files(uid):
             yield (b"" if first else b",") + json_dumps(s).encode()
             first = False
             count += 1
@@ -230,16 +229,17 @@ def delete_account(ctx=Depends(verified_device)):
     must sign out afterwards: any further authenticated call would create a
     fresh, empty profile.
     """
-    user, device = ctx["user"], ctx["device"]
+    user = ctx.user
     uid = user["uid"]
     started = time.monotonic()
     token = drive.access_token()
 
     # 1. The session folders live inside the user folder, so deleting that one
     #    removes the whole subtree in a single call. The per-session loop below
-    #    is the fallback for accounts predating the stored pointer — walking N
-    #    sessions is N sequential Drive round-trips, which is what made deleting
-    #    a busy account take the best part of a minute.
+    #    is the fallback for accounts predating the stored pointer; it deletes
+    #    the session folders with a bounded fan-out (`drive.delete_files`),
+    #    where one round trip per session made a busy account take the best
+    #    part of a minute.
     user_folder = user.get("driveFolderId")
     folders_deleted = 0
     if user_folder:
@@ -249,12 +249,9 @@ def delete_account(ctx=Depends(verified_device)):
         # rather than trusting a lookup by name. If a name lookup missed we would
         # silently skip Drive and still wipe the metadata, stranding the blobs
         # with nothing left pointing at them.
-        sessions = repo.iter_user_sessions(uid)
-        for s in sessions:
-            folder = s.get("driveFolderId")
-            if folder:
-                drive.delete_file(token, folder)
-                folders_deleted += 1
+        folders_deleted = drive.delete_files(
+            token, [s.get("driveFolderId") for s in repo.iter_user_sessions(uid)],
+        )
         # Then the scaffolding itself, and anything a failed sync orphaned.
         user_folder = drive.find_user_folder(token, uid)
         if user_folder:
@@ -277,7 +274,7 @@ def delete_account(ctx=Depends(verified_device)):
         "firestoreMs": total_ms - drive_ms,
         "totalMs": total_ms,
     }
-    audit.record(uid, device.get("deviceId"), action="ACCOUNT_DELETE",
+    audit.record(uid, ctx.device_id, action="ACCOUNT_DELETE",
                  target={"type": "user", "id": uid}, detail=detail)
     log.info("Erased account %s: %s", uid, detail)
     return {"deleted": uid, **detail}
