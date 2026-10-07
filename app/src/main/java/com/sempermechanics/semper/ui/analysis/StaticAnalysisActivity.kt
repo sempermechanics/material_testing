@@ -5,7 +5,6 @@
 package com.sempermechanics.semper.ui.analysis
 
 import android.app.Activity
-import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
@@ -23,7 +22,6 @@ import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.WizardDraft
-import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.databinding.ActivityStaticAnalysisBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
@@ -64,16 +62,10 @@ import com.sempermechanics.semper.ui.common.CoachMarkController
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.Motion
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
-import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
 import com.sempermechanics.semper.ui.common.onButtonChecked
 import com.sempermechanics.semper.ui.common.showUnlessEditing
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import timber.log.Timber
-import java.io.File
-import java.io.IOException
 
 /**
  * The analysis setup wizard: page 1 loads reference/deformed images (or
@@ -89,11 +81,11 @@ class StaticAnalysisActivity :
     AppCompatActivity(),
     AnalysisWizardHost {
 
-    private val viewModel: AnalysisViewModel by viewModels()
+    internal val viewModel: AnalysisViewModel by viewModels()
 
     // The wizard's three pages: the host layout (page 1, the bottom nav and the
     // run overlay), and the settings and sweep pages inflated from their stubs.
-    private lateinit var binding: ActivityStaticAnalysisBinding
+    internal lateinit var binding: ActivityStaticAnalysisBinding
     private lateinit var settingsPage: WizardStepSettingsBinding
     private lateinit var settings: WizardStepSettingsContentBinding
     private lateinit var sweepPage: WizardStepSweepBinding
@@ -117,11 +109,11 @@ class StaticAnalysisActivity :
     private lateinit var reference: ReferenceImportController
 
     /** Only inflated for tests that take a load per frame; see [setupLoadCard]. */
-    private var loadCard: AnalysisLoadCard? = null
-    private val pickLoadCsv = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    internal var loadCard: AnalysisLoadCard? = null
+    internal val pickLoadCsv = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) loadCard?.onCsvPicked(uri)
     }
-    private val pickLoadPoint = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    internal val pickLoadPoint = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val taps = result.data?.getFloatArrayExtra(IntentKeys.BEAM_EDGE_TAPS)
         if (result.resultCode == Activity.RESULT_OK) loadCard?.loadPoint?.onPicked(BeamEdgeTaps.fromArray(taps))
     }
@@ -408,70 +400,6 @@ class StaticAnalysisActivity :
 
         checkReady()
         wizardCoach.maybeShow(target)
-    }
-
-    /**
-     * The machine-load card exists only for tests with a load log (tensile and
-     * bending; plain 2D DIC has none). It sits in a ViewStub so a type without
-     * one never pays for its views, and so the host layout stays under lint's
-     * TooManyViews cap.
-     */
-    private fun setupLoadCard() {
-        if (!viewModel.testType.hasMachineLoad) return
-        val root = binding.stubLoadCard.inflate()
-        loadCard = AnalysisLoadCard(
-            activity = this,
-            viewModel = viewModel,
-            root = root,
-            pickers = AnalysisLoadCard.Pickers(
-                loadCsv = { pickLoadCsv.launch(AnalysisLoadCard.CSV_MIME_TYPES) },
-                loadPoint = ::openLoadPointEditor,
-            ),
-            onChanged = ::checkReady,
-            confirmOpenFaq = ::confirmOpenFaq,
-        )
-    }
-
-    /** Bending: tap the beam's edges on the reference; needs the photo and the thickness first. */
-    private fun openLoadPointEditor() {
-        val bytes = viewModel.refBytes
-        val thickness = viewModel.geometry.thicknessMm
-        when {
-            bytes == null -> Feedback.toast(this, R.string.load_image_first)
-            thickness <= 0f -> Feedback.toast(this, R.string.load_point_need_thickness, long = true)
-            else -> openBeamEdgeTaps(bytes, thickness)
-        }
-    }
-
-    /**
-     * Hands the reference to [BeamEdgeTapActivity] through a cache file, as the
-     * ROI studio gets it. The copy runs on [Dispatchers.IO]: the reference is
-     * tens of megabytes for a RAW frame.
-     */
-    private fun openBeamEdgeTaps(bytes: ByteArray, thicknessMm: Float) {
-        val tempFile = File(cacheDir, CacheJanitor.TEMP_ROI_REF)
-        lifecycleScope.launch {
-            val written = withContext(Dispatchers.IO) {
-                try {
-                    tempFile.writeBytes(bytes)
-                    true
-                } catch (e: IOException) {
-                    Timber.e(e, "Failed to write temp beam-tap reference file")
-                    false
-                }
-            }
-            if (!written) {
-                Feedback.toast(this@StaticAnalysisActivity, R.string.failed_save_temp_file)
-                return@launch
-            }
-            val intent = Intent(this@StaticAnalysisActivity, BeamEdgeTapActivity::class.java)
-                .putExtra(IntentKeys.IMAGE_FILE_PATH, tempFile.absolutePath)
-                .putExtra(IntentKeys.IMAGE_WIDTH, viewModel.realRefWidth)
-                .putExtra(IntentKeys.IMAGE_HEIGHT, viewModel.realRefHeight)
-                .putExtra(IntentKeys.BEAM_THICKNESS_MM, thicknessMm)
-                .putExtra(IntentKeys.BEAM_EDGE_TAPS, viewModel.geometry.loadPoint.toArray())
-            pickLoadPoint.launch(intent)
-        }
     }
 
     override fun checkReady() {
