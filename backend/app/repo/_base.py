@@ -13,9 +13,12 @@ from google.cloud import firestore
 from .. import errors
 from ..config import settings
 from ..licenses import (
+    KIND_INSTITUTION,
     MODES,
+    STATUS_REVOKED,
     grace_ends_at,
     legacy_plan,
+    normalize_kind,
     normalize_mode,
 )
 from ..observability import DependencyError
@@ -139,6 +142,28 @@ def _license_mode(data: dict) -> str:
     return normalize_mode(raw)
 
 
+def _apply_patch(doc: dict, patch: dict) -> dict:
+    """`doc` as it reads after `patch` is written: `DELETE_FIELD` removes a
+    field, anything else sets it. For answering with what was just stored
+    without reading it back."""
+    merged = {**doc, **patch}
+    for k, v in patch.items():
+        if v is firestore.DELETE_FIELD:
+            merged.pop(k, None)
+    return merged
+
+
+def _is_institution(lic: dict) -> bool:
+    """An institution licence (`campus` included), read off its document."""
+    return normalize_kind(lic.get("kind")) == KIND_INSTITUTION
+
+
+def _is_revoked(doc: dict) -> bool:
+    """A licence or seat that is revoked. Terminal for both; a missing status
+    is never revoked (an unused key, an active seat)."""
+    return (doc.get("status") or "") == STATUS_REVOKED
+
+
 def _seat_ref(license_id: str, uid: str):
     return db().collection("licenses").document(license_id).collection("seats").document(uid)
 
@@ -146,7 +171,7 @@ def _seat_ref(license_id: str, uid: str):
 # ---------------- floating-seat leases ----------------
 # A floating license separates the roster from the count: every member may use
 # the license, but only `maxSeats` hold a live lease at once. The lease lives
-# on the seat document — `check_device_lock` already reads that document on
+# on the seat document — `revalidate_device_lock` already reads that document on
 # every institution request, so consulting it costs nothing extra — and its
 # expiry is mirrored onto the user so `effective_mode` stays a pure function.
 
@@ -236,6 +261,29 @@ def _get_all(refs: list) -> list:
     for start in range(0, len(refs), _BATCH_LIMIT):
         out.extend(db().get_all(refs[start:start + _BATCH_LIMIT]))
     return out
+
+
+def _scan(col, query, page_token: str | None = None, chunk: int = _BATCH_LIMIT,
+          order_field: str = "__name__"):
+    """Every document of [query] after `page_token`, in document-id order
+    unless `order_field` is given (ties then break on the id), fetched `chunk`
+    at a time. A token naming a document that has since been deleted restarts
+    from the beginning, as `_cursor_page` does."""
+    query = query.order_by(order_field)
+    cursor = None
+    if page_token:
+        snap = col.document(page_token).get()
+        if snap.exists:
+            cursor = snap
+    while True:
+        page = query.limit(chunk)
+        if cursor is not None:
+            page = page.start_after(cursor)
+        docs = list(page.stream())
+        yield from docs
+        if len(docs) < chunk:
+            return
+        cursor = docs[-1]
 
 
 def _cursor_page(col, query, limit: int, page_token: str | None,

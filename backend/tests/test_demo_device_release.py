@@ -8,9 +8,11 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps
+import repo_view as repo
 from key_helpers import _ec_pem
 from license_helpers import _mint_individual, _signed_in
+from refusals import attempt
 
 
 def _demo_on(store, uid="demo-1", email="demo@lab.org", device_id="old-phone"):
@@ -25,7 +27,7 @@ def _demo_on(store, uid="demo-1", email="demo@lab.org", device_id="old-phone"):
 def test_staff_release_frees_a_demo_accounts_phone(store):
     uid = _demo_on(store)
 
-    err, released = repo.release_account_device(uid)
+    err, released = attempt(repo.release_account_device, uid)
 
     assert (err, released) == ("", {"semper": "old-phone"})
     user = store._data["users"][uid]
@@ -45,9 +47,9 @@ def test_a_licensed_account_is_sent_to_new_device(store):
     store._data["users"]["solo-1"]["activeDeviceId"] = "old-phone"
     assert store._data["users"]["solo-1"]["licenseId"] == license_id
 
-    err, released = repo.release_account_device("solo-1")
+    err, released = attempt(repo.release_account_device, "solo-1")
 
-    assert (err, released) == ("license_device_clear_required", {})
+    assert (err, released) == ("license_device_clear_required", None)
     assert store._data["users"]["solo-1"]["activeDeviceId"] == "old-phone"
 
 
@@ -61,20 +63,20 @@ def test_a_holder_left_on_demo_by_a_revoked_licence_can_be_released(store):
     repo.revoke_license(license_id, "staff-1")
     assert store._data["users"]["solo-1"]["licenseId"] == license_id
 
-    assert repo.release_account_device("solo-1") == ("", {"semper": "old-phone"})
+    assert attempt(repo.release_account_device, "solo-1") == ("", {"semper": "old-phone"})
 
 
 def test_nothing_registered_is_not_an_error(store):
     uid = _demo_on(store)
     store._data["users"][uid].pop("activeDeviceId")
 
-    assert repo.release_account_device(uid) == ("", {})
+    assert attempt(repo.release_account_device, uid) == ("", {})
     assert "releasedDeviceId" not in store._data["users"][uid]
 
 
 def test_an_unknown_account(store):
     store._data["users"] = {}
-    assert repo.release_account_device("nobody") == ("user_not_found", {})
+    assert attempt(repo.release_account_device, "nobody") == ("user_not_found", None)
 
 
 def test_a_release_frees_the_phone_in_both_apps(store):
@@ -84,7 +86,7 @@ def test_a_release_frees_the_phone_in_both_apps(store):
     store._data["users"][uid]["activeDeviceIdMaterialTesting"] = "old-phone-mt"
     store._data["devices"]["old-phone-mt"] = {"uid": uid, "status": "ACTIVE"}
 
-    err, released = repo.release_account_device(uid)
+    err, released = attempt(repo.release_account_device, uid)
 
     assert (err, released) == ("", {"semper": "old-phone", "materialtesting": "old-phone-mt"})
     user = store._data["users"][uid]

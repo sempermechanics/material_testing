@@ -5,15 +5,15 @@ from datetime import timedelta
 
 from .. import errors, statuses
 from ..licenses import (
-    KIND_INSTITUTION,
     MODE_DEMO,
     as_utc,
     normalize_email,
-    normalize_kind,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     _CONTENDED,
     db,
     get_license,
@@ -23,8 +23,7 @@ from ._base import (
 from .claims import (
     claim_individual_license,
     claim_seat,
-    _individual_member_patch,
-    _institution_member_patch,
+    _member_patch,
 )
 from .invites import (
     _invite_ref,
@@ -124,7 +123,7 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
         ref.delete()
         _clear_invite_block(uid, user)
         return user, ""
-    if (lic.get("status") or "active") == "revoked":
+    if _is_revoked(lic):
         ref.delete()
         _clear_invite_block(uid, user)
         return user, ""
@@ -138,13 +137,13 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
     # No device lock is passed either way: the invite predates any device
     # choice, and the lock is bound on the first authed request that carries a
     # device id — see revalidate_device_lock.
-    elif normalize_kind(lic.get("kind")) == KIND_INSTITUTION:
-        patch = _institution_member_patch(license_id, lic)
+    elif _is_institution(lic):
+        patch = _member_patch(license_id, lic)
         if user.get(_INVITE_BLOCKED_AT) is not None:
             patch[_INVITE_BLOCKED_AT] = _base.firestore.DELETE_FIELD
         err = claim_seat(license_id, uid, address, "", patch, invite_ref=ref)
     else:
-        patch = _individual_member_patch(license_id, lic)
+        patch = _member_patch(license_id, lic)
         if user.get(_INVITE_BLOCKED_AT) is not None:
             patch[_INVITE_BLOCKED_AT] = _base.firestore.DELETE_FIELD
         err = claim_individual_license(license_id, uid, address, patch, invite_ref=ref)

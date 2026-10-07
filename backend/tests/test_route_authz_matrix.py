@@ -21,7 +21,8 @@ import pytest
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app import audit, deps, drive, firestore_repo as repo
+from app import audit, deps, drive
+import repo_view as repo
 from app.config import settings
 from app.deps import (
     admin_user,
@@ -114,6 +115,14 @@ EXPECTED = {
     # own route, at the staff tier, because staff are not in a customer's
     # adminEmails and that route 404s for them.
     ("PATCH", "/v1/admin/licenses/{license_id}/seats/{uid}/device"): ADMIN_STEPUP,
+    # The institution roster at the staff tier (`routers/roster.py`): any
+    # institution licence, adminEmails or not. Reading it is an ordinary
+    # admin read, like the licence list; changing it is a staff write.
+    ("GET", "/v1/admin/licenses/{license_id}/seats"): ADMIN,
+    ("POST", "/v1/admin/licenses/{license_id}/seats"): ADMIN_STEPUP,
+    ("PATCH", "/v1/admin/licenses/{license_id}/seats/{uid}"): ADMIN_STEPUP,
+    ("DELETE", "/v1/admin/licenses/{license_id}/seats/{uid}"): ADMIN_STEPUP,
+    ("DELETE", "/v1/admin/licenses/{license_id}/invites/{invite_key}"): ADMIN_STEPUP,
     # Read-only device-move history for support. ADMIN (token) not step-up —
     # same tier as listing licences.
     ("GET", "/v1/admin/licenses/{license_id}/device-history"): ADMIN,
@@ -191,24 +200,17 @@ def _tier(route) -> str:
     return NONE
 
 
-def _iter_api_routes(routes):
-    """Walk `app.routes`, including FastAPI `_IncludedRouter` wrappers.
-
-    `include_router` no longer flattens child APIRoutes onto `app.routes`;
-    they live on `original_router.routes`. The auth-tier table still needs
-    every user-facing path.
-    """
-    for route in routes:
-        nested = getattr(route, "original_router", None)
-        if nested is not None:
-            yield from _iter_api_routes(nested.routes)
-            continue
-        yield route
+def _iter_api_routes(_routes=None):
+    """Every route the app serves, nested routers included, with full paths
+    (`app.main.served_routes`). Walking only the top level would compare
+    against the docs endpoints and pass vacuously."""
+    from app.main import served_routes
+    yield from served_routes(app)
 
 
 def _actual_routes():
     out = {}
-    for route in _iter_api_routes(app.routes):
+    for route in _iter_api_routes():
         if not hasattr(route, "dependant") or not getattr(route, "methods", None):
             continue
         for method in route.methods:
@@ -265,7 +267,7 @@ def attacker(monkeypatch):
     monkeypatch.setattr(audit, "record", lambda *a, **k: None)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     monkeypatch.setattr(drive, "access_token", lambda: "tok")
-    monkeypatch.setattr(repo, "consume_nonce", lambda *a, **k: True)
+    repo.patch(monkeypatch, "consume_nonce", lambda *a, **k: True)
 
     priv = ec.generate_private_key(ec.SECP256R1())
     pem = priv.public_key().public_bytes(
@@ -277,7 +279,7 @@ def attacker(monkeypatch):
         "access_status": "APPROVED", "activeDeviceId": "atk-device",
     }
     monkeypatch.setattr(deps, "verify_id_token", lambda _t: {"sub": ATTACKER})
-    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: dict(profile))
+    repo.patch(monkeypatch, "get_or_create_user", lambda claims, device_id=None: dict(profile))
     store._data["devices"] = {"atk-device": {
         "uid": ATTACKER, "status": "ACTIVE", "publicKeyPem": pem,
     }}
@@ -404,7 +406,7 @@ def institution_it(monkeypatch):
         "uid": uid, "email": "it@university-a.edu", "role": "user",
         "access_status": "APPROVED", "emailVerified": True,
     }
-    monkeypatch.setattr(repo, "get_or_create_user", lambda claims, device_id=None: dict(profile))
+    repo.patch(monkeypatch, "get_or_create_user", lambda claims, device_id=None: dict(profile))
 
     store._data["licenses"] = {
         INSTITUTION_A: {
@@ -468,19 +470,17 @@ async def test_institution_it_can_manage_its_own_institutions_seats(institution_
     assert "key" not in body["license"]  # never leaks plaintext or the raw hash-keyed record
 
 
-async def test_institution_route_rejects_a_bare_token_from_a_non_member(institution_it, client):
+async def test_institution_route_rejects_a_bare_token_from_a_non_member(
+        institution_it, client, monkeypatch):
     """A verified, approved caller who is simply not on adminEmails for ANY
     license must not learn that INSTITUTION_A even exists."""
-    monkeypatch_email = {"uid": "it-admin-a", "email": "outsider@example.com",
-                          "role": "user", "access_status": "APPROVED", "emailVerified": True}
-    import app.firestore_repo as repo_mod
-    orig = repo_mod.get_or_create_user
-    repo_mod.get_or_create_user = lambda claims, device_id=None: dict(monkeypatch_email)
-    try:
-        r = await client.get(f"/v1/institutions/licenses/{INSTITUTION_A}/seats", headers=institution_it.bearer)
-        assert r.status_code == 404
-    finally:
-        repo_mod.get_or_create_user = orig
+    outsider = {"uid": "it-admin-a", "email": "outsider@example.com",
+                "role": "user", "access_status": "APPROVED", "emailVerified": True}
+    import repo_view as repo_mod
+    repo_mod.patch(monkeypatch, "get_or_create_user",
+                   lambda claims, device_id=None: dict(outsider))
+    r = await client.get(f"/v1/institutions/licenses/{INSTITUTION_A}/seats", headers=institution_it.bearer)
+    assert r.status_code == 404
 
 
 @pytest.mark.parametrize("method,path", [

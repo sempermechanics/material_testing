@@ -211,7 +211,7 @@ read fails the suite. Python 3.13, Windows 11; the counts are deterministic
 | `GET /v1/config` | 1 | 0 |
 | `GET /v1/me` | 1 | 0 |
 | `GET /v1/sessions` | S + 2 = 22 (S + 3 = 23 since #224) | 0 |
-| `POST /v1/sessions` | 14 → **9** (10 since #224) | 11 |
+| `POST /v1/sessions` | 14 → **9** (10 since #224, 9 again since TD-180) | 11 |
 | `POST /v1/files/{id}/complete`, each | 6 | 4 |
 | `DELETE /v1/sessions/{id}` | 7 | 5 |
 
@@ -247,7 +247,8 @@ it. Per upload of 3 files: 32 → 27 reads (16 % fewer). **Gate met** (5 ≥ 3).
 both the create check and `quota.used` on the listing) now subtracts a second
 count of `PROVISION_FAILED` sessions, which store nothing and were charged as
 stored analyses. That is one more read on each of the two routes: create is
-7 + N, the listing S + 3. The status write that ends an inline create stays a
+7 + N, the listing S + 3. The retry lookup became one query on 2026-10-05
+(TD-180), so create is 6 + N. The status write that ends an inline create stays a
 plain write; only the queued path pays a read to keep a `COMPLETED` session
 from being moved back (TD-120).
 
@@ -263,8 +264,10 @@ The whole backend suite passes (539 passed, 23 skipped; coverage 89.4 %).
   a synthetic user, and `test_folder_ids_are_stored_then_reused` failed.
 - `iter_unprovisioned_files` (N reads) stays. It is what makes a retried
   provisioning resume instead of opening a second upload URL.
-- The re-reads inside the `complete` transaction and the second licence check in
-  `verified_device` are there for correctness and security.
+- The re-reads inside the `complete` transaction are there for correctness. (The
+  second licence check in `verified_device` was listed here too; it repeated
+  `current_user`'s check with the same inputs and was removed on 2026-10-05,
+  TD-178.)
 
 **Latency.** Production `POST /v1/sessions`, 200s over the last 30 days, all
 N = 3 (9 requests, 2026-09-23/24): median 3158 ms, IQR 2704–3653 ms, range
@@ -287,3 +290,28 @@ Do not credit the 671 ms drop to Pass 4. It is about 20 times the 10–30 ms tha
 three Firestore round trips could save. The after-runs were back to back against one
 warm instance with one payload; the baseline was spread over two days and three
 revisions. It is the Drive calls that vary.
+
+## Pass 5: the export, the edge and the Drive fan-out (2026-10-05)
+
+Backend-only levers, measured against the store double and the emulator, not
+yet deployed.
+
+- **Export, one files stream (TD-195).** `GET /v1/me/export` ran one files
+  query per session: S + 1 queries for S sessions. It now merges the sessions
+  (by id) with the account's files (by `sessionId`, index `files (uid,
+  sessionId)`), one query per 400 files. With S = 20, N = 3: files queries
+  **20 → 1** [Measured, `test_export_reads_the_files_as_one_stream_not_a_query_per_session`].
+  Billed reads are unchanged: one per document either way.
+- **Upload URLs, one batch (TD-196).** Provisioning wrote each upload URL as it
+  opened it, one commit per file. It now records them in one batch per 400
+  files, a failed fan-out included. N = 12: **12 commits → 1**
+  [Measured, `test_upload_targets_are_recorded_in_one_batch`]. Billed writes are
+  unchanged.
+- **One Drive pool (TD-196).** Each fan-out started its own 8-thread pool, so
+  40 concurrent requests could run 320 Drive calls against 64 pooled
+  connections. One process-wide pool of 64 now serves them all, each caller
+  still at most `TASKS_PROVISION_WORKERS` wide.
+- **One ASGI middleware (TD-196).** Security headers and the access log were two
+  `BaseHTTPMiddleware` layers, each running the app in a task of its own and
+  passing every body, a 300 s download included, through a memory stream.
+  Latency [Unknown] until a deploy.

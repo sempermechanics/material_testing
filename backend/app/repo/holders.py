@@ -11,11 +11,11 @@ the other two moving the account onto the new licence and leaving the old one
 """
 from ..licenses import (
     MODE_DEMO,
-    STATUS_REVOKED,
     normalize_email,
 )
 
 from ._base import (
+    _is_revoked,
     db,
     get_license,
     _license_mode,
@@ -37,7 +37,7 @@ def licence_is_live(lic: dict | None) -> bool:
     """
     if not lic:
         return False
-    if (lic.get("status") or "") == STATUS_REVOKED:
+    if _is_revoked(lic):
         return False
     if _license_mode(lic) == MODE_DEMO:
         return False

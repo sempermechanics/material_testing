@@ -14,7 +14,8 @@ from pathlib import Path
 import pytest
 
 import fake_firestore
-from app import apps, audit, drive, firestore_repo as repo, statuses
+from app import apps, audit, drive, statuses
+import repo_view as repo
 
 DEV_UID = "dev-user"  # deps._DEV_USER in DEV_INSECURE_AUTH mode
 MT = apps.MATERIAL_TESTING

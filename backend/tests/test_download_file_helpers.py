@@ -3,7 +3,7 @@ download gets the (single) FILE_DOWNLOAD audit write — a restore fetches one
 file in many adaptive-size windows (DriveTransfer.nextWindowBytes on the
 client), and logging every window would be one Firestore write per window
 instead of one per file."""
-from app.main import _is_first_byte_request
+from app.routers.files import _is_first_byte_request
 
 
 def test_no_range_header_is_first():

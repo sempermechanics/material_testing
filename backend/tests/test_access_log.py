@@ -41,3 +41,40 @@ async def test_access_log_includes_error_code_on_client_error(client, caplog, mo
     entry = json.loads(lines[-1])
     assert entry["status"] == 429
     assert entry["errorCode"] == "http_429"
+
+
+async def test_access_log_names_the_caller_the_auth_dependency_found(client, caplog):
+    """The dependencies record the caller on `request.state`; the edge
+    middleware reads it back from the same scope for the log line."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="semper.access"):
+        r = await client.get("/v1/me")
+    assert r.status_code == 200
+    entry = json.loads([rec.message for rec in caplog.records if rec.name == "semper.access"][-1])
+    assert entry["uid"] == "dev-user"
+    assert entry["opClass"] == "login"
+
+
+async def test_a_hidden_failure_still_carries_the_edge_headers(client, monkeypatch):
+    """On Cloud Run an unexpected exception answers `internal_error`; that
+    answer leaves through the same headers as any other."""
+    from app.config import settings
+    from app.main import app
+
+    monkeypatch.setattr(settings, "ON_CLOUD_RUN", True)
+
+    @app.get("/__test_edge_boom")
+    def boom():
+        raise RuntimeError("secret internals")
+
+    try:
+        r = await client.get("/__test_edge_boom")
+    finally:
+        app.router.routes = [
+            rt for rt in app.router.routes if getattr(rt, "path", None) != "/__test_edge_boom"
+        ]
+    assert r.status_code == 500
+    assert r.json() == {"detail": "internal_error"}
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-request-id"]

@@ -269,3 +269,33 @@ test("a refused add is explained, and an unknown refusal keeps its code", async 
     assert.equal($("addEmail").value, "x@uni.edu", "the address stays for a retry");
   }
 });
+
+/* ------------------------------------------------------- picker, paging */
+
+test("the licences this address administers are one click each", async () => {
+  await open({
+    search: "",
+    routes: { "GET /v1/institutions/licenses": () => json(200, { licenses: [
+      { id: "L1", keyPrefix: "SEMP-UNI1", domainLock: "uni.edu" },
+      { id: "L2", keyPrefix: "SEMP-UNI2" },
+    ] }) },
+  });
+  const choices = $("licenceChoices").querySelectorAll("button[data-pick]");
+  assert.deepEqual(choices.map((b) => b.textContent.trim()), ["SEMP-UNI1 · uni.edu", "SEMP-UNI2"]);
+  assert.deepEqual(sent(/seats/), [], "nothing opens until one is chosen");
+  choices[0].click();
+  await settle();
+  assert.equal($("licenseId").value, "L1");
+  assert.deepEqual(sent(/seats/), [`GET ${SEATS}`]);
+  assert.equal($("rosterCard").hidden, false);
+});
+
+test("a roster longer than one page is read to the end", async () => {
+  await open({ roster: { ...assigned, seats: assigned.seats.slice(0, 1), page: { nextPageToken: "u1" } },
+    routes: { [`GET ${SEATS}?page_token=u1`]: () => json(200, {
+      seats: assigned.seats.slice(1), invites: [], page: { nextPageToken: null },
+    }) } });
+  assert.deepEqual(sent(/seats/), [`GET ${SEATS}`, `GET ${SEATS}?page_token=u1`]);
+  assert.deepEqual(rows().map((r) => r[0]),
+    ["ana@uni.edu", "ben@uni.edu", "cy@uni.edu", "dee@uni.edu", "eve@uni.edu"]);
+});

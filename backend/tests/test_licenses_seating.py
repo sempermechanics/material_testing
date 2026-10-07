@@ -5,7 +5,8 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps
+import repo_view as repo
 from app.config import settings
 from license_helpers import (  # noqa: F401
     _mint_individual,
@@ -13,6 +14,7 @@ from license_helpers import (  # noqa: F401
     _recording_stubs,
     _signed_in,
 )
+from refusals import attempt, attempt_add
 
 
 # ================================================================== floating
@@ -41,7 +43,7 @@ def test_a_roster_member_without_a_lease_is_demo(store):
     _roster(store, "u1")
     minted = _mint_floating()
     license_id = minted["license"]["id"]
-    err, seat, _invite = repo.add_institution_member(license_id, "u1@university.edu")
+    err, seat, _invite = attempt_add(repo.add_institution_member, license_id, "u1@university.edu")
     assert err == ""
     assert seat["uid"] == "u1"
 
@@ -57,12 +59,12 @@ def test_checkout_makes_a_member_licensed_and_release_gives_it_back(store):
     license_id = minted["license"]["id"]
     repo.add_institution_member(license_id, "u1@university.edu")
 
-    err, cfg = repo.checkout_lease({**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
+    err, cfg = attempt(repo.checkout_lease, {**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
     assert err == ""
     assert cfg["mode"] == "licensed"
     assert store._data["licenses"][license_id]["leasesActive"] == 1
 
-    err, cfg = repo.release_lease({**store._data["users"]["u1"], "uid": "u1"})
+    err, cfg = attempt(repo.release_lease, {**store._data["users"]["u1"], "uid": "u1"})
     assert err == ""
     assert cfg["mode"] == "demo"
     assert store._data["licenses"][license_id]["leasesActive"] == 0
@@ -91,9 +93,9 @@ def test_a_full_pool_refuses_the_next_claimant(store):
         repo.add_institution_member(license_id, f"{uid}@university.edu")
 
     for uid in ("u1", "u2"):
-        err, _ = repo.checkout_lease({**store._data["users"][uid], "uid": uid}, f"dev-{uid}")
+        err, _ = attempt(repo.checkout_lease, {**store._data["users"][uid], "uid": uid}, f"dev-{uid}")
         assert err == "", uid
-    err, cfg = repo.checkout_lease({**store._data["users"]["u3"], "uid": "u3"}, "dev-u3")
+    err, cfg = attempt(repo.checkout_lease, {**store._data["users"]["u3"], "uid": "u3"}, "dev-u3")
     assert err == "no_floating_seat"
     assert cfg is None
     # Being refused a seat is not being thrown off the roster.
@@ -110,7 +112,7 @@ def test_releasing_frees_exactly_one_slot(store):
         repo.checkout_lease({**store._data["users"][uid], "uid": uid}, f"dev-{uid}")
 
     repo.release_lease({**store._data["users"]["u1"], "uid": "u1"})
-    err, _ = repo.checkout_lease({**store._data["users"]["u3"], "uid": "u3"}, "dev-u3")
+    err, _ = attempt(repo.checkout_lease, {**store._data["users"]["u3"], "uid": "u3"}, "dev-u3")
     assert err == ""
     assert store._data["licenses"][license_id]["leasesActive"] == 2
 
@@ -123,9 +125,9 @@ def test_re_checkout_extends_rather_than_taking_a_second_slot(store):
     license_id = minted["license"]["id"]
     repo.add_institution_member(license_id, "u1@university.edu")
 
-    err, first = repo.checkout_lease({**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
+    err, first = attempt(repo.checkout_lease, {**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
     assert err == ""
-    err, second = repo.checkout_lease({**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
+    err, second = attempt(repo.checkout_lease, {**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
     assert err == ""
     assert store._data["licenses"][license_id]["leasesActive"] == 1
     assert second["leaseExpiresAt"] >= first["leaseExpiresAt"]
@@ -145,7 +147,7 @@ def test_an_expired_lease_is_swept_and_its_slot_reclaimed(store):
     seats = store._data[f"licenses/{license_id}/seats"]
     seats["u1"]["leaseExpiresAt"] = datetime.now(timezone.utc) - timedelta(hours=1)
 
-    err, _ = repo.checkout_lease({**store._data["users"]["u2"], "uid": "u2"}, "dev-2")
+    err, _ = attempt(repo.checkout_lease, {**store._data["users"]["u2"], "uid": "u2"}, "dev-2")
     assert err == "", "the abandoned slot must be reclaimable"
     assert store._data["licenses"][license_id]["leasesActive"] == 1
 
@@ -155,7 +157,7 @@ def test_checkout_refuses_someone_not_on_the_roster(store):
     minted = _mint_floating()
     store._data["users"]["u1"]["licenseId"] = minted["license"]["id"]
     store._data["users"]["u1"]["licenseSeating"] = "floating"
-    err, _ = repo.checkout_lease({**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
+    err, _ = attempt(repo.checkout_lease, {**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
     assert err == "not_eligible"
 
 
@@ -166,7 +168,7 @@ def test_checkout_on_an_assigned_license_is_refused(store):
     minted = _mint_institution()
     license_id = minted["license"]["id"]
     repo.activate_license("u1", "u1@university.edu", "dev-1", minted["key"])
-    err, _ = repo.checkout_lease({**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
+    err, _ = attempt(repo.checkout_lease, {**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
     assert err == "seating_not_floating"
     assert license_id  # minted, and untouched by the refusal
 
@@ -191,7 +193,7 @@ def test_release_is_idempotent(store):
     repo.add_institution_member(license_id, "u1@university.edu")
     repo.checkout_lease({**store._data["users"]["u1"], "uid": "u1"}, "dev-1")
     repo.release_lease({**store._data["users"]["u1"], "uid": "u1"})
-    err, _ = repo.release_lease({**store._data["users"]["u1"], "uid": "u1"})
+    err, _ = attempt(repo.release_lease, {**store._data["users"]["u1"], "uid": "u1"})
     assert err == ""
     assert store._data["licenses"][license_id]["leasesActive"] == 0, "must not go negative"
 
@@ -204,7 +206,7 @@ def test_adding_a_member_who_never_signed_in_creates_an_invite(store):
     store._data["users"] = {}
     minted = _mint_floating()
     license_id = minted["license"]["id"]
-    err, seat, invite = repo.add_institution_member(
+    err, seat, invite = attempt_add(repo.add_institution_member,
         license_id, "Nobody@University.edu", invited_by_uid="it-admin",
     )
     assert err == ""
@@ -262,7 +264,7 @@ def test_an_invite_to_a_second_licence_is_refused(store):
     first = _mint_floating()["license"]["id"]
     second = _mint_floating()["license"]["id"]
     repo.add_institution_member(first, "shared@university.edu")
-    err, seat, invite = repo.add_institution_member(second, "shared@university.edu")
+    err, seat, invite = attempt_add(repo.add_institution_member, second, "shared@university.edu")
     assert err == "member_already_licensed"
     assert seat is None and invite is None
 
@@ -272,7 +274,7 @@ def test_re_inviting_to_the_same_licence_is_a_no_op(store):
     store._data["users"] = {}
     license_id = _mint_floating()["license"]["id"]
     repo.add_institution_member(license_id, "twice@university.edu")
-    err, _seat, invite = repo.add_institution_member(license_id, "twice@university.edu")
+    err, _seat, invite = attempt_add(repo.add_institution_member, license_id, "twice@university.edu")
     assert err == ""
     assert invite["licenseId"] == license_id
     assert len(store._data["licenseInvites"]) == 1
@@ -293,7 +295,7 @@ def test_a_starved_invite_claim_mints_no_demo_key(store, monkeypatch):
     demo_before = {k for k, v in store._data["licenses"].items() if v.get("mode") == "demo"}
 
     real_claim = repo.claim_seat
-    monkeypatch.setattr(repo, "claim_seat", lambda *a, **k: repo._CONTENDED)
+    repo.patch(monkeypatch, "claim_seat", lambda *a, **k: repo._CONTENDED)
     out = repo.ensure_entitlement(dict(user), "dev-1")
 
     assert not out.get("licenseId")
@@ -301,7 +303,7 @@ def test_a_starved_invite_claim_mints_no_demo_key(store, monkeypatch):
     assert {k for k, v in store._data["licenses"].items() if v.get("mode") == "demo"} == demo_before
     assert len(repo.list_institution_invites(license_id)) == 1, "the invite must stay pending"
 
-    monkeypatch.setattr(repo, "claim_seat", real_claim)
+    repo.patch(monkeypatch, "claim_seat", real_claim)
     out = repo.ensure_entitlement(dict(store._data["users"]["busy-1"], uid="busy-1"), "dev-1")
     assert out["licenseId"] == license_id
     assert out["mode"] == "licensed"
@@ -317,7 +319,7 @@ def test_a_non_transient_claim_failure_still_mints_demo(store, monkeypatch):
     user = {"uid": "full-1", "email": "full@university.edu",
             "access_status": "APPROVED", "emailVerified": True}
     store._data["users"]["full-1"] = dict(user)
-    monkeypatch.setattr(repo, "claim_seat", lambda *a, **k: "license_seats_exhausted")
+    repo.patch(monkeypatch, "claim_seat", lambda *a, **k: "license_seats_exhausted")
     out = repo.ensure_entitlement(dict(user), "dev-1")
     assert out["licenseId"] and out["licenseId"] != license_id
     assert out["mode"] == "demo"
@@ -326,7 +328,7 @@ def test_a_non_transient_claim_failure_still_mints_demo(store, monkeypatch):
 def test_a_revoked_invite_is_never_redeemed(store):
     store._data["users"] = {}
     license_id = _mint_floating()["license"]["id"]
-    _err, _seat, invite = repo.add_institution_member(license_id, "gone@university.edu")
+    _err, _seat, invite = attempt_add(repo.add_institution_member, license_id, "gone@university.edu")
 
     assert repo.revoke_institution_invite(license_id, invite["id"]) is True
     assert repo.revoke_institution_invite(license_id, invite["id"]) is False
@@ -344,7 +346,7 @@ def test_one_institution_cannot_revoke_anothers_invite(store):
     store._data["users"] = {}
     mine = _mint_floating()["license"]["id"]
     theirs = _mint_floating()["license"]["id"]
-    _err, _seat, invite = repo.add_institution_member(theirs, "theirs@university.edu")
+    _err, _seat, invite = attempt_add(repo.add_institution_member, theirs, "theirs@university.edu")
     assert repo.revoke_institution_invite(mine, invite["id"]) is False
     assert len(store._data["licenseInvites"]) == 1
 
@@ -379,7 +381,7 @@ def test_adding_a_member_twice_is_idempotent(store):
     minted = _mint_floating()
     license_id = minted["license"]["id"]
     repo.add_institution_member(license_id, "u1@university.edu")
-    err, _seat, _invite = repo.add_institution_member(license_id, "u1@university.edu")
+    err, _seat, _invite = attempt_add(repo.add_institution_member, license_id, "u1@university.edu")
     assert err == ""
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
 
@@ -403,7 +405,7 @@ def test_an_assigned_license_needs_no_lease(store):
     start requiring a checkout."""
     _roster(store, "u1")
     minted = _mint_institution()
-    err, cfg = repo.activate_license("u1", "u1@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "u1@university.edu", "dev-1", minted["key"])
     assert err == ""
     assert cfg["mode"] == "licensed"
     assert cfg["licenseSeating"] == "assigned"

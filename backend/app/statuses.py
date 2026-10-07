@@ -27,7 +27,7 @@ SESSION_COMPLETED = "COMPLETED"
 
 #: Statuses that mean work is still outstanding, so a new backup of the same
 #: analysis must not start a second session. Order preserved from the tuple
-#: this replaces in firestore_repo.
+#: this replaces in the repo.
 IN_FLIGHT_SESSION_STATUSES = (SESSION_PROVISIONING, SESSION_UPLOADING)
 
 # --- File lifecycle (files/{id}.status) -------------------------------------

@@ -17,6 +17,8 @@ runtime rather than named here.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 # --- authentication / authorisation ----------------------------------------
 MISSING_BEARER = "missing_bearer"
 INVALID_TOKEN = "invalid_token"
@@ -176,6 +178,9 @@ INVITE_EXISTS = "invite_exists"
 EMAIL_ALREADY_LICENSED = "email_already_licensed"
 ALREADY_LICENSED = "already_licensed"
 MEMBER_ALREADY_LICENSED = "member_already_licensed"
+#: Not a refusal: a staff mint's `claimError` when the address already holds a
+#: live licence, so the new one is minted but not attached (repo/mint.py).
+HOLDER_ALREADY_LICENSED = "holder_already_licensed"
 INVITE_NOT_FOUND = "invite_not_found"
 INVALID_EMAIL = "invalid_email"
 
@@ -209,6 +214,8 @@ DRIVE_FILE_GONE = "drive_file_gone"
 # DependencyError codes the readiness probe and the Drive/Firestore clients
 # raise (main.dependency_error_handler returns exc.code as the detail).
 INTERNAL_ERROR = "internal_error"
+# 413 from `main.EdgeMiddleware`: a body over its cap, refused before it is read.
+REQUEST_TOO_LARGE = "request_too_large"
 DRIVE_UNREACHABLE = "drive_unreachable"
 DRIVE_UNHEALTHY = "drive_unhealthy"
 FIRESTORE_UNREACHABLE = "firestore_unreachable"
@@ -250,3 +257,91 @@ CLIENT_BRANCHED = frozenset(
         SIZE_MISMATCH,
     }
 )
+
+
+# --- refusals ---------------------------------------------------------------
+#: The HTTP status of every code the repo refuses with. Status is a property of
+#: the code, so a route never maps codes to statuses itself; `main.py` answers
+#: any `Refusal` from this table. Two routes answer one code differently, and
+#: say so where they do (`restatus`): `license_revoked` is 409 when staff
+#: convert a licence or IT holds a seat, and `license_seat_disabled` is 403 when
+#: a key is typed in the app (TD-185).
+STATUS: dict[str, int] = {
+    # Nothing there, or nothing the caller may see.
+    USER_NOT_FOUND: 404,
+    LICENSE_NOT_FOUND: 404,
+    NO_LICENSE: 404,
+    SEAT_NOT_FOUND: 404,
+    DELETED_LICENSE_NOT_FOUND: 404,
+    # There, but not for this caller.
+    LICENSE_EXPIRED: 403,
+    LICENSE_REVOKED: 403,
+    LICENSE_EMAIL_MISMATCH: 403,
+    LICENSE_DEVICE_MISMATCH: 403,
+    NOT_ELIGIBLE: 403,
+    # Conflicts with the state it is in.
+    ALREADY_LICENSED: 409,
+    LICENSE_ALREADY_REDEEMED: 409,
+    LICENSE_SEATS_EXHAUSTED: 409,
+    LICENSE_SEAT_DISABLED: 409,
+    SEATING_NOT_FLOATING: 409,
+    NO_FLOATING_SEAT: 409,
+    LICENSE_DEVICE_CLEAR_REQUIRED: 409,
+    DEMO_KEY_NOT_DELETABLE: 409,
+    LICENSE_EXISTS: 409,
+    LICENSE_NOT_CONVERTIBLE: 409,
+    MEMBER_ALREADY_LICENSED: 409,
+    INVITE_EXISTS: 409,
+    SEAT_REVOKED: 409,
+    SEAT_BUSY: 409,
+    DELETED_LICENSE_PURGED: 410,
+    # A licence edit or conversion that is not allowed as asked.
+    CONVERT_DOMAIN_MISMATCH: 422,
+    EXPIRY_IN_PAST: 422,
+    EXPIRY_BEFORE_CURRENT: 422,
+    LICENSE_PERPETUAL: 422,
+    CAP_ON_DEMO_KEY: 422,
+    INSTITUTION_ONLY: 422,
+    FLOATING_NEEDS_MAX_SEATS: 422,
+    MAX_SEATS_BELOW_USED: 422,
+    INVALID_EMAIL: 400,
+    KIND_NOT_INSTITUTION: 400,
+    # Not yet: the caller is told when.
+    DEVICE_CHANGE_TOO_SOON: 429,
+    # Lost a race; a retry succeeds.
+    CLAIM_CONTENDED: 503,
+}
+
+
+class Refusal(Exception):
+    """A request the service refuses, named by its wire code.
+
+    Raised by the repo; `main.py` answers it as `{"detail": "<code>"}` (or
+    `"<code>: <suffix>"`, as `device_change_too_soon` carries its instant) with
+    `STATUS[code]`, and `Retry-After` when `retry_at` says when to come back.
+    A code without a status is a programming error, refused at construction.
+    """
+
+    def __init__(self, code: str, suffix: str = "", *, retry_at=None):
+        if code not in STATUS:
+            raise ValueError(f"{code!r} has no status in errors.STATUS")
+        super().__init__(code)
+        self.code = code
+        self.suffix = suffix
+        self.retry_at = retry_at
+        self.status = STATUS[code]
+
+    @property
+    def detail(self) -> str:
+        return f"{self.code}: {self.suffix}" if self.suffix else self.code
+
+
+@contextmanager
+def restatus(overrides: dict[str, int]):
+    """Answer the named codes with a different status inside this block."""
+    try:
+        yield
+    except Refusal as refusal:
+        if refusal.code in overrides:
+            refusal.status = overrides[refusal.code]
+        raise

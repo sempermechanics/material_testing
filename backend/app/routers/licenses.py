@@ -1,13 +1,11 @@
-import math
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
-from .. import apps, audit, errors, firestore_repo as repo
+from .. import apps, audit, errors, repo
 from .. import rate_limit
 from ..deps import attested_or_mfa_user, current_user, rate_limited, request_app
 from ..models import LicenseActivate
 from ..validation import require_header_identifier
+from ._shared import named_app
 
 router = APIRouter()
 
@@ -23,43 +21,17 @@ def activate_license(
     (the device of the app that asks, ADR-010)."""
     rate_limit.enforce(rate_limit.license_activate_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
-    code, config = repo.activate_license(
-        user["uid"], user.get("email") or "", device_id, body.key, app,
-    )
-    if code:
-        status = {
-            errors.LICENSE_NOT_FOUND: 404,
-            errors.USER_NOT_FOUND: 404,
-            errors.LICENSE_ALREADY_REDEEMED: 409,
-            errors.ALREADY_LICENSED: 409,
-            errors.LICENSE_SEATS_EXHAUSTED: 409,
-            # Lost the race for the seat; a retry succeeds. 503 like
-            # device_lock_contended, so it never reads as a full licence.
-            errors.CLAIM_CONTENDED: 503,
-            # 403, not 410: the key is real and may be renewed in place, so
-            # this is "you may not use it", not "it is gone".
-            errors.LICENSE_EXPIRED: 403,
-        }.get(code, 403)
-        raise HTTPException(status, code)
+    # A seat on hold refuses a typed key as 403 here, where IT adding the
+    # member is told 409: the holder may not use it, IT is in a conflict.
+    with errors.restatus({errors.LICENSE_SEAT_DISABLED: 403}):
+        config = repo.activate_license(
+            user["uid"], user.get("email") or "", device_id, body.key, app,
+        )
     audit.record(
         user["uid"], device_id, action="LICENSE_ACTIVATE",
         detail={"mode": (config or {}).get("mode")},
     )
     return {"config": config}
-
-
-#: Lease outcomes that are the pool working as designed rather than a fault.
-#: `no_floating_seat` is a 200 elsewhere — see the checkout docstring — but as
-#: an explicit checkout it is a refusal the caller asked for and gets 409.
-_LEASE_STATUS = {
-    errors.NO_LICENSE: 404,
-    errors.LICENSE_NOT_FOUND: 404,
-    errors.LICENSE_REVOKED: 403,
-    errors.LICENSE_EXPIRED: 403,
-    errors.NOT_ELIGIBLE: 403,
-    errors.SEATING_NOT_FLOATING: 409,
-    errors.NO_FLOATING_SEAT: 409,
-}
 
 
 @router.post("/v1/licenses/checkout")
@@ -85,10 +57,7 @@ def checkout_lease(
     """
     rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
-    code, config = repo.checkout_lease(user, device_id)
-    if code:
-        raise HTTPException(_LEASE_STATUS.get(code, 403), code)
-    return {"config": config}
+    return {"config": repo.checkout_lease(user, device_id)}
 
 
 @router.post("/v1/licenses/release")
@@ -100,9 +69,7 @@ def release_lease(user=Depends(current_user)):
     heartbeat.
     """
     rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
-    code, config = repo.release_lease(user)
-    if code:
-        raise HTTPException(_LEASE_STATUS.get(code, 403), code)
+    config = repo.release_lease(user)
     audit.record(
         user["uid"], action="INSTITUTION_LEASE_RELEASE",
         target={"type": "lease", "id": f"{user.get('licenseId')}/{user['uid']}"},
@@ -148,55 +115,19 @@ def unbind_device(
     from a browser, which cannot send that header, `?app=materialtesting`.
     Each app has its own cooldown. No app named is Semper.
     """
-    if app:
-        named = apps.from_name(app)
-        if named is None:
-            raise HTTPException(400, errors.UNKNOWN_APP)
-    else:
-        named = header_app
-    user = ctx["user"]
+    named = named_app(app, header_app)
+    user = ctx.user
     license_id = user.get("licenseId") or ""
     if not license_id:
         raise HTTPException(404, errors.NO_LICENSE)
-    err, cleared = repo.clear_device_lock(license_id, user["uid"], actor=repo.ACTOR_SELF,
-                                          app=named)
-    if err == errors.DEVICE_CHANGE_TOO_SOON:
-        # 429, not 403: the answer is "not yet", and the caller is told
-        # when. Nothing about their entitlement has changed.
-        raise _too_soon((cleared or {}).get("nextChangeAllowedAt") or "")
-    if err:
-        status = {
-            errors.LICENSE_NOT_FOUND: 404,
-            errors.SEAT_NOT_FOUND: 404,
-        }.get(err, 403)
-        raise HTTPException(status, err)
+    # Too soon is 429 with the instant and a Retry-After (`errors.STATUS`): the
+    # answer is "not yet", and nothing about the entitlement has changed.
+    cleared = repo.clear_device_lock(license_id, user["uid"], actor=repo.ACTOR_SELF, app=named)
     audit.record(
         user["uid"], action="LICENSE_DEVICE_UNBIND",
-        target={"type": (cleared or {}).get("scope") or "license", "id": license_id},
-        detail={k: str(v) for k, v in (cleared or {}).items()},
+        target={"type": cleared.get("scope") or "license", "id": license_id},
+        detail={k: str(v) for k, v in cleared.items()},
     )
     return {"licenseId": license_id, "app": named, "deviceIdLock": "",
-            "previousDeviceId":
-                (cleared or {}).get(apps.field("previousDeviceId", named)) or "",
-            "nextChangeAllowedAt": (cleared or {}).get("nextChangeAllowedAt") or ""}
-
-
-def _too_soon(next_allowed: str) -> HTTPException:
-    """`429 device_change_too_soon: <ISO instant>`, plus `Retry-After`.
-
-    The instant goes after a colon, as the counts do on
-    `session_quota_exceeded`, so a caller matching on the code still matches.
-    The refusal used to be the bare code, and the account page could only
-    say "recently" to someone waiting up to a month.
-    """
-    if not next_allowed:
-        return HTTPException(429, errors.DEVICE_CHANGE_TOO_SOON)
-    detail = f"{errors.DEVICE_CHANGE_TOO_SOON}: {next_allowed}"
-    try:
-        when = datetime.fromisoformat(next_allowed)
-    except ValueError:
-        return HTTPException(429, detail)
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    wait = max(0, math.ceil((when - datetime.now(timezone.utc)).total_seconds()))
-    return HTTPException(429, detail, headers={"Retry-After": str(wait)})
+            "previousDeviceId": cleared.get(apps.field("previousDeviceId", named)) or "",
+            "nextChangeAllowedAt": cleared.get("nextChangeAllowedAt") or ""}

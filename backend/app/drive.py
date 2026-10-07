@@ -8,7 +8,7 @@ init_resumable().
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -53,6 +53,52 @@ _session_lock = threading.Lock()
 _http: requests.Session | None = None
 
 
+# Connections kept per host; also the most Drive calls the pool below runs at
+# once, so that a fan-out never opens connections the pool then discards.
+_HTTP_POOL = 64
+
+# One worker pool for every Drive fan-out in the process. Each call used to
+# start its own ThreadPoolExecutor (8 workers), so forty concurrent requests
+# could put 320 Drive calls against 64 pooled connections, and every call paid
+# for thread start-up. Work submitted here never submits more work here: a
+# task that waited on the pool from inside it could deadlock it.
+_pool = ThreadPoolExecutor(max_workers=_HTTP_POOL, thread_name_prefix="drive")
+
+
+def fan_out(fn, items, *, width: int) -> list:
+    """`fn` over `items` on the shared Drive pool, at most `width` of this
+    caller's calls in flight, so one large manifest cannot queue ahead of
+    every other request. Results come back in input order. The first failure
+    stops further submissions and is raised once the calls in flight finish.
+    """
+    items = list(items)
+    results: list = [None] * len(items)
+    pending = iter(enumerate(items))
+    in_flight: dict = {}
+    failure: BaseException | None = None
+
+    def submit_next() -> None:
+        nxt = next(pending, None)
+        if nxt is not None:
+            in_flight[_pool.submit(fn, nxt[1])] = nxt[0]
+
+    for _ in range(max(1, min(width, len(items)))):
+        submit_next()
+    while in_flight:
+        done, _ = wait(in_flight, return_when=FIRST_COMPLETED)
+        for fut in done:
+            index = in_flight.pop(fut)
+            try:
+                results[index] = fut.result()
+            except BaseException as e:  # noqa: BLE001 - re-raised below
+                failure = failure or e
+            if failure is None:
+                submit_next()
+    if failure is not None:
+        raise failure
+    return results
+
+
 def http() -> requests.Session:
     """Process-wide pooled HTTP session (thread-safe, like the Firestore client)."""
     global _http
@@ -60,7 +106,7 @@ def http() -> requests.Session:
         with _session_lock:
             if _http is None:
                 session = requests.Session()
-                adapter = HTTPAdapter(pool_connections=8, pool_maxsize=64, max_retries=0)
+                adapter = HTTPAdapter(pool_connections=8, pool_maxsize=_HTTP_POOL, max_retries=0)
                 session.mount("https://", adapter)
                 _http = session
     return _http
@@ -298,16 +344,16 @@ def _check_and_create(token: str, sess_dir: str, sid: str) -> tuple[bool, str | 
     anyway (a trashed parent still accepts children) is deleted, best effort,
     and (False, None) comes back so the caller walks.
     """
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        check = pool.submit(file_exists, token, sess_dir)
-        create = pool.submit(_create_folder, token, sid, sess_dir)
-        alive = check.result()
-        try:
-            sid_dir = create.result()
-        except requests.HTTPError:
-            if alive:
-                raise
-            sid_dir = None
+    check = _pool.submit(file_exists, token, sess_dir)
+    create = _pool.submit(_create_folder, token, sid, sess_dir)
+    wait([check, create])
+    alive = check.result()
+    try:
+        sid_dir = create.result()
+    except requests.HTTPError:
+        if alive:
+            raise
+        sid_dir = None
     if alive:
         return True, sid_dir
     if sid_dir:
@@ -355,23 +401,28 @@ def probe_files(token: str, file_ids: list[str], *, max_workers: int = 8) -> dic
     Firestore session metadata on MISSING, so mapping a transient outage to
     "missing" turned a Drive blip into permanent data loss.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
     unique = [fid for fid in dict.fromkeys(file_ids) if fid]
-    if not unique:
-        return {}
-    out: dict[str, str] = {}
-    workers = max(1, min(max_workers, len(unique)))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(file_exists, token, fid): fid for fid in unique}
-        for fut in as_completed(futures):
-            fid = futures[fut]
-            try:
-                out[fid] = ALIVE if fut.result() else MISSING
-            except Exception:  # noqa: BLE001 - unreachable != absent
-                log.warning("Drive existence probe failed for %s — treating as unknown", fid)
-                out[fid] = UNKNOWN
-    return out
+
+    def probe(fid: str) -> str:
+        try:
+            return ALIVE if file_exists(token, fid) else MISSING
+        except Exception:  # noqa: BLE001 - unreachable != absent
+            log.warning("Drive existence probe failed for %s — treating as unknown", fid)
+            return UNKNOWN
+
+    return dict(zip(unique, fan_out(probe, unique, width=max_workers)))
+
+
+def delete_files(token: str, file_ids: list[str], *, max_workers: int = 8) -> int:
+    """`delete_file` for several ids, with a bounded fan-out like `probe_files`.
+
+    For the account-erase fallback, which used to delete one session folder
+    per round trip. Any failure propagates, as one `delete_file` would, so the
+    caller still stops before touching Firestore. Returns how many it deleted.
+    """
+    unique = [fid for fid in dict.fromkeys(file_ids) if fid]
+    fan_out(lambda fid: delete_file(token, fid), unique, width=max_workers)
+    return len(unique)
 
 
 def ping(timeout_s: float = 5.0) -> None:
@@ -466,7 +517,10 @@ def open_download(
         stream=True,
         timeout=_TIMEOUT_S,
     )
-    if r.status_code not in (200, 206):
+    if r.status_code >= 400:
+        # A streamed response holds its pooled connection until it is read or
+        # closed, and nothing reads an error body here: close it, then raise.
+        r.close()
         r.raise_for_status()
     return DriveDownload(r)
 

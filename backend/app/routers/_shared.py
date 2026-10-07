@@ -5,6 +5,14 @@ Routers import from here, never from each other: `sessions` used to reach into
 (TD-54).
 """
 import json
+import logging
+
+import requests
+from fastapi import HTTPException
+
+from .. import apps, errors
+
+log = logging.getLogger("semper")
 
 
 def json_dumps(value) -> str:
@@ -26,3 +34,32 @@ def page_block(size: int, count: int, next_token: str | None) -> dict:
         "nextPageToken": next_token,
         "hasMore": bool(next_token),
     }
+
+
+def drive_failure(e: requests.RequestException, what: str, drive_file_id: str, *,
+                  gone: int, failed: str) -> HTTPException:
+    """The answer for a Drive call that raised.
+
+    Drive answering 404 for an object the index points at is `drive_file_gone`
+    with the route's own `gone` status — it was deleted straight in Drive, or
+    the upload never landed, and a 5xx would make the app retry forever.
+    Anything else is 502 with the route's `failed` code.
+    """
+    if isinstance(e, requests.HTTPError) and e.response is not None \
+            and e.response.status_code == 404:
+        log.error("drive %s %s: object gone from Drive", what, drive_file_id)
+        return HTTPException(gone, errors.DRIVE_FILE_GONE)
+    log.error("drive %s %s failed: %s", what, drive_file_id, e)
+    return HTTPException(502, failed)
+
+
+def named_app(app: str, header_app: str) -> str:
+    """The app a `?app=` names (`semper`, `materialtesting`), or the caller's
+    own (by `X-App-Id`) when there is none. A browser cannot send the header,
+    so the consoles name the app. Anything else is 400 `unknown_app`."""
+    if not app:
+        return header_app
+    named = apps.from_name(app)
+    if named is None:
+        raise HTTPException(400, errors.UNKNOWN_APP)
+    return named

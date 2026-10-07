@@ -7,7 +7,7 @@ record that replaced it.
 
 | ADR | Title | Status | Register |
 |-----|-------|--------|----------|
-| [001](ADR-001-firestore-repo-package.md) | Split `firestore_repo.py` into a package behind a facade | Accepted, built | TD-53, TD-58 |
+| [001](ADR-001-firestore-repo-package.md) | Split `firestore_repo.py` into a package behind a facade | Accepted, built; facade superseded by 021 | TD-53, TD-58 |
 | [002](ADR-002-cloudapi-seam.md) | `CloudApi` interface seam for `SemperApi` | Accepted, built | TD-25 |
 | [003](ADR-003-viewerargs-read-side.md) | `ViewerArgs.from` read side with a `SessionRecord` fallback | Accepted, built | TD-3, TD-61 |
 | [004](ADR-004-runspec.md) | Immutable `RunSpec` built once at Compute | Accepted, built | FI-6, TD-61 |
@@ -24,6 +24,8 @@ record that replaced it.
 | [017](ADR-017-viewbinding-and-ui-kit.md) | ViewBinding for every screen, and one `ui/common` helper per UI job | Accepted, built | — |
 | [018](ADR-018-error-convention.md) | One typed outcome per failure domain; cancellation is never a failure | Accepted, built | TD-41, TD-171 |
 | [019](ADR-019-sempermechanics-app-id.md) | The app is `com.sempermechanics.semper`; "indic" leaves the code, and the engine submodule is `engine/` | Accepted, built (not released) | TD-176 |
+| [020](ADR-020-backend-refusal-model.md) | Backend refusals are one exception (`errors.Refusal`) with one status table (`errors.STATUS`) | Accepted, built | TD-185, TD-186 |
+| [021](ADR-021-retire-firestore-repo-facade.md) | Retire the `firestore_repo` facade; `app.repo` is a plain package and tests patch through `repo_view.patch` | Accepted, built | TD-190 |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md). ADR-008, ADR-009,
 ADR-011 (ported here), ADR-012 and ADR-013 are material_testing's (ADR-008's benchmark harness and ADR-013's backend route live here too: the harness is shared code, and the backend deploys from this repo); the numbers are shared so they do not collide.

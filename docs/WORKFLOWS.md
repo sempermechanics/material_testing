@@ -426,7 +426,7 @@ because Drive has no anonymous signed read.
 
 Handlers stay plain `def` (Firestore and Drive calls are blocking, so Starlette
 runs them in its threadpool). Every route is in `backend/app/routers/`; shared
-pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade over `repo/`),
+pieces are `deps.py` (auth), `repo/` (all Firestore access, one module per aggregate),
 `drive.py` (all Drive access), `errors.py` (the `detail` codes),
 `validation.py`, `rate_limit.py`, `audit.py`, `observability.py`.
 
@@ -434,21 +434,22 @@ pieces are `deps.py` (auth), `firestore_repo.py` (all Firestore access, a facade
 
 | Id | Concern | File | What it does |
 |---|---|---|---|
-| C17 | Access log | `main.py` `access_log` middleware | One JSON line per request: `requestId`, `opClass`, `routeTemplate`, status, latency, outcome, uid/deviceId when known. Stamps **`X-Request-Id`** on the response — the app now echoes it into failure reasons (B1/B2), so a user's screenshot joins to this line |
+| C17 | Access log | `main.py` `EdgeMiddleware` (one ASGI middleware) | One JSON line per request: `requestId`, `opClass`, `routeTemplate`, status, latency, outcome, uid/deviceId when known. Stamps **`X-Request-Id`** on the response — the app now echoes it into failure reasons (B1/B2), so a user's screenshot joins to this line |
 | C17a | Route classes | `observability.classify_route` | `health` / `attest` / `login` / `config` / `account` / `backup` / `sync` / `restore` / `admin`; ids in paths collapse to `{id}` so nothing identifying lands in `routeTemplate` |
 | C18 | Audit trail 🔒 | `audit.record` | Append-only `audit_logs`: AUTH_DENIED, DEVICE_*, SESSION_CREATE/DELETE, UPLOAD_COMPLETE, FILE_DOWNLOAD, DATA_EXPORT, ACCOUNT_DELETE, ADMIN_*. Best-effort — an audit write never fails the request |
 | C19 | Access-request mail 🔒 | `notify.access_request` | On first PENDING user, mails support via Resend on a daemon worker with retry + per-uid idempotency. Off (silently) without `RESEND_API_KEY` |
 | C20 | Rate limits | `rate_limit.py` | Per-instance token buckets per uid (`export`, `erase` (account), `session_erase` (one analysis), `download`, `session`, `session_verify`, `challenge`, `device_register`, `file_complete`, `listing`, `admin`, `health`). The durable cross-instance limits are the gateway quotas in `backend/gateway/openapi.yaml` |
-| C20a | Security headers | `main.py` `security_headers` | nosniff, `frame-ancestors 'none'`, no-referrer, Permissions-Policy, HSTS behind HTTPS |
+| C20a | Security headers | `main.py` `EdgeMiddleware` | nosniff, `frame-ancestors 'none'`, no-referrer, Permissions-Policy, HSTS behind HTTPS; on every answer, a hidden 500 included |
+| C20b | Body cap | `main.py` `MAX_BODY_BYTES` (4 MiB) | A larger body is refused `413 request_too_large`: unread when its length is declared, counted as it arrives when not |
 | C20b | Startup checks | `main.py` `_startup_checks` | Refuses to start on Cloud Run without the required env; refuses `DEV_INSECURE_AUTH` unless explicitly acknowledged. Interactive docs are served locally only |
 
 ### Authentication pipeline 🔒
 
 | Id | Workflow | Entry | Chain |
 |---|---|---|---|
-| C1 | Identify the caller | `deps.current_user` | `google_auth.verify_id_token` → `firestore_repo.get_or_create_user` (auto-approve rules, device binding, `DeviceInUseError` → 409) → 403 unless APPROVED. First PENDING user triggers C19 |
+| C1 | Identify the caller | `deps.current_user` | `google_auth.verify_id_token` → `repo.get_or_create_user` (auto-approve rules, device binding, `DeviceInUseError` → 409) → 403 unless APPROVED. First PENDING user triggers C19 |
 | C2 | Register a device | `POST /v1/devices/register` (`routers/devices.py`) | One account per device and one device per account: a different bound device is `device_conflict`, a device owned by another uid is `device_in_use` (audited). Re-registering the same id heals the stored public key |
-| C3 | Mint a nonce | `POST /v1/challenge` | `firestore_repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
+| C3 | Mint a nonce | `POST /v1/challenge` | `repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
 | C4 | Verify a device-signed call | `deps.verified_device` | ACTIVE device → `consume_nonce` (replay = 401) → ECDSA P-256 over `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → `bad_signature` audited on failure |
 | C14 | Admin | `routers/admin.py` | Listing and **device-history** need only an admin ID token; **approve / revoke / config-patch / mint additionally require a step-up** — a device attestation, or a second factor plus a recent sign-in for the staff console — so a stolen ID token alone cannot change access. Whole-licence revoke uses a tighter freshness window. All audited |
 

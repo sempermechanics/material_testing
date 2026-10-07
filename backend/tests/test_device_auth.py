@@ -85,8 +85,8 @@ async def _call(priv, method="POST", path="/v1/sessions", body=b'{"x":1}', nonce
 
 async def test_valid_signature_accepted(wired):
     ctx = await _call(wired)
-    assert ctx["user"]["uid"] == "u1"
-    assert ctx["device"]["deviceId"] == "d1"
+    assert ctx.user["uid"] == "u1"
+    assert ctx.device["deviceId"] == "d1"
 
 
 async def test_tampered_body_rejected(wired):
@@ -165,7 +165,7 @@ def claims(monkeypatch):
 async def test_fresh_client_nonce_accepted_without_a_challenge(wired, claims):
     nonce = _client_nonce()
     ctx = await _call(wired, nonce=nonce)
-    assert ctx["device"]["deviceId"] == "d1"
+    assert ctx.device["deviceId"] == "d1"
     assert claims == [nonce]
 
 
@@ -224,7 +224,7 @@ def test_claim_client_nonce_is_single_use(monkeypatch):
 
     import fake_firestore
 
-    from app import firestore_repo as repo
+    import repo_view as repo
 
     fake_firestore.install(monkeypatch)
     exp = datetime.now(timezone.utc)

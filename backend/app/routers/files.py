@@ -5,11 +5,12 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from .. import audit, drive, errors, firestore_repo as repo, statuses
+from .. import audit, drive, errors, repo, statuses
 from .. import rate_limit
 from ..deps import rate_limited, verified_device
 from ..models import FileComplete
 from ..validation import DocumentId
+from ._shared import drive_failure
 
 log = logging.getLogger("semper")
 router = APIRouter()
@@ -49,7 +50,7 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     `deadline: 300` (other JSON routes stay at 60s). Empty HTTP 500 from the
     edge usually means that budget was exhausted mid-stream.
     """
-    user = ctx["user"]
+    user = ctx.user
     f = _owned_file(file_id, user)
     if not repo.cloud_backup_enabled(user):
         raise HTTPException(403, errors.feature_not_licensed_detail())
@@ -69,14 +70,11 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     try:
         dl = drive.open_download(token, drive_file_id, byte_range=byte_range)
     except requests.RequestException as e:
-        if isinstance(e, requests.HTTPError) and e.response is not None:
-            if e.response.status_code == 416:
-                raise HTTPException(416, errors.RANGE_NOT_SATISFIABLE) from e
-            if e.response.status_code == 404:
-                log.error("drive download %s: object gone from Drive", drive_file_id)
-                raise HTTPException(404, errors.DRIVE_FILE_GONE) from e
-        log.error("drive download %s failed: %s", drive_file_id, e)
-        raise HTTPException(502, errors.DRIVE_DOWNLOAD_FAILED) from e
+        if isinstance(e, requests.HTTPError) and e.response is not None \
+                and e.response.status_code == 416:
+            raise HTTPException(416, errors.RANGE_NOT_SATISFIABLE) from e
+        raise drive_failure(e, "download", drive_file_id,
+                            gone=404, failed=errors.DRIVE_DOWNLOAD_FAILED) from e
 
     # The stored name is client-supplied (validated for length only), so strip
     # anything that could break out of the quoted filename or inject a header.
@@ -108,7 +106,7 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
     dependencies=[rate_limited(rate_limit.file_complete_bucket)],
 )
 def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_device)):
-    user = ctx["user"]
+    user = ctx.user
     rec = _owned_file(file_id, user)
     # Verify the upload actually landed intact before trusting this completion.
     # The client uploads straight to Drive, so ask Drive for the real size/md5
@@ -118,10 +116,9 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
         try:
             meta = drive.get_file_meta(drive.access_token(), body.driveFileId)
         except requests.HTTPError as e:
-            log.error("drive meta for %s failed: %s", body.driveFileId, e)
-            if e.response is not None and e.response.status_code == 404:
-                raise HTTPException(400, errors.DRIVE_FILE_GONE) from e
-            raise HTTPException(502, errors.DRIVE_META_FAILED) from e
+            # 400, not 404: the app discards the session and rebuilds it.
+            raise drive_failure(e, "meta", body.driveFileId,
+                                gone=400, failed=errors.DRIVE_META_FAILED) from e
         if meta["size"] != rec.get("sizeBytes"):
             raise HTTPException(422, errors.SIZE_MISMATCH)
         # Whenever Drive reports an md5 (always, for our binary blobs), the client
@@ -140,18 +137,18 @@ def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_
         if not folder or folder not in parents:
             raise HTTPException(403, errors.FILE_NOT_IN_SESSION)
     outcome = repo.complete_file(file_id, user["uid"], body)
-    if not outcome:
+    if outcome is repo.Completion.REJECTED:
         raise HTTPException(409, errors.SIZE_OR_STATE_MISMATCH)
     # Only a FIRST completion advances the counter — a retried completion
-    # ("already") must not double-count toward session COMPLETED.
+    # (ALREADY) must not double-count toward session COMPLETED.
     #
     # Advance the session the FILE belongs to, never the one the client named:
     # body.sessionId is unauthenticated input, and bump_session_progress does no
     # ownership check of its own, so trusting it let a caller complete someone
-    # else's session. The binding was fixed at upload time (create_file records
+    # else's session. The binding was fixed at upload time (create_files_batch records
     # sessionId on the file doc), so the client's copy is redundant anyway.
-    if outcome == "ok":
+    if outcome is repo.Completion.DONE:
         repo.bump_session_progress(rec["sessionId"])
-    audit.record(user["uid"], ctx["device"].get("deviceId"), action="UPLOAD_COMPLETE",
+    audit.record(user["uid"], ctx.device_id, action="UPLOAD_COMPLETE",
                  target={"type": "file", "id": file_id})
     return {"status": "ok"}

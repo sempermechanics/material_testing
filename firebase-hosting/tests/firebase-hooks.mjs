@@ -16,7 +16,24 @@ export async function resolve(specifier, context, nextResolve) {
   if (/^https?:/.test(specifier)) {
     throw new Error(`console tests make no network imports; add a fake for ${specifier}`);
   }
-  return nextResolve(specifier, context);
+  return withPageLoad(await nextResolve(specifier, context), context.parentURL);
+}
+
+// A page is opened afresh by importing its entry with `?load=N` (harness.mjs),
+// so that its module state starts empty. A page split into modules holds
+// state in those too, and they bind to the DOM they first saw: a module in
+// the page's own folder is loaded with the same `?load=N`. The shared modules
+// one folder up (auth.js above all) stay one copy, as in a browser.
+const PAGE_LOAD = /^(.*\/)[^/]+\.js\?(load=\d+)$/;
+
+function withPageLoad(resolved, parentURL) {
+  const parent = parentURL && PAGE_LOAD.exec(parentURL);
+  if (!parent || !parent[1].startsWith(CONSOLE) || parent[1] === CONSOLE) return resolved;
+  const url = resolved.url;
+  if (!url.startsWith(parent[1]) || url.includes("?") || url.slice(parent[1].length).includes("/")) {
+    return resolved;
+  }
+  return { ...resolved, url: `${url}?${parent[2]}` };
 }
 
 // The console's .js files are ES modules the browser loads with

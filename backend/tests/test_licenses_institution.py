@@ -4,13 +4,15 @@ import pytest
 
 import fake_firestore
 
-from app import deps, firestore_repo as repo
+from app import deps
+import repo_view as repo
 from license_helpers import (  # noqa: F401
     _mint_individual,
     _mint_institution,
     _recording_stubs,
     _signed_in,
 )
+from refusals import attempt, attempt_add
 
 
 # ===================================================================== institution
@@ -21,7 +23,7 @@ def test_activate_institution_requires_domain_match(store):
         "u1": {"email": "student@other.edu", "access_status": "APPROVED", "plan": "demo"},
     }
     minted = _mint_institution()
-    err, cfg = repo.activate_license("u1", "student@other.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "student@other.edu", "dev-1", minted["key"])
     assert err == "license_email_mismatch"
     assert cfg is None
 
@@ -32,7 +34,7 @@ def test_activate_institution_creates_seat_and_locks_device(store):
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
-    err, cfg = repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "student@university.edu", "dev-1", minted["key"])
     assert err == ""
     assert cfg["plan"] == "professional"
     assert cfg["licenseKind"] == "institution"
@@ -43,7 +45,7 @@ def test_activate_institution_creates_seat_and_locks_device(store):
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
 
     # Same uid, same device: idempotent re-entry, no second seat minted.
-    err2, cfg2 = repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
+    err2, cfg2 = attempt(repo.activate_license, "u1", "student@university.edu", "dev-1", minted["key"])
     assert err2 == ""
     assert cfg2["plan"] == "professional"
     assert len(repo.list_institution_seats(license_id)) == 1
@@ -56,7 +58,7 @@ def test_activate_institution_device_mismatch_once_seat_is_locked(store):
     }
     minted = _mint_institution()
     repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
-    err, cfg = repo.activate_license("u1", "student@university.edu", "dev-2", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "student@university.edu", "dev-2", minted["key"])
     assert err == "license_device_mismatch"
     assert cfg is None
 
@@ -67,9 +69,9 @@ def test_activate_institution_seats_exhausted_returns_409(store):
         "u2": {"email": "b@university.edu", "access_status": "APPROVED", "plan": "demo"},
     }
     minted = _mint_institution(max_seats=1)
-    err1, _ = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err1, _ = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert err1 == ""
-    err2, cfg2 = repo.activate_license("u2", "b@university.edu", "dev-2", minted["key"])
+    err2, cfg2 = attempt(repo.activate_license, "u2", "b@university.edu", "dev-2", minted["key"])
     assert err2 == "license_seats_exhausted"
     assert cfg2 is None
 
@@ -151,19 +153,19 @@ def test_disable_seat_drops_to_demo_without_freeing_slot(store):
     repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
 
-    assert repo.set_seat_enabled(license_id, "u1", False) == ""
+    assert attempt(repo.set_seat_enabled, license_id, "u1", False)[0] == ""
     assert store._data["users"]["u1"]["plan"] == "demo"
     # Slot is still occupied — a second student cannot claim it while disabled.
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
     store._data["users"]["u2"] = {
         "email": "b@university.edu", "access_status": "APPROVED", "plan": "demo",
     }
-    err, cfg = repo.activate_license("u2", "b@university.edu", "dev-2", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u2", "b@university.edu", "dev-2", minted["key"])
     assert err == "license_seats_exhausted"
     assert cfg is None
 
     # Re-enabling restores Professional in place, no re-activation needed.
-    assert repo.set_seat_enabled(license_id, "u1", True) == ""
+    assert attempt(repo.set_seat_enabled, license_id, "u1", True)[0] == ""
     assert store._data["users"]["u1"]["plan"] == "professional"
 
 
@@ -175,11 +177,11 @@ def test_clearing_a_seat_lock_lets_the_key_be_re_activated_elsewhere(store):
     license_id = minted["license"]["id"]
     repo.activate_license("u1", "a@university.edu", "old-phone", minted["key"])
     # Without clearing, a new device on the same seat is rejected.
-    err, _ = repo.activate_license("u1", "a@university.edu", "new-phone", minted["key"])
+    err, _ = attempt(repo.activate_license, "u1", "a@university.edu", "new-phone", minted["key"])
     assert err == "license_device_mismatch"
 
-    assert repo.clear_device_lock(license_id, "u1", actor=repo.ACTOR_IT)[0] == ""
-    err2, cfg2 = repo.activate_license("u1", "a@university.edu", "new-phone", minted["key"])
+    assert attempt(repo.clear_device_lock, license_id, "u1", actor=repo.ACTOR_IT)[0] == ""
+    err2, cfg2 = attempt(repo.activate_license, "u1", "a@university.edu", "new-phone", minted["key"])
     assert err2 == ""
     assert cfg2["plan"] == "professional"
 
@@ -198,7 +200,7 @@ def test_activation_is_in_place_session_data_untouched(store):
     assert before == 5
 
     minted = _mint_institution()
-    err, cfg = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert err == ""
     assert cfg["plan"] == "professional"
     after = repo.count_user_sessions("u1")
@@ -224,7 +226,7 @@ def test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores(st
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
-    err, cfg = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err, cfg = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert err == ""
     assert cfg["cloudBackupEnabled"] is True
     assert repo.count_user_sessions("u1") == 30
@@ -244,7 +246,7 @@ def test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores(st
 
     # Re-activation (institution re-admits the student, or they self-serve
     # re-enter the same key) restores Professional in place, zero data loss.
-    err2, cfg2 = repo.activate_license("u1", "a@university.edu", "dev-1", minted["key"])
+    err2, cfg2 = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
     assert err2 == ""
     assert cfg2["plan"] == "professional"
     assert cfg2["cloudBackupEnabled"] is True
@@ -384,3 +386,146 @@ async def test_institution_seat_revoke_over_http(client, monkeypatch):
     resp = await client.delete(f"/v1/institutions/licenses/{license_id}/seats/student")
     assert resp.status_code == 200, resp.text
     assert store._data["users"]["student"]["plan"] == "demo"
+
+
+@pytest.mark.asyncio
+async def test_roster_routes_read_one_seat_not_the_roster(client, monkeypatch, audited):
+    """Adding or patching a member answers with that member's seat, read alone.
+
+    Both used to stream every seat on the licence to pick one out, so each edit
+    cost a read per member; the listing read the licence document twice.
+    """
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "email": "it@university.edu"})
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    store._data["users"] = {
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "member": {"email": "m@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+    }
+    license_id = _mint_institution()["license"]["id"]
+    base = f"/v1/institutions/licenses/{license_id}"
+
+    streams, gets = [], []
+    real_stream, real_get = fake_firestore._Query.stream, fake_firestore._DocRef.get
+    monkeypatch.setattr(fake_firestore._Query, "stream",
+                        lambda q: streams.append(q._collection) or real_stream(q))
+    monkeypatch.setattr(fake_firestore._DocRef, "get",
+                        lambda ref, transaction=None: gets.append(ref._collection)
+                        or real_get(ref, transaction=transaction))
+    seats = f"licenses/{license_id}/seats"
+
+    added = await client.post(f"{base}/seats", json={"email": "a@university.edu"})
+    assert added.status_code == 200, added.text
+    assert added.json()["seat"]["uid"] == "student"
+    assert seats not in streams
+
+    streams.clear()
+    patched = await client.patch(f"{base}/seats/student", json={"enabled": False})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["seat"]["status"] == "disabled"
+    assert seats not in streams
+
+    gets.clear()
+    listed = await client.get(f"{base}/seats")
+    assert listed.status_code == 200, listed.text
+    assert gets.count("licenses") == 1
+
+
+# ================================================ the roster at the staff tier
+# The operator desk drives any institution's roster. The routes are IT's
+# (`routers/roster.py`), mounted again under /v1/admin for staff, who are not
+# in a customer's adminEmails.
+
+
+@pytest.fixture
+def staff_desk(monkeypatch, audited):
+    """The dev caller is staff and administers no licence."""
+    store = fake_firestore.install(monkeypatch)
+    monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
+    monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "email": "staff@semper.test"})
+    store._data["users"] = {
+        "dev-user": {"email": "staff@semper.test", "access_status": "APPROVED", "role": "admin"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+    }
+    return store
+
+
+@pytest.mark.asyncio
+async def test_staff_drive_a_roster_whose_admin_emails_do_not_name_them(staff_desk, client, audited):
+    license_id = _mint_institution()["license"]["id"]
+    assert "staff@semper.test" not in staff_desk._data["licenses"][license_id]["adminEmails"]
+    base = f"/v1/admin/licenses/{license_id}"
+
+    # IT's own route still refuses them, as for any foreign licence.
+    it = await client.get(f"/v1/institutions/licenses/{license_id}/seats")
+    assert it.status_code == 404
+
+    added = await client.post(f"{base}/seats", json={"email": "a@university.edu"})
+    assert added.status_code == 200, added.text
+    assert added.json()["seat"]["uid"] == "student"
+    invited = await client.post(f"{base}/seats", json={"email": "new@university.edu"})
+    assert invited.json()["invite"]["email"] == "new@university.edu"
+
+    listed = (await client.get(f"{base}/seats")).json()
+    assert [s["uid"] for s in listed["seats"]] == ["student"]
+    assert [i["email"] for i in listed["invites"]] == ["new@university.edu"]
+
+    held = await client.patch(f"{base}/seats/student", json={"enabled": False})
+    assert held.json()["seat"]["status"] == "disabled"
+    withdrawn = await client.delete(f"{base}/invites/{listed['invites'][0]['id']}")
+    assert withdrawn.status_code == 200
+    removed = await client.delete(f"{base}/seats/student")
+    assert removed.json() == {"licenseId": license_id, "uid": "student", "revoked": True}
+
+    actions = [r["action"] for r in audited]
+    assert actions == ["ADMIN_SEAT_ADD", "ADMIN_INVITE_ADD", "ADMIN_SEAT_PATCH",
+                       "ADMIN_INVITE_REVOKE", "ADMIN_SEAT_REVOKE"]
+
+
+@pytest.mark.asyncio
+async def test_staff_roster_routes_are_for_institution_licences_only(staff_desk, client):
+    solo = _mint_individual("solo@lab.org")["license"]["id"]
+    assert (await client.get(f"/v1/admin/licenses/{solo}/seats")).status_code == 404
+    assert (await client.get("/v1/admin/licenses/nope/seats")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_staff_seat_unbind_is_staff_not_the_holder(staff_desk, client, audited):
+    """Staff clears carry no cooldown; only the holder's own change does."""
+    minted = _mint_institution()
+    license_id = minted["license"]["id"]
+    attempt(repo.activate_license, "student", "a@university.edu", "old-dev", minted["key"])
+    base = f"/v1/admin/licenses/{license_id}/seats/student"
+
+    for _ in range(2):
+        r = await client.patch(base, json={"clearDeviceLock": True})
+        assert r.status_code == 200, r.text
+        assert r.json()["seat"]["deviceIdLock"] == ""
+    patches = [r for r in audited if r["action"] == "ADMIN_SEAT_PATCH"]
+    assert patches[0]["detail"]["previousDeviceId"] == "old-dev"
+
+
+@pytest.mark.asyncio
+async def test_a_roster_listing_pages(staff_desk, client):
+    license_id = _mint_institution()["license"]["id"]
+    for i in range(5):
+        staff_desk._data[f"licenses/{license_id}/seats"] = {
+            **staff_desk._data.get(f"licenses/{license_id}/seats", {}),
+            f"u{i}": {"uid": f"u{i}", "email": f"m{i}@university.edu", "status": "active"},
+        }
+    attempt_add(repo.add_institution_member, license_id, "later@university.edu")
+    base = f"/v1/admin/licenses/{license_id}/seats"
+
+    first = (await client.get(f"{base}?page_size=2")).json()
+    assert [s["uid"] for s in first["seats"]] == ["u0", "u1"]
+    assert first["page"]["hasMore"] is True
+    assert [i["email"] for i in first["invites"]] == ["later@university.edu"]
+
+    uids, token = [s["uid"] for s in first["seats"]], first["page"]["nextPageToken"]
+    while token:
+        page = (await client.get(f"{base}?page_size=2&page_token={token}")).json()
+        assert page["invites"] == []
+        uids += [s["uid"] for s in page["seats"]]
+        token = page["page"]["nextPageToken"]
+    assert uids == ["u0", "u1", "u2", "u3", "u4"]

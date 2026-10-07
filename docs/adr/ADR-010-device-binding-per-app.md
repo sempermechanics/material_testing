@@ -34,7 +34,7 @@ second device:
 **Phase 0 (#279).** A lock mismatch is Demo for the mismatched device's
 requests only; nothing is written. A revoked licence or a revoked/disabled
 seat still stores Demo, since that is the account's state and not one
-device's. `check_device_lock` refuses both (`_LOCK_REFUSED`). The clear's mode
+device's. `revalidate_device_lock` serves Demo for both. The clear's mode
 re-stamp (`_settle_holder`) stays, for accounts demoted before this change.
 
 **Phases 1–3.** Bind one device **per app**:

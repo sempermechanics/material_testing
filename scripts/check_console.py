@@ -27,6 +27,13 @@ runtime, and a person only discovers in production:
 7. Every `/v1/...` path a console calls is declared in the API Gateway spec.
    ESPv2 is an allowlist: a route missing there is unreachable in production
    no matter what the backend serves.
+8. Every backend code a console matches on is one the backend has: a code in
+   `backend/app/errors.py`, or a reconciliation reason. A renamed code
+   otherwise leaves the page's sentence for it unreachable, and the user sees
+   the raw code. `tests/test_error_codes.py` holds the same line for the app.
+
+Checks 2, 3, 7 and 8 read every module a page runs: its `<script src>` and,
+transitively, what those import by relative path.
 
 Run: `python scripts/check_console.py`. Exit 1 on the first failure found,
 after reporting all of them.
@@ -47,6 +54,8 @@ HOSTING = os.path.join(ROOT, "firebase-hosting")
 PUBLIC = os.path.join(HOSTING, "public")
 CONSOLE = os.path.join(PUBLIC, "console")
 GATEWAY = os.path.join(ROOT, "backend", "gateway", "openapi.yaml")
+ERRORS = os.path.join(ROOT, "backend", "app", "errors.py")
+RECONCILE = os.path.join(ROOT, "backend", "app", "repo", "reconcile.py")
 
 # The pages that carry a dashboard. `finishSignIn` and `finishReset` are auth
 # continue-URLs served under the strict global policy and are not consoles.
@@ -58,6 +67,32 @@ PAGES = [
 ]
 
 failures: list[str] = []
+
+_RELATIVE_IMPORT = re.compile(
+    r"""^\s*(?:import|export)\b[^;]*?\bfrom\s*["'](\.{1,2}/[^"']+)["']|^\s*import\s*["'](\.{1,2}/[^"']+)["']""",
+    re.M,
+)
+
+
+def page_modules(page: str) -> list[str]:
+    """Every module a page runs: each `<script src>` and, transitively, every
+    module those import by relative path. A page module split into parts
+    keeps every check below; reading only the entry script would let a moved
+    `$("id")` or `/v1` path escape them."""
+    html = read(page)
+    queue = [
+        os.path.normpath(os.path.join(os.path.dirname(page), src))
+        for src in re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html)
+    ]
+    seen: list[str] = []
+    while queue:
+        module = queue.pop(0)
+        if module in seen or not os.path.isfile(module):
+            continue
+        seen.append(module)
+        for a, b in _RELATIVE_IMPORT.findall(read(module)):
+            queue.append(os.path.normpath(os.path.join(os.path.dirname(module), a or b)))
+    return seen
 
 
 def fail(where: str, message: str) -> None:
@@ -77,6 +112,7 @@ def check_scripts() -> None:
     if not node:
         print("note: node not on PATH — module syntax not checked", file=sys.stderr)
 
+    parsed: set[str] = set()
     for page in PAGES:
         html = read(page)
 
@@ -92,7 +128,14 @@ def check_scripts() -> None:
             module = os.path.normpath(os.path.join(os.path.dirname(page), src.group(1)))
             if not os.path.isfile(module):
                 fail(page, f"loads {src.group(1)}, which does not exist")
-            elif node:
+
+        for module in page_modules(page):
+            for a, b in _RELATIVE_IMPORT.findall(read(module)):
+                target = os.path.normpath(os.path.join(os.path.dirname(module), a or b))
+                if not os.path.isfile(target):
+                    fail(module, f"imports {a or b}, which does not exist")
+            if node and module not in parsed:
+                parsed.add(module)
                 # Fed on stdin with an explicit module type. `node --check
                 # <path>` looks like the obvious call and is not: for a bare
                 # `.js` path Node 22 exits 0 on source that does not parse at
@@ -122,10 +165,7 @@ def check_element_ids() -> None:
         html = read(page)
         declared = set(re.findall(r'\bid="([^"]+)"', html))
 
-        for src in re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html):
-            module = os.path.normpath(os.path.join(os.path.dirname(page), src))
-            if not os.path.isfile(module):
-                continue
+        for module in page_modules(page):
             code = read(module)
             wanted = set(re.findall(r'\$\(\s*"([^"]+)"\s*\)', code))
             wanted |= set(re.findall(r'getElementById\(\s*"([^"]+)"\s*\)', code))
@@ -273,11 +313,7 @@ def segment_matches(called: str, declared: str) -> bool:
 def check_gateway() -> None:
     declared = gateway_paths()
     for page in PAGES:
-        html = read(page)
-        for src in re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html):
-            module = os.path.normpath(os.path.join(os.path.dirname(page), src))
-            if not os.path.isfile(module):
-                continue
+        for module in page_modules(page):
             for called in sorted(console_paths(read(module))):
                 parts = called.split("/")[1:]
                 if not any(
@@ -291,11 +327,37 @@ def check_gateway() -> None:
                                  f"allowlist, so it 404s in production")
 
 
+# ---------------- 8: every code a console matches, the backend has ---------
+
+_CODE = r"([a-z][a-z0-9]*(?:_[a-z0-9]+)+)"
+#: A code compared against (`=== "license_revoked"`) or used as a key in a
+#: code-to-sentence map (`license_revoked: "…"`).
+_MATCHED_CODE = re.compile(r'(?:===|!==)\s*"' + _CODE + '"' + r'|^\s*"?' + _CODE + r'"?\s*:', re.M)
+
+
+def backend_codes() -> set[str]:
+    codes = set()
+    for path in (ERRORS, RECONCILE):
+        codes |= set(re.findall(r'^[A-Z_]+ = "([a-z_]+)"', read(path), re.M))
+    return codes
+
+
+def check_codes() -> None:
+    known = backend_codes()
+    modules = {module for page in PAGES for module in page_modules(page)}
+    for module in sorted(modules):
+        matched = {a or b for a, b in _MATCHED_CODE.findall(read(module))}
+        for code in sorted(matched - known):
+            fail(module, f"matches {code!r}, which backend/app/errors.py does not "
+                         f"declare — a renamed code leaves this sentence unreachable")
+
+
 def main() -> int:
     check_scripts()
     check_element_ids()
     check_placeholders(check_hosting())
     check_gateway()
+    check_codes()
 
     if failures:
         print("Console checks failed:\n", file=sys.stderr)

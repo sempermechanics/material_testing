@@ -56,7 +56,7 @@ class Settings:
     #
     # This is a mint-time default only. A license already in Firestore that
     # carries no graceDays reads as ZERO, not as this value — see
-    # firestore_repo._grace_days. Otherwise deploying a grace default would
+    # repo.user_config._grace_days. Otherwise deploying a grace default would
     # retroactively reinstate every account that expired within the window.
     LICENSE_GRACE_DAYS_DEFAULT = _env_int("LICENSE_GRACE_DAYS_DEFAULT", "14")
 

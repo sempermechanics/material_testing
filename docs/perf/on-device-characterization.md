@@ -163,7 +163,7 @@ between them stays in the same broad band.
 ## Cloud components vs free-tier limits
 
 Endpoint/Firestore-write counts below are derived from the backend source
-(`backend/app/routers/`, `firestore_repo.py`) rather than live-measured per-call —
+(`backend/app/routers/`, `repo/`) rather than live-measured per-call —
 **approximate, order-of-magnitude**, not exact. GCP always-free quotas as commonly
 published (verify current values at gcp-quota-review time — these change):
 Cloud Run ~2M requests/mo + ~1 GiB egress/mo (NA egress only), Firestore 50K reads /
@@ -426,7 +426,7 @@ untracked sidecar is invisible to it by design, not evidence it's missing.
 - Cloud Run request counts for **restore** are now live-measured from production
   access logs (`gcloud logging read`), exact for the two sessions checked. **Backup**
   request/Firestore-write counts are still derived from reading the backend endpoint
-  structure (`backend/app/routers/`, `firestore_repo.py`), not live-measured —
+  structure (`backend/app/routers/`, `repo/`), not live-measured —
   order-of-magnitude, not exact.
 - The restore measurement reflects the **currently deployed production backend**
   (`indic-api`, last deployed 2026-08-12; the service is `semper-api` since #146), which predates every change from this

@@ -11,6 +11,7 @@ ID token or a device signature — it is not a user-facing route.
 """
 from __future__ import annotations
 
+import functools
 import json
 import logging
 
@@ -89,6 +90,16 @@ def enqueue_provision(sid: str) -> bool:
         return False
 
 
+@functools.lru_cache(maxsize=1)
+def _oidc_transport():
+    """The transport every callback's token check fetches Google's certificates
+    through. A new `Request()` per callback opened a new TCP and TLS connection
+    to Google on every task."""
+    from google.auth.transport import requests as ga_requests
+
+    return ga_requests.Request()
+
+
 def tasks_caller(authorization: str = Header(default="")) -> dict:
     """Authenticate a Cloud Tasks callback via its OIDC token.
 
@@ -102,13 +113,12 @@ def tasks_caller(authorization: str = Header(default="")) -> dict:
     if not authorization.startswith("Bearer "):
         raise HTTPException(401, errors.MISSING_BEARER)
 
-    from google.auth.transport import requests as ga_requests
     from google.oauth2 import id_token as ga_id_token
 
     audience = settings.TASKS_TARGET_BASE_URL.rstrip("/")
     try:
         claims = ga_id_token.verify_oauth2_token(
-            authorization[7:], ga_requests.Request(), audience or None,
+            authorization[7:], _oidc_transport(), audience or None,
         )
     except Exception as e:  # noqa: BLE001
         log.warning("task OIDC verification failed: %s", e)

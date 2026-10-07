@@ -1,7 +1,7 @@
 """Claiming a licence: the seat and individual-licence transactions, and the
 user-document patches they write.
 """
-from .. import apps
+from .. import apps, errors
 from ..licenses import (
     SEATING_FLOATING,
     KIND_INDIVIDUAL,
@@ -10,12 +10,16 @@ from ..licenses import (
     MODE_LICENSED,
     normalize_duration,
     normalize_seating,
+    normalize_email,
 )
 
 from . import _base
 from ._base import (
+    _is_institution,
+    _is_revoked,
     _CONTENDED,
     db,
+    _get_all,
     _license_mode,
     _mode_patch,
     _run_tx,
@@ -23,19 +27,18 @@ from ._base import (
 )
 
 
-def _public_claim_error(err: str, fallback: str) -> str:
-    """The wire code for a claim failure, contention included.
+def _public_claim_error(err: str) -> str:
+    """The wire code for a claim failure: `claim_contended` for a lost race.
 
-    Contention fails closed as `fallback` — granting a seat or a licence we
-    could not commit is the one outcome that breaks the cap, and a caller who
-    lost the race succeeds on their next request.
+    Contention fails closed — granting a seat or a licence we could not
+    commit is the one outcome that breaks the cap — and a caller who lost the
+    race succeeds on their next request.
     """
-    return fallback if err == _CONTENDED else err
+    return errors.CLAIM_CONTENDED if err == _CONTENDED else err
 
 
 def _emails_match(left, right) -> bool:
-    a = (left or "").strip().lower()
-    b = (right or "").strip().lower()
+    a, b = normalize_email(left), normalize_email(right)
     return bool(a and b and a == b)
 
 
@@ -122,17 +125,32 @@ def _drop_superseded_demo(uid: str, license_id: str) -> None:
     closes. Only `ensure_demo_license` writes `mode: demo` and
     `createdByUid: "system"` together.
     """
-    snap = db().collection("users").document(uid).get()
-    if not snap.exists or ((snap.to_dict() or {}).get("licenseId") or "") != license_id:
-        # Something has moved the account on again. Whatever it holds now is
-        # not this claim's to reason about.
-        return
-    for doc in db().collection("licenses").where("redeemedByUid", "==", uid).stream():
-        if doc.id == license_id:
-            continue
-        lic = doc.to_dict() or {}
-        if _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system":
-            doc.reference.delete()
+    _drop_superseded_demos([uid], license_id)
+
+
+#: Firestore caps an `in` filter at 30 values.
+_IN_LIMIT = 30
+
+
+def _drop_superseded_demos(uids: list[str], license_id: str) -> None:
+    """`_drop_superseded_demo` for a roster: one `get_all` for the accounts
+    and one query per 30 of them, where a restored institution licence used to
+    pay a read and a query per member."""
+    users = db().collection("users")
+    still_here = [
+        snap.id for snap in _get_all([users.document(u) for u in dict.fromkeys(uids) if u])
+        if snap.exists and ((snap.to_dict() or {}).get("licenseId") or "") == license_id
+    ]
+    # Accounts something has moved on again are not this claim's to reason
+    # about; the rest may still hold the Demo key they were given meanwhile.
+    for start in range(0, len(still_here), _IN_LIMIT):
+        chunk = still_here[start:start + _IN_LIMIT]
+        for doc in db().collection("licenses").where("redeemedByUid", "in", chunk).stream():
+            if doc.id == license_id:
+                continue
+            lic = doc.to_dict() or {}
+            if _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system":
+                doc.reference.delete()
 
 
 def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch: dict,
@@ -181,11 +199,11 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
             # Revoked between the read that found it and this transaction.
             return "invite_not_found"
         lic = lic_snap.to_dict() or {}
-        if (lic.get("status") or "active") == "revoked":
+        if _is_revoked(lic):
             return "license_revoked"
 
         seat = seat_snap.to_dict() if seat_snap.exists else None
-        if seat and seat.get("status") == "revoked":
+        if seat and _is_revoked(seat):
             # revoke_institution_seat() already freed this slot. A revoked seat
             # is not a permanent ban — the holder may be re-admitted and takes
             # a fresh slot through the normal maxSeats check below.
@@ -222,7 +240,7 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
                 locks[apps.field("deviceIdLock", app)] = device_id
             tx.set(seat_ref, {
                 "uid": uid,
-                "email": (email or "").strip().lower(),
+                "email": normalize_email(email),
                 **locks,
                 "status": "active",
                 "createdAt": _base.firestore.SERVER_TIMESTAMP,
@@ -241,24 +259,6 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
     if not err:
         _drop_superseded_demo(uid, license_id)
     return err
-
-
-def _individual_member_patch(license_id: str, lic: dict) -> dict:
-    """The user-document patch that attaches an individual licence.
-
-    The counterpart to `_institution_member_patch`, and shared for the same
-    reason: a licence reached by typing its key and one reached by signing in
-    at the invited address must entitle the holder identically.
-    """
-    patch = {
-        **_mode_patch(_license_mode(lic)),
-        "licenseId": license_id,
-        "licenseKind": KIND_INDIVIDUAL,
-        "licensePrefix": lic.get("keyPrefix") or "",
-        "updatedAt": _base.firestore.SERVER_TIMESTAMP,
-    }
-    patch.update(_license_mirror_patch(lic))
-    return patch
 
 
 def claim_individual_license(license_id: str, uid: str, email: str,
@@ -320,19 +320,21 @@ def claim_individual_license(license_id: str, uid: str, email: str,
     return err
 
 
-def _institution_member_patch(license_id: str, lic: dict) -> dict:
-    """The user-document patch that puts someone on an institution licence.
+def _member_patch(license_id: str, lic: dict) -> dict:
+    """The user-document patch that puts someone on `lic`.
 
-    Shared by the two ways onto a roster — IT adding an existing account, and
-    a newcomer redeeming an invite at sign-in — so the two cannot drift into
-    entitling people differently.
+    One patch for every way onto a licence — a key typed in the app, an
+    invite redeemed at sign-in, IT adding an existing account, staff minting
+    for one, a restore, a conversion — so they cannot drift into entitling
+    people differently. An institution seat is licensed whatever the key
+    record says; an individual licence grants the mode it carries.
     """
-    patch = {
-        **_mode_patch(MODE_LICENSED),
+    institution = _is_institution(lic)
+    return {
+        **_mode_patch(MODE_LICENSED if institution else _license_mode(lic)),
         "licenseId": license_id,
-        "licenseKind": KIND_INSTITUTION,
+        "licenseKind": KIND_INSTITUTION if institution else KIND_INDIVIDUAL,
         "licensePrefix": lic.get("keyPrefix") or "",
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+        **_license_mirror_patch(lic),
     }
-    patch.update(_license_mirror_patch(lic))
-    return patch

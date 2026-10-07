@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import apps, audit, errors, firestore_repo as repo, statuses
+from .. import apps, audit, errors, repo, statuses
 from .. import rate_limit
 from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
-from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION
+from ..licenses import KIND_INDIVIDUAL, KIND_INSTITUTION, normalize_kind
 from ..models import (
     AdminDeviceRelease,
     AdminLicenseConvert,
@@ -14,6 +14,7 @@ from ..models import (
 )
 from ..validation import AccessStatus, DocumentId, LicenceSearch, PageToken, Uid
 from ._shared import clamp_page_size, page_block
+from .roster import RosterAdmin, Tier, roster_router
 
 router = APIRouter()
 
@@ -42,7 +43,8 @@ def admin_list_users(
 
 
 @router.post("/v1/admin/users/{uid}/approve", dependencies=[rate_limited(rate_limit.admin_bucket)])
-def admin_approve_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
+def admin_approve_user(uid: Uid, ctx=Depends(attested_or_mfa_admin)):
+    admin = ctx.user
     if not repo.set_user_status(uid, statuses.ACCESS_APPROVED):
         raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_APPROVE", target={"type": "user", "id": uid})
@@ -50,7 +52,8 @@ def admin_approve_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depen
 
 
 @router.post("/v1/admin/users/{uid}/revoke", dependencies=[rate_limited(rate_limit.admin_bucket)])
-def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
+def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin)):
+    admin = ctx.user
     if not repo.set_user_status(uid, statuses.ACCESS_SUSPENDED):
         raise HTTPException(404, errors.USER_NOT_FOUND)
     audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
@@ -59,7 +62,7 @@ def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin), admin=Depend
 
 @router.post("/v1/admin/device-releases", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_release_account_device(body: AdminDeviceRelease,
-                                 ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
+                                 ctx=Depends(attested_or_mfa_admin)):
     """Free an account's registered phone so a new one can register (TD-126).
 
     For a Demo account, on request: it has no licence lock to clear, and the app
@@ -71,12 +74,11 @@ def admin_release_account_device(body: AdminDeviceRelease,
     Releases every app's phone (ADR-010); `releasedDeviceIdMaterialTesting`
     names the Material Testing one.
     """
+    admin = ctx.user
     user = repo.find_user_by_email(body.email)
     if user is None:
         raise HTTPException(404, errors.USER_NOT_FOUND)
-    err, released = repo.release_account_device(user["uid"])
-    if err:
-        raise HTTPException(404 if err == errors.USER_NOT_FOUND else 409, err)
+    released = repo.release_account_device(user["uid"])
     audit.record(
         admin["uid"], action="ADMIN_DEVICE_RELEASE",
         target={"type": "user", "id": user["uid"]},
@@ -88,10 +90,11 @@ def admin_release_account_device(body: AdminDeviceRelease,
 
 @router.patch("/v1/admin/users/{uid}/config", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_patch_user_config(uid: Uid, body: UserConfigPatch,
-                            ctx=Depends(attested_or_mfa_admin), admin=Depends(admin_user)):
+                            ctx=Depends(attested_or_mfa_admin)):
     """Set or clear per-user product-limit overrides on the Firestore user doc."""
     # model_dump(exclude_unset=True) keeps omitted fields out; explicit nulls
     # remain so set_user_config can DELETE_FIELD them.
+    admin = ctx.user
     patch = body.model_dump(exclude_unset=True)
     if not patch:
         raise HTTPException(400, errors.EMPTY_PATCH)
@@ -135,7 +138,6 @@ def admin_list_licenses(
 def admin_create_license(
     body: AdminLicenseCreate,
     ctx=Depends(attested_or_mfa_admin),
-    admin=Depends(admin_user),
 ):
     """Mint a licensed key.
 
@@ -153,6 +155,7 @@ def admin_create_license(
     Only Semper staff (this device-attested admin path) may mint or whole-key
     revoke; institution IT never reaches this route.
     """
+    admin = ctx.user
     if body.kind == KIND_INSTITUTION:
         minted = repo.create_institution_license(
             domain_lock=body.domainLock,
@@ -227,7 +230,6 @@ def admin_update_license(
     license_id: DocumentId,
     body: AdminLicenseUpdate,
     ctx=Depends(attested_or_mfa_admin),
-    admin=Depends(admin_user),
 ):
     """Device-attested, Semper-staff only. Change a license's terms in place.
 
@@ -252,6 +254,7 @@ def admin_update_license(
     and `adminEmails` (`license_edit_error` has every refusal). Unknown
     fields are a 422, not silently dropped.
     """
+    admin = ctx.user
     patch = body.model_dump(exclude_none=True)
     clear_lock = patch.pop("clearDeviceLock", False)
     # Every check is made before the lock is touched, so a refused edit never
@@ -261,23 +264,17 @@ def admin_update_license(
         current = repo.get_license(license_id)
         err = repo.license_edit_error(current, patch) if current else ""
         if err:
-            raise HTTPException(422, err)
-    cleared = {}
+            raise errors.Refusal(err)
     if clear_lock:
-        err, cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
-        if err:
-            raise HTTPException(404, err)
+        cleared = repo.clear_device_lock(license_id, actor=repo.ACTOR_STAFF)
         audit.record(
             admin["uid"], action="ADMIN_DEVICE_LOCK_CLEAR",
             target={"type": "license", "id": license_id},
-            detail={k: str(v) for k, v in (cleared or {}).items()},
+            detail={k: str(v) for k, v in cleared.items()},
         )
     # An empty patch is a device change on its own; `update_license` answers
     # with the licence as it stands and writes nothing, which is what that is.
-    try:
-        updated = repo.update_license(license_id, patch, admin["uid"])
-    except repo.LicenseTermsRejected as exc:
-        raise HTTPException(422, exc.code) from exc
+    updated = repo.update_license(license_id, patch, admin["uid"])
     if updated is None:
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     if patch:
@@ -296,7 +293,6 @@ def admin_update_license(
 def admin_delete_license(
     license_id: DocumentId,
     ctx=Depends(attested_or_mfa_admin_fresh),
-    admin=Depends(admin_user),
 ):
     """Delete a licence into a 30-day hold (`repo/deletion.py`). The same
     fresh step-up as a whole-licence revoke, which this runs first: holders
@@ -305,9 +301,8 @@ def admin_delete_license(
     until then `POST /v1/admin/deleted-licenses/{id}/restore` brings it back.
     A system Demo key is refused (409 `demo_key_not_deletable`).
     """
-    code, row = repo.delete_license(license_id, admin["uid"])
-    if code:
-        raise HTTPException(404 if code == errors.LICENSE_NOT_FOUND else 409, code)
+    admin = ctx.user
+    row = repo.delete_license(license_id, admin["uid"])
     audit.record(
         admin["uid"], action="ADMIN_LICENSE_DELETE",
         target={"type": "license", "id": license_id},
@@ -335,18 +330,11 @@ def admin_list_deleted_licenses(
 def admin_restore_license(
     license_id: DocumentId,
     ctx=Depends(attested_or_mfa_admin),
-    admin=Depends(admin_user),
 ):
     """Bring a deleted licence back within its hold. Holders are re-attached
     unless they have taken another licence since (one licence per person)."""
-    code, lic = repo.restore_license(license_id, admin["uid"])
-    if code:
-        status = {
-            errors.DELETED_LICENSE_NOT_FOUND: 404,
-            errors.DELETED_LICENSE_PURGED: 410,
-            errors.LICENSE_EXISTS: 409,
-        }.get(code, 409)
-        raise HTTPException(status, code)
+    admin = ctx.user
+    lic = repo.restore_license(license_id, admin["uid"])
     audit.record(
         admin["uid"], action="ADMIN_LICENSE_RESTORE",
         target={"type": "license", "id": license_id},
@@ -363,7 +351,6 @@ def admin_convert_license(
     license_id: DocumentId,
     body: AdminLicenseConvert,
     ctx=Depends(attested_or_mfa_admin),
-    admin=Depends(admin_user),
 ):
     """Device-attested, Semper-staff only. Replace an individual licence with
     an institution licence carrying its terms (`repo/upgrade.py`).
@@ -373,23 +360,18 @@ def admin_convert_license(
     in yet has their invite moved. The individual licence is then revoked
     with `supersededBy` set. The new key is returned once, as a mint does.
     """
-    code, out = repo.convert_to_institution(
-        license_id,
-        domain_lock=body.domainLock,
-        admin_emails=body.adminEmails,
-        max_seats=body.maxSeats,
-        seating=body.seating,
-        admin_uid=admin["uid"],
-    )
-    if code:
-        status = {
-            errors.LICENSE_NOT_FOUND: 404,
-            errors.LICENSE_REVOKED: 409,
-            errors.LICENSE_NOT_CONVERTIBLE: 409,
-            errors.CONVERT_DOMAIN_MISMATCH: 422,
-            errors.CLAIM_CONTENDED: 503,
-        }.get(code, 409)
-        raise HTTPException(status, code)
+    admin = ctx.user
+    # A revoked licence is a conflict to convert (409), where on the phone's
+    # own routes it is "you may not use it" (403).
+    with errors.restatus({errors.LICENSE_REVOKED: 409}):
+        out = repo.convert_to_institution(
+            license_id,
+            domain_lock=body.domainLock,
+            admin_emails=body.adminEmails,
+            max_seats=body.maxSeats,
+            seating=body.seating,
+            admin_uid=admin["uid"],
+        )
     audit.record(
         admin["uid"], action="ADMIN_LICENSE_CONVERT",
         target={"type": "license", "id": license_id},
@@ -408,7 +390,6 @@ def admin_clear_seat_device_lock(
     license_id: DocumentId,
     uid: Uid,
     ctx=Depends(attested_or_mfa_admin),
-    admin=Depends(admin_user),
 ):
     """Semper staff unbinding one institution seat from its device.
 
@@ -422,17 +403,15 @@ def admin_clear_seat_device_lock(
     Clearing is not revoking: the seat, its lease and the member's data are
     untouched, and the next device that signs in binds.
     """
-    err, cleared = repo.clear_device_lock(license_id, uid, actor=repo.ACTOR_STAFF)
-    if err:
-        raise HTTPException(404, err)
+    admin = ctx.user
+    cleared = repo.clear_device_lock(license_id, uid, actor=repo.ACTOR_STAFF)
     audit.record(
         admin["uid"], action="ADMIN_DEVICE_LOCK_CLEAR",
         target={"type": "seat", "id": f"{license_id}/{uid}"},
-        detail={k: str(v) for k, v in (cleared or {}).items()},
+        detail={k: str(v) for k, v in cleared.items()},
     )
     return {"licenseId": license_id, "uid": uid, "deviceIdLock": "",
-            **{k: (cleared or {}).get(k) or ""
-               for k in apps.spread("previousDeviceId", {})}}
+            **{k: cleared.get(k) or "" for k in apps.spread("previousDeviceId", {})}}
 
 
 @router.get("/v1/admin/licenses/{license_id}/device-history")
@@ -474,12 +453,7 @@ def admin_reconcile_license_seats(
     licence listing.
     """
     rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
-    err, report = repo.reconcile_institution_seats(license_id)
-    if err == errors.LICENSE_NOT_FOUND:
-        raise HTTPException(404, err)
-    if err:
-        raise HTTPException(400, err)
-    return report
+    return repo.reconcile_institution_seats(license_id)
 
 
 @router.post(
@@ -489,12 +463,12 @@ def admin_reconcile_license_seats(
 def admin_revoke_license(
     license_id: DocumentId,
     ctx=Depends(attested_or_mfa_admin_fresh),
-    admin=Depends(admin_user),
 ):
     """Whole-licence revoke. Browser callers need a *fresh* password/Google
     re-auth plus TOTP (ADMIN_WEB_REVOKE_REAUTH_SECONDS), tighter than ordinary
     dashboard mutations — the console forces step-up before this call.
     """
+    admin = ctx.user
     revoked = repo.revoke_license(license_id, admin["uid"])
     if revoked is None:
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
@@ -503,3 +477,36 @@ def admin_revoke_license(
         target={"type": "license", "id": license_id},
     )
     return revoked
+
+
+# ---------------- institution rosters, at the staff tier ----------------
+# The same roster routes IT has (`routers/roster.py`), for any institution
+# licence. Staff are not in a customer's `adminEmails`, and a support request
+# must not depend on whether they are. Reads take the ordinary admin token,
+# like the licence listing; changes take the staff step-up, like every other
+# staff write.
+
+
+def _staff_roster(license_id: str, user: dict) -> RosterAdmin:
+    lic = repo.get_license(license_id)
+    if not lic or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
+        raise HTTPException(404, errors.LICENSE_NOT_FOUND)
+    return RosterAdmin(user, license_id, lic)
+
+
+def staff_roster_reader(license_id: DocumentId, admin=Depends(admin_user)) -> RosterAdmin:
+    return _staff_roster(license_id, admin)
+
+
+def staff_roster_writer(license_id: DocumentId,
+                        ctx=Depends(attested_or_mfa_admin)) -> RosterAdmin:
+    return _staff_roster(license_id, ctx.user)
+
+
+router.include_router(
+    roster_router(Tier(
+        reader=staff_roster_reader, writer=staff_roster_writer,
+        bucket=rate_limit.admin_bucket, actor=repo.ACTOR_STAFF, audit="ADMIN",
+    )),
+    prefix="/v1/admin/licenses/{license_id}",
+)
