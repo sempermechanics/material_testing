@@ -310,44 +310,7 @@ class ViewerArgsTest {
 
     @Test
     fun `an Intent the base build wrote reads back field by field`() {
-        // Built by hand with the base build's keys and value types, not through
-        // toIntent: what an Intent already in a back stack carries must still read.
-        val sent = Intent(context, ResultViewerActivity::class.java)
-            .putExtra("IMG_W", 1920)
-            .putExtra("IMG_H", 1080)
-            .putExtra("STEP", 7)
-            .putExtra("REF_NAME", "ref.png")
-            .putExtra("REF_PATH", "/sessions/s1/ref.png")
-            .putExtra("DEF_PATH", "/tmp/def.png")
-            .putExtra("BATCH_DIR_PATH", "/sessions/s1")
-            .putStringArrayListExtra("DEF_FILE_NAMES", arrayListOf("f1.png", "f2.png"))
-            .putStringArrayListExtra("DEF_FILE_PATHS", arrayListOf("/tmp/f1.png"))
-            .putExtra("SWEEP_SUBSETS", intArrayOf(41, 51))
-            .putExtra("SWEEP_STEPS", intArrayOf(5, 7))
-            .putExtra("SWEEP_STRAIN_WINS", intArrayOf(15, 21))
-            .putExtra("LINE_CUT_HORIZONTAL", false)
-            .putExtra("SWEEP_SKIPPED", """[{"subset":61,"step":9,"strainWindow":27,"code":-3}]""")
-            .putExtra("STOP_CODE", 3)
-            .putExtra("PLANNED_FRAMES", 4)
-            .putExtra("SESSION_ID", "cloud-1")
-            .putExtra("SESSION_LOCAL_ID", "local-1")
-            .putExtra("SUBSET_SIZE", 31)
-            .putExtra("STRAIN_WINDOW", 21)
-            .putExtra("STRAIN_METHOD", "VSG")
-            .putExtra("ENGINE_STATS", floatArrayOf(1f, 2f))
-            .putExtra("ROI_X", 10)
-            .putExtra("ROI_Y", 20)
-            .putExtra("ROI_W", 300)
-            .putExtra("ROI_H", 400)
-            .putExtra("START_FRAME", 1)
-            .putExtra("TEST_TYPE", "bending")
-            .putExtra("CROSS_SECTION_MM2", 12.5f)
-            .putExtra("LOAD_AXIS_X", false)
-            .putExtra("LOADS_N", floatArrayOf(0f, 42f))
-            .putExtra("SPECIMEN_GEOMETRY", floatArrayOf(80f, 10.5f, 4f, 100f, 40f, 100f, 90f, 1.05f, -0.12f))
-            .putExtra("CURVE_CORRECTION", floatArrayOf(1.1f, 0.2f, 0.9f, -3f))
-
-        val read = ViewerArgs.from(sent, ::noRecord)
+        val read = ViewerArgs.from(baseBuildIntent(), ::noRecord)
 
         assertEquals(ImageSize(1920, 1080), read.imageSize)
         assertEquals(7, read.step)
@@ -372,6 +335,12 @@ class ViewerArgsTest {
         assertEquals(listOf(1f, 2f), read.engineStats)
         assertEquals(Roi(10, 20, 300, 400), read.roi)
         assertEquals(1, read.startFrame)
+    }
+
+    @Test
+    fun `the lab fields of an Intent the base build wrote read back`() {
+        val read = ViewerArgs.from(baseBuildIntent(), ::noRecord)
+
         assertEquals("bending", read.testType)
         assertEquals(12.5f, read.crossSectionMm2, 0f)
         assertFalse(read.loadAxisX)
@@ -382,6 +351,46 @@ class ViewerArgsTest {
         )
         assertEquals(CurveCorrection(1.1f, 0.2f, 0.9f, -3f), read.curveCorrection)
     }
+
+    /**
+     * Built by hand with the base build's keys and value types, not through
+     * toIntent: what an Intent already in a back stack carries must still read.
+     * This fork's base build wrote the lab keys on every Intent.
+     */
+    private fun baseBuildIntent(): Intent = Intent(context, ResultViewerActivity::class.java)
+        .putExtra("IMG_W", 1920)
+        .putExtra("IMG_H", 1080)
+        .putExtra("STEP", 7)
+        .putExtra("REF_NAME", "ref.png")
+        .putExtra("REF_PATH", "/sessions/s1/ref.png")
+        .putExtra("DEF_PATH", "/tmp/def.png")
+        .putExtra("BATCH_DIR_PATH", "/sessions/s1")
+        .putStringArrayListExtra("DEF_FILE_NAMES", arrayListOf("f1.png", "f2.png"))
+        .putStringArrayListExtra("DEF_FILE_PATHS", arrayListOf("/tmp/f1.png"))
+        .putExtra("SWEEP_SUBSETS", intArrayOf(41, 51))
+        .putExtra("SWEEP_STEPS", intArrayOf(5, 7))
+        .putExtra("SWEEP_STRAIN_WINS", intArrayOf(15, 21))
+        .putExtra("LINE_CUT_HORIZONTAL", false)
+        .putExtra("SWEEP_SKIPPED", """[{"subset":61,"step":9,"strainWindow":27,"code":-3}]""")
+        .putExtra("STOP_CODE", 3)
+        .putExtra("PLANNED_FRAMES", 4)
+        .putExtra("SESSION_ID", "cloud-1")
+        .putExtra("SESSION_LOCAL_ID", "local-1")
+        .putExtra("SUBSET_SIZE", 31)
+        .putExtra("STRAIN_WINDOW", 21)
+        .putExtra("STRAIN_METHOD", "VSG")
+        .putExtra("ENGINE_STATS", floatArrayOf(1f, 2f))
+        .putExtra("ROI_X", 10)
+        .putExtra("ROI_Y", 20)
+        .putExtra("ROI_W", 300)
+        .putExtra("ROI_H", 400)
+        .putExtra("START_FRAME", 1)
+        .putExtra("TEST_TYPE", "bending")
+        .putExtra("CROSS_SECTION_MM2", 12.5f)
+        .putExtra("LOAD_AXIS_X", false)
+        .putExtra("LOADS_N", floatArrayOf(0f, 42f))
+        .putExtra("SPECIMEN_GEOMETRY", floatArrayOf(80f, 10.5f, 4f, 100f, 40f, 100f, 90f, 1.05f, -0.12f))
+        .putExtra("CURVE_CORRECTION", floatArrayOf(1.1f, 0.2f, 0.9f, -3f))
 
     @Test
     fun `the typed views read the same fields`() {
