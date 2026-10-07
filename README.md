@@ -58,8 +58,8 @@ reports: [docs/app/REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)
 
 > **Lineage.** This repo holds the full history of
 > [`sempermechanics/semperdic-app`](https://github.com/sempermechanics/semperdic-app) at `bfe00e5`
-> (2026-09-21), and merges the parent's `main` back in (last at `643462c`, 2026-09-24).
-> - **Own app, shared backend.** It installs as `com.indicvision.semper.materialtesting`, beside
+> (2026-09-21), and merges the parent's `main` back in (`git log --merges --grep=semperdic-app`).
+> - **Own app, shared backend.** It installs as `com.sempermechanics.materialtesting` (ADR-019; `com.indicvision.semper.materialtesting` before), beside
 >   Semper, with its own signing key, and signs in to Semper's Firebase project and backend
 >   ([ADR-009](docs/adr/ADR-009-material-testing-app-identity.md)).
 > - **Deploys.** The backend deploys from the parent repo only, so the deploy workflows here fail if run.

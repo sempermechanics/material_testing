@@ -4,9 +4,9 @@ How a build goes from **`main`** to testers. Written for maintainers; nothing
 here is needed for day-to-day contributions. Secrets/vars layout:
 [ENVIRONMENTS.md](ENVIRONMENTS.md).
 
-This repo releases **Material Testing** (`com.indicvision.semper.materialtesting`),
+This repo releases **Material Testing** (`com.sempermechanics.materialtesting`, [ADR-019](../adr/ADR-019-sempermechanics-app-id.md)),
 not Semper: its signing secrets hold Material Testing's own key, and
-`INDIC_API_BASE_URL` is Semper's gateway, since both apps share one backend
+`SEMPER_API_BASE_URL` (or the older `INDIC_API_BASE_URL` var) is Semper's gateway, since both apps share one backend
 ([ADR-009](../adr/ADR-009-material-testing-app-identity.md)). The Asset Links
 check greps the whole file for the key's SHA-256, so add it to
 `assetlinks.json` in this repo and in `semperdic-app`, which deploys Hosting.
