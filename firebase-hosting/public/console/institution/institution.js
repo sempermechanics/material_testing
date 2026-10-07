@@ -1,9 +1,17 @@
 import { requireSignIn, api, setStatus, esc } from "../auth.js";
-import { seatCells, inviteCells, day, licenceStatePill } from "../util.js";
+import { day, licenceStatePill } from "../util.js";
+import { fetchRoster, wireRoster } from "../roster.js";
 
 let licenseId = "";
 
 const $ = (id) => document.getElementById(id);
+
+/** The open licence's roster routes, IT's tier; "" when none is open. */
+const base = () => (licenseId ? `/v1/institutions/licenses/${encodeURIComponent(licenseId)}` : "");
+
+const renderRows = wireRoster({
+  rows: $("rows"), email: $("addEmail"), add: $("add"), base, report: setStatus, reload: load,
+});
 
 requireSignIn(async (user) => {
   $("signedOut").hidden = true;
@@ -28,13 +36,16 @@ async function administersSomething(user) {
   try {
     licenses = (await api("/v1/institutions/licenses")).licenses || [];
   } catch (e) {
-    if (e.message !== "email_not_verified") {
+    if (e.code !== "email_not_verified") {
       setStatus(`Could not list your institution licences: ${e.message}`, true);
       return true;
     }
     licenses = [];
   }
-  if (licenses.length) return true;
+  if (licenses.length) {
+    offerLicences(licenses);
+    return true;
+  }
   $("app").hidden = true;
   $("notAdminWho").textContent = user.email;
   $("notAdmin").hidden = false;
@@ -42,18 +53,32 @@ async function administersSomething(user) {
   return false;
 }
 
+/**
+ * The licences this address administers, one click each, beside the id box.
+ * The listing already said which they are; asking IT to paste an id from an
+ * email it was sent months ago was the box's only purpose.
+ */
+function offerLicences(licenses) {
+  $("licenceChoices").innerHTML = licenses.map((lic) => `
+    <button class="secondary" data-pick="${esc(lic.id)}">${esc(lic.keyPrefix || lic.id.slice(0, 10))}${
+      lic.domainLock ? ` · ${esc(lic.domainLock)}` : ""}</button>`).join("");
+}
+
+$("licenceChoices").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button[data-pick]");
+  if (!btn) return;
+  $("licenseId").value = btn.dataset.pick;
+  load();
+});
 $("load").addEventListener("click", load);
 $("licenseId").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
-$("add").addEventListener("click", addMember);
-$("addEmail").addEventListener("keydown", (e) => { if (e.key === "Enter") addMember(); });
 
 async function load() {
   licenseId = $("licenseId").value.trim();
   if (!licenseId) return;
   setStatus("Loading…");
   try {
-    const data = await api(`/v1/institutions/licenses/${encodeURIComponent(licenseId)}/seats`);
-    render(data);
+    render(await fetchRoster(base()));
     setStatus("");
   } catch (e) {
     $("rosterCard").hidden = true;
@@ -63,7 +88,7 @@ async function load() {
     // nothing about other institutions. Say so rather than implying the id
     // was simply mistyped.
     setStatus(
-      e.message === "license_not_found"
+      e.code === "license_not_found"
         ? "No licence with that id that you administer."
         : `Could not load: ${e.message}`,
       true,
@@ -111,129 +136,6 @@ function render(data) {
   // Invites belong in the same list: to whoever manages the roster this
   // is one question — "who is on this licence" — even though only a seat
   // holds a uid and counts against the cap.
-  $("rows").innerHTML =
-    data.seats.map(seatRow).concat((data.invites || []).map(inviteRow)).join("") ||
-    '<tr><td colspan="5" class="muted">Nobody on this licence yet.</td></tr>';
+  renderRows(data.seats, data.invites);
   $("rosterCard").hidden = false;
-  for (const el of document.querySelectorAll("[data-act]")) {
-    el.addEventListener("click", () => act(el.dataset.act, el.dataset.uid));
-  }
-  for (const el of document.querySelectorAll("[data-invite]")) {
-    el.addEventListener("click", () => withdraw(el.dataset.invite));
-  }
 }
-
-function seatRow(seat) {
-  // A removed member holds nothing to hold, resume or unlock. Resume used to
-  // be offered here and reactivated the seat without taking a slot back;
-  // adding the address again is how someone comes back.
-  if (seat.status === "revoked") {
-    return `
-    <tr>${seatCells(seat)}
-      <td class="actions muted">add again to restore</td>
-    </tr>`;
-  }
-  return `
-    <tr>${seatCells(seat)}
-      <td class="actions">
-        ${seat.deviceIdLock || seat.deviceIdLockMaterialTesting
-          ? `<button class="secondary" data-act="clear" data-uid="${esc(seat.uid)}">New device</button>`
-          : ""}
-        ${seat.status === "active"
-          ? `<button class="secondary" data-act="hold" data-uid="${esc(seat.uid)}">Hold</button>`
-          : `<button class="secondary" data-act="unhold" data-uid="${esc(seat.uid)}">Resume</button>`}
-        <button class="danger" data-act="remove" data-uid="${esc(seat.uid)}">Remove</button>
-      </td>
-    </tr>`;
-}
-
-function inviteRow(invite) {
-  return `
-    <tr>${inviteCells(invite)}
-      <td class="actions">
-        <button class="danger" data-invite="${esc(invite.id)}">Withdraw</button>
-      </td>
-    </tr>`;
-}
-
-async function withdraw(inviteId) {
-  if (!confirm("Withdraw this invitation? Nobody has claimed it yet.")) return;
-  setStatus("Withdrawing…");
-  try {
-    await api(
-      `/v1/institutions/licenses/${encodeURIComponent(licenseId)}/invites/${encodeURIComponent(inviteId)}`,
-      { method: "DELETE" },
-    );
-    await load();
-  } catch (e) {
-    setStatus(`Could not withdraw: ${e.message}`, true);
-  }
-}
-
-async function addMember() {
-  const email = $("addEmail").value.trim();
-  if (!email) return;
-  setStatus("Adding…");
-  try {
-    const out = await api(
-      `/v1/institutions/licenses/${encodeURIComponent(licenseId)}/seats`,
-      { method: "POST", body: JSON.stringify({ email }) },
-    );
-    $("addEmail").value = "";
-    await load();
-    // Someone who has never opened Semper is invited rather than refused,
-    // so say which of the two happened — "added" and "invited" mean
-    // different things to whoever is chasing them.
-    setStatus(
-      out.seat
-        ? `${email} is on the licence now.`
-        : `${email} has not signed in yet — invited. They join automatically ` +
-          "the first time they do.",
-    );
-  } catch (e) {
-    setStatus(
-      {
-        invite_exists: `${email} is already promised a place on a different licence.`,
-        // One licence per person. Which licence is not IT's to know; Semper
-        // support can move them.
-        member_already_licensed: `${email} already has a Semper licence of their own. ` +
-          "Ask Semper support to move them onto this one.",
-        license_seats_exhausted: "This licence has no seats left.",
-        // Another request was claiming on this licence at the same moment.
-        // Nothing is wrong with it, and adding again succeeds.
-        claim_contended: "Busy just now — try again.",
-      }[e.message] || `Could not add ${email}: ${e.message}`,
-      true,
-    );
-  }
-}
-
-const ACTIONS = {
-  clear: { method: "PATCH", body: { clearDeviceLock: true }, verb: "Unlocking" },
-  hold: { method: "PATCH", body: { enabled: false }, verb: "Holding" },
-  unhold: { method: "PATCH", body: { enabled: true }, verb: "Resuming" },
-  remove: { method: "DELETE", verb: "Removing" },
-};
-
-async function act(action, uid) {
-  const spec = ACTIONS[action];
-  if (action === "remove" && !confirm("Remove this member? Their saved analyses stay untouched.")) {
-    return;
-  }
-  setStatus(`${spec.verb}…`);
-  try {
-    await api(
-      `/v1/institutions/licenses/${encodeURIComponent(licenseId)}/seats/${encodeURIComponent(uid)}`,
-      { method: spec.method, ...(spec.body ? { body: JSON.stringify(spec.body) } : {}) },
-    );
-    await load();
-  } catch (e) {
-    setStatus(ACT_ERRORS[e.message] || `Could not complete that: ${e.message}`, true);
-  }
-}
-
-const ACT_ERRORS = {
-  seat_revoked: "That member was removed. Add their address again to restore them.",
-  license_revoked: "This licence has been revoked, so its seats cannot be changed.",
-  seat_busy: "That seat changed while you were acting on it. Try again.",
-};

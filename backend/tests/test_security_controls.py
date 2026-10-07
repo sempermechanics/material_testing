@@ -226,3 +226,35 @@ async def test_costly_routes_have_in_process_limit(
     response = await client.request(method, path, json=json_body)
     assert response.status_code == 429
     assert response.json()["detail"] == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_a_body_over_the_cap_is_refused_before_it_is_read(client, monkeypatch):
+    """Every route used to buffer whatever body arrived."""
+    from app import main
+
+    monkeypatch.setattr(main, "MAX_BODY_BYTES", 1024)
+    declared = await client.post("/v1/sessions", content=b"{" + b" " * 2048 + b"}",
+                                 headers={"Content-Type": "application/json"})
+    assert declared.status_code == 413
+    assert declared.json() == {"detail": "request_too_large"}
+    assert declared.headers["x-content-type-options"] == "nosniff"
+
+    async def chunks():
+        for _ in range(4):
+            yield b" " * 512
+
+    # Sent without a length, it is counted as it arrives.
+    streamed = await client.post("/v1/sessions", content=chunks(),
+                                 headers={"Content-Type": "application/json"})
+    assert streamed.status_code == 413
+    assert streamed.json() == {"detail": "request_too_large"}
+
+
+@pytest.mark.asyncio
+async def test_a_body_under_the_cap_is_served(client, monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(main, "MAX_BODY_BYTES", 1024)
+    r = await client.post("/v1/sessions", json={})
+    assert r.status_code == 422

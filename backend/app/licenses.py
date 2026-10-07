@@ -1,6 +1,6 @@
 """License key format, hashing, and the entitlement-mode vocabulary.
 
-Firestore persistence lives in firestore_repo.
+Firestore persistence lives in `app.repo`.
 
 `mode` is the account's enforcement state: `licensed` (a valid, unexpired
 license is attached) or `demo` (everything else — no license, expired past
@@ -205,6 +205,12 @@ def key_prefix(key: str) -> str:
 def normalize_email(email: str) -> str:
     """Lowercased and trimmed — the one spelling every lookup uses."""
     return (email or "").strip().lower()
+
+
+def email_domain(email: str) -> str:
+    """The domain an address is at, normalised; "" for no address."""
+    address = normalize_email(email)
+    return address.rsplit("@", 1)[-1] if "@" in address else ""
 
 
 def invite_id(email: str) -> str:

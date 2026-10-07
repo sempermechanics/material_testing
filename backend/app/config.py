@@ -46,7 +46,7 @@ class Settings:
     # the frame count; 600 was sized for earlier builds that sent one file per
     # artifact (3 x frames + 4).
     # MAX_FRAMES_PER_ANALYSIS is the deformed-frame ceiling the app enforces
-    # (DicSettings.MAX_MAX_FRAMES, the app's offline fallback, is also 500).
+    # (AppSettings.MAX_MAX_FRAMES, the app's offline fallback, is also 500).
     DEMO_MAX_ANALYSES = _env_int("DEMO_MAX_ANALYSES", "25")
     LICENSED_MAX_SESSIONS_PER_USER = _env_int("LICENSED_MAX_SESSIONS_PER_USER", "999")
 
@@ -56,7 +56,7 @@ class Settings:
     #
     # This is a mint-time default only. A license already in Firestore that
     # carries no graceDays reads as ZERO, not as this value — see
-    # firestore_repo._grace_days. Otherwise deploying a grace default would
+    # repo.user_config._grace_days. Otherwise deploying a grace default would
     # retroactively reinstate every account that expired within the window.
     LICENSE_GRACE_DAYS_DEFAULT = _env_int("LICENSE_GRACE_DAYS_DEFAULT", "14")
 
@@ -183,7 +183,7 @@ class Settings:
     # The Firebase Web API key ships inside the APK (google-services.json) and
     # is an identifier, not a secret, so anyone can mint a genuine ID token from
     # a script. For the routes behind `verified_device` or a step-up tier that
-    # buys an attacker nothing — a DeviceKeyManager signature is a stronger
+    # buys an attacker nothing — a DeviceKeys signature is a stronger
     # proof than App Check. The exposed set is the ID-token-only routes, and
     # `POST /v1/licenses/checkout` is the one worth abusing: it reads the device
     # id from a *header* and doubles as the seat heartbeat, so a scripted client

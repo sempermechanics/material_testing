@@ -71,7 +71,7 @@ async function licencesAdministered() {
     const out = await api("/v1/institutions/licenses");
     return { licenses: out.licenses || [], certain: true };
   } catch (e) {
-    if (e.message === "email_not_verified") return { licenses: [], certain: true };
+    if (e.code === "email_not_verified") return { licenses: [], certain: true };
     return { licenses: [], certain: false, why: e.message };
   }
 }

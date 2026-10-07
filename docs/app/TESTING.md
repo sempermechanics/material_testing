@@ -11,13 +11,13 @@ chunk own?" here.
 | Chunk | User journey | JVM tests (`app/src/test`) | Instrumented (`androidTest`) |
 |-------|--------------|---------------------------|------------------------------|
 | **auth** | Splash → Auth / Pending / Home, re-auth, password rules | `auth/AccessRouterTest`, `ReauthFlowTest`, `PasswordPolicyTest` | `auth/FirebaseAuthIntegrationTest` |
-| **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability; the wizard across a process death | `analysis/AnalysisViewModelTest`, `WizardStateTest`, `VsgStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecodeTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest`, `SweepSetupHelperTest`, `DicBatchRunnerLimitTest`, `ui/common/MediaPickerSheetTest`, `ui/analysis/StudioOverlayViewTest`, `RoiViewportTest`, `RoiDrawActivityTest`, `VsgLatticeViewTest`, `VsgPlotViewTest` | `ui/analysis/WizardDraftRestoreTest` (incl. a bending wizard's load log, taps and frame times); `e2e/RoiEditorGestureTest` (ROI editor under real touches: pinch keeps the ROI's pixels, two-finger pan stops at the edge, double-tap 2× / fit, a stray tap keeps the ROI, a zoomed draw saves the pixels under the finger) |
+| **analysis** | Import → ROI → batch / parameter sweep; speckle and noise-floor suitability; the wizard across a process death | `analysis/AnalysisViewModelTest`, `WizardStateTest`, `SweepStudyTest`, `SubsetRecommenderTest`, `ConvergenceGateTest`, `DicGoodPracticeTest`, `SpeckleScaleTest`, `NoiseFloorProbeTest`, `NoiseFloorStatsTest`, `NoiseCorrelationTest`, `FrameOrderHelperTest`, `BitmapDecoderTest`, `ExifOrientedSizeTest`, `LossyFormatCheckTest`, `RawRgbaTest`, `SweepSetupControllerTest`, `BatchAnalysisLimitTest`, `ui/common/media/MediaPickerSheetTest`, `ui/analysis/roi/StudioOverlayViewTest`, `RoiDrawActivityTest`, `SweepLatticeViewTest`, `RoiViewportTest`, `SweepPlotViewTest` | `ui/analysis/wizard/WizardDraftRestoreTest`; `e2e/RoiEditorGestureTest` (ROI editor under real touches: pinch keeps the ROI's pixels, two-finger pan stops at the edge, double-tap 2× / fit, a stray tap keeps the ROI, a zoomed draw saves the pixels under the finger) |
 | **session** | Session store durability, disk footprint, failure provenance; the Home list and its multi-select | `session/SessionStoreAtomicTest`, `LocalStorageFootprintTest`, `FailureProvenanceTest`, `ui/home/SessionListAdapterTest`, `SessionSelectionControllerTest`, `CloudBackupsCardTest` | — |
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `AnalysisCsvSectionsTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest`, `PdfReportGeneratorTest` | `report/PdfReportDeviceTest` |
-| **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ShareCenterTest`, `ui/viewer/ViewerArgsTest`, `TouchImageViewTest`, `ViewerSettingsSheetTest`, `analysis/RunSpecTest`, `viewer/TouchImageViewScrubTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
-| **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `RestoreStartTest`, `CloudBackupListingTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest`, `data/SessionUploadBundlerTest` | `data/SessionUploadBundlerDeviceTest` |
-| **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `DicSettingsMigrateTest` | — |
-| **analytics** | Consent-gated Firebase Analytics events | `analytics/SemperAnalyticsTest` | — |
+| **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ShareCenterTest`, `viewer/TouchImageViewScrubTest`, `ui/viewer/ViewerArgsTest`, `TouchImageViewTest`, `SettingsUsedSheetTest`, `analysis/RunSpecTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
+| **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `RestoreStartTest`, `CloudBackupListingTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest`, `data/cloud/SessionUploadBundlerTest` | `data/cloud/SessionUploadBundlerDeviceTest` |
+| **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `AppSettingsMigrateTest` | — |
+| **analytics** | Consent-gated Firebase Analytics events | `diagnostics/SemperAnalyticsTest` | — |
 | **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |
 | **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
 | **lab** | Tensile and bending sessions: E from the phone's own `.dat` files, the viewer opening on Results, the Elastic region toggle, the lab-report PDF; viewer gestures (flick and slow swipe scrub one frame, pinch, pan, tap to probe); the beam-edge tap editor under real touches (bottom mark held to the top's x, zoom kept between taps) | `report/*` (`ElasticModulusTest`, `BeamDeflectionTest`, `LabReportTest`, …) | `e2e/LabWorkflowDeviceTest`, `e2e/BeamTapEditorGestureTest` |
@@ -32,16 +32,31 @@ chunk own?" here.
 - **JVM tests** own Kotlin orchestration and data contracts. Do not add JVM
   tests that re-assert displacement accuracy.
 
+## Shared fixtures
+
+Reach for these before writing a local helper; each replaced several
+hand-rolled copies (#315, #330).
+
+| Fixture | File (under `app/src/test/java/com/sempermechanics/semper/`) | Use it for |
+|---|---|---|
+| `sessionRecord(...)` | `fixtures/SessionRecords.kt` | A `SessionRecord` with every required field defaulted (one frame, 100 × 100 px, subset 41, step 5, the whole image as ROI). Name only the fields the test cares about |
+| `packDat`, `gridFrame`, `writeGridBatch` | `fixtures/DatFixtures.kt` | `.dat` bytes in the engine's layout, a synthetic grid frame, or a whole batch of them in a folder |
+| `viewerArgs`, `viewerController`, `launchViewer` | `fixtures/ViewerFixture.kt` | A `ResultViewerActivity` under Robolectric on a `writeGridBatch` batch; keep the controller to recreate the viewer |
+| `idleUntil(what, timeoutMs) { done }` | `fixtures/Robo.kt` | Waiting for work that runs on a background dispatcher and posts back to main: idles the main looper until `done` holds, and names `what` when it times out. Use it instead of `Thread.sleep` or a bare `idle()` |
+| `CleanAppState` | `fixtures/CleanAppState.kt` | A JUnit rule: signed out, no saved sessions, before and after each test (token store, remote config, session index and folders) |
+| `MockWebServerRule` | OkHttp's `mockwebserver3.junit4` | Starting and closing a `MockWebServer` per test; do not start one by hand |
+| `WizardTestBed`, `FakeWizardHost` | `ui/analysis/WizardTestBed.kt` | The wizard's parts one at a time: its views in a plain themed Activity, a fresh `AnalysisViewModel`, and a host that counts what each part asks of it. Pass `resumed = false` for a part that registers a result launcher |
+
 ## Running by chunk
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.auth.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.session.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.analysis.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.results.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.cloud.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.settings.*"
-./gradlew :app:testDebugUnitTest --tests "com.indicvision.semper.viewer.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.auth.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.session.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.analysis.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.results.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.cloud.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.settings.*"
+./gradlew :app:testDebugUnitTest --tests "com.sempermechanics.semper.viewer.*"
 ```
 
 `settings/HelpSupportSectionTest` drives the real `SettingsActivity` under
@@ -55,10 +70,10 @@ than a decoder of ours: the encoder is written against the GIF89a spec by hand,
 so the only claim worth making is that a third-party decoder agrees.
 
 `analysis/WizardStateTest` covers the wizard's process-death restore on the
-JVM, `ui/analysis/WizardDraftRestoreTest` covers it through a real Parcel on a
+JVM, `ui/analysis/wizard/WizardDraftRestoreTest` covers it through a real Parcel on a
 device, and neither can kill the process. The kill is a scripted pass: take
-the wizard to step 2, press Home, run `adb shell am kill com.indicvision.semper.materialtesting`
-(if `pidof` still shows the process, `adb shell run-as com.indicvision.semper.materialtesting
+the wizard to step 2, press Home, run `adb shell am kill com.sempermechanics.materialtesting`
+(if `pidof` still shows the process, `adb shell run-as com.sempermechanics.materialtesting
 kill -9 <pid>`), then reopen from Recents. Step, sliders, ROI and both slots
 must come back. Run it once more with `run-as … rm -rf cache/temp_deformed`
 before reopening: expect an empty step 1 and the "cleared while Semper was in
@@ -84,9 +99,9 @@ fixed, so a change in allocations is caused by the code and nothing else.
 
 ```bash
 ./gradlew :app:installDebug :app:installDebugAndroidTest
-adb shell am instrument -w -e class com.indicvision.semper.benchmark.HotPathMicroBenchmark \
+adb shell am instrument -w -e class com.sempermechanics.semper.benchmark.HotPathMicroBenchmark \
   -e androidx.benchmark.suppressErrors EMULATOR,DEBUGGABLE,LOW-BATTERY,UNLOCKED,ACTIVITY-MISSING,NOT-AOT-COMPILED \
-  com.indicvision.semper.materialtesting.test/androidx.test.runner.AndroidJUnitRunner
+  com.sempermechanics.materialtesting.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 Emulators on API 34 and 37 both raise `ACTIVITY-MISSING` and `NOT-AOT-COMPILED`
@@ -138,11 +153,11 @@ Four things that will otherwise cost you an afternoon:
 
 - **The connected task installs over whatever is on the phone, then uninstalls it.**
   `:benchmark:connectedBenchmarkAndroidTest` installs the `benchmark` build over an
-  existing `com.indicvision.semper.materialtesting` (same debug key), keeping its data, and uninstalls
+  existing `com.sempermechanics.materialtesting` (same debug key), keeping its data, and uninstalls
   the app when it finishes, taking that data with it. Back up anything you need first.
   A signed-in session left over from a debug install also changes the launch route
   (Splash → Home rather than sign-in); before TD-90 that crashed both `StartupBenchmark`
-  cases on a build with no `INDIC_API_BASE_URL`.
+  cases on a build with no `SEMPER_API_BASE_URL` (found on a Pixel 6 in material_testing).
 
 Results land as `*-benchmarkData.json` under the module's
 `build/outputs/connected_android_test_additional_output/`. A worked before/after
@@ -217,7 +232,7 @@ gated: debuggable and not AOT-compiled, they are relative numbers only.
 **The phone's state (TD-135, [ADR-008](../adr/ADR-008-startup-gates-phone-state.md)).**
 A startup time moves 30–40 % with heat and the charger, so a result is gated only
 in the state the references assume. `DeviceStateRule` (in every gated benchmark
-class) writes `com.indicvision.semper.benchmark-deviceState.json` next to the
+class) writes `com.sempermechanics.semper.benchmark-deviceState.json` next to the
 results: per test, the thermal status, battery temperature and level, charger,
 free memory and swap, at its start and end. A result whose test ran above
 `state.maxThermalStatus` (0) or off the charger (`state.requirePlugged`) prints
@@ -291,7 +306,7 @@ Worth knowing before you assume something is protected:
 
 - The strain plot's own gestures — scrub, pinch, pan, double-tap, and the
   fraction it reports to the scrub slider (NaN once the scrub clears) — are
-  covered by `ui/analysis/VsgPlotViewTest`. The lattice screen around it — the
+  covered by `ui/analysis/sweep/SweepPlotViewTest`. The lattice screen around it — the
   slider itself, double-tap-to-copy and the composed **Save graph** PNG — has
   **no automated coverage**; it is exercised only by the manual pass in
   [WORKFLOWS.md](WORKFLOWS.md) §7.
@@ -330,7 +345,7 @@ Re-run them after a change to the solve, the strain window, `ElasticModulus` or
 
 ## What not to test here
 
-- Algorithm accuracy → the engine's own suite, which lives in the `native/`
+- Algorithm accuracy → the engine's own suite, which lives in the `engine/`
   submodule and runs in the engine repo's CI, not here
   ([docs/engine/TESTING.md](../engine/TESTING.md))
 - Backend API → backend pytest (`backend/tests/`)

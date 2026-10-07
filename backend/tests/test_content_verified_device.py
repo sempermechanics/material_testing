@@ -1,7 +1,7 @@
 """GET /v1/files/{id}/content must use verified_device (not bare current_user)."""
 import inspect
 
-from app.main import download_file
+from app.routers.files import download_file
 from app.deps import verified_device
 
 

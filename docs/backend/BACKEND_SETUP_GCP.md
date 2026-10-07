@@ -21,11 +21,11 @@ without a backend; do this only if you are deploying the cloud side yourself.
 > - ✅ The **backend** (`backend/app/*.py`) is complete: auth, device binding,
 >   Firestore, keyless Drive resumable uploads. You can deploy and smoke-test it
 >   with `curl` right now (Parts A + B).
-> - ✅ The **Android client is implemented** — `data/net/` (IndicApi, TokenStore,
->   TokenProvider), `DeviceKeyManager`, `AuthRepository`, and
+> - ✅ The **Android client is implemented** — `data/net/` (SemperApi, AccountCache,
+>   TokenProvider), `DeviceKeys`, `AuthRepository`, and
 >   `DicUploadWorker` (resumable PUT straight to Drive). Part C is the
 >   operational path to point the app at your deployment and test it.
-> - Cloud sync stays off entirely until `INDIC_API_BASE_URL` is set (C1), so
+> - Cloud sync stays off entirely until `SEMPER_API_BASE_URL` is set (C1), so
 >   the app builds and runs fully offline without any of this.
 >
 > Steps marked 🖐️ happen in a web console (can't be scripted). Do them in order;
@@ -45,7 +45,7 @@ without a backend; do this only if you are deploying the cloud side yourself.
 - `curl` + `python` (3.12) for the smoke test.
 
 ```bash
-export PROJECT=indic-prod          # your GCP project id (placeholder — replace)
+export PROJECT=semper-prod          # your GCP project id (placeholder — replace)
 export REGION=asia-south1          # pick one near you; Firestore must match
 export API_SA=indic-api@$PROJECT.iam.gserviceaccount.com
 gcloud config set project $PROJECT
@@ -96,9 +96,11 @@ shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
 
 ### A2b. Deploy the composite indexes
 
-`backend/firestore.indexes.json` declares four composite indexes: the
-duplicate-session lookup's (`sessions`: `uid`, `localSessionId`, `status`) and
-three for the staff licence list (`licenses`: `mode` + `createdAt` DESC,
+`backend/firestore.indexes.json` declares five composite indexes: the
+duplicate-session lookup's (`sessions`: `uid`, `localSessionId`, `status`), the
+account export's (`files`: `uid` + `sessionId`, so the export reads the
+account's files as one stream ordered by session), and three for the staff
+licence list (`licenses`: `mode` + `createdAt` DESC,
 `mode` + `status` + `createdAt` DESC, `status` + `createdAt` DESC). Every other query the backend and the consoles run is a single-field equality or
 `array-contains`, optionally ordered by `__name__`, and Firestore serves those
 from its automatic single-field indexes — do not add `field + __name__` entries
@@ -144,7 +146,7 @@ gcloud projects add-iam-policy-binding $PROJECT \
 
 ### A5. 🖐️ Add the SA to the Shared Drive
 In **Google Drive → `Semper-Research-Storage` → Manage members**, add
-`indic-api@indic-prod.iam.gserviceaccount.com` as **Manager**.
+`indic-api@semper-prod.iam.gserviceaccount.com` as **Manager**.
   > Use **Manager**, not Content manager. Content manager can upload but
   > **cannot permanently delete**: `files.delete` needs *organizer* rights on
   > the parent, so GDPR erasure silently fails without it.
@@ -338,7 +340,7 @@ Everything above is required (or near enough). These are the rest of what
 | `MAX_FRAMES_PER_ANALYSIS` | `500` | Deformed-frame ceiling the app enforces |
 | `ROOT_FOLDER_ID` | `SHARED_DRIVE_ID` | A folder inside the Shared Drive to root everything under, instead of the drive root |
 | `TASKS_QUEUE` · `TASKS_LOCATION` · `TASKS_TARGET_BASE_URL` · `TASKS_INVOKER_SA` | unset / `asia-south1` / unset / `SERVICE_ACCOUNT_EMAIL` | Async provisioning — see A6. Leave `TASKS_QUEUE` empty to provision inline |
-| `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions |
+| `TASKS_PROVISION_WORKERS` | `8` | Fan-out when the provisioning task opens resumable sessions: how many of one session's calls run at once on the process-wide Drive pool (64 workers, the size of the Drive connection pool) |
 | `INLINE_PROVISION_MAX_FILES` | `8` | Manifests this small provision inside `POST /v1/sessions` instead of through the queue. `0` sends everything through Cloud Tasks |
 | `CLIENT_NONCE_WINDOW_SECONDS` | `120` | How far a device-minted `t1.` nonce's timestamp may be from server time ([CLOUD_ARCHITECTURE_GCP.md §3](CLOUD_ARCHITECTURE_GCP.md)). `0` refuses client nonces, so every signed call fetches a challenge |
 | `APP_CHECK_MODE` | `off` | `off` / `monitor` / `enforce`. Whether a caller sending `X-Device-Id` must also carry a valid Firebase App Check token. Roll out through `monitor` — see [AUTH_SETUP.md §3.2](AUTH_SETUP.md). A value outside the three fails startup. **Never `enforce` while a build without App Check is still installed** — every request from it would 403 |
@@ -542,8 +544,8 @@ Then use `URL=http://localhost:8080` in the B2 steps.
 
 ## Part C — Connect & test the Android app
 
-> **The client code is implemented.** `data/net/` (IndicApi, TokenStore,
-> TokenProvider, ApiDtos), the EC-P256 `DeviceKeyManager` (challenge-response),
+> **The client code is implemented.** `data/net/` (SemperApi, AccountCache,
+> TokenProvider, ApiDtos), the EC-P256 `DeviceKeys` (challenge-response),
 > `AuthRepository` (Google, email/password, or email-link sign-in) and `DicUploadWorker` (resumable PUT
 > direct to Drive) are all in the app. This part is the **operational** steps
 > to point the app at your live backend and test it.
@@ -636,7 +638,7 @@ gcloud api-gateway gateways describe semper-gw --location $GW_REGION \
 ```
 Leave Cloud Run **ingress at its default** (`all`) — the gateway calls the
 `run.app` URL and only its SA has `run.invoker`, so direct calls still 403; only
-the gateway gets through. In **C1**, set `INDIC_API_BASE_URL` to
+the gateway gets through. In **C1**, set `SEMPER_API_BASE_URL` to
 `https://<gateway defaultHostname>` (not the `run.app` URL).
 
 #### Redeploying the gateway after a route change
@@ -722,12 +724,12 @@ deleted once nothing points at them.
 
 In `local.properties`:
 ```properties
-INDIC_API_BASE_URL=https://semper-gw-xxxx.an.gateway.dev
+SEMPER_API_BASE_URL=https://semper-gw-xxxx.an.gateway.dev
 ```
-Blank `INDIC_API_BASE_URL` = offline-only (cloud disabled). Rebuild after editing.
+Blank `SEMPER_API_BASE_URL` = offline-only (cloud disabled). Rebuild after editing.
 
 Release builds go further. The release workflow passes `-PrequireCloudApi=true`,
-and `app/build.gradle.kts` then **fails the build** if `INDIC_API_BASE_URL` is
+and `app/build.gradle.kts` then **fails the build** if `SEMPER_API_BASE_URL` is
 blank or does not start with `https://` — offline-only must not ship by accident,
 and cleartext would put ID tokens and device signatures on the wire in plain
 text. Set the variable from the environment or `local.properties` when building a
@@ -783,7 +785,7 @@ Firestore directly.
 - Build a **debug** APK and install on a **Google-Play** emulator or a real
   device (plain AOSP images can't do Google Sign-In).
   - The debug auth-skip now only applies when **no** backend is configured. With
-    `INDIC_API_BASE_URL` set (C1), even a debug build runs the **real** sign-in
+    `SEMPER_API_BASE_URL` set (C1), even a debug build runs the **real** sign-in
     flow — so device testing exercises the full path.
 - Sign in with a Google account:
   - **`@indicvision.com`** → auto-APPROVED → straight into the app.

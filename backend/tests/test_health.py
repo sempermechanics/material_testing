@@ -1,6 +1,7 @@
 import pytest
 
-from app import drive, firestore_repo as repo
+from app import drive
+import repo_view as repo
 from app.observability import DependencyError
 
 
@@ -19,7 +20,7 @@ async def test_healthz_stays_up_when_dependencies_are_down(client, monkeypatch):
     def unreachable(*a, **k):
         raise DependencyError("firestore_unreachable", "firestore")
 
-    monkeypatch.setattr(repo, "ping", unreachable)
+    repo.patch(monkeypatch, "ping", unreachable)
     monkeypatch.setattr(drive, "ping", unreachable)
 
     resp = await client.get("/healthz")
@@ -30,7 +31,7 @@ async def test_healthz_stays_up_when_dependencies_are_down(client, monkeypatch):
 async def test_readyz_reports_which_dependency_failed(client, monkeypatch):
     """Readiness does the opposite, with a stable code the deploy smoke gate
     and load balancer can act on without parsing prose."""
-    monkeypatch.setattr(repo, "ping", lambda: None)
+    repo.patch(monkeypatch, "ping", lambda: None)
     monkeypatch.setattr(
         drive, "ping",
         lambda *a, **k: (_ for _ in ()).throw(DependencyError("drive_unhealthy", "drive")),
@@ -43,7 +44,7 @@ async def test_readyz_reports_which_dependency_failed(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_readyz_ok_reports_both_checks(client, monkeypatch):
-    monkeypatch.setattr(repo, "ping", lambda: None)
+    repo.patch(monkeypatch, "ping", lambda: None)
     monkeypatch.setattr(drive, "ping", lambda *a, **k: None)
 
     resp = await client.get("/readyz")

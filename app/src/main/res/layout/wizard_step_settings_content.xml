@@ -233,7 +233,7 @@
                             android:layout_height="1dp"
                             android:layout_weight="1" />
                         <EditText
-                            android:id="@+id/tvSubsetValue"
+                            android:id="@+id/etSubsetValue"
                             android:layout_width="52dp"
                             android:layout_height="wrap_content"
                             android:background="@android:color/transparent"
@@ -245,7 +245,7 @@
                             android:maxLength="3"
                             android:paddingTop="0dp"
                             android:paddingBottom="0dp"
-                            android:text="@string/label_41"
+                            tools:text="41"
                             android:textColor="@color/sky_primary"
                             android:textStyle="bold" />
 
@@ -259,7 +259,7 @@
                     </LinearLayout>
 
                     <com.google.android.material.slider.Slider
-                        android:id="@+id/etSubsetSize"
+                        android:id="@+id/sliderSubsetSize"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:valueFrom="15"
@@ -288,7 +288,7 @@
                          place instead of somewhere the user cannot see. -->
                     <include
                         android:id="@+id/speckleSpanWarnRow"
-                        layout="@layout/warn_chip_row"
+                        layout="@layout/view_warn_chip"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
@@ -348,7 +348,7 @@
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
                         <com.google.android.material.slider.Slider
-                            android:id="@+id/etStepSize"
+                            android:id="@+id/sliderStepSize"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
@@ -361,7 +361,7 @@
                             android:value="5" />
 
                         <EditText
-                            android:id="@+id/tvStepValue"
+                            android:id="@+id/etStepValue"
                             android:layout_width="36dp"
                             android:layout_height="wrap_content"
                             android:background="@android:color/transparent"
@@ -374,7 +374,7 @@
                             android:maxLength="2"
                             android:paddingTop="0dp"
                             android:paddingBottom="0dp"
-                            android:text="@string/label_5"
+                            tools:text="5"
                             android:textColor="@color/sky_primary"
                             android:textSize="16sp"
                             android:textStyle="bold" />
@@ -390,7 +390,7 @@
                             android:textStyle="bold" />
 
                         <EditText
-                            android:id="@+id/tvOverlapValue"
+                            android:id="@+id/etOverlapValue"
                             android:layout_width="48dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="12dp"
@@ -411,7 +411,7 @@
                     </LinearLayout>
 
                     <com.google.android.material.slider.Slider
-                        android:id="@+id/etOverlap"
+                        android:id="@+id/sliderOverlap"
                         android:layout_width="0dp"
                         android:layout_height="0dp"
                         android:visibility="gone"
@@ -448,7 +448,7 @@
                             android:layout_height="1dp"
                             android:layout_weight="1" />
                         <EditText
-                            android:id="@+id/tvStrainValue"
+                            android:id="@+id/etStrainValue"
                             android:layout_width="52dp"
                             android:layout_height="wrap_content"
                             android:background="@android:color/transparent"
@@ -460,7 +460,7 @@
                             android:maxLength="3"
                             android:paddingTop="0dp"
                             android:paddingBottom="0dp"
-                            android:text="@string/label_5"
+                            tools:text="5"
                             android:textColor="@color/sky_primary"
                             android:textStyle="bold" />
 
@@ -473,10 +473,10 @@
                             android:textStyle="bold" />
                     </LinearLayout>
 
-                    <!-- In data points (VsgStudy.MIN_WINDOW_POINTS..MAX_WINDOW_POINTS);
+                    <!-- In data points (SweepStudy.MIN_WINDOW_POINTS..MAX_WINDOW_POINTS);
                          tvStrainVsg below shows the VSG in px it gives at the current step. -->
                     <com.google.android.material.slider.Slider
-                        android:id="@+id/etStrainWindow"
+                        android:id="@+id/sliderStrainWindow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:valueFrom="3"
@@ -817,7 +817,7 @@
                             app:hintTextColor="@color/viewer_chrome_muted">
 
                             <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/tvSweepOverlapValue"
+                                android:id="@+id/etSweepOverlapValue"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:imeOptions="actionDone"
@@ -859,7 +859,7 @@
 
         <include
             android:id="@+id/frameSizeWarnRow"
-            layout="@layout/warn_chip_row"
+            layout="@layout/view_warn_chip"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"

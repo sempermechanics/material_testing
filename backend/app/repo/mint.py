@@ -3,7 +3,7 @@ and institution keys.
 """
 import logging
 
-from .. import apps, statuses
+from .. import apps, errors, statuses
 from ..config import settings
 from ..licenses import (
     DURATION_PERPETUAL,
@@ -35,7 +35,7 @@ from ._base import (
 )
 from .claims import (
     claim_individual_license,
-    _individual_member_patch,
+    _member_patch,
     _public_claim_error,
 )
 from .holders import (
@@ -48,7 +48,7 @@ from .invites import (
 )
 
 
-log = logging.getLogger("indic.firestore")
+log = logging.getLogger("semper.firestore")
 
 
 def _license_public(license_id: str, data: dict) -> dict:
@@ -126,7 +126,7 @@ def _write_license(
         # Pre-rename mirror; see _mode_patch.
         "plan": legacy_plan(mode),
         "status": status,
-        "emailLock": (email_lock or "").strip().lower(),
+        "emailLock": normalize_email(email_lock),
         "deviceIdLock": device_id_lock,
         "createdAt": _base.firestore.SERVER_TIMESTAMP,
         "createdByUid": created_by_uid,
@@ -136,7 +136,7 @@ def _write_license(
     if kind == KIND_INSTITUTION:
         stored["domainLock"] = (domain_lock or "").strip().lower()
         stored["adminEmails"] = [
-            (e or "").strip().lower() for e in (admin_emails or []) if (e or "").strip()
+            normalize_email(e) for e in (admin_emails or []) if normalize_email(e)
         ]
         if max_seats is not None:
             stored["maxSeats"] = int(max_seats)
@@ -192,7 +192,7 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
         return user
     if not user.get("emailVerified"):
         return user
-    email = (user.get("email") or "").strip().lower()
+    email = normalize_email(user.get("email"))
     device = device_id or user.get("activeDeviceId") or user.get("claimedDeviceId")
     if not email or not device:
         return user
@@ -331,17 +331,17 @@ def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[
     if holder.get("access_status") != statuses.ACCESS_APPROVED or not holder.get("emailVerified"):
         return "", ""
     if not _holds_only_a_demo_key(holder):
-        return "", "holder_already_licensed"
+        return "", errors.HOLDER_ALREADY_LICENSED
     err = claim_individual_license(
         license_id, holder["uid"], address,
-        _individual_member_patch(license_id, lic), invite_ref=_invite_ref(address),
+        _member_patch(license_id, lic), invite_ref=_invite_ref(address),
     )
     if err:
         # A lost race here has no next request to fall back on — the holder's
         # Demo key short-circuits the sign-in path — so say so plainly rather
         # than leaking the private marker. The licence is minted and the key
         # in hand redeems it through the support route.
-        public = _public_claim_error(err, "claim_contended")
+        public = _public_claim_error(err)
         log.warning("individual licence %s not attached to %s: %s",
                     license_id, holder["uid"], public)
         return "", public

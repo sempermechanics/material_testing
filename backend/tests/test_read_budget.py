@@ -174,13 +174,14 @@ async def _measure(client, priv, meter):
 #: (14, 11) before the inline path stopped reading back what it had just written.
 #: GET and POST /v1/sessions each gained one read the same day (TD-121): the
 #: quota count subtracts a second count of PROVISION_FAILED sessions, which
-#: store nothing and were being charged as stored analyses.
+#: store nothing and were being charged as stored analyses. POST /v1/sessions
+#: lost one again on 2026-10-05: the retry lookup is one query, not two.
 BUDGET = {
     "GET /v1/config (first ever)": (4, 3),
     "GET /v1/config": (1, 0),
     "GET /v1/me": (1, 0),
     f"GET /v1/sessions (S={SESSIONS})": (SESSIONS + 3, 0),
-    f"POST /v1/sessions (N={FILES})": (10, 11),
+    f"POST /v1/sessions (N={FILES})": (9, 11),
     "POST /v1/files/{id}/complete (each)": (6, 4),
     f"DELETE /v1/sessions/{{id}} (N={FILES})": (7, 5),
 }
@@ -201,8 +202,9 @@ async def test_firestore_cost_per_request_stays_in_budget(world, client, capsys)
 
 #: Reads for one POST /v1/sessions by manifest size, up to the largest manifest
 #: provisioned inline (INLINE_PROVISION_MAX_FILES). Before: 8 + 2N, then 6 + N,
-#: then 7 + N with the failed-session count in the quota check (TD-121).
-CREATE_READS = {1: 8, 3: 10, 8: 15}
+#: then 7 + N with the failed-session count in the quota check (TD-121), then
+#: 6 + N once the retry lookup became one `status in` query (2026-10-05).
+CREATE_READS = {1: 7, 3: 9, 8: 14}
 
 
 @pytest.mark.asyncio
@@ -217,3 +219,80 @@ async def test_create_reads_grow_once_per_file(world, client, n):
                   for i in range(n)],
     })
     assert reads == CREATE_READS[n]
+
+
+def _gets_by_collection(monkeypatch) -> collections.Counter:
+    """Document gets per collection (`licenses/L1/seats` for a seat)."""
+    seen: collections.Counter = collections.Counter()
+    real = fake_firestore._DocRef.get
+
+    def get(ref, transaction=None):
+        seen[ref._collection] += 1
+        return real(ref, transaction=transaction)
+
+    monkeypatch.setattr(fake_firestore._DocRef, "get", get)
+    return seen
+
+
+@pytest.mark.asyncio
+async def test_signed_request_reads_the_licence_and_seat_once(world, client, monkeypatch):
+    """A licensed seat holder's signed call checks its device lock once.
+
+    `current_user` re-validates the lock for the request's X-Device-Id;
+    `verified_device` used to repeat the same check with the same inputs, which
+    read the licence and the seat twice on every completion, download window
+    and erase.
+    """
+    priv, meter = world
+    import repo_view as repo
+    data = repo._DB._data
+    data["licenses"] = {"L1": {"kind": "institution", "status": "active", "mode": "licensed",
+                               "seating": "assigned", "keyPrefix": "SEMP-TEST"}}
+    data["licenses/L1/seats"] = {UID: {"uid": UID, "status": "active", "deviceIdLock": DEVICE}}
+    data["users"][UID].update({"licenseId": "L1", "licenseKind": "institution",
+                               "mode": "licensed", "plan": "professional"})
+    gets = _gets_by_collection(monkeypatch)
+    await _call(client, priv, meter, "DELETE", "/v1/sessions/s00")
+    assert gets["licenses"] == 1
+    assert gets["licenses/L1/seats"] == 1
+
+
+def _queries_by_collection(monkeypatch) -> collections.Counter:
+    """Queries run per collection."""
+    seen: collections.Counter = collections.Counter()
+    real = fake_firestore._Query.stream
+
+    def stream(q):
+        seen[q._collection] += 1
+        return real(q)
+
+    monkeypatch.setattr(fake_firestore._Query, "stream", stream)
+    return seen
+
+
+@pytest.mark.asyncio
+async def test_export_reads_the_files_as_one_stream_not_a_query_per_session(
+        world, client, monkeypatch):
+    """`GET /v1/me/export` used to run one files query per session: an account
+    with a thousand analyses made a thousand round trips. The files are now
+    one stream ordered by session, merged with the sessions'."""
+    priv, meter = world
+    import repo_view as repo
+    data = repo._DB._data
+    data["files"] = {
+        f"s{i:02d}-f{j}": {"uid": UID, "sessionId": f"s{i:02d}", "name": f"f{j}.zip",
+                           "role": "bundle", "sizeBytes": 10, "status": "COMPLETED"}
+        for i in range(SESSIONS) for j in range(FILES)
+    }
+    # A file whose session is gone, between two that exist, is not listed.
+    data["files"]["s05x-orphan"] = {"uid": UID, "sessionId": "s05x", "name": "lost.zip",
+                                    "role": "bundle", "sizeBytes": 1}
+    # Nor is another account's file in a session of the same name.
+    data["files"]["other"] = {"uid": "u2", "sessionId": "s03", "name": "theirs.zip",
+                              "role": "bundle", "sizeBytes": 1}
+    queries = _queries_by_collection(monkeypatch)
+    body, _ = await _call(client, priv, meter, "GET", "/v1/me/export")
+    assert queries["files"] == 1
+    assert body["complete"] is True and body["sessionCount"] == SESSIONS
+    assert [[f["fileId"] for f in s["files"]] for s in body["sessions"]] == [
+        [f"s{i:02d}-f{j}" for j in range(FILES)] for i in range(SESSIONS)]

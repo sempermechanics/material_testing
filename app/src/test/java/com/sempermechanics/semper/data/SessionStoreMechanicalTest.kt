@@ -1,0 +1,183 @@
+package com.sempermechanics.semper.data
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.report.BeamDeflection
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import java.io.File
+
+/**
+ * The mechanical-test fields on [SessionRecord] must be invisible to every
+ * index written before they existed, and must round-trip once written.
+ */
+@RunWith(RobolectricTestRunner::class)
+// Pinned like every other Robolectric test here: Robolectric ships no
+// android-all jar for targetSdk 36.
+@Config(sdk = [34])
+class SessionStoreMechanicalTest {
+
+    private lateinit var context: Context
+
+    @Before
+    fun setUp() {
+        context = ApplicationProvider.getApplicationContext()
+        File(context.filesDir, "sessions").deleteRecursively()
+    }
+
+    @Test
+    fun `a session index written before test types loads with no type and no loads`() {
+        val dir = File(context.filesDir, "sessions").apply { mkdirs() }
+        File(dir, "index.json").writeText(PRE_TEST_TYPE_INDEX)
+
+        val record = SessionStore.get(context, "sess-untyped")
+
+        assertNotNull(record)
+        record!!
+        assertEquals("", record.testType)
+        assertEquals(0f, record.crossSectionMm2, 0f)
+        assertTrue(record.loadAxisX)
+        assertEquals(SpecimenGeometry.NONE, record.geometry)
+        assertTrue(record.loadsN.isEmpty())
+        assertFalse(record.hasMachineLoads)
+    }
+
+    @Test
+    fun `a bending record keeps its geometry through the store`() {
+        val geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10.5f, thicknessMm = 4f)
+        val record = typedRecord(loadsN = listOf(0f, 100f, 200f)).copy(testType = "bending", geometry = geometry)
+
+        assertTrue(SessionStore.upsert(context, record))
+        val back = SessionStore.get(context, record.id)
+
+        assertNotNull(back)
+        assertEquals(geometry, back!!.geometry)
+    }
+
+    @Test
+    fun `bending load-point taps round-trip and a record without them writes no loadPoint key`() {
+        val taps = BeamEdgeTaps(topX = 400f, topY = 210f, bottomX = 401f, bottomY = 338f)
+        val geometry = SpecimenGeometry(spanMm = 935f, widthMm = 150f, thicknessMm = 6.38f, loadPoint = taps)
+        val record = typedRecord(loadsN = listOf(0f, 42f, 51f)).copy(testType = "bending", geometry = geometry)
+
+        assertTrue(SessionStore.upsert(context, record))
+        assertEquals(taps, SessionStore.get(context, record.id)!!.geometry.loadPoint)
+
+        assertTrue(SessionStore.upsert(context, record.copy(geometry = geometry.copy(loadPoint = BeamEdgeTaps.NONE))))
+        val index = File(context.filesDir, "sessions/index.json").readText()
+        assertFalse(index.contains("loadPoint"))
+    }
+
+    @Test
+    fun `a deflection correction set in the viewer is saved on the session and keeps the rest`() {
+        val taps = BeamEdgeTaps(topX = 400f, topY = 210f, bottomX = 401f, bottomY = 338f)
+        val geometry = SpecimenGeometry(spanMm = 935f, widthMm = 150f, thicknessMm = 6.38f, loadPoint = taps)
+        val record = typedRecord(loadsN = listOf(0f, 42f, 51f)).copy(testType = "bending", geometry = geometry)
+        assertTrue(SessionStore.upsert(context, record))
+
+        assertTrue(SessionStore.setDeflectionCorrection(context, record.id, BeamDeflection.Correction(1.05f, -0.12f)))
+        val back = SessionStore.get(context, record.id)!!
+
+        assertEquals(BeamDeflection.Correction(1.05f, -0.12f), back.geometry.deflectionCorrection)
+        assertEquals(geometry, back.geometry.withCorrection(BeamDeflection.Correction.NONE))
+        assertEquals(record.syncState, back.syncState)
+        assertTrue(back.updatedAt > record.updatedAt)
+    }
+
+    @Test
+    fun `a typed record with per-frame loads round-trips through the store`() {
+        val record = typedRecord(loadsN = listOf(0f, 512.5f, -1024f))
+
+        assertTrue(SessionStore.upsert(context, record))
+        val back = SessionStore.get(context, record.id)
+
+        assertNotNull(back)
+        back!!
+        assertEquals("compression", back.testType)
+        assertEquals(78.54f, back.crossSectionMm2, 1e-4f)
+        assertFalse(back.loadAxisX)
+        assertEquals(listOf(0f, 512.5f, -1024f), back.loadsN)
+        assertEquals("utm_export.csv", back.loadSource)
+        assertEquals("ONE_TO_ONE", back.loadMapping)
+        assertTrue(back.hasMachineLoads)
+    }
+
+    @Test
+    fun `a frame with no matched load keeps its place as null in the index`() {
+        val record = typedRecord(loadsN = listOf(0f, Float.NaN, -1024f))
+
+        assertTrue(SessionStore.upsert(context, record))
+        val index = File(context.filesDir, "sessions/index.json").readText()
+
+        assertTrue(index, index.contains("\"loadsN\":[0.0,null,-1024.0]"))
+        assertEquals(listOf(0f, Float.NaN, -1024f), SessionStore.get(context, record.id)!!.loadsN)
+    }
+
+    @Test
+    fun `loads that do not cover every frame do not count as machine loads`() {
+        val record = typedRecord(loadsN = listOf(0f, 512.5f))
+
+        assertFalse(record.hasMachineLoads)
+    }
+
+    private fun typedRecord(loadsN: List<Float>) = SessionRecord(
+        id = "sess-typed",
+        name = "Compression run",
+        createdAt = 1750000000000L,
+        updatedAt = 1750000000000L,
+        frameCount = 3,
+        subset = 41,
+        step = 5,
+        strainWindow = 15,
+        imgW = 640,
+        imgH = 480,
+        roiX = 0,
+        roiY = 0,
+        roiW = 640,
+        roiH = 480,
+        refPath = "/data/sessions/sess-typed/ref.png",
+        refName = "ref.png",
+        sessionDir = "/data/sessions/sess-typed",
+        defNames = listOf("d1.png", "d2.png", "d3.png"),
+        testType = "compression",
+        crossSectionMm2 = 78.54f,
+        loadAxisX = false,
+        loadsN = loadsN,
+        loadSource = "utm_export.csv",
+        loadMapping = "ONE_TO_ONE",
+    )
+
+    private companion object {
+        val PRE_TEST_TYPE_INDEX = """
+            [
+              {
+                "id": "sess-untyped",
+                "name": "Older run",
+                "createdAt": 1750000000000,
+                "updatedAt": 1750000000000,
+                "frameCount": 2,
+                "subset": 41,
+                "step": 5,
+                "strainWindow": 15,
+                "imgW": 640,
+                "imgH": 480,
+                "roiX": 0,
+                "roiY": 0,
+                "roiW": 640,
+                "roiH": 480,
+                "refPath": "/data/sessions/sess-untyped/ref.png",
+                "refName": "ref.png",
+                "sessionDir": "/data/sessions/sess-untyped",
+                "defNames": ["d1.png", "d2.png"]
+              }
+            ]
+        """.trimIndent()
+    }
+}

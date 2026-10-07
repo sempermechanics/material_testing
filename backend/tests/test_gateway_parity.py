@@ -53,25 +53,17 @@ def _erase_params(path: str) -> str:
     return re.sub(r"\{[^}]+\}", "{}", path)
 
 
-def _iter_api_routes(routes):
-    """Walk `app.routes`, descending into FastAPI's `_IncludedRouter` wrappers.
-
-    `include_router` no longer flattens child routes onto `app.routes`; they
-    hang off `original_router`. Walking only the top level here would compare
-    the gateway against four docs endpoints and pass vacuously — which is
-    worse than having no test, so this mirrors test_route_authz_matrix.
-    """
-    for route in routes:
-        nested = getattr(route, "original_router", None)
-        if nested is not None:
-            yield from _iter_api_routes(nested.routes)
-            continue
-        yield route
+def _iter_api_routes(_routes=None):
+    """Every route the app serves, nested routers included, with full paths
+    (`app.main.served_routes`). Walking only the top level would compare
+    against the docs endpoints and pass vacuously."""
+    from app.main import served_routes
+    yield from served_routes(app)
 
 
 def _app_surface() -> set[tuple[str, str]]:
     out = set()
-    for route in _iter_api_routes(app.routes):
+    for route in _iter_api_routes():
         for method in getattr(route, "methods", None) or ():
             if method in _HTTP_METHODS:
                 out.add((method, _erase_params(route.path)))

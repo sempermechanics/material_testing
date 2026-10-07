@@ -1,7 +1,8 @@
 """Admin approve/revoke, list_users limit clamp, and device registration conflicts."""
 import pytest
 
-from app import audit, firestore_repo as repo
+from app import audit
+import repo_view as repo
 from app import deps
 from key_helpers import _ec_pem
 
@@ -50,7 +51,7 @@ async def test_admin_list_users_clamps_limit(store, client, monkeypatch):
                  for uid, u in list(store._data["users"].items())[:limit]]
         return users, None
 
-    monkeypatch.setattr(repo, "list_users", spy)
+    repo.patch(monkeypatch, "list_users", spy)
 
     r = await client.get("/v1/admin/users?limit=9999")
     assert r.status_code == 200

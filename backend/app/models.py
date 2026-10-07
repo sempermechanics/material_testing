@@ -205,7 +205,7 @@ class AdminLicenseCreate(BaseModel):
 
     `kind="institution"` mints an institution key instead: no email/device
     lock at mint time. Membership is decided per-activation by `domainLock` (a
-    verified-email domain match — see firestore_repo.activate_license), and
+    verified-email domain match — see repo.activate_license), and
     `adminEmails` names the institution IT contacts who may manage seats via
     `backend/app/routers/institutions.py`
     (list/clear-device/enable-disable/revoke). `maxSeats` is an optional hard
@@ -299,7 +299,7 @@ class AdminLicenseCreate(BaseModel):
             # demanded, because demanding it meant the customer had to read a
             # device id off their phone and send it to us before we could mint
             # anything. Left empty, the licence binds to the first device that
-            # signs in as `emailLock` — see firestore_repo._device_lock_state.
+            # signs in as `emailLock` — see repo.devlock._device_lock_state.
             if not self.emailLock:
                 raise ValueError("individual licenses require emailLock")
         else:  # institution
@@ -322,7 +322,7 @@ class InstitutionSeatPatch(BaseModel):
     what changes. `clearDeviceLock=true` lets a seat holder re-bind to a new
     device (lost phone, factory reset) without a support ticket to Semper
     staff. `enabled=false` drops the seat to Demo without freeing the slot —
-    see routers/institutions.py and firestore_repo.set_seat_enabled."""
+    see routers/institutions.py and repo.set_seat_enabled."""
     clearDeviceLock: Optional[bool] = None
     enabled: Optional[bool] = None
 

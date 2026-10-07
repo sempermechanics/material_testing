@@ -4,7 +4,7 @@ Split out of the single 2,500-line test_licenses.py (TD-55). Each helper
 used by only one file stayed in that file; these are the ones two or more
 share, and what they call."""
 
-from app import firestore_repo as repo
+import repo_view as repo
 
 
 def _recording_stubs(monkeypatch):
