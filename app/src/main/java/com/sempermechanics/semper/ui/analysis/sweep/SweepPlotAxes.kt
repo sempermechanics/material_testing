@@ -113,7 +113,7 @@ internal class SweepPlotAxes(private val plot: View, private val text: Paint) {
                 magnitude >= LARGE_VALUE -> 0
                 magnitude >= READOUT_TENS -> 1
                 magnitude >= SMALL_VALUE -> 2
-                else -> 3
+                else -> READOUT_MAX_DECIMALS
             }
             val text = String.format(Locale.US, "%.${decimals}f", value)
             return if (text.startsWith('-') && text.all { it in "-0." }) text.drop(1) else text
@@ -170,5 +170,8 @@ internal class SweepPlotAxes(private val plot: View, private val text: Paint) {
         private const val LARGE_VALUE = 100f
         private const val SMALL_VALUE = 1f
         private const val READOUT_TENS = 10f
+
+        /** Three significant figures below 1: 0.052, not a tick's 0.05. */
+        private const val READOUT_MAX_DECIMALS = 3
     }
 }

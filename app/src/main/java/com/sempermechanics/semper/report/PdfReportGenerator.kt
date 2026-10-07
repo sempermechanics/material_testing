@@ -13,7 +13,6 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +24,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.io.IOException
 import java.io.OutputStream
-import java.util.Locale
 
 /**
  * Renders a [ReportData] into the multi-page PDF report (cover, field
@@ -51,15 +49,6 @@ object PdfReportGenerator {
 
     /** Raster width for the vector wordmark; PDF draws it at [PdfLayoutEngine.BRAND_LOGO_WIDTH]. */
     private const val BRAND_LOGO_RASTER_WIDTH = 1040
-
-    /** Height of the stress–strain plot block; the table starts under it. */
-    private const val STRESS_STRAIN_PLOT_HEIGHT = 1500f
-
-    /** Table rows per page, at [PdfLayoutEngine.drawTable]'s row pitch. */
-    private const val STRESS_STRAIN_ROWS_FIRST_PAGE = 14
-    private const val STRESS_STRAIN_ROWS_PER_PAGE = 34
-    private val STRESS_STRAIN_TABLE_WEIGHTS = listOf(0.31f, 0.23f, 0.23f, 0.23f)
-    private val DEFLECTION_TABLE_WEIGHTS = listOf(0.24f, 0.19f, 0.19f, 0.19f, 0.19f)
 
     /**
      * The closing stress–strain page(s) of an all-frames report: the curve as
@@ -121,7 +110,7 @@ object PdfReportGenerator {
 
         if (stressStrain != null && !stressStrain.curve.isEmpty) {
             emit(Progress.Status("Plotting stress–strain…", TELEMETRY_PROGRESS))
-            drawStressStrainPages(layout, stressStrain)
+            MechanicalPdfPages.drawStressStrainPages(layout, stressStrain)
         }
         telemetrySource?.let {
             emit(Progress.Status("Compiling Engine Telemetry...", TELEMETRY_PROGRESS))
@@ -223,7 +212,7 @@ object PdfReportGenerator {
         )
         layout.advanceY(40f)
 
-        data.mechanical?.let { drawMechanicalBlock(layout, it) }
+        data.mechanical?.let { MechanicalPdfPages.drawCoverBlock(layout, it) }
 
         layout.drawSectionHeader("Analysis Region (ROI)")
         layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
@@ -237,83 +226,6 @@ object PdfReportGenerator {
             data.deformedImage,
             data.deformedImageName,
         )
-    }
-
-    /** The cover's "Mechanical Test" block, only on a typed session. */
-    private fun drawMechanicalBlock(layout: PdfLayoutEngine, m: MechanicalCover) {
-        layout.drawSectionHeader("Mechanical Test")
-        layout.drawKeyValue("Test Type:", m.label)
-        layout.drawDimensions(m.model)
-        layout.drawKeyValue("Strain:", m.model.strainName)
-        m.loadN?.let { loadN ->
-            if (m.model is StressStrain.Model.Flexural) {
-                layout.drawKeyValue("Load:", "%.2f kg".format(Locale.US, TypedLoads.kg(loadN)))
-            } else {
-                layout.drawKeyValue("Machine Load:", "%.2f N".format(Locale.US, loadN))
-            }
-        }
-        m.stressMPa?.let {
-            layout.drawKeyValue("${m.model.stressName}:", "%.3f MPa".format(Locale.US, it))
-        }
-        layout.advanceY(40f)
-    }
-
-    /**
-     * Stress–strain curve then the table behind it, after the last frame and
-     * before telemetry. The plot shares its first page with the opening rows;
-     * the rest of the table is chunked over following pages.
-     */
-    private fun drawStressStrainPages(layout: PdfLayoutEngine, page: StressStrainPage) {
-        val curve = page.curve
-        layout.newPage()
-        layout.drawTitle(curve.model.curveTitle)
-        layout.drawDimensions(curve.model)
-        layout.drawKeyValue("Strain:", "${curve.model.strainName} ${curve.model.strainBasis}")
-        curve.peakStress?.let {
-            val where = if (it.onCurve) "" else ", off the curve (no strain)"
-            val value = "%.3f MPa at frame %d%s".format(Locale.US, it.stressMPa, it.frame + 1, where)
-            layout.drawKeyValue("Peak Stress:", value)
-        }
-        page.modulus?.let { layout.drawKeyValue("Modulus E (approx.):", LabReport.modulusSummary(it)) }
-        page.modulus?.let { YieldStrength.offset(curve, it) }?.let {
-            val value = "%.3f MPa at %.3f mε (0.2%% offset)".format(Locale.US, it.stressMPa, it.strainMilli)
-            layout.drawKeyValue("Yield Strength Rp0.2:", value)
-        }
-        layout.advanceY(20f)
-        page.plot?.let {
-            layout.drawDiagnosticBlock(
-                curve.model.plotTitle,
-                it,
-                STRESS_STRAIN_PLOT_HEIGHT,
-            )
-        }
-
-        val deflection = curve.model.plotsLoadDeflection
-        val rows = curve.points.map {
-            listOfNotNull(
-                "Frame ${it.frame + 1}",
-                "%.2f".format(Locale.US, if (deflection) TypedLoads.kg(it.loadN) else it.loadN),
-                "%.3f".format(Locale.US, it.stressMPa),
-                "%.3f".format(Locale.US, it.strainMilli),
-                if (deflection) it.deflectionMm?.let { d -> "%.4f".format(Locale.US, d) } ?: "—" else null,
-            )
-        }
-        val headers = listOfNotNull(
-            "Frame",
-            if (deflection) "Load (kg)" else "Load (N)",
-            "Stress (MPa)",
-            "Strain (mε)",
-            "Deflection (mm)".takeIf { deflection },
-        )
-        val weights = if (deflection) DEFLECTION_TABLE_WEIGHTS else STRESS_STRAIN_TABLE_WEIGHTS
-        val first = rows.take(STRESS_STRAIN_ROWS_FIRST_PAGE)
-        layout.drawSectionHeader("Per-frame values")
-        layout.drawTable(headers, first, weights)
-        rows.drop(STRESS_STRAIN_ROWS_FIRST_PAGE).chunked(STRESS_STRAIN_ROWS_PER_PAGE).forEach { chunk ->
-            layout.newPage()
-            layout.drawTitle("Stress–Strain Curve (continued)")
-            layout.drawTable(headers, chunk, weights)
-        }
     }
 
     /**
@@ -418,18 +330,6 @@ object PdfReportGenerator {
 
     private fun recycleLogo(logo: Bitmap?) {
         if (logo != null && !logo.isRecycled) logo.recycle()
-    }
-}
-
-/**
- * One key-value per entered dimension of a test's stress model. A file-level
- * extension rather than a member: the object is at detekt's function cap.
- */
-private fun PdfLayoutEngine.drawDimensions(model: StressStrain.Model) {
-    model.dimensions.forEach { (dimension, value) ->
-        if (value > 0f) {
-            drawKeyValue("${dimension.label}:", "%.3f %s".format(Locale.US, value, dimension.unit))
-        }
     }
 }
 

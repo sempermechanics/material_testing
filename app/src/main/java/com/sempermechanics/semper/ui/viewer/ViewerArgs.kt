@@ -247,7 +247,6 @@ data class ViewerArgs(
         fun read(): ViewerArgs {
             val imgW = int(IntentKeys.IMG_W, { it.imgW }, 0)
             val imgH = int(IntentKeys.IMG_H, { it.imgH }, 0)
-            val sweep = readSweep()
             val args = ViewerArgs(
                 imgW = imgW,
                 imgH = imgH,
@@ -275,7 +274,7 @@ data class ViewerArgs(
                 roiY = int(IntentKeys.ROI_Y, { it.roiY }, 0),
                 roiW = int(IntentKeys.ROI_W, { it.roiW }, imgW),
                 roiH = int(IntentKeys.ROI_H, { it.roiH }, imgH),
-                sweep = sweep,
+                sweep = readSweep(),
                 defPath = intent.getStringExtra(IntentKeys.DEF_PATH),
                 defFilePaths = intent.getStringArrayListExtra(IntentKeys.DEF_FILE_PATHS).orEmpty(),
                 startFrame = intent.takeIf { it.hasExtra(IntentKeys.START_FRAME) }
@@ -300,10 +299,15 @@ data class ViewerArgs(
                     CurveCorrection.fromArray(it.getFloatArrayExtra(IntentKeys.CURVE_CORRECTION))
                 },
             )
+            logMissingKeys()
+            return args
+        }
+
+        /** Names the extras that came from the session's record or a default, once per read. */
+        private fun logMissingKeys() {
             if (fromRecord.isNotEmpty() || defaulted.isNotEmpty()) {
                 Timber.w("Viewer Intent missing keys; from record: %s; defaulted: %s", fromRecord, defaulted)
             }
-            return args
         }
 
         private fun readSweep(): ViewerSweepArgs? {

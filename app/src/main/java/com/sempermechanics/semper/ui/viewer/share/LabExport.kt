@@ -37,9 +37,8 @@ internal class LabExport(
      * must happen on the main thread.
      */
     suspend fun stressStrainPage(report: (Int, String) -> Unit): PdfReportGenerator.StressStrainPage? {
-        if (s.loadsN.isEmpty() || s.isSweep) return null
-        val curve = sessionCurve(report)
-        if (curve.isEmpty) return null
+        val curve = if (s.loadsN.isEmpty() || s.isSweep) null else sessionCurve(report)
+        if (curve == null || curve.isEmpty) return null
         val axisLabels = ViewerStressStrainHelper.axisLabels(context, curve.model)
         val modulus = ViewerStressStrainHelper.modulusOf(curve)
         val plot = withContext(Dispatchers.Main) {

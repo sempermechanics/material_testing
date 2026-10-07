@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
+import android.content.Context
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.databinding.ActivityStaticAnalysisBinding
@@ -57,19 +58,26 @@ class AnalysisReadyGate(
                 viewModel.typedLoadsMissing(),
                 viewModel.typedLoadsMissing(),
             )
-            testType.hasMachineLoad && viewModel.machineLoads?.matchedFrames == 0 ->
-                context.getString(R.string.next_reason_load_unmatched)
-            testType.hasMachineLoad && !viewModel.stressModel().isComplete ->
-                context.getString(
-                    if (viewModel.stressModel() is StressStrain.Model.Axial) {
-                        R.string.next_reason_cross_section
-                    } else {
-                        R.string.next_reason_dimensions
-                    },
-                )
-            testType.hasMachineLoad && viewModel.loadPointMissing() ->
-                context.getString(R.string.next_reason_load_point)
+            testType.hasMachineLoad -> loadReason(context)
             else -> ""
         }
+    }
+
+    /**
+     * Why Next is off for a test with a load log that has been read: no frame
+     * matched a load, the stress model is missing a dimension, or bending's
+     * load point is untapped. Blank when none of these holds.
+     */
+    private fun loadReason(context: Context): String = when {
+        viewModel.machineLoads?.matchedFrames == 0 -> context.getString(R.string.next_reason_load_unmatched)
+        !viewModel.stressModel().isComplete -> context.getString(
+            if (viewModel.stressModel() is StressStrain.Model.Axial) {
+                R.string.next_reason_cross_section
+            } else {
+                R.string.next_reason_dimensions
+            },
+        )
+        viewModel.loadPointMissing() -> context.getString(R.string.next_reason_load_point)
+        else -> ""
     }
 }
