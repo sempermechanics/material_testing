@@ -3,6 +3,8 @@ package com.sempermechanics.semper.ui.viewer
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
@@ -265,6 +267,7 @@ class ViewerArgsTest {
     fun `the Intent carries the keys and values the base build wrote`() {
         // Written out by hand: an Intent already in a back stack must keep
         // opening, so neither a key's spelling nor its value's type may move.
+        // This fork's base build also wrote the six lab keys, empty when untyped.
         val expected = mapOf(
             "IMG_W" to 1920,
             "IMG_H" to 1080,
@@ -293,6 +296,12 @@ class ViewerArgsTest {
             "ROI_W" to 300,
             "ROI_H" to 400,
             "START_FRAME" to 1,
+            "TEST_TYPE" to "",
+            "CROSS_SECTION_MM2" to 0f,
+            "LOAD_AXIS_X" to true,
+            "LOADS_N" to emptyList<Float>(),
+            "SPECIMEN_GEOMETRY" to listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f),
+            "CURVE_CORRECTION" to listOf(1f, 0f, 1f, 0f),
         )
         val sent = args(sweepArgs).copy(defPath = "/tmp/def.png", defFilePaths = listOf("/tmp/f1.png"), startFrame = 1)
 
@@ -331,6 +340,12 @@ class ViewerArgsTest {
             .putExtra("ROI_W", 300)
             .putExtra("ROI_H", 400)
             .putExtra("START_FRAME", 1)
+            .putExtra("TEST_TYPE", "bending")
+            .putExtra("CROSS_SECTION_MM2", 12.5f)
+            .putExtra("LOAD_AXIS_X", false)
+            .putExtra("LOADS_N", floatArrayOf(0f, 42f))
+            .putExtra("SPECIMEN_GEOMETRY", floatArrayOf(80f, 10.5f, 4f, 100f, 40f, 100f, 90f, 1.05f, -0.12f))
+            .putExtra("CURVE_CORRECTION", floatArrayOf(1.1f, 0.2f, 0.9f, -3f))
 
         val read = ViewerArgs.from(sent, ::noRecord)
 
@@ -357,6 +372,15 @@ class ViewerArgsTest {
         assertEquals(listOf(1f, 2f), read.engineStats)
         assertEquals(Roi(10, 20, 300, 400), read.roi)
         assertEquals(1, read.startFrame)
+        assertEquals("bending", read.testType)
+        assertEquals(12.5f, read.crossSectionMm2, 0f)
+        assertFalse(read.loadAxisX)
+        assertEquals(listOf(0f, 42f), read.loadsN)
+        assertEquals(
+            SpecimenGeometry(80f, 10.5f, 4f, BeamEdgeTaps(100f, 40f, 100f, 90f), 1.05f, -0.12f),
+            read.geometry,
+        )
+        assertEquals(CurveCorrection(1.1f, 0.2f, 0.9f, -3f), read.curveCorrection)
     }
 
     @Test

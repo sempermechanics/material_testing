@@ -19,7 +19,9 @@ import org.robolectric.RobolectricTestRunner
 /**
  * [SessionUploadMetadata.buildMetadataJson] against what the org.json writer
  * it replaced wrote for the same records, captured before the move onto
- * [SessionMetadataDoc] (`cloud/upload_metadata_golden.json`).
+ * [SessionMetadataDoc] (`cloud/upload_metadata_golden.json`). This fork's
+ * writer stamped schema `/6` (the lab test's fields), so the golden does too;
+ * its records are untyped, so nothing else differs from the parent's.
  *
  * Compared as JSON, not as text: the new writer prints `50.0` where org.json
  * printed `50`, and `/` where it printed `\/`. The upload declares the sha of

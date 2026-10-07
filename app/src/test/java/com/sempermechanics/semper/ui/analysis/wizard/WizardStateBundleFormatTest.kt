@@ -18,7 +18,9 @@ import org.robolectric.annotation.Config
  *
  * [baseBundle] is that Bundle written out by hand, key by key, as the build
  * before the wizard's value types (`Roi`, `ImageSize`, `SweepRanges`,
- * `WizardStep`) wrote it.
+ * `WizardStep`) wrote it. In this fork that build also wrote the lab
+ * test's keys (`testType` … `typedLoadsEntry`, and `refCaptureMs` when the
+ * reference photo had an EXIF time), so they are part of the format too.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -48,6 +50,15 @@ class WizardStateBundleFormatTest {
         putInt("vsgFrameIndex", 1)
         putString("workingLocalId", "abc123")
         putString("framesFingerprint", WizardState.fingerprint(WizardState.encodeFrames(WizardState.Frames())))
+        putLong("refCaptureMs", 1_727_000_000_000L)
+        putString("testType", "bending")
+        putFloat("crossSectionMm2", 12.5f)
+        putBoolean("loadAxisX", false)
+        putFloatArray("geometry", floatArrayOf(80f, 10.5f, 4f, 100f, 40f, 100f, 90f, 1.05f, -0.12f))
+        putBoolean("hasLoadLog", false)
+        putString("loadCsvName", "loads.csv")
+        putFloat("loadLogStartS", 1.5f)
+        putString("typedLoadsEntry", "INCREMENTAL")
     }
 
     @Test
@@ -82,6 +93,14 @@ class WizardStateBundleFormatTest {
             putInt("vsgFrameIndex", -1)
             putString("workingLocalId", null)
             putString("framesFingerprint", WizardState.fingerprint(WizardState.encodeFrames(WizardState.Frames())))
+            putString("testType", "tensile")
+            putFloat("crossSectionMm2", 0f)
+            putBoolean("loadAxisX", true)
+            putFloatArray("geometry", floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f))
+            putBoolean("hasLoadLog", false)
+            putString("loadCsvName", "")
+            putFloat("loadLogStartS", 0f)
+            putString("typedLoadsEntry", "ABSOLUTE")
         }
 
         assertSameBundle(expected, AnalysisViewModel().saveWizardState())
@@ -109,6 +128,8 @@ class WizardStateBundleFormatTest {
             assertEquals("type of $key", want?.javaClass, got?.javaClass)
             if (want is IntArray) {
                 assertArrayEquals("value of $key", want, got as IntArray)
+            } else if (want is FloatArray) {
+                assertArrayEquals("value of $key", want, got as FloatArray, 0f)
             } else {
                 assertEquals("value of $key", want, got)
             }
