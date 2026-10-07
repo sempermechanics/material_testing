@@ -99,8 +99,9 @@ sync is trivial (material_testing#121). Not released.
 - **App id `com.sempermechanics.materialtesting`**
   ([ADR-020](../adr/ADR-020-sempermechanics-materialtesting-id.md)). It installs beside the
   old `com.indicvision.semper.materialtesting` build. The backend maps it to
-  `materialtesting` and `assetlinks.json` lists it; the Firebase Android app and its
-  client in `app/google-services.json` are owed.
+  `materialtesting` and `assetlinks.json` lists it. Its Firebase Android app
+  (`1:171818100029:android:ea2b93f0bb3e53c7161154`, registered 2026-10-07 with the old
+  app's 4 fingerprints) is the only client in `app/google-services.json`.
 - **The parent's code layout and names.** The Kotlin package is `com.sempermechanics.semper`,
   `SEMPER_*` build keys, `engine/` submodule (ADR-019), feature packages (ADR-015),
   ViewBinding (ADR-017) and typed outcomes (ADR-018). The lab code moved with it:

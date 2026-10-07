@@ -1,6 +1,6 @@
 # ADR-020: Material Testing is `com.sempermechanics.materialtesting`
 
-**Status:** Accepted, built (Firebase app and `google-services.json` owed; not released)
+**Status:** Accepted, built (Firebase app registered 2026-10-07; App Check and a release owed)
 **Date:** 2026-10-05
 **Deciders:** app owner
 **Amends:** [ADR-009](ADR-009-material-testing-app-identity.md) (its package; the rest stands)
@@ -65,9 +65,10 @@ settings and its device key.
 ## Action items
 
 - [x] `applicationId`, test runner, docs (2026-10-05 sync).
-- [ ] Register `com.sempermechanics.materialtesting` in Firebase with the
-      release and debug fingerprints and App Check, and commit its client in
-      `app/google-services.json`.
+- [x] Register `com.sempermechanics.materialtesting` in Firebase with the
+      release and debug fingerprints, and commit its client in
+      `app/google-services.json` (2026-10-07, `…android:ea2b93f0bb3e53c7161154`).
+- [ ] App Check (Play Integrity) for the new app.
 - [ ] Phone check: install beside the old build, sign in, restore a backup,
       open an App Link.
 - [ ] Release it (`v1.2-beta.4` or later) and tell testers it is a new app.

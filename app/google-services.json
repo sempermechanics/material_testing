@@ -7,79 +7,34 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:171818100029:android:db984f1bba569a38161154",
+        "mobilesdk_app_id": "1:171818100029:android:ea2b93f0bb3e53c7161154",
         "android_client_info": {
-          "package_name": "com.sempermechanics.semper"
+          "package_name": "com.sempermechanics.materialtesting"
         }
       },
       "oauth_client": [
         {
-          "client_id": "171818100029-0rmm677d3ot7sdau0lfchicshq8g7c68.apps.googleusercontent.com",
+          "client_id": "171818100029-4hh169cargflee707idvssn82lqd5p9t.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.sempermechanics.semper",
+            "package_name": "com.sempermechanics.materialtesting",
+            "certificate_hash": "920fd8d7acf4c3461363f29e7b82d3dd96842be2"
+          }
+        },
+        {
+          "client_id": "171818100029-5afa5m13hasju21br24iu6erhnhm76a3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sempermechanics.materialtesting",
             "certificate_hash": "32d1ef745cd068108d8832fc3a286951207d086c"
           }
         },
         {
-          "client_id": "171818100029-9ebjm6odu9vhafebcrjofmve1nccvhah.apps.googleusercontent.com",
+          "client_id": "171818100029-qcem9f588fanbmu8ajk1v1n5rluh6vr5.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.sempermechanics.semper",
-            "certificate_hash": "920fd8d7acf4c3461363f29e7b82d3dd96842be2"
-          }
-        },
-        {
-          "client_id": "171818100029-buljk26gokn5v473ouc7f120obgurhj2.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyA0_VDq5JJjUMnWS8WZAzn1a73mFgnAuwQ"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "171818100029-buljk26gokn5v473ouc7f120obgurhj2.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:171818100029:android:52451e04a07d4bbe161154",
-        "android_client_info": {
-          "package_name": "com.indicvision.semper.materialtesting"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "171818100029-bp764rn8tfcr3aauhgcrebp5bsceinen.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.indicvision.semper.materialtesting",
-            "certificate_hash": "920fd8d7acf4c3461363f29e7b82d3dd96842be2"
-          }
-        },
-        {
-          "client_id": "171818100029-ct5e0isgh6c2f6j5m0knpqboifvg10n6.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.indicvision.semper.materialtesting",
+            "package_name": "com.sempermechanics.materialtesting",
             "certificate_hash": "6cc31b4f12cba6e3ea78222453f7601820ab67bf"
-          }
-        },
-        {
-          "client_id": "171818100029-ivdohq8l3hriecsfb8lnlmpmhto5b2u6.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.indicvision.semper.materialtesting",
-            "certificate_hash": "32d1ef745cd068108d8832fc3a286951207d086c"
           }
         },
         {

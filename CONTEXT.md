@@ -154,9 +154,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   free row in both registers is TD-178; check both before taking one.
 - **App id `com.sempermechanics.materialtesting`**
   ([ADR-020](docs/adr/ADR-020-sempermechanics-materialtesting-id.md)); the backend and
-  `assetlinks.json` know it (parent, 2026-10-05). Owed: its Firebase Android app (fingerprints,
-  App Check) and client in `app/google-services.json` (a local build needs an uncommitted
-  copy until then), a phone check and a release. Released builds, up to `v1.2-beta.3`, are
+  `assetlinks.json` know it (parent, 2026-10-05). Its Firebase Android app
+  (`1:171818100029:android:ea2b93f0bb3e53c7161154`, the old app's 4 fingerprints) and its
+  client in `app/google-services.json` are in (2026-10-07). Owed: App Check (Play
+  Integrity) for it, a phone check and a release. Released builds, up to `v1.2-beta.3`, are
   `com.indicvision.semper.materialtesting` (ADR-009) and stay installed beside it.
 - **Lab outputs (#1–#21).** Tensile: stress–strain under ΔL / L₀ (ADR-012), E, Rp0.2,
   **Adjust curve** (TD-152). Bending: beam-edge taps, δ and E = WL³/(48δI), loads typed in kg,
