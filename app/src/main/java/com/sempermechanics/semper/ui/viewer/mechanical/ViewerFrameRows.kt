@@ -5,6 +5,8 @@ import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.data.mechanical.loadOfFrame
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.ui.viewer.plannedFrameIndex
+import com.sempermechanics.semper.ui.viewer.stressModel
 import java.util.Locale
 
 /**

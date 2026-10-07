@@ -8,7 +8,6 @@
 package com.sempermechanics.semper.ui.viewer
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
@@ -19,9 +18,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.cloud.SessionMetadataSync
-import com.sempermechanics.semper.data.mechanical.CurveCorrection
-import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
@@ -31,9 +27,6 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.navigation.IntentKeys
-import com.sempermechanics.semper.report.BeamDeflection
-import com.sempermechanics.semper.report.ReportImageNames
-import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
@@ -46,7 +39,6 @@ import com.sempermechanics.semper.ui.viewer.mechanical.ViewerStressStrainHelper
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareExportController
 import com.sempermechanics.semper.ui.viewer.share.ShareKind
-import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
 import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -134,17 +126,6 @@ class ResultViewerActivity : AppCompatActivity() {
     internal val crossSectionMm2: Float get() = args.crossSectionMm2
     internal val loadAxisX: Boolean get() = args.loadAxisX
     internal val loadsN: FloatArray by lazy { args.loadsN.toFloatArray() }
-
-    /** The session's geometry, with the deflection correction set in Results when there is one. */
-    internal val geometry: SpecimenGeometry
-        get() = viewModel.deflectionCorrection?.let(args.geometry::withCorrection) ?: args.geometry
-
-    /** The tensile scale and bias: one typed on this screen, else the session's. */
-    internal val curveCorrection: CurveCorrection get() = viewModel.curveCorrection ?: args.curveCorrection
-
-    /** How this session's loads become stress; axial for a plain DIC session. */
-    internal val stressModel: StressStrain.Model
-        get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
     internal val stressStrain: ViewerStressStrainHelper by lazy { ViewerStressStrainHelper(this, viewModel) }
 
     /** The summary slot is showing a test's Results, where field and colour scale do not apply. */
@@ -432,49 +413,6 @@ class ResultViewerActivity : AppCompatActivity() {
         viewModel.deflectionCorrection?.let { ViewerDeflectionCorrection.save(outState, it) }
     }
 
-    /**
-     * Results' Adjust curve: redraws the cached curve under [correction]
-     * without decoding the frames again, on every Results surface on screen,
-     * and saves it on the session so the next open, the CSV and the report
-     * read it. A backed-up session's cloud copy gets the new metadata too.
-     */
-    internal fun applyCurveCorrection(correction: CurveCorrection) {
-        viewModel.curveCorrection = correction
-        viewModel.stressStrain = viewModel.stressStrain?.let { StressStrain.recorrect(it, correction) }
-        stressStrain.redraw()
-        saveOnSession(args.sessionLocalId) { appContext, id ->
-            SessionStore.setCurveCorrection(appContext, id, correction)
-        }
-    }
-
-    /**
-     * Results' Adjust deflection: [correction] becomes the session's. The
-     * cached curve is re-mapped rather than rebuilt, the Results on screen
-     * redraw, and the share sheet, report and CSV read it through [geometry].
-     * Saved to the session so a reopen shows it too.
-     */
-    internal fun applyDeflectionCorrection(correction: BeamDeflection.Correction) {
-        viewModel.deflectionCorrection = correction
-        viewModel.stressStrain = viewModel.stressStrain?.let { BeamDeflection.Correction.recorrect(it, stressModel) }
-        stressStrain.redraw()
-        saveOnSession(args.sessionId) { appContext, id ->
-            SessionStore.setDeflectionCorrection(appContext, id, correction)
-        }
-    }
-
-    /**
-     * Runs [write] on session [id] off the main thread; a backed-up session's
-     * cloud copy then gets the new metadata (ADR-013, TD-152).
-     */
-    private fun saveOnSession(id: String?, write: (Context, String) -> Unit) {
-        id ?: return
-        val appContext = applicationContext
-        lifecycleScope.launch(Dispatchers.IO) {
-            write(appContext, id)
-            if (SessionStore.get(appContext, id)?.metadataStale == true) SessionMetadataSync.enqueue(appContext, id)
-        }
-    }
-
     internal fun applyLoadedFrame(index: Int, data: FloatArray) {
         rawData = data
         // A sweep's frames each have their own grid pitch.
@@ -503,45 +441,6 @@ class ResultViewerActivity : AppCompatActivity() {
      * at the displaced positions. See [ViewerImageLoader.onFramePhoto].
      */
     internal val onFramePhoto: Boolean get() = images.onFramePhoto
-
-    /**
-     * Same rest-fit box the summary GIF should fill. Custom ROI when set;
-     * otherwise null so [com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation]
-     * discovers accepted points from the first readable frame.
-     */
-    internal fun summaryFitBounds(): FloatArray? = roi.takeIf { it.isCustomFor(imageSize) }?.toLtrb()
-
-    /**
-     * The planned frame behind the [position]-th `.dat` on disk. A frame the
-     * batch skipped leaves a gap in the numbering, so the two part ways there.
-     */
-    internal fun plannedFrameIndex(position: Int): Int = plannedFrames.getOrElse(position) { position }
-
-    /**
-     * What the frame at [position] is called on screen: its image name (or a
-     * sweep's combination label), looked up by the planned frame, not the
-     * position, so a frame after a skipped one keeps its own name.
-     */
-    internal fun frameDisplayName(position: Int): String {
-        val planned = plannedFrameIndex(position)
-        return ReportImageNames.frameName(args.frameNames, planned) ?: "Frame ${planned + 1}"
-    }
-
-    /**
-     * The deformed image solved at [position], or null when it is not on disk.
-     * Every node of a sweep solves the one deformed image. A batch looks its
-     * frame up by the name the run persisted it under, since `raw_deformed/`
-     * keeps the user's own file names and sorts them alphabetically, not in
-     * frame order.
-     */
-    internal fun deformedImagePathAt(position: Int): String? =
-        ViewerReportFactory.deformedImagePath(
-            args,
-            isSweep,
-            defImagePaths,
-            args.frameNames,
-            plannedFrameIndex(position),
-        )
 
     /**
      * The stored record behind this viewer, or null when it was opened without

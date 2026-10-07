@@ -9,6 +9,8 @@ import com.google.android.material.textfield.TextInputLayout
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.ui.viewer.applyCurveCorrection
+import com.sempermechanics.semper.ui.viewer.curveCorrection
 import java.util.Locale
 
 /**

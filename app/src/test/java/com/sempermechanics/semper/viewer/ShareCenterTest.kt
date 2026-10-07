@@ -19,6 +19,7 @@ import com.sempermechanics.semper.fixtures.writeGridBatch
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
 import com.sempermechanics.semper.ui.viewer.ViewerSweepArgs
+import com.sempermechanics.semper.ui.viewer.frameDisplayName
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareExportBuilder
 import com.sempermechanics.semper.ui.viewer.share.ShareKind

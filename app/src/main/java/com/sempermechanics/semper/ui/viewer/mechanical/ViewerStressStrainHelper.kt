@@ -19,6 +19,9 @@ import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
+import com.sempermechanics.semper.ui.viewer.curveCorrection
+import com.sempermechanics.semper.ui.viewer.plannedFrameIndex
+import com.sempermechanics.semper.ui.viewer.stressModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
