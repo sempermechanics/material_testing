@@ -161,7 +161,7 @@ class LabWorkflowDeviceTest {
         val record = seedTensile()
         val intent = SessionOpenHelper.argsFor(record).copy(startFrame = 0).toIntent(context)
         ActivityScenario.launch<ResultViewerActivity>(intent).use { scenario ->
-            awaitOn(scenario, "frame 1's field") { it.rawData != null && it.imgMain.drawable != null }
+            awaitOn(scenario, "frame 1's field") { it.rawData != null && it.binding.imgBaseResult.drawable != null }
             val restScale = scaleOf(scenario)
 
             // At rest, a horizontal swipe is a scrub: one frame whether it is a
@@ -189,7 +189,7 @@ class LabWorkflowDeviceTest {
             // A short tap reads the nearest point.
             val box = image().visibleBounds
             device.click(box.centerX(), box.centerY())
-            awaitOn(scenario, "the probe readout") { it.tvProbeReadout.isVisible }
+            awaitOn(scenario, "the probe readout") { it.binding.tvProbeReadout.isVisible }
 
             image().pinchClose(PINCH_PERCENT)
             device.waitForIdle()
@@ -222,7 +222,7 @@ class LabWorkflowDeviceTest {
         var scale = 0f
         scenario.onActivity {
             val values = FloatArray(9)
-            it.imgMain.getZoomMatrix().getValues(values)
+            it.binding.imgBaseResult.getZoomMatrix().getValues(values)
             scale = values[Matrix.MSCALE_X]
         }
         return scale
