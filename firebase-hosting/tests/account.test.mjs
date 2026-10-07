@@ -45,6 +45,28 @@ test("the page starts once signed in: 2FA pill, account and analyses", async () 
   assert.deepEqual(sent(), ["GET /v1/me", "GET /v1/sessions?app=all"]);
 });
 
+test("staff who also hold a licence get the switch, with Your account current", async () => {
+  await open({ routes: { "GET /v1/me": () => json(200, {
+    role: "admin", email: "staff@semper.test", license: { mode: "licensed", held: true },
+  }) } });
+  assert.equal($("switch").hidden, false);
+  assert.deepEqual(
+    $("switch").querySelectorAll("a").map((a) => [a.textContent, a.getAttribute("href"), a.getAttribute("aria-current") ?? ""]),
+    [["Operator", "../operator/", ""], ["Your account", "../account/", "page"]],
+  );
+});
+
+test("an account that is not staff sees no switch, licensed or not", async () => {
+  await open({ license: { mode: "licensed", held: true } });
+  assert.equal($("switch").hidden, true);
+});
+
+test("when /v1/me fails there is no switch, and the analyses still load", async () => {
+  await open({ routes: { "GET /v1/me": () => json(503, { detail: "unavailable" }) } });
+  assert.equal($("switch").hidden, true);
+  assert.deepEqual(sent(), ["GET /v1/me", "GET /v1/sessions?app=all"]);
+});
+
 test("a live licence shows its kind, key, end date, and may be moved", async () => {
   const expiresAt = iso(30 * DAY);
   await open({ license: {

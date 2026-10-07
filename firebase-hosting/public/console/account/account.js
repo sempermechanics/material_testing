@@ -8,8 +8,9 @@
 import {
   requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when, day,
 } from "../auth.js";
-import { errorDetail } from "../util.js";
+import { errorDetail, holdsLicence } from "../util.js";
 import { explain as refusalText } from "../messages.js";
+import { mountSwitcher } from "../switcher.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -50,6 +51,7 @@ async function loadAccount() {
     licence = me.license || {};
     accountError = "";
     renderLicence();
+    mountSwitcher("account", me);
   } catch (e) {
     accountError = `Could not read your account: ${e.message}`;
     setStatus(accountError, true);
@@ -61,10 +63,9 @@ function renderLicence() {
   const floating = licence.seating === "floating";
   const holdsSeat = licence.leaseExpiresAt &&
     new Date(licence.leaseExpiresAt) > new Date();
-  // Whether a real licence is attached. A Demo key and a licence revoked out
-  // from under the account both have a kind and a prefix, and used to show
-  // them as if they were one. A backend without `held` is answered from mode.
-  const held = licence.held ?? licensed;
+  // Whether a real licence is attached: a Demo key used to show as if it
+  // were one.
+  const held = holdsLicence(licence);
   const lapsed = Date.parse(licence.graceEndsAt || licence.expiresAt || "") <= Date.now();
 
   const pills = [
