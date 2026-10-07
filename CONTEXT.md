@@ -110,7 +110,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-05)
+## Current state (2026-10-07)
 
 - **Quality program (on `main`, #310–#332, 2026-10-05).** Bug fixes, the package layout
   ([ADR-015](docs/adr/ADR-015-package-layout.md)), ViewBinding and the `ui/common` kit
@@ -129,10 +129,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   from the restore itself (fix #341). material_testing moves to
   `com.sempermechanics.materialtesting` in the same merge that takes this code
   ([FORK_SYNC](docs/ops/FORK_SYNC.md)); its Firebase app is not registered yet.
-- **Deployed.** Cloud Run `semper-api` (image `semper-api-37277643509-1` from `67d2ad35`,
-  2026-10-05; scales to zero) behind API Gateway `semper-gw` (config `v202610010948-83`,
-  deployed by CI, ADR-006); staging `semper-api-staging` behind `semper-gw-staging` (CI
-  since #258); project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+- **Deployed.** Cloud Run `semper-api` from `85650da` (#344, 2026-10-07; scales to zero)
+  behind API Gateway `semper-gw`, and staging `semper-api-staging` behind
+  `semper-gw-staging`. It was deployed by hand because the Actions runners were not
+  assigned, so the images are not re-pinned (CHANGELOG). Project IDs keep `indic-*`
+  ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
   Licensing, the licence desk ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device
   binding per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)) and sessions
   tagged by app ([ADR-014](docs/adr/ADR-014-session-app-tag.md)) are live; consoles on
@@ -142,17 +143,15 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `ae05bb87`); Pixel 6 smoke on 2026-09-26 was clean. Next release also carries the
   material_testing ports #298–#302 (manual keyboard / ROI dock / viewer checks owed).
 - **material_testing shares this history** and merges this `main` (last at `dc133510`,
-  material_testing#120, before the quality program), with its own app id (TD-133).
-  Shared code and backend changes land here first; after the quality program it replays two package mappings
+  material_testing#120). Its sync of `85650da` is draft material_testing#122. That sync
+  is not compiled, and it waits on the Firebase app for
+  `com.sempermechanics.materialtesting`. Shared code and backend changes land here first
   ([FORK_SYNC.md](docs/ops/FORK_SYNC.md)).
-- **Backend and console restructuring (branch `ccr-6575f0b3-7g5yvz`, not merged).** One
-  refusal model ([ADR-020](docs/adr/ADR-020-backend-refusal-model.md)), the `firestore_repo`
-  facade retired ([ADR-021](docs/adr/ADR-021-retire-firestore-repo-facade.md)), one roster
-  for IT and staff (`routers/roster.py`, new staff paths: gateway config deploy owed), and
-  the consoles on `ApiError`, `roster.js` and a split operator desk, and a performance
-  pass (TD-178–TD-198). Before its backend deploys: the `files (uid, sessionId)` index.
 - **Dependabot** opens monthly PRs for major versions only (pip, Gradle, Actions; #337);
   minor and patch fixes arrive as Dependabot security updates, which are on.
+- **CI runners.** On 2026-10-05/07 jobs sat queued with no runner and were cancelled
+  after 15 minutes. That hit #344's secret-scan, legal-pages and CI OK jobs, and the
+  deploy run. Check the org's Actions concurrency limit and billing.
 - **Owed.** The public release of `v1.2-beta.3` (website / Play); a licensed-account smoke
   of share and PDF and Delete everywhere (Restore and the backups card were checked on the
   new app 2026-10-05; a backup hidden from the card comes back only through Settings);

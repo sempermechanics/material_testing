@@ -12,6 +12,40 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-07 — Backend, gateway and console deploy: the restructuring (#344)
+
+From `85650da`, by hand: `deploy-backend.yml` run 37572831085 sat with no runner
+assigned and was cancelled. That is the same runner shortage that cancelled #344's own
+secret-scan and legal-pages jobs twice. The steps mirrored the workflow, in order:
+1. The `files (uid, sessionId)` index, with `scripts/deploy-firestore.sh indexes`. It
+   had to show READY first, because staging and production share the Firestore.
+2. Staging: `semper-api-staging` was deployed as a no-traffic `cand` tag, smoked on
+   `/readyz`, then promoted. `semper-gw-staging` was switched to a new `v…-manual`
+   config rendered from `backend/gateway/openapi.yaml`.
+3. Production: the same for `semper-api` and `semper-gw`.
+4. The consoles, with `scripts/deploy-console.sh`.
+
+The operator reported the deploy complete. The revision and config names were not
+recorded. What the hand deploy skipped:
+- The env vars are not re-applied from the GitHub variables: a new revision inherits
+  the live service's.
+- The serving and rollback images were not re-pinned
+  ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) §A7).
+
+What changed for callers (#344):
+- **Errors:** every refusal comes from one table, with the same codes and statuses as
+  before ([ADR-020](../adr/ADR-020-backend-refusal-model.md); TD-185 keeps two
+  route-specific statuses).
+- **Staff roster routes:** Semper staff have their own under
+  `/v1/admin/licenses/{id}/seats` and `…/invites/{key}`. The seat listing on both
+  tiers is paged with `page_size` and `page_token`.
+- **Request size:** a body over 4 MiB answers `413 request_too_large`.
+- **Account export:** `GET /v1/me/export` reads the account's files as one stream
+  (TD-195).
+- **Consoles:** they read refusal codes rather than messages. The operator desk's
+  roster works for staff (TD-191), and the institution page offers its licences as a
+  picker.
+
 ## 2026-10-05 — Backend deploy: the new app ids (#333)
 
 Staging (`semper-api-staging`, run 37277292633) and production (`semper-api`, run

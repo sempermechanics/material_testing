@@ -314,4 +314,4 @@ yet deployed.
 - **One ASGI middleware (TD-196).** Security headers and the access log were two
   `BaseHTTPMiddleware` layers, each running the app in a task of its own and
   passing every body, a 300 s download included, through a memory stream.
-  Latency [Unknown] until a deploy.
+  Latency [Unknown]: deployed 2026-10-07, not yet measured.
