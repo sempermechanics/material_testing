@@ -133,15 +133,16 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
   --grep=semperdic-app`; last merged `dc13351`, 2026-10-01; rules in the parent's
   `docs/ops/FORK_SYNC.md`). The sync of `85650da` (package move ADR-015, app id
-  ADR-019, engine at `engine/`) is on branch `ccr-6575f0b3-7g5yvz`, a draft PR: not
-  compiled here, and it needs this app id registered in Firebase first. The parent deploys, and its TD rows jump to TD-122. General
+  ADR-019, engine at `engine/`) is PR #122 on branch `ccr-6575f0b3-7g5yvz`: it compiles
+  and passes Tier 1 here (2026-10-07), with this app id's Firebase client in
+  `google-services.json`; six files are over ADR-015's ~500 lines (TD-199). The parent deploys, and its TD rows jump to TD-122. General
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
   TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-199; check both before taking one.
+  free in both registers is TD-200; check both before taking one.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
