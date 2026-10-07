@@ -149,9 +149,6 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ([FORK_SYNC.md](docs/ops/FORK_SYNC.md)).
 - **Dependabot** opens monthly PRs for major versions only (pip, Gradle, Actions; #337);
   minor and patch fixes arrive as Dependabot security updates, which are on.
-- **CI runners.** On 2026-10-05/07 jobs sat queued with no runner and were cancelled
-  after 15 minutes. That hit #344's secret-scan, legal-pages and CI OK jobs, and the
-  deploy run. Check the org's Actions concurrency limit and billing.
 - **Owed.** The public release of `v1.2-beta.3` (website / Play); a licensed-account smoke
   of share and PDF and Delete everywhere (Restore and the backups card were checked on the
   new app 2026-10-05; a backup hidden from the card comes back only through Settings);
