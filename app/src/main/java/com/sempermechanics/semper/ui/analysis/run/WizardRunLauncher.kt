@@ -6,12 +6,12 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.diagnostics.EngineDebug
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.Roi
-import com.sempermechanics.semper.ui.analysis.mechanicalInputs
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.launchBatchAnalysis
 import com.sempermechanics.semper.ui.analysis.wizard.launchSweep
+import com.sempermechanics.semper.ui.analysis.wizard.mechanicalInputs
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import kotlinx.coroutines.launch
 

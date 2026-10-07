@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.analysis
 
 import androidx.exifinterface.media.ExifInterface
-import com.sempermechanics.semper.ui.analysis.PhotoCaptureTime
+import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

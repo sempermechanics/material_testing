@@ -3,11 +3,11 @@ package com.sempermechanics.semper.analysis
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.LoadCsvParse
-import com.sempermechanics.semper.data.LoadUnit
-import com.sempermechanics.semper.data.MachineLoadCsv
-import com.sempermechanics.semper.data.TestType
-import com.sempermechanics.semper.ui.analysis.LoadInfoDialog
+import com.sempermechanics.semper.data.mechanical.LoadCsvParse
+import com.sempermechanics.semper.data.mechanical.LoadUnit
+import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
+import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.ui.analysis.load.LoadInfoDialog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue

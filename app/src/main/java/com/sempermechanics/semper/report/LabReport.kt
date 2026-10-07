@@ -1,6 +1,6 @@
 package com.sempermechanics.semper.report
 
-import com.sempermechanics.semper.data.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.report.LabReportFormat.frameCell
 import com.sempermechanics.semper.report.LabReportFormat.gpa
 import com.sempermechanics.semper.report.LabReportFormat.num

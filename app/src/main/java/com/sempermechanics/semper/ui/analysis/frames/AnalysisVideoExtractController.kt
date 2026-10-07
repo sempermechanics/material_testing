@@ -8,9 +8,9 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.imaging.video.ExtractionRequest
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.analysis.onReferenceReplaced
 import com.sempermechanics.semper.ui.analysis.run.ComputeOverlayController
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.onReferenceReplaced
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.CancellationException

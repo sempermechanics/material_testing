@@ -2,9 +2,9 @@ package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.os.Bundle
 import androidx.annotation.WorkerThread
-import com.sempermechanics.semper.data.SpecimenGeometry
-import com.sempermechanics.semper.data.TestType
-import com.sempermechanics.semper.data.TypedLoads
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.getRoi

@@ -1,6 +1,6 @@
 package com.sempermechanics.semper.ui.analysis.run
 
-import com.sempermechanics.semper.data.MechanicalTestInputs
+import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
 import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.Roi

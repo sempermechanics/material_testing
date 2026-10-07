@@ -1,6 +1,6 @@
 package com.sempermechanics.semper.viewer
 
-import com.sempermechanics.semper.ui.viewer.LabReportExporter
+import com.sempermechanics.semper.ui.viewer.mechanical.LabReportExporter
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

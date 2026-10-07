@@ -1,15 +1,11 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.TestType
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.databinding.ActivityStaticAnalysisBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.analysis.loadPointMissing
-import com.sempermechanics.semper.ui.analysis.mechanicalInputsReady
-import com.sempermechanics.semper.ui.analysis.stressModel
-import com.sempermechanics.semper.ui.analysis.typedLoadsMissing
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
 

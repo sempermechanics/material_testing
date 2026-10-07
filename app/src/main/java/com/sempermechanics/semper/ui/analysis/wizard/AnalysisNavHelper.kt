@@ -7,7 +7,6 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.navigation.AppIntents
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.analysis.mechanicalInputs
 import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import com.sempermechanics.semper.ui.viewer.ViewerSweepArgs
 import kotlinx.coroutines.Dispatchers

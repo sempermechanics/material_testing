@@ -18,8 +18,8 @@ import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.BeamEdgeTaps
-import com.sempermechanics.semper.data.TestType
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.WizardDraft
@@ -34,8 +34,10 @@ import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportController
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderController
 import com.sempermechanics.semper.ui.analysis.frames.ReferenceImportController
+import com.sempermechanics.semper.ui.analysis.frames.VideoSamplingSheet
 import com.sempermechanics.semper.ui.analysis.frames.WizardMediaPickers
 import com.sempermechanics.semper.ui.analysis.frames.checkFrameSizes
+import com.sempermechanics.semper.ui.analysis.load.AnalysisLoadCard
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
 import com.sempermechanics.semper.ui.analysis.roi.RoiResolveHelper
 import com.sempermechanics.semper.ui.analysis.roi.RoiStudioLauncher

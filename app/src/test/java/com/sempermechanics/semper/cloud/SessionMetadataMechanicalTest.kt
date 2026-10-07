@@ -2,11 +2,11 @@
 
 package com.sempermechanics.semper.cloud
 
-import com.sempermechanics.semper.data.BeamEdgeTaps
-import com.sempermechanics.semper.data.CloudRestore
 import com.sempermechanics.semper.data.SessionRecord
-import com.sempermechanics.semper.data.SessionUploadMetadata
-import com.sempermechanics.semper.data.SpecimenGeometry
+import com.sempermechanics.semper.data.cloud.SessionUploadMetadata
+import com.sempermechanics.semper.data.cloud.restore.CloudRestore
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.report.BeamDeflection
 import org.json.JSONObject
 import org.junit.Assert.assertEquals

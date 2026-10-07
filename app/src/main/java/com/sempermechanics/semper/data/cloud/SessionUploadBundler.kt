@@ -6,7 +6,7 @@ import android.graphics.Bitmap
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.scale
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.loadOfFrame
+import com.sempermechanics.semper.data.mechanical.loadOfFrame
 import com.sempermechanics.semper.data.session.SessionLayout
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord

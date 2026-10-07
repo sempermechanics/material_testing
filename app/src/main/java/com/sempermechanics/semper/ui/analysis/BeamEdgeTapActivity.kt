@@ -12,9 +12,12 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.sempermechanics.semper.DicKeys
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.ui.analysis.load.BeamEdgeTapOverlay
+import com.sempermechanics.semper.ui.analysis.load.BeamTapPlacement
+import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.sempermechanics.semper.ui.common.Insets
-import com.sempermechanics.semper.ui.viewer.TouchImageView
+import com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

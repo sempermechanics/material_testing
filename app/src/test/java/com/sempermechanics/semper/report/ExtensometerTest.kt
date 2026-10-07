@@ -2,7 +2,7 @@
 
 package com.sempermechanics.semper.report
 
-import com.sempermechanics.semper.DicResult
+import com.sempermechanics.semper.field.DicResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

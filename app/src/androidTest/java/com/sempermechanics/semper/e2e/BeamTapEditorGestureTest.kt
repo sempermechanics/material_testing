@@ -16,9 +16,9 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import com.sempermechanics.semper.DicKeys
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.ui.analysis.BeamEdgeTapActivity
-import com.sempermechanics.semper.ui.viewer.TouchImageView
+import com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

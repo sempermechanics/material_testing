@@ -2,8 +2,8 @@
 
 package com.sempermechanics.semper.report
 
-import com.sempermechanics.semper.DicResult
-import com.sempermechanics.semper.data.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.field.DicResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

@@ -7,8 +7,8 @@ package com.sempermechanics.semper.data.session
 
 import android.content.Context
 import androidx.annotation.WorkerThread
-import com.sempermechanics.semper.data.CurveCorrection
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.util.AtomicFiles

@@ -3,7 +3,7 @@ package com.sempermechanics.semper.ui.viewer
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
-import com.sempermechanics.semper.data.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.DicParams

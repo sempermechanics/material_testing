@@ -7,7 +7,7 @@ import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.TestType
+import com.sempermechanics.semper.data.mechanical.TestType
 
 /**
  * The first question a new analysis asks: which mechanical test the frames

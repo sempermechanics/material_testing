@@ -1,9 +1,9 @@
 package com.sempermechanics.semper.data.session
 
-import com.sempermechanics.semper.data.CurveCorrection
-import com.sempermechanics.semper.data.SpecimenGeometry
-import com.sempermechanics.semper.data.TestType
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer

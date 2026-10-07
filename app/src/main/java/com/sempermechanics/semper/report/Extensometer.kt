@@ -1,6 +1,6 @@
 package com.sempermechanics.semper.report
 
-import com.sempermechanics.semper.DicResult
+import com.sempermechanics.semper.field.DicResult
 
 /**
  * A virtual extensometer for the tensile lab table's Extension column, in

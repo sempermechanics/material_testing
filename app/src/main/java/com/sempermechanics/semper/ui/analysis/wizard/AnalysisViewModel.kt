@@ -4,11 +4,11 @@ import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import com.sempermechanics.semper.SemperNativeLib
-import com.sempermechanics.semper.data.MachineLoadTable
-import com.sempermechanics.semper.data.ParsedLoadCsv
-import com.sempermechanics.semper.data.SpecimenGeometry
-import com.sempermechanics.semper.data.TestType
-import com.sempermechanics.semper.data.TypedLoads
+import com.sempermechanics.semper.data.mechanical.MachineLoadTable
+import com.sempermechanics.semper.data.mechanical.ParsedLoadCsv
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionRecordSettings

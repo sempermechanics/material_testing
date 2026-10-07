@@ -1,12 +1,10 @@
 package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.os.Bundle
-import com.sempermechanics.semper.data.LoadCsvParse
-import com.sempermechanics.semper.data.MachineLoadCsv
+import com.sempermechanics.semper.data.mechanical.LoadCsvParse
+import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.field.ImageSize
-import com.sempermechanics.semper.ui.analysis.clearLabInputs
-import com.sempermechanics.semper.ui.analysis.refreshMachineLoads
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger

@@ -13,7 +13,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.TypedLoads
+import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers

@@ -12,12 +12,12 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.TestType
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore

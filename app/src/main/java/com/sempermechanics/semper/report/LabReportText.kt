@@ -3,7 +3,7 @@
 
 package com.sempermechanics.semper.report
 
-import com.sempermechanics.semper.data.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import java.util.Locale
 import kotlin.math.abs
 

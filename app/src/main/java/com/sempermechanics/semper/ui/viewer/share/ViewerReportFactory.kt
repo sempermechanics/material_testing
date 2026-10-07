@@ -1,7 +1,7 @@
 package com.sempermechanics.semper.ui.viewer.share
 
 import android.graphics.Bitmap
-import com.sempermechanics.semper.data.loadOfFrame
+import com.sempermechanics.semper.data.mechanical.loadOfFrame
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize

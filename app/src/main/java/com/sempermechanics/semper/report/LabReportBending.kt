@@ -1,6 +1,6 @@
 package com.sempermechanics.semper.report
 
-import com.sempermechanics.semper.data.TypedLoads
+import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.report.LabReport.Block
 import com.sempermechanics.semper.report.LabReport.Document
 import com.sempermechanics.semper.report.LabReport.Series
