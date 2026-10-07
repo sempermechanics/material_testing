@@ -21,6 +21,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.shadows.ShadowDialog
 
 /**
@@ -31,6 +32,7 @@ import org.robolectric.shadows.ShadowDialog
 class HomeFirstRunPromptsTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
+    private val screens = mutableListOf<ActivityController<HomeActivity>>()
 
     // Home observes upload work in onCreate; the app starts WorkManager itself.
     @Before
@@ -42,12 +44,15 @@ class HomeFirstRunPromptsTest {
     @SuppressLint("RestrictedApi")
     @After
     fun stopWorkManager() {
+        // Home's session list registers with the main thread's GapWorker until
+        // the Activity is destroyed; left open, it outlives the test (TD-199).
+        screens.forEach { it.close() }
         WorkManagerTestInitHelper.closeWorkDatabase()
         WorkManagerImpl.setDelegate(null)
     }
 
     private fun home(): HomeActivity {
-        val activity = Robolectric.buildActivity(HomeActivity::class.java).setup().get()
+        val activity = Robolectric.buildActivity(HomeActivity::class.java).setup().also { screens += it }.get()
         shadowOf(activity.mainLooper).idle()
         return activity
     }

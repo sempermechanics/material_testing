@@ -9,6 +9,7 @@ import com.sempermechanics.semper.imaging.video.ExtractionRequest
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.imaging.video.VideoMeta
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,6 +24,11 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 class VideoSamplingSheetTest {
+
+    private val beds = mutableListOf<WizardTestBed>()
+
+    @After
+    fun closeBeds() = beds.forEach { it.close() }
 
     private val meta = VideoMeta(
         durationMs = 4_000L,
@@ -56,7 +62,7 @@ class VideoSamplingSheetTest {
 
     @Test
     fun `the sheet shows the clip and the sampling, and Extract hands it over`() {
-        val bed = WizardTestBed()
+        val bed = WizardTestBed().also { beds += it }
         var request: ExtractionRequest? = null
         val sheet = VideoSamplingSheet(bed.activity, onExtract = { request = it })
             .show(Uri.parse("content://v/1"), meta)

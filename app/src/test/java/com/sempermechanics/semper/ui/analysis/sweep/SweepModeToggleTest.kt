@@ -4,6 +4,7 @@ import com.google.android.material.button.MaterialButtonToggleGroup
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -14,6 +15,9 @@ import org.robolectric.RobolectricTestRunner
 class SweepModeToggleTest {
 
     private val bed = WizardTestBed()
+
+    @After
+    fun closeBed() = bed.close()
 
     /** The page calls the host made after the mode was switched to single on page [on]. */
     private fun stepsAfterLeavingSweepMode(on: WizardStep): List<String> {
