@@ -27,6 +27,7 @@ import com.sempermechanics.semper.ui.analysis.sweep.bindCopyGestures
 import com.sempermechanics.semper.ui.analysis.sweep.latticeSummary
 import com.sempermechanics.semper.ui.analysis.sweep.readSweepFrameProfiles
 import com.sempermechanics.semper.ui.analysis.sweep.scrubReadout
+import com.sempermechanics.semper.ui.analysis.sweep.scrubToFraction
 import com.sempermechanics.semper.ui.analysis.sweep.skippedLatticeNodes
 import com.sempermechanics.semper.ui.analysis.sweep.solvedLatticeNodes
 import com.sempermechanics.semper.ui.analysis.sweep.sweepFrameProfiles

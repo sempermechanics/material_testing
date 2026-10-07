@@ -9,6 +9,7 @@ import com.sempermechanics.semper.report.LabReport
 import com.sempermechanics.semper.report.LabReportPdf
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.renderToBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

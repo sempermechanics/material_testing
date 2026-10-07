@@ -1,9 +1,7 @@
 package com.sempermechanics.semper.ui.analysis.sweep
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -13,7 +11,6 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withClip
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.common.dp
@@ -108,7 +105,7 @@ class SweepPlotView @JvmOverloads constructor(
     }
 
     /** The plot area in view pixels, inside the axis gutters; reused every draw, which runs on each scrub frame. */
-    private val frame = RectF()
+    internal val frame = RectF()
 
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -136,7 +133,7 @@ class SweepPlotView @JvmOverloads constructor(
 
     private val axes = SweepPlotAxes(this, textPaint)
 
-    private var series: List<Series> = emptyList()
+    internal var series: List<Series> = emptyList()
     private var marks: List<Mark> = emptyList()
     private var xLabel: String = ""
     private var yLabel: String = ""
@@ -159,7 +156,7 @@ class SweepPlotView @JvmOverloads constructor(
 
     /** Data-unit x of a vertical guide line, e.g. the recommended VSG. */
     private var highlightX: Float? = null
-    private var scrubX: Float? = null
+    internal var scrubX: Float? = null
 
     /**
      * Full data extent, cached: onDraw and every touch/scale/pan handler asks
@@ -169,7 +166,7 @@ class SweepPlotView @JvmOverloads constructor(
     private var dataBounds: PlotBounds? = null
 
     /** The zoomed window into [dataBounds], or none to show all of it. */
-    private val viewport = SweepPlotViewport(MIN_SPAN_FRACTION)
+    internal val viewport = SweepPlotViewport(MIN_SPAN_FRACTION)
 
     /**
      * When true, pinch-zoom and two-finger pan are active (lattice strain plot).
@@ -255,34 +252,7 @@ class SweepPlotView @JvmOverloads constructor(
         invalidate()
     }
 
-    /**
-     * Renders the current plot at [widthPx]×[heightPx] (full resolution, not a
-     * screenshot of the on-screen size). Restores the view's prior layout after.
-     */
-    fun renderToBitmap(widthPx: Int, heightPx: Int): Bitmap {
-        val prevW = width
-        val prevH = height
-        val wSpec = MeasureSpec.makeMeasureSpec(widthPx, MeasureSpec.EXACTLY)
-        val hSpec = MeasureSpec.makeMeasureSpec(heightPx, MeasureSpec.EXACTLY)
-        measure(wSpec, hSpec)
-        layout(0, 0, widthPx, heightPx)
-        val bitmap = createBitmap(widthPx, heightPx)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.WHITE)
-        draw(canvas)
-        if (prevW > 0 && prevH > 0) {
-            measure(
-                MeasureSpec.makeMeasureSpec(prevW, MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(prevH, MeasureSpec.EXACTLY),
-            )
-            layout(left, top, left + prevW, top + prevH)
-        } else {
-            requestLayout()
-        }
-        return bitmap
-    }
-
-    private fun dataBounds(): PlotBounds? {
+    internal fun dataBounds(): PlotBounds? {
         dataBounds?.let { return it }
         return plotBoundsOf(series, Y_MARGIN_FRACTION)?.also { dataBounds = it }
     }
@@ -496,48 +466,6 @@ class SweepPlotView @JvmOverloads constructor(
     override fun performClick(): Boolean {
         super.performClick()
         return true
-    }
-
-    private fun hasFrame(): Boolean = frame.right > frame.left && frame.bottom > frame.top
-
-    /** Inside the plot area, edges included. */
-    private fun contains(x: Float, y: Float): Boolean =
-        x in frame.left..frame.right && y in frame.top..frame.bottom
-
-    private fun updateScrub(xPx: Float, b: PlotBounds) {
-        val clamped = xPx.coerceIn(frame.left, frame.right)
-        val ratio = (clamped - frame.left) / (frame.right - frame.left)
-        emitScrub(b.xMin + ratio * (b.xMax - b.xMin), b)
-    }
-
-    /** Moves the scrub to [fraction] (0..1) of the current viewport — for a slider. */
-    fun scrubToFraction(fraction: Float) {
-        val full = dataBounds() ?: return
-        if (!hasFrame()) return
-        val vp = viewport.visible(full)
-        emitScrub(vp.xMin + fraction.coerceIn(0f, 1f) * (vp.xMax - vp.xMin), vp)
-    }
-
-    /** Sets the scrub at data-x [xData] and reports it to [onScrub] / [onScrubMove]. */
-    private fun emitScrub(xData: Float, vp: PlotBounds) {
-        scrubX = xData
-        val values = series
-            .filterNot { it.muted }
-            .mapNotNull { entry ->
-                interpolateY(entry.points, xData)?.let { y -> Sample(entry.label, y, entry.color) }
-            }
-        onScrub?.invoke(xData, values)
-        val span = vp.xMax - vp.xMin
-        onScrubMove?.invoke(if (span > 0f) ((xData - vp.xMin) / span).coerceIn(0f, 1f) else 0f)
-        invalidate()
-    }
-
-    private fun clearScrub() {
-        if (scrubX == null) return
-        scrubX = null
-        onScrub?.invoke(Float.NaN, emptyList())
-        onScrubMove?.invoke(Float.NaN)
-        invalidate()
     }
 }
 
