@@ -303,21 +303,6 @@ object VideoFrameExtractor {
         }
     }
 
-    /** The request's sampling times: its planned [ExtractionRequest.timesMs], else evenly at its rate. */
-    private fun ExtractionRequest.sampleTimesUs(): List<Long> =
-        plannedTimesUs() ?: VideoKeyframeHelper.uniformTimestampsUs(startMs, endMs, fpsExtract, maxFrames)
-
-    /**
-     * [ExtractionRequest.timesMs] in µs, or null when the request planned none.
-     * Rounded, not truncated: a key frame's time in ms, truncated, lands a hair
-     * before it, and the decoder would then decode the GOP before it first.
-     */
-    private fun ExtractionRequest.plannedTimesUs(): List<Long>? =
-        timesMs.takeIf { it.isNotEmpty() }?.map { (it * US_PER_MS).roundToLong() }
-
-    /** [timeUs] as ms after [firstUs], the reference's time. */
-    private fun offsetMs(timeUs: Long, firstUs: Long): Long = ((timeUs - firstUs) / US_PER_MS.toDouble()).roundToLong()
-
     /**
      * The frame at [timeUs], decoding forward from the sync frame before it;
      * the sync frame itself only when that fails. Sync-first would return one
@@ -345,3 +330,21 @@ object VideoFrameExtractor {
         )
     }
 }
+
+/** The request's sampling times: its planned [ExtractionRequest.timesMs], else evenly at its rate. */
+private fun ExtractionRequest.sampleTimesUs(): List<Long> =
+    plannedTimesUs() ?: VideoKeyframeHelper.uniformTimestampsUs(startMs, endMs, fpsExtract, maxFrames)
+
+/**
+ * [ExtractionRequest.timesMs] in µs, or null when the request planned none.
+ * Rounded, not truncated: a key frame's time in ms, truncated, lands a hair
+ * before it, and the decoder would then decode the GOP before it first.
+ */
+private fun ExtractionRequest.plannedTimesUs(): List<Long>? =
+    timesMs.takeIf { it.isNotEmpty() }?.map { (it * US_PER_MS_D).roundToLong() }
+
+/** [timeUs] as ms after [firstUs], the reference's time. */
+private fun offsetMs(timeUs: Long, firstUs: Long): Long = ((timeUs - firstUs) / US_PER_MS_D).roundToLong()
+
+/** µs in a ms, for the sample-time helpers above. */
+private const val US_PER_MS_D = 1000.0

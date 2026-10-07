@@ -1,6 +1,6 @@
 package com.sempermechanics.semper.data.mechanical
 
-import com.sempermechanics.semper.ui.analysis.VsgStudy
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -36,11 +36,11 @@ class TestTypeTest {
         // Plain DIC starts at the slider's own default, as before test types.
         assertEquals(5, TestType.DIC_2D.defaultStrainWindow)
         // In data points: at the default 5 px step, a 21 px and a 41 px VSG.
-        assertEquals(21, VsgStudy.vsgFor(TestType.TENSILE.defaultStrainWindow, 5))
-        assertEquals(41, VsgStudy.vsgFor(TestType.BENDING.defaultStrainWindow, 5))
+        assertEquals(21, SweepStudy.vsgFor(TestType.TENSILE.defaultStrainWindow, 5))
+        assertEquals(41, SweepStudy.vsgFor(TestType.BENDING.defaultStrainWindow, 5))
         // The slider takes odd values in its own range; a default off it would snap.
         TestType.entries.forEach {
-            assertEquals(it.name, it.defaultStrainWindow, VsgStudy.oddWindowPoints(it.defaultStrainWindow))
+            assertEquals(it.name, it.defaultStrainWindow, SweepStudy.oddWindowPoints(it.defaultStrainWindow))
         }
     }
 

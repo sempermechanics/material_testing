@@ -16,7 +16,7 @@ import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.ElasticModulus
 import com.sempermechanics.semper.report.ElasticRegion
 import com.sempermechanics.semper.report.StressStrain
-import com.sempermechanics.semper.ui.analysis.VsgPlotView
+import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +44,7 @@ class ViewerStressStrainHelper(
      * bias, or the tensile curve's.
      */
     class Views(
-        val plot: VsgPlotView,
+        val plot: SweepPlotView,
         val caption: TextView,
         val result: TextView,
         val range: MaterialButtonToggleGroup,
@@ -54,7 +54,7 @@ class ViewerStressStrainHelper(
     private var job: Job? = null
 
     /** The surfaces drawn so far, by plot, so a new correction redraws what is on screen. */
-    private val drawn = WeakHashMap<VsgPlotView, Views>()
+    private val drawn = WeakHashMap<SweepPlotView, Views>()
 
     /** True while [bindRange] sets the toggle to match the ViewModel, so its listener ignores it. */
     private var syncingRange = false
@@ -281,7 +281,7 @@ class ViewerStressStrainHelper(
             context: Context,
             curve: StressStrain.Curve,
             modulus: ElasticModulus.Fit?,
-        ): List<VsgPlotView.Series> = if (curve.model.plotsLoadDeflection) {
+        ): List<SweepPlotView.Series> = if (curve.model.plotsLoadDeflection) {
             ViewerBendingResults.plotSeries(context, curve)
         } else {
             ViewerStressStrainResults.plotSeries(context, curve, modulus)
@@ -292,7 +292,7 @@ class ViewerStressStrainHelper(
             context: Context,
             curve: StressStrain.Curve,
             modulus: ElasticModulus.Fit?,
-        ): List<VsgPlotView.Mark> =
+        ): List<SweepPlotView.Mark> =
             if (curve.model.plotsLoadDeflection) {
                 emptyList()
             } else {
@@ -318,15 +318,15 @@ class ViewerStressStrainHelper(
         }
 
         fun stressLabelRes(model: StressStrain.Model): Int = when (model) {
-            is StressStrain.Model.Axial -> R.string.setting_stress
-            is StressStrain.Model.Flexural -> R.string.setting_stress_flexural
+            is StressStrain.Model.Axial -> R.string.settings_used_stress
+            is StressStrain.Model.Flexural -> R.string.settings_used_stress_flexural
         }
 
         fun dimensionLabelRes(dimension: StressStrain.Dimension): Int = when (dimension) {
-            StressStrain.Dimension.CROSS_SECTION -> R.string.setting_cross_section
-            StressStrain.Dimension.SPAN -> R.string.setting_span
-            StressStrain.Dimension.WIDTH -> R.string.setting_width
-            StressStrain.Dimension.THICKNESS -> R.string.setting_thickness
+            StressStrain.Dimension.CROSS_SECTION -> R.string.settings_used_cross_section
+            StressStrain.Dimension.SPAN -> R.string.settings_used_span
+            StressStrain.Dimension.WIDTH -> R.string.settings_used_width
+            StressStrain.Dimension.THICKNESS -> R.string.settings_used_thickness
         }
     }
 }

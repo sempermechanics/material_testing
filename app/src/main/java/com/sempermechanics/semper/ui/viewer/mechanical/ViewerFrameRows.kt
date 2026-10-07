@@ -29,18 +29,22 @@ object ViewerFrameRows {
                 }
             }
             if (model is StressStrain.Model.Flexural) {
-                add(row(R.string.setting_load_bending, R.string.setting_kg_fmt, TypedLoads.kg(loadN)))
+                add(row(R.string.settings_used_load_bending, R.string.settings_used_kg_fmt, TypedLoads.kg(loadN)))
             } else {
-                add(row(R.string.setting_load, R.string.setting_n_fmt, loadN))
+                add(row(R.string.settings_used_load, R.string.settings_used_n_fmt, loadN))
             }
             if (!stress.isNaN()) {
-                add(row(ViewerStressStrainHelper.stressLabelRes(model), R.string.setting_mpa_fmt, stress))
+                add(row(ViewerStressStrainHelper.stressLabelRes(model), R.string.settings_used_mpa_fmt, stress))
             }
         }
     }
 
     private fun unitRes(dimension: StressStrain.Dimension): Int =
-        if (dimension == StressStrain.Dimension.CROSS_SECTION) R.string.setting_mm2_fmt else R.string.setting_mm_fmt
+        if (dimension == StressStrain.Dimension.CROSS_SECTION) {
+            R.string.settings_used_mm2_fmt
+        } else {
+            R.string.settings_used_mm_fmt
+        }
 
     private fun fmt(value: Float): String = String.format(Locale.US, "%.3f", value).trimEnd('0').trimEnd('.')
 }

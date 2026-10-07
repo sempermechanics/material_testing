@@ -1,3 +1,7 @@
+// The lab inputs' logic as AnalysisViewModel extensions, one small function per
+// step of the load card's flow; hence TooManyFunctions is suppressed here.
+@file:Suppress("TooManyFunctions")
+
 package com.sempermechanics.semper.ui.analysis.wizard
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps

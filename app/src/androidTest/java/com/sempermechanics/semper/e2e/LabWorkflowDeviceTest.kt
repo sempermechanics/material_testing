@@ -14,12 +14,12 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.SessionRecord
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.prefs.CoachPrefs
 import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.report.BeamDeflection

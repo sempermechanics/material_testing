@@ -43,7 +43,6 @@ class SessionMetadataSyncTest {
     private val sent = mutableListOf<Pair<String, JSONObject>>()
     private val queued = mutableListOf<String>()
 
-
     private val corrected = BeamDeflection.Correction(1.05f, -0.12f)
     private val matched = CurveCorrection(1.25f, 57.5f, 1f, 0f)
 
