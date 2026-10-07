@@ -13,6 +13,7 @@ import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.report.StressStrain
+import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 
 /*
@@ -22,6 +23,42 @@ import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
  * draft across a process death, ADR-005); the logic is here, as extensions,
  * like the runner files beside it.
  */
+
+/**
+ * Time of each deformed frame after the reference, index-aligned with
+ * [defFilePaths], as video extraction knows it ([DeformedFrame.videoTimeMs]).
+ * Image batches leave it empty; their times come from [defCaptureTimesMs]
+ * and [refCaptureTimeMs].
+ */
+var AnalysisViewModel.defFrameTimesMs: List<Long>
+    get() = deformedFrames.map { it.videoTimeMs ?: return emptyList() }
+    set(value) {
+        deformedFrames = deformedFrames.mapIndexed { i, f -> f.copy(videoTimeMs = value.getOrNull(i)) }
+    }
+
+/**
+ * EXIF capture time of each picked photo ([DeformedFrame.captureTimeMs]),
+ * index-aligned with [defFilePaths]; null for a photo without one. Empty
+ * for video frames.
+ */
+var AnalysisViewModel.defCaptureTimesMs: List<Long?>
+    get() = if (defFromVideo) emptyList() else deformedFrames.map { it.captureTimeMs }
+    set(value) {
+        deformedFrames = deformedFrames.mapIndexed { i, f -> f.copy(captureTimeMs = value.getOrNull(i)) }
+    }
+
+/**
+ * Bending's hanger mass per deformed frame, in kg, typed on the phone
+ * ([DeformedFrame.typedLoadKg]); index-aligned with [defFilePaths] and
+ * reordered with it. Null is a box left blank. Empty when nothing is
+ * typed. Used only while no load log is imported: the two are never
+ * combined.
+ */
+var AnalysisViewModel.typedLoadsKg: List<Float?>
+    get() = deformedFrames.map { it.typedLoadKg }.takeIf { kg -> kg.any { it != null } } ?: emptyList()
+    set(value) {
+        deformedFrames = deformedFrames.mapIndexed { i, f -> f.copy(typedLoadKg = value.getOrNull(i)) }
+    }
 
 /** How the logged loads will become stress, given what is entered so far. */
 fun AnalysisViewModel.stressModel(): StressStrain.Model =

@@ -17,8 +17,11 @@ import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.DraftRestore
 import com.sempermechanics.semper.ui.analysis.wizard.WizardState
+import com.sempermechanics.semper.ui.analysis.wizard.defCaptureTimesMs
+import com.sempermechanics.semper.ui.analysis.wizard.defFrameTimesMs
 import com.sempermechanics.semper.ui.analysis.wizard.saveWizardState
 import com.sempermechanics.semper.ui.analysis.wizard.setLoadLog
+import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsKg
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.After
