@@ -12,6 +12,15 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-07 — Hosting deploy: Material Testing's debug key in `assetlinks.json` (#346)
+
+From `2c1ecef8`, with `firebase deploy --only hosting` in `firebase-hosting/` (one file
+uploaded). `com.sempermechanics.materialtesting` now lists the shared debug key
+(`39:30:C4…`) beside its release key (`F5:DC…`), as Semper does, so its debug and
+benchmark builds can verify App Links. Both hosts served it right after the deploy.
+Google's Digital Asset Links API still answered "not linked" for an hour from its cache,
+so the Pixel 6 re-verify of the new Material Testing app is still owed.
+
 ## 2026-10-07 — Backend, gateway and console deploy: the restructuring (#344)
 
 From `85650da`, by hand: `deploy-backend.yml` run 37572831085 sat with no runner

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.core.view.isVisible
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -29,6 +30,9 @@ class SubsetRecommendationControllerTest {
         bed = WizardTestBed()
         subsets = SubsetRecommendationController(bed.activity, bed.viewModel, bed.binding, bed.settings, bed.host)
     }
+
+    @After
+    fun closeBed() = bed.close()
 
     private fun recommend(subset: Int, speckle: Double? = null, capped: Int = 0) {
         bed.viewModel.subsetRecommendation = SubsetRecommender.Recommendation(

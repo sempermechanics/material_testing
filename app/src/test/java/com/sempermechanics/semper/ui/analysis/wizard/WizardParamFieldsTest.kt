@@ -7,6 +7,7 @@ import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommender
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -34,6 +35,9 @@ class WizardParamFieldsTest {
         subsets = SubsetRecommendationController(bed.activity, bed.viewModel, bed.binding, bed.settings, bed.host)
         fields = WizardParamFields(bed.activity, bed.viewModel, bed.settings, subsets, bed.host).also { it.bind() }
     }
+
+    @After
+    fun closeBed() = bed.close()
 
     @Test
     fun `a run takes the window as a VSG in px at the slider's step`() {

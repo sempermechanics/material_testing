@@ -271,6 +271,22 @@ android {
         unitTests {
             // Robolectric (UploadResumableTest) needs the real resource table.
             isIncludeAndroidResources = true
+            all { test ->
+                // Gradle gives a test worker 512 MB unless told otherwise. The
+                // suite's live heap reached 430-460 MB of that (TD-199, local
+                // and CI GC logs), so an OutOfMemoryError could land in the
+                // worker's own thread and end it with "Gradle Test Executor 1
+                // finished with non-zero exit value 1" and no failing test.
+                // The bulk was tests that left an Activity or sheet open: its
+                // RecyclerView stayed registered with the main thread's
+                // GapWorker, holding the Activity and its Robolectric themes
+                // (~190 KB each) for the rest of the run. Those tests now close
+                // what they open, which brings the live peak to about 280 MB
+                // (no full GC left at 512 MB, against 12 before); Robolectric's
+                // own state and the Kover agent's data make up most of the
+                // rest. 2 GB is headroom for the suite to grow, not a need.
+                test.maxHeapSize = "2g"
+            }
         }
     }
 

@@ -20,19 +20,25 @@ import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
 import com.sempermechanics.semper.ui.common.showUnlessEditing
 import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.android.controller.ActivityController
 
 /**
  * The wizard's views in a plain themed Activity, a fresh view model and a
  * [FakeWizardHost], for testing the wizard's parts one at a time.
  *
+ * [close] it after the test (`@After`, or `use`): an Activity left open keeps
+ * its wizard's RecyclerView registered with the main thread's GapWorker, so it
+ * and its themes outlive the test and pile up across the suite (TD-199).
+ *
  * @param resumed false leaves the Activity just created, where a part that
  *   registers a result launcher may still be built.
  */
-internal class WizardTestBed(resumed: Boolean = true) {
-    val activity: AppCompatActivity = Robolectric.buildActivity(AppCompatActivity::class.java)
-        .also { it.get().setTheme(R.style.Theme_Semper) }
-        .let { if (resumed) it.setup() else it.create() }
-        .get()
+internal class WizardTestBed(resumed: Boolean = true) : AutoCloseable {
+    private val controller: ActivityController<AppCompatActivity> =
+        Robolectric.buildActivity(AppCompatActivity::class.java)
+            .also { it.get().setTheme(R.style.Theme_Semper) }
+            .let { if (resumed) it.setup() else it.create() }
+    val activity: AppCompatActivity = controller.get()
     val binding: ActivityStaticAnalysisBinding = ActivityStaticAnalysisBinding.inflate(activity.layoutInflater)
     val settings: WizardStepSettingsContentBinding
     val viewModel = AnalysisViewModel()
@@ -58,6 +64,9 @@ internal class WizardTestBed(resumed: Boolean = true) {
     }
 
     fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    /** Destroys the Activity, which detaches its views and releases them. */
+    override fun close() = controller.close()
 }
 
 /**
