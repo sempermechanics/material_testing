@@ -4,12 +4,14 @@ import android.app.Application
 import android.view.View
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
+import androidx.dynamicanimation.animation.SpringFrames
 import androidx.recyclerview.widget.RecyclerView
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.TransferPhase
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.common.transfer.TransferWorkObserver
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -67,6 +69,10 @@ class SessionListAdapterTest {
             },
         )
     }
+
+    /** A bound row's bar springs to its percent, and no frame ends it here (TD-200). */
+    @After
+    fun tearDown() = SpringFrames.endAll()
 
     @Suppress("LongParameterList") // named, defaulted knobs of one SessionRecord
     private fun record(

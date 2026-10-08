@@ -7,7 +7,7 @@
 import { beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
-  test, reset, settle, openPage, json, net, confirms, prompts, sent, storage, fake,
+  test, reset, settle, openPage, json, net, confirms, prompts, codes, sent, storage, fake,
   readyUser, FakeUser, $, loadAuth,
 } from "./harness.mjs";
 
@@ -395,7 +395,7 @@ test("back from Google, a delete is finished after one confirmation", async () =
 });
 
 test("a delete whose return leg was cancelled says it was not deleted", async () => {
-  prompts.answer(null); // the authenticator code on the return leg
+  codes.answer(null); // Cancel on the authenticator-code card, on the return leg
   await open({ resume: { action: "delete", id: IND.id }, redirect: fake.mfaError() });
   assert.equal($("status").textContent,
     "SEMP-IND1 was not deleted: the authenticator code was not entered. Delete it again to retry.");

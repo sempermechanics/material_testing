@@ -7,6 +7,8 @@
 # There is no AUTH_DOMAIN: auth.js uses the page's own host as authDomain.
 #
 # Optional: FIREBASE_PROJECT=indicvision-dic-app-auth
+# Optional: LIVE_ORIGIN=https://app.sempermechanics.com (the host checked after
+#           the deploy; scripts/check_live_console.py)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -71,5 +73,11 @@ subst "${JSON}" "__API_ORIGIN__" "${API_BASE_URL}"
   cd "${HOSTING}"
   firebase deploy --only hosting "${PROJECT_FLAG[@]}"
 )
+
+# Read back what the live site serves. A deploy can "succeed" and still leave
+# the consoles unable to reach the API, which a bare `firebase deploy` did on
+# 2026-10-07; this fails the run instead of waiting for the next sign-in.
+"${PYTHON[@]}" "${ROOT}/scripts/check_live_console.py" \
+  --origin "${LIVE_ORIGIN:-https://app.sempermechanics.com}" --api "${API_BASE_URL%/}"
 
 echo "Hosting deploy finished; placeholders restored under firebase-hosting/."
