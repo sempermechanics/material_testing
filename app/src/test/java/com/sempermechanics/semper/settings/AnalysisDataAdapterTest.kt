@@ -53,4 +53,20 @@ class AnalysisDataAdapterTest {
 
         assertEquals(emptyList<String>(), shown())
     }
+
+    /**
+     * Settings counts the rows above the list, which scrolls inside the page
+     * past its height cap. A delete updates that count at once, before the
+     * removal's diff has landed in [AnalysisDataAdapter.getItemCount].
+     */
+    @Test
+    fun `the row count follows a submit and a removal at once`() {
+        adapter.submit(listOf(entry("a"), entry("b"), entry("c")))
+        assertEquals(3, adapter.rowCount)
+
+        adapter.remove(entry("a").downloadKey())
+        assertEquals(2, adapter.rowCount)
+        adapter.remove("gone")
+        assertEquals(2, adapter.rowCount)
+    }
 }

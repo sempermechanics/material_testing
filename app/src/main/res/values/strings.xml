@@ -303,6 +303,11 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="cloud_section">Cloud backup</string>
     <string name="analyses_data_management">Analyses data management</string>
     <string name="analyses_data_empty">No analyses on this phone or in the cloud yet.</string>
+    <!-- Above the Analyses data management list, which scrolls inside the page. -->
+    <plurals name="analyses_data_count">
+        <item quantity="one">%1$d analysis</item>
+        <item quantity="other">%1$d analyses</item>
+    </plurals>
     <string name="analysis_state_phone_and_cloud_fmt">On phone · In cloud (%1$s)</string>
     <string name="analysis_state_phone_only">On phone only</string>
     <string name="analysis_state_cloud_only_fmt">Cloud only (%1$s)</string>
