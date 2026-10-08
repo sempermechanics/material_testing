@@ -457,7 +457,7 @@ fused hot loop always moved whole with its function.
 
 ## 6. Deferred
 
-Each item is a row in [TECH_DEBT.md](TECH_DEBT.md#new-deferred-by-the-2026-10-quality-program),
+Each item is a row in [TECH_DEBT.md](TECH_DEBT.md#open-register),
 with its evidence and priority. "Found in" names the PR whose work or review
 found the item; "the program's review" means it came from checking the PRs
 against each other while this page and the TECH_DEBT rows were written, not
