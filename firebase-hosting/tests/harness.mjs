@@ -63,12 +63,16 @@ export const prompts = {
 
 /**
  * Scripted answers for the in-page authenticator-code card (auth.js
- * `askCodeInPage`), in order: a string is typed and confirmed, null presses
- * Cancel. `asked` counts the cards shown and `cards` keeps them. An
- * unscripted card fails the test, as an unscripted prompt does.
+ * `codeCard`), in order: a string is typed and confirmed, null presses
+ * Cancel. After a rejected code the card offers Try again; a string answer
+ * there presses it first (`retries` counts those). `asked` counts the cards
+ * shown and `cards` keeps them. An unscripted card fails the test, as an
+ * unscripted prompt does.
  */
 export const codes = {
+  generation: 0,
   asked: 0,
+  retries: 0,
   cards: [],
   answers: [],
   answer(...values) {
@@ -80,17 +84,46 @@ hooks.inserted = (card) => {
   if (card.className !== "card code") return;
   codes.asked += 1;
   codes.cards.push(card);
-  // After auth.js has wired the card's buttons, as a person would.
-  setImmediate(() => {
-    if (!codes.answers.length) throw new Error("unscripted authenticator-code card");
+  const generation = codes.generation;
+  // Act as a person would, once auth.js waits on the card: for a code (box
+  // enabled) or for Try again / Cancel (Try again shown). In between the
+  // code is being checked, so wait, for a bounded number of turns.
+  let idle = 0;
+  const step = () => setImmediate(() => {
+    // A card from an earlier test (reset() moved on) is left alone.
+    if (card.removed || generation !== codes.generation) return;
+    const input = card.querySelector("input");
+    const retry = card.querySelector(".retry");
+    const forRetry = !retry.hidden;
+    const forCode = retry.hidden && !input.disabled;
+    if (!forRetry && !forCode) {
+      idle += 1;
+      if (idle < 200) step();
+      return;
+    }
+    // A test may look at the card before answering it; it is unscripted only
+    // if no answer comes within the same bound.
+    if (!codes.answers.length) {
+      idle += 1;
+      if (idle < 200) step();
+      else throw new Error("unscripted authenticator-code card");
+      return;
+    }
+    idle = 0;
     const value = codes.answers.shift();
     if (value === null) {
       card.querySelector(".cancel").click();
-      return;
+    } else if (forRetry) {
+      codes.retries += 1;
+      codes.answers.unshift(value);
+      retry.click();
+    } else {
+      input.value = value;
+      card.querySelector(".confirm").click();
     }
-    card.querySelector("input").value = value;
-    card.querySelector(".confirm").click();
+    step();
   });
+  step();
 };
 
 export const location = {
@@ -225,7 +258,9 @@ export function reset() {
   storage.clear();
   prompts.asked = [];
   prompts.answers = [];
+  codes.generation += 1;
   codes.asked = 0;
+  codes.retries = 0;
   codes.cards = [];
   codes.answers = [];
   confirms.asked = [];

@@ -153,17 +153,20 @@ function ask(message) {
 }
 
 /**
- * The authenticator code, asked for in the page: a card under the status
- * line with a code box, Confirm and Cancel. Resolves the trimmed code, or
- * null on Cancel.
+ * The authenticator-code card: a code box, Confirm and Cancel under the
+ * status line, and after a rejected code a Try again button.
  *
  * Not `window.prompt`: some browsers show no prompt at all (the Claude
  * desktop app's browser pane answers "prompt() is not supported"), and there
  * this was the one step of sign-in nobody could complete. It sits where the
  * enrolment card does and looks like it, so first sign-in and every later one
  * ask for the code the same way.
+ *
+ * `next()` resolves the trimmed code, or null on Cancel. `rejected()` says the
+ * code was not accepted and resolves true on Try again (the box cleared for a
+ * fresh code), false on Cancel. `close()` removes the card.
  */
-function askCodeInPage() {
+function codeCard() {
   const card = document.createElement("section");
   card.className = "card code";
   card.innerHTML = `
@@ -173,23 +176,64 @@ function askCodeInPage() {
       <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
              placeholder="6-digit code" size="12" />
       <button class="confirm">Confirm</button>
+      <button class="retry" hidden>Try again</button>
       <button class="secondary cancel">Cancel</button>
-    </div>`;
+    </div>
+    <p class="muted err feedback"></p>`;
   const anchor = document.getElementById("status") || document.querySelector("main");
   anchor.insertAdjacentElement("afterend", card);
   const input = card.querySelector("input");
-  input.focus();
+  const confirmBtn = card.querySelector(".confirm");
+  const retryBtn = card.querySelector(".retry");
+  const feedback = card.querySelector(".feedback");
 
-  return new Promise((resolve) => {
-    const done = (value) => { card.remove(); resolve(value); };
-    const confirm = () => {
-      const code = input.value.trim();
-      if (code) done(code);
-    };
-    card.querySelector(".confirm").addEventListener("click", confirm);
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") confirm(); });
-    card.querySelector(".cancel").addEventListener("click", () => done(null));
-  });
+  // Whoever is waiting on the card, next() or rejected(), and what Cancel
+  // answers it with.
+  let waiting = null;
+  let onCancel = null;
+  const answer = (value) => {
+    const settle = waiting;
+    waiting = null;
+    if (settle) settle(value);
+  };
+  const confirm = () => {
+    const code = input.value.trim();
+    if (!code || !retryBtn.hidden) return;
+    // Being checked: no second submit of the same code.
+    input.disabled = true;
+    confirmBtn.disabled = true;
+    answer(code);
+  };
+  confirmBtn.addEventListener("click", confirm);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") confirm(); });
+  retryBtn.addEventListener("click", () => answer(true));
+  card.querySelector(".cancel").addEventListener("click", () => answer(onCancel));
+
+  return {
+    next() {
+      feedback.textContent = "";
+      input.value = "";
+      input.disabled = false;
+      confirmBtn.disabled = false;
+      confirmBtn.hidden = false;
+      retryBtn.hidden = true;
+      input.focus();
+      onCancel = null;
+      return new Promise((resolve) => { waiting = resolve; });
+    },
+    rejected() {
+      feedback.textContent = "That code was not accepted. Codes change every 30 " +
+        "seconds: wait for a fresh one, from the Semper DIC entry for this account.";
+      confirmBtn.hidden = true;
+      retryBtn.hidden = false;
+      retryBtn.focus();
+      onCancel = false;
+      return new Promise((resolve) => { waiting = resolve; });
+    },
+    close() {
+      card.remove();
+    },
+  };
 }
 
 /**
@@ -208,11 +252,28 @@ async function resolveChallenge(error) {
   );
   if (!hint) throw new Error(ERR_NO_SECOND_FACTOR);
 
-  const code = await askCodeInPage();
-  if (!code) throw new Error(ERR_CANCELLED);
-  const result = await resolver.resolveSignIn(
-    TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
-  );
+  // A wrong code keeps the challenge: Try again asks for the next code
+  // against the same resolver, with no second trip to Google. Anything else
+  // (a challenge that timed out, say) ends it, as does Cancel.
+  const card = codeCard();
+  let result;
+  try {
+    for (;;) {
+      const code = await card.next();
+      if (!code) throw new Error(ERR_CANCELLED);
+      try {
+        result = await resolver.resolveSignIn(
+          TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),
+        );
+        break;
+      } catch (e) {
+        if (e.code !== "auth/invalid-verification-code") throw e;
+        if (!(await card.rejected())) throw e;
+      }
+    }
+  } finally {
+    card.close();
+  }
   // After a re-authentication *redirect* the SDK resolves the challenge
   // against the user it stashed for the round trip, not the one it restored
   // as `currentUser` on this page load. The fresh tokens then land on an
@@ -486,7 +547,9 @@ export function requireSignIn(onReady) {
         setStatus("Sign-in cancelled — the authenticator code was not entered.");
         return unfinished("cancelled");
       }
-      setStatus(`Sign-in failed: ${e.code || e.message}`, true);
+      setStatus(e.code === "auth/totp-challenge-timeout"
+        ? "That sign-in timed out before a code was accepted. Sign in again."
+        : `Sign-in failed: ${e.code || e.message}`, true);
       return unfinished(e.code || e.message);
     });
 
