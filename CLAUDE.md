@@ -57,7 +57,8 @@ Engine tests are **not** this CI. From the submodule: see [docs/engine/TESTING.m
   `API_BASE_URL=<INDIC_API_BASE_URL repo variable> ./scripts/deploy-console.sh` from a clean `main`,
   never a bare `firebase deploy`: that ships `__API_BASE_URL__` / `__API_ORIGIN__` unfilled and every
   console API call fails (2026-10-07). Any Hosting deploy replaces the whole site, assetlinks-only too.
-  After it, check that live `/console/config.js` and the `/login` CSP hold no `__` placeholder.
+  The script then runs `scripts/check_live_console.py`, which fails if the live site still holds a
+  `__` placeholder; run it by hand after any other Hosting deploy.
 - PRs target `main`. No force-push to `main`. No `--no-verify`.
 
 ## Docs to update in the same PR
