@@ -27,6 +27,7 @@ async function open({ license = {}, sessions = { sessions: [], quota: { used: 0,
     routes: {
       "GET /v1/me": () => json(200, { email: "user@example.com", license }),
       "GET /v1/sessions": () => json(200, sessions),
+      "GET /v1/institutions/licenses": () => json(200, { licenses: [] }),
       ...routes,
     },
   });
@@ -42,21 +43,26 @@ test("the page starts once signed in: 2FA pill, account and analyses", async () 
   assert.equal($("signedOut").hidden, true);
   assert.equal($("mfaPill").hidden, false);
   assert.equal($("mfaPill").textContent, "2FA on");
-  assert.deepEqual(sent(), ["GET /v1/me", "GET /v1/sessions?app=all"]);
+  assert.deepEqual(sent(), ["GET /v1/me", "GET /v1/sessions?app=all", "GET /v1/institutions/licenses"]);
 });
 
-test("staff who also hold a licence get the switch, with Your account current", async () => {
+const tabs = () => $("switch").querySelectorAll("a").map((a) =>
+  [a.textContent, a.getAttribute("href"), a.getAttribute("aria-current") ?? ""]);
+
+test("staff get the switch with Your account current, even on a Demo key", async () => {
   await open({ routes: { "GET /v1/me": () => json(200, {
-    role: "admin", email: "staff@semper.test", license: { mode: "licensed", held: true },
+    role: "admin", email: "staff@semper.test", license: { mode: "demo", held: false },
   }) } });
   assert.equal($("switch").hidden, false);
-  assert.deepEqual(
-    $("switch").querySelectorAll("a").map((a) => [a.textContent, a.getAttribute("href"), a.getAttribute("aria-current") ?? ""]),
-    [["Operator", "../operator/", ""], ["Your account", "../account/", "page"]],
-  );
+  assert.deepEqual(tabs(), [["Operator", "../operator/", ""], ["Your account", "../account/", "page"]]);
 });
 
-test("an account that is not staff sees no switch, licensed or not", async () => {
+test("an IT contact gets Institution seats | Your account", async () => {
+  await open({ routes: { "GET /v1/institutions/licenses": () => json(200, { licenses: [{ id: "L1" }, { id: "L2" }] }) } });
+  assert.deepEqual(tabs(), [["Institution seats", "../institution/", ""], ["Your account", "../account/", "page"]]);
+});
+
+test("an account with only this dashboard sees no switch", async () => {
   await open({ license: { mode: "licensed", held: true } });
   assert.equal($("switch").hidden, true);
 });

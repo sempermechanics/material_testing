@@ -51,7 +51,7 @@ async function loadAccount() {
     licence = me.license || {};
     accountError = "";
     renderLicence();
-    mountSwitcher("account", me);
+    mountSwitcher("account", { me });
   } catch (e) {
     accountError = `Could not read your account: ${e.message}`;
     setStatus(accountError, true);

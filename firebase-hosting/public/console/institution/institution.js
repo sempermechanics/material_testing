@@ -1,6 +1,7 @@
 import { requireSignIn, api, setStatus, esc } from "../auth.js";
 import { day, licenceStatePill } from "../util.js";
 import { fetchRoster, wireRoster } from "../roster.js";
+import { mountSwitcher } from "../switcher.js";
 
 let licenseId = "";
 
@@ -44,6 +45,7 @@ async function administersSomething(user) {
   }
   if (licenses.length) {
     offerLicences(licenses);
+    mountSwitcher("institution", { licenses });
     return true;
   }
   $("app").hidden = true;

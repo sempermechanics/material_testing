@@ -55,11 +55,13 @@ roster (deep-linked when there is exactly one), and everyone else to their own
 account. Somebody who is both gets a switcher rather than a guess, and
 `/login?stay=1` always shows it.
 
-Staff who also hold a licence of their own (`role=admin` and a `held` licence,
-not a Demo key) are forwarded to the desk like any operator, so the desk and the
-account page both carry an **Operator | Your account** switch in the header
-(`switcher.js`). It is decided from the `/v1/me` answer each page already reads,
-so it costs no request; every other account sees no switch.
+Every page also carries a dashboard switch in its header (`switcher.js`): one
+tab per dashboard the account can open, shown whenever there is more than one.
+Staff get Operator and Your account, an IT contact Institution seats (deep-linked
+when there is exactly one licence) and Your account, and someone who is both
+gets all three. `roles.js` decides it from the same two answers the front door
+routes on; a page passes the one it already read, so the switch adds one
+request. A failed read hides only the tab it would have shown.
 
 The two restricted pages make the same check themselves, because a link can
 land anyone on them: the operator desk asks `/v1/me` and shows nothing of the

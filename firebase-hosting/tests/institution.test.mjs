@@ -39,6 +39,7 @@ async function open({ roster = assigned, routes = {}, search = "?license=L1", us
     routes: {
       "GET /v1/institutions/licenses": () => json(200, { licenses: [{ id: "L1" }] }),
       [`GET ${SEATS}`]: () => json(200, roster),
+      "GET /v1/me": () => json(200, { role: "user" }),
       ...routes,
     },
   });
@@ -51,6 +52,17 @@ const rows = () => $("rows").querySelectorAll("tr").map((tr) =>
 const button = (act, uid) => $("rows").querySelector(`button[data-act="${act}"][data-uid="${uid}"]`);
 
 /* --------------------------------------------------------------- access */
+
+test("an IT contact gets Institution seats | Your account, staff all three", async () => {
+  await open();
+  const tabs = () => $("switch").querySelectorAll("a").map((a) => [a.textContent, a.getAttribute("aria-current") ?? ""]);
+  assert.equal($("switch").hidden, false);
+  assert.deepEqual(tabs(), [["Institution seats", "page"], ["Your account", ""]]);
+  await settle();
+  reset();
+  await open({ routes: { "GET /v1/me": () => json(200, { role: "admin" }) } });
+  assert.deepEqual(tabs(), [["Operator", ""], ["Institution seats", "page"], ["Your account", ""]]);
+});
 
 test("an address no licence names is told so, and sees no roster form", async () => {
   await openPage("institution", {
