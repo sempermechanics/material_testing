@@ -146,10 +146,60 @@ function unstashResume() {
 
 /* ---------------------------------------------------------------- challenge */
 
-/** Ask the operator for something, returning null if they cancel. */
-function ask(message) {
-  const value = window.prompt(message);
-  return value == null ? null : value.trim();
+/**
+ * Ask for one line of text in the page: a card with a heading, the message
+ * (paragraphs split on blank lines), a text or password box, the confirm
+ * button and Cancel. Resolves the trimmed answer ("" if left blank), or null
+ * on Cancel.
+ *
+ * Not `window.prompt`, for the reason `codeCard` gives: some browsers show no
+ * prompt at all. The card goes after `anchor` (default: the status line). The
+ * Edit dialog passes an element inside itself, because a modal dialog makes
+ * everything outside it unreachable. Every piece of text goes in as a text
+ * node, so a licence label or address is never markup.
+ */
+export function askInPage({ title, message, password = false, confirm = "Confirm", anchor } = {}) {
+  const card = document.createElement("section");
+  card.className = "card ask";
+  card.innerHTML = `
+    <h2></h2>
+    <div class="lines"></div>
+    <div class="row">
+      <input size="24" />
+      <button type="button" class="confirm"></button>
+      <button type="button" class="secondary cancel">Cancel</button>
+    </div>`;
+  card.querySelector("h2").textContent = title;
+  const lines = card.querySelector(".lines");
+  for (const text of String(message).split("\n\n")) {
+    const p = document.createElement("p");
+    p.className = "muted line";
+    p.textContent = text;
+    lines.appendChild(p);
+  }
+  const input = card.querySelector("input");
+  input.type = password ? "password" : "text";
+  input.autocomplete = password ? "current-password" : "off";
+  card.querySelector(".confirm").textContent = confirm;
+
+  const at = anchor || document.getElementById("status") || document.querySelector("main");
+  at.insertAdjacentElement("afterend", card);
+  // The desk's status line sits above a long table; bring the card into view.
+  if (card.scrollIntoView) card.scrollIntoView({ block: "center" });
+  input.focus();
+
+  return new Promise((resolve) => {
+    const done = (value) => { card.remove(); resolve(value); };
+    const ok = () => done(input.value.trim());
+    card.querySelector(".confirm").addEventListener("click", ok);
+    // Enter answers the card; inside the Edit form it must not also submit it.
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      if (e.preventDefault) e.preventDefault();
+      ok();
+    });
+    card.querySelector(".cancel").addEventListener("click", () => done(null));
+  });
 }
 
 /**
@@ -745,11 +795,14 @@ export { esc, when, day } from "./util.js";
  * the wrong licence drops a whole institution to demo, so the friction is the
  * point.
  */
-export function confirmByTyping(label, what) {
-  const typed = window.prompt(
-    `This cannot be undone.\n\nType ${label} to ${what}:`,
-  );
-  return typed != null && typed.trim() === label;
+export async function confirmByTyping(label, what, { title = "Confirm", anchor } = {}) {
+  const typed = await askInPage({
+    title,
+    message: `This cannot be undone.\n\nType ${label} to ${what}:`,
+    confirm: "Confirm",
+    anchor,
+  });
+  return typed != null && typed === label;
 }
 
 /**
@@ -775,13 +828,16 @@ export async function stepUpForRevoke(resume) {
   const can = reauthMethods(auth.currentUser && auth.currentUser.providerData);
   let password;
   if (can.password) {
-    password = ask(
-      `Re-enter your account password to ${verb} this licence.\n\n` +
-      (can.google
-        ? "Leave blank to re-authenticate with Google, then enter your " +
-          "authenticator code when asked."
-        : "Then enter your authenticator code when asked."),
-    );
+    password = await askInPage({
+      title: "Re-enter your password",
+      message: `Re-enter your account password to ${verb} this licence.\n\n` +
+        (can.google
+          ? "Leave blank to re-authenticate with Google, then enter your " +
+            "authenticator code when asked."
+          : "Then enter your authenticator code when asked."),
+      password: true,
+      confirm: "Continue",
+    });
     if (password === null || (!password && !can.google)) {
       throw new Error(ERR_CANCELLED);
     }

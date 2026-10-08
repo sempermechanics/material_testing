@@ -451,6 +451,7 @@ test("an earlier end must be confirmed by typing the key", async () => {
   assert.equal(prompts.asked[0],
     `This shortens SEMP-IND1: its term ends ${isoDay(sooner)} instead of ${isoDay(IND.expiresAt)}, ` +
     "for everyone on it.\n\nType SEMP-IND1 to confirm:");
+  assert.equal(prompts.cards[0].anchor, $("editHint"), "inside the modal Edit dialog, where it can be reached");
   assert.deepEqual([$("editHint").textContent, $("editHint").className], ["Not saved: the key was not typed.", "err"]);
   assert.deepEqual(sent(/PATCH/), []);
 

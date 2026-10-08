@@ -529,11 +529,32 @@ test("a password-and-Google operator may leave the password blank to use Google"
 
 /* ------------------------------------------------------ confirmByTyping */
 
-test("confirmByTyping accepts only the exact label", () => {
+test("confirmByTyping accepts only the exact label", async () => {
   prompts.answer(" SEMP-4K2P ", "semp-4k2p", null, "SEMP-4K2");
-  assert.equal(auth.confirmByTyping("SEMP-4K2P", "revoke it"), true);
-  assert.equal(auth.confirmByTyping("SEMP-4K2P", "revoke it"), false);
-  assert.equal(auth.confirmByTyping("SEMP-4K2P", "revoke it"), false);
-  assert.equal(auth.confirmByTyping("SEMP-4K2P", "revoke it"), false);
+  assert.equal(await auth.confirmByTyping("SEMP-4K2P", "revoke it"), true);
+  assert.equal(await auth.confirmByTyping("SEMP-4K2P", "revoke it"), false);
+  assert.equal(await auth.confirmByTyping("SEMP-4K2P", "revoke it"), false);
+  assert.equal(await auth.confirmByTyping("SEMP-4K2P", "revoke it"), false);
   assert.equal(prompts.asked[0], "This cannot be undone.\n\nType SEMP-4K2P to revoke it:");
+});
+
+test("the ask card sits under the status line, its text never markup, and goes once answered", async () => {
+  prompts.answer("SEMP-4K2P");
+  assert.equal(await auth.confirmByTyping("SEMP-4K2P", "revoke it", { title: "Revoke <b>SEMP-4K2P</b>" }), true);
+  const [card] = prompts.cards;
+  assert.equal(card.anchor, $("status"));
+  assert.equal(card.querySelector("h2").textContent, "Revoke <b>SEMP-4K2P</b>", "the title went in as text");
+  assert.equal(card.querySelector("h2").querySelectorAll("b").length, 0);
+  assert.equal(card.querySelector("input").focused, true);
+  assert.equal(card.querySelector(".confirm").getAttribute("type"), "button", "never submits a surrounding form");
+  assert.equal(card.removed, true);
+});
+
+test("the revoke password is asked for in a password box", async () => {
+  signIn(new FakeUser({ providers: ["password"], password: "pw", factors: [{}], authAgeSeconds: 600 }));
+  prompts.answer(null);
+  await rejection(auth.stepUpForRevoke({ action: "revoke" }));
+  const [card] = prompts.cards;
+  assert.equal(card.querySelector("h2").textContent, "Re-enter your password");
+  assert.equal(card.querySelector("input").type, "password");
 });
