@@ -80,6 +80,28 @@ test("when the role cannot be read, the desk stays hidden and says why", async (
   assert.deepEqual(status(), ["Could not check whether operator@example.com is an operator: unavailable", "muted err"]);
 });
 
+const tabs = () => $("switch").querySelectorAll("a").map((a) =>
+  [a.textContent, a.getAttribute("href"), a.getAttribute("aria-current") ?? ""]);
+
+test("staff who also hold a licence get the Operator | Your account switch", async () => {
+  await open({ routes: { "GET /v1/me": () => json(200, {
+    role: "admin", email: "staff@semper.test", license: { mode: "licensed", held: true },
+  }) } });
+  assert.equal($("switch").hidden, false);
+  assert.deepEqual(tabs(), [["Operator", "../operator/", "page"], ["Your account", "../account/", ""]]);
+});
+
+test("staff with no licence, or only a Demo key, see no switch", async () => {
+  await open();
+  assert.equal($("switch").hidden, true);
+  await settle();
+  reset();
+  await open({ routes: { "GET /v1/me": () => json(200, {
+    role: "admin", email: "staff@semper.test", license: { mode: "demo", held: false },
+  }) } });
+  assert.equal($("switch").hidden, true);
+});
+
 /* ---------------------------------------------------------------- table */
 
 test("each licence row says what it is and offers only what applies", async () => {

@@ -4,6 +4,7 @@
  */
 import { requireSignIn, api, setStatus } from "../auth.js";
 import { unfinishedStepUpText } from "../util.js";
+import { mountSwitcher } from "../switcher.js";
 import { $, labelOf } from "./state.js";
 import { loadLicences } from "./licences.js";
 import "./mint.js";
@@ -46,7 +47,10 @@ async function isOperator(user) {
     setStatus(`Could not check whether ${user.email} is an operator: ${e.message}`, true);
     return false;
   }
-  if (me.role === "admin") return true;
+  if (me.role === "admin") {
+    mountSwitcher("operator", me);
+    return true;
+  }
   $("app").hidden = true;
   $("notOperatorWho").textContent = user.email;
   $("notOperator").hidden = false;

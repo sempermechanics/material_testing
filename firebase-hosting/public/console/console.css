@@ -57,6 +57,15 @@ header h1 {
 .brand:hover { color: var(--ink); }
 .brand img { width: 1.7rem; height: 1.7rem; border-radius: 6px; display: block; }
 .spacer { flex: 1; }
+/* Operator | Your account: a segmented pair in the button.secondary shape. */
+.switch {
+  display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px;
+  overflow: hidden; font-size: .85rem; font-weight: 600;
+}
+.switch a { padding: .35rem .8rem; color: var(--muted); }
+.switch a + a { border-left: 1px solid var(--line-strong); }
+.switch a:hover { color: var(--ink); background: rgba(255, 255, 255, 0.04); }
+.switch a[aria-current="page"] { color: var(--accent); background: var(--accent-dim); }
 main { flex: 1; width: 100%; max-width: var(--max-width); margin: 0 auto; padding: 2rem 1.5rem; }
 
 footer {

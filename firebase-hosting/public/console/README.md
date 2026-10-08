@@ -55,6 +55,12 @@ roster (deep-linked when there is exactly one), and everyone else to their own
 account. Somebody who is both gets a switcher rather than a guess, and
 `/login?stay=1` always shows it.
 
+Staff who also hold a licence of their own (`role=admin` and a `held` licence,
+not a Demo key) are forwarded to the desk like any operator, so the desk and the
+account page both carry an **Operator | Your account** switch in the header
+(`switcher.js`). It is decided from the `/v1/me` answer each page already reads,
+so it costs no request; every other account sees no switch.
+
 The two restricted pages make the same check themselves, because a link can
 land anyone on them: the operator desk asks `/v1/me` and shows nothing of the
 desk to an account without `role=admin`, and the institution page asks
