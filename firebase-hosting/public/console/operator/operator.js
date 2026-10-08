@@ -18,7 +18,7 @@ requireSignIn(async (user, resume) => {
   $("signedOut").hidden = true;
   const me = await operatorMe(user);
   if (!me) return;
-  mountSwitcher("operator", me);
+  mountSwitcher("operator", { me });
   showFactorPill();
   loadUsers();
   await loadLicences();

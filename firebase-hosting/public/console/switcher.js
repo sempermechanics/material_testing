@@ -1,33 +1,55 @@
-/* The Operator | Your account switch in the header of both pages.
+/* The dashboard switch in the header of every console page.
  *
- * Staff who also hold a licence of their own use both pages, and the front
- * door forwards them to the desk, which had no way back to their account
- * short of typing the address. Only that account sees the switch: a staff
- * address with no licence has nothing on the account page worth a tab, and
- * everyone else can open only the account page.
+ * An account with more than one role — Semper staff, an institution's IT
+ * contact, and the account holder everyone is — has more than one
+ * dashboard, and the front door forwards it to one of them. Each page used
+ * to link only to the account page, and only from its "not yours" card, so
+ * getting from the desk to the account meant typing the address. Every page
+ * now shows one tab per dashboard the account can open, whenever there is
+ * more than one.
  *
- * Decided from the /v1/me answer the page has already read, so it costs no
- * request, and nothing is remembered in the browser.
+ * Decided from what the backend says on each load, the same two answers the
+ * front door routes on; nothing is remembered in the browser. A page passes
+ * the answer it already read, and the switch asks only for the other
+ * (roles.js decides what each answer opens).
  */
-import { esc, holdsLicence } from "./util.js";
+import { api, esc } from "./auth.js";
+import { licencesAdministered, dashboardsFor } from "./roles.js";
 
 const $ = (id) => document.getElementById(id);
 
-const TABS = [
-  { name: "operator", href: "../operator/", title: "Operator" },
-  { name: "account", href: "../account/", title: "Your account" },
-];
+const TABS = {
+  operator: { href: "../operator/", title: "Operator" },
+  institution: { href: "../institution/", title: "Institution seats" },
+  account: { href: "../account/", title: "Your account" },
+};
 
-/** Whether this /v1/me answer has both the desk and a licence of its own. */
-export function canSwitch(me) {
-  return Boolean(me) && me.role === "admin" && Boolean(holdsLicence(me.license));
-}
+/**
+ * Fill and show `#switch` with `current` marked, when the account has more
+ * than one dashboard. `known` carries what the page already read (`me`,
+ * `licenses`). A failed read hides only what it would have shown; the
+ * switch is a convenience and never stops a page.
+ */
+export async function mountSwitcher(current, known = {}) {
+  let { me, licenses } = known;
+  if (me === undefined) {
+    try {
+      me = await api("/v1/me", {}, { allowStepUp: false });
+    } catch {
+      me = null;
+    }
+  }
+  if (licenses === undefined) licenses = (await licencesAdministered()).licenses;
 
-/** Fill and show `#switch` with `current` marked, or leave it hidden. */
-export function mountSwitcher(current, me) {
-  if (!canSwitch(me)) return;
-  $("switch").innerHTML = TABS.map((t) => t.name === current
-    ? `<a href="${esc(t.href)}" aria-current="page">${esc(t.title)}</a>`
-    : `<a href="${esc(t.href)}">${esc(t.title)}</a>`).join("");
+  const names = dashboardsFor(me, licenses);
+  if (names.length < 2) return;
+  // Deep-link the one licence an IT contact administers, as the front door
+  // does, so the tab lands on the roster rather than an empty id box.
+  const href = (name) => name === "institution" && licenses.length === 1
+    ? `../institution/?license=${encodeURIComponent(licenses[0].id)}`
+    : TABS[name].href;
+  $("switch").innerHTML = names.map((name) => name === current
+    ? `<a href="${esc(href(name))}" aria-current="page">${esc(TABS[name].title)}</a>`
+    : `<a href="${esc(href(name))}">${esc(TABS[name].title)}</a>`).join("");
   $("switch").hidden = false;
 }

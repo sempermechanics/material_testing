@@ -10,6 +10,7 @@
  * correctly the first time.
  */
 import { requireSignIn, api, setStatus, esc } from "./auth.js";
+import { licencesAdministered } from "./roles.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -55,26 +56,6 @@ requireSignIn(async () => {
     });
   }
 });
-
-/**
- * The institution licences this address administers, and whether the
- * answer is trustworthy.
- *
- * A refusal is an ordinary answer here: an unverified address cannot be
- * named as an administrator in the first place, so `email_not_verified`
- * means "none" as surely as an empty list does. Any other failure is a
- * fault, and routing on it would silently send an IT contact to the wrong
- * page — so it is reported as uncertainty instead.
- */
-async function licencesAdministered() {
-  try {
-    const out = await api("/v1/institutions/licenses");
-    return { licenses: out.licenses || [], certain: true };
-  } catch (e) {
-    if (e.code === "email_not_verified") return { licenses: [], certain: true };
-    return { licenses: [], certain: false, why: e.message };
-  }
-}
 
 function route(me, administered) {
   const targets = [];
