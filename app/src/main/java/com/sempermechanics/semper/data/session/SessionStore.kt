@@ -30,11 +30,10 @@ import java.io.FileOutputStream
  *
  * Sync accessors take the lock on the calling thread and are marked
  * [WorkerThread]; UI code calls the `suspend` variants ([listOnIo],
- * [setSyncStateOnIo]) so disk+JSON never block Main. The annotation is half a
- * pair: Android Lint's `WrongThread` fires only when the *calling* method
- * carries a conflicting one, and nothing in this app is `@MainThread` yet, so
- * today it documents the contract for the IDE rather than failing a build.
- * Annotating the UI entry points is the other half — see docs/ops/TECH_DEBT.md.
+ * [setSyncStateOnIo]) so disk+JSON never block Main. Every Activity is
+ * `@MainThread` at class level, so Android Lint's `WrongThread` fails a build
+ * that calls a sync accessor from one; a helper that runs off the main thread
+ * says so with `@WorkerThread` or `@AnyThread`.
  */
 object SessionStore {
 
