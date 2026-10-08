@@ -52,9 +52,17 @@ export const storage = {
   },
 };
 
-/** Scripted answers for window.prompt, in order. An unscripted prompt fails the test. */
+/**
+ * Scripted answers for the in-page ask card (auth.js `askInPage`: the typed
+ * key, the revoke password), in order: a string is typed and confirmed, null
+ * presses Cancel. `asked` records each card's message, paragraphs joined by a
+ * blank line, and `cards` keeps the cards. An unscripted card fails the test.
+ * The consoles no longer call window.prompt; the fake below refuses it.
+ */
 export const prompts = {
+  generation: 0,
   asked: [],
+  cards: [],
   answers: [],
   answer(...values) {
     this.answers.push(...values);
@@ -81,6 +89,10 @@ export const codes = {
 };
 
 hooks.inserted = (card) => {
+  if (card.className === "card ask") {
+    answerAskCard(card);
+    return;
+  }
   if (card.className !== "card code") return;
   codes.asked += 1;
   codes.cards.push(card);
@@ -126,6 +138,33 @@ hooks.inserted = (card) => {
   step();
 };
 
+/** Answer an ask card from `prompts`, once auth.js has wired its buttons. */
+function answerAskCard(card) {
+  prompts.asked.push(card.querySelectorAll(".line").map((p) => p.textContent).join("\n\n"));
+  prompts.cards.push(card);
+  const generation = prompts.generation;
+  let idle = 0;
+  const step = () => setImmediate(() => {
+    if (card.removed || generation !== prompts.generation) return;
+    // A test may look at the card before answering it; it is unscripted only
+    // if no answer comes within a bounded number of turns.
+    if (!prompts.answers.length) {
+      idle += 1;
+      if (idle < 200) step();
+      else throw new Error(`unscripted ask card: ${prompts.asked.at(-1)}`);
+      return;
+    }
+    const value = prompts.answers.shift();
+    if (value === null) {
+      card.querySelector(".cancel").click();
+      return;
+    }
+    card.querySelector("input").value = value;
+    card.querySelector(".confirm").click();
+  });
+  step();
+}
+
 export const location = {
   host: "console.test",
   search: "",
@@ -149,9 +188,9 @@ globalThis.window = {
   location,
   sessionStorage: storage,
   prompt(message) {
-    prompts.asked.push(message);
-    if (!prompts.answers.length) throw new Error(`unscripted prompt: ${message}`);
-    return prompts.answers.shift();
+    // Some browsers show no prompt at all (the Claude desktop app's pane);
+    // the consoles ask in the page instead (askInPage, codeCard).
+    throw new Error(`window.prompt is not used by the consoles: ${message}`);
   },
   confirm(message) {
     confirms.asked.push(message);
@@ -256,7 +295,9 @@ export async function rejection(promise) {
 export function reset() {
   fake.reset();
   storage.clear();
+  prompts.generation += 1;
   prompts.asked = [];
+  prompts.cards = [];
   prompts.answers = [];
   codes.generation += 1;
   codes.asked = 0;
