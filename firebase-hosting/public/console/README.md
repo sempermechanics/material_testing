@@ -145,7 +145,14 @@ API_BASE_URL="https://your-gateway-host" ./scripts/deploy-console.sh
 
 The script copies `config.js` / `firebase.json`, substitutes `__API_BASE_URL__`
 and `__API_ORIGIN__`, runs `firebase deploy --only hosting`, then a `trap` puts
-the templates back.
+the templates back. Last it runs
+[`scripts/check_live_console.py`](../../../scripts/check_live_console.py), which
+reads the live `/console/config.js` and the CSP on `/login`, `/account` and
+`/console/`, and fails the run if a placeholder is left or the gateway is not the
+one given. Every Hosting deploy replaces the whole site, so a bare `firebase
+deploy` (for one `assetlinks.json` line, say) ships the placeholders: the pages
+load and every API call fails, as on 2026-10-07. Run the check on its own after
+any Hosting deploy: `python scripts/check_live_console.py --api <gateway>`.
 
 ### Sign-in flow: redirect, own host as `authDomain`
 
