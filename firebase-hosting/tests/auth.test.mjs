@@ -266,9 +266,53 @@ test("a wrong authenticator code rejects with Firebase's code", async () => {
   fake.onReauthWithCredential = async () => {
     throw fake.mfaError({ reject: "auth/invalid-verification-code" });
   };
-  codes.answer("000000");
+  codes.answer("000000", null);
   const e = await rejection(auth.stepUp({ password: "pw" }));
-  assert.equal(e.code, "auth/invalid-verification-code");
+  assert.equal(e.code, "auth/invalid-verification-code", "Cancel after a wrong code keeps Firebase's code");
+  assert.equal(codes.retries, 0);
+});
+
+test("a wrong code offers Try again, and the next code finishes the same challenge", async () => {
+  signIn(new FakeUser({ providers: ["password"], password: "pw", factors: [{}] }));
+  fake.onReauthWithCredential = async () => {
+    throw fake.mfaError({ reject: ["auth/invalid-verification-code", null] });
+  };
+  codes.answer("000000", "123456");
+  await auth.stepUp({ password: "pw" });
+  assert.equal(codes.asked, 1, "one card, kept open across the retry");
+  assert.equal(codes.retries, 1);
+  assert.deepEqual(fake.callsTo("resolveSignIn").map(([a]) => a.code), ["000000", "123456"]);
+  assert.equal(fake.callsTo("reauthenticateWithCredential").length, 1, "no second sign-in");
+  assert.equal(codes.cards[0].removed, true);
+});
+
+test("after a wrong code the card says so and shows Try again in place of Confirm", async () => {
+  signIn(new FakeUser({ providers: ["password"], password: "pw", factors: [{}] }));
+  fake.onReauthWithCredential = async () => {
+    throw fake.mfaError({ reject: "auth/invalid-verification-code" });
+  };
+  codes.answer("000000");
+  const call = auth.stepUp({ password: "pw" });
+  call.catch(() => {});
+  await settle();
+  const [card] = codes.cards;
+  assert.match(card.querySelector(".feedback").textContent, /^That code was not accepted\./);
+  assert.equal(card.querySelector(".confirm").hidden, true, "Confirm hidden");
+  assert.equal(card.querySelector(".retry").hidden, false, "Try again shown");
+  assert.equal(card.removed, false, "still on the page");
+  codes.answer(null);
+  assert.equal((await rejection(call)).code, "auth/invalid-verification-code");
+});
+
+test("a challenge that times out ends the card without a retry", async () => {
+  signIn(new FakeUser({ providers: ["password"], password: "pw", factors: [{}] }));
+  fake.onReauthWithCredential = async () => {
+    throw fake.mfaError({ reject: "auth/totp-challenge-timeout" });
+  };
+  codes.answer("123456");
+  assert.equal((await rejection(auth.stepUp({ password: "pw" }))).code, "auth/totp-challenge-timeout");
+  assert.equal(codes.retries, 0);
+  assert.equal(codes.cards[0].removed, true);
 });
 
 test("a Google step-up stashes the note and resume, then never returns", async () => {

@@ -12,7 +12,7 @@ on:
         type: boolean
         default: false
       run_benchmark:
-        description: 'Run Macrobenchmark startup suite on an emulator'
+        description: 'Run the benchmarks on an emulator (Macrobenchmark + HotPathMicroBenchmark smoke)'
         type: boolean
         default: false
 

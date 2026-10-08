@@ -54,15 +54,21 @@ export class FakeUser {
   }
 }
 
-/** The error Firebase raises when a sign-in or re-auth needs the second factor. */
+/**
+ * The error Firebase raises when a sign-in or re-auth needs the second factor.
+ * `reject` is a code every attempt fails with, or a list taken one per
+ * attempt (null in it accepts that attempt).
+ */
 function mfaError({ user, hints = [{ uid: "totp-1", factorId: "totp" }], reject = null } = {}) {
   const error = new Error("Multi-factor authentication required");
   error.code = MFA_REQUIRED;
+  const rejects = Array.isArray(reject) ? [...reject] : null;
   error.resolver = {
     hints,
     async resolveSignIn(assertion) {
       fake.calls.push(["resolveSignIn", assertion]);
-      if (reject) throw Object.assign(new Error(reject), { code: reject });
+      const code = rejects ? rejects.shift() : reject;
+      if (code) throw Object.assign(new Error(code), { code });
       const who = user || fake.auth.currentUser;
       who.freshen({ secondFactor: true });
       return { user: who };

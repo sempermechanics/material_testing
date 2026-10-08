@@ -119,12 +119,16 @@ not start to. Every console uses the same card (`enrolInPage` in `auth.js`);
 the account page hosts it in its own section.
 
 Every later sign-in and step-up asks for the code the same way: a card under
-the status line with a code box, Confirm and Cancel (`askCodeInPage`), never
+the status line with a code box, Confirm and Cancel (`codeCard`), never
 `window.prompt`. Some browsers show no prompt at all (the Claude desktop app's
 browser pane answers "prompt() is not supported"), which left the code the one
-step of sign-in nobody could complete there. Cancel is `ERR_CANCELLED`, as
-before. The operator desk's typed-key confirmations and the revoke password
-still use `window.prompt`.
+step of sign-in nobody could complete there. A wrong code keeps the card: it
+says the code was not accepted and offers **Try again**, which takes the next
+code against the same challenge, with no second trip to Google. Cancel is
+`ERR_CANCELLED`, or after a wrong code that code's error, as before. A challenge
+that timed out ends the card, and the status line says to sign in again. The
+operator desk's typed-key confirmations and the revoke password still use
+`window.prompt`.
 
 ## Confirming destructive actions
 
