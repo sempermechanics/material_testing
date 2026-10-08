@@ -6,6 +6,7 @@ import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -33,6 +34,9 @@ class RoiStudioLauncherTest {
         bed = WizardTestBed(resumed = false)
         studio = RoiStudioLauncher(bed.activity, bed.viewModel, onRoiChanged = { changes++ })
     }
+
+    @After
+    fun closeBed() = bed.close()
 
     @Test
     fun `without a reference the studio says to load one`() {

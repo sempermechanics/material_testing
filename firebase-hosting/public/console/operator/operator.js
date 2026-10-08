@@ -4,6 +4,7 @@
  */
 import { requireSignIn, api, setStatus } from "../auth.js";
 import { unfinishedStepUpText } from "../util.js";
+import { mountSwitcher } from "../switcher.js";
 import { $, labelOf } from "./state.js";
 import { loadLicences } from "./licences.js";
 import "./mint.js";
@@ -15,7 +16,9 @@ import { openRoster } from "./roster-card.js";
 
 requireSignIn(async (user, resume) => {
   $("signedOut").hidden = true;
-  if (!(await isOperator(user))) return;
+  const me = await operatorMe(user);
+  if (!me) return;
+  mountSwitcher("operator", { me });
   showFactorPill();
   loadUsers();
   await loadLicences();
@@ -32,26 +35,27 @@ requireSignIn(async (user, resume) => {
 });
 
 /**
- * Whether this account may see the desk at all. Anyone can be sent here by
- * a link, and the backend refuses every call from a non-operator, so the
- * page used to show a full mint form under a one-line refusal. Now the desk
- * stays hidden and the account is told where it can go instead.
+ * The /v1/me answer if this account may see the desk at all, else null.
+ * Anyone can be sent here by a link, and the backend refuses every call from
+ * a non-operator, so the page used to show a full mint form under a one-line
+ * refusal. Now the desk stays hidden and the account is told where it can go
+ * instead.
  */
-async function isOperator(user) {
+async function operatorMe(user) {
   let me;
   try {
     me = await api("/v1/me");
   } catch (e) {
     $("app").hidden = true;
     setStatus(`Could not check whether ${user.email} is an operator: ${e.message}`, true);
-    return false;
+    return null;
   }
-  if (me.role === "admin") return true;
+  if (me.role === "admin") return me;
   $("app").hidden = true;
   $("notOperatorWho").textContent = user.email;
   $("notOperator").hidden = false;
   setStatus("");
-  return false;
+  return null;
 }
 
 /* ------------------------------------------------------ second factor */

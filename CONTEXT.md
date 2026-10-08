@@ -127,12 +127,13 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-07)
+## Current state (2026-10-08)
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`; last merged `85650da`, 2026-10-07 (#122: package move
-  ADR-015, app id ADR-019, engine at `engine/`); rules in the parent's
+  --grep=semperdic-app`; last merged `070eb33`, 2026-10-08 (the console role
+  switch and the test-heap fix; #122 took `85650da`: package move ADR-015, app id
+  ADR-019, engine at `engine/`); rules in the parent's
   `docs/ops/FORK_SYNC.md`). This app id's Firebase client is in
   `google-services.json`; App Check for it waits for a Play listing. The parent deploys, and its TD rows jump to TD-122. General
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride

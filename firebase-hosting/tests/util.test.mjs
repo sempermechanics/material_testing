@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  esc, when, day, licenceState, licenceStatePill, leaseHeld, seatCells, seatDevices, inviteCells,
+  esc, when, day, licenceState, licenceStatePill, holdsLicence, leaseHeld, seatCells, seatDevices, inviteCells,
   errorDetail, licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
   isoDay, emailList, licenceEditPatch, daysLeft, reauthMethods, unfinishedStepUpText,
 } from "../public/console/util.js";
@@ -22,6 +22,15 @@ test("when renders an em dash for nothing or garbage", () => {
   assert.equal(when(null), "—");
   assert.equal(when("not a date"), "—");
   assert.notEqual(when("2026-09-23T12:00:00Z"), "—");
+});
+
+test("only a real licence counts as held, and a backend without held is read from mode", () => {
+  assert.equal(holdsLicence({ mode: "licensed", held: true }), true);
+  assert.equal(holdsLicence({ mode: "demo", held: true }), true, "lapsed, still attached");
+  assert.equal(holdsLicence({ mode: "demo", held: false, prefix: "SEMP-DEMO" }), false);
+  assert.equal(holdsLicence({ mode: "licensed" }), true);
+  assert.equal(holdsLicence({ mode: "demo" }), false);
+  assert.equal(holdsLicence(undefined), false);
 });
 
 test("a lease is held only until it ends", () => {

@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.analysis.frames
 import android.app.Application
 import android.net.Uri
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -19,15 +20,20 @@ import java.io.File
 @Config(application = Application::class)
 class ReferenceImportControllerTest {
 
+    private val beds = mutableListOf<WizardTestBed>()
+
+    @After
+    fun closeBeds() = beds.forEach { it.close() }
+
     @Test
     fun `a pick with no display name is still named`() {
-        val bed = WizardTestBed()
+        val bed = WizardTestBed().also { beds += it }
         assertEquals("Image_File", displayNameOf(bed.activity.contentResolver, Uri.fromFile(File("/x/ref.png"))))
     }
 
     @Test
     fun `an unreadable pick leaves the reference as it was`() {
-        val bed = WizardTestBed()
+        val bed = WizardTestBed().also { beds += it }
         var loaded = 0
         val controller = ReferenceImportController(bed.activity, bed.viewModel, onLoaded = { loaded++ })
         val notThere = Uri.fromFile(File(bed.activity.cacheDir, "missing.png"))

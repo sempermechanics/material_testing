@@ -75,9 +75,13 @@ object AnalysisEntries {
 
     /**
      * Local records first (they are the working set), then backups with no copy
-     * on this phone. Cloud rows link by [CloudSessionDto.localSessionId],
-     * falling back to the stored cloud id for sessions uploaded before that
-     * link existed — the same fallback the erase path uses.
+     * on this phone. A record links to the backup its stored cloud id names
+     * first: that is the one it was uploaded to or restored from. Otherwise it
+     * links by [CloudSessionDto.localSessionId], which also covers sessions
+     * uploaded before the cloud id was stored. An analysis backed up twice has
+     * two backups with one local id; linking by local id alone paired a
+     * restored row with whichever came last, and listed the backup it was
+     * restored from as "Cloud only".
      *
      * Pass an empty [cloud] list when the backend could not be reached: local
      * records then keep their own sync state rather than being demoted to
@@ -96,15 +100,12 @@ object AnalysisEntries {
         cloud: List<CloudSessionDto>,
         hasLocal: (SessionRecord) -> Boolean = { it.hasLocalData() },
     ): List<AnalysisEntry> {
-        val byLocalId = cloud.filter { it.localSessionId.isNotBlank() }.associateBy { it.localSessionId }
         val matched = mutableSetOf<String>()
         val onPhone = records.map { record ->
-            val match = byLocalId[record.id]?.takeIf { it.sessionId !in matched }
-                ?: cloud.firstOrNull {
-                    record.cloudSessionId.isNotBlank() &&
-                        it.sessionId == record.cloudSessionId &&
-                        it.sessionId !in matched
-                }
+            val unclaimed = cloud.filter { it.sessionId !in matched }
+            val match = unclaimed.firstOrNull {
+                record.cloudSessionId.isNotBlank() && it.sessionId == record.cloudSessionId
+            } ?: unclaimed.firstOrNull { it.localSessionId.isNotBlank() && it.localSessionId == record.id }
             match?.let { matched += it.sessionId }
             AnalysisEntry(record.name, record, match, hasLocalData = hasLocal(record))
         }

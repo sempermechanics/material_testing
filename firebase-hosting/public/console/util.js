@@ -62,6 +62,17 @@ export function licenceStatePill(lic, now = Date.now()) {
   return `<span class="pill ${tone}">${esc(state)}</span>`;
 }
 
+/**
+ * Whether the `license` block of /v1/me is a real licence attached to the
+ * account. A Demo key and a licence revoked out from under the account both
+ * have a kind and a prefix, so neither is enough; a backend without `held`
+ * is answered from mode.
+ */
+export function holdsLicence(license) {
+  const lic = license || {};
+  return lic.held ?? lic.mode === "licensed";
+}
+
 /** Whether a floating lease ending at `iso` is still held at `now` (ms). */
 export function leaseHeld(iso, now = Date.now()) {
   const end = Date.parse(iso || "");

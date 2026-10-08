@@ -53,6 +53,11 @@ Engine tests are **not** this CI. From the submodule: see [docs/engine/TESTING.m
 - Do not bump `targetSdk` 36→37 or enable `warningsAsErrors` without an explicit decision.
 - Never bump `backend/requirements.txt` without `pip-compile --generate-hashes` on Python **3.12**.
 - Never commit `local.properties` (API URL) or keystores.
+- Deploy Hosting (app.sempermechanics.com: `/login`, `/account`, `/console/*`) only with
+  `API_BASE_URL=<INDIC_API_BASE_URL repo variable> ./scripts/deploy-console.sh` from a clean `main`,
+  never a bare `firebase deploy`: that ships `__API_BASE_URL__` / `__API_ORIGIN__` unfilled and every
+  console API call fails (2026-10-07). Any Hosting deploy replaces the whole site, assetlinks-only too.
+  After it, check that live `/console/config.js` and the `/login` CSP hold no `__` placeholder.
 - PRs target `main`. No force-push to `main`. No `--no-verify`.
 
 ## Docs to update in the same PR

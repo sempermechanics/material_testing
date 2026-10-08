@@ -184,6 +184,40 @@ class AnalysisEntriesTest {
         assertNull(entries[1].cloud)
     }
 
+    /**
+     * An analysis backed up twice has two backups with one local id. A row
+     * restored from one of them pairs with that one, by its stored cloud id,
+     * and the other is the cloud-only row. Pairing by local id alone took the
+     * last in the listing (seen on the Pixel 6, 2026-10-07: restored from the
+     * 15 MB backup, shown as "In cloud (2 MB)" beside a "Cloud only (15 MB)").
+     */
+    @Test
+    fun `a restored row pairs with the backup it was restored from`() {
+        val entries = AnalysisEntries.merge(
+            records = listOf(record("local-1", cloudSessionId = "cloud-big")),
+            cloud = listOf(
+                CloudSessionDto(sessionId = "cloud-big", localSessionId = "local-1", totalBytes = 15),
+                CloudSessionDto(sessionId = "cloud-small", localSessionId = "local-1", totalBytes = 2),
+            ),
+        )
+
+        assertEquals(2, entries.size)
+        assertEquals(AnalysisLocation.PHONE_AND_CLOUD, entries[0].location)
+        assertEquals("cloud-big", entries[0].cloud?.sessionId)
+        assertEquals(AnalysisLocation.CLOUD_ONLY, entries[1].location)
+        assertEquals("cloud-small", entries[1].cloud?.sessionId)
+    }
+
+    @Test
+    fun `a row without a stored cloud id still pairs by local id`() {
+        val entries = AnalysisEntries.merge(
+            records = listOf(record("local-1")),
+            cloud = listOf(CloudSessionDto(sessionId = "cloud-1", localSessionId = "local-1")),
+        )
+
+        assertEquals("cloud-1", entries.single().cloud?.sessionId)
+    }
+
     @Test
     fun `Download when cloud listed Restore only when local frames missing`() {
         val phoneAndCloud = AnalysisEntries.merge(
