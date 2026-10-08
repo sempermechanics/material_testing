@@ -12,6 +12,16 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-08 — Hosting deploy: Operator | Your account switch in the console (#349)
+
+#349 merged at 04:05 UTC (`ae94fc6f`). By the time this entry was written that day, the
+live `/console/switcher.js` matched `main` byte for byte, and `/console/account/` carried
+the `#switch` nav. The deploy's time, and who ran it, were not recorded. Staff
+(`role=admin`) who also hold a licence of their own (`held`, not a Demo key) now get an
+**Operator | Your account** switch in the header of the operator desk and the account
+page; every other account sees no change. A sign-in check as such an account was still
+owed at the time of writing.
+
 ## 2026-10-07 — Hosting deploy: Material Testing's debug key in `assetlinks.json` (#346)
 
 From `2c1ecef8`, with `firebase deploy --only hosting` in `firebase-hosting/` (one file
