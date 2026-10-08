@@ -9,6 +9,7 @@ import com.sempermechanics.semper.imaging.video.ExtractionRequest
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.imaging.video.VideoMeta
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,6 +26,11 @@ import org.robolectric.annotation.Config
 @Config(application = Application::class)
 class VideoSamplingSheetTest {
 
+    private val beds = mutableListOf<WizardTestBed>()
+
+    @After
+    fun closeBeds() = beds.forEach { it.close() }
+
     private val meta = VideoMeta(
         durationMs = 4_000L,
         fps = 29.97,
@@ -36,7 +42,7 @@ class VideoSamplingSheetTest {
 
     @Test
     fun `the sheet shows the clip and the sampling, and Extract hands over the planned times`() {
-        val bed = WizardTestBed()
+        val bed = WizardTestBed().also { beds += it }
         var request: ExtractionRequest? = null
         val sheet = VideoSamplingSheet(bed.activity, onExtract = { request = it })
             .show(Uri.parse("content://v/1"), meta, syncTimesUs = emptyList())
@@ -66,7 +72,7 @@ class VideoSamplingSheetTest {
 
     @Test
     fun `key frames are offered when the clip marks two or more, and Extract sends their times`() {
-        val bed = WizardTestBed()
+        val bed = WizardTestBed().also { beds += it }
         var request: ExtractionRequest? = null
         val sync = listOf(0L, 1_000_000L, 2_000_000L, 3_000_000L)
         val sheet = VideoSamplingSheet(bed.activity, onExtract = { request = it })

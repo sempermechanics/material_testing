@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.frames
 
 import android.app.Application
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -28,6 +29,9 @@ class FrameOrderControllerTest {
         order = FrameOrderController(bed.activity, bed.viewModel, bed.binding, onReordered = { redraws++ })
         bed.viewModel.deformedFrames = listOf("a", "b", "c").map { DeformedFrame("/c/$it.png", "$it.png") }
     }
+
+    @After
+    fun closeBed() = bed.close()
 
     @Test
     fun `a drag reorders the frames and switches to manual order`() {

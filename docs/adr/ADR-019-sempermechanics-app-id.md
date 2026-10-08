@@ -42,7 +42,10 @@ first install. The app is in testing and not on Play, so no store listing moves.
   `materialtesting`) as the old ids, which stay mapped. A phone keeps its
   device slot (ADR-010) and its backups (ADR-014, tagged by short name) across
   the move.
-- **App Links.** `assetlinks.json` lists the new and old packages.
+- **App Links.** `assetlinks.json` lists the new and old packages. Both new
+  ids also list the shared debug key (`39:30:C4…`), so debug and benchmark
+  builds verify their links on a phone; Material Testing's was added
+  2026-10-07, after its benchmark build failed verification on the Pixel 6.
 - **What keeps "indic", and why:**
   - the wire and file formats `indic.session.metadata/N` and
     `indic.account.export/1`: old backups and exports must still parse;

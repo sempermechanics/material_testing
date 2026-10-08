@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.sweep
 
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,6 +18,9 @@ class SweepFramePickerTest {
 
     private val bed = WizardTestBed()
     private val picker = SweepFramePicker(bed.activity, bed.viewModel) {}
+
+    @After
+    fun closeBed() = bed.close()
 
     @Test
     fun `a frame is labelled by its picked name, else by its number`() {

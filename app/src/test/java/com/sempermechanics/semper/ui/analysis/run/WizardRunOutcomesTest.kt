@@ -7,6 +7,7 @@ import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -42,6 +43,9 @@ class WizardRunOutcomesTest {
         val sweep = SweepSetupController(bed.activity, bed.viewModel, bed.host)
         outcomes = WizardRunOutcomes(bed.activity, bed.viewModel, chrome, status, sweep) { checks++ }
     }
+
+    @After
+    fun closeBed() = bed.close()
 
     private fun outcome(frames: Int, code: Int) = BatchAnalysisOutcome(
         engineErrorCode = code,
