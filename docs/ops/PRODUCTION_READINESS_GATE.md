@@ -44,10 +44,13 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       `storage.admin` and `iam.serviceAccountUser` (TD-71), and Shared Drive
       Manager rights for `indic-api`.
 - [ ] Run and record one **Firestore restore drill** (TD-156: it has never run). The drill is automated
-      (`.github/workflows/firestore-restore-drill.yml`) but needs a
-      **`restore-drill` GitHub Environment** (separate from `production-backup`)
-      plus one recorded RTO
-      ([FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md)).
+      (`.github/workflows/firestore-restore-drill.yml`). Its **`restore-drill`
+      GitHub Environment** (separate from `production-backup`) exists but has no
+      variables (checked 2026-10-08), and no drill project exists yet. Still owed: the
+      drill project and identity, the five variables the workflow checks first,
+      and one recorded RTO
+      ([FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
+      Configuring the `restore-drill` environment).
 - [x] Confirm PITR / scheduled export job actually scheduled in GCP. The export
       script already refuses to run without PITR, and now also fails if the
       `challenges.expireAt` TTL policy is not ACTIVE. Checked 2026-09-24:
@@ -77,11 +80,13 @@ Strict binary PASS against all applicable external controls is **not** claimed.
 ### Deployment
 
 - [x] GitHub Environments `staging`, `production`, `release`, `production-backup`
-      exist. On Free private orgs, **secrets/vars are often repo-level** (Environment
-      protection_rules may be empty). Still open: required reviewers when the plan
-      allows; create **`restore-drill`**. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
-- [ ] Branch ruleset / protection with required `CI OK` (may be unavailable on
-      Free — enforce by process until then).
+      and `restore-drill` exist. **Secrets are repo-level**, and so are most
+      variables (`staging`, `production` and `production-backup` hold a few of their
+      own). No environment has protection rules or a branch policy (checked
+      2026-10-08). Still open: required reviewers. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
+- [ ] Branch ruleset / protection with required `CI OK`. The repo is public, so
+      the plan allows it, but on 2026-10-08 `main` had neither (protection answers
+      404 and there are no rulesets); enforced by process until it is set.
 - [x] Staging candidate smoke before traffic shift
       (`deploy-backend.yml`: tagged revision + ID-token `/readyz`). Record a
       deliberate rollback drill when convenient.
@@ -452,9 +457,9 @@ no isolation and no retries):
 | Control | Evidence |
 |---------|----------|
 | Firebase MCP / active project | Confirm in console |
-| GitHub Environments | Shells exist (`staging`, `production`, `release`, `production-backup`); `restore-drill` may still need creating; reviewers often empty on Free |
+| GitHub Environments | All five exist (`staging`, `production`, `release`, `production-backup`, `restore-drill`); none has reviewers or a branch policy, and `restore-drill` has no variables (2026-10-08) |
 | Secrets / vars | Prefer **repo-level** on Free private orgs; Environment names still select workflow targets |
-| Branch protection / ruleset | Confirm on `main`; 403 / unavailable → process-only until plan allows |
+| Branch protection / ruleset | None on `main` (2026-10-08: protection 404, no rulesets); process-only until set |
 
 ## Risk acceptance
 

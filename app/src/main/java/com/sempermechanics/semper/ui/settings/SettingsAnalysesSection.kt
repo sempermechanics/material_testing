@@ -82,7 +82,16 @@ internal class SettingsAnalysesSection(
 
     /** Takes [row] out of the list at once, ahead of its queued delete. */
     /** Drops [entry]'s row at once; its deletion waits out the undo window. */
-    fun removeRow(entry: AnalysisEntry) = analysesAdapter.remove(entry.downloadKey())
+    fun removeRow(entry: AnalysisEntry) {
+        analysesAdapter.remove(entry.downloadKey())
+        showCount(analysesAdapter.rowCount)
+    }
+
+    /** The count above the list: past its height cap, the only sign of the rows below. */
+    private fun showCount(rows: Int) {
+        views.tvAnalysesDataCount.isVisible = rows > 0
+        views.tvAnalysesDataCount.text = activity.resources.getQuantityString(R.plurals.analyses_data_count, rows, rows)
+    }
 
     fun isBusy(key: String): Boolean = busy.isBusy(key)
 
@@ -122,6 +131,7 @@ internal class SettingsAnalysesSection(
             views.tvAnalysesDataState.isVisible = true
             views.tvAnalysesDataState.setText(R.string.analyses_data_empty)
         }
+        showCount(entries.size)
         analysesAdapter.submit(entries)
     }
 
