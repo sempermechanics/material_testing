@@ -7,6 +7,7 @@ import android.graphics.PointF
 import android.os.Bundle
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
@@ -38,6 +39,7 @@ import kotlin.math.roundToInt
  * zoom in; a tap after both are placed moves the mark nearer in height. Returns
  * [IntentKeys.BEAM_EDGE_TAPS] in true reference pixels.
  */
+@MainThread
 class BeamEdgeTapActivity : AppCompatActivity() {
 
     private lateinit var photo: TouchImageView
