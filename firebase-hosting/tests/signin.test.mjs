@@ -6,7 +6,7 @@
 import { beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-  test, fake, FakeUser, readyUser, reset, settle, storage, prompts, page, $, loadAuth,
+  test, fake, FakeUser, readyUser, reset, settle, storage, prompts, codes, page, $, loadAuth,
 } from "./harness.mjs";
 
 const auth = await loadAuth();
@@ -123,7 +123,7 @@ test("a TOTP challenge on the return leg adopts the re-authenticated user, with 
   const stale = new FakeUser({ factors: [{}], secondFactor: false, authAgeSeconds: 3600 });
   const fresh = new FakeUser({ factors: [{}], secondFactor: false, authAgeSeconds: 3600 });
   fake.redirectResult = fake.mfaError({ user: fresh });
-  prompts.answer("123456");
+  codes.answer("123456");
   const ready = await start(stale);
 
   assert.deepEqual(fake.callsTo("updateCurrentUser"), [["uid-1"]]);
@@ -144,7 +144,7 @@ test("a return leg that came back without a sign-in marks the resume incomplete"
 test("a cancelled code on the return leg says so and marks the resume cancelled", async () => {
   const resume = returningFromRevokeStepUp();
   fake.redirectResult = fake.mfaError();
-  prompts.answer(null);
+  codes.answer(null);
   const ready = await start(readyUser());
   assert.deepEqual(ready[0].resume, { ...resume, reauthFailed: "cancelled" });
   assert.equal($("status").textContent,
@@ -154,7 +154,7 @@ test("a cancelled code on the return leg says so and marks the resume cancelled"
 test("a rejected code on the return leg reports Firebase's code and marks the resume with it", async () => {
   const resume = returningFromRevokeStepUp();
   fake.redirectResult = fake.mfaError({ reject: "auth/invalid-verification-code" });
-  prompts.answer("000000");
+  codes.answer("000000");
   const ready = await start(readyUser());
   assert.deepEqual(ready[0].resume, { ...resume, reauthFailed: "auth/invalid-verification-code" });
   assert.equal($("status").textContent, "Sign-in failed: auth/invalid-verification-code");

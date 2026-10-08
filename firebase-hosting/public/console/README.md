@@ -118,6 +118,14 @@ protects licence issuance. The CSP's `img-src` names no such origin and must
 not start to. Every console uses the same card (`enrolInPage` in `auth.js`);
 the account page hosts it in its own section.
 
+Every later sign-in and step-up asks for the code the same way: a card under
+the status line with a code box, Confirm and Cancel (`askCodeInPage`), never
+`window.prompt`. Some browsers show no prompt at all (the Claude desktop app's
+browser pane answers "prompt() is not supported"), which left the code the one
+step of sign-in nobody could complete there. Cancel is `ERR_CANCELLED`, as
+before. The operator desk's typed-key confirmations and the revoke password
+still use `window.prompt`.
+
 ## Confirming destructive actions
 
 Revoking a licence drops a whole institution to demo, so the page asks more
@@ -145,7 +153,14 @@ API_BASE_URL="https://your-gateway-host" ./scripts/deploy-console.sh
 
 The script copies `config.js` / `firebase.json`, substitutes `__API_BASE_URL__`
 and `__API_ORIGIN__`, runs `firebase deploy --only hosting`, then a `trap` puts
-the templates back.
+the templates back. Last it runs
+[`scripts/check_live_console.py`](../../../scripts/check_live_console.py), which
+reads the live `/console/config.js` and the CSP on `/login`, `/account` and
+`/console/`, and fails the run if a placeholder is left or the gateway is not the
+one given. Every Hosting deploy replaces the whole site, so a bare `firebase
+deploy` (for one `assetlinks.json` line, say) ships the placeholders: the pages
+load and every API call fails, as on 2026-10-07. Run the check on its own after
+any Hosting deploy: `python scripts/check_live_console.py --api <gateway>`.
 
 ### Sign-in flow: redirect, own host as `authDomain`
 

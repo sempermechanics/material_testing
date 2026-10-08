@@ -24,6 +24,9 @@ const camel = (name) => name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
 export let page = null;
 
+/** `inserted(element)` runs for every element a module inserts (harness.mjs answers the code card). */
+export const hooks = { inserted: null };
+
 export class FakeElement {
   constructor(tag, attributes = {}) {
     this.localName = tag.toLowerCase();
@@ -160,6 +163,7 @@ export class FakeElement {
     element.anchor = this;
     element.position = position;
     page.inserted.push(element);
+    if (hooks.inserted) hooks.inserted(element);
     return element;
   }
 

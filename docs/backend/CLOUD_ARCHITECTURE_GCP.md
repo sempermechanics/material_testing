@@ -1394,9 +1394,9 @@ retry minted a second licence for the same address, which could not attach —
 that retry is now a `409` naming the first. The operator desk says for every
 mint whether the licence attached, is waiting for a first sign-in, or was not
 delivered and why. Renewal is an edit of the expiry (§20.6), never a
-second mint. A claim that loses every retry under contention is the one
-delivery failure nobody is told about —
-[TD-33](../ops/TECH_DEBT.md).
+second mint. A claim that loses every retry under contention mints no Demo
+key: `ensure_entitlement` leaves the invite claimable, and the next request
+takes it.
 
 None of these reach the person instantly, and the counters IT reads move
 before they do. §20.12 is the read that measures the difference.
@@ -2065,8 +2065,8 @@ Every route also needs a declaration in `gateway/openapi.yaml`, and
 is an allowlist: an undeclared route is unreachable in production and nothing
 in the app's logs says why. That has happened twice (the `/v1/campus/*`
 aliases, then the lease routes). The test proves the spec; it does not deploy
-it — moving the live gateway to a new config is still by hand
-([TD-27](../ops/TECH_DEBT.md)).
+it. Moving the live gateway to a new config is the `gateway` job in
+`deploy-backend.yml` ([ADR-006](../adr/ADR-006-gateway-deploy-job.md)).
 
 ### 20.10 Changing device
 

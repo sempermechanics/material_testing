@@ -12,6 +12,48 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-08 — Deploys now check the live site (`check_live_console.py`)
+
+`scripts/deploy-console.sh` ends by running the new `scripts/check_live_console.py`. It
+reads the live `/console/config.js` and the Content-Security-Policy on `/login`,
+`/account` and `/console/`, and fails the run if `__API_BASE_URL__` or `__API_ORIGIN__`
+is left, or if the gateway is not the one deployed. It also runs on its own, after any
+Hosting deploy: `python scripts/check_live_console.py --api <gateway>`. CLAUDE.md and the
+console README say so. This is the guard the 2026-10-07 deploy below lacked.
+
+## 2026-10-08 — Hosting deploy: a dashboard switch for every account with more than one role (#353)
+
+#353 merged as `070eb330` and was deployed from it with `scripts/deploy-console.sh`. Live
+`/console/roles.js` reports `Last-Modified: Thu, 08 Oct 2026 04:42:06 GMT`. Every console
+page now shows one tab per dashboard the account can open, whenever there is more than
+one: Operator for `role=admin`, Institution seats for an address an institution licence
+names (deep-linked when there is one), and Your account for everyone. The Institution
+seats page carries the switch too. `roles.js` holds the decision, and `/login` shares it.
+#349's narrower rule (staff with a held licence only) is gone. Checked signed in as
+`damodar@indicvision.com` (`role=admin`, Demo key): `/login` forwarded to Operator, the
+header showed **Operator | Your account**, and the account page showed it back. Still
+owed: a signed-in check as an institution IT contact, and as an account with only Your
+account (no switch).
+
+## 2026-10-08 — Hosting redeploy: the console's gateway placeholders (fix for 2026-10-07)
+
+From `4748f653`, with `scripts/deploy-console.sh`. Before it, live `/console/config.js`
+held `API_BASE_URL = "__API_BASE_URL__"` and the console CSP held `connect-src 'self'
+__API_ORIGIN__ …`. Every console API call failed while that was live. The cause was #346's
+bare `firebase deploy --only hosting` (below): every Hosting deploy replaces the whole site,
+so it also shipped the committed placeholders. After the redeploy, `config.js` and the CSP
+on `/login`, `/account` and `/console/` named the gateway, and `assetlinks.json` matched
+`main`. This deploy also put #349 live (the entry below).
+
+## 2026-10-08 — Hosting deploy: the operator switch mounts after the role check (#352)
+
+From `e663839f`, with `scripts/deploy-console.sh` (the live gateway origin substituted
+into `config.js` and the console CSP, placeholders restored afterwards). `operator.js`
+now mounts the Operator | Your account switch from the sign-in callback, after
+`operatorMe` returns the `/v1/me` answer, instead of inside the role check; nothing a
+user sees changed. Both hosts served the new `operator.js`, the production gateway in
+`config.js` and in `connect-src`, and `assetlinks.json` right after the deploy.
+
 ## 2026-10-08 — Hosting deploy: Operator | Your account switch in the console (#349)
 
 #349 merged at 04:05 UTC (`ae94fc6f`). By the time this entry was written that day, the
@@ -21,6 +63,8 @@ the `#switch` nav. The deploy's time, and who ran it, were not recorded. Staff
 **Operator | Your account** switch in the header of the operator desk and the account
 page; every other account sees no change. A sign-in check as such an account was still
 owed at the time of writing.
+[Note 2026-10-08: it went live with the placeholder redeploy from `4748f653` above.
+#353 has since widened it to every account with more than one role.]
 
 ## 2026-10-07 — Hosting deploy: Material Testing's debug key in `assetlinks.json` (#346)
 
@@ -30,6 +74,8 @@ uploaded). `com.sempermechanics.materialtesting` now lists the shared debug key
 benchmark builds can verify App Links. Both hosts served it right after the deploy.
 Google's Digital Asset Links API still answered "not linked" for an hour from its cache,
 so the Pixel 6 re-verify of the new Material Testing app is still owed.
+[Note 2026-10-08: being a bare `firebase deploy`, this also shipped the console with
+`__API_BASE_URL__` / `__API_ORIGIN__` unfilled. See the placeholder redeploy above.]
 
 ## 2026-10-07 — Backend, gateway and console deploy: the restructuring (#344)
 
