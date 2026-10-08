@@ -1,7 +1,7 @@
 /* The Edit and To-institution dialogs: a licence's terms, and an individual
  * licence carried over to an institution one.
  */
-import { api, setStatus } from "../auth.js";
+import { api, setStatus, askInPage } from "../auth.js";
 import { day, isoDay, emailList, licenceEditPatch } from "../util.js";
 import { explain } from "../messages.js";
 import { $, findLicence, labelOf, demoCapNote } from "./state.js";
@@ -97,13 +97,16 @@ $("editForm").addEventListener("submit", async (ev) => {
   // A downgrade is agreed with the customer, not clicked through: the key
   // has to be typed, as for a revoke.
   if (shortens) {
-    const typed = window.prompt(
-      `This shortens ${label}: its term ends ${patch.expiresAt.slice(0, 10)}` +
-      `${lic.duration === "timed" ? ` instead of ${isoDay(lic.expiresAt)}` : " (it was perpetual)"}` +
-      ", for everyone on it." +
-      `\n\nType ${label} to confirm:`,
-    );
-    if (typed == null || typed.trim() !== label) {
+    // Inside the dialog: it is modal, so a card anywhere else is out of reach.
+    const typed = await askInPage({
+      title: `Shorten ${label}`,
+      message: `This shortens ${label}: its term ends ${patch.expiresAt.slice(0, 10)}` +
+        `${lic.duration === "timed" ? ` instead of ${isoDay(lic.expiresAt)}` : " (it was perpetual)"}` +
+        ", for everyone on it." +
+        `\n\nType ${label} to confirm:`,
+      anchor: $("editHint"),
+    });
+    if (typed !== label) {
       editHint("Not saved: the key was not typed.");
       return;
     }

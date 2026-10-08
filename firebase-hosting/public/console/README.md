@@ -126,9 +126,17 @@ step of sign-in nobody could complete there. A wrong code keeps the card: it
 says the code was not accepted and offers **Try again**, which takes the next
 code against the same challenge, with no second trip to Google. Cancel is
 `ERR_CANCELLED`, or after a wrong code that code's error, as before. A challenge
-that timed out ends the card, and the status line says to sign in again. The
-operator desk's typed-key confirmations and the revoke password still use
-`window.prompt`.
+that timed out ends the card, and the status line says to sign in again.
+
+Nothing else uses `window.prompt` either. The operator desk's typed-key
+confirmations (revoke, delete, shortening a licence's term) and the password
+before a revoke use `askInPage` in `auth.js`: a card with a heading, the
+message, a text or password box, the confirm button and Cancel, placed under
+the status line and scrolled into view. The shortening check runs inside the
+modal Edit dialog, so its card goes inside the dialog (after `#editHint`). The
+card's buttons are `type="button"` and Enter is handled by the card, so it
+never submits the Edit form. In the tests, `prompts` answers these cards, and
+the fake `window.prompt` fails the test if anything calls it.
 
 ## Confirming destructive actions
 

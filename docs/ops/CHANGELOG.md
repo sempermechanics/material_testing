@@ -12,6 +12,22 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-08 — Hosting deploys: the authenticator code asked for in the page, with Try again (#358, #361)
+
+The consoles asked for the authenticator code with `window.prompt`. The Claude desktop
+app's browser pane shows no prompt ("Sign-in failed: prompt() is not supported."), so
+sign-in could not be completed there. #358 (`51fbfc1d`) moved the code into a card under
+the status line. #361 (`dabb23f0`) kept that card open after a wrong code, with **Try
+again** taking the next code against the same challenge, with no second trip to Google.
+A challenge that times out now says to sign in again. Both were deployed with
+`scripts/deploy-console.sh`, and its live check passed each time; these were its first
+two real runs. Checked from the pane as `damodar@indicvision.com`. On #358 alone, the code
+was rejected (`auth/invalid-verification-code`) and the sign-in ended. On #361, sign-in
+completed: `/login` forwarded to Operator, with **2FA on** and the **Operator | Your
+account** switch. The desk's typed-key confirmations and the revoke password still used
+`window.prompt` at this point. The next change moves them into the page; it is not yet
+deployed at the time of writing.
+
 ## 2026-10-08 — Deploys now check the live site (`check_live_console.py`)
 
 `scripts/deploy-console.sh` ends by running the new `scripts/check_live_console.py`. It

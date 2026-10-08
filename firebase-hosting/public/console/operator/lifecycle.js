@@ -2,7 +2,7 @@
  * fresh sign-in, and the 30 days in which a delete can be undone.
  */
 import {
-  api, setStatus, esc, confirmByTyping, stepUpForRevoke, ERR_CANCELLED,
+  api, setStatus, esc, askInPage, confirmByTyping, stepUpForRevoke, ERR_CANCELLED,
 } from "../auth.js";
 import { day, daysLeft } from "../util.js";
 import { explain } from "../messages.js";
@@ -26,7 +26,7 @@ export async function revokeLicence(id) {
     "Their saved analyses are untouched — this withdraws entitlement, " +
     "it does not delete anything.\n\nContinue?",
   )) return;
-  if (!confirmByTyping(label, "revoke this licence")) {
+  if (!(await confirmByTyping(label, "revoke this licence", { title: `Revoke ${label}` }))) {
     setStatus("Revoke cancelled — the key did not match.");
     return;
   }
@@ -105,8 +105,12 @@ export async function deleteLicence(id) {
     "It leaves this list and is held under Recently deleted for 30 days, " +
     "then purged. Nobody's saved analyses are touched.",
   )) return;
-  const typed = window.prompt(`Type ${label} to delete this licence:`);
-  if (typed == null || typed.trim() !== label) {
+  const typed = await askInPage({
+    title: `Delete ${label}`,
+    message: `Type ${label} to delete this licence:`,
+    confirm: "Delete",
+  });
+  if (typed !== label) {
     setStatus("Delete cancelled — the key did not match.");
     return;
   }
