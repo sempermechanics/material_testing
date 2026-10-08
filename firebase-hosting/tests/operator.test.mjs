@@ -50,6 +50,7 @@ async function open({ licenses = [IND, UNI], page = {}, routes = {}, user, resum
       "GET /v1/me": () => json(200, { role: "admin", email: "staff@semper.test" }),
       "GET /v1/admin/users?status=PENDING&limit=50": () => json(200, { users: [] }),
       [LIST]: () => json(200, { licenses, page, demoMaxAnalyses: 25 }),
+      "GET /v1/institutions/licenses": () => json(200, { licenses: [] }),
       ...routes,
     },
   });
@@ -78,6 +79,29 @@ test("when the role cannot be read, the desk stays hidden and says why", async (
   await openPage("operator", { routes: { "GET /v1/me": () => json(503, { detail: "unavailable" }) } });
   assert.equal($("app").hidden, true);
   assert.deepEqual(status(), ["Could not check whether operator@example.com is an operator: unavailable", "muted err"]);
+});
+
+const tabs = () => $("switch").querySelectorAll("a").map((a) =>
+  [a.textContent, a.getAttribute("href"), a.getAttribute("aria-current") ?? ""]);
+
+test("staff get the Operator | Your account switch, licence or not", async () => {
+  await open();
+  assert.equal($("switch").hidden, false);
+  assert.deepEqual(tabs(), [["Operator", "../operator/", "page"], ["Your account", "../account/", ""]]);
+});
+
+test("staff who also run an institution get all three, the roster deep-linked", async () => {
+  await open({ routes: { "GET /v1/institutions/licenses": () => json(200, { licenses: [{ id: "L1" }] }) } });
+  assert.deepEqual(tabs(), [
+    ["Operator", "../operator/", "page"],
+    ["Institution seats", "../institution/?license=L1", ""],
+    ["Your account", "../account/", ""],
+  ]);
+});
+
+test("a failed institution check still leaves Operator | Your account", async () => {
+  await open({ routes: { "GET /v1/institutions/licenses": () => json(503, { detail: "unavailable" }) } });
+  assert.deepEqual(tabs().map((t) => t[0]), ["Operator", "Your account"]);
 });
 
 /* ---------------------------------------------------------------- table */

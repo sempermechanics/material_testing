@@ -28,6 +28,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
 import java.time.Duration
@@ -82,6 +83,7 @@ class MediaPickerSheetTest {
         }
     }
 
+    private lateinit var screen: ActivityController<AppCompatActivity>
     private lateinit var activity: AppCompatActivity
     private var permissionRequests = 0
     private var safBrowses = 0
@@ -91,7 +93,8 @@ class MediaPickerSheetTest {
     fun setUp() {
         val built = Robolectric.buildActivity(AppCompatActivity::class.java)
         built.get().setTheme(R.style.Theme_Semper)
-        activity = built.setup().get()
+        screen = built.setup()
+        activity = screen.get()
         Robolectric.buildContentProvider(FakeMediaProvider::class.java).create("media")
         FakeMediaProvider.rows = listOf(
             FakeMediaProvider.Row(11, "ref.png", "image/png", IMAGE),
@@ -106,6 +109,11 @@ class MediaPickerSheetTest {
 
     @After
     fun tearDown() {
+        // A sheet left showing keeps its grid's RecyclerView, and with it the
+        // Activity, registered with the main thread's GapWorker for the rest
+        // of the suite (TD-199). Destroying the Activity does not dismiss it.
+        ShadowDialog.getShownDialogs().forEach { it.dismiss() }
+        screen.close()
         MediaPickerSheet.queryDispatcher = Dispatchers.IO
     }
 

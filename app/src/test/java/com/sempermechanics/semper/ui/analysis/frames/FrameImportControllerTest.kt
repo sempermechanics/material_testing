@@ -5,6 +5,7 @@ import android.net.Uri
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -30,6 +31,9 @@ class FrameImportControllerTest {
     fun setUp() {
         bed = WizardTestBed()
     }
+
+    @After
+    fun closeBed() = bed.close()
 
     private fun controller(chrome: com.sempermechanics.semper.ui.analysis.run.RunChrome = bed.chrome()) =
         FrameImportController(bed.activity, bed.viewModel, chrome, bed.settings.tvStaticResult) { checks++ }

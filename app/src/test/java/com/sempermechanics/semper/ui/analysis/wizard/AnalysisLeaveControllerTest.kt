@@ -5,6 +5,7 @@ import androidx.appcompat.app.AlertDialog
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -33,6 +34,9 @@ class AnalysisLeaveControllerTest {
         bed = WizardTestBed()
         ShadowDialog.reset()
     }
+
+    @After
+    fun closeBed() = bed.close()
 
     private fun leave(chrome: com.sempermechanics.semper.ui.analysis.run.RunChrome = bed.chrome()) =
         AnalysisLeaveController(bed.activity, bed.viewModel, chrome) { steps += it }
