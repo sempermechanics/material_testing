@@ -2,12 +2,11 @@ package com.sempermechanics.semper.cloud
 
 import com.sempermechanics.semper.data.net.SingleFlight
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,6 +19,13 @@ import java.util.concurrent.atomic.AtomicInteger
  * access log, 2026-09-25). `SemperApi.getConfig` runs through a [SingleFlight] so
  * the second one waits for the first instead of sending its own
  * (docs/perf/request-volume.md, Pass 2).
+ *
+ * Every caller here starts [CoroutineStart.UNDISPATCHED]: it runs into
+ * [SingleFlight.run], and so has joined (or started) the shared call, before the
+ * next line of the test, and a shared fetch is held open until every caller
+ * has started. The tests used to start callers on `Dispatchers.Default` and
+ * assume each had joined within 20–50 ms; on a busy CI runner one could arrive
+ * after the shared call had finished and start a second fetch.
  */
 class ConfigSingleFlightTest {
 
@@ -31,8 +37,20 @@ class ConfigSingleFlightTest {
         return n
     }
 
+    /** Held open until [callersAtOnce] has started every caller. */
+    private var gate = CompletableDeferred<Unit>()
+
+    private suspend fun fetchUntilAllStarted(): Int {
+        val n = fetched.incrementAndGet()
+        gate.await()
+        return n
+    }
+
     private fun callersAtOnce(k: Int, call: suspend () -> Int): List<Int> = runBlocking {
-        (1..k).map { async(Dispatchers.Default) { call() } }.awaitAll()
+        gate = CompletableDeferred()
+        val callers = (1..k).map { async(start = CoroutineStart.UNDISPATCHED) { call() } }
+        gate.complete(Unit)
+        callers.awaitAll()
     }
 
     @Test
@@ -40,7 +58,7 @@ class ConfigSingleFlightTest {
         for (k in SIZES) {
             fetched.set(0)
             val flight = SingleFlight<Int>()
-            val answers = callersAtOnce(k) { flight.run { fetchSlowly() } }
+            val answers = callersAtOnce(k) { flight.run { fetchUntilAllStarted() } }
             println("K=$k fetches=${fetched.get()}")
             assertEquals("K=$k", 1, fetched.get())
             assertEquals("every caller gets the one answer", List(k) { 1 }, answers)
@@ -52,7 +70,7 @@ class ConfigSingleFlightTest {
         // The baseline this change removes: K overlapping callers, K fetches.
         for (k in SIZES) {
             fetched.set(0)
-            callersAtOnce(k) { fetchSlowly() }
+            callersAtOnce(k) { fetchUntilAllStarted() }
             assertEquals("K=$k", k, fetched.get())
         }
     }
@@ -73,9 +91,9 @@ class ConfigSingleFlightTest {
             release.await()
             throw IOException("offline")
         }
-        val callers = (1..3).map { async(Dispatchers.Default) { runCatching { flight.run(failing) } } }
-        withTimeout(TIMEOUT_MS) { while (fetched.get() == 0) delay(1) }
-        delay(SETTLE_MS)
+        val callers = (1..3).map {
+            async(start = CoroutineStart.UNDISPATCHED) { runCatching { flight.run(failing) } }
+        }
         release.complete(Unit)
         val results = callers.awaitAll()
         assertTrue(results.all { it.exceptionOrNull() is IOException })
@@ -86,18 +104,18 @@ class ConfigSingleFlightTest {
     @Test
     fun `a caller that gives up does not cancel the others`() = runBlocking {
         val flight = SingleFlight<Int>()
-        val first = async(Dispatchers.Default) { flight.run { fetchSlowly() } }
-        withTimeout(TIMEOUT_MS) { while (fetched.get() == 0) delay(1) }
-        val second = async(Dispatchers.Default) { flight.run { fetchSlowly() } }
+        val release = CompletableDeferred<Unit>()
+        val gated = suspend { fetched.incrementAndGet().also { release.await() } }
+        val first = async(start = CoroutineStart.UNDISPATCHED) { flight.run(gated) }
+        val second = async(start = CoroutineStart.UNDISPATCHED) { flight.run(gated) }
         first.cancel()
+        release.complete(Unit)
         assertEquals(1, second.await())
         assertEquals(1, fetched.get())
     }
 
     private companion object {
         const val NETWORK_MS = 50L
-        const val SETTLE_MS = 20L
-        const val TIMEOUT_MS = 2_000L
         val SIZES = listOf(2, 8, 32)
     }
 }

@@ -45,6 +45,15 @@ so it also shipped the committed placeholders. After the redeploy, `config.js` a
 on `/login`, `/account` and `/console/` named the gateway, and `assetlinks.json` matched
 `main`. This deploy also put #349 live (the entry below).
 
+## 2026-10-08 — Hosting deploy: the operator switch mounts after the role check (#352)
+
+From `e663839f`, with `scripts/deploy-console.sh` (the live gateway origin substituted
+into `config.js` and the console CSP, placeholders restored afterwards). `operator.js`
+now mounts the Operator | Your account switch from the sign-in callback, after
+`operatorMe` returns the `/v1/me` answer, instead of inside the role check; nothing a
+user sees changed. Both hosts served the new `operator.js`, the production gateway in
+`config.js` and in `connect-src`, and `assetlinks.json` right after the deploy.
+
 ## 2026-10-08 — Hosting deploy: Operator | Your account switch in the console (#349)
 
 #349 merged at 04:05 UTC (`ae94fc6f`). By the time this entry was written that day, the
