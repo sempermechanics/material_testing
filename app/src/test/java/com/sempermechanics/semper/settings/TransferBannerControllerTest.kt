@@ -1,7 +1,10 @@
 package com.sempermechanics.semper.settings
 
 import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
+import androidx.dynamicanimation.animation.SpringFrames
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.settings.SettingsActivity
@@ -30,18 +33,29 @@ class TransferBannerControllerTest {
      */
     private val built = mutableListOf<ActivityController<SettingsActivity>>()
 
+    /**
+     * The banner here is never in a window, so nothing ends its bar's spring,
+     * and one still moving would hold its Settings for the rest of the run
+     * (TD-200).
+     */
     @After
-    fun destroySettings() = built.forEach { runCatching { it.pause().stop().destroy() } }
+    fun destroySettings() {
+        built.forEach { runCatching { it.pause().stop().destroy() } }
+        SpringFrames.endAll()
+    }
 
+    private lateinit var activity: SettingsActivity
     private lateinit var root: View
     private lateinit var controller: TransferBannerController
 
     @Before
     fun setUp() {
-        val activity = Robolectric.buildActivity(SettingsActivity::class.java).setup().also { built += it }.get()
+        activity = Robolectric.buildActivity(SettingsActivity::class.java).setup().also { built += it }.get()
         root = activity.layoutInflater.inflate(R.layout.view_transfer_banner, null)
         controller = TransferBannerController(root)
     }
+
+    private val bar get() = root.findViewById<LinearProgressIndicator>(R.id.transferProgress)
 
     @Test
     fun `single transfer shows progress without pager chrome`() {
@@ -101,5 +115,34 @@ class TransferBannerControllerTest {
             "halfway",
             root.findViewById<TextView>(R.id.tvTransferStatus).text.toString(),
         )
+    }
+
+    @Test
+    fun `a banner out of any window keeps its spring until the test ends it`() {
+        controller.upsert(TransferBannerController.Transfer(id = "a", title = "A", percent = 40))
+        val drawable = checkNotNull(bar.progressDrawable)
+        assertTrue(SpringFrames.running(drawable))
+
+        SpringFrames.step()
+        assertTrue("nothing asked this spring to end", SpringFrames.running(drawable))
+
+        SpringFrames.endAll()
+        assertFalse(SpringFrames.running(drawable))
+        assertTrue("the handler would not ask for frames again", SpringFrames.idle)
+    }
+
+    @Test
+    fun `a banner taken out of its window ends its spring on the next frames`() {
+        val host = activity.findViewById<ViewGroup>(android.R.id.content)
+        host.addView(root)
+        controller.upsert(TransferBannerController.Transfer(id = "a", title = "A", percent = 40))
+        val drawable = checkNotNull(bar.progressDrawable)
+        assertTrue("the bar springs while shown", SpringFrames.running(drawable))
+
+        // Detaching jumps a view's drawables to their current state, which
+        // asks Material's spring to end on its next frame.
+        host.removeView(root)
+        SpringFrames.step()
+        assertFalse("a spring outlived the banner", SpringFrames.running(drawable))
     }
 }
