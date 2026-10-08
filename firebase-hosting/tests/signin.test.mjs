@@ -154,10 +154,18 @@ test("a cancelled code on the return leg says so and marks the resume cancelled"
 test("a rejected code on the return leg reports Firebase's code and marks the resume with it", async () => {
   const resume = returningFromRevokeStepUp();
   fake.redirectResult = fake.mfaError({ reject: "auth/invalid-verification-code" });
-  codes.answer("000000");
+  codes.answer("000000", null); // the wrong code, then Cancel instead of Try again
   const ready = await start(readyUser());
   assert.deepEqual(ready[0].resume, { ...resume, reauthFailed: "auth/invalid-verification-code" });
   assert.equal($("status").textContent, "Sign-in failed: auth/invalid-verification-code");
+  assert.equal($("status").className, "muted err");
+});
+
+test("a sign-in that timed out before a code was accepted says to sign in again", async () => {
+  fake.redirectResult = fake.mfaError({ reject: "auth/totp-challenge-timeout" });
+  codes.answer("123456");
+  await start(readyUser());
+  assert.equal($("status").textContent, "That sign-in timed out before a code was accepted. Sign in again.");
   assert.equal($("status").className, "muted err");
 });
 
