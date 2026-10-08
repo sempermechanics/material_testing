@@ -201,7 +201,8 @@
                      inside this scroll view the list would inflate one view per
                      analysis and never reuse any. constrainedHeight caps it, and
                      past the cap the list scrolls itself; its scrollbar stays
-                     shown and its edges fade, so a cut-off list reads as one. -->
+                     shown, beside the rows rather than on them, and its edges
+                     fade, so a cut-off list reads as one. -->
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -213,7 +214,11 @@
                         android:layout_height="wrap_content"
                         android:fadeScrollbars="false"
                         android:fadingEdgeLength="24dp"
+                        android:paddingEnd="8dp"
                         android:requiresFadingEdge="vertical"
+                        android:scrollbarSize="3dp"
+                        android:scrollbarStyle="outsideInset"
+                        android:scrollbarThumbVertical="@drawable/scrollbar_thumb_list"
                         android:scrollbars="vertical"
                         app:layout_constrainedHeight="true"
                         app:layout_constraintBottom_toBottomOf="parent"
