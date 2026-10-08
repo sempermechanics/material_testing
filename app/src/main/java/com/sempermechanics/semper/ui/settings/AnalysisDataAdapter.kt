@@ -35,6 +35,9 @@ class AnalysisDataAdapter(
      */
     private var submitted: List<AnalysisEntry> = emptyList()
 
+    /** Rows as last submitted; [getItemCount] lags it while a diff runs. */
+    val rowCount: Int get() = submitted.size
+
     /**
      * Shows [items]. Every row is rebound afterwards, as a whole-list refresh
      * did: a row's wording and backup action also read settings that are not

@@ -186,10 +186,22 @@
                     android:textSize="12sp"
                     android:visibility="gone" />
 
+                <!-- How many rows the list holds: past its height cap the rest
+                     sit below the fold, and nothing else says so. -->
+                <TextView
+                    android:id="@+id/tvAnalysesDataCount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
                 <!-- Bounded height so rows actually recycle: with wrap_content
                      inside this scroll view the list would inflate one view per
                      analysis and never reuse any. constrainedHeight caps it, and
-                     past the cap the list scrolls itself. -->
+                     past the cap the list scrolls itself; its scrollbar stays
+                     shown and its edges fade, so a cut-off list reads as one. -->
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -199,6 +211,10 @@
                         android:id="@+id/analysesDataList"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:fadeScrollbars="false"
+                        android:fadingEdgeLength="24dp"
+                        android:requiresFadingEdge="vertical"
+                        android:scrollbars="vertical"
                         app:layout_constrainedHeight="true"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
