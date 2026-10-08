@@ -141,7 +141,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
   TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-200; check both before taking one.
+  free in both registers is TD-201 (semperdic-app took TD-200 in its #350); check
+  both before taking one.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
