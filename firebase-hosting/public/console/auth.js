@@ -153,6 +153,46 @@ function ask(message) {
 }
 
 /**
+ * The authenticator code, asked for in the page: a card under the status
+ * line with a code box, Confirm and Cancel. Resolves the trimmed code, or
+ * null on Cancel.
+ *
+ * Not `window.prompt`: some browsers show no prompt at all (the Claude
+ * desktop app's browser pane answers "prompt() is not supported"), and there
+ * this was the one step of sign-in nobody could complete. It sits where the
+ * enrolment card does and looks like it, so first sign-in and every later one
+ * ask for the code the same way.
+ */
+function askCodeInPage() {
+  const card = document.createElement("section");
+  card.className = "card code";
+  card.innerHTML = `
+    <h2>Enter your authenticator code</h2>
+    <p class="muted">The 6-digit code your authenticator app shows for Semper DIC.</p>
+    <div class="row">
+      <input inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*"
+             placeholder="6-digit code" size="12" />
+      <button class="confirm">Confirm</button>
+      <button class="secondary cancel">Cancel</button>
+    </div>`;
+  const anchor = document.getElementById("status") || document.querySelector("main");
+  anchor.insertAdjacentElement("afterend", card);
+  const input = card.querySelector("input");
+  input.focus();
+
+  return new Promise((resolve) => {
+    const done = (value) => { card.remove(); resolve(value); };
+    const confirm = () => {
+      const code = input.value.trim();
+      if (code) done(code);
+    };
+    card.querySelector(".confirm").addEventListener("click", confirm);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") confirm(); });
+    card.querySelector(".cancel").addEventListener("click", () => done(null));
+  });
+}
+
+/**
  * Complete a second-factor challenge raised during sign-in or re-auth.
  *
  * TOTP only. The project enrols no SMS factor, so a phone hint cannot reach
@@ -168,7 +208,7 @@ async function resolveChallenge(error) {
   );
   if (!hint) throw new Error(ERR_NO_SECOND_FACTOR);
 
-  const code = ask("Enter the 6-digit code from your authenticator app:");
+  const code = await askCodeInPage();
   if (!code) throw new Error(ERR_CANCELLED);
   const result = await resolver.resolveSignIn(
     TotpMultiFactorGenerator.assertionForSignIn(hint.uid, code),

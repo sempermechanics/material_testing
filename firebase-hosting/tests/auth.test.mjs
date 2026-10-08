@@ -6,7 +6,7 @@ import { beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import {
   test, fake, FakeUser, readyUser, reset, settle, stillPending, rejection,
-  net, json, storage, prompts, page, $, loadAuth,
+  net, json, storage, prompts, codes, page, $, loadAuth,
 } from "./harness.mjs";
 
 // Dynamic, so that these load after harness.mjs registered its hooks.
@@ -28,7 +28,7 @@ function signIn(user) {
 /** A step-up that finishes in the page: the SDK raises the TOTP challenge instead of navigating. */
 function stepUpCompletesInPage(user, code = "123456") {
   fake.onReauthWithRedirect = async () => { throw fake.mfaError({ user }); };
-  prompts.answer(code);
+  codes.answer(code);
 }
 
 const bearer = (request) => request.headers.Authorization;
@@ -118,7 +118,8 @@ test("a step-up that completes in the page retries once, with a refreshed token"
   assert.deepEqual(net.requests.map(bearer), ["Bearer token-uid-1-v1", "Bearer token-uid-1-v2"]);
   assert.deepEqual(fake.callsTo("resolveSignIn"),
     [[{ kind: "signIn", enrollmentId: "totp-1", code: "123456" }]]);
-  assert.match(prompts.asked[0], /6-digit code/);
+  assert.equal(codes.asked, 1, "the code was asked for in the page");
+  assert.equal(prompts.asked.length, 0, "never with window.prompt");
 });
 
 test("a second reauth_required after the step-up is a refusal, not a loop", async () => {
@@ -216,9 +217,28 @@ test("a password steps up in place and forces a token refresh", async () => {
   assert.ok(Date.now() - user.authTime < 5000);
 });
 
+test("the authenticator code is asked for in a card under the status line, gone once answered", async () => {
+  signIn(new FakeUser({ providers: ["password"], password: "pw", factors: [{}] }));
+  codes.answer("123456");
+  await auth.stepUp({ password: "pw" });
+  const [card] = codes.cards;
+  assert.equal(codes.asked, 1);
+  assert.equal(card.anchor, $("status"));
+  assert.equal(card.position, "afterend");
+  assert.equal(card.querySelector("h2").textContent, "Enter your authenticator code");
+  assert.equal(card.querySelector("input").focused, true, "the box has focus");
+  assert.equal(card.removed, true, "the card goes once the code is confirmed");
+  assert.equal(prompts.asked.length, 0, "no window.prompt");
+
+  codes.answer(null);
+  assert.equal((await rejection(auth.stepUp({ password: "pw" }))).message, auth.ERR_CANCELLED,
+    "Cancel on the card is a cancelled code");
+  assert.equal(page.inserted.filter((e) => e.className === "card code").length, 0);
+});
+
 test("a password step-up on an enrolled account answers the TOTP challenge", async () => {
   const user = signIn(new FakeUser({ providers: ["password"], password: "pw", factors: [{}] }));
-  prompts.answer(" 654321 ");
+  codes.answer(" 654321 ");
   await auth.stepUp({ password: "pw" });
   assert.deepEqual(fake.callsTo("resolveSignIn"),
     [[{ kind: "signIn", enrollmentId: "totp-1", code: "654321" }]]);
@@ -238,7 +258,7 @@ test("a challenge with no TOTP factor is reported, not half-handled", async () =
   };
   assert.equal((await rejection(auth.stepUp({ password: "pw" }))).message,
     auth.ERR_NO_SECOND_FACTOR);
-  assert.equal(prompts.asked.length, 0);
+  assert.equal(codes.asked, 0);
 });
 
 test("a wrong authenticator code rejects with Firebase's code", async () => {
@@ -246,7 +266,7 @@ test("a wrong authenticator code rejects with Firebase's code", async () => {
   fake.onReauthWithCredential = async () => {
     throw fake.mfaError({ reject: "auth/invalid-verification-code" });
   };
-  prompts.answer("000000");
+  codes.answer("000000");
   const e = await rejection(auth.stepUp({ password: "pw" }));
   assert.equal(e.code, "auth/invalid-verification-code");
 });
@@ -284,7 +304,7 @@ test("a resolved challenge adopts the user that re-authenticated", async () => {
   const stale = signIn(new FakeUser({ providers: ["password"], factors: [{}], authAgeSeconds: 3600 }));
   const fresh = new FakeUser({ providers: ["password"], factors: [{}], authAgeSeconds: 3600 });
   fake.onReauthWithCredential = async () => { throw fake.mfaError({ user: fresh }); };
-  prompts.answer("123456");
+  codes.answer("123456");
   const token = await auth.stepUp({ password: "pw" });
   assert.deepEqual(fake.callsTo("updateCurrentUser"), [["uid-1"]]);
   assert.equal(fake.auth.currentUser, fresh);
@@ -445,7 +465,8 @@ test("a stale password-only operator must type the password; cancel or blank ref
   assert.equal((await rejection(auth.stepUpForRevoke({ action: "revoke" }))).message, auth.ERR_CANCELLED);
   assert.equal(fake.calls.filter((c) => c[0].startsWith("reauth")).length, 0);
 
-  prompts.answer("pw", "123456");
+  prompts.answer("pw");
+  codes.answer("123456");
   await auth.stepUpForRevoke({ action: "revoke" });
   assert.equal(fake.callsTo("reauthenticateWithCredential")[0][1].password, "pw");
   assert.equal(fake.callsTo("resolveSignIn").length, 1);

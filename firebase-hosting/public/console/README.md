@@ -118,6 +118,14 @@ protects licence issuance. The CSP's `img-src` names no such origin and must
 not start to. Every console uses the same card (`enrolInPage` in `auth.js`);
 the account page hosts it in its own section.
 
+Every later sign-in and step-up asks for the code the same way: a card under
+the status line with a code box, Confirm and Cancel (`askCodeInPage`), never
+`window.prompt`. Some browsers show no prompt at all (the Claude desktop app's
+browser pane answers "prompt() is not supported"), which left the code the one
+step of sign-in nobody could complete there. Cancel is `ERR_CANCELLED`, as
+before. The operator desk's typed-key confirmations and the revoke password
+still use `window.prompt`.
+
 ## Confirming destructive actions
 
 Revoking a licence drops a whole institution to demo, so the page asks more

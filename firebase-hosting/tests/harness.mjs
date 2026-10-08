@@ -6,14 +6,15 @@
 //     fakes under fakes/ (a test file must therefore import auth.js
 //     dynamically, after this module has run — see loadAuth);
 //  2. installs a small browser on globalThis: `window` (location,
-//     sessionStorage, prompt, confirm, alert), `document` (fake-dom.mjs: the
+//     sessionStorage, prompt, confirm, alert), `codes` for the in-page
+//     authenticator-code card, `document` (fake-dom.mjs: the
 //     real console page's markup, parsed), and `location`;
 //  3. replaces `fetch` with a scripted one that refuses anything a test did
 //     not queue, so no test reaches the network.
 import { register } from "node:module";
 import { test as nodeTest } from "node:test";
 import { fake } from "./fakes/firebase-auth.mjs";
-import { document as fakeDocument, mountPage } from "./fake-dom.mjs";
+import { document as fakeDocument, mountPage, hooks } from "./fake-dom.mjs";
 
 register("./firebase-hooks.mjs", import.meta.url);
 
@@ -58,6 +59,38 @@ export const prompts = {
   answer(...values) {
     this.answers.push(...values);
   },
+};
+
+/**
+ * Scripted answers for the in-page authenticator-code card (auth.js
+ * `askCodeInPage`), in order: a string is typed and confirmed, null presses
+ * Cancel. `asked` counts the cards shown and `cards` keeps them. An
+ * unscripted card fails the test, as an unscripted prompt does.
+ */
+export const codes = {
+  asked: 0,
+  cards: [],
+  answers: [],
+  answer(...values) {
+    this.answers.push(...values);
+  },
+};
+
+hooks.inserted = (card) => {
+  if (card.className !== "card code") return;
+  codes.asked += 1;
+  codes.cards.push(card);
+  // After auth.js has wired the card's buttons, as a person would.
+  setImmediate(() => {
+    if (!codes.answers.length) throw new Error("unscripted authenticator-code card");
+    const value = codes.answers.shift();
+    if (value === null) {
+      card.querySelector(".cancel").click();
+      return;
+    }
+    card.querySelector("input").value = value;
+    card.querySelector(".confirm").click();
+  });
 };
 
 export const location = {
@@ -192,6 +225,9 @@ export function reset() {
   storage.clear();
   prompts.asked = [];
   prompts.answers = [];
+  codes.asked = 0;
+  codes.cards = [];
+  codes.answers = [];
   confirms.asked = [];
   confirms.answers = [];
   alerts.length = 0;
