@@ -133,8 +133,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
   --grep=semperdic-app`; last merged `d870f45`, 2026-10-08 (its #345–#361: the
   restored-backup pairing in Settings and the analyses list's count and scrollbar,
-  the 2 GB unit-test JVM and closed test beds (TD-200), console changes and the
-  live-site check); before that `85650da`, 2026-10-07 (#122: package move ADR-015,
+  the 2 GB unit-test JVM and closed test beds (TD-200), console changes, the
+  live-site check and the authenticator-code retry); before that `85650da`, 2026-10-07 (#122: package move ADR-015,
   app id ADR-019, engine at `engine/`); rules in the parent's
   `docs/ops/FORK_SYNC.md`). This app id's Firebase client is in
   `google-services.json`; App Check for it waits for a Play listing. The parent deploys, and its TD rows jump to TD-122. General
