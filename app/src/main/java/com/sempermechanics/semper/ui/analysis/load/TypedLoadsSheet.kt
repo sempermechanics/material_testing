@@ -30,7 +30,9 @@ import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.data.mechanical.TypedLoads.Entry
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.defFrameTimesMs
 import com.sempermechanics.semper.ui.analysis.wizard.setTypedLoads
+import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsKg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

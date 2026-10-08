@@ -3,7 +3,6 @@
 
 package com.sempermechanics.semper.ui.home
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.MainThread
@@ -24,21 +23,16 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
 import com.sempermechanics.semper.navigation.IntentKeys
-import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.SerialJob
-import com.sempermechanics.semper.ui.common.TestTypeSheet
 import com.sempermechanics.semper.ui.common.auth.AuthRoute
 import com.sempermechanics.semper.ui.common.auth.SignOutRun
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
-import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
 import com.sempermechanics.semper.ui.common.transfer.DeleteFeedback
-import com.sempermechanics.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,11 +46,11 @@ import kotlinx.coroutines.withContext
 @MainThread
 class HomeActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityHomeBinding
+    internal lateinit var binding: ActivityHomeBinding
     private lateinit var adapter: SessionListAdapter
     private lateinit var selection: SessionSelectionController
     private lateinit var cloudBackups: CloudBackupsCard
-    private lateinit var quotaCard: HomeQuotaCard
+    internal lateinit var quotaCard: HomeQuotaCard
     private lateinit var backupBadge: BackupBadgeActions
 
     private lateinit var deleteFeedback: DeleteFeedback
@@ -111,20 +105,20 @@ class HomeActivity : AppCompatActivity() {
     }
 
     /** Files tab: Storage Access Framework (Drive, storage, DNG). */
-    private val pickDocument =
+    internal val pickDocument =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             routePickedMedia(uri)
         }
 
-    private var mediaPicker: MediaPickerSheet? = null
+    internal var mediaPicker: MediaPickerSheet? = null
 
     /**
      * The test type picked on the sheet, waiting for the media picker to
      * finish. Saved across recreation because the SAF picker can kill Home
      * while it is open, and the wizard must not open typeless.
      */
-    private var pendingTestType: TestType? = null
-    private val requestMediaPermission =
+    internal var pendingTestType: TestType? = null
+    internal val requestMediaPermission =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             mediaPicker?.onPermissionResult()
         }
@@ -132,25 +126,6 @@ class HomeActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         pendingTestType?.let { outState.putString(IntentKeys.TEST_TYPE, it.wireName) }
-    }
-
-    /**
-     * Route a picked photo/video into the analysis screen. Shared by both source
-     * pickers so the two entry points behave identically; the mime type decides
-     * whether we hand off a single reference image or a video to sample frames
-     * from.
-     */
-    private fun routePickedMedia(uri: android.net.Uri?) {
-        if (uri == null) return
-        val mime = contentResolver.getType(uri) ?: ""
-        val intent = Intent(this, StaticAnalysisActivity::class.java)
-        pendingTestType?.let { intent.putExtra(IntentKeys.TEST_TYPE, it.wireName) }
-        if (mime.startsWith("video/")) {
-            intent.putExtra(IntentKeys.PICKED_VIDEO_URI, uri.toString())
-        } else {
-            intent.putExtra(IntentKeys.PICKED_REF_URI, uri.toString())
-        }
-        startActivity(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -207,38 +182,6 @@ class HomeActivity : AppCompatActivity() {
         // not just that the backend's index says so.
         binding.swipeRefresh.setOnRefreshListener { refresh(deep = true) }
         binding.sessionList.layoutManager = LinearLayoutManager(this)
-    }
-
-    /** The + button, the gear, and the empty state's button (which is the + button). */
-    private fun wireButtons() {
-        val fab = binding.fabNewAnalysis
-        HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab)
-        fab.setOnClickListener {
-            // Two independent reasons new work cannot start. The seat check is
-            // first because an institution member is licensed, so the quota
-            // check below is false for them by definition and would wave them
-            // through. btnEmptyRestore delegates here via performClick(), so
-            // both entry points are covered by this one listener.
-            if (LicenseEntitlements.isSeatRequiredToStart(this)) {
-                AnalysisNavHelper.openSeatRequired(this)
-                return@setOnClickListener
-            }
-            // At the account's analysis limit, block new work behind the persistent
-            // limit screen (email support) instead of letting it fail on upload.
-            if (quotaCard.openLimitScreenIfReached()) return@setOnClickListener
-            // Which test first: the wizard decides on open whether to ask for
-            // machine loads, so it has to know before any media is picked.
-            TestTypeSheet.show(this) { type ->
-                pendingTestType = type
-                showSourceChooser()
-            }
-        }
-        binding.btnHomeSettings.setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-        binding.btnEmptyRestore.setOnClickListener {
-            fab.performClick()
-        }
     }
 
     /**
@@ -323,23 +266,6 @@ class HomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refresh()
-    }
-
-    /**
-     * In-sheet Images gallery; Files opens SAF for Drive / storage / DNG.
-     */
-    private fun showSourceChooser() {
-        mediaPicker = MediaSourceChooser.show(
-            activity = this,
-            mode = MediaSourceChooser.Mode.HOME_REFERENCE,
-            requestPermission = {
-                requestMediaPermission.launch(
-                    MediaSourceChooser.requiredPermissions(includeVideo = true),
-                )
-            },
-            onBrowseSaf = { pickDocument.launch(arrayOf("image/*", "video/*")) },
-            onPicked = { uris -> routePickedMedia(uris.firstOrNull()) },
-        )
     }
 
     /**

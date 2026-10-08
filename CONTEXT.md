@@ -131,11 +131,10 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`; last merged `dc13351`, 2026-10-01; rules in the parent's
-  `docs/ops/FORK_SYNC.md`). The sync of `85650da` (package move ADR-015, app id
-  ADR-019, engine at `engine/`) is PR #122 on branch `ccr-6575f0b3-7g5yvz`: it compiles
-  and passes Tier 1 here (2026-10-07), with this app id's Firebase client in
-  `google-services.json`; six files are over ADR-015's ~500 lines (TD-199). The parent deploys, and its TD rows jump to TD-122. General
+  --grep=semperdic-app`; last merged `85650da`, 2026-10-07 (#122: package move
+  ADR-015, app id ADR-019, engine at `engine/`); rules in the parent's
+  `docs/ops/FORK_SYNC.md`). This app id's Firebase client is in
+  `google-services.json`; App Check for it waits for a Play listing. The parent deploys, and its TD rows jump to TD-122. General
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
@@ -197,9 +196,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     analysis there needs a licensed key or deletes first.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
     first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
-  - **Own app (ADR-009, TD-133).** Installs as `com.indicvision.semper.materialtesting`
-    (`com.sempermechanics.materialtesting` once the 85650da sync lands, ADR-019: no
-    in-place upgrade) beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
+  - **Own app (ADR-009, TD-133).** `main` installs as `com.sempermechanics.materialtesting`
+    since #122 (ADR-019: no in-place upgrade from the released
+    `com.indicvision.semper.materialtesting` builds, so testers install it beside them) beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
     (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
     TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
     sends `X-App-Id` and signed in licensed on a Pixel 6, which now runs `v1.2-beta.3`
@@ -209,8 +208,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     (#106, TD-149; Pixel 6 2026-09-30); each account still acks once. A release
     installed over a debug build is a new phone to the backend (`ANDROID_ID` follows
     the signing key): reset this app's device first. Owed: signing in where Semper is
-    signed in too, and App Check for this app (its attestation fails; production runs
-    it `off`). A `sync/` merge keeps this repo's `applicationId` and
+    signed in too, and App Check for this app once it is on Google Play (a sideloaded
+    APK cannot attest; production runs it `off`). A `sync/` merge keeps this repo's `applicationId` and
     `google-services.json`.
   - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
 - **Look it up; this list rots.** `gh pr list --state open`; history in

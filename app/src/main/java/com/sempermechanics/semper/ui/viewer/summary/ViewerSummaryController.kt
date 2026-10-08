@@ -27,6 +27,7 @@ import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.mechanical.ViewerStressStrainHelper
+import com.sempermechanics.semper.ui.viewer.summaryFitBounds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
