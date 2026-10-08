@@ -1,4 +1,5 @@
-// Home owns its row actions, refreshes and pickers as small private steps.
+// Home owns its row actions, refreshes and result launchers as small private
+// steps; the + flow (checks, source chooser, hand-off) is in HomeNewAnalysis.kt.
 @file:Suppress("TooManyFunctions")
 
 package com.sempermechanics.semper.ui.home
