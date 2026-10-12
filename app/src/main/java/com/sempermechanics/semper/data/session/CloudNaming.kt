@@ -36,10 +36,20 @@ object CloudNaming {
     }
 
     /**
-     * Labels for a list of backups, one per [specimens] entry (the reference's
-     * file name, which is all the backend lists): the name without its image
+     * What a listed backup is called before [backupNames] makes it unique: the
+     * analysis's [name] as `GET /v1/sessions` lists it, read as a restore reads
+     * it ([restoredName]), so the list shows the name the restored row will
+     * have. A backup made without one (an older app, or a backend from before
+     * TD-208) lists a blank name and goes by its [specimen].
+     */
+    fun listedName(name: String?, specimen: String?): String =
+        if (name.isNullOrBlank()) specimen.orEmpty() else restoredName(name, specimen)
+
+    /**
+     * Labels for a list of backups, one per [specimens] entry (each backup's
+     * [listedName], or the reference's file name): the name without its image
      * extension, made unique against [taken] (the names on the phone) and the
-     * labels before it, so no two read alike. A blank specimen stays blank for
+     * labels before it, so no two read alike. A blank entry stays blank for
      * the caller's own wording.
      */
     fun backupNames(specimens: List<String?>, taken: Collection<String>): List<String> {

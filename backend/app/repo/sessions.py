@@ -55,17 +55,37 @@ def metadata_file_id(sid: str) -> str:
     return f"{sid}_metadata_metadata.json"
 
 
-def replace_file_content(sid: str, file_id: str, size_bytes: int, sha256: str, drive_md5: str | None) -> None:
+#: The longest session name kept; `SessionCreate.name` allows the same.
+SESSION_NAME_MAX_CHARS = 200
+
+
+def session_name_of(metadata: dict) -> str:
+    """The analysis name a metadata.json carries, as a session doc keeps it:
+    `name` trimmed and cut to [SESSION_NAME_MAX_CHARS]. "" when it is absent,
+    blank or not a string, which leaves the stored name alone (TD-208)."""
+    name = metadata.get("name")
+    if not isinstance(name, str):
+        return ""
+    return name.strip()[:SESSION_NAME_MAX_CHARS]
+
+
+def replace_file_content(sid: str, file_id: str, size_bytes: int, sha256: str, drive_md5: str | None,
+                         name: str = "") -> None:
     """Record new bytes for a COMPLETED file (a re-sent metadata.json): its size
     and checksums, so the restore's size check and the bundle manifest match
-    what Drive now holds. The session's `updatedAt` moves with it."""
+    what Drive now holds. The session's `updatedAt` moves with it, and so does
+    its `name` when [name] is not blank: a rename after the backup reaches the
+    backup list (TD-208)."""
     db().collection("files").document(file_id).update({
         "sizeBytes": size_bytes,
         "sha256": sha256,
         "driveMd5": drive_md5,
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
     })
-    db().collection("sessions").document(sid).update({"updatedAt": _base.firestore.SERVER_TIMESTAMP})
+    session: dict = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
+    if name.strip():
+        session["name"] = name.strip()
+    db().collection("sessions").document(sid).update(session)
 
 
 def _session_file_docs(sid: str, page_size: int = _BATCH_LIMIT):
@@ -246,6 +266,9 @@ def _listed_session(doc_id: str, s: dict) -> dict:
         "sessionId": doc_id,
         "localSessionId": s.get("localSessionId") or "",
         "specimen": s.get("specimen"),
+        # The analysis's name (TD-208); "" for a session from an app that sent
+        # none, which the app then names from `specimen`.
+        "name": s.get("name") or "",
         "status": s.get("status"),
         "fileCount": s.get("fileCount", 0),
         "completedCount": s.get("completedCount", 0),
@@ -426,6 +449,7 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate,
         "app": app,
         "deviceId": device.get("deviceId"),
         "specimen": body.specimen,
+        "name": body.name.strip(),
         "localSessionId": body.localSessionId,
         # Reserved, but no upload targets yet. Provisioning moves it to
         # PROVISIONING → UPLOADING (or PROVISION_FAILED).

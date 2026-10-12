@@ -551,10 +551,25 @@ class DicUploadWorkerTest {
         val declared = api.created!!.files.associateBy { it.name }
         assertEquals(setOf("metadata.json", "Session.zip", "Extras.zip"), declared.keys)
         assertEquals(ID, api.created!!.localSessionId)
+        // The backup list shows the analysis's name, not the reference's file name (TD-208).
+        assertEquals("n", api.created!!.name)
+        assertEquals("ref.png", api.created!!.specimen)
         assertEquals(listOf("metadata", "bundle", "extras"), api.created!!.files.map { it.role })
         assertEquals("cs9", row().cloudSessionId)
         assertEquals(setOf("cs9"), api.completed.map { it.sessionId }.toSet())
         assertEquals(SessionRecord.SyncState.SYNCED, row().syncState)
+    }
+
+    @Test
+    fun `a long name is cut to what the backend takes, so the create is not refused`() {
+        val record = seed()
+        assertTrue(SessionStore.upsert(context, record.copy(name = "  " + "x".repeat(250)), allowOverLimit = true))
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs9", status = "UPLOADING") }
+        api.onSessionUploads = { uploading(it) }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        assertEquals("x".repeat(SessionCreateRequest.NAME_MAX_CHARS), api.created!!.name)
     }
 
     @Test

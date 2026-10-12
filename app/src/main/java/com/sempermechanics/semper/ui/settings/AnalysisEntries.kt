@@ -111,8 +111,9 @@ object AnalysisEntries {
             AnalysisEntry(record.name, record, match, hasLocalData = hasLocal(record))
         }
         val unmatched = cloud.filterNot { it.sessionId in matched }
-        // Named as their rows will be: no image extension, and no two alike.
-        val names = CloudNaming.backupNames(unmatched.map { it.specimen }, records.map { it.name })
+        // Named as their rows will be: the analysis's name (else the reference's), no image extension, no two alike.
+        val listed = unmatched.map { CloudNaming.listedName(it.name, it.specimen) }
+        val names = CloudNaming.backupNames(listed, records.map { it.name })
         val cloudOnly = unmatched.zip(names) { dto, name -> AnalysisEntry(name.ifBlank { dto.sessionId }, null, dto) }
         return onPhone + cloudOnly
     }
