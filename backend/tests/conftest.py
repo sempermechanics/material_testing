@@ -47,6 +47,21 @@ def audited(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def firestore_calls_carry_a_deadline():
+    """Fails a test whose app code reached the store double without a timeout.
+
+    Every Firestore round trip goes through a `repo/_base.py` helper that sets
+    `timeout` and `retry` (TD-197); a raw `.get()` / `.stream()` / write would
+    run on the client's 60 to 300 s defaults, past the gateway's 60 s.
+    """
+    fake_firestore.CALLS.clear()
+    fake_firestore.UNTIMED.clear()
+    yield
+    untimed = list(fake_firestore.UNTIMED)
+    assert not untimed, f"Firestore calls without a timeout (method, module, line): {untimed}"
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limits():
     """Token buckets are process-global singletons shared by every test.
 

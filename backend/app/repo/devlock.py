@@ -24,6 +24,8 @@ from ._base import (
     _mode_patch,
     _run_tx,
     _seat_ref,
+    _get,
+    _update_doc,
 )
 from .user_config import (
     effective_mode,
@@ -69,7 +71,7 @@ def _device_lock_state(user: dict, device_id: str,
     if not license_id:
         return _Lock.OK, None
     ref = db().collection("licenses").document(license_id)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         return _Lock.OK, None
     lic = snap.to_dict() or {}
@@ -78,7 +80,7 @@ def _device_lock_state(user: dict, device_id: str,
     if not _is_institution(lic):
         return _lock_verdict(lic.get(apps.field("deviceIdLock", app)), device_id, ref)
     seat_ref = _seat_ref(license_id, user.get("uid") or "")
-    seat_snap = seat_ref.get()
+    seat_snap = _get(seat_ref)
     if not seat_snap.exists:
         return _Lock.OK, None
     seat = seat_snap.to_dict() or {}
@@ -139,7 +141,7 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
 
     @_base.firestore.transactional
     def _bind(tx) -> bool:
-        snap = ref.get(transaction=tx)
+        snap = _get(ref, tx)
         if not snap.exists or ((snap.to_dict() or {}).get(lock) or ""):
             return False
         tx.update(ref, {lock: device_id})
@@ -149,7 +151,7 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
         bound = _run_tx(_bind, on_contended=lambda: None)
         if bound is not None:
             return bound
-        snap = ref.get()
+        snap = _get(ref)
         if not snap.exists or ((snap.to_dict() or {}).get(lock) or ""):
             # Another device bound it first. This one is a mismatch from its
             # next request onward, which revalidate_device_lock will act on.
@@ -270,7 +272,7 @@ def revalidate_device_lock(user: dict, device_id: str | None,
         return {**user, **_mode_patch(MODE_DEMO)}
     uid = user.get("uid")
     if uid:
-        db().collection("users").document(uid).update({
+        _update_doc(db().collection("users").document(uid), {
             **_mode_patch(MODE_DEMO),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
