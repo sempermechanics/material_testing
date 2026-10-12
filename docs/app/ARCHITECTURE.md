@@ -137,7 +137,10 @@ When cloud is configured (`SEMPER_API_BASE_URL`):
 `SemperApi.listSessions` **pages**: it follows `nextPageToken` until the backend
 stops returning one, so a deep refresh sees the whole account rather than the
 first page. Anything that lists cloud sessions should go through it rather than
-issuing a single request.
+issuing a single request. It lists this app's sessions (`X-App-Id`, ADR-014);
+`app = CloudApi.ALL_APPS` lists the whole account, which the reconcile asks
+only when a SYNCED row is missing from its own list, so a row restored from the
+other app's backup is not uploaded again (`CloudReconcile.list`).
 
 ### The interceptors on the shared client
 

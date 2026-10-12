@@ -341,7 +341,10 @@ Storage section shows.
 `CloudSync.reconcile(deep = …)` from Home pull-to-refresh and the limit screen →
 `SemperApi.listSessions` (paged, `verify=true` on a deep refresh) → C8. Repairs
 sync state, re-enqueues B1 for local-only rows, refreshes the quota in
-`AccountCache` / `AppRemoteConfig`.
+`AccountCache` / `AppRemoteConfig`. A SYNCED row missing from this app's list
+is repaired only after one `?app=all` listing shows no other app's backup of
+it either (`CloudReconcile.list`, ADR-014, TD-153); if that listing fails, no
+row is repaired that pass.
 
 **A Drive outage must not look like deleted data**: local metadata is dropped
 only when the backend *confirms* a blob is missing (`C8` returns `MISSING`, not
