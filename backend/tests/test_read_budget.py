@@ -64,8 +64,8 @@ class Meter:
         # count aggregation is one read per 1000 index entries, so one here.
         real_stream = fake_firestore._Query.stream
 
-        def stream(q):
-            rows = list(real_stream(q))
+        def stream(q, **kw):
+            rows = list(real_stream(q, **kw))
             m.by_kind["read:query"] += max(1, len(rows))
             m.reads += max(1, len(rows))
             return iter(rows)
@@ -226,9 +226,9 @@ def _gets_by_collection(monkeypatch) -> collections.Counter:
     seen: collections.Counter = collections.Counter()
     real = fake_firestore._DocRef.get
 
-    def get(ref, transaction=None):
+    def get(ref, transaction=None, **kw):
         seen[ref._collection] += 1
-        return real(ref, transaction=transaction)
+        return real(ref, transaction=transaction, **kw)
 
     monkeypatch.setattr(fake_firestore._DocRef, "get", get)
     return seen
@@ -262,9 +262,9 @@ def _queries_by_collection(monkeypatch) -> collections.Counter:
     seen: collections.Counter = collections.Counter()
     real = fake_firestore._Query.stream
 
-    def stream(q):
+    def stream(q, **kw):
         seen[q._collection] += 1
-        return real(q)
+        return real(q, **kw)
 
     monkeypatch.setattr(fake_firestore._Query, "stream", stream)
     return seen

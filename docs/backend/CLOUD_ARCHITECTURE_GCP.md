@@ -922,6 +922,47 @@ The shape it deploys into, and why:
 No mounted secrets. All identity comes from the attached SA + metadata server.
 HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 
+### 10.1 Firestore call deadlines
+
+The JSON routes' gateway deadline is 60 s
+([`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml), top-level
+`deadline`). The Firestore client's own defaults are longer: 60 s for a get or
+a write and 300 s for a query or `get_all`, and its retry starts over on
+`DEADLINE_EXCEEDED`. So until TD-197 was closed, a hung call kept a threadpool
+thread busy for minutes after the gateway had answered 504.
+
+Every Firestore call in `backend/app` now goes through a helper in
+[`repo/_base.py`](../../backend/app/repo/_base.py) (`_get`, `_stream`,
+`_count`, `_get_all`, `_commit`, `_set_doc`, `_create_doc`, `_update_doc`,
+`_delete_doc`, `_add_doc`). Each helper passes a `timeout` and a matching
+`retry`:
+
+| Kind | Timeout | Retried on | Worst case |
+|---|---|---|---|
+| Document get, also inside a transaction | 10 s | `INTERNAL`, `UNAVAILABLE` | ~20 s |
+| Query, `.count()`, `get_all` | 20 s | `INTERNAL`, `UNAVAILABLE` | ~40 s |
+| Write: set, create, update, delete, batch commit, audit `add` | 10 s | `RESOURCE_EXHAUSTED`, `UNAVAILABLE` (commit's own predicate) | ~20 s |
+
+- **The retry window equals the timeout.** The retry does not start a sleep
+  that would cross the window. api-core gives an attempt that starts with less
+  than a second left the full timeout again, so the worst case is about twice
+  the value. That is still under 60 s.
+- **`DEADLINE_EXCEEDED` is not retried.** An attempt that used up its time
+  ends the call. The route then answers 500, as it does for any other
+  Firestore error it does not handle (`readyz` answers 503
+  `firestore_unreachable`).
+- **`_stream` returns a list.** The deadline covers the whole server stream,
+  so the helper reads the stream to the end before the caller writes anything.
+- **Not covered.** A transaction's begin and commit take no timeout in the
+  client's public API (google-cloud-firestore 2.32), so they keep the 60 s
+  default. The reads inside a transaction are covered.
+
+`tests/test_firestore_timeouts.py` fails on a raw `.get()`, `.stream()`,
+`get_all`, `.commit()` or document write anywhere in `backend/app` outside
+those helpers. It also checks that the values reach the client. The
+`firestore_calls_carry_a_deadline` fixture in `tests/conftest.py` fails any
+test whose app code reaches the store double without a timeout.
+
 ---
 
 ## 11. Application Default Credentials (ADC)

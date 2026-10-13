@@ -23,6 +23,8 @@ from ._base import (
     _run_tx,
     _seat_lease_counted,
     _seat_ref,
+    _get,
+    _stream,
 )
 from .user_config import (
     resolve_user_config,
@@ -61,11 +63,10 @@ def _sweep_expired_leases(lic_ref, now) -> int:
     reclaimed in its own transaction that re-reads it, so only the first
     sweeper to reach a seat counts it.
     """
-    expired = list(
+    expired = _stream(
         lic_ref.collection("seats")
         .where("leaseExpiresAt", "<=", now)
         .limit(_LEASE_SWEEP_LIMIT)
-        .stream()
     )
     reclaimed = sum(1 for doc in expired if _reclaim_expired_lease(lic_ref, doc.reference, now))
     if reclaimed:
@@ -84,8 +85,8 @@ def _reclaim_expired_lease(lic_ref, seat_ref, now) -> bool:
     """
     @_base.firestore.transactional
     def _reclaim(tx) -> bool:
-        lic_snap = lic_ref.get(transaction=tx)
-        seat_snap = seat_ref.get(transaction=tx)
+        lic_snap = _get(lic_ref, tx)
+        seat_snap = _get(seat_ref, tx)
         if not seat_snap.exists:
             return False
         ends = as_utc((seat_snap.to_dict() or {}).get("leaseExpiresAt"))
@@ -142,8 +143,8 @@ def checkout_lease(user: dict, device_id: str) -> dict:
 
     @_base.firestore.transactional
     def _checkout(tx) -> str:
-        lic_snap = lic_ref.get(transaction=tx)
-        seat_snap = seat_ref.get(transaction=tx)
+        lic_snap = _get(lic_ref, tx)
+        seat_snap = _get(seat_ref, tx)
         if not seat_snap.exists:
             # Not on the roster. Institution IT adds members; there is no
             # self-service path onto a floating license.
@@ -202,7 +203,7 @@ def release_lease(user: dict) -> dict:
 
     @_base.firestore.transactional
     def _release(tx) -> str:
-        seat_snap = seat_ref.get(transaction=tx)
+        seat_snap = _get(seat_ref, tx)
         if not seat_snap.exists:
             return errors.NOT_ELIGIBLE
         held = _seat_lease_counted(seat_snap.to_dict() or {})
@@ -226,7 +227,7 @@ def release_lease(user: dict) -> dict:
     # it. Answer from the current state rather than reporting failure.
     err = _run_tx(
         _release,
-        on_contended=lambda: "" if seat_ref.get().exists else errors.NOT_ELIGIBLE,
+        on_contended=lambda: "" if _get(seat_ref).exists else errors.NOT_ELIGIBLE,
     )
     if err:
         raise Refusal(err)

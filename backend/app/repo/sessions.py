@@ -17,6 +17,13 @@ from ._base import (
     _delete_query_until_empty,
     _run_tx,
     SCHEMA_VERSION,
+    _get,
+    _stream,
+    _count,
+    _commit,
+    _set_doc,
+    _update_doc,
+    _delete_doc,
 )
 
 
@@ -35,17 +42,17 @@ def delete_session(sid: str) -> int:
     file_count = _delete_query_until_empty(
         db().collection("files").where("sessionId", "==", sid)
     )
-    db().collection("sessions").document(sid).delete()
+    _delete_doc(db().collection("sessions").document(sid))
     return file_count
 
 
 def get_session(sid: str):
-    snap = db().collection("sessions").document(sid).get()
+    snap = _get(db().collection("sessions").document(sid))
     return {**snap.to_dict(), "sessionId": sid} if snap.exists else None
 
 
 def get_file(file_id: str):
-    snap = db().collection("files").document(file_id).get()
+    snap = _get(db().collection("files").document(file_id))
     return {**snap.to_dict(), "fileId": file_id} if snap.exists else None
 
 
@@ -76,7 +83,7 @@ def replace_file_content(sid: str, file_id: str, size_bytes: int, sha256: str, d
     what Drive now holds. The session's `updatedAt` moves with it, and so does
     its `name` when [name] is not blank: a rename after the backup reaches the
     backup list (TD-208)."""
-    db().collection("files").document(file_id).update({
+    _update_doc(db().collection("files").document(file_id), {
         "sizeBytes": size_bytes,
         "sha256": sha256,
         "driveMd5": drive_md5,
@@ -85,7 +92,7 @@ def replace_file_content(sid: str, file_id: str, size_bytes: int, sha256: str, d
     session: dict = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
     if name.strip():
         session["name"] = name.strip()
-    db().collection("sessions").document(sid).update(session)
+    _update_doc(db().collection("sessions").document(sid), session)
 
 
 def _session_file_docs(sid: str, page_size: int = _BATCH_LIMIT):
@@ -200,15 +207,15 @@ def set_session_status(sid: str, status: str, error_code: str | None = None) -> 
 
     @_base.firestore.transactional
     def _set(tx) -> None:
-        if _open(ref.get(transaction=tx)):
+        if _open(_get(ref, tx)):
             tx.update(ref, patch)
 
     def _guarded_write() -> None:
         # Losing every attempt means files are completing right now. A plain
         # guarded write still beats leaving the status unwritten.
-        if _open(ref.get()):
+        if _open(_get(ref)):
             try:
-                ref.update(patch)
+                _update_doc(ref, patch)
             except NotFound:
                 pass
 
@@ -220,7 +227,7 @@ def set_new_session_status(sid: str, status: str) -> None:
     write: its upload targets have not left the request yet, so nothing can
     have completed, and the guard's read would be paid on every analysis."""
     try:
-        db().collection("sessions").document(sid).update(_status_patch(status, None))
+        _update_doc(db().collection("sessions").document(sid), _status_patch(status, None))
     except NotFound:
         pass
 
@@ -376,7 +383,7 @@ def list_session_artifacts(sid: str, *, page_size: int = 200) -> list:
 
 def iter_user_sessions(uid: str):
     """Stream every session for destructive Drive cleanup without a silent cap."""
-    for d in db().collection("sessions").where("uid", "==", uid).stream():
+    for d in _stream(db().collection("sessions").where("uid", "==", uid)):
         s = d.to_dict()
         yield {
             "sessionId": d.id,
@@ -400,8 +407,8 @@ def count_user_sessions(uid: str) -> int:
     session tagged with either app counts, though each app lists only its own.
     """
     sessions = db().collection("sessions").where("uid", "==", uid)
-    total = int(sessions.count().get()[0][0].value)
-    failed = sessions.where("status", "==", statuses.SESSION_PROVISION_FAILED).count().get()
+    total = int(_count(sessions.count())[0][0].value)
+    failed = _count(sessions.where("status", "==", statuses.SESSION_PROVISION_FAILED).count())
     return max(0, total - int(failed[0][0].value))
 
 
@@ -427,7 +434,7 @@ def find_incomplete_session(uid: str, local_session_id: str):
         .where("status", "in", list(statuses.IN_FLIGHT_SESSION_STATUSES))
         .limit(1)
     )
-    for d in q.stream():
+    for d in _stream(q):
         return {**d.to_dict(), "sessionId": d.id}
     return None
 
@@ -463,14 +470,15 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate,
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         "schemaVersion": SCHEMA_VERSION,
     }
-    db().collection("sessions").document(sid).set(doc)
+    _set_doc(db().collection("sessions").document(sid), doc)
     return {**doc, "sessionId": sid}
 
 
 def set_session_folder(sid: str, folder_id: str):
     """Record the session's Drive folder id once it has been created."""
-    db().collection("sessions").document(sid).update(
-        {"driveFolderId": folder_id, "updatedAt": _base.firestore.SERVER_TIMESTAMP}
+    _update_doc(
+        db().collection("sessions").document(sid),
+        {"driveFolderId": folder_id, "updatedAt": _base.firestore.SERVER_TIMESTAMP},
     )
 
 
@@ -504,7 +512,7 @@ def create_files_batch(sid: str, uid: str, files: list[tuple[str, FileSpec]]) ->
         batch = db().batch()
         for file_id, f in files[start:start + _BATCH_LIMIT]:
             batch.set(db().collection("files").document(file_id), _file_doc(sid, uid, f, None))
-        batch.commit()
+        _commit(batch)
 
 
 class Completion(StrEnum):
@@ -528,7 +536,7 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> Completion:
 
     @_base.firestore.transactional
     def _complete(tx):
-        snap = ref.get(transaction=tx)
+        snap = _get(ref, tx)
         if not snap.exists:
             return Completion.REJECTED
         d = snap.to_dict()
@@ -553,7 +561,7 @@ def complete_file(file_id: str, uid: str, body: FileComplete) -> Completion:
         # idempotent case the transaction exists to produce — re-read and answer
         # it precisely rather than 500ing on the loser. ALREADY is important:
         # it stops the caller bumping the session counter a second time.
-        snap = ref.get()
+        snap = _get(ref)
         current = snap.to_dict() if snap.exists else None
         if (current and current.get("uid") == uid
                 and current.get("status") == statuses.FILE_COMPLETED):
@@ -586,7 +594,7 @@ def bump_session_progress(sid: str):
     """
     ref = db().collection("sessions").document(sid)
     try:
-        ref.update({
+        _update_doc(ref, {
             "completedCount": _base.firestore.Increment(1),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
@@ -598,12 +606,12 @@ def bump_session_progress(sid: str):
     # to observe it here. The flip is monotone and idempotent: a caller that
     # reads a lower count simply does nothing, and the one that completes the
     # set finishes the job.
-    after = ref.get().to_dict() or {}
+    after = _get(ref).to_dict() or {}
     if (
         int(after.get("completedCount", 0)) >= int(after.get("fileCount", 0))
         and after.get("status") != statuses.SESSION_COMPLETED
     ):
-        ref.update({
+        _update_doc(ref, {
             "status": statuses.SESSION_COMPLETED,
             "completedAt": _base.firestore.SERVER_TIMESTAMP,
         })

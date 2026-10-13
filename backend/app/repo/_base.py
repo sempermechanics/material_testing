@@ -7,7 +7,13 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, TypeVar
 
-from google.api_core.exceptions import Aborted
+from google.api_core import retry as retries
+from google.api_core.exceptions import (
+    Aborted,
+    InternalServerError,
+    ResourceExhausted,
+    ServiceUnavailable,
+)
 from google.cloud import firestore
 
 from .. import errors
@@ -42,6 +48,96 @@ _TX_ATTEMPTS = 10
 
 # Firestore caps a write batch at 500 operations.
 _BATCH_LIMIT = 400
+
+# ---------------- per-call deadlines (TD-197) ----------------
+# Without these the client's GAPIC defaults apply: 60 s for a get or a write,
+# 300 s for a query or `get_all`, and the retry keeps going on
+# DEADLINE_EXCEEDED. The JSON routes' gateway deadline is 60 s
+# (`backend/gateway/openapi.yaml`), so a hung call held a threadpool thread for
+# minutes after the client had gone. Every Firestore call in the app goes
+# through the helpers below; `tests/test_firestore_timeouts.py` pins that.
+#
+# Each call gets an attempt timeout and a retry window of the same length. The
+# retry stops before a sleep that would cross the window, and api-core gives an
+# attempt that starts with under a second left the full timeout again, so the
+# worst case is about twice the value: 20 s for a get or a write, 40 s for a
+# query, still under the gateway's 60 s.
+#: One document read (`_get`), in a transaction or not.
+_GET_TIMEOUT_S = 10.0
+#: A query, a `.count()` or a `get_all` of up to `_BATCH_LIMIT` documents.
+_QUERY_TIMEOUT_S = 20.0
+#: One write or one batch commit.
+_WRITE_TIMEOUT_S = 10.0
+
+# The GAPIC predicates, minus DEADLINE_EXCEEDED: an attempt that used up its
+# timeout ends the call instead of starting another. Writes keep commit's own
+# predicate (RESOURCE_EXHAUSTED, UNAVAILABLE), so nothing is retried that the
+# client would not already retry.
+_READ_RETRY = retries.Retry(
+    predicate=retries.if_exception_type(InternalServerError, ServiceUnavailable),
+    initial=0.1, maximum=2.0, multiplier=1.3, timeout=_GET_TIMEOUT_S,
+)
+_QUERY_RETRY = retries.Retry(
+    predicate=retries.if_exception_type(InternalServerError, ServiceUnavailable),
+    initial=0.1, maximum=2.0, multiplier=1.3, timeout=_QUERY_TIMEOUT_S,
+)
+_WRITE_RETRY = retries.Retry(
+    predicate=retries.if_exception_type(ResourceExhausted, ServiceUnavailable),
+    initial=0.1, maximum=2.0, multiplier=1.3, timeout=_WRITE_TIMEOUT_S,
+)
+
+
+def _get(ref, transaction=None):
+    """`ref.get()` under the read deadline, inside `transaction` when given.
+
+    A transaction's own begin and commit take no timeout in the client's
+    public API; they keep its 60 s default.
+    """
+    return ref.get(transaction=transaction, retry=_READ_RETRY, timeout=_GET_TIMEOUT_S)
+
+
+def _stream(query) -> list:
+    """Every snapshot [query] answers, read to the end under the query deadline.
+
+    Returns a list, not the stream: the deadline covers the whole server
+    stream, so a caller that wrote between documents could run it out.
+    """
+    return list(query.stream(retry=_QUERY_RETRY, timeout=_QUERY_TIMEOUT_S))
+
+
+def _count(aggregation):
+    """`aggregation.get()` (a `.count()` query) under the query deadline."""
+    return aggregation.get(retry=_QUERY_RETRY, timeout=_QUERY_TIMEOUT_S)
+
+
+def _commit(batch):
+    """`batch.commit()` under the write deadline."""
+    return batch.commit(retry=_WRITE_RETRY, timeout=_WRITE_TIMEOUT_S)
+
+
+def _set_doc(ref, data: dict):
+    """`ref.set(data)` under the write deadline."""
+    return ref.set(data, retry=_WRITE_RETRY, timeout=_WRITE_TIMEOUT_S)
+
+
+def _create_doc(ref, data: dict):
+    """`ref.create(data)` under the write deadline. Raises AlreadyExists."""
+    return ref.create(data, retry=_WRITE_RETRY, timeout=_WRITE_TIMEOUT_S)
+
+
+def _update_doc(ref, patch: dict):
+    """`ref.update(patch)` under the write deadline. Raises NotFound."""
+    return ref.update(patch, retry=_WRITE_RETRY, timeout=_WRITE_TIMEOUT_S)
+
+
+def _delete_doc(ref):
+    """`ref.delete()` under the write deadline."""
+    return ref.delete(retry=_WRITE_RETRY, timeout=_WRITE_TIMEOUT_S)
+
+
+def _add_doc(col, data: dict):
+    """`col.add(data)` (a new document, generated id) under the write deadline."""
+    return col.add(data, retry=_WRITE_RETRY, timeout=_WRITE_TIMEOUT_S)
 
 
 def _lost_to_contention(exc: BaseException) -> bool:
@@ -106,7 +202,7 @@ def ping() -> None:
         # A missing document is still a successful round-trip.
         # Doc ids matching __.*__ are reserved by Firestore and raise locally
         # (misreported as unreachable); use a plain probe id.
-        db().collection("users").document("readyz_ping").get()
+        _get(db().collection("users").document("readyz_ping"))
     except Exception as e:  # noqa: BLE001
         log.exception("firestore ping failed: %s", e)
         raise DependencyError(errors.FIRESTORE_UNREACHABLE, "firestore") from e
@@ -117,7 +213,7 @@ def _now():
 
 
 def _load_user(uid: str):
-    snap = db().collection("users").document(uid).get()
+    snap = _get(db().collection("users").document(uid))
     if not snap.exists:
         return None
     return {**snap.to_dict(), "uid": uid}
@@ -213,7 +309,7 @@ def _license_past_grace(lic: dict) -> bool:
 
 
 def get_license(license_id: str) -> dict | None:
-    snap = db().collection("licenses").document(license_id).get()
+    snap = _get(db().collection("licenses").document(license_id))
     return snap.to_dict() if snap.exists else None
 
 
@@ -221,7 +317,7 @@ def _delete_query_until_empty(query) -> int:
     """Delete a query result in bounded batches, repeating until empty."""
     deleted = 0
     while True:
-        docs = list(query.limit(_BATCH_LIMIT).stream())
+        docs = _stream(query.limit(_BATCH_LIMIT))
         if not docs:
             return deleted
         _delete_refs([doc.reference for doc in docs])
@@ -234,7 +330,7 @@ def _delete_refs(refs: list) -> None:
         batch = db().batch()
         for ref in refs[start:start + _BATCH_LIMIT]:
             batch.delete(ref)
-        batch.commit()
+        _commit(batch)
 
 
 def _update_refs(updates: list) -> None:
@@ -248,18 +344,21 @@ def _update_refs(updates: list) -> None:
         batch = db().batch()
         for ref, patch in updates[start:start + _BATCH_LIMIT]:
             batch.update(ref, patch)
-        batch.commit()
+        _commit(batch)
 
 
 def _get_all(refs: list) -> list:
-    """Snapshots for every reference, in `_BATCH_LIMIT` chunks, one call each.
+    """Snapshots for every reference, in `_BATCH_LIMIT` chunks, one call each,
+    each under the query deadline.
 
     `get_all` answers in no particular order, so callers key the result by
     `snap.id` or `snap.reference`, never by position.
     """
     out = []
     for start in range(0, len(refs), _BATCH_LIMIT):
-        out.extend(db().get_all(refs[start:start + _BATCH_LIMIT]))
+        out.extend(db().get_all(
+            refs[start:start + _BATCH_LIMIT], retry=_QUERY_RETRY, timeout=_QUERY_TIMEOUT_S,
+        ))
     return out
 
 
@@ -272,14 +371,14 @@ def _scan(col, query, page_token: str | None = None, chunk: int = _BATCH_LIMIT,
     query = query.order_by(order_field)
     cursor = None
     if page_token:
-        snap = col.document(page_token).get()
+        snap = _get(col.document(page_token))
         if snap.exists:
             cursor = snap
     while True:
         page = query.limit(chunk)
         if cursor is not None:
             page = page.start_after(cursor)
-        docs = list(page.stream())
+        docs = _stream(page)
         yield from docs
         if len(docs) < chunk:
             return
@@ -306,10 +405,10 @@ def _cursor_page(col, query, limit: int, page_token: str | None,
         )
     query = query.limit(limit + 1)
     if page_token:
-        cursor = col.document(page_token).get()
+        cursor = _get(col.document(page_token))
         if cursor.exists:
             query = query.start_after(cursor)
-    docs = list(query.stream())
+    docs = _stream(query)
     if len(docs) > limit:
         docs = docs[:limit]
         return docs, docs[-1].id
