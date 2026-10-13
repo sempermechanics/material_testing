@@ -412,7 +412,7 @@ def test_the_mode_and_the_release_land_together(store, monkeypatch):
     _registered_on(store, "solo-1")
     _stored_demotion(store)
 
-    def _fail(self):
+    def _fail(self, **_kw):
         raise RuntimeError("commit failed")
 
     monkeypatch.setattr(fake_firestore._Batch, "commit", _fail)

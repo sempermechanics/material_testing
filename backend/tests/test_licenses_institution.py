@@ -409,10 +409,10 @@ async def test_roster_routes_read_one_seat_not_the_roster(client, monkeypatch, a
     streams, gets = [], []
     real_stream, real_get = fake_firestore._Query.stream, fake_firestore._DocRef.get
     monkeypatch.setattr(fake_firestore._Query, "stream",
-                        lambda q: streams.append(q._collection) or real_stream(q))
+                        lambda q, **kw: streams.append(q._collection) or real_stream(q, **kw))
     monkeypatch.setattr(fake_firestore._DocRef, "get",
-                        lambda ref, transaction=None: gets.append(ref._collection)
-                        or real_get(ref, transaction=transaction))
+                        lambda ref, transaction=None, **kw: gets.append(ref._collection)
+                        or real_get(ref, transaction=transaction, **kw))
     seats = f"licenses/{license_id}/seats"
 
     added = await client.post(f"{base}/seats", json={"email": "a@university.edu"})

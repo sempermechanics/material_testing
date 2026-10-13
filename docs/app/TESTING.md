@@ -69,6 +69,19 @@ hand-rolled copies (#315, #330).
 | `MockWebServerRule` | OkHttp's `mockwebserver3.junit4` | Starting and closing a `MockWebServer` per test; do not start one by hand |
 | `WizardTestBed`, `FakeWizardHost` | `ui/analysis/WizardTestBed.kt` | The wizard's parts one at a time: its views in a plain themed Activity, a fresh `AnalysisViewModel`, and a host that counts what each part asks of it. Pass `resumed = false` for a part that registers a result launcher |
 
+## Swapping a dispatcher
+
+A class whose background work a test must hold or run inline takes the
+dispatcher as a constructor parameter defaulting to `Dispatchers.IO` (the
+wizard parts, e.g. `ReferenceImportController`; `MediaPickerSheet.show`); a
+view model takes it the same way and is built through a `viewModelFactory`
+(`SaveExportViewModel.factory`). An Activity or Fragment, which the system
+constructs, keeps it in a per-instance `@VisibleForTesting internal var` that
+the test sets on `controller.get()` before `setup()`
+(`ResultViewerActivity.frameSetDispatcher`, `SaveExportActivity.copyDispatcher`).
+Never a companion or top-level `var`: it is process-global, so a test that
+fails before restoring it leaks its dispatcher into every later test in the JVM.
+
 ## Running by chunk
 
 ```bash

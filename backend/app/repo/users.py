@@ -19,6 +19,12 @@ from ._base import (
     db,
     _load_user,
     SCHEMA_VERSION,
+    _get,
+    _stream,
+    _commit,
+    _set_doc,
+    _create_doc,
+    _update_doc,
 )
 from .devices import (
     _release_devices,
@@ -84,17 +90,17 @@ def _emails_conflict(left, right) -> bool:
 
 
 def _link_auth_uid(canonical_uid: str, firebase_sub: str) -> None:
-    db().collection("auth_links").document(firebase_sub).set({"uid": canonical_uid})
+    _set_doc(db().collection("auth_links").document(firebase_sub), {"uid": canonical_uid})
     if firebase_sub == canonical_uid:
         return
     ref = db().collection("users").document(canonical_uid)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         return
     linked = list((snap.to_dict() or {}).get("linkedAuthUids") or [])
     if firebase_sub not in linked:
         linked.append(firebase_sub)
-        ref.update({"linkedAuthUids": linked})
+        _update_doc(ref, {"linkedAuthUids": linked})
 
 
 def _user_for_device(device_id: str | None):
@@ -110,7 +116,7 @@ def _user_for_device(device_id: str | None):
         .where("claimedDeviceId", "==", device_id)
         .limit(1)
     )
-    for snap in query.stream():
+    for snap in _stream(query):
         return {**snap.to_dict(), "uid": snap.id}
     return None
 
@@ -163,18 +169,18 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
         return ensure_entitlement({**cur, "uid": uid}, device_id)
 
     patch = {**changed, "lastSeenAt": _base.firestore.SERVER_TIMESTAMP}
-    ref.update(patch)
+    _update_doc(ref, patch)
     return ensure_entitlement({**cur, **patch, "uid": uid}, device_id)
 
 
 def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
     uid = claims["sub"]
     ref = db().collection("users").document(uid)
-    snap = ref.get()
+    snap = _get(ref)
     if snap.exists:
         return _touch_existing({**snap.to_dict(), "uid": uid}, claims, device_id)
 
-    link = db().collection("auth_links").document(uid).get()
+    link = _get(db().collection("auth_links").document(uid))
     if link.exists:
         canonical = (link.to_dict() or {}).get("uid")
         existing = _load_user(canonical) if canonical else None
@@ -214,7 +220,7 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
         # here (the app fires /v1/me and /v1/config back to back on launch),
         # and an unconditional set let the loser overwrite the winner — resetting
         # an already-approved profile to PENDING and mailing support twice.
-        ref.create(data)
+        _create_doc(ref, data)
     except AlreadyExists:
         existing = _load_user(uid)
         if existing:
@@ -274,7 +280,7 @@ def release_account_device(uid: str) -> dict[str, str]:
     both apps are on the phone they are changing.
     """
     user_ref = db().collection("users").document(uid)
-    snap = user_ref.get()
+    snap = _get(user_ref)
     if not snap.exists:
         raise Refusal(errors.USER_NOT_FOUND)
     user = snap.to_dict() or {}
@@ -298,14 +304,14 @@ def set_user_status(uid: str, status: str) -> bool:
     account. Revocation should mean the same thing at both layers.
     """
     ref = db().collection("users").document(uid)
-    if not ref.get().exists:
+    if not _get(ref).exists:
         return False
     batch = db().batch()
     batch.update(ref, {"access_status": status, "updatedAt": _base.firestore.SERVER_TIMESTAMP})
     if status != statuses.ACCESS_APPROVED:
         batch.update(ref, {apps.field("activeDeviceId", app): _base.firestore.DELETE_FIELD
                            for app in apps.ALL})
-        for dev in db().collection("devices").where("uid", "==", uid).stream():
+        for dev in _stream(db().collection("devices").where("uid", "==", uid)):
             _retire_device(batch, dev.reference, statuses.DEVICE_REVOKED)
-    batch.commit()
+    _commit(batch)
     return True
