@@ -134,6 +134,17 @@ When cloud is configured (`SEMPER_API_BASE_URL`):
 | Bundle download | `DicBundleDownloadWorker` | Write a session `.zip` into a SAF document the user picked **before** enqueue. Falls back to packing the local session when the cloud copy is unavailable, and deletes the empty destination on failure |
 | Delete queue | `SessionDeletes` / `BackupDeleteWorker` | Every delete that touches the cloud: one unique chain, a 5-second undo window, one analysis at a time, 429s waited out. Phone-only deletes stay inline (`CloudSync.eraseLocalOnly`). `ui/common/transfer/DeleteFeedback` reports progress and the outcome on Home and Settings |
 
+A backup's `Session.zip` holds what a restore needs: since `metadata.json`
+schema `/4` the reference as `ref/Reference.png` (`SessionZip.REFERENCE_ENTRY`),
+the frames under `raw/` by their own names, and `dat/`; `Extras.zip` holds the
+regenerable rest. `RestoreUnpacker.destFor` still reads an older backup's
+`raw/Reference.png` as the reference when the archive has no `ref/` entry. The
+layouts by schema, and what an older app makes of a `/4` backup, are in
+[CLOUD_ARCHITECTURE_GCP.md §4](../backend/CLOUD_ARCHITECTURE_GCP.md#4-upload-sequence-5-gb-resumable-keyless).
+A skipped sweep node's `code` is null when the backup predates codes
+(`SkippedNode`); it then reads "This combination was skipped" rather than a
+strain-window failure.
+
 `SemperApi.listSessions` **pages**: it follows `nextPageToken` until the backend
 stops returning one, so a deep refresh sees the whole account rather than the
 first page. Anything that lists cloud sessions should go through it rather than
@@ -335,7 +346,7 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 | Change the analysis wizard UI | `StaticAnalysisActivity.goToStep(WizardStep)` → `AnalysisWizardChrome.applyStep`; slot chrome / coach in `AnalysisWizardSlots` / `AnalysisWizardCoach`; later steps inflate through ViewStubs; each step's controllers sit in `ui/analysis/frames`, `roi`, `recommend`, `run`, `sweep` |
 | Change the full-field batch loop | `BatchAnalysis` + `DicFieldIo` (shared with the sweep). Do not split `computeFullFieldDirect` out of that loop |
 | Change Home list / settings | `ui/home/HomeActivity.kt` + `Session*`, `HomeQuotaCard`, `HomeTransferWatch` / `ui/settings/SettingsActivity` + `Settings*Section` |
-| Change import / video extraction | `FrameImportController` / `ReferenceImportController` → `FrameImportHelper`, `VideoSamplingSheet`, `VideoFrameExtractor` (three rungs: `AviVideoDecoder` → `HardwareVideoDecoder` → `MediaMetadataRetriever`; all write through `FrameSink`). Fixed-interval instants are `VideoKeyframeHelper.uniformTimestampsUs` for the sheet's estimate and every rung, over a segment the sheet caps at `lastFrameStartMs` |
+| Change import / video extraction | `FrameImportController` / `ReferenceImportController` → `FrameImportHelper`, `VideoSamplingSheet`, `VideoFrameExtractor` (three rungs: `AviVideoDecoder` → `HardwareVideoDecoder` → `MediaMetadataRetriever`; all write through `FrameSink`). Fixed-interval instants are `VideoKeyframeHelper.uniformTimestampsUs` for the sheet's estimate and every rung, over a segment the sheet caps at `lastFrameStartMs`. Every rung plans through `VideoKeyframeHelper.planFor`: Keyframes mode takes the clip's sync frames when it has two or more in the segment (hardware: its `MediaExtractor`; AVI: the `idx1` flags via `aviFramePlan`, none for an index-less or all-intra file; retriever: `findKeyframeTimestampsUs(context, uri, …)`), else the uniform instants, logged as a fallback. A frame's clip time is its decoder's own (`DecodedFrame.ptsUs`) on the hardware and AVI rungs, the requested time on the retriever |
 | Change AVI support | `imaging/AviReader` (demuxer), `imaging/AviLuma` (uncompressed layouts), `imaging/MjpegHuffman` (table repair), `AviCodecDecoder` (`MediaCodec` for Xvid/H.264) |
 | Change parameter-sweep setup UI | `SweepSetupController` + `SweepRangeFields` / `SweepFramePicker`; the run is `SweepAnalysis.runSweep` → `SweepStudyRunner` |
 | Change the sweep result lattice | `ui/analysis/VsgLatticeActivity.kt` + `SweepControls` / `SweepProfiles` / `SweepGraphExport`, `SweepLatticeView`, `SweepPlotView` |

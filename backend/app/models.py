@@ -11,7 +11,9 @@ from .config import settings
 from .validation import DeviceId, DocumentId, SessionId
 
 # "bundle" = Session.zip, holding only what a restore needs to rebuild a working
-# session: raw/ (reference + deformed originals) and dat/ (engine results).
+# session: ref/ (the reference; raw/Reference.png before metadata schema /4),
+# raw/ (deformed originals) and dat/ (engine results). The backend never reads
+# inside it, so "ref" is an archive folder, not a Role.
 # "extras" = Extras.zip, holding the derived deliverables — csv/, reports/,
 # processed/. Nothing in the app reads those back after a restore (they are
 # regenerated on export), so keeping them out of the bundle is what lets a restore

@@ -81,7 +81,7 @@ internal object SessionRowText {
      */
     private fun size(context: Context, r: SessionRecord): String {
         val frames = when {
-            r.isSweep -> (r.sweepSteps.size + r.sweepSkipSubsets.size).let { planned ->
+            r.isSweep -> (r.sweepSteps.size + r.sweepSkipCount).let { planned ->
                 val solved = r.sweepSteps.size
                 context.resources.getQuantityString(R.plurals.session_sweep_row_fmt, planned, solved, planned)
             }

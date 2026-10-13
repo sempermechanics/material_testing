@@ -197,7 +197,7 @@ class CloudRestorePipelineTest {
 
         val row = SessionStore.get(context, LOCAL_ID)
         assertEquals(listOf(41, 51), row?.sweepSkippedNodes?.map { it.subset })
-        assertEquals(listOf(0, 0), row?.sweepSkippedNodes?.map { it.code })
+        assertEquals(listOf(null, null), row?.sweepSkippedNodes?.map { it.code })
     }
 
     @Test

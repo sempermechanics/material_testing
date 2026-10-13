@@ -52,8 +52,9 @@ data class DicParams(val subset: Int, val step: Int, val strainWindow: Int) {
 
         /**
          * `ViewerArgs.DEFAULT_STRAIN_WINDOW` and `CloudRestore`'s fallback, in px.
-         * The wizard's own default is now 5 points at step 5, a 21 px VSG; this
-         * value predates it and is kept so readers stay unchanged.
+         * A record with no saved strain window is read as 15 px on purpose: that
+         * was the default it ran with. New analyses default to 5 points at step 5,
+         * a 21 px VSG (`SweepStudy`, `WizardParamFields`), and always save it.
          */
         const val DEFAULT_STRAIN_WINDOW = 15
 
