@@ -7,12 +7,15 @@ import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.MainThread
+import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.os.BundleCompat
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.util.Mime
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -23,7 +26,14 @@ import java.io.File
 @MainThread
 class SaveExportActivity : AppCompatActivity() {
 
-    private val viewModel: SaveExportViewModel by viewModels()
+    /**
+     * Where the copy runs, read when the view model is first built. A test sets
+     * it before [onCreate] to hold the copy and rotate mid-copy.
+     */
+    @VisibleForTesting
+    internal var copyDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+    private val viewModel: SaveExportViewModel by viewModels { SaveExportViewModel.factory(copyDispatcher) }
 
     private var pendingFile: File? = null
 
