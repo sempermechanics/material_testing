@@ -127,10 +127,10 @@ def _count_user_writes(monkeypatch):
     written = []
     real = fake_firestore._DocRef.update
 
-    def update(ref, patch):
+    def update(ref, patch, **kw):
         if ref._collection == "users":
             written.append(ref.id)
-        return real(ref, patch)
+        return real(ref, patch, **kw)
 
     monkeypatch.setattr(fake_firestore._DocRef, "update", update)
     return written

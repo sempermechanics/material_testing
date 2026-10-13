@@ -17,6 +17,7 @@ import com.sempermechanics.semper.ui.analysis.run.BatchRun
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
 import com.sempermechanics.semper.ui.analysis.run.saveRunRecord
+import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
@@ -71,7 +72,8 @@ class BatchAnalysisLimitTest {
 
     private fun run(): BatchAnalysisOutcome {
         val progress = mutableListOf<BatchProgressUpdate>()
-        val outcome = vm.runBatchAnalysisBody(ctx, BatchRun(spec, ctx.cacheDir, 0L, Job())) { progress += it }
+        val run = BatchRun(spec, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
+        val outcome = vm.runBatchAnalysisBody(ctx, run) { progress += it }
         assertTrue("a blocked run reports no progress", progress.isEmpty())
         return outcome
     }
@@ -85,6 +87,19 @@ class BatchAnalysisLimitTest {
         assertEquals("", outcome.batchDirPath)
         assertNull("no session id is minted for a blocked run", vm.workingLocalId)
         assertTrue(SessionStore.list(ctx).isEmpty())
+    }
+
+    @Test
+    fun `a blocked run counts the frames it was launched with, not the wizard's later ones`() {
+        AccountCache.setQuota(ctx, used = 1)
+        val run = BatchRun(spec, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
+        // The wizard picks five frames on Main while the run waits for the native thread.
+        vm.deformedFrames = (0 until 5).map { DeformedFrame("/frames/late_$it.png", "") }
+
+        val outcome = vm.runBatchAnalysisBody(ctx, run) { }
+
+        assertEquals(RunStop.SessionLimit, outcome.stop)
+        assertEquals(3, outcome.totalFrames)
     }
 
     @Test

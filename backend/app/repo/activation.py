@@ -15,6 +15,7 @@ from ._base import (
     db,
     _license_past_grace,
     _load_user,
+    _get,
 )
 from .devlock import (
     bind_device_lock,
@@ -57,7 +58,7 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         # device that may not take the lock (`_may_bind`) is answered as a
         # mismatch, as the request path leaves it unbound.
         bind_device_lock(ref, device_id, app)
-        locked = (ref.get().to_dict() or {}).get(lock_field) or ""
+        locked = (_get(ref).to_dict() or {}).get(lock_field) or ""
     if locked != device_id:
         raise Refusal(errors.LICENSE_DEVICE_MISMATCH)
     # The same transaction an invite or a staff mint attaches through: the
@@ -102,7 +103,7 @@ def activate_license(uid: str, email: str, device_id: str, key: str,
         raise Refusal(errors.USER_NOT_FOUND)
     license_id = key_hash(key)
     ref = db().collection("licenses").document(license_id)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = snap.to_dict() or {}

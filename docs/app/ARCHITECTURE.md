@@ -45,7 +45,7 @@ on 2026-10-03.
 | `ui/home/` | 15 | `HomeActivity` and its parts: session list and selection (cards under the day headers `SessionDays` inserts, painted by `SessionRowText`, `SessionStateIcon` and `SessionThumbs`, the last caching the last frame's U heatmap as `SessionPaths.resultThumb`), `HomeQuotaCard`, `CloudBackupsCard`, `FirstRunPrompts`, `HomeFabLayout`, `HomeTransferWatch` (backup and restore jobs), `BackupBadgeActions` |
 | `ui/analysis/` | 3 | The three analysis Activities only: `StaticAnalysisActivity` (the wizard), `RoiDrawActivity`, `VsgLatticeActivity` |
 | `ui/analysis/wizard/` | 22 | `AnalysisViewModel` with `RunChannels` (launch batch and sweep) and `SweepAnalysis`; `WizardStep`, `AnalysisWizardChrome.applyStep`, `AnalysisWizardHost`; `WizardState` / `WizardDraftBinding` (process death, [ADR-005](../adr/ADR-005-wizard-process-death.md)); slots, coach, nav, ready / cancel / leave gates; parameter fields and sliders; settings sheet |
-| `ui/analysis/run/` | 19 | `BatchAnalysis.kt` (`runBatchAnalysisBody`, the one JNI loop, and `afterSave`) + `DicFieldIo`; `RunRecordSave` (`saveRunRecord`); `BatchRunController`, `WizardRunLauncher`, `WizardRunOutcomes`, `RunStatusLine`, `RunChrome`; the run overlay `ComputeOverlayController` (a header row of what is running and its percent, time left, then a batch run's convergence bins, a sweep's live lattice, or an import's progress bar) with its wording (`RunOverlayText`) and convergence bins (`ConvergenceBinsView`, one bin a frame, merged keeping the lowest over 100 frames; `ConvergenceTrace`, which warns one strike before `ConvergenceGate` stops a run); `RunSpec` ([ADR-004](../adr/ADR-004-runspec.md)); `EngineFailure`, `ConvergenceGate`, `UnsavedRerun`, `SemperEngine` |
+| `ui/analysis/run/` | 19 | `BatchAnalysis.kt` (`runBatchAnalysisBody`, the one JNI loop, and `afterSave`) + `DicFieldIo`; `RunRecordSave` (`saveRunRecord`); `BatchRunController`, `WizardRunLauncher`, `WizardRunOutcomes`, `RunStatusLine`, `RunChrome`; the run overlay `ComputeOverlayController` (a header row of what is running and its percent, time left, then a batch run's convergence bins, a sweep's live lattice, or an import's progress bar) with its wording (`RunOverlayText`) and convergence bins (`ConvergenceBinsView`, one bin a frame, merged keeping the lowest over 100 frames; `ConvergenceTrace`, which warns one strike before `ConvergenceGate` stops a run); `RunSpec` ([ADR-004](../adr/ADR-004-runspec.md)) and `BatchRun`, whose `RunInputs` (reference, frames) are frozen on Main at launch so the run reads its images from no wizard field; `EngineFailure`, `ConvergenceGate`, `UnsavedRerun`, `SemperEngine` |
 | `ui/analysis/frames/` | 13 | Reference and frame import (`ReferenceImportController` with `ReferenceSlotBusy`, `FrameImportController`, `WizardMediaPickers`), ordering (`FrameOrderController`, adapter, menu), deformed batch, video (`VideoSamplingSheet`, extract controller) |
 | `ui/analysis/roi/` | 7 | ROI studio: `StudioOverlayView` with its geometry, viewport and mask encoder; `RoiViewport`, `RoiResolveHelper`, `RoiStudioLauncher` |
 | `ui/analysis/recommend/` | 11 | `SubsetRecommender` and `SubsetRecommendationController` with the `SubsetBand` shaded behind the subset slider, `RunEstimate` (the ROI row's point count and the time on Compute), speckle scale, noise floor, good-practice and strain-window copy, EXIF patch map |
@@ -137,7 +137,10 @@ When cloud is configured (`SEMPER_API_BASE_URL`):
 `SemperApi.listSessions` **pages**: it follows `nextPageToken` until the backend
 stops returning one, so a deep refresh sees the whole account rather than the
 first page. Anything that lists cloud sessions should go through it rather than
-issuing a single request.
+issuing a single request. It lists this app's sessions (`X-App-Id`, ADR-014);
+`app = CloudApi.ALL_APPS` lists the whole account, which the reconcile asks
+only when a SYNCED row is missing from its own list, so a row restored from the
+other app's backup is not uploaded again (`CloudReconcile.list`).
 
 ### The interceptors on the shared client
 

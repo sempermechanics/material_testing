@@ -18,6 +18,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.File
+import java.net.URLEncoder
 
 /** Seat routes take no body; the backend reads the caller from the token. */
 private const val EMPTY_JSON = "{}"
@@ -257,13 +258,17 @@ class SemperApi @VisibleForTesting internal constructor(
      * [verify] makes the backend also confirm each page's session blobs still
      * exist in Drive (catching artifacts deleted straight in Drive). It costs
      * Drive calls per page, so it's for explicit refreshes, not every resume.
+     *
+     * [app] names whose analyses to list ([CloudApi.ALL_APPS] for the whole
+     * account, ADR-014); null lists this app's.
      */
-    override suspend fun listSessions(idToken: String, verify: Boolean): SessionsResponse {
+    override suspend fun listSessions(idToken: String, verify: Boolean, app: String?): SessionsResponse {
         val pages = fetchAllPages(
             fetch = { token ->
                 val query = buildString {
                     append("page_size=$SESSIONS_PAGE_SIZE")
                     if (verify) append("&verify=true")
+                    if (app != null) append("&app=").append(URLEncoder.encode(app, Charsets.UTF_8.name()))
                     if (token != null) append('&').append(pageTokenParam(token))
                 }
                 calls.bearer(idToken, { url(endpoint("/v1/sessions?$query")) }, ApiAnswer::failApprovedOnly) {

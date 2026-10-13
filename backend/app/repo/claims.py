@@ -24,6 +24,9 @@ from ._base import (
     _mode_patch,
     _run_tx,
     _seat_ref,
+    _get,
+    _stream,
+    _delete_doc,
 )
 
 
@@ -145,12 +148,12 @@ def _drop_superseded_demos(uids: list[str], license_id: str) -> None:
     # about; the rest may still hold the Demo key they were given meanwhile.
     for start in range(0, len(still_here), _IN_LIMIT):
         chunk = still_here[start:start + _IN_LIMIT]
-        for doc in db().collection("licenses").where("redeemedByUid", "in", chunk).stream():
+        for doc in _stream(db().collection("licenses").where("redeemedByUid", "in", chunk)):
             if doc.id == license_id:
                 continue
             lic = doc.to_dict() or {}
             if _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system":
-                doc.reference.delete()
+                _delete_doc(doc.reference)
 
 
 def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch: dict,
@@ -190,9 +193,9 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
 
     @_base.firestore.transactional
     def _claim(tx) -> str:
-        lic_snap = lic_ref.get(transaction=tx)
-        seat_snap = seat_ref.get(transaction=tx)
-        invite_snap = invite_ref.get(transaction=tx) if invite_ref is not None else None
+        lic_snap = _get(lic_ref, tx)
+        seat_snap = _get(seat_ref, tx)
+        invite_snap = _get(invite_ref, tx) if invite_ref is not None else None
         if not lic_snap.exists:
             return "license_not_found"
         if invite_ref is not None and not invite_snap.exists:
@@ -284,8 +287,8 @@ def claim_individual_license(license_id: str, uid: str, email: str,
 
     @_base.firestore.transactional
     def _claim(tx) -> str:
-        lic_snap = lic_ref.get(transaction=tx)
-        invite_snap = invite_ref.get(transaction=tx) if invite_ref is not None else None
+        lic_snap = _get(lic_ref, tx)
+        invite_snap = _get(invite_ref, tx) if invite_ref is not None else None
         if not lic_snap.exists:
             return "license_not_found"
         if invite_ref is not None and not invite_snap.exists:

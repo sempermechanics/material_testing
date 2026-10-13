@@ -32,6 +32,9 @@ from ._base import (
     _mode_patch,
     _run_tx,
     SCHEMA_VERSION,
+    _get,
+    _set_doc,
+    _delete_doc,
 )
 from .claims import (
     claim_individual_license,
@@ -163,12 +166,12 @@ def _write_license(
         stored["redeemedByUid"] = redeemed_by_uid
         stored["redeemedAt"] = _base.firestore.SERVER_TIMESTAMP
     ref = db().collection("licenses").document(license_id)
-    ref.set(stored)
+    _set_doc(ref, stored)
     # Read back rather than return what was written: `createdAt` (and
     # `redeemedAt`) above are the SERVER_TIMESTAMP sentinel, and the mint
     # routes hand this dict to the response, where the sentinel cannot be
     # serialised — the licence was written and the request still failed.
-    return key, license_id, (ref.get().to_dict() or stored)
+    return key, license_id, (_get(ref).to_dict() or stored)
 
 
 def ensure_demo_license(user: dict, device_id: str | None) -> dict:
@@ -215,7 +218,7 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
 
     @_base.firestore.transactional
     def _attach(tx) -> bool:
-        snap = user_ref.get(transaction=tx)
+        snap = _get(user_ref, tx)
         if not snap.exists or ((snap.to_dict() or {}).get("licenseId") or ""):
             return False
         tx.update(user_ref, patch)
@@ -229,8 +232,8 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
     # rather than leaving a redeemed Demo record pointing at no one, and answer
     # with what the account actually has — which on the losing side of an
     # invite claim is the licence, not demo.
-    db().collection("licenses").document(license_id).delete()
-    current = user_ref.get()
+    _delete_doc(db().collection("licenses").document(license_id))
+    current = _get(user_ref)
     if not current.exists:
         return user
     return {**user, **(current.to_dict() or {}), "uid": uid}

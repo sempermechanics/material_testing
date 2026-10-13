@@ -41,6 +41,11 @@ from ._base import (
     _load_user,
     _now,
     _update_refs,
+    _get,
+    _stream,
+    _commit,
+    _set_doc,
+    _delete_doc,
 )
 from .claims import (
     _drop_superseded_demos,
@@ -85,7 +90,7 @@ def _set_refs(writes: list) -> None:
         batch = db().batch()
         for ref, data in writes[start:start + _BATCH_LIMIT]:
             batch.set(ref, data)
-        batch.commit()
+        _commit(batch)
 
 
 def _deleted_public(license_id: str, tomb: dict) -> dict:
@@ -101,13 +106,13 @@ def _deleted_public(license_id: str, tomb: dict) -> dict:
 def delete_license(license_id: str, admin_uid: str) -> dict:
     """Delete a licence into the 30-day hold. Returns (error, deleted row)."""
     ref = db().collection("licenses").document(license_id)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = snap.to_dict() or {}
     if _license_mode(lic) == MODE_DEMO and (lic.get("createdByUid") or "") == "system":
         raise Refusal(errors.DEMO_KEY_NOT_DELETABLE)
-    seats = list(ref.collection("seats").stream())
+    seats = _stream(ref.collection("seats"))
     purge_at = _now() + timedelta(days=HOLD_DAYS)
 
     # The copy first, as the licence stood before the revoke below, so a
@@ -120,7 +125,7 @@ def delete_license(license_id: str, admin_uid: str) -> dict:
         "deletedByUid": admin_uid,
         "purgeAt": purge_at,
     }
-    tomb_ref.set(tomb)
+    _set_doc(tomb_ref, tomb)
     _set_refs([
         (tomb_ref.collection(DELETED_SEATS).document(s.id), {**(s.to_dict() or {}), "purgeAt": purge_at})
         for s in seats
@@ -132,7 +137,7 @@ def delete_license(license_id: str, admin_uid: str) -> dict:
     _update_refs([(user_ref, detach) for user_ref in _users_on_license(holders, license_id)])
 
     _delete_refs([s.reference for s in seats])
-    ref.delete()
+    _delete_doc(ref)
     return _deleted_public(license_id, {**tomb, "deletedAt": _now()})
 
 
@@ -141,7 +146,7 @@ def list_deleted_licenses(limit: int = 50) -> list[dict]:
     query = (db().collection(DELETED)
              .order_by("deletedAt", direction=_base.firestore.Query.DESCENDING)
              .limit(limit))
-    return [_deleted_public(d.id, d.to_dict() or {}) for d in query.stream()]
+    return [_deleted_public(d.id, d.to_dict() or {}) for d in _stream(query)]
 
 
 def restore_license(license_id: str, admin_uid: str) -> dict:
@@ -154,7 +159,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
     out again. A licence that was already revoked comes back revoked.
     """
     tomb_ref = db().collection(DELETED).document(license_id)
-    snap = tomb_ref.get()
+    snap = _get(tomb_ref)
     if not snap.exists:
         raise Refusal(errors.DELETED_LICENSE_NOT_FOUND)
     tomb = snap.to_dict() or {}
@@ -162,7 +167,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
     if purge_at is not None and purge_at <= _now():
         raise Refusal(errors.DELETED_LICENSE_PURGED)
     ref = db().collection("licenses").document(license_id)
-    if ref.get().exists:
+    if _get(ref).exists:
         raise Refusal(errors.LICENSE_EXISTS)
 
     lic = {k: v for k, v in tomb.items() if k not in _TOMBSTONE_FIELDS}
@@ -171,7 +176,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
     lic["restoredAt"] = _base.firestore.SERVER_TIMESTAMP
     lic["restoredByUid"] = admin_uid
     institution = _is_institution(lic)
-    seat_docs = list(tomb_ref.collection(DELETED_SEATS).stream())
+    seat_docs = _stream(tomb_ref.collection(DELETED_SEATS))
 
     back: list[str] = []
     seat_writes = []
@@ -206,7 +211,7 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
             lic.pop("redeemedByUid", None)
             lic.pop("redeemedAt", None)
 
-    ref.set(lic)
+    _set_doc(ref, lic)
     _set_refs(seat_writes)
     patch = _member_patch(license_id, lic)
     users = db().collection("users")
@@ -220,5 +225,5 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
         _write_invite(license_id, address, admin_uid)
 
     _delete_refs([d.reference for d in seat_docs])
-    tomb_ref.delete()
+    _delete_doc(tomb_ref)
     return get_license_public(license_id)
