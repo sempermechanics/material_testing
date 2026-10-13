@@ -20,6 +20,8 @@ from ._base import (
     get_license,
     _license_mode,
     _license_past_grace,
+    _get,
+    _stream,
 )
 from .invites import (
     find_user_by_email,
@@ -64,10 +66,10 @@ def licence_held_by(email: str, *, user: dict | None = None, exclude_id: str = "
         return held
     if not address:
         return ""
-    for doc in db().collection("licenses").where("emailLock", "==", address).stream():
+    for doc in _stream(db().collection("licenses").where("emailLock", "==", address)):
         if doc.id != exclude_id and licence_is_live(doc.to_dict()):
             return doc.id
-    invite = _invite_ref(address).get()
+    invite = _get(_invite_ref(address))
     if invite.exists:
         promised = (invite.to_dict() or {}).get("licenseId") or ""
         if promised and promised != exclude_id and licence_is_live(get_license(promised)):

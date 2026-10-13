@@ -11,6 +11,8 @@ from ._base import (
     db,
     get_license,
     _seat_ref,
+    _get,
+    _stream,
 )
 from .claims import (
     claim_seat,
@@ -60,7 +62,7 @@ def list_licenses_administered_by(email: str) -> list[dict]:
         return []
     out = []
     q = db().collection("licenses").where("adminEmails", "array_contains", wanted)
-    for d in q.stream():
+    for d in _stream(q):
         data = d.to_dict() or {}
         if not _is_institution(data):
             continue
@@ -127,7 +129,7 @@ def institution_license_summary(license_id: str, lic: dict | None = None) -> dic
 def institution_seat(license_id: str, uid: str) -> dict | None:
     """One seat as the roster lists it, or None. One document read, where
     finding it in `list_institution_seats` read the whole roster."""
-    snap = _seat_ref(license_id, uid).get()
+    snap = _get(_seat_ref(license_id, uid))
     return _seat_public(snap.id, snap.to_dict() or {}) if snap.exists else None
 
 
@@ -142,7 +144,7 @@ def page_institution_seats(license_id: str, limit: int,
 def list_institution_seats(license_id: str) -> list[dict]:
     return [
         _seat_public(doc.id, doc.to_dict() or {})
-        for doc in db().collection("licenses").document(license_id).collection("seats").stream()
+        for doc in _stream(db().collection("licenses").document(license_id).collection("seats"))
     ]
 
 
