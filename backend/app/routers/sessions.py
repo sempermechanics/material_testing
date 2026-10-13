@@ -287,7 +287,10 @@ def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depe
         log.error("metadata replace %s: Drive holds %s bytes, sent %d", rec["driveFileId"], written["size"], len(data))
         raise HTTPException(502, errors.DRIVE_WRITE_FAILED)
 
-    repo.replace_file_content(sid, file_id, len(data), hashlib.sha256(data).hexdigest(), written["md5"])
+    # A rename is sent this way too: the session doc takes the new name, so the
+    # backup list shows it (TD-208). A body with no name leaves the old one.
+    repo.replace_file_content(sid, file_id, len(data), hashlib.sha256(data).hexdigest(), written["md5"],
+                              name=repo.session_name_of(payload))
     audit.record(user["uid"], ctx.device_id, action="SESSION_METADATA_REPLACE",
                  target={"type": "session", "id": sid}, detail={"bytes": len(data)})
     return {"sessionId": sid, "sizeBytes": len(data)}

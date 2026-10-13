@@ -38,7 +38,7 @@ object CloudBackupListing {
         val backups = sessions.filter {
             it.status == UploadWorkOutcomes.STATUS_COMPLETED && it.sessionId.isNotBlank()
         }.map {
-            Backup(it.sessionId, it.localSessionId, it.specimen.orEmpty(), it.totalBytes)
+            Backup(it.sessionId, it.localSessionId, CloudNaming.listedName(it.name, it.specimen), it.totalBytes)
         }
         val ids = backups.map { it.cloudId }.toSet()
         val prefs = prefs(context)

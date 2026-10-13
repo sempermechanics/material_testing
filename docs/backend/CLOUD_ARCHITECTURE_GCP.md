@@ -340,7 +340,7 @@ sequenceDiagram
     participant R as Cloud Run
     participant T as Cloud Tasks
     participant D as Google Drive (Shared Drive)
-    W->>R: POST /v1/sessions {specimen, files:[…]} (ID token + device sig)
+    W->>R: POST /v1/sessions {specimen, name, files:[…]} (ID token + device sig)
     R->>Firestore: sessions/{sid} = PROVISIONING, files/{fid} = PENDING
     R->>T: create task provision-{sid} (OIDC, deterministic name)
     R-->>W: 200 {sessionId, status:"PROVISIONING", uploads:[]}
@@ -510,7 +510,10 @@ session costs ~1–2 Firestore file docs instead of 3F+4. `metadata.json` is the
 one file a backup can change after it completes: `PUT /v1/sessions/{sid}/metadata`
 writes the app's current metadata over the same Drive object and updates the file
 doc's size and checksums. Semper sends it after a rename, Material Testing also
-after a deflection or curve correction, made after the backup ([ADR-013](../adr/ADR-013-session-metadata-replace.md)). This trades in-Drive
+after a deflection or curve correction, made after the backup ([ADR-013](../adr/ADR-013-session-metadata-replace.md)).
+A non-blank string `name` in that body (trimmed, cut to 200 characters) also
+becomes the session doc's `name`, so `GET /v1/sessions` lists the new name; a
+body without one leaves it (`repo.session_name_of`). This trades in-Drive
 browsability of individual frames for far fewer resumable inits and Firestore
 writes. The `raw/processed/reports/metadata` subfolder tree below is the older
 per-file layout, kept for reference.
@@ -574,7 +577,14 @@ sessions/{sessionId}
                                   stamps them.
                                   GET /v1/sessions lists one app's;
                                   /files answers only that app)
-  specimen: string
+  specimen: string                (the reference image's file name)
+  name: string                    (the analysis's name, ≤ 200 chars, from
+                                  POST /v1/sessions and moved by a re-sent
+                                  metadata.json's `name` (PUT …/metadata).
+                                  "" or absent on a session from an app that
+                                  sent none: GET /v1/sessions lists `name: ""`
+                                  and the app names the backup from
+                                  `specimen` (TD-208))
   status: "PENDING" | "PROVISIONING" | "PROVISION_FAILED"
         | "UPLOADING" | "COMPLETED" | "FAILED"
         (PROVISIONING and UPLOADING are IN_FLIGHT_STATUSES — both still

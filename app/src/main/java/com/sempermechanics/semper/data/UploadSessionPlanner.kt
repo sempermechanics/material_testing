@@ -160,7 +160,14 @@ internal class UploadSessionPlanner(
         )
         val session = api.createSession(
             idToken,
-            SessionCreateRequest(record.refName, specs, metrics, localSessionId = localId),
+            SessionCreateRequest(
+                record.refName,
+                specs,
+                metrics,
+                localSessionId = localId,
+                // Listed by the backup list in place of the reference's file name (TD-208).
+                name = record.name.trim().take(SessionCreateRequest.NAME_MAX_CHARS),
+            ),
         )
         // Persist the pointer before anything can fail: a session that exists in
         // the cloud but is not recorded here would be orphaned against quota.
