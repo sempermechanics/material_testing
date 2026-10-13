@@ -9,6 +9,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import androidx.annotation.VisibleForTesting
 import androidx.core.graphics.scale
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.imaging.BitmapDecoder
@@ -190,14 +191,8 @@ object VideoFrameExtractor {
                     startUs = request.startMs * US_PER_MS,
                     endUs = request.endMs * US_PER_MS,
                 )
-                val plan = VideoKeyframeHelper.resolveExtractionPlan(
-                    keyframeTimestampsUs = keyframesUs,
-                    startMs = request.startMs,
-                    endMs = request.endMs,
-                    fpsExtract = request.fpsExtract,
-                    maxFrames = request.maxFrames,
-                    forceUniform = !request.preferKeyframes,
-                )
+                val plan = VideoKeyframeHelper.planFor(request, keyframesUs, rung = "Hardware")
+                // Each frame is timed by its own presentation time, not the time asked for.
                 plan.timestampsUs.takeIf { it.size >= 2 }?.let { times ->
                     sink.write(timesMs = times.map { it / US_PER_MS }) { i -> dec.decodeFrameAt(times[i]) }
                 }
@@ -223,23 +218,27 @@ object VideoFrameExtractor {
     ): ExtractionResult? {
         val decoder = AviVideoDecoder.create(context, request.uri) ?: return null
         return decoder.use { avi ->
-            // An AVI has no seekable timeline of its own: sampling times map
-            // onto frame indices, and repeats collapse so a rate above the
-            // stream's own cannot ask for the same frame twice. Each frame is
-            // timed where it starts in the stream.
-            val indices = request.uniformTimestampsUs()
-                .map { avi.video.frameIndexAt(it) }
-                .distinct()
+            // Key frames from the idx1 flags, or uniform; each frame is timed
+            // where it starts in the stream.
+            val indices = VideoKeyframeHelper.aviFramePlan(avi.video, request).indices
             if (!avi.canDecode || indices.size < 2) {
                 null
             } else {
                 val timesMs = indices.map { avi.video.presentationTimeUs(it) / US_PER_MS }
-                sink.write(timesMs) { i -> avi.decodeFrame(indices[i]) }
+                sink.write(timesMs) { i -> avi.decodeTimedFrame(indices[i]) }
             }
         }
     }
 
-    private suspend fun extractWithRetriever(
+    /**
+     * The last rung, which crashes on nothing. In Key frames mode the sync frames
+     * come from a [android.media.MediaExtractor] of their own, uniform when it finds
+     * fewer than two. `getFrameAtTime` cannot report the time of the frame it
+     * returns, so each frame keeps the time asked for (TD-207).
+     * Internal so the device test can force this rung.
+     */
+    @VisibleForTesting
+    internal suspend fun extractWithRetriever(
         context: Context,
         request: ExtractionRequest,
         sink: FrameSink,
@@ -248,7 +247,18 @@ object VideoFrameExtractor {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, request.uri)
-            val timesUs = request.uniformTimestampsUs()
+            val keyframesUs = if (request.preferKeyframes) {
+                VideoKeyframeHelper.findKeyframeTimestampsUs(
+                    context,
+                    request.uri,
+                    startUs = request.startMs * US_PER_MS,
+                    endUs = request.endMs * US_PER_MS,
+                )
+            } else {
+                emptyList()
+            }
+            val plan = VideoKeyframeHelper.planFor(request, keyframesUs, rung = "Retriever")
+            val timesUs = plan.timestampsUs
             val count = timesUs.size
 
             // A frame the retriever cannot read is skipped, with its time.
@@ -258,7 +268,7 @@ object VideoFrameExtractor {
 
             for ((i, timeUs) in timesUs.withIndex()) {
                 currentCoroutineContext().ensureActive()
-                val frame = getFrameHybrid(retriever, timeUs) ?: continue
+                val frame = getFrame(retriever, timeUs, onSyncFrame = plan.isKeyframePlan) ?: continue
                 try {
                     currentCoroutineContext().ensureActive()
                     if (i == 0) {
@@ -292,18 +302,18 @@ object VideoFrameExtractor {
         }
     }
 
-    /** The request's sampling times, evenly spaced at its rate over its segment. */
-    private fun ExtractionRequest.uniformTimestampsUs(): List<Long> =
-        VideoKeyframeHelper.uniformTimestampsUs(startMs, endMs, fpsExtract, maxFrames)
-
     /**
      * The frame at [timeUs], decoding forward from the sync frame before it;
      * the sync frame itself only when that fails. Sync-first would return one
-     * I-frame for every sample in a GOP.
+     * I-frame for every sample in a GOP, so it goes first only when [onSyncFrame]:
+     * [timeUs] is itself a sync frame's time, and no decode forward is needed.
      */
-    private fun getFrameHybrid(retriever: MediaMetadataRetriever, timeUs: Long): Bitmap? =
-        retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST)
-            ?: retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+    private fun getFrame(retriever: MediaMetadataRetriever, timeUs: Long, onSyncFrame: Boolean): Bitmap? {
+        val closest = MediaMetadataRetriever.OPTION_CLOSEST
+        val sync = MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+        return retriever.getFrameAtTime(timeUs, if (onSyncFrame) sync else closest)
+            ?: retriever.getFrameAtTime(timeUs, if (onSyncFrame) closest else sync)
+    }
 
     private fun compressPngToBytes(frame: Bitmap): ByteArray =
         ByteArrayOutputStream().use { out ->

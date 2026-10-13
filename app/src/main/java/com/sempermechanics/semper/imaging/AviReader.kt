@@ -115,6 +115,16 @@ internal object AviReader {
         /** When frame [index] starts, at [effectiveFps]. */
         fun presentationTimeUs(index: Int): Long = (index * 1_000_000.0 / effectiveFps).toLong()
 
+        /**
+         * When each keyframe starts, for Key frames sampling; empty when the
+         * flags say nothing: a file with no `idx1`, whose frames are all assumed to be
+         * keyframes, or an all-intra stream (MJPEG, uncompressed), where every frame is one.
+         */
+        fun keyframeTimesUs(): List<Long> {
+            if (!hasIndex || frames.all { it.keyframe }) return emptyList()
+            return frames.indices.filter { frames[it].keyframe }.map(::presentationTimeUs)
+        }
+
         /** The last keyframe at or before [index]; 0 when the stream marks none. */
         fun keyframeAt(index: Int): Int {
             for (i in index.coerceIn(0, frames.size - 1) downTo 0) {

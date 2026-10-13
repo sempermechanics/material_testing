@@ -13,17 +13,20 @@ import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.sempermechanics.semper.imaging.GrayPngEncoder
+import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.io.File
+import kotlin.math.abs
 
 /**
  * Video import end to end on a real Android media stack: a clip is encoded
@@ -37,6 +40,9 @@ import java.io.File
  * rotation tag is honoured in the right direction, and that each frame came
  * through the lossless Y-plane path (8-bit grayscale PNG) rather than the
  * RGB retriever fallback, which would pass every other check silently.
+ * Keyframe mode is checked on each rung: the hardware decoder, the AVI
+ * demuxer (indexed, all-intra and index-less files), and the retriever,
+ * forced; frames from the first two carry their own clip times.
  */
 @RunWith(AndroidJUnit4::class)
 class VideoFrameExtractionDeviceTest {
@@ -85,6 +91,19 @@ class VideoFrameExtractionDeviceTest {
         val frames = extract(clip, preferKeyframes = false, fps = 10.0, endMs = CLIP_MS)
         assertEquals((0..87 step 3).toList() + 89, frames.map { it.code(rotation = 0) })
         frames.forEach { it.assertGrayOfSize(W, H) }
+        // TD-207: each frame is timed by its own presentation time, so the last
+        // sample (asked for at 3000 ms) reads frame 89's 2966 ms.
+        frames.drop(1).forEach { it.assertTimedAsFrame(it.code(rotation = 0)) }
+    }
+
+    // ---- Key frames mode on the retriever rung, forced (TD-154) ----------------
+
+    @Test
+    fun keyframeModeOnTheRetrieverRungExtractsEachIFrame() {
+        val clip = encodeMp4("retriever-keyframes.mp4", rotation = 0)
+        val frames = extractWithRetriever(clip, preferKeyframes = true, fps = 5.0, endMs = CLIP_MS)
+        // At 5 fps a uniform plan would hold 15 frames; the I-frames are three.
+        assertEquals(listOf(0, 30, 60), frames.map { it.code(rotation = 0) })
     }
 
     @Test
@@ -102,6 +121,7 @@ class VideoFrameExtractionDeviceTest {
         val clip = writeAvi("y800.avi", compression = "Y800", bitCount = 8, extra = ByteArray(0)) { i ->
             AviPayload(lumaOf(i), keyframe = true)
         }
+        // Key frames mode on an all-intra AVI: every frame is a keyframe, so it samples uniformly.
         val frames = extract(clip, preferKeyframes = true, fps = 5.0, endMs = 2_000)
         assertEquals((0..60 step 6).toList(), frames.map { it.code(rotation = 0) })
         frames.forEach { it.assertGrayOfSize(W, H) }
@@ -126,21 +146,56 @@ class VideoFrameExtractionDeviceTest {
     }
 
     @Test
-    fun h264InAviDecodesThroughThePlatformCodec() {
-        val encoded = encodeAvc(onFormat = {}) { _, _, _ -> }
-        val clip = writeAvi("h264.avi", compression = "H264", bitCount = 24, extra = encoded.csd) { i ->
-            val sample = encoded.samples[i]
-            AviPayload(if (i == 0) encoded.csd + sample.bytes else sample.bytes, sample.keyframe)
-        }
+    fun indexLessAviInKeyframeModeSamplesUniformly() {
+        val clip = writeAvi(
+            "y800-noindex.avi",
+            compression = "Y800",
+            bitCount = 8,
+            extra = ByteArray(0),
+            index = false,
+        ) { AviPayload(lumaOf(it), keyframe = it % 30 == 0) }
+        // No idx1: the reader assumes every frame a keyframe, which says nothing.
         val frames = extract(clip, preferKeyframes = true, fps = 5.0, endMs = 2_000)
         assertEquals((0..60 step 6).toList(), frames.map { it.code(rotation = 0) })
         frames.forEach { it.assertGrayOfSize(W, H) }
     }
 
+    @Test
+    fun h264InAviDecodesThroughThePlatformCodec() {
+        val frames = extract(h264Avi("h264.avi"), preferKeyframes = false, fps = 5.0, endMs = 2_000)
+        assertEquals((0..60 step 6).toList(), frames.map { it.code(rotation = 0) })
+        frames.forEach { it.assertGrayOfSize(W, H) }
+    }
+
+    @Test
+    fun keyframeModeOnAnIndexedH264AviExtractsEachIFrame() {
+        // TD-154: the AVI rung reads the idx1 keyframe flags, one I-frame a second.
+        val frames = extract(h264Avi("h264-keyframes.avi"), preferKeyframes = true, fps = 5.0, endMs = CLIP_MS)
+        assertEquals(listOf(0, 30, 60), frames.map { it.code(rotation = 0) })
+        frames.forEach { it.assertGrayOfSize(W, H) }
+        frames.drop(1).forEach { it.assertTimedAsFrame(it.code(rotation = 0)) }
+    }
+
+    private fun h264Avi(name: String): File {
+        val encoded = encodeAvc(onFormat = {}) { _, _, _ -> }
+        return writeAvi(name, compression = "H264", bitCount = 24, extra = encoded.csd) { i ->
+            val sample = encoded.samples[i]
+            AviPayload(if (i == 0) encoded.csd + sample.bytes else sample.bytes, sample.keyframe)
+        }
+    }
+
     // ---- extraction ----------------------------------------------------------
 
-    private class Frame(val png: ByteArray) {
+    /** One extracted frame: its PNG and its time in the clip (null for the reference, which has none). */
+    private class Frame(val png: ByteArray, val timeMs: Long? = null) {
         val bitmap: Bitmap = requireNotNull(BitmapFactory.decodeByteArray(png, 0, png.size)) { "undecodable PNG" }
+
+        /** Timed as source frame [index] starts, to the millisecond the container rounds to. */
+        fun assertTimedAsFrame(index: Int) {
+            val expected = index * 1000L / FPS
+            val actual = requireNotNull(timeMs) { "frame $index has no clip time" }
+            assertTrue("frame $index timed $actual ms, expected $expected", abs(actual - expected) <= 1)
+        }
 
         /**
          * Written by [GrayPngEncoder] — the Y-plane path — and not by the retriever
@@ -185,26 +240,52 @@ class VideoFrameExtractionDeviceTest {
         }
     }
 
+    private fun request(file: File, preferKeyframes: Boolean, fps: Double, endMs: Long) = ExtractionRequest(
+        uri = Uri.fromFile(file),
+        fpsExtract = fps,
+        startMs = 0,
+        endMs = endMs,
+        maxFrames = 100,
+        preferKeyframes = preferKeyframes,
+    )
+
+    /** Every rung in order, as the sampling dialog runs them. */
     private fun extract(file: File, preferKeyframes: Boolean, fps: Double, endMs: Long): List<Frame> {
         val out = File(dir, "out-${file.nameWithoutExtension}").apply { mkdirs() }
         val result = runBlocking(Dispatchers.IO) {
             VideoFrameExtractor.extract(
                 context = context,
-                request = ExtractionRequest(
-                    uri = Uri.fromFile(file),
-                    fpsExtract = fps,
-                    startMs = 0,
-                    endMs = endMs,
-                    maxFrames = 100,
-                    preferKeyframes = preferKeyframes,
-                ),
+                request = request(file, preferKeyframes, fps, endMs),
                 cacheDir = out,
                 onProgress = { _, _ -> },
             )
         }
+        return framesOf(file, result)
+    }
+
+    /** The retriever rung alone, which the hardware decoder otherwise takes every MP4 from. */
+    private fun extractWithRetriever(file: File, preferKeyframes: Boolean, fps: Double, endMs: Long): List<Frame> {
+        val out = File(dir, "out-retriever-${file.nameWithoutExtension}").apply { mkdirs() }
+        val staging = FrameImportHelper.createStagingDir(out)
+        val result = try {
+            runBlocking(Dispatchers.IO) {
+                VideoFrameExtractor.extractWithRetriever(
+                    context = context,
+                    request = request(file, preferKeyframes, fps, endMs),
+                    sink = FrameSink(context, out, staging, clipName = file.name, onProgress = { _, _ -> }),
+                )
+            }
+        } finally {
+            staging.deleteRecursively()
+        }
+        return framesOf(file, result)
+    }
+
+    private fun framesOf(file: File, result: VideoFrameExtractor.ExtractionResult?): List<Frame> {
         assertNotNull("extraction returned nothing for ${file.name}", result)
         result!!
-        return listOf(Frame(result.reference.png)) + result.batch.filePaths.map { Frame(File(it).readBytes()) }
+        return listOf(Frame(result.reference.png)) +
+            result.batch.frames.map { Frame(File(it.path).readBytes(), it.timeMs) }
     }
 
     // ---- source frames -------------------------------------------------------
@@ -350,26 +431,28 @@ class VideoFrameExtractionDeviceTest {
         compression: String,
         bitCount: Int,
         extra: ByteArray,
+        index: Boolean = true,
         frame: (Int) -> AviPayload,
     ): File {
         val payloads = (0 until FRAMES).map(frame)
         val chunkId = if (compression == "Y800") "00db" else "00dc"
         val movi = ByteArrayOutputStream()
         payloads.forEach { movi.write(chunk(chunkId, it.bytes)) }
-        val index = ByteArrayOutputStream()
+        val idx1 = ByteArrayOutputStream()
         payloads.forEach {
-            index.write(fcc(chunkId))
-            index.write(le32(if (it.keyframe) 0x10 else 0))
-            index.write(le32(0))
-            index.write(le32(it.bytes.size))
+            idx1.write(fcc(chunkId))
+            idx1.write(le32(if (it.keyframe) 0x10 else 0))
+            idx1.write(le32(0))
+            idx1.write(le32(it.bytes.size))
         }
+        val indexChunk = if (index) chunk("idx1", idx1.toByteArray()) else ByteArray(0)
         val header = list(
             "hdrl",
             avih(1_000_000 / FPS, W, H) +
                 list("strl", strh("vids", compression, 1, FPS) + strf(W, H, bitCount, compression, extra)),
         )
         val file = File(dir, name)
-        file.writeBytes(riff("AVI ", header + list("movi", movi.toByteArray()) + chunk("idx1", index.toByteArray())))
+        file.writeBytes(riff("AVI ", header + list("movi", movi.toByteArray()) + indexChunk))
         return file
     }
 
