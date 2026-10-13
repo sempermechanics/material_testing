@@ -154,3 +154,16 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   `Roi.forSolve` (`field/Roi.kt`). What `RunSpec` still leaves out (reference
   bytes and size, frame paths) the batch loop reads from the view model:
   TD-173.
+- *Later (2026-10-12, TD-173):* the run's images are frozen too.
+  `launchBatchAnalysis` and `launchSweep` take `snapshotRunInputs()` on Main,
+  before the run leaves for the native dispatcher, and hand it to the run
+  (`ui/analysis/run/BatchRun.kt`): `RunInputs.Reference` (bytes, size, name)
+  and `RunInputs.Frames` (paths, picked names, clip times, clip name), the
+  lists copied. The batch loop (`BatchRun.inputs`) and the sweep
+  (`SweepSession.inputs`) read their images only from there. Still resolved
+  inside the run, as above: the session id (the quota's `admitRun` comes
+  before `wouldCreateNewSession`). The run still reads `cancelRequested`, and
+  writes it, the `last*` result fields and, through
+  `repointDeformedPathsOnMain`, the moved frame paths. The reference array is shared rather than copied: the
+  wizard replaces its reference, never writes into it. `.dat` oracles
+  unchanged.

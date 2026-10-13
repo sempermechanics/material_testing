@@ -127,7 +127,7 @@ more classes need fakes; nothing in A blocks it.
   and looks `FirebaseAuth` up lazily. A test that never signs in never
   initialises Firebase. Revisit if the sign-in flows themselves need JVM tests.
 - **Defaults live on the interface.** Kotlin forbids an override from
-  restating a default, so `listSessions(verify)`, `downloadFile(expectedBytes,
+  restating a default, so `listSessions(verify, app)`, `downloadFile(expectedBytes,
   onBytes)`, `listUsers(status)` and `uploadResumable(onBytes)` declare theirs
   on `CloudApi`; calls through `SemperApi` inherit them unchanged.
 - **The fake fails loudly.** Every `FakeCloudApi` call a test did not script

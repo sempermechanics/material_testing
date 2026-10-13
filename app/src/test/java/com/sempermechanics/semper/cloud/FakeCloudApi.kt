@@ -38,6 +38,10 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     var onAcceptTerms: suspend (String, String) -> Unit = { _, _ -> unscripted("acceptTerms") }
     var onSetImprovementConsent: suspend (String, Boolean) -> Unit = { _, _ -> unscripted("setImprovementConsent") }
     var onListSessions: suspend (String, Boolean) -> SessionsResponse = { _, _ -> unscripted("listSessions") }
+
+    /** `listSessions` with an `app` ([CloudApi.ALL_APPS] for the account), recorded as `listSessions?app=…`. */
+    var onListAppSessions: suspend (String, String) -> SessionsResponse =
+        { _, app -> unscripted("listSessions?app=$app") }
     var onDeleteAccount: suspend (String) -> Unit = { unscripted("deleteAccount") }
     var onDeleteSession: suspend (String, String) -> Unit = { _, _ -> unscripted("deleteSession") }
     var onListSessionUploads: suspend (String, String) -> SessionUploadsResponse =
@@ -69,8 +73,11 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     override suspend fun setImprovementConsent(idToken: String, granted: Boolean) =
         record("setImprovementConsent") { onSetImprovementConsent(idToken, granted) }
 
-    override suspend fun listSessions(idToken: String, verify: Boolean) =
+    override suspend fun listSessions(idToken: String, verify: Boolean, app: String?) = if (app == null) {
         record("listSessions") { onListSessions(idToken, verify) }
+    } else {
+        record("listSessions?app=$app") { onListAppSessions(idToken, app) }
+    }
 
     override suspend fun deleteAccount(idToken: String) = record("deleteAccount") { onDeleteAccount(idToken) }
 
