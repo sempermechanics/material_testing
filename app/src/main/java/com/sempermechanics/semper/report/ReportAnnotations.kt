@@ -92,11 +92,17 @@ internal object ReportAnnotations {
 
         if (maxIdx != -1 && minIdx != -1) {
             // Data coords are in full-resolution image space; scale them to the
-            // (possibly capped) canvas so markers land correctly.
-            val maxX = data[maxIdx] * coordScale
-            val maxY = data[maxIdx + 1] * coordScale
-            val minX = data[minIdx] * coordScale
-            val minY = data[minIdx + 1] * coordScale
+            // (possibly capped) canvas so markers land correctly. On a frame's own
+            // photo a marker sits where its point moved to, like the viewer's
+            // crosshair (ADR-011).
+            fun x(idx: Int): Float =
+                (if (annotation.displaced) data[idx] + data[idx + DicResult.IDX_U] else data[idx]) * coordScale
+            fun y(idx: Int): Float =
+                (if (annotation.displaced) data[idx + 1] + data[idx + DicResult.IDX_V] else data[idx + 1]) * coordScale
+            val maxX = x(maxIdx)
+            val maxY = y(maxIdx)
+            val minX = x(minIdx)
+            val minY = y(minIdx)
             val targetRadius = width * 0.015f
             val crosshairLen = targetRadius * 1.5f
             val whiteOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply {

@@ -130,7 +130,8 @@ internal class BundleExport(
             val prefix = frameNumber.toString().padStart(3, '0')
             val frameName = s.nameAt(index)?.substringBeforeLast('.') ?: "Frame_$frameNumber"
             val folder = "photos_$ts/results/${prefix}_$frameName"
-            val baseCache = mutableMapOf<Pair<Int, Int>, Bitmap>()
+            // One frame's photo at a time: the cache is freed before the next frame.
+            val baseCache = FieldImageExport.FrameBaseCache()
             try {
                 addFrameResultImages(zip, data, index, folder, baseCache)
             } finally {
@@ -145,7 +146,7 @@ internal class BundleExport(
         data: FloatArray,
         index: Int,
         folder: String,
-        baseCache: MutableMap<Pair<Int, Int>, Bitmap>,
+        baseCache: FieldImageExport.FrameBaseCache,
     ) {
         for ((label, idx) in FIELDS) {
             var bmp: Bitmap? = null

@@ -364,9 +364,10 @@ object SessionUploadBundler {
             frameIndex: Int,
             onFieldHeatmaps: (List<FieldResult>) -> Unit,
         ): Boolean = withContext(Dispatchers.Default) {
-            // The deformed original is only the cover image (downscaled to 600 px in
+            // The deformed original is the cover image and what the field images are
+            // drawn on, as the viewer draws the frame (both downscaled to 600 px in
             // the report); decode + scale it capped, and fall back to the reference
-            // rather than losing the whole report over it.
+            // (and the reference-position map) rather than losing the whole report.
             val (coverW, coverH) =
                 VisualizationEngine.cappedDims(record.imgW, record.imgH, VisualizationEngine.REPORT_MAX_EDGE)
             val originalDefImg = BitmapDecoder.decodeFileForView(
@@ -378,7 +379,12 @@ object SessionUploadBundler {
                 rawHeight = record.imgH,
             )
             val defImg = originalDefImg?.scale(coverW, coverH) ?: baseImg
-            val reportData = ReportBuilder.buildReport(reportParams(record, frameIndex, data, baseImg, defImg))
+            // On the frame's own photo the field images are drawn as the viewer
+            // draws the frame: on it, at the displaced positions (TD-139).
+            val reportData = ReportBuilder.buildReport(
+                reportParams(record, frameIndex, data, baseImg, defImg)
+                    .copy(fieldsOnFramePhoto = originalDefImg != null),
+            )
 
             var ok = true
             try {

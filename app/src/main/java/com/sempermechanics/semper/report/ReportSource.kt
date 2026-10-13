@@ -47,6 +47,9 @@ data class ReportSource(
      * from [frameNames]: the viewer passes the planned frame (they differ past
      * a skipped frame), a sweep and the cloud bundle the frame itself.
      * [analysisDate] defaults to now, as both callers stamp it.
+     * [onFramePhoto] says [defImgForCover] is the frame's own photo, not the
+     * reference standing in for it: the field images are then drawn on it, at
+     * the displaced positions, as the viewer shows that frame (TD-139).
      */
     @Suppress("LongParameterList") // the frame's own inputs; the rest is this source
     fun forFrame(
@@ -56,6 +59,7 @@ data class ReportSource(
         defImgForCover: Bitmap,
         nameIndex: Int = frameIndex,
         analysisDate: String = ReportBuilder.currentAnalysisDate(),
+        onFramePhoto: Boolean = false,
     ): ReportBuilder.ReportBuildParams = ReportBuilder.ReportBuildParams(
         data = data,
         baseImg = baseImg,
@@ -74,6 +78,7 @@ data class ReportSource(
         referenceImageName = ReportImageNames.reference(refName),
         deformedImageName = ReportImageNames.deformed(frameNames, nameIndex),
         drawMinMarker = drawMinMarker,
+        fieldsOnFramePhoto = onFramePhoto,
     )
 
     companion object {
