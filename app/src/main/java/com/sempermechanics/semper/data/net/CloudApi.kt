@@ -46,7 +46,11 @@ interface CloudApi {
 
     suspend fun setImprovementConsent(idToken: String, granted: Boolean)
 
-    suspend fun listSessions(idToken: String, verify: Boolean = false): SessionsResponse
+    /**
+     * The caller's cloud analyses: this app's (by `X-App-Id`) when [app] is
+     * null, else the named app's, or the whole account's for [ALL_APPS] (ADR-014).
+     */
+    suspend fun listSessions(idToken: String, verify: Boolean = false, app: String? = null): SessionsResponse
 
     suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse
 
@@ -82,6 +86,11 @@ interface CloudApi {
         chunkSize: Int,
         onBytes: (Long) -> Unit = {},
     ): Pair<String, String>
+
+    companion object {
+        /** [listSessions]' `app` for every app's analyses, as the console asks (ADR-014). */
+        const val ALL_APPS = "all"
+    }
 }
 
 /** The signed-in user's Firebase ID token, refreshed when near expiry (ADR-002). */

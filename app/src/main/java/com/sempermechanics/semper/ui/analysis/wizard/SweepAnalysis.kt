@@ -18,6 +18,7 @@ import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.ui.analysis.run.AfterSave
+import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.afterSave
 import com.sempermechanics.semper.ui.analysis.run.baseName
@@ -40,22 +41,24 @@ import java.io.File
 internal suspend fun AnalysisViewModel.runSweep(
     appContext: Context,
     spec: RunSpec,
+    inputs: RunInputs,
     onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
     traceSection("Semper.analysis.sweep") {
-        runSweepBody(appContext, spec, onProgress)
+        runSweepBody(appContext, spec, inputs, onProgress)
     }
 }
 
 private fun AnalysisViewModel.runSweepBody(
     appContext: Context,
     spec: RunSpec,
+    inputs: RunInputs,
     onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome {
     val sweep = checkNotNull(spec.sweep) { "not a sweep" }
     val plan = sweep.plan
     sweepEvent(appContext, SemperAnalytics.ANALYSIS_STARTED, "frames" to SemperAnalytics.frameCountBucket(plan.size))
-    val bytes = refBytes ?: error("Reference missing")
+    if (inputs.reference.bytes == null) error("Reference missing")
 
     // Admitted here, the sweep saves its session even if the cap fills meanwhile.
     val admission = admitRun(appContext, plan.size, sweep = true)
@@ -63,18 +66,18 @@ private fun AnalysisViewModel.runSweepBody(
         sweepEvent(appContext, SemperAnalytics.ANALYSIS_FAILED, "reason" to "session_limit")
         return admission.outcome
     }
-    return solveSweep(appContext, spec, bytes, admission.admitted, onProgress)
+    return solveSweep(appContext, spec, inputs, admission.admitted, onProgress)
 }
 
 /**
- * Solves every combination of [spec]'s plan against [bytes] and saves the
+ * Solves every combination of [spec]'s plan against [inputs] and saves the
  * ones that solved; [admitted] is whether the quota let the sweep start as a
  * new session, so its save goes through if the cap fills meanwhile.
  */
 private fun AnalysisViewModel.solveSweep(
     appContext: Context,
     spec: RunSpec,
-    bytes: ByteArray,
+    inputs: RunInputs,
     admitted: Boolean,
     onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome {
@@ -92,12 +95,12 @@ private fun AnalysisViewModel.solveSweep(
     sweepSkippedNodes = emptyList()
 
     val result = SweepStudyRunner.run(
-        bytes,
-        realRefWidth,
-        realRefHeight,
+        checkNotNull(inputs.reference.bytes),
+        inputs.reference.size.width,
+        inputs.reference.size.height,
         SweepStudyRunner.Params(
             plan = plan,
-            defFramePath = defFilePaths[sweep.frameIndex],
+            defFramePath = inputs.frames.paths[sweep.frameIndex],
             roiX = spec.roi.x,
             roiY = spec.roi.y,
             roiW = spec.roi.w,
@@ -133,7 +136,7 @@ private fun AnalysisViewModel.solveSweep(
 
     return finishSolvedSweep(
         appContext,
-        SweepSession(localSessionId, batchDir, bytes, result, spec, executionTimeMs),
+        SweepSession(localSessionId, batchDir, inputs, result, spec, executionTimeMs),
         admitted = admitted,
     )
 }
@@ -194,11 +197,11 @@ private fun sweepEvent(appContext: Context, event: String, vararg params: Pair<S
 private fun SweepStudyRunner.SweepResult.skippedNodes(): List<SkippedNode> =
     skipped.mapIndexed { index, point -> point.toSkippedNode(skippedCodes[index]) }
 
-/** What a finished sweep's session is assembled from. */
+/** What a finished sweep's session is assembled from; [inputs] are the images as the sweep was launched with them. */
 internal class SweepSession(
     val localSessionId: String,
     val batchDir: File,
-    val reference: ByteArray,
+    val inputs: RunInputs,
     val result: SweepStudyRunner.SweepResult,
     val spec: RunSpec,
     val executionTimeMs: Int,
@@ -218,29 +221,30 @@ private fun AnalysisViewModel.persistSweepSession(
 ): AfterSave {
     val result = run.result
     val sweep = checkNotNull(run.spec.sweep)
-    val refPngPath = sessions.writeReferenceCopy(run.batchDir, run.reference, realRefWidth, realRefHeight)
-    lastRefPath = refPngPath
+    val reference = run.inputs.reference
+    val frames = run.inputs.frames
+    val refPngPath = writeSweepReference(run)
 
     val frameIndex = sweep.frameIndex
-    val rawName = sessions.persistRawDeformed(run.batchDir, frameIndex, defFilePaths, defOriginalNames)
+    val rawName = sessions.persistRawDeformed(run.batchDir, frameIndex, frames.paths, frames.originalNames)
     // Followed only when it moved: one copied out of a single run's session
     // stays where it is, that run's input for its next re-run.
-    if (rawName.isNotBlank() && !File(defFilePaths[frameIndex]).exists()) {
+    if (rawName.isNotBlank() && !File(frames.paths[frameIndex]).exists()) {
         val moved = File(run.batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).resolve(rawName)
         repointDeformedPathsOnMain(
-            defFilePaths.toMutableList().also { it[frameIndex] = moved.absolutePath },
+            frames.paths.toMutableList().also { it[frameIndex] = moved.absolutePath },
         )
     }
 
     val first = result.runs.first().point
     val defDisplay = rawName.ifBlank {
-        defOriginalNames.originalNameOr(frameIndex, File(defFilePaths[frameIndex]).name)
+        frames.originalNames.originalNameOr(frameIndex, File(frames.paths[frameIndex]).name)
     }.baseName()
     val summary = sweepSummary(appContext, run.localSessionId, result, sweep, defDisplay)
     val input = RunInput(
         localSessionId = run.localSessionId,
         dir = run.batchDir,
-        reference = RunReference(refPngPath, refName, refSize),
+        reference = RunReference(refPngPath, reference.name, reference.size),
         settings = run.spec.recordSettings()
             .copy(subset = first.subset, step = first.step, strainWin = first.vsg)
             .also { recordRunSettings(it) },
@@ -274,6 +278,14 @@ private fun AnalysisViewModel.persistSweepSession(
         RunStop.fromWireCode(result.engineErrorCode),
         saveRunRecord(appContext, record, cloudEnabled, admitted),
     )
+}
+
+/** Writes the viewable copy of [run]'s reference into its session and returns its path, the run's [lastRefPath]. */
+private fun AnalysisViewModel.writeSweepReference(run: SweepSession): String {
+    val reference = run.inputs.reference
+    val bytes = checkNotNull(reference.bytes) { "Reference missing" }
+    return sessions.writeReferenceCopy(run.batchDir, bytes, reference.size.width, reference.size.height)
+        .also { lastRefPath = it }
 }
 
 /** The Home-list name, headline and per-frame labels of a finished sweep. */

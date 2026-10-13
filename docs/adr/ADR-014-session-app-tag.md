@@ -96,8 +96,12 @@ Every app call already names its app (`X-App-Id`, ADR-010), resolved once in
   sessions are Semper's from the moment the backend deploys, so a Material
   Testing backup missed by the backfill disappears from that app until tagged.
 - A phone that restored the other app's backup before this change keeps a
-  backed-up row the new list does not show, and its reconcile may upload it
-  again as a duplicate: TD-153.
+  backed-up row the new list does not show. Its reconcile would have marked it
+  PENDING and uploaded it again as a duplicate (TD-153), so the app's
+  reconcile asks `?app=all` once whenever a SYNCED row is missing from its own
+  list, and leaves a row SYNCED when another app's COMPLETED backup holds its
+  local id or its stored cloud id (`CloudReconcile.list`). If that listing
+  fails, the pass repairs no row.
 - A third app is one more entry in `apps.py`; the console names the apps it
   knows and shows any other value as sent.
 
@@ -113,4 +117,8 @@ Every app call already names its app (`X-App-Id`, ADR-010), resolved once in
       75 sessions tagged, 68 `semper` and 7 `materialtesting`.
 - [x] Deploy the console, then the backend; re-run the backfill: 2026-10-01,
       production run 36844645753, `semper-gw` `v202610010948-83`; 0 left to tag.
-- [ ] TD-153: settle rows restored across apps before the deploy.
+- [x] TD-153: settle rows restored across apps before the deploy: the app's
+      reconcile checks `?app=all` before it repairs a missing row
+      (`app/src/main/java/com/sempermechanics/semper/data/cloud/CloudReconcile.kt`,
+      `CrossAppReconcileTest`). No backend or gateway change: the gateway
+      already declares `app` on `GET /v1/sessions`.

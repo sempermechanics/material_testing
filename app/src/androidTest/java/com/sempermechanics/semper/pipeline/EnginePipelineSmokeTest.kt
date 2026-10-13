@@ -21,6 +21,7 @@ import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.run.BatchRun
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
+import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import kotlinx.coroutines.Job
@@ -369,14 +370,20 @@ class EnginePipelineSmokeTest {
 
         try {
             val ticks = mutableListOf<BatchProgressUpdate>()
-            val outcome = vm.runBatchAnalysisBody(ctx, BatchRun(spec, ctx.cacheDir, System.currentTimeMillis(), Job())) {
-                ticks += it
-            }
+            val run = BatchRun(spec, ctx.cacheDir, System.currentTimeMillis(), Job(), vm.snapshotRunInputs())
+            // TD-173: what the wizard does once the run has its inputs never reaches it.
+            vm.refBytes = null
+            vm.refName = "other.png"
+            vm.deformedFrames = emptyList()
+            val outcome = vm.runBatchAnalysisBody(ctx, run) { ticks += it }
 
             assertEquals(RunStop.Finished, outcome.stop)
             assertEquals(shifts.size, outcome.totalFrames)
             assertTrue("the run's Home row was not saved", outcome.saved)
-            assertEquals(shifts.size, SessionStore.get(ctx, sessionId)?.frameCount)
+            val row = SessionStore.get(ctx, sessionId)
+            assertEquals(shifts.size, row?.frameCount)
+            assertEquals("ref.png", row?.refName)
+            assertEquals(frames.map { it.name }, row?.defNames)
 
             val batchDir = File(outcome.batchDirPath)
             shifts.forEachIndexed { i, (dx, dy) ->

@@ -15,6 +15,7 @@ import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.keepDeformedFrame
+import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import org.junit.Assert.assertEquals
@@ -111,8 +112,9 @@ class RunKindOwnRecordTest {
             firstMetrics = null,
             engineErrorCode = 0,
         )
-        val reference = ByteArray(REF_SIDE * REF_SIDE * 4)
-        vm.finishSolvedSweep(ctx, SweepSession(session.id, session.dir, reference, result, spec, 3_000), false)
+        vm.refBytes = ByteArray(REF_SIDE * REF_SIDE * 4)
+        val inputs = vm.snapshotRunInputs()
+        vm.finishSolvedSweep(ctx, SweepSession(session.id, session.dir, inputs, result, spec, 3_000), false)
         shadowOf(Looper.getMainLooper()).idle()
         return session
     }

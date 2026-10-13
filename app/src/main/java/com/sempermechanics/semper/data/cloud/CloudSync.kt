@@ -40,7 +40,8 @@ import timber.log.Timber
  * If the cloud copy is later deleted (or never finished), the app would keep
  * claiming "Synced" forever — local state silently drifting from server truth.
  * [reconcile] asks the backend what actually exists and repairs the difference,
- * re-queueing uploads for anything that went missing.
+ * re-queueing uploads for anything that went missing; a row restored from the
+ * other app's backup is not missing ([CloudReconcile.list]).
  */
 object CloudSync {
 
@@ -120,9 +121,9 @@ object CloudSync {
                     CloudReconcile.refreshRemoteConfig(appContext, this, token, throttled)
                     // The expensive per-session reconcile below is throttled; the cheap
                     // config fetch above is not, so quota still recovers between reconciles.
-                    if (throttled) null else this.listSessions(token, verify = deep)
+                    if (throttled) null else CloudReconcile.list(appContext, this, token, verify = deep)
                 }
-                val cloud = when (listed) {
+                val listing = when (listed) {
                     is Authed.Ok -> listed.value ?: run {
                         Timber.d("Reconcile skipped — last successful check %d s ago", sinceLast / MS_PER_SECOND)
                         return@withContext Outcome.Skipped
@@ -133,20 +134,16 @@ object CloudSync {
                     is Authed.Failed -> return@withContext CloudReconcile.reconcileFailure(listed.failure)
                 }
 
+                val cloud = listing.cloud
                 // Home offers the backups this phone has no row for from this.
                 CloudBackupListing.record(appContext, cloud.sessions)
-
-                // Only COMPLETED cloud sessions count as a real backup.
-                val backedUp = cloud.sessions
-                    .filter { it.status == UploadWorkOutcomes.STATUS_COMPLETED && it.localSessionId.isNotBlank() }
-                    .map { it.localSessionId }
-                    .toSet()
 
                 // Waiting rows respect the save-to-cloud toggle; a repair does not,
                 // because it restores a backup the user already had.
                 val repaired = CloudReconcile.repairRows(
                     appContext,
-                    backedUp,
+                    listing.backedUp,
+                    listing.keep,
                     reupload,
                     requeue = reupload && uploadsEnabled(appContext, api),
                 )
