@@ -4,22 +4,21 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** One unsolved sweep combination: subset, step, strain window, and engine code. */
+/**
+ * One unsolved sweep combination: subset, step, strain window, and engine code.
+ *
+ * [code] is null when the node was saved before codes were kept (5a1e5fcb..1eb3fa2d):
+ * such a node says only that it was skipped. It is not the engine's 0, which
+ * is the strain-window (VSG) skip. A null code is left out of the JSON.
+ */
 @Serializable
 data class SkippedNode(
     val subset: Int,
     val step: Int,
     val strainWindow: Int,
-    val code: Int,
+    val code: Int? = null,
 ) {
     companion object {
-        /**
-         * The code of a legacy node saved before codes were kept. The FI-3 types
-         * have no "no code" value, so such a node reads as the engine's 0, the
-         * strain-window (VSG) skip.
-         */
-        const val UNRECORDED_CODE = 0
-
         private val json = Json { ignoreUnknownKeys = true }
 
         fun encodeJson(nodes: List<SkippedNode>): String = json.encodeToString(nodes)
@@ -54,13 +53,13 @@ data class SkippedNode(
          * The four parallel lists from before FI-3. The combinations must agree
          * in length. [codes] may be shorter or empty: sweeps saved or backed up
          * before codes were kept (5a1e5fcb..1eb3fa2d) have none, and those nodes
-         * read as [UNRECORDED_CODE].
+         * get a null [code].
          */
         fun fromLegacyArrays(
             subsets: List<Int>,
             steps: List<Int>,
             strainWindows: List<Int>,
-            codes: List<Int>,
+            codes: List<Int?>,
         ): List<SkippedNode> {
             val count = subsets.size
             require(steps.size == count && strainWindows.size == count && codes.size <= count) {
@@ -68,7 +67,7 @@ data class SkippedNode(
                     "windows=${strainWindows.size} codes=${codes.size}"
             }
             return subsets.indices.map { i ->
-                SkippedNode(subsets[i], steps[i], strainWindows[i], codes.getOrElse(i) { UNRECORDED_CODE })
+                SkippedNode(subsets[i], steps[i], strainWindows[i], codes.getOrNull(i))
             }
         }
 
@@ -95,7 +94,7 @@ data class SkippedNode(
             val subsets: List<Int>,
             val steps: List<Int>,
             val strainWindows: List<Int>,
-            val codes: List<Int>,
+            val codes: List<Int?>,
         )
     }
 }

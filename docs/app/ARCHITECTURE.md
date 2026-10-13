@@ -134,6 +134,17 @@ When cloud is configured (`SEMPER_API_BASE_URL`):
 | Bundle download | `DicBundleDownloadWorker` | Write a session `.zip` into a SAF document the user picked **before** enqueue. Falls back to packing the local session when the cloud copy is unavailable, and deletes the empty destination on failure |
 | Delete queue | `SessionDeletes` / `BackupDeleteWorker` | Every delete that touches the cloud: one unique chain, a 5-second undo window, one analysis at a time, 429s waited out. Phone-only deletes stay inline (`CloudSync.eraseLocalOnly`). `ui/common/transfer/DeleteFeedback` reports progress and the outcome on Home and Settings |
 
+A backup's `Session.zip` holds what a restore needs: since `metadata.json`
+schema `/4` the reference as `ref/Reference.png` (`SessionZip.REFERENCE_ENTRY`),
+the frames under `raw/` by their own names, and `dat/`; `Extras.zip` holds the
+regenerable rest. `RestoreUnpacker.destFor` still reads an older backup's
+`raw/Reference.png` as the reference when the archive has no `ref/` entry. The
+layouts by schema, and what an older app makes of a `/4` backup, are in
+[CLOUD_ARCHITECTURE_GCP.md §4](../backend/CLOUD_ARCHITECTURE_GCP.md#4-upload-sequence-5-gb-resumable-keyless).
+A skipped sweep node's `code` is null when the backup predates codes
+(`SkippedNode`); it then reads "This combination was skipped" rather than a
+strain-window failure.
+
 `SemperApi.listSessions` **pages**: it follows `nextPageToken` until the backend
 stops returning one, so a deep refresh sees the whole account rather than the
 first page. Anything that lists cloud sessions should go through it rather than

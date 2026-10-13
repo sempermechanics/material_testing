@@ -39,13 +39,31 @@ internal object SessionZip {
 
     data class Member(val role: String, val name: String, val file: File)
 
-    /** Fixed name of the reference image artifact (role `raw`). */
+    /** Fixed name of the reference image in the archive. */
     const val REFERENCE_NAME = "Reference.png"
 
     /**
+     * The archive folder that holds only the reference, so no deformed frame can
+     * share its entry name: frames keep the user's own file name under `raw/`,
+     * and one may well be called `Reference.png`. An archive folder, never a
+     * role the backend sees: only `metadata`, `bundle` and `extras` are declared.
+     * Written since `metadata.json` schema 4
+     * ([com.sempermechanics.semper.data.cloud.SessionUploadMetadata.SCHEMA]).
+     */
+    const val REFERENCE_ROLE = "ref"
+
+    /**
+     * The reference's entry name since schema 4: `ref/Reference.png`. Archives
+     * before it kept the reference at `raw/Reference.png`, beside the frames; a
+     * restore reads that as the reference only when the archive has no entry here
+     * (`RestoreUnpacker.destFor`), and otherwise as a frame of that name.
+     */
+    val REFERENCE_ENTRY: String = entryName(REFERENCE_ROLE, REFERENCE_NAME)
+
+    /**
      * Whether a [role] belongs in the restore-essential bundle: every original
-     * image (`raw/` — the reference **and** the deformed originals) plus the engine
-     * results (`dat/`). Restoring a session brings back everything a local analysis
+     * image (`ref/` — the reference — and `raw/` — the deformed originals) plus the
+     * engine results (`dat/`). Restoring a session brings back everything a local analysis
      * run would have produced, so on-device re-export and the report covers work
      * without a second fetch.
      *
@@ -59,15 +77,17 @@ internal object SessionZip {
      * check because restore's ranged-prefix reader ([RESTORE_ENTRY_PREFIXES]) needs
      * to stay in step with it.
      */
-    fun isRestoreEssential(role: String): Boolean = role == ArtifactRoles.DAT || role == ArtifactRoles.RAW
+    fun isRestoreEssential(role: String): Boolean =
+        role == ArtifactRoles.DAT || role == ArtifactRoles.RAW || role == REFERENCE_ROLE
 
     /**
      * Entry-name prefixes a restore fetches from a **legacy** single-archive backup.
      * Same set as [isRestoreEssential] admits by role, expressed as zip-entry
      * prefixes for the ranged-prefix reader, which works on entry names rather than
-     * artifact records.
+     * artifact records. (A legacy archive predates `ref/`; it is listed to keep the
+     * two sets in step.)
      */
-    val RESTORE_ENTRY_PREFIXES: Set<String> = setOf("raw/", "dat/")
+    val RESTORE_ENTRY_PREFIXES: Set<String> = setOf("$REFERENCE_ROLE/", "raw/", "dat/")
 
     /** Already-compressed or large binary payloads — store, do not deflate. */
     val STORE_EXTENSIONS: Set<String> = setOf(

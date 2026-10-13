@@ -126,6 +126,25 @@ class SessionIndexGoldenTest {
         assertEquals(batch, read)
     }
 
+    @Test
+    fun `a skipped node with no recorded code writes no code and reads it back as none`() {
+        val restored = sweep.copy(
+            id = "restored-1",
+            sweepSkippedNodes = listOf(SkippedNode(41, 9, 121, null)),
+            sweepSkipSubsets = listOf(41),
+            sweepSkipSteps = listOf(9),
+            sweepSkipStrainWindows = listOf(121),
+            sweepSkipCodes = listOf(null),
+        )
+        SessionStore.upsert(context, restored, allowOverLimit = true)
+
+        val written = File(context.filesDir, "sessions/index.json").readText(Charsets.UTF_8)
+
+        assertTrue(written.contains(""""sweepSkipCodes":[null]"""))
+        assertTrue(written.contains(""""sweepSkippedNodes":[{"subset":41,"step":9,"strainWindow":121}]"""))
+        assertEquals(restored, SessionStore.get(context, "restored-1"))
+    }
+
     private fun expected(): String = checkNotNull(javaClass.classLoader)
         .getResource("session/index_golden.json")
         .readText(Charsets.UTF_8)

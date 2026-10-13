@@ -15,7 +15,10 @@ import java.io.File
  */
 class SessionLayout(val dir: File) {
 
-    /** Display-size PNG copy of the reference (the Home thumbnail; restored from `raw/Reference.png`). */
+    /**
+     * Display-size PNG copy of the reference (the Home thumbnail). A restore
+     * writes it from `ref/Reference.png`, or `raw/Reference.png` before schema 4.
+     */
     val referencePng: File get() = File(dir, REFERENCE_PNG)
 
     /** The cloud backup's blueprint, as uploaded or as restored. */

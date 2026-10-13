@@ -114,6 +114,13 @@ class SweepControlsTest {
     }
 
     @Test
+    fun `a skipped node with no recorded code keeps it null`() {
+        val node = skippedLatticeNodes(sweep(listOf(SkippedNode(41, 10, 60, null)))) { code -> "reason $code" }.single()
+        assertEquals("reason null", node.failureReason)
+        assertEquals(null, node.failureCode)
+    }
+
+    @Test
     fun `a missing or empty batch directory has no profiles`() {
         val line = SweepStudy.StudyLine(horizontal = true, position = 0f)
         val components = SweepStudy.STRAIN_COMPONENTS.toIntArray()

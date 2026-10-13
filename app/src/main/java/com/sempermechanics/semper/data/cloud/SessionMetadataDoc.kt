@@ -186,7 +186,7 @@ data class SessionMetadataDoc(
         /**
          * Nodes when there are any, else the legacy lists through
          * [SkippedNode.fromLegacyArrays]: their combinations must agree in
-         * length, and a missing `codes` list reads as [SkippedNode.UNRECORDED_CODE].
+         * length, and a missing `codes` list leaves each [SkippedNode.code] null.
          */
         fun toSkippedNodes(): List<SkippedNode> =
             nodes?.takeIf { it.isNotEmpty() }?.filterNotNull()?.map { it.toSkippedNode() }
@@ -205,7 +205,8 @@ data class SessionMetadataDoc(
         @Serializable(with = OptIntSerializer::class) val strainWindow: Int? = null,
         @Serializable(with = OptIntSerializer::class) val code: Int? = null,
     ) {
-        fun toSkippedNode(): SkippedNode = SkippedNode(subset ?: 0, step ?: 0, strainWindow ?: 0, code ?: 0)
+        /** A missing `code` stays null: the backup predates codes, which is not the engine's 0. */
+        fun toSkippedNode(): SkippedNode = SkippedNode(subset ?: 0, step ?: 0, strainWindow ?: 0, code)
     }
 
     @Serializable

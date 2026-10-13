@@ -67,8 +67,9 @@ internal object RestoreBundleFetcher {
     /**
      * Everything but `metadata.json`, into [PayloadFetch.layout]. Three eras, one
      * destination layout (see [RestoreUnpacker.destFor]):
-     *  - schema/3+ ([split]): `Session.zip` holds only raw/ + dat/. Fetch it whole;
-     *    the `Extras.zip` beside it is never downloaded.
+     *  - schema/3+ ([split]): `Session.zip` holds only raw/ + dat/ (and, from
+     *    schema/4, the reference under ref/). Fetch it whole; the `Extras.zip`
+     *    beside it is never downloaded.
      *  - schema < 3: one `Session.zip` holds everything. Fetch just the raw/ + dat/
      *    prefix, falling back to the whole archive if that is not safely possible.
      *  - pre-bundle: every artifact listed as its own file.

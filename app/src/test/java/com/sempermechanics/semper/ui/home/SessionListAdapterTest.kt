@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.TransferPhase
 import com.sempermechanics.semper.data.session.SessionRecord
+import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.ui.common.transfer.TransferWorkObserver
@@ -242,12 +243,27 @@ class SessionListAdapterTest {
 
     @Test
     fun `a parameter sweep counts its solved combinations, not frames or subsets`() {
+        // As a local run saves it: typed skipped nodes only, no legacy lists.
         val sweep = record("a", frameCount = 2, sweep = true, headline = "plate · 2 of 3 solved", convergence = 50f)
-            .copy(sweepSubsets = listOf(15, 25), sweepSkipSubsets = listOf(35))
+            .copy(sweepSubsets = listOf(15, 25), sweepSkippedNodes = listOf(SkippedNode(35, 5, 21, -12)))
         submit(sweep)
         val subtitle = bind(0).subtitle.text.toString()
 
         assertEquals("2 of 3 solved", subtitle)
+    }
+
+    @Test
+    fun `a sweep row with only the legacy skip lists counts its skipped combinations too`() {
+        val sweep = record("a", frameCount = 2, sweep = true, headline = "plate · 2 of 3 solved", convergence = 50f)
+            .copy(
+                sweepSubsets = listOf(15, 25),
+                sweepSkipSubsets = listOf(35),
+                sweepSkipSteps = listOf(5),
+                sweepSkipStrainWindows = listOf(21),
+            )
+        submit(sweep)
+
+        assertEquals("2 of 3 solved", bind(0).subtitle.text.toString())
     }
 
     // ── State icon and transfer bar ──────────────────────────────────────────

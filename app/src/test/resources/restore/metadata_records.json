@@ -708,28 +708,25 @@
             0
         ],
         "sweepSkipCodes": [
-            0,
-            0,
-            0
+            null,
+            null,
+            null
         ],
         "sweepSkippedNodes": [
             {
                 "subset": 41,
                 "step": 9,
-                "strainWindow": 0,
-                "code": 0
+                "strainWindow": 0
             },
             {
                 "subset": 0,
                 "step": 0,
-                "strainWindow": 0,
-                "code": 0
+                "strainWindow": 0
             },
             {
                 "subset": 0,
                 "step": 0,
-                "strainWindow": 0,
-                "code": 0
+                "strainWindow": 0
             }
         ],
         "stopCode": 0,
