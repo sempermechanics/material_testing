@@ -54,14 +54,15 @@ internal class FrameSink(
     }
 
     /**
-     * Writes one decoded frame per entry of [timesMs] (each frame's time in
-     * the clip) as lossless grayscale PNGs: frame 0 is the reference, the rest
-     * are the deformed batch. Null when a frame fails to decode or nothing
-     * deformed came out.
+     * Writes one decoded frame per entry of [timesMs] (the time each frame was
+     * asked for) as lossless grayscale PNGs: frame 0 is the reference, the rest
+     * are the deformed batch. Each deformed frame is timed by its own
+     * [DecodedFrame.ptsUs], and by the time asked for only when the decoder
+     * cannot say. Null when a frame fails to decode or nothing deformed came out.
      */
     suspend fun write(
         timesMs: List<Long>,
-        lumaAt: (Int) -> GrayPngEncoder.Luma?,
+        frameAt: (Int) -> DecodedFrame?,
     ): VideoFrameExtractor.ExtractionResult? {
         val count = timesMs.size
         val defPaths = mutableListOf<String>()
@@ -70,7 +71,8 @@ internal class FrameSink(
 
         for (i in 0 until count) {
             currentCoroutineContext().ensureActive()
-            val luma = lumaAt(i) ?: return null
+            val frame = frameAt(i) ?: return null
+            val luma = frame.luma
             currentCoroutineContext().ensureActive()
 
             if (i == 0) {
@@ -86,7 +88,7 @@ internal class FrameSink(
                 val f = deformedFile(i)
                 FileOutputStream(f).use { out -> GrayPngEncoder.encode(out, luma) }
                 defPaths.add(f.absolutePath)
-                defTimesMs.add(timesMs[i])
+                defTimesMs.add(frame.timeMs(requestedMs = timesMs[i]))
             }
             progress(i, count)
         }
@@ -138,5 +140,23 @@ internal class FrameSink(
 
     private companion object {
         const val PERCENT = 100
+    }
+}
+
+/**
+ * One decoded frame: its [luma] plane and [ptsUs], the presentation time the
+ * stream gives it, or [UNKNOWN_PTS] when the decoder cannot say. The hardware
+ * decoder returns the first frame at or after the time asked for, so that
+ * time can be up to a frame early; the frame's own time is what the clip shows.
+ */
+internal class DecodedFrame(val luma: GrayPngEncoder.Luma, val ptsUs: Long = UNKNOWN_PTS) {
+
+    /** The frame's time in the clip in ms: its own when known, else [requestedMs]. */
+    fun timeMs(requestedMs: Long): Long = if (ptsUs >= 0) ptsUs / US_PER_MS else requestedMs
+
+    companion object {
+        /** A [ptsUs] the decoder could not report. */
+        const val UNKNOWN_PTS = -1L
+        private const val US_PER_MS = 1000L
     }
 }

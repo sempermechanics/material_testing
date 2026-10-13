@@ -85,7 +85,8 @@ internal class HardwareVideoDecoder private constructor(
             return created
         }
 
-        private fun findVideoTrack(extractor: MediaExtractor): Int? {
+        /** The first video track of [extractor]; shared with the retriever rung's key-frame lookup. */
+        internal fun findVideoTrack(extractor: MediaExtractor): Int? {
             for (i in 0 until extractor.trackCount) {
                 val format = extractor.getTrackFormat(i)
                 val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
@@ -99,10 +100,12 @@ internal class HardwareVideoDecoder private constructor(
 
     /**
      * Decodes the first frame presented at or after [timeUs] (seeking to the previous sync
-     * frame and decoding forward) and extracts the raw Y plane.
+     * frame and decoding forward) and extracts the raw Y plane, with that frame's own
+     * presentation time: it can be up to a frame after [timeUs]. A frame reached
+     * only by end of stream, before the target, reports no time of its own.
      * Returns null if decoding fails or output image cannot be acquired.
      */
-    fun decodeFrameAt(timeUs: Long): GrayPngEncoder.Luma? {
+    fun decodeFrameAt(timeUs: Long): DecodedFrame? {
         try {
             // A segment ending at the container duration asks for a time past the last
             // frame; decoding forward would then run into end of stream with no frame.
@@ -127,10 +130,13 @@ internal class HardwareVideoDecoder private constructor(
                     // The seek lands on the previous sync frame; decode forward past it so
                     // uniform-interval samples are the requested frame, not a repeated I-frame.
                     val isEos = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
-                    val reached = bufferInfo.presentationTimeUs >= target || isEos
+                    val ptsUs = bufferInfo.presentationTimeUs
+                    val reached = ptsUs >= target || isEos
                     val luma = if (reached) extractLumaFromOutputBuffer(outIndex) else null
                     codec.releaseOutputBuffer(outIndex, false)
-                    if (luma != null) return luma
+                    if (luma != null) {
+                        return DecodedFrame(luma, ptsUs = if (ptsUs >= target) ptsUs else DecodedFrame.UNKNOWN_PTS)
+                    }
                     if (isEos) break
                 }
             }

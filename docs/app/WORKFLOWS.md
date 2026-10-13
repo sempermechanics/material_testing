@@ -400,8 +400,11 @@ Reached whenever the file picked — from the grid or through Files — is a vid
 emulator: it encodes MP4 and AVI (Y800, MJPG, H.264) clips whose frames are stamped
 with their own index, and checks keyframe and fixed-interval picks, portrait
 rotation, and that every PNG came from the lossless Y-plane path rather than the
-retriever fallback. Rows 5.1a.1–11 remain for the sheet itself and for real
-vendor decoders and camera AVIs.
+retriever fallback. Keyframes mode is checked on every rung: the hardware decoder,
+the AVI demuxer (an indexed H.264 AVI gives its I-frames; an all-intra or
+index-less AVI falls back to the interval), and the retriever, forced; the
+hardware and AVI frames carry their own clip times. Rows 5.1a.1–11 remain for the
+sheet itself and for real vendor decoders and camera AVIs.
 
 ### 5.2 Step 2 — Confirm settings
 

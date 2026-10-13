@@ -6,7 +6,6 @@ import android.net.Uri
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -36,10 +35,9 @@ class MediaPickerSheet private constructor(
     private val requestPermission: () -> Unit,
     private val onBrowseSaf: () -> Unit,
     private val onPicked: (List<Uri>) -> Unit,
+    /** Where the MediaStore query runs; tests pass an inline one so the grid fills as main idles. */
+    private val queryDispatcher: CoroutineDispatcher,
 ) {
-    /** Where the MediaStore query runs, fixed when the sheet opens. */
-    private val queryDispatcher: CoroutineDispatcher = Companion.queryDispatcher
-
     private val content = inflateSheet(activity, R.layout.sheet_media_picker)
     private val sheet = content.dialog
     private val views = SheetMediaPickerBinding.bind(content.view)
@@ -344,22 +342,21 @@ class MediaPickerSheet private constructor(
         private const val SCRIM_FADE_MS = 180L
         private const val GRID_COLUMNS = 3
 
-        /** Seam for tests, which query inline so the grid fills as the main thread idles. */
-        @VisibleForTesting
-        internal var queryDispatcher: CoroutineDispatcher = Dispatchers.IO
-
+        @Suppress("LongParameterList") // queryDispatcher is a test seam
         fun show(
             activity: AppCompatActivity,
             mode: MediaSourceChooser.Mode,
             requestPermission: () -> Unit,
             onBrowseSaf: () -> Unit,
             onPicked: (List<Uri>) -> Unit,
+            queryDispatcher: CoroutineDispatcher = Dispatchers.IO,
         ): MediaPickerSheet = MediaPickerSheet(
             activity,
             mode,
             requestPermission,
             onBrowseSaf,
             onPicked,
+            queryDispatcher,
         )
     }
 }

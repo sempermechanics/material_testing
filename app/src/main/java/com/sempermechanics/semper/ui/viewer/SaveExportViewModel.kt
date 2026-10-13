@@ -2,9 +2,12 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.app.Application
 import android.net.Uri
-import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -19,8 +22,13 @@ import java.io.File
  * cancelled the wait and the recreated proxy started a second copy into the
  * same document while the first, blocking in IO, was still writing it. Here one
  * copy runs per proxy, and whichever instance is current awaits it.
+ *
+ * The copy runs on [io]; the activity builds this through [factory].
  */
-internal class SaveExportViewModel(app: Application) : AndroidViewModel(app) {
+internal class SaveExportViewModel(
+    app: Application,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) : AndroidViewModel(app) {
 
     private var copy: Deferred<Boolean>? = null
 
@@ -29,7 +37,7 @@ internal class SaveExportViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun start(uri: Uri, file: File): Deferred<Boolean> {
         val resolver = getApplication<Application>().contentResolver
-        return viewModelScope.async(ioDispatcher) {
+        return viewModelScope.async(io) {
             runCatching {
                 // Treat the copy as successful only if bytes actually landed —
                 // an opened-but-empty stream shouldn't report "Saved".
@@ -42,9 +50,9 @@ internal class SaveExportViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
-        /** Where the copy runs; a test holds it to rotate mid-copy. */
-        @VisibleForTesting
-        @Volatile
-        var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+        /** Builds the view model with its copy on [io]. */
+        fun factory(io: CoroutineDispatcher = Dispatchers.IO): ViewModelProvider.Factory = viewModelFactory {
+            initializer { SaveExportViewModel(checkNotNull(this[APPLICATION_KEY]), io) }
+        }
     }
 }

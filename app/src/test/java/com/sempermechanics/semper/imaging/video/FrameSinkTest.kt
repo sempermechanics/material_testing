@@ -6,6 +6,7 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.imaging.GrayPngEncoder
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -44,9 +45,12 @@ class FrameSinkTest {
     private fun luma(width: Int, height: Int) =
         GrayPngEncoder.Luma(ByteArray(width * height) { (it % 251).toByte() }, width, height, rowStride = width)
 
+    /** A 6×4 frame with no presentation time of its own. */
+    private fun frame() = DecodedFrame(luma(6, 4))
+
     @Test
     fun `frame 0 is the reference and the rest are the deformed batch`() {
-        val result = runBlocking { sink(temp.newFolder()).write(timesMs = listOf(0L, 40L, 80L)) { luma(6, 4) } }!!
+        val result = runBlocking { sink(temp.newFolder()).write(timesMs = listOf(0L, 40L, 80L)) { frame() } }!!
 
         assertEquals(ImageSize(6, 4), result.reference.size)
         assertTrue(result.reference.png.isNotEmpty())
@@ -62,24 +66,45 @@ class FrameSinkTest {
     @Test
     fun `a frame that does not decode aborts the batch`() {
         val result = runBlocking {
-            sink(temp.newFolder()).write(timesMs = listOf(0L, 40L, 80L)) { i -> if (i == 1) null else luma(6, 4) }
+            sink(temp.newFolder()).write(timesMs = listOf(0L, 40L, 80L)) { i -> if (i == 1) null else frame() }
         }
         assertNull(result)
     }
 
     @Test
     fun `a clip with no deformed frame gives no batch`() {
-        assertNull(runBlocking { sink(temp.newFolder()).write(timesMs = listOf(0L)) { luma(6, 4) } })
+        assertNull(runBlocking { sink(temp.newFolder()).write(timesMs = listOf(0L)) { frame() } })
     }
 
     @Test
     fun `each deformed frame keeps its own time, the reference's left out`() {
         // As the AVI rung hands them over once repeats are dropped: uneven gaps.
         val times = listOf(1_000L, 1_040L, 1_120L, 1_250L)
-        val result = runBlocking { sink(temp.newFolder()).write(times) { luma(6, 4) } }!!
+        val result = runBlocking { sink(temp.newFolder()).write(times) { frame() } }!!
 
         assertEquals(listOf(1_040L, 1_120L, 1_250L), result.batch.frames.map { it.timeMs })
         assertEquals(listOf(1_040L, 1_120L, 1_250L), result.batch.frameTimesMs)
+    }
+
+    @Test
+    fun `a decoded frame is timed by its own presentation time, its pixels unchanged`() {
+        // A decoder that lands one frame (33 ms at 30 fps) after each time asked for,
+        // as the hardware decoder does when a sample falls between two frames (TD-207).
+        val asked = listOf(0L, 100L, 200L)
+        val pts = listOf(0L, 133_333L, 233_333L)
+        val luma = luma(6, 4)
+        val timed = runBlocking {
+            sink(temp.newFolder()).write(asked) { i -> DecodedFrame(luma, ptsUs = pts[i]) }
+        }!!
+        val untimed = runBlocking { sink(temp.newFolder()).write(asked) { DecodedFrame(luma) } }!!
+
+        assertEquals(listOf(133L, 233L), timed.batch.frameTimesMs)
+        // No time of its own: the time asked for, as before.
+        assertEquals(listOf(100L, 200L), untimed.batch.frameTimesMs)
+        assertArrayEquals(untimed.reference.png, timed.reference.png)
+        timed.batch.filePaths.zip(untimed.batch.filePaths).forEach { (a, b) ->
+            assertArrayEquals(File(b).readBytes(), File(a).readBytes())
+        }
     }
 
     @Test
@@ -98,8 +123,8 @@ class FrameSinkTest {
 
     @Test
     fun `a clip with no usable name is called Video`() {
-        val unnamed = runBlocking { sink(temp.newFolder(), clipName = null).write(listOf(0L, 40L)) { luma(6, 4) } }!!
-        val dotOnly = runBlocking { sink(temp.newFolder(), clipName = ".mp4").write(listOf(0L, 40L)) { luma(6, 4) } }!!
+        val unnamed = runBlocking { sink(temp.newFolder(), clipName = null).write(listOf(0L, 40L)) { frame() } }!!
+        val dotOnly = runBlocking { sink(temp.newFolder(), clipName = ".mp4").write(listOf(0L, 40L)) { frame() } }!!
 
         assertEquals("Video", unnamed.refName)
         assertEquals("Video", dotOnly.batch.videoName)
