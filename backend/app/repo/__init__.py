@@ -138,6 +138,8 @@ from .sessions import (  # noqa: F401
     get_session,
     get_file,
     metadata_file_id,
+    SESSION_NAME_MAX_CHARS,
+    session_name_of,
     replace_file_content,
     list_pending_uploads,
     upload_target,

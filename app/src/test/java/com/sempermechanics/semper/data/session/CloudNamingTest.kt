@@ -59,6 +59,16 @@ class CloudNamingTest {
         assertEquals(listOf("", "", "a"), CloudNaming.backupNames(listOf(null, " ", "a.png"), emptySet()))
     }
 
+    @Test
+    fun `a listed backup goes by its analysis's name, else by its reference's file name`() {
+        assertEquals("Steel sweep", CloudNaming.listedName(" Steel sweep ", "steel_24.png"))
+        assertEquals("steel_24", CloudNaming.listedName("steel_24 · Oct 9, 17:57:31", "steel_24.png"))
+        assertEquals("steel_24", CloudNaming.listedName("steel_24.png", "steel_24.png"))
+        assertEquals("steel_24.png", CloudNaming.listedName(null, "steel_24.png"))
+        assertEquals("steel_24.png", CloudNaming.listedName("  ", "steel_24.png"))
+        assertEquals("", CloudNaming.listedName("", null))
+    }
+
     // ── Repair of names an earlier build left ───────────────────────────────
 
     @Test

@@ -100,6 +100,9 @@ class FileSpec(BaseModel):
 
 class SessionCreate(BaseModel):
     specimen: str = Field(min_length=1, max_length=200)
+    # The analysis's own name, which the backup list shows (TD-208). Optional:
+    # an older app sends none, and its sessions are listed by `specimen`.
+    name: str = Field(default="", max_length=200)
     files: List[FileSpec] = Field(min_length=1, max_length=5000)
     metrics: dict = {}
     # The app's local analysis id. Lets the client reconcile its local sync

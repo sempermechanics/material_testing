@@ -285,6 +285,7 @@ data**.
 | [ ] 4.14f | Download a row whose cloud zip is unavailable | It falls back to packing the local session into the same destination |
 | [ ] 4.14g | Cause a Download to fail | The empty destination file is removed rather than left as a 0-byte zip, and the failure is named |
 | [ ] 4.14h | Look at cloud-only rows of backups made from one image, beside a phone row of that name | Named without the extension and never alike: "steel_00 (2)", "pmma_00", "pmma_00 (2)"; restored, each keeps the name it was backed up with, numbered on a clash |
+| [ ] 4.14i | Back up a sweep and a renamed analysis, then look at their cloud-only rows here and on Home's restore list (another phone, or after deleting the phone copies) | Listed by the analysis's name ("steel_24 sweep", the new name), the name the restore gives the row, not the reference's file name. Rename one after its backup: after the metadata re-send the list shows the new name. A backup from an older build, or on a backend from before TD-208, is still listed by its reference's name |
 | [ ] 4.15 | Tap the bin on a row with a local copy | The same three choices as Home §3.13: phone / cloud backup / everywhere, plus Cancel |
 | [ ] 4.16 | Tap the bin on a cloud-only row | "Delete steel_00 from the cloud?" naming the analysis, "Raw images, results and report. This can't be undone.", and **Delete** |
 | [ ] 4.17 | Confirm any backup delete, then tap **Undo** within 5 s | The row returns; nothing is deleted server-side |
