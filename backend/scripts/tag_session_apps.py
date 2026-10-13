@@ -16,7 +16,7 @@ document, no `deviceId`) is Semper's. One device read per distinct device.
 What this cannot see: a Material Testing build from before it sent
 `X-App-Id` registered its phone as Semper, so its sessions are tagged
 Semper. The `metadata.json` schema (`indic.session.metadata/6` for Material
-Testing, `/3` for Semper) would tell them apart, but it is in Drive, not in
+Testing, `/3` or `/4` for Semper) would tell them apart, but it is in Drive, not in
 Firestore, and reading every session's metadata is not worth it for the few
 pre-header lab builds. Retag those by hand if anyone asks.
 

@@ -4,6 +4,7 @@ import com.sempermechanics.semper.data.cloud.CorruptTransferException
 import com.sempermechanics.semper.data.cloud.restore.RestoreUnpacker
 import com.sempermechanics.semper.data.session.SessionLayout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Rule
 import org.junit.Test
@@ -31,6 +32,7 @@ class RestoreDestForTest {
     @Test
     fun `each role lands where a local run puts it`() {
         val dir = layout.dir
+        assertEquals(File(dir, "reference.png"), dest("ref", "Reference.png"))
         assertEquals(File(dir, "reference.png"), dest("raw", "Reference.png"))
         assertEquals(File(layout.rawDeformedDir, "def.png"), dest("raw", "def.png"))
         assertEquals(File(dir, "frame_0001.dat"), dest("dat", "frame_0001.dat"))
@@ -83,5 +85,52 @@ class RestoreDestForTest {
 
         assertEquals(layout.referencePng.absolutePath, refPath)
         assertEquals(listOf<Byte>(4, 5), layout.rawDeformed("reference.png").readBytes().toList())
+    }
+
+    @Test
+    fun `beside a ref entry, raw Reference_png is a frame of that name`() {
+        assertEquals(
+            layout.rawDeformed("Reference.png"),
+            RestoreUnpacker.destFor("raw", "Reference.png", layout, legacyReference = false),
+        )
+        assertEquals(
+            layout.referencePng,
+            RestoreUnpacker.destFor("ref", "Reference.png", layout, legacyReference = false),
+        )
+    }
+
+    @Test
+    fun `a legacy bundle's raw Reference_png is still the reference`() {
+        val bundle = File(tmp.root, "legacy.zip").apply {
+            writeBytes(
+                FakeRestoreApi.zipOf(
+                    listOf("raw/Reference.png" to byteArrayOf(1, 2, 3), "raw/def.png" to byteArrayOf(4)),
+                ),
+            )
+        }
+
+        val refPath = RestoreUnpacker.unpackBundle(bundle, layout)
+
+        assertEquals(layout.referencePng.absolutePath, refPath)
+        assertEquals(listOf<Byte>(1, 2, 3), layout.referencePng.readBytes().toList())
+        assertEquals(listOf<Byte>(4), layout.rawDeformed("def.png").readBytes().toList())
+        assertFalse(layout.rawDeformed("Reference.png").exists())
+    }
+
+    @Test
+    fun `a schema 4 bundle keeps the reference and a frame named Reference_png apart`() {
+        val bundle = File(tmp.root, "v4.zip").apply {
+            writeBytes(
+                FakeRestoreApi.zipOf(
+                    listOf("raw/Reference.png" to byteArrayOf(7), "ref/Reference.png" to byteArrayOf(1, 2, 3)),
+                ),
+            )
+        }
+
+        val refPath = RestoreUnpacker.unpackBundle(bundle, layout)
+
+        assertEquals(layout.referencePng.absolutePath, refPath)
+        assertEquals(listOf<Byte>(1, 2, 3), layout.referencePng.readBytes().toList())
+        assertEquals(listOf<Byte>(7), layout.rawDeformed("Reference.png").readBytes().toList())
     }
 }

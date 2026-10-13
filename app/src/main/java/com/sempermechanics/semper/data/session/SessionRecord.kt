@@ -83,9 +83,9 @@ data class SessionRecord(
      * Engine code per skipped combination, index-aligned with the lists above.
      * Stored rather than resolved so the lattice can still say *why* each node
      * is hollow after a reopen — without it the reasons only survive until the
-     * screen is left.
+     * screen is left. Null where a restored backup predates codes ([SkippedNode.code]).
      */
-    val sweepSkipCodes: List<Int> = emptyList(),
+    val sweepSkipCodes: List<Int?> = emptyList(),
 
     /** Typed skips; legacy parallel lists remain for old on-disk JSON. */
     val sweepSkippedNodes: List<SkippedNode> = emptyList(),

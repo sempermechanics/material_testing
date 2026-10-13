@@ -503,11 +503,28 @@ API Gateway deadline; a truncated chunk resumes from the `.part` file length
 changing `gateway/openapi.yaml` deadlines, recreate the API Gateway **api-config**
 (Cloud Run deploy alone does not update the gateway).
 
-**One Session.zip per session (current), not per-file objects.** The product now
-uploads a single `bundle`-role `Session.zip` holding `raw/`, `dat/`, `csv/` and
-the report archives (plus a small `metadata.json` at the session root), so a
-session costs ~1–2 Firestore file docs instead of 3F+4. `metadata.json` is the
-one file a backup can change after it completes: `PUT /v1/sessions/{sid}/metadata`
+**Two archives per session (current), not per-file objects.** The product
+uploads a `bundle`-role `Session.zip`, an `extras`-role `Extras.zip` and a small
+`metadata.json` at the session root, so a session costs ~3 Firestore file docs
+instead of 3F+4. The backend never opens the archives; the app reads them back.
+Their layout follows the `schema` in `metadata.json`
+(`SessionUploadMetadata.SCHEMA`):
+
+| `schema` | `Session.zip` | `Extras.zip` |
+|---|---|---|
+| `indic.session.metadata/2` and older | `raw/` (reference as `raw/Reference.png`, frames by their own names), `dat/`, `csv/`, `reports/`, `processed/` | none |
+| `/3` | `raw/` (reference as `raw/Reference.png`), `dat/` | `csv/`, `reports/`, `processed/` |
+| `/4` (since 2026-10-13) | `ref/Reference.png` (the reference), `raw/` (frames only), `dat/` | as `/3` |
+
+`/4` gives the reference its own folder because a frame keeps the user's file
+name, and one named `Reference.png` collided with it. A restore takes
+`ref/Reference.png` as the reference, and `raw/Reference.png` only from an
+archive with no `ref/` entry (`RestoreUnpacker.destFor`). An app older than `/4`
+restores a `/4` backup **without its reference**: it puts `ref/Reference.png`
+loose in the session directory. Material Testing writes its own numbering
+(`/6`); a fork sync has to carry the `ref/` reader before its writer.
+
+`metadata.json` is the one file a backup can change after it completes: `PUT /v1/sessions/{sid}/metadata`
 writes the app's current metadata over the same Drive object and updates the file
 doc's size and checksums. Semper sends it after a rename, Material Testing also
 after a deflection or curve correction, made after the backup ([ADR-013](../adr/ADR-013-session-metadata-replace.md)). This trades in-Drive

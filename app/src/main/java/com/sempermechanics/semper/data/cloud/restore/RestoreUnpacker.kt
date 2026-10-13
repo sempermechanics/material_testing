@@ -22,8 +22,9 @@ internal object RestoreUnpacker {
      */
     fun unpackBundle(zip: File, layout: SessionLayout): String {
         var refPath = ""
+        val legacyReference = ZipFile(zip).use { it.getEntry(SessionZip.REFERENCE_ENTRY) == null }
         SessionZip.forEachEntry(zip) { role, name, input ->
-            val dest = destFor(role, name, layout)
+            val dest = destFor(role, name, layout, legacyReference)
             dest.outputStream().use { input.copyTo(it) }
             if (dest == layout.referencePng) refPath = dest.absolutePath
         }
@@ -47,11 +48,12 @@ internal object RestoreUnpacker {
     fun unpackPrefix(zip: File, layout: SessionLayout, crcByName: Map<String, Long>): String {
         var refPath = ""
         var restored = 0
+        val legacyReference = SessionZip.REFERENCE_ENTRY !in crcByName
         ZipInputStream(zip.inputStream().buffered()).use { input ->
             generateSequence { input.nextEntry }
                 .filterNot { it.isDirectory }
                 .forEach { entry ->
-                    val dest = writePrefixEntry(input, entry.name, layout, crcByName[entry.name])
+                    val dest = writePrefixEntry(input, entry.name, layout, crcByName[entry.name], legacyReference)
                     if (dest == layout.referencePng) refPath = dest.absolutePath
                     restored++
                 }
@@ -66,11 +68,12 @@ internal object RestoreUnpacker {
         entryName: String,
         layout: SessionLayout,
         expectedCrc: Long?,
+        legacyReference: Boolean,
     ): File {
         val role = entryName.substringBefore('/', missingDelimiterValue = "")
         val name = entryName.substringAfter('/', missingDelimiterValue = "")
         if (role.isEmpty() || name.isEmpty()) throw CorruptTransferException("unexpected_zip_entry")
-        val dest = destFor(role, name, layout)
+        val dest = destFor(role, name, layout, legacyReference)
         val crc = CRC32()
         dest.outputStream().buffered().use { out ->
             input.forEachChunk { buffer, n ->
@@ -84,7 +87,13 @@ internal object RestoreUnpacker {
 
     /**
      * Where one artifact lands on disk, by role — the single mapping both
-     * restore paths share, with its parent directory created. Guards against
+     * restore paths share, with its parent directory created.
+     *
+     * The reference is `ref/Reference.png` ([SessionZip.REFERENCE_ENTRY]).
+     * Backups before metadata schema 4 kept it at `raw/Reference.png`, so that
+     * entry is the reference while [legacyReference] holds — the caller's
+     * archive has no `ref/` entry — and otherwise a frame the user named
+     * `Reference.png`. Guards against
      * zip-slip: an entry must resolve to a path strictly **inside** the session
      * directory.
      *
@@ -94,9 +103,10 @@ internal object RestoreUnpacker {
      * escapes is a hostile or broken archive, so it fails as a
      * [CorruptTransferException]: terminal, never retried.
      */
-    fun destFor(role: String, name: String, layout: SessionLayout): File {
+    fun destFor(role: String, name: String, layout: SessionLayout, legacyReference: Boolean = true): File {
         val dest = when {
-            role == ArtifactRoles.RAW && name == SessionZip.REFERENCE_NAME -> layout.referencePng
+            role == SessionZip.REFERENCE_ROLE && name == SessionZip.REFERENCE_NAME -> layout.referencePng
+            legacyReference && role == ArtifactRoles.RAW && name == SessionZip.REFERENCE_NAME -> layout.referencePng
             role == ArtifactRoles.RAW -> layout.rawDeformed(name)
             // Per-frame reports/heatmaps into their own subfolders — one PDF and
             // five PNGs per frame flat in the session dir would drown the .dat files.

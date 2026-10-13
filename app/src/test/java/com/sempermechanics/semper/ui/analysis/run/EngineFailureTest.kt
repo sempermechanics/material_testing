@@ -21,6 +21,13 @@ class EngineFailureTest {
     }
 
     @Test
+    fun `no recorded code says only that the node was skipped and not a strain-window failure`() {
+        assertEquals(R.string.sweep_node_skipped, EngineFailure.reasonRes(null))
+        assertEquals(R.string.sweep_node_skipped, EngineFailure.shortReasonRes(null))
+        assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(null))
+    }
+
+    @Test
     fun `known negatives keep their long and short strings`() {
         assertEquals(
             R.string.sweep_fail_features,
