@@ -14,6 +14,10 @@ from ._base import (
     db,
     get_license,
     SCHEMA_VERSION,
+    _get,
+    _stream,
+    _set_doc,
+    _delete_doc,
 )
 
 
@@ -31,7 +35,7 @@ def find_user_by_email(email: str) -> dict | None:
     if not wanted:
         return None
     q = db().collection("users").where("email", "==", wanted).limit(1)
-    for d in q.stream():
+    for d in _stream(q):
         return {**d.to_dict(), "uid": d.id}
     return None
 
@@ -113,12 +117,12 @@ def _delete_license_invites(license_id: str, email_lock: str = "") -> None:
     """
     if email_lock:
         ref = _invite_ref(email_lock)
-        snap = ref.get()
+        snap = _get(ref)
         if snap.exists and ((snap.to_dict() or {}).get("licenseId") or "") == license_id:
-            ref.delete()
+            _delete_doc(ref)
         return
-    for doc in db().collection(_INVITES).where("licenseId", "==", license_id).stream():
-        doc.reference.delete()
+    for doc in _stream(db().collection(_INVITES).where("licenseId", "==", license_id)):
+        _delete_doc(doc.reference)
 
 
 def _write_invite(license_id: str, email: str,
@@ -137,7 +141,7 @@ def _write_invite(license_id: str, email: str,
         return errors.INVALID_EMAIL, None
 
     ref = _invite_ref(address)
-    existing = ref.get()
+    existing = _get(ref)
     if existing.exists:
         held = existing.to_dict() or {}
         # Re-inviting to the same licence is a no-op rather than an error, so
@@ -157,8 +161,8 @@ def _write_invite(license_id: str, email: str,
         "createdAt": _base.firestore.SERVER_TIMESTAMP,
         "schemaVersion": SCHEMA_VERSION,
     }
-    ref.set(data)
-    return "", _invite_public(ref.id, ref.get().to_dict() or data)
+    _set_doc(ref, data)
+    return "", _invite_public(ref.id, _get(ref).to_dict() or data)
 
 
 def list_institution_invites(license_id: str) -> list[dict]:
@@ -170,7 +174,7 @@ def list_institution_invites(license_id: str) -> list[dict]:
     """
     rows = [
         _invite_public(doc.id, doc.to_dict() or {})
-        for doc in db().collection(_INVITES).where("licenseId", "==", license_id).stream()
+        for doc in _stream(db().collection(_INVITES).where("licenseId", "==", license_id))
     ]
     rows.sort(key=lambda r: (r.get("createdAt") is None, r.get("createdAt")))
     return rows
@@ -187,10 +191,10 @@ def revoke_institution_invite(license_id: str, invite_key: str) -> bool:
     invite by guessing an id.
     """
     ref = db().collection(_INVITES).document(invite_key)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         return False
     if ((snap.to_dict() or {}).get("licenseId") or "") != license_id:
         return False
-    ref.delete()
+    _delete_doc(ref)
     return True

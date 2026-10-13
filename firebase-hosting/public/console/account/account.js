@@ -319,7 +319,7 @@ function sessionRow(s) {
   const canDownload = (s.completedCount || 0) > 0;
   return `
     <tr>
-      <td>${esc(s.specimen || s.localSessionId || s.sessionId)}
+      <td>${esc(s.name || s.specimen || s.localSessionId || s.sessionId)}
           <div class="muted mono">${esc(s.sessionId)}</div></td>
       <td>${esc(appName(s.app))}</td>
       <td>${state}</td>

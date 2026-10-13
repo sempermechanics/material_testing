@@ -57,8 +57,11 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     onProgress: (BatchProgressUpdate) -> Unit,
 ): BatchAnalysisOutcome {
     val spec = run.spec
+    // The images as they were at launch: the wizard's fields are Main's (TD-173).
+    val reference = run.inputs.reference
+    val frames = run.inputs.frames
     // Admitted here, the run saves its session even if the cap fills meanwhile.
-    val admission = admitRun(appContext, defFilePaths.size, sweep = false)
+    val admission = admitRun(appContext, frames.paths.size, sweep = false)
     if (admission is RunAdmission.Blocked) {
         SemperAnalytics.event(
             appContext,
@@ -84,11 +87,11 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
     EngineDebug.attach(spec.debugDir)
 
-    val plannedFrames = defFilePaths.size
+    val plannedFrames = frames.paths.size
     // A video's frame times, one per planned frame, as the session row keeps them.
-    val frameTimesMs = defFrameTimesMs?.takeIf { it.size == plannedFrames }
-    val videoName = defVideoName
-    val refBytes = refBytes ?: error("Reference missing")
+    val frameTimesMs = frames.timesMs?.takeIf { it.size == plannedFrames }
+    val videoName = frames.videoName
+    val refBytes = reference.bytes ?: error("Reference missing")
 
     var firstFrameValidPoints = 0
     var firstFrameCorrelatedPoints = -1
@@ -99,8 +102,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     SemperNativeLib.initializeReference(
         refBytes,
         spec.mask,
-        realRefWidth,
-        realRefHeight,
+        reference.size.width,
+        reference.size.height,
     )
 
     val roi = spec.roi
@@ -133,7 +136,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val persistedRawNames = MutableList(plannedFrames) { "" }
 
     // Where each frame's image ended up, so the view model can follow the move.
-    val resolvedDefPaths = defFilePaths.toMutableList()
+    val resolvedDefPaths = frames.paths.toMutableList()
 
     // Every field's sigma-clamped (p02, p98) for this frame, computed once here
     // while the frame's data is already decoded in outputBuffer — persisted so
@@ -150,7 +153,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     )
     val perFrameSummaryRanges = mutableListOf<Map<Int, Pair<Float, Float>?>>()
 
-    for ((frameIndex, defPath) in defFilePaths.withIndex()) {
+    for ((frameIndex, defPath) in frames.paths.withIndex()) {
         run.job.ensureActive()
         if (cancelRequested) {
             stop = RunStop.Cancelled
@@ -187,7 +190,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             try {
                 // Persist the untouched original under the user's own filename
                 // so exports keep default names.
-                val rawName = defOriginalNames.originalNameOr(frameIndex, source.name).baseName()
+                val rawName = frames.originalNames.originalNameOr(frameIndex, source.name).baseName()
                 val target = keepDeformedFrame(source, defBytes, rawDeformedDir, rawName, frameIndex)
                 // Record the name we ACTUALLY wrote: the session index (and the
                 // cloud upload) must be able to find these files again.
@@ -346,7 +349,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // The names actually on disk in raw_deformed/ — reopening a session,
     // exporting and cloud upload resolve images by these.
     val defNames = persistedRawNames.mapIndexed { i, persisted ->
-        persisted.ifBlank { defOriginalNames.originalNameOr(i, resolvedDefPaths[i]).baseName() }
+        persisted.ifBlank { frames.originalNames.originalNameOr(i, resolvedDefPaths[i]).baseName() }
     }
 
     // A cancelled first run saves nothing. A cancelled re-run is saved like a
@@ -355,14 +358,14 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     if (firstFrameValidPoints > 0 && (stop != RunStop.Cancelled || previous != null)) {
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
-        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
+        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, reference.size.width, reference.size.height)
         lastRefPath = refPngPath
 
         val cloudEnabled = CloudSync.uploadsEnabled(appContext)
         val input = RunInput(
             localSessionId = localSessionId,
             dir = batchDir,
-            reference = RunReference(refPngPath, refName, refSize),
+            reference = RunReference(refPngPath, reference.name, reference.size),
             settings = spec.recordSettings().also { recordRunSettings(it) },
             videoName = videoName,
             frameTimesMs = frameTimesMs,

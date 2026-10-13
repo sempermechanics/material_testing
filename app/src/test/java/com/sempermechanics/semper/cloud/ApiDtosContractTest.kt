@@ -112,6 +112,7 @@ class ApiDtosContractTest {
         val s = resp.sessions.single()
         assertEquals("3f9c2a7e5b1d4c8e9a0b6f2d1e4c7a95", s.sessionId)
         assertEquals("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", s.localSessionId)
+        assertEquals("Steel 24 sweep", s.name)
         assertEquals("COMPLETED", s.status)
         assertEquals(2, s.completedCount)
         assertEquals(48215355L, s.totalBytes)
@@ -198,6 +199,7 @@ class ApiDtosContractTest {
     @Test
     fun `session create request is exactly the fixture's body`() {
         val req = request<SessionCreateRequest>("session_create_request")
+        assertEquals("Steel 24 sweep", req.name)
         assertEquals(listOf("bundle", "metadata"), req.files.map { it.role })
         assertEquals(48213307L, req.files.first().bytes)
         assertEquals(24f, req.metrics["frameCount"])

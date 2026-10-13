@@ -14,6 +14,7 @@ import com.sempermechanics.semper.data.session.SessionHeadline
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
+import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.util.LenientObjectListSerializer
@@ -258,9 +259,9 @@ data class SessionMetadataDoc(
                 ?: madeAt() ?: existing?.createdAt ?: now,
             updatedAt = now,
             frameCount = frameCount ?: defNames.size,
-            subset = engine.subset ?: DEFAULT_SUBSET,
-            step = engine.step ?: DEFAULT_STEP,
-            strainWindow = engine.strainWindow ?: DEFAULT_STRAIN_WINDOW,
+            subset = engine.subset ?: DicParams.DEFAULT_SUBSET,
+            step = engine.step ?: DicParams.DEFAULT_STEP,
+            strainWindow = engine.strainWindow ?: DicParams.DEFAULT_STRAIN_WINDOW,
             imgW = engine.imageWidth ?: 0,
             imgH = engine.imageHeight ?: 0,
             roiX = roi.x,
@@ -354,10 +355,6 @@ data class SessionMetadataDoc(
     }
 
     companion object {
-        private const val DEFAULT_SUBSET = 41
-        private const val DEFAULT_STEP = 5
-        private const val DEFAULT_STRAIN_WINDOW = 15
-
         /** Lenient like org.json's reader; keys it does not know are skipped. */
         private val READER = Json {
             ignoreUnknownKeys = true

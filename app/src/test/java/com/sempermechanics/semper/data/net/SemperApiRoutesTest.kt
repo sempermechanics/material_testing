@@ -158,6 +158,21 @@ class SemperApiRoutesTest {
     }
 
     @Test
+    fun `listSessions names the app only when asked, the account for all`() {
+        answer(200, body = """{"sessions":[{"sessionId":"a","localSessionId":"l1"}],"quota":{"used":2,"max":25}}""")
+        answer(200, body = """{"sessions":[],"page":{"nextPageToken":"t 1","hasMore":true}}""")
+        answer(200, body = """{"sessions":[{"sessionId":"b"}],"quota":{"used":2,"max":25}}""")
+
+        runBlocking { api.listSessions("tok") }
+        val everyApp = runBlocking { api.listSessions("tok", app = CloudApi.ALL_APPS) }
+
+        assertEquals("/v1/sessions?page_size=100", server.takeRequest().target)
+        assertEquals("/v1/sessions?page_size=100&app=all", server.takeRequest().target)
+        assertEquals("/v1/sessions?page_size=100&app=all&page_token=t+1", server.takeRequest().target)
+        assertEquals(listOf("b"), everyApp.sessions.map { it.sessionId })
+    }
+
+    @Test
     fun `listSessionUploads walks every page and signs each page's query`() {
         answer(
             200,

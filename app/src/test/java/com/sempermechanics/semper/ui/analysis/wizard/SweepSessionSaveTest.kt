@@ -16,11 +16,13 @@ import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.diagnostics.SemperAnalytics.ANALYSIS_COMPLETED
 import com.sempermechanics.semper.diagnostics.SemperAnalytics.ANALYSIS_FAILED
 import com.sempermechanics.semper.diagnostics.SemperAnalytics.CLOUD_UPLOAD_ENQUEUED
+import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
+import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import org.junit.After
@@ -79,10 +81,14 @@ class SweepSessionSaveTest {
     private fun uploadsQueuedFor(id: String) =
         WorkManager.getInstance(ctx).getWorkInfosForUniqueWork("upload-$id").get().size
 
-    /** Two combinations solved against frame 0, a 4 x 4 raw-RGBA reference. */
-    private fun finish(id: String, admitted: Boolean = false): BatchAnalysisOutcome {
+    /**
+     * Two combinations solved against frame 0, a 4 x 4 raw-RGBA reference;
+     * [afterLaunch] is what the wizard does once the sweep has its inputs.
+     */
+    private fun finish(id: String, admitted: Boolean = false, afterLaunch: () -> Unit = {}): BatchAnalysisOutcome {
         vm.realRefWidth = REF_SIDE
         vm.realRefHeight = REF_SIDE
+        vm.refName = "ref.png"
         val frame = File(ctx.cacheDir, "0000_def.png").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         vm.deformedFrames = listOf(DeformedFrame(frame.absolutePath, "def.png"))
         val batchDir = SessionStore.dirFor(ctx, id)
@@ -99,7 +105,9 @@ class SweepSessionSaveTest {
             firstMetrics = null,
             engineErrorCode = 0,
         )
-        val session = SweepSession(id, batchDir, ByteArray(REF_SIDE * REF_SIDE * 4), result, spec, 3_000)
+        vm.refBytes = ByteArray(REF_SIDE * REF_SIDE * 4)
+        val session = SweepSession(id, batchDir, vm.snapshotRunInputs(), result, spec, 3_000)
+        afterLaunch()
         return vm.finishSolvedSweep(ctx, session, cloudEnabled = true, admitted = admitted)
     }
 
@@ -118,6 +126,23 @@ class SweepSessionSaveTest {
             ),
             events,
         )
+    }
+
+    @Test
+    fun `the saved sweep describes the images it was launched with, not the wizard's later ones`() {
+        val outcome = finish("s1") {
+            vm.refBytes = null
+            vm.refSize = ImageSize(10, 10)
+            vm.refName = "other.png"
+            vm.deformedFrames = listOf(DeformedFrame("/frames/late.png", "late.png"))
+        }
+
+        assertTrue(outcome.saved)
+        val row = checkNotNull(SessionStore.get(ctx, "s1"))
+        assertEquals("ref.png", row.refName)
+        assertEquals(REF_SIDE, row.imgW)
+        assertEquals(REF_SIDE, row.imgH)
+        assertEquals(listOf("def.png", "def.png"), row.defNames)
     }
 
     @Test

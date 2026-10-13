@@ -19,6 +19,9 @@ from ._base import (
     get_license,
     _license_past_grace,
     _now,
+    _get,
+    _update_doc,
+    _delete_doc,
 )
 from .claims import (
     claim_individual_license,
@@ -60,7 +63,7 @@ def _invite_retry_due(user: dict) -> bool:
 def _clear_invite_block(uid: str, user: dict) -> None:
     if user.get(_INVITE_BLOCKED_AT) is None:
         return
-    db().collection("users").document(uid).update({
+    _update_doc(db().collection("users").document(uid), {
         _INVITE_BLOCKED_AT: _base.firestore.DELETE_FIELD,
     })
 
@@ -111,7 +114,7 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
         return user, ""
 
     ref = _invite_ref(address)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         _clear_invite_block(uid, user)
         return user, ""
@@ -120,11 +123,11 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
     if not lic:
         # The licence was deleted out from under the invite. Drop it rather
         # than leaving a record that can never be redeemed.
-        ref.delete()
+        _delete_doc(ref)
         _clear_invite_block(uid, user)
         return user, ""
     if _is_revoked(lic):
-        ref.delete()
+        _delete_doc(ref)
         _clear_invite_block(uid, user)
         return user, ""
 
@@ -158,7 +161,7 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
         else:
             log.warning("invite claim failed uid=%s license=%s err=%s", uid, license_id, err)
             # Try again later, once the account holds Demo; see _INVITE_RETRY.
-            db().collection("users").document(uid).update({_INVITE_BLOCKED_AT: _now()})
+            _update_doc(db().collection("users").document(uid), {_INVITE_BLOCKED_AT: _now()})
         # Answer with the account as stored, not with the caller's copy. The
         # copy was read before this request began, and the request that beat
         # us to the claim has already granted the entitlement; returning the
@@ -166,7 +169,7 @@ def _claim_pending_invite(user: dict) -> tuple[dict, str]:
         # `ensure_demo_license` usually rescues this by re-reading, but it
         # returns early when there is no device id to mint against — which is
         # every browser request, since the consoles send no `X-Device-Id`.
-        stored = db().collection("users").document(uid).get()
+        stored = _get(db().collection("users").document(uid))
         if not stored.exists:
             return user, err
         return {**user, **(stored.to_dict() or {}), "uid": uid}, err

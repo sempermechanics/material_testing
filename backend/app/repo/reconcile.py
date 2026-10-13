@@ -13,6 +13,9 @@ from ._base import (
     _is_revoked,
     db,
     _license_mode,
+    _get,
+    _stream,
+    _get_all,
 )
 from .user_config import (
     _expiry_state,
@@ -80,7 +83,7 @@ def reconcile_institution_seats(license_id: str) -> dict:
     rather than a field on any hot path. The holders come back in one batched
     `get_all` rather than one round trip per seat (TD-62).
     """
-    lic_snap = db().collection("licenses").document(license_id).get()
+    lic_snap = _get(db().collection("licenses").document(license_id))
     if not lic_snap.exists:
         raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = lic_snap.to_dict() or {}
@@ -97,15 +100,16 @@ def reconcile_institution_seats(license_id: str) -> dict:
     entitled = 0
     roster = [
         (seat_doc.to_dict() or {}, seat_doc.id)
-        for seat_doc in db().collection("licenses").document(license_id)
-        .collection("seats").stream()
+        for seat_doc in _stream(
+            db().collection("licenses").document(license_id).collection("seats")
+        )
     ]
     uids = [seat.get("uid") or seat_id for seat, seat_id in roster]
     users_ref = db().collection("users")
     # get_all yields snapshots in no particular order; key them by id.
     holders = {
         snap.id: snap.to_dict()
-        for snap in db().get_all([users_ref.document(uid) for uid in dict.fromkeys(uids)])
+        for snap in _get_all([users_ref.document(uid) for uid in dict.fromkeys(uids)])
         if snap.exists
     } if uids else {}
     for (seat, _seat_id), uid in zip(roster, uids):

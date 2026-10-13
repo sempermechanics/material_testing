@@ -15,6 +15,7 @@ import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.BatchRun
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
+import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.util.UUID
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -101,8 +103,11 @@ internal class PendingOutcome<T : Any> {
  * Runs the batch on [viewModelScope] so destroying the Activity mid-run does
  * not cancel a minutes-long native solve. Progress is published on
  * [AnalysisViewModel.progress]; completion (or failure) is held on
- * [AnalysisViewModel.batchOutcome] until the screen takes it.
+ * [AnalysisViewModel.batchOutcome] until the screen takes it. The run's
+ * images are frozen here, on Main, before it leaves for the native thread
+ * ([snapshotRunInputs]).
  */
+@MainThread
 @Suppress("TooGenericExceptionCaught") // any failure is the run's outcome
 fun AnalysisViewModel.launchBatchAnalysis(
     appContext: Context,
@@ -111,6 +116,7 @@ fun AnalysisViewModel.launchBatchAnalysis(
     processingStartTime: Long,
 ) {
     if (runs.batchJob?.isActive == true) return
+    val inputs = snapshotRunInputs()
     runs.batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
         runs.progress.tryEmit(null)
         SemperAnalytics.event(
@@ -118,11 +124,12 @@ fun AnalysisViewModel.launchBatchAnalysis(
             SemperAnalytics.ANALYSIS_STARTED,
             mapOf(
                 "mode" to "batch",
-                "frames" to SemperAnalytics.frameCountBucket(defFilePaths.size),
+                "frames" to SemperAnalytics.frameCountBucket(inputs.frames.paths.size),
             ),
         )
         try {
-            val outcome = runBatchAnalysis(appContext, spec, cacheDir, processingStartTime) { update ->
+            val newRun = { job: CoroutineContext -> BatchRun(spec, cacheDir, processingStartTime, job, inputs) }
+            val outcome = runBatchAnalysis(appContext, newRun) { update ->
                 if (isActive) runs.progress.tryEmit(update)
             }
             runs.batchOutcome.post(Result.success(outcome))
@@ -143,16 +150,15 @@ fun AnalysisViewModel.launchBatchAnalysis(
 }
 
 /**
- * Full-field batch compute + offline upload queue. All JNI calls run on the native dispatcher.
+ * Full-field batch compute + offline upload queue, the run [newRun] makes of
+ * the job it runs as. All JNI calls run on the native dispatcher.
  */
 private suspend fun AnalysisViewModel.runBatchAnalysis(
     appContext: Context,
-    spec: RunSpec,
-    cacheDir: File,
-    startedAtMs: Long,
+    newRun: (job: CoroutineContext) -> BatchRun,
     onProgress: (BatchProgressUpdate) -> Unit,
 ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
-    val run = BatchRun(spec, cacheDir, startedAtMs, coroutineContext)
+    val run = newRun(coroutineContext)
     traceSection("Semper.analysis.batch") {
         runBatchAnalysisBody(appContext, run, onProgress)
     }
@@ -165,15 +171,18 @@ private suspend fun AnalysisViewModel.runBatchAnalysis(
  * own scope until now, which cancelled it on destroy and left the partial
  * session behind. Progress arrives on [AnalysisViewModel.sweepProgress], the
  * result is held on [AnalysisViewModel.sweepOutcome] until the screen takes it.
+ * Its images are frozen here, as a batch run's are.
  */
+@MainThread
 @Suppress("TooGenericExceptionCaught") // any failure is the sweep's outcome
 fun AnalysisViewModel.launchSweep(appContext: Context, spec: RunSpec) {
     require(spec.sweep != null) { "not a sweep" }
     if (runs.sweepJob?.isActive == true) return
+    val inputs = snapshotRunInputs()
     runs.sweepJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
         runs.sweepProgress.tryEmit(null)
         try {
-            val outcome = runSweep(appContext, spec) { update ->
+            val outcome = runSweep(appContext, spec, inputs) { update ->
                 if (isActive) runs.sweepProgress.tryEmit(update)
             }
             runs.sweepOutcome.post(Result.success(outcome))
