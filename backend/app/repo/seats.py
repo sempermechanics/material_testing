@@ -23,6 +23,8 @@ from ._base import (
     _run_tx,
     _seat_lease_counted,
     _seat_ref,
+    _get,
+    _update_doc,
 )
 from .devices import (
     _release_devices,
@@ -51,7 +53,7 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     if _is_revoked(lic):
         return None
     if scope == "seat":
-        seat = ref.get()
+        seat = _get(ref)
         if not seat.exists or (seat.to_dict() or {}).get("status") != STATUS_ACTIVE:
             return None
         holder = uid
@@ -60,7 +62,7 @@ def _live_holder(license_id: str, lic: dict, ref, scope: str, uid: str):
     if not holder:
         return None
     user_ref = db().collection("users").document(holder)
-    snap = user_ref.get()
+    snap = _get(user_ref)
     if not snap.exists:
         return None
     user = snap.to_dict() or {}
@@ -180,7 +182,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
     `releasedDeviceId` are Semper's, `previousDeviceIdMaterialTesting` and so
     on the other app's, "" for an app the clear did not touch.
     """
-    lic_snap = db().collection("licenses").document(license_id).get()
+    lic_snap = _get(db().collection("licenses").document(license_id))
     if not lic_snap.exists:
         raise Refusal(errors.LICENSE_NOT_FOUND)
     lic = lic_snap.to_dict() or {}
@@ -201,12 +203,12 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         # clears landing together produce the same empty lock. A plain read
         # and update keeps the support path out of the transaction machinery
         # entirely.
-        snap = ref.get()
+        snap = _get(ref)
         if not snap.exists:
             raise Refusal(not_found)
         doc = snap.to_dict() or {}
         previous = {a: doc.get(apps.field("deviceIdLock", a)) or "" for a in apps.ALL}
-        ref.update({
+        _update_doc(ref, {
             **{apps.field("deviceIdLock", a): "" for a in apps.ALL},
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
@@ -227,7 +229,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
 
     @_base.firestore.transactional
     def _clear(tx) -> dict:
-        snap = ref.get(transaction=tx)
+        snap = _get(ref, tx)
         if not snap.exists:
             raise Refusal(not_found)
         doc = snap.to_dict() or {}
@@ -277,8 +279,8 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
 
     @_base.firestore.transactional
     def _set(tx) -> str:
-        snap = ref.get(transaction=tx)
-        lic_snap = lic_ref.get(transaction=tx)
+        snap = _get(ref, tx)
+        lic_snap = _get(lic_ref, tx)
         if not snap.exists:
             return errors.SEAT_NOT_FOUND
         seat = snap.to_dict() or {}
@@ -307,9 +309,9 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
         _drop_user_to_demo_if_licensed(uid, license_id)
     else:
         user_ref = db().collection("users").document(uid)
-        user_snap = user_ref.get()
+        user_snap = _get(user_ref)
         if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
-            user_ref.update({
+            _update_doc(user_ref, {
                 **_mode_patch(MODE_LICENSED),
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
             })
@@ -331,13 +333,13 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
 
     @_base.firestore.transactional
     def _revoke(tx) -> bool:
-        seat_snap = seat_ref.get(transaction=tx)
+        seat_snap = _get(seat_ref, tx)
         if not seat_snap.exists:
             return False
         seat = seat_snap.to_dict() or {}
         if _is_revoked(seat):
             return True  # idempotent: already revoked, counters already settled
-        lic_snap = lic_ref.get(transaction=tx)
+        lic_snap = _get(lic_ref, tx)
         seats_used = int((lic_snap.to_dict() or {}).get("seatsUsed") or 0) if lic_snap.exists else 0
         held_lease = _seat_lease_counted(seat)
 
@@ -362,7 +364,7 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
 
     # On contention the other writer won and did the same thing. Re-read to
     # answer precisely rather than reporting a failure that did not happen.
-    revoked = _run_tx(_revoke, on_contended=lambda: seat_ref.get().exists)
+    revoked = _run_tx(_revoke, on_contended=lambda: _get(seat_ref).exists)
     if revoked:
         _drop_user_to_demo_if_licensed(uid, license_id)
     return revoked
