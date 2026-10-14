@@ -12,6 +12,66 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-14 — Backend deploy: Firestore call deadlines (#432), backups listed by the analysis's name (#429)
+
+Staging run 38538685399 (`semper-api-staging-38538685399-1`) and production run
+38541490118 (`semper-api-38541490118-1`) from `c295639d`, started by the operator.
+Production's `/readyz` answered ok and the new revision took 100 %; the gateways
+were not changed (no route or spec change since `v202610091239-93` /
+`v202610091241-94`). `main` has moved on to `8ba7081c` (#435), which changes no
+backend file.
+
+What changed for callers:
+- **Firestore call deadlines (#432, TD-197).** Every Firestore call in `backend/app`
+  goes through a helper in `repo/_base.py` with a timeout and a matching retry window:
+  10 s for a get or a write, 20 s for a query, `.count()` or `get_all`, about twice
+  that at worst, under the gateway's 60 s. Before, a hung call held a threadpool thread
+  for minutes after the gateway had answered 504. A transaction's begin and commit take
+  no timeout in the client's public API and keep its 60 s default (TD-210);
+  [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §10.1.
+- **Backup names (#429, TD-208).** `POST /v1/sessions` takes an optional `name`, the
+  listing returns it, and a metadata PUT with a non-blank `name` renames the session.
+  The app lists `name` and falls back to `specimen` (the reference's file name) when it
+  is empty. Backups made before this deploy, or by a build without #429 (every
+  installed release until the next one), have no `name`, so they show the file name
+  until a #429 build renames them or backs them up again; both re-send the metadata. No
+  backfill: the state clears itself as builds update. The account console's name column
+  needs a Hosting deploy (`scripts/deploy-console.sh`), not yet done.
+
+Merged 2026-10-13/14, not part of the backend image, for the next app release
+([TECH_DEBT.md](TECH_DEBT.md) rows deleted in each):
+- #428 (TD-153): reconcile asks `?app=all` once when a SYNCED row is missing from its
+  own list, so an analysis restored from the other app's backup stays SYNCED instead of
+  uploading again ([ADR-014](../adr/ADR-014-session-app-tag.md)).
+- #429's app half: backups send the analysis's name; lists show it.
+- #430 (TD-173): a run's reference and frames are frozen at launch (`RunInputs`), so the
+  batch loop and the sweep no longer read mutable view-model fields
+  ([ADR-004](../adr/ADR-004-runspec.md)).
+- #431 (TD-154, TD-207 narrowed): video frames keep the decoded frame's own clip time on
+  the hardware and AVI rungs, and Key frames mode works on every rung. The retriever
+  rung still records the time asked for (TD-207).
+- #433 (TD-170): dispatchers are injected per instance; no mutable companion dispatcher
+  is left in main code.
+- #434 (TD-163, TD-164, TD-169): `Session.zip` stages the reference as
+  `ref/Reference.png` (upload schema `/3` → `/4`); unrecorded skip codes stay null;
+  the 15 px strain window for records without one is kept on purpose. An app older than
+  `/4` restores a `/4` backup without its reference, so material_testing must take the
+  reader before the writer at its next sync.
+- #435 (TD-139): the PNG export, the PDF report and the summary GIF draw each frame on
+  its own photo at the displaced positions, as the viewer does
+  ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md)). The GIF goldens were regenerated;
+  `field_small.dat` is unchanged. Its Pixel 6 benchmarks are owed.
+
+## 2026-10-10 — Backend deploy: retired app ids refused at registration (#427)
+
+Staging run 38032218283 and production run 38032569176 from `a462755f` (`main` after
+#425), started by the operator. `POST /v1/devices/register` answers `410 app_retired`
+(audited `DEVICE_REGISTER` / `DENIED`) to a retired `com.indicvision.*` `X-App-Id`,
+since such a build reports the device id of the app that succeeded it on the same
+phone and would replace that app's key. The app half of #427 (a signed call refused
+`bad_signature` registers the key again and is re-sent once, `DeviceKeyRecovery`) waits
+for the next app release. Two apps signed with one key still share a key slot (TD-209).
+
 ## 2026-10-10 — The first Firestore restore drill passed; backend redeploy from `bd1246c3`
 
 **Restore drill (TD-156, #404, #411, #422).** No export had ever been restored.

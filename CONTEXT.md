@@ -114,53 +114,45 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-10)
+## Current state (2026-10-14)
 
 - **Deployed.** Cloud Run `semper-api` behind API Gateway `semper-gw`, and staging
-  `semper-api-staging` behind `semper-gw-staging`, from `029a12c4` (2026-10-09; redeployed
-  2026-10-10 from `bd1246c3` with no backend change). Live since 2026-10-09: the erasure
-  check `GET /v1/me/erasure` (#400), JSON log lines with the caller's `appId`, the licence
-  prefix only while licensed, one status per refusal (#409). Licensing
+  `semper-api-staging` behind `semper-gw-staging`, from `c295639d` (2026-10-14; gateways
+  unchanged): every Firestore call has a deadline (#432; transaction begin and commit
+  do not, TD-210), and backups list by the analysis's name (#429). Licensing
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)) and sessions tagged by app
   ([ADR-014](docs/adr/ADR-014-session-app-tag.md)) are live; consoles on
   `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)). What went out
-  when: [CHANGELOG](docs/ops/CHANGELOG.md). Project IDs keep `indic-*`
-  ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
-- **Backups are restorable.** The first Firestore restore drill passed 2026-10-10 (RTO
-  111 s) and runs monthly ([FIRESTORE_DATA_PROTECTION.md](docs/backend/FIRESTORE_DATA_PROTECTION.md)).
+  when, the monthly restore drill included: [CHANGELOG](docs/ops/CHANGELOG.md). Project
+  IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
 - **App id `com.sempermechanics.semper`** ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md),
-  #333/#334, 2026-10-05; Pixel 6 checked). material_testing moves to
-  `com.sempermechanics.materialtesting` when it merges this code
-  ([FORK_SYNC](docs/ops/FORK_SYNC.md)).
-- **App release `v1.2-beta.3`** (beta, versionCode 35, from `ae05bb87`). Everything below
-  is on `main` and not in a release yet:
-  - the quality program (#310–#332; [QUALITY_PROGRAM_RESULTS.md](docs/ops/QUALITY_PROGRAM_RESULTS.md));
-  - security and data-loss fixes (#393–#400: Drive resume by `Range`, the API client's
-    host check, an interrupted account deletion finished at the next start and checked
-    without re-creating the account, a wizard outcome kept for the screen);
-  - the UI pass (#385–#396) and the minimal pass (#402–#419);
-  - tech-debt fixes (#404–#411, #425): the licence row, licence refresh and PDF progress
-    text, the ROI readout, one name per sweep frame, one session-quota rule, a failed
-    backup told once;
-  - no two analyses share a name, and a restore keeps the backed-up name (#426).
-  - device key recovery (#427): a signed call refused `bad_signature` registers the key
-    again and is re-sent once (`DeviceKeyRecovery`). Its backend half, `410 app_retired`
-    for a retired `com.indicvision.*` id at registration, waits for the next backend
-    deploy; the shared key slot stays open (TD-209).
+  2026-10-05); material_testing moves to `com.sempermechanics.materialtesting` when it
+  merges this code ([FORK_SYNC](docs/ops/FORK_SYNC.md)).
+- **App release `v1.2-beta.3`** (beta, versionCode 35, from `ae05bb87`). On `main` and not
+  in a release yet: the quality program (#310–#332;
+  [QUALITY_PROGRAM_RESULTS.md](docs/ops/QUALITY_PROGRAM_RESULTS.md)); security and data-loss
+  fixes (#393–#400); the UI pass (#385–#396) and the minimal pass (#402–#419); tech-debt
+  fixes (#404–#411, #425); unique analysis names (#426); device key recovery (#427; the
+  shared key slot stays open, TD-209); and the 2026-10-13/14 fixes #428, #429 (the app
+  sends the name), #430, #431, #433, #434 (backup schema `/4`) and #435 (exports drawn
+  on the deformed frame). No PR is open.
 - **material_testing shares this history** and merges this `main` (last at `3154ebc`,
-  material_testing#132, 2026-10-08); shared code and backend changes land here first
-  ([FORK_SYNC.md](docs/ops/FORK_SYNC.md)).
+  material_testing#132, 2026-10-08; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). At its next
+  sync it must take #434's restore reader (schema `/4`, `ref/Reference.png`) before
+  its writer.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
-  Dependabot opens monthly PRs for major versions only.
-- **Owed.** The public release (website / Play) with the emulator and Pixel checks
-  each PR's test plan lists, ADR-015's queued-work upgrade check and the manual checks
-  of the material_testing ports #298–#302; a licensed-account smoke of share, PDF and Delete
-  everywhere; a device check of the transfer notifications; Material Testing beside
-  Semper on one phone, and its App Check; AVI import on a phone
-  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); the privacy-policy values (TD-36);
-  unchecked rows in [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
+- **Owed.** Pixel 6 runs for #435: `HotPathMicroBenchmark` (`buildReport_oneFrame`,
+  `generateDeformedHeatmap_oneFrame`, `gifEncode_*`, `decodeDatFile_oneFrame`) and
+  `ViewerScrubBenchmark`. Optional: a Hosting deploy (`scripts/deploy-console.sh`) for
+  the account console's backup-name column (#429). The public release (website / Play)
+  with each PR's emulator and Pixel checks, ADR-015's queued-work upgrade check and the
+  material_testing ports #298–#302; a licensed-account smoke of share, PDF and Delete
+  everywhere; the transfer notifications and AVI import on a device
+  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Material Testing beside Semper on one
+  phone, and its App Check; the privacy-policy values (TD-36); unchecked rows in
+  [PRODUCTION_READINESS_GATE.md](docs/ops/PRODUCTION_READINESS_GATE.md).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps
