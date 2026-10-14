@@ -120,6 +120,8 @@ class WizardStateLabTest {
             crossSectionMm2 = 12.5f
             loadAxisX = false
             this.geometry = geometry
+            // A clip sampled from 3 s in: the frames sit at 3.5 s and 4 s.
+            refVideoTimeMs = 3_000L
             defTimesAfterRefMs = listOf(500L, 1_000L)
             setLoadLog((MachineLoadCsv.parse(LOAD_LOG) as LoadCsvParse.Ok).csv, "run1.csv", LOAD_LOG)
             loadLogStartS = 0.5f
@@ -135,9 +137,11 @@ class WizardStateLabTest {
         assertEquals("run1.csv", after.loadCsvName)
         assertEquals(0.5f, after.loadLogStartS, 0f)
         assertEquals(TypedLoads.Entry.INCREMENTAL, after.typedLoadsEntry)
+        assertEquals(3_000L, after.refVideoTimeMs)
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(listOf(500L, 1_000L), after.defTimesAfterRefMs)
+        assertEquals(listOf(3_500L, 4_000L), after.deformedFrames.map { it.timeMs })
         assertEquals(before.parsedLoadCsv, after.parsedLoadCsv)
         assertEquals(2, after.machineLoads?.matchedFrames)
     }

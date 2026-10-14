@@ -137,6 +137,26 @@ class LabInputsTest {
         assertEquals(listOf(50f, 150f, 250f), vm.machineLoads!!.loadsN)
     }
 
+    @Test
+    fun `a video frame is timed from the reference's clip time, not the clip's start`() {
+        timedPhotoBatch()
+        // Sampled from 4 s into the clip: the reference at 4.0 s, frames 4.5 s on.
+        vm.refVideoTimeMs = 4_000L
+        vm.deformedFrames = vm.deformedFrames.mapIndexed { i, f -> f.copy(timeMs = 4_500L + i * 1_000L) }
+        vm.refreshMachineLoads()
+
+        assertEquals(listOf(500L, 1_500L, 2_500L), vm.defTimesAfterRefMs)
+        assertEquals(listOf(50f, 150f, 250f), vm.machineLoads!!.loadsN)
+    }
+
+    @Test
+    fun `clearing the lab inputs forgets the video's clip time`() {
+        vm.refVideoTimeMs = 4_000L
+        vm.clearLabInputs()
+
+        assertNull(vm.refVideoTimeMs)
+    }
+
     // ------------------------------------------------------- bending typed loads
 
     /** Bending with three photos, dimensions and taps: everything but the loads. */
