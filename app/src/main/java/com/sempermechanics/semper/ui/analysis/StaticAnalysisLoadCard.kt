@@ -55,7 +55,11 @@ internal fun StaticAnalysisActivity.setupLoadCard() {
  */
 private fun StaticAnalysisActivity.bindBendingStrainInfo() {
     findViewById<View>(R.id.btnStrainInfo).setOnClickListener {
-        val body = TextUtils.concat(getText(R.string.info_strain_window), " ", getText(R.string.info_strain_window_bending))
+        val body = TextUtils.concat(
+            getText(R.string.info_strain_window),
+            " ",
+            getText(R.string.info_strain_window_bending),
+        )
         Dialogs.info(this, getText(R.string.strain_window), body)
     }
 }

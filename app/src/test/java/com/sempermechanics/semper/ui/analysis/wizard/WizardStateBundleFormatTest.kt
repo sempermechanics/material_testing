@@ -116,7 +116,9 @@ class WizardStateBundleFormatTest {
             putString("workingLocalId", null)
             putBoolean("workingIsSweep", false)
             putString("framesFingerprint", WizardState.fingerprint(WizardState.encodeFrames(WizardState.Frames())))
-            putString("testType", "tensile")
+            // A fresh wizard is plain 2D DIC since ADR-022 (it was tensile); a
+            // Bundle that says "tensile" still reads back as tensile (baseBundle).
+            putString("testType", "dic2d")
             putFloat("crossSectionMm2", 0f)
             putBoolean("loadAxisX", true)
             putFloatArray("geometry", floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f))
