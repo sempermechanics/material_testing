@@ -71,7 +71,7 @@ class AnalysisCsvPreambleTest {
         )
         AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
         val text = out.readText()
-        assertTrue(text.contains("# semper_csv_version,2\n"))
+        assertTrue(text.contains("# semper_csv_version,1\n"))
         assertTrue(!text.contains("# test_type"))
         assertTrue(text.contains("# reference,ref.jpg\n"))
         assertTrue(text.contains("# roi_x,10\n"))
@@ -81,7 +81,7 @@ class AnalysisCsvPreambleTest {
         assertTrue(
             text.contains(
                 "\nimage,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd," +
-                    "shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa\n",
+                    "shift_u_px,shift_v_px,shift_rot_deg\n",
             ),
         )
         assertTrue(text.contains("\nframe_a.jpg,0,0,0.1,0.2,"))
@@ -116,13 +116,13 @@ class AnalysisCsvPreambleTest {
         assertTrue(
             text.contains(
                 "\nimage,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd," +
-                    "shift_u_px,shift_v_px,shift_rot_deg,load_N,stress_MPa\n",
+                    "shift_u_px,shift_v_px,shift_rot_deg\n",
             ),
         )
         assertTrue(text.contains("frame_a.jpg,0,0,1.5,-2.25,"))
         assertTrue(text.contains(",1.5000,-2.2500,"))
-        // No load log: the two mechanical cells are present and empty.
-        assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",,") })
+        // A plain DIC session: Semper's columns, no load or stress cells.
+        assertTrue(text.lines().none { it.contains("stress_MPa") })
     }
 
     @Test
@@ -327,7 +327,7 @@ class AnalysisCsvPreambleTest {
      * returns an unsolvable field writes no rows, so the fit is exercised by
      * the solved frame beside it).
      */
-    private fun assertFieldCountParity(sweep: Boolean) {
+    private fun assertFieldCountParity(sweep: Boolean, testType: String = "") {
         val out = File.createTempFile("semper_csv_parity", ".csv")
         out.deleteOnExit()
         val data = translatedGrid()
@@ -356,16 +356,16 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
+            testType = testType,
         )
         AnalysisCsvWriter.write(out, sweep, frames, metadata)
 
         val lines = out.readLines()
             .filter { it.isNotBlank() && !it.startsWith("#") }
         val header = lines.first()
-        assertTrue(
-            "header should end with the mechanical columns: $header",
-            header.endsWith(",shift_rot_deg,load_N,stress_MPa"),
-        )
+        // A lab test adds its load and stress columns; a plain session ends at the motion ones.
+        val end = if (testType.isEmpty()) ",shift_rot_deg" else ",shift_rot_deg,load_N,stress_MPa"
+        assertTrue("header should end with $end: $header", header.endsWith(end))
         val expected = header.split(',').size
         val rows = lines.drop(1)
         assertTrue("no data rows were written", rows.isNotEmpty())
@@ -386,5 +386,11 @@ class AnalysisCsvPreambleTest {
     @Test
     fun `every point row has as many fields as the sweep header`() {
         assertFieldCountParity(sweep = true)
+    }
+
+    @Test
+    fun `a tensile session's point rows carry the load and stress columns`() {
+        assertFieldCountParity(sweep = false, testType = "tensile")
+        assertFieldCountParity(sweep = true, testType = "tensile")
     }
 }

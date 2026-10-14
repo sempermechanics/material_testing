@@ -51,6 +51,13 @@ object AnalysisCsvWriter {
         val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
         val curveCorrection: CurveCorrection = CurveCorrection.NONE,
     ) {
+        /**
+         * A tensile or bending session: its CSV is [LAB_CSV_VERSION], with the
+         * test preamble and the `load_N,stress_MPa` columns. A plain DIC
+         * session's is Semper's own [CSV_VERSION].
+         */
+        val isLabTest: Boolean get() = testType.isNotBlank()
+
         /** How this session's loads become the `stress_MPa` column. */
         val stressModel: StressStrain.Model
             get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
@@ -67,14 +74,18 @@ object AnalysisCsvWriter {
         val loadN: Float? = null,
     )
 
+    /** Semper's format, which a plain 2D DIC session keeps. */
+    private const val CSV_VERSION = 1
+
     /**
-     * 2: `load_N,stress_MPa` trail every point row; typed sessions add `# test_type…`.
-     * A bending session adds `# stress_model` and its dimensions to the
-     * preamble without a version bump: `stress_MPa` is the model's stress
-     * either way, and a reader that ignores unknown `#` lines is unaffected.
-     * The `# mechanical_results` trailer is added on the same terms.
+     * 2, a tensile or bending session's ([Metadata.isLabTest]):
+     * `load_N,stress_MPa` trail every point row and the preamble adds
+     * `# test_type…`. A bending session adds `# stress_model` and its
+     * dimensions to the preamble without a version bump: `stress_MPa` is the
+     * model's stress either way, and a reader that ignores unknown `#` lines is
+     * unaffected. The `# mechanical_results` trailer is added on the same terms.
      */
-    private const val CSV_VERSION = 2
+    private const val LAB_CSV_VERSION = 2
 
     // One definition, shared with the row formatter's tests (TD-39): a second
     // copy here let the header and the rows drift apart unnoticed.
@@ -169,8 +180,9 @@ object AnalysisCsvWriter {
     }
 
     /**
-     * The frame's load and stress, without the leading comma. Empty cells when
-     * the session has no load log, so the column count never changes.
+     * The frame's load and stress, without the leading comma: a lab test's
+     * columns. Empty cells when the frame has no load, so the column count
+     * never changes.
      */
     internal fun mechanicalSuffixColumns(loadN: Float?, model: StressStrain.Model): String {
         if (loadN == null) return ","
@@ -179,17 +191,20 @@ object AnalysisCsvWriter {
         return String.format(Locale.US, "%.3f,", loadN) + stressText
     }
 
-    internal fun pointHeader(sweep: Boolean): String {
+    /** The point rows' header; a lab test ([Metadata.isLabTest]) adds its load and stress columns. */
+    internal fun pointHeader(sweep: Boolean, labTest: Boolean = false): String {
         val base = if (sweep) {
             "image,$SWEEP_SETTINGS_HEADER$POINT_HEADER_BASE"
         } else {
             "image,$POINT_HEADER_BASE"
         }
-        return "$base,$MOTION_SUFFIX_HEADER,$MECHANICAL_SUFFIX_HEADER"
+        val lab = if (labTest) ",$MECHANICAL_SUFFIX_HEADER" else ""
+        return "$base,$MOTION_SUFFIX_HEADER$lab"
     }
 
     private fun writeGlobalPreamble(w: Writer, metadata: Metadata) {
-        w.append("# semper_csv_version,$CSV_VERSION\n")
+        val version = if (metadata.isLabTest) LAB_CSV_VERSION else CSV_VERSION
+        w.append("# semper_csv_version,$version\n")
         w.append("# reference,").append(escape(metadata.referenceName)).append('\n')
         w.append("# strain_method,").append(escape(metadata.strainMethod)).append('\n')
         w.append("# image_width,${metadata.imgW}\n")
@@ -198,7 +213,7 @@ object AnalysisCsvWriter {
         w.append("# roi_y,${metadata.roiY}\n")
         w.append("# roi_w,${metadata.roiW}\n")
         w.append("# roi_h,${metadata.roiH}\n")
-        if (metadata.testType.isNotBlank()) MechanicalCsv.writePreamble(w, metadata)
+        if (metadata.isLabTest) MechanicalCsv.writePreamble(w, metadata)
     }
 
     private fun writeFieldStatsRow(
@@ -250,7 +265,7 @@ object AnalysisCsvWriter {
 
         /** The curve's points, collected as frames stream past; null when there is no trailer. */
         private val mechanical: StressStrain.Collector? =
-            if (!sweep && metadata.testType.isNotBlank()) StressStrain.Collector(metadata.stressModel) else null
+            if (!sweep && metadata.isLabTest) StressStrain.Collector(metadata.stressModel) else null
 
         fun appendFieldStats(frame: Frame, data: FloatArray) {
             check(!pointSectionStarted) { "field stats after the point section started" }
@@ -274,7 +289,7 @@ object AnalysisCsvWriter {
             writer.append(pendingStats)
             pendingStats.setLength(0)
             writer.append('\n')
-            writer.append(pointHeader(sweep)).append('\n')
+            writer.append(pointHeader(sweep, metadata.isLabTest)).append('\n')
             pointSectionStarted = true
             staged?.let { points ->
                 points.close()
@@ -297,7 +312,7 @@ object AnalysisCsvWriter {
                 prefix(frame, sweep),
                 row,
                 formatter,
-                mechanicalSuffixColumns(frame.loadN, metadata.stressModel),
+                if (metadata.isLabTest) mechanicalSuffixColumns(frame.loadN, metadata.stressModel) else null,
                 onRows,
             )
             collect(index, frame.loadN, data)
@@ -334,10 +349,11 @@ object AnalysisCsvWriter {
         prefix: String,
         row: StringBuffer,
         formatter: DicResult.CsvPointFormatter,
-        mechanical: String,
+        mechanical: String?,
         onRows: (fraction: Double) -> Unit,
     ) {
-        val suffix = motionSuffixColumns(RigidBodyFit.fit(data)) + "," + mechanical
+        val motion = motionSuffixColumns(RigidBodyFit.fit(data))
+        val suffix = if (mechanical == null) motion else "$motion,$mechanical"
         var rows = 0
         var i = 0
         while (i < data.size) {
