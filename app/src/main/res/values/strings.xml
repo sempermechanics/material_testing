@@ -1186,6 +1186,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="info_subset">Bigger means more robust on weak speckle, but smoothens sharp strain gradients. Once the speckle is measured, the shaded band on the slider marks the sizes that hold enough speckle.</string>
     <string name="info_step">Spacing between tracked points, in pixels. Smaller means denser results but longer analysis time. Linked to subset overlap: overlap = 1 − step / subset.</string>
     <string name="info_strain_window">How many data points across each strain value averages over. The virtual strain gauge (VSG) it gives, in pixels, is (window − 1) × step + 1, shown beside the value. Bigger means smoother strain but less local detail.</string>
+    <string name="info_strain_window_bending">Bending starts at 9 points: its deflection and E come from displacement, so here strain only draws the maps, and a wider window makes them much less noisy.</string>
 
     <!-- Auth: sign-in errors -->
     <string name="error_passwords_mismatch">Passwords do not match.</string>
