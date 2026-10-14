@@ -154,6 +154,17 @@ class SweepPlotView @JvmOverloads constructor(
             invalidate()
         }
 
+    /**
+     * When true, the scrub label reads the point, "(1.94 mε, 263 MPa)", not
+     * just its y: Material Testing's stress–strain and load–deflection
+     * curves set it. The sweep plots leave it false.
+     */
+    var scrubShowsPoint: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     /** Data-unit x of a vertical guide line, e.g. the recommended VSG. */
     private var highlightX: Float? = null
     internal var scrubX: Float? = null
@@ -323,7 +334,7 @@ class SweepPlotView @JvmOverloads constructor(
         }
     }
 
-    /** The selected curve's point at the scrub line: a dot plus its (x, y) on the plot. */
+    /** The selected curve's point at the scrub line: a dot plus its value ([scrubShowsPoint]) on the plot. */
     private fun drawScrubValue(canvas: Canvas, b: PlotBounds) {
         val scrub = scrubX
         val target = series.firstOrNull { !it.muted && it.points.isNotEmpty() }
@@ -333,7 +344,7 @@ class SweepPlotView @JvmOverloads constructor(
         val py = sy(yVal, b).coerceIn(frame.top, frame.bottom)
         valueDotPaint.color = target.color
         canvas.drawCircle(px, py, dp(MARKER_RADIUS_DP), valueDotPaint)
-        val label = SweepPlotAxes.scrubLabel(scrub, yVal, xUnit, yUnit)
+        val label = SweepPlotAxes.scrubText(scrubShowsPoint, scrub, yVal, xUnit, yUnit)
         valuePaint.textAlign = Paint.Align.LEFT
         canvas.drawText(
             label,

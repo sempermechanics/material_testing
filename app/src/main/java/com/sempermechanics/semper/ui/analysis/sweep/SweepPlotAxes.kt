@@ -120,7 +120,15 @@ internal class SweepPlotAxes(private val plot: View, private val text: Paint) {
         }
 
         /**
-         * The scrub point as the plot draws it beside its dot: both
+         * The text beside the scrub dot: the curve's y, as Semper's sweep
+         * plots read it, or with [showsPoint] (Material Testing's Results
+         * curves) both coordinates ([scrubLabel]).
+         */
+        fun scrubText(showsPoint: Boolean, x: Float, y: Float, xUnit: String, yUnit: String): String =
+            if (showsPoint) scrubLabel(x, y, xUnit, yUnit) else tickLabel(y)
+
+        /**
+         * The scrub point as a lab curve draws it beside its dot: both
          * coordinates, each with its unit when the plot has one —
          * "(0.520 mm, 9.81 N)" on a load–deflection curve.
          */

@@ -360,6 +360,14 @@ class SweepPlotViewTest {
     }
 
     @Test
+    fun `a sweep plot's scrub reads the y alone, as Semper's does, and a lab curve reads the point`() {
+        assertEquals("0.01", SweepPlotAxes.scrubText(showsPoint = false, 41f, 0.0123f, "", ""))
+        assertEquals("263", SweepPlotAxes.scrubText(showsPoint = false, 1.94f, 263.2f, "mε", "MPa"))
+        assertEquals("(1.94 mε, 263 MPa)", SweepPlotAxes.scrubText(showsPoint = true, 1.94f, 263.2f, "mε", "MPa"))
+        assertFalse(SweepPlotView(context).scrubShowsPoint)
+    }
+
+    @Test
     fun `a read value keeps three significant figures and never reads -0`() {
         assertEquals("0.052", SweepPlotAxes.readoutValue(0.052f))
         assertEquals("4.90", SweepPlotAxes.readoutValue(4.903325f))
