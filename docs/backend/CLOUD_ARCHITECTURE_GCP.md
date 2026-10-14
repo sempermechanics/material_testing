@@ -972,7 +972,7 @@ Every Firestore call in `backend/app` now goes through a helper in
   so the helper reads the stream to the end before the caller writes anything.
 - **Not covered.** A transaction's begin and commit take no timeout in the
   client's public API (google-cloud-firestore 2.32), so they keep the 60 s
-  default. The reads inside a transaction are covered.
+  default. The reads inside a transaction are covered. Open as TD-210.
 
 `tests/test_firestore_timeouts.py` fails on a raw `.get()`, `.stream()`,
 `get_all`, `.commit()` or document write anywhere in `backend/app` outside
