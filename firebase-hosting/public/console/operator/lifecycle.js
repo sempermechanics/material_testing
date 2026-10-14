@@ -2,9 +2,9 @@
  * fresh sign-in, and the 30 days in which a delete can be undone.
  */
 import {
-  api, setStatus, esc, askInPage, confirmByTyping, stepUpForRevoke, ERR_CANCELLED,
+  api, setStatus, esc, askInPage, confirmInPage, confirmByTyping, stepUpForRevoke, ERR_CANCELLED,
 } from "../auth.js";
-import { day, daysLeft } from "../util.js";
+import { day, daysLeft, placeholderRows, retryRow } from "../util.js";
 import { explain } from "../messages.js";
 import { $, desk, findLicence, labelOf } from "./state.js";
 import { showLicence, renderLicences } from "./licences.js";
@@ -21,11 +21,12 @@ export async function revokeLicence(id) {
   const who = lic.kind === "institution"
     ? `every one of the ${lic.seatsUsed ?? 0} people on its roster`
     : "the person holding it";
-  if (!window.confirm(
-    `Revoking ${label} drops ${who} to demo immediately.\n\n` +
-    "Their saved analyses are untouched — this withdraws entitlement, " +
-    "it does not delete anything.\n\nContinue?",
-  )) return;
+  if (!(await confirmInPage({
+    title: `Revoke ${label}`,
+    message: `Revoking ${label} drops ${who} to demo immediately.\n\n` +
+      "Their saved analyses are untouched — this withdraws entitlement, " +
+      "it does not delete anything.\n\nContinue?",
+  }))) return;
   if (!(await confirmByTyping(label, "revoke this licence", { title: `Revoke ${label}` }))) {
     setStatus("Revoke cancelled — the key did not match.");
     return;
@@ -61,7 +62,9 @@ export async function resumeRevoke(id) {
     setStatus(`${label} is already revoked.`);
     return;
   }
-  if (!window.confirm(`Re-authenticated. Revoke ${label} now?`)) {
+  if (!(await confirmInPage({
+    title: `Revoke ${label}`, message: `Re-authenticated. Revoke ${label} now?`, confirm: "Revoke",
+  }))) {
     setStatus("Revoke cancelled.");
     return;
   }
@@ -99,12 +102,13 @@ export async function deleteLicence(id) {
   const who = lic.kind === "institution"
     ? `every one of the ${lic.seatsUsed ?? 0} people on its roster`
     : "the person holding it";
-  if (!window.confirm(
-    `Delete ${label}?\n\n` +
-    (live ? `It is revoked first: ${who} drops to demo immediately. ` : "") +
-    "It leaves this list and is held under Recently deleted for 30 days, " +
-    "then purged. Nobody's saved analyses are touched.",
-  )) return;
+  if (!(await confirmInPage({
+    title: `Delete ${label}`,
+    message: `Delete ${label}?\n\n` +
+      (live ? `It is revoked first: ${who} drops to demo immediately. ` : "") +
+      "It leaves this list and is held under Recently deleted for 30 days, " +
+      "then purged. Nobody's saved analyses are touched.",
+  }))) return;
   const typed = await askInPage({
     title: `Delete ${label}`,
     message: `Type ${label} to delete this licence:`,
@@ -122,7 +126,9 @@ export async function resumeDelete(id) {
   if (resumed) return;
   resumed = true;
   const label = labelOf(id);
-  if (!window.confirm(`Re-authenticated. Delete ${label} now?`)) {
+  if (!(await confirmInPage({
+    title: `Delete ${label}`, message: `Re-authenticated. Delete ${label} now?`, confirm: "Delete",
+  }))) {
     setStatus("Delete cancelled.");
     return;
   }
@@ -156,6 +162,8 @@ $("loadDeleted").addEventListener("click", loadDeleted);
 async function loadDeleted() {
   $("loadDeleted").textContent = "Refresh";
   $("deletedWrap").hidden = false;
+  $("deletedRows").innerHTML = placeholderRows(7, 2);
+  $("loadDeleted").disabled = true;
   try {
     const data = await api("/v1/admin/deleted-licenses?limit=50");
     const rows = data.licenses || [];
@@ -163,8 +171,9 @@ async function loadDeleted() {
       ? rows.map(deletedRow).join("")
       : '<tr><td colspan="7" class="muted">Nothing deleted in the last 30 days.</td></tr>';
   } catch (e) {
-    $("deletedRows").innerHTML =
-      `<tr><td colspan="7" class="err">Could not load: ${esc(e.message)}</td></tr>`;
+    $("deletedRows").innerHTML = retryRow(7, `Could not load: ${e.message}`);
+  } finally {
+    $("loadDeleted").disabled = false;
   }
 }
 
@@ -184,6 +193,7 @@ function deletedRow(lic) {
 }
 
 $("deletedRows").addEventListener("click", async (ev) => {
+  if (ev.target.closest("button[data-retry]")) return loadDeleted();
   const btn = ev.target.closest("button[data-restore]");
   if (!btn) return;
   const id = btn.dataset.restore;

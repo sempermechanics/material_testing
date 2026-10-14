@@ -286,6 +286,18 @@ android {
                 // own state and the Kover agent's data make up most of the
                 // rest. 2 GB is headroom for the suite to grow, not a need.
                 test.maxHeapSize = "2g"
+                // Golden oracles (fixtures/Goldens.kt): `-PupdateGoldens`
+                // rewrites the committed files under src/test/resources/oracles
+                // instead of comparing against them. Never in CI.
+                test.systemProperty("semper.goldens.dir", file("src/test/resources/oracles").absolutePath)
+                test.systemProperty("semper.goldens.update", project.hasProperty("updateGoldens").toString())
+                if (project.hasProperty("updateGoldens")) test.outputs.upToDateWhen { false }
+                // The client/backend wire bodies (ApiDtosContractTest; the
+                // backend's tests/test_wire_contracts.py reads the same files).
+                // An input, so editing one reruns the tests instead of a cache hit.
+                val contracts = rootProject.file("contracts")
+                test.inputs.dir(contracts).withPropertyName("wireContracts")
+                test.systemProperty("semper.contracts.dir", contracts.absolutePath)
             }
         }
     }
@@ -392,34 +404,40 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
     jvmTarget = "17"
 }
 
-// Coverage: exclude view classes only — ViewModels and the pure helpers that
-// live alongside them (AnalysisViewModel, FrameOrderHelper, …) are the app's
-// highest-churn logic and were invisible while the whole `ui` package was
-// excluded. Android view/entry-point classes stay out: they need an emulator,
-// not JVM unit tests, so counting them would only depress the floor.
+// Coverage: everything but generated bindings. Activities, adapters and dialogs
+// were excluded as "emulator-only", but Robolectric runs most of them (Settings,
+// the viewer, Home, the wizard), and leaving them out hid ~2,100 lines of the
+// app's screens from the number. Counting them is the honest figure.
 kover {
     reports {
         filters {
             excludes {
-                // Trailing `*` also swallows nested/synthetic classes
-                // (SettingsActivity$Companion, lambdas) without needing a `$`
-                // literal in a Kotlin string.
                 classes(
-                    "com.sempermechanics.semper.ui.*Activity*",
-                    "com.sempermechanics.semper.ui.*Adapter*",
-                    "com.sempermechanics.semper.ui.*Fragment*",
-                    "com.sempermechanics.semper.ui.*Dialog*",
                     // Generated ViewBinding classes: no logic of ours to cover.
                     "com.sempermechanics.semper.databinding.*",
                 )
             }
         }
         verify {
-            // Two points under the measured line coverage (51.7 % on 2026-09-24,
-            // after the TD-57 view-class tests), so churn does not fail unrelated
-            // PRs while a real drop does. Raise it as coverage climbs; never lower it.
-            rule {
-                minBound(49)
+            // Two points under the measured coverage, so churn does not fail
+            // unrelated PRs while a real drop does. Every PR that adds tests
+            // re-measures (`koverXmlReport`, the totals in
+            // build/reports/kover/report.xml) and raises both to measured − 2;
+            // never lower them. material_testing, 2026-10-14 (the sync of
+            // semperdic-app 8ba7081): lines 73.93 %, branches 59.40 %, so 71 / 57
+            // here; the lab code is less covered than Semper's, whose floors
+            // are 75 / 57. 2026-10-10: lines 77.12 %, branches 59.99 %.
+            // 2026-10-09: lines 76.38 %, branches 59.15 %.
+            // 2026-10-08: lines 74.50 %, branches 56.41 %, the
+            // first figure with the screens counted (76.84 / 60.80 % on the old,
+            // narrower set, whose floors were 73 / 58 — the reset is the wider
+            // measure, not lost coverage). The line floor once sat at 49 while
+            // coverage climbed past 75, so a 26-point drop would have passed.
+            rule("Line coverage") {
+                minBound(71)
+            }
+            rule("Branch coverage") {
+                minBound(57, kotlinx.kover.gradle.plugin.dsl.CoverageUnit.BRANCH)
             }
         }
     }

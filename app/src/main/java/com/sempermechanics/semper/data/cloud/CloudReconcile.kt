@@ -5,7 +5,9 @@ import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.cloud.CloudSync.Outcome
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.CloudApi
+import com.sempermechanics.semper.data.net.CloudSessionDto
 import com.sempermechanics.semper.data.net.HttpFailure
+import com.sempermechanics.semper.data.net.SessionsResponse
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.util.suspendRunCatching
@@ -13,7 +15,8 @@ import timber.log.Timber
 
 /**
  * The parts of [CloudSync.reconcile] around the listing: the config refresh
- * before it, what a failed listing means, and the repair of rows after it.
+ * before it, the listing itself, what a failed listing means, and the repair
+ * of rows after it.
  */
 internal object CloudReconcile {
 
@@ -49,16 +52,64 @@ internal object CloudReconcile {
         }
     }
 
+    /** This app's [cloud] sessions, the local ids they back up, and the rows another app backs up. */
+    class Listing(val cloud: SessionsResponse, val backedUp: Set<String>, val keep: Set<String>)
+
+    /**
+     * This app's listing, plus the rows [repairRows] must [Listing.keep] SYNCED
+     * although this app's list lacks them: a row restored from the other app's
+     * backup (ADR-014, TD-153) is backed up there, and repairing it would
+     * upload it again as a second session. Only when some SYNCED row is missing
+     * is the whole account listed, once, to tell the two apart.
+     */
+    suspend fun list(appContext: Context, api: CloudApi, token: String, verify: Boolean): Listing {
+        val cloud = api.listSessions(token, verify = verify)
+        // Only COMPLETED cloud sessions count as a real backup.
+        val backedUp = cloud.sessions.completed().map { it.localSessionId }.filter { it.isNotBlank() }.toSet()
+        val missing = SessionStore.list(appContext)
+            .filter { it.syncState == SessionRecord.SyncState.SYNCED && it.id !in backedUp }
+        val keep = if (missing.isEmpty()) emptySet() else otherAppBackups(api, token, missing)
+        return Listing(cloud, backedUp, keep)
+    }
+
+    /**
+     * The [missing] rows another app's COMPLETED backup holds, by its local id
+     * or the cloud id the restore stored. When the account cannot be listed,
+     * all of them: a pass that cannot tell a lost backup from the other app's
+     * repairs nothing, and the next pass asks again.
+     */
+    private suspend fun otherAppBackups(api: CloudApi, token: String, missing: List<SessionRecord>): Set<String> {
+        val account = suspendRunCatching { api.listSessions(token, app = CloudApi.ALL_APPS) }.getOrElse {
+            Timber.w(it, "Could not list every app's backups — repairing no row this pass")
+            return missing.mapTo(HashSet()) { record -> record.id }
+        }
+        val completed = account.sessions.completed()
+        val localIds = completed.map { it.localSessionId }.filter { it.isNotBlank() }.toSet()
+        val cloudIds = completed.map { it.sessionId }.toSet()
+        return missing
+            .filter { it.id in localIds || (it.cloudSessionId.isNotBlank() && it.cloudSessionId in cloudIds) }
+            .onEach { Timber.i("Session %s is backed up by another app — left SYNCED", it.id) }
+            .mapTo(HashSet()) { it.id }
+    }
+
+    private fun List<CloudSessionDto>.completed() = filter { it.status == UploadWorkOutcomes.STATUS_COMPLETED }
+
     /**
      * Mark SYNCED rows whose backup is not in [backedUp] PENDING, and queue them
-     * when [reupload]. With [requeue], queue the rows already PENDING too.
-     * Returns how many rows were repaired.
+     * when [reupload]; a row in [keep] stays SYNCED ([list]). With [requeue],
+     * queue the rows already PENDING too. Returns how many rows were repaired.
      */
-    fun repairRows(appContext: Context, backedUp: Set<String>, reupload: Boolean, requeue: Boolean): Int {
+    fun repairRows(
+        appContext: Context,
+        backedUp: Set<String>,
+        keep: Set<String>,
+        reupload: Boolean,
+        requeue: Boolean,
+    ): Int {
         var repaired = 0
         SessionStore.list(appContext).forEach { record ->
             val claimsSynced = record.syncState == SessionRecord.SyncState.SYNCED
-            if (claimsSynced && record.id !in backedUp) {
+            if (claimsSynced && record.id !in backedUp && record.id !in keep) {
                 // The cloud copy is gone (deleted) or never completed.
                 Timber.i("Session %s claims SYNCED but is not in the cloud — repairing", record.id)
                 SessionStore.setSyncState(appContext, record.id, SessionRecord.SyncState.PENDING)

@@ -232,7 +232,7 @@
     },
     "e1": {
         "id": "r1",
-        "name": "",
+        "name": "Restored",
         "createdAt": 0,
         "updatedAt": 1700000000000,
         "frameCount": 1,
@@ -708,28 +708,25 @@
             0
         ],
         "sweepSkipCodes": [
-            0,
-            0,
-            0
+            null,
+            null,
+            null
         ],
         "sweepSkippedNodes": [
             {
                 "subset": 41,
                 "step": 9,
-                "strainWindow": 0,
-                "code": 0
+                "strainWindow": 0
             },
             {
                 "subset": 0,
                 "step": 0,
-                "strainWindow": 0,
-                "code": 0
+                "strainWindow": 0
             },
             {
                 "subset": 0,
                 "step": 0,
-                "strainWindow": 0,
-                "code": 0
+                "strainWindow": 0
             }
         ],
         "stopCode": 0,
@@ -738,7 +735,7 @@
     },
     "a sweep with no subsets uses the engine subset, else 0, for its span": {
         "id": "r1",
-        "name": "spec.png",
+        "name": "spec",
         "createdAt": 1700000000000,
         "updatedAt": 1700000000000,
         "frameCount": 0,

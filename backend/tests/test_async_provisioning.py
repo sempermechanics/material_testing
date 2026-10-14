@@ -552,7 +552,7 @@ async def test_upload_targets_are_recorded_in_one_batch(store, queued, client, m
     commits = []
     real_commit = fake_firestore._Batch.commit
     monkeypatch.setattr(fake_firestore._Batch, "commit",
-                        lambda b: commits.append(len(b._ops)) or real_commit(b))
+                        lambda b, **kw: commits.append(len(b._ops)) or real_commit(b, **kw))
 
     session_provision.provision_session(sid)
 

@@ -7,8 +7,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.ui.viewer.SaveExportActivity
-import com.sempermechanics.semper.ui.viewer.SaveExportViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -98,29 +96,27 @@ class SaveExportActivityTest {
     @Test
     fun `a rotation mid-copy waits on the running copy instead of starting another`() {
         val copies = mutableListOf<Runnable>()
-        SaveExportViewModel.ioDispatcher = Executor { copies += it }.asCoroutineDispatcher()
-        try {
-            val controller = Robolectric.buildActivity(SaveExportActivity::class.java, intent(staged())).setup()
-            val first = controller.get()
-            val picker = shadowOf(first).nextStartedActivityForResult
-            val dest = File(temp.root, "picked.csv")
-            first.activityResultRegistry.dispatchResult(
-                picker.requestCode,
-                Activity.RESULT_OK,
-                Intent().setData(Uri.fromFile(dest)),
-            )
-            assertEquals("the copy is under way", 1, copies.size)
+        val built = Robolectric.buildActivity(SaveExportActivity::class.java, intent(staged()))
+        built.get().copyDispatcher = Executor { copies += it }.asCoroutineDispatcher()
+        val controller = built.setup()
+        val first = controller.get()
+        val picker = shadowOf(first).nextStartedActivityForResult
+        val dest = File(temp.root, "picked.csv")
+        first.activityResultRegistry.dispatchResult(
+            picker.requestCode,
+            Activity.RESULT_OK,
+            Intent().setData(Uri.fromFile(dest)),
+        )
+        assertEquals("the copy is under way", 1, copies.size)
 
-            // Rotated while that copy is still writing the document.
-            val rebuilt = controller.recreate().get()
-            assertEquals("no second copy into the same document", 1, copies.size)
+        // Rotated while that copy is still writing the document; the rebuilt
+        // instance's own dispatcher is never read, since the view model is kept.
+        val rebuilt = controller.recreate().get()
+        assertEquals("no second copy into the same document", 1, copies.size)
 
-            copies.toList().forEach { it.run() }
-            idleUntil("the save") { rebuilt.isFinishing }
-            assertEquals(CSV, dest.readText())
-            assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
-        } finally {
-            SaveExportViewModel.ioDispatcher = Dispatchers.IO
-        }
+        copies.toList().forEach { it.run() }
+        idleUntil("the save") { rebuilt.isFinishing }
+        assertEquals(CSV, dest.readText())
+        assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
     }
 }

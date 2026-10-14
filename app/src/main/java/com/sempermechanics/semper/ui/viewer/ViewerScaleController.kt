@@ -141,29 +141,17 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
             // Warm the stats/extrema off the main thread, next to the heatmap render,
             // so the scrub settle never pays the O(n)+sort on the UI thread.
             val metrics = viewModel.fieldMetricsFor(frameAtStart, index, data)
-            val heatmap = if (displaced) {
-                VisualizationEngine.generateDeformedHeatmap(
-                    data,
-                    size.width,
-                    size.height,
-                    index,
-                    frameStep,
-                    custom?.min,
-                    custom?.max,
-                    maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
-                )
-            } else {
-                VisualizationEngine.generateHeatmap(
-                    data,
-                    size.width,
-                    size.height,
-                    index,
-                    frameStep,
-                    custom?.min,
-                    custom?.max,
-                    maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
-                )
-            }
+            val heatmap = VisualizationEngine.generateFrameHeatmap(
+                displaced,
+                data,
+                size.width,
+                size.height,
+                index,
+                frameStep,
+                custom?.min,
+                custom?.max,
+                maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+            )
             host.scrubCache.putHeat(heatKey, heatmap)
 
             withContext(Dispatchers.Main) {
@@ -179,6 +167,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         binding.imgHeatmapOverlay.scaleType = ImageView.ScaleType.MATRIX
         binding.imgHeatmapOverlay.setImageBitmap(heatmap.bitmap)
         applyHeatmapMatrix()
+        host.captions.openingDone()
 
         shownRange = heatmap.range
 

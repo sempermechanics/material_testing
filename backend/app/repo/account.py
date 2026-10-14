@@ -16,6 +16,10 @@ from ._base import (
     get_license,
     _license_mode,
     _now,
+    _get,
+    _stream,
+    _update_doc,
+    _delete_doc,
 )
 from .invites import (
     _write_invite,
@@ -37,11 +41,11 @@ def remember_user_folder(uid: str, folder_id: str, sessions_folder_id: str | Non
     fields = {"driveFolderId": folder_id}
     if sessions_folder_id:
         fields["driveSessionsFolderId"] = sessions_folder_id
-    db().collection("users").document(uid).update(fields)
+    _update_doc(db().collection("users").document(uid), fields)
 
 
 def get_user(uid: str):
-    snap = db().collection("users").document(uid).get()
+    snap = _get(db().collection("users").document(uid))
     return {**snap.to_dict(), "uid": uid} if snap.exists else None
 
 
@@ -58,7 +62,7 @@ def record_terms_acceptance(uid: str, version: str, device_id: str | None, sourc
         "deviceId": device_id,
         "source": source,
     }
-    db().collection("users").document(uid).update({
+    _update_doc(db().collection("users").document(uid), {
         "termsAccepted": record, "updatedAt": _base.firestore.SERVER_TIMESTAMP,
     })
     return {**record, "acceptedAt": _now().isoformat()}
@@ -78,7 +82,7 @@ def record_improvement_consent(uid: str, granted: bool, version: str, device_id:
         "deviceId": device_id,
         "source": source,
     }
-    db().collection("users").document(uid).update({
+    _update_doc(db().collection("users").document(uid), {
         "improvementConsent": record, "updatedAt": _base.firestore.SERVER_TIMESTAMP,
     })
     return {**record, "at": _now().isoformat()}
@@ -86,7 +90,7 @@ def record_improvement_consent(uid: str, granted: bool, version: str, device_id:
 
 def list_user_devices(uid: str) -> list:
     out = []
-    for d in db().collection("devices").where("uid", "==", uid).stream():
+    for d in _stream(db().collection("devices").where("uid", "==", uid)):
         v = d.to_dict()
         out.append({
             "deviceId": d.id,
@@ -113,7 +117,7 @@ def _give_back_license(uid: str) -> None:
     request, as the original one was. Demo keys are left alone: they are
     minted per account and hold nothing anyone else is waiting for.
     """
-    snap = db().collection("users").document(uid).get()
+    snap = _get(db().collection("users").document(uid))
     if not snap.exists:
         return
     license_id = (snap.to_dict() or {}).get("licenseId") or ""
@@ -125,7 +129,7 @@ def _give_back_license(uid: str) -> None:
         return
     if (lic.get("redeemedByUid") or "") != uid or _license_mode(lic) == MODE_DEMO:
         return
-    db().collection("licenses").document(license_id).update({
+    _update_doc(db().collection("licenses").document(license_id), {
         "status": "unused",
         "redeemedByUid": _base.firestore.DELETE_FIELD,
         "redeemedAt": _base.firestore.DELETE_FIELD,
@@ -163,5 +167,5 @@ def delete_all_user_data(uid: str) -> dict:
         db().collection("devices").where("uid", "==", uid)
     )
     _give_back_license(uid)
-    db().collection("users").document(uid).delete()
+    _delete_doc(db().collection("users").document(uid))
     return {"sessions": sessions, "files": files, "devices": devices}

@@ -29,6 +29,7 @@ import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.fixtures.CleanAppState
+import com.sempermechanics.semper.fixtures.QuotaBackendOn
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.navigation.IntentKeys
@@ -36,7 +37,9 @@ import com.sempermechanics.semper.ui.limit.SessionLimitActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -58,6 +61,10 @@ class HomeControllersTest {
 
     @get:Rule
     val clean = CleanAppState()
+
+    /** The limit screen opens only where the quota has a backend to cap it. */
+    @get:Rule
+    val backend = QuotaBackendOn()
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private lateinit var activity: AppCompatActivity
@@ -106,9 +113,9 @@ class HomeControllersTest {
         AppRemoteConfig.apply(context, AppConfigDto(maxSessions = 5))
         AccountCache.setQuota(context, used = 2)
 
-        card.render(localSessionCount = 3)
+        card.render(localSessionCount = 4)
         assertEquals(View.VISIBLE, quotaView.visibility)
-        assertEquals(activity.resources.getQuantityString(R.plurals.home_quota_fmt, 3, 3, 5), quotaView.text)
+        assertEquals(activity.resources.getQuantityString(R.plurals.home_quota_fmt, 4, 4, 5), quotaView.text)
         assertEquals(activity.getColor(R.color.text_secondary), quotaView.currentTextColor)
 
         card.render(localSessionCount = 5)
@@ -116,9 +123,32 @@ class HomeControllersTest {
     }
 
     @Test
+    fun `the quota line shows only from eighty percent of the ceiling`() {
+        AppRemoteConfig.apply(context, AppConfigDto(maxSessions = 100))
+
+        card.render(localSessionCount = 79)
+        assertEquals("79%", View.GONE, quotaView.visibility)
+
+        card.render(localSessionCount = 80)
+        assertEquals("80%", View.VISIBLE, quotaView.visibility)
+
+        card.render(localSessionCount = 3)
+        assertEquals("hidden again under it", View.GONE, quotaView.visibility)
+    }
+
+    @Test
+    fun `near the ceiling means at least eighty percent of it`() {
+        assertFalse(HomeQuotaCard.nearCeiling(used = 799, max = 999))
+        assertTrue(HomeQuotaCard.nearCeiling(used = 800, max = 999))
+        assertTrue(HomeQuotaCard.nearCeiling(used = 4, max = 5))
+        assertFalse(HomeQuotaCard.nearCeiling(used = 3, max = 5))
+        assertFalse("no ceiling", HomeQuotaCard.nearCeiling(used = 10, max = 0))
+    }
+
+    @Test
     fun `a tap on the quota line opens Settings under the limit and the limit screen at it`() {
         AppRemoteConfig.apply(context, AppConfigDto(maxSessions = 5))
-        card.render(localSessionCount = 1)
+        card.render(localSessionCount = 4)
 
         quotaView.performClick()
         assertEquals(1, settingsOpened)
@@ -165,6 +195,26 @@ class HomeControllersTest {
         assertEquals(Gravity.TOP or Gravity.START, params.gravity)
         assertEquals(1000 / 2 - 50, params.leftMargin)
         assertEquals(2000 * 9 / 10 - 50, params.topMargin)
+    }
+
+    @Test
+    fun `the list is padded so its last row scrolls clear above the button`() {
+        val root = CoordinatorLayout(activity)
+        val list = View(activity).apply { setPadding(0, 0, 0, 7) }
+        val fab = View(activity)
+        root.addView(list, CoordinatorLayout.LayoutParams(1000, 2000))
+        root.addView(fab, CoordinatorLayout.LayoutParams(100, 100))
+        HomeFabLayout.pinAtNineTenths(root, fab, list)
+
+        root.measure(
+            MeasureSpec.makeMeasureSpec(1000, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(2000, MeasureSpec.EXACTLY),
+        )
+        root.layout(0, 0, 1000, 2000)
+
+        val fabTopFromBottom = 2000 - (2000 * 9 / 10 - 50)
+        val clearance = (16 * activity.resources.displayMetrics.density).toInt()
+        assertEquals(fabTopFromBottom + clearance, list.paddingBottom)
     }
 
     // ── BackupBadgeActions ───────────────────────────────────────────────

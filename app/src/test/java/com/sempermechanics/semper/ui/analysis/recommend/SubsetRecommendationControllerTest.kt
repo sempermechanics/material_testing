@@ -1,9 +1,17 @@
 package com.sempermechanics.semper.ui.analysis.recommend
 
 import android.app.Application
+import android.graphics.drawable.LayerDrawable
+import android.os.Looper
+import android.provider.Settings
+import android.view.View
 import androidx.core.view.isVisible
+import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicParams
+import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
+import com.sempermechanics.semper.ui.common.InlineBusy
+import kotlinx.coroutines.asCoroutineDispatcher
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,7 +20,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
 
 /**
  * The recommendation seeds the subset slider until the user sets their own,
@@ -57,7 +68,7 @@ class SubsetRecommendationControllerTest {
 
         assertEquals(25, bed.settings.sliderSubsetSize.value.toInt())
         assertEquals(listOf("commitParamFields", "onSweepInputsChanged"), bed.host.calls)
-        assertTrue(bed.settings.tvSpeckleReadout.isVisible)
+        assertTrue(bed.settings.chipSpeckle.isVisible)
         assertFalse(bed.binding.speckleWarnRow.root.isVisible)
         assertFalse(bed.binding.lowTextureWarnRow.root.isVisible)
     }
@@ -92,7 +103,8 @@ class SubsetRecommendationControllerTest {
         bed.viewModel.subsetRecommendation = null
         subsets.apply()
 
-        assertFalse(bed.settings.tvSpeckleReadout.isVisible)
+        assertFalse(bed.settings.chipSpeckle.isVisible)
+        assertEquals(null, band().range)
         assertFalse(bed.binding.speckleWarnRow.root.isVisible)
         assertFalse(bed.binding.lowTextureWarnRow.root.isVisible)
     }
@@ -101,5 +113,125 @@ class SubsetRecommendationControllerTest {
     fun `nothing is measured without a reference`() {
         subsets.request()
         assertEquals(null, bed.viewModel.subsetRecommendationKey)
+    }
+
+    private fun idleFor(ms: Long) {
+        shadowOf(Looper.getMainLooper()).idleFor(ms, TimeUnit.MILLISECONDS)
+    }
+
+    /** Makes the subset slider visible on screen, as it is on page 2, so a recommendation glides it. */
+    private fun showSlider() {
+        var view: View? = bed.settings.sliderSubsetSize
+        while (view != null) {
+            view.visibility = View.VISIBLE
+            view = view.parent as? View
+        }
+    }
+
+    /** The band [SubsetRecommendationController] put behind the subset slider. */
+    private fun band(): SubsetBand {
+        val background = bed.settings.sliderSubsetSize.background
+        return (background as? LayerDrawable)?.getDrawable(0) as? SubsetBand ?: background as SubsetBand
+    }
+
+    @Test
+    fun `the chip gives the speckle and the band starts at the recommended size`() {
+        recommend(31, speckle = 4.3)
+        subsets.apply()
+        assertEquals(31..bed.settings.sliderSubsetSize.valueTo.toInt(), band().range)
+        assertEquals("Speckle 4.3 px", bed.settings.chipSpeckle.text.toString())
+        assertEquals(
+            "Speckle measures about 4.3 px across. Good practice asks for 3–9 px.",
+            bed.settings.chipSpeckle.contentDescription.toString(),
+        )
+
+        // A size of the user's own leaves the band where the speckle put it.
+        bed.viewModel.subsetUserModified = true
+        bed.settings.sliderSubsetSize.value = 61f
+        subsets.showSpeckleFeedback()
+        assertEquals(31, band().range?.first)
+    }
+
+    @Test
+    fun `the band starts at the three-speckle span when that asks for more than SSSIG`() {
+        // 9 px speckle: three of them need 27 px, above the 21 px SSSIG size.
+        recommend(21, speckle = 9.0)
+        subsets.apply()
+
+        assertEquals(27, band().range?.first)
+    }
+
+    @Test
+    fun `the subset's info says what the shaded band means`() {
+        assertTrue(bed.activity.getString(R.string.info_subset).contains("shaded band"))
+    }
+
+    @Test
+    fun `a slow measurement says so in the speckle chip, and a failed one clears it`() {
+        val held = mutableListOf<Runnable>()
+        val measuring = SubsetRecommendationController(
+            bed.activity,
+            bed.viewModel,
+            bed.binding,
+            bed.settings,
+            bed.host,
+            measureOn = { Executor { held += it }.asCoroutineDispatcher() },
+        )
+        // Too small for the smallest subset: the measurement comes back empty.
+        bed.viewModel.applyNewReference(ByteArray(64), "ref.png", ImageSize(8, 8))
+        val readout = bed.settings.chipSpeckle
+
+        measuring.request()
+        idleFor(InlineBusy.SHOW_AFTER_MS - 1)
+        assertFalse("nothing for the first 300 ms", readout.isVisible)
+        idleFor(2)
+        assertTrue(readout.isVisible)
+        assertEquals("Measuring speckle…", readout.text.toString())
+
+        while (held.isNotEmpty()) held.removeAt(0).run()
+        bed.idle()
+        assertFalse("a failed measurement leaves no chip", readout.isVisible)
+        assertEquals(null, bed.viewModel.subsetRecommendation)
+    }
+
+    @Test
+    fun `on screen the slider glides to the recommendation, then the sweep follows`() {
+        showSlider()
+        recommend(25, speckle = 5.0)
+        subsets.apply()
+
+        assertEquals("the chip shows the speckle at once", true, bed.settings.chipSpeckle.isVisible)
+        assertEquals(DicParams.DEFAULT_SUBSET, bed.settings.sliderSubsetSize.value.toInt())
+        assertEquals(listOf("commitParamFields"), bed.host.calls)
+
+        idleFor(GLIDE_PAST_MS)
+        assertEquals(25, bed.settings.sliderSubsetSize.value.toInt())
+        assertEquals(listOf("commitParamFields", "onSweepInputsChanged"), bed.host.calls)
+    }
+
+    @Test
+    fun `reading the size lands a glide still running`() {
+        showSlider()
+        recommend(25)
+        subsets.apply()
+
+        subsets.settle()
+        assertEquals(25, bed.settings.sliderSubsetSize.value.toInt())
+        assertEquals(1, bed.host.count("onSweepInputsChanged"))
+    }
+
+    @Test
+    fun `with animations off the slider jumps`() {
+        Settings.Global.putFloat(bed.activity.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 0f)
+        showSlider()
+        recommend(25)
+        subsets.apply()
+
+        assertEquals(25, bed.settings.sliderSubsetSize.value.toInt())
+        assertEquals(listOf("commitParamFields", "onSweepInputsChanged"), bed.host.calls)
+    }
+
+    private companion object {
+        const val GLIDE_PAST_MS = 400L
     }
 }

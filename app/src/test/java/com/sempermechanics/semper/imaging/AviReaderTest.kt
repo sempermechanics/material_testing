@@ -228,6 +228,29 @@ class AviReaderTest {
         assertEquals(2, video.keyframeAt(2))
     }
 
+    /** An XVID stream at 25 fps, one frame per entry of [keys]; no `idx1` when [indexed] is false. */
+    private fun xvid(keys: List<Boolean>, indexed: Boolean = true): AviReader.Video {
+        val movi = keys.indices.fold(ByteArray(0)) { acc, i -> acc + chunk("00dc", payload(i, 4)) }
+        val index = if (indexed) idx1(keys.map { "00dc" to it }) else ByteArray(0)
+        val file = riff("AVI ", headerList(width = 8, height = 8, compression = "XVID") + list("movi", movi) + index)
+        return checkNotNull(read(file))
+    }
+
+    @Test
+    fun `an indexed stream offers its keyframes' start times for Key frames sampling`() {
+        val keys = List(10) { it % 4 == 0 } // Frames 0, 4 and 8.
+
+        assertEquals(listOf(0L, 160_000L, 320_000L), xvid(keys).keyframeTimesUs())
+    }
+
+    @Test
+    fun `an index-less or all-intra stream offers no keyframes to sample`() {
+        // No idx1: every frame is assumed a keyframe, which says nothing.
+        assertEquals(emptyList<Long>(), xvid(List(10) { it % 4 == 0 }, indexed = false).keyframeTimesUs())
+        // Every frame flagged (MJPEG, uncompressed): a key frame plan would be every frame.
+        assertEquals(emptyList<Long>(), xvid(List(10) { true }).keyframeTimesUs())
+    }
+
     @Test
     fun `a negative biHeight means the rows are stored top-down`() {
         val body = ByteArray(40)

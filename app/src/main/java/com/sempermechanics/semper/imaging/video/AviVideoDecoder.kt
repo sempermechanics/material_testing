@@ -103,8 +103,12 @@ internal class AviVideoDecoder private constructor(
             AviLuma.isSupported(video) ||
             AviCodecDecoder.mimeFor(video.fourcc) != null
 
-    /** The frame on screen at [timeUs], as a luma plane. */
-    fun decodeFrameAt(timeUs: Long): GrayPngEncoder.Luma? = decodeFrame(video.frameIndexAt(timeUs))
+    /** The frame on screen at [timeUs], as a luma plane timed where that frame starts. */
+    fun decodeFrameAt(timeUs: Long): DecodedFrame? = decodeTimedFrame(video.frameIndexAt(timeUs))
+
+    /** Frame [index] of the stream, as a luma plane timed where it starts in the stream. */
+    fun decodeTimedFrame(index: Int): DecodedFrame? =
+        decodeFrame(index)?.let { DecodedFrame(it, ptsUs = video.presentationTimeUs(index)) }
 
     /** Frame [index] of the stream, as a luma plane. */
     fun decodeFrame(index: Int): GrayPngEncoder.Luma? {

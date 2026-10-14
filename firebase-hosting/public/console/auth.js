@@ -60,13 +60,15 @@ import {
   TotpMultiFactorGenerator,
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { API_BASE_URL } from "./config.js";
-import { qrSvg } from "./qr.js";
 import { errorDetail, reauthMethods } from "./util.js";
 
 // Hosting's /__/firebase/init.js is the classic-SDK script
 // (`firebase.initializeApp({...})`), not a module — there is nothing to
 // import from it. The same config as JSON is one fetch away; top-level await
 // holds every page's module until it is here, which is what they want anyway.
+// Every page's <head> preloads it (`as="fetch" crossorigin="anonymous"`, the
+// mode of this plain fetch), so the browser has usually fetched it before
+// this line runs; a preload in any other mode would be fetched twice.
 const firebaseConfig = await fetch("/__/firebase/init.json").then((r) => {
   if (!r.ok) throw new Error(`hosting/init-error: /__/firebase/init.json ${r.status}`);
   return r.json();
@@ -147,27 +149,31 @@ function unstashResume() {
 /* ---------------------------------------------------------------- challenge */
 
 /**
- * Ask for one line of text in the page: a card with a heading, the message
- * (paragraphs split on blank lines), a text or password box, the confirm
- * button and Cancel. Resolves the trimmed answer ("" if left blank), or null
- * on Cancel.
+ * A card in the page in place of the browser's own dialogs: a heading, the
+ * message (paragraphs split on blank lines; a single line break is kept), an
+ * optional text or password box, the confirm button and, unless `cancel` is
+ * null, a Cancel button. Resolves what `answer` makes of the confirm (given
+ * the box's trimmed text), or null on Cancel.
  *
- * Not `window.prompt`, for the reason `codeCard` gives: some browsers show no
- * prompt at all. The card goes after `anchor` (default: the status line). The
- * Edit dialog passes an element inside itself, because a modal dialog makes
- * everything outside it unreachable. Every piece of text goes in as a text
- * node, so a licence label or address is never markup.
+ * Not `window.prompt` / `confirm` / `alert`, for the reason `codeCard` gives:
+ * some browsers show none of them at all. The card goes after `anchor`
+ * (default: the status line). The Edit dialog passes an element inside
+ * itself, because a modal dialog makes everything outside it unreachable.
+ * Every piece of text goes in as a text node, so a licence label or address
+ * is never markup.
  */
-export function askInPage({ title, message, password = false, confirm = "Confirm", anchor } = {}) {
+function pageCard(kind, {
+  title, message, input = false, password = false, confirm, cancel = "Cancel", anchor, answer,
+}) {
   const card = document.createElement("section");
-  card.className = "card ask";
+  card.className = `card ${kind}`;
   card.innerHTML = `
     <h2></h2>
     <div class="lines"></div>
     <div class="row">
       <input size="24" />
       <button type="button" class="confirm"></button>
-      <button type="button" class="secondary cancel">Cancel</button>
+      <button type="button" class="secondary cancel"></button>
     </div>`;
   card.querySelector("h2").textContent = title;
   const lines = card.querySelector(".lines");
@@ -177,29 +183,60 @@ export function askInPage({ title, message, password = false, confirm = "Confirm
     p.textContent = text;
     lines.appendChild(p);
   }
-  const input = card.querySelector("input");
-  input.type = password ? "password" : "text";
-  input.autocomplete = password ? "current-password" : "off";
-  card.querySelector(".confirm").textContent = confirm;
+  const box = card.querySelector("input");
+  if (input) {
+    box.type = password ? "password" : "text";
+    box.autocomplete = password ? "current-password" : "off";
+  } else {
+    box.remove();
+  }
+  const ok = card.querySelector(".confirm");
+  ok.textContent = confirm;
+  const no = card.querySelector(".cancel");
+  if (cancel == null) no.remove();
+  else no.textContent = cancel;
 
   const at = anchor || document.getElementById("status") || document.querySelector("main");
   at.insertAdjacentElement("afterend", card);
   // The desk's status line sits above a long table; bring the card into view.
   if (card.scrollIntoView) card.scrollIntoView({ block: "center" });
-  input.focus();
+  (input ? box : ok).focus();
 
   return new Promise((resolve) => {
     const done = (value) => { card.remove(); resolve(value); };
-    const ok = () => done(input.value.trim());
-    card.querySelector(".confirm").addEventListener("click", ok);
-    // Enter answers the card; inside the Edit form it must not also submit it.
-    input.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
-      if (e.preventDefault) e.preventDefault();
-      ok();
-    });
-    card.querySelector(".cancel").addEventListener("click", () => done(null));
+    const yes = () => done(answer(input ? box.value.trim() : ""));
+    ok.addEventListener("click", yes);
+    if (input) {
+      // Enter answers the card; inside the Edit form it must not also submit it.
+      box.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter") return;
+        if (e.preventDefault) e.preventDefault();
+        yes();
+      });
+    }
+    if (cancel != null) no.addEventListener("click", () => done(null));
   });
+}
+
+/**
+ * Ask for one line of text in the page. Resolves the trimmed answer ("" if
+ * left blank), or null on Cancel.
+ */
+export function askInPage({ title, message, password = false, confirm = "Confirm", anchor } = {}) {
+  return pageCard("ask", {
+    title, message, input: true, password, confirm, anchor, answer: (text) => text,
+  });
+}
+
+/** A yes / no question in the page. Resolves true on `confirm`, false on Cancel. */
+export async function confirmInPage({ title, message, confirm = "Continue", anchor } = {}) {
+  const yes = await pageCard("confirm", { title, message, confirm, anchor, answer: () => true });
+  return yes === true;
+}
+
+/** Something to read, in the page, with one Close button. Resolves once closed. */
+export async function tellInPage({ title, message, anchor } = {}) {
+  await pageCard("tell", { title, message, confirm: "Close", cancel: null, anchor, answer: () => true });
 }
 
 /**
@@ -439,8 +476,12 @@ export async function ensureDashboardMfa() {
   if (!user) throw new Error("not_signed_in");
   if (!hasSecondFactor(user)) {
     setStatus("Enrol an authenticator app to open any Semper dashboard.");
+    // The QR library is needed once per account, here, so it is fetched
+    // here rather than on every page load. If it cannot be fetched the card
+    // shows the key to type instead.
+    const qr = import("./qr.js").then((m) => m.qrSvg, () => null);
     const enrolment = await beginTotpEnrolment(user.email);
-    await enrolInPage(enrolment, user.email);
+    await enrolInPage(enrolment, user.email, await qr);
     setStatus("Authenticator enrolled.");
   }
   if (!(await sessionHasSecondFactor())) {
@@ -494,9 +535,10 @@ export async function beginTotpEnrolment(accountLabel) {
  *
  * The secret and the account go in as text nodes — never through innerHTML —
  * and the SVG is the library's own output for a URI we built, so the one
- * innerHTML below carries nothing a user typed.
+ * innerHTML below carries nothing a user typed. Without `qrSvg` (qr.js could
+ * not be fetched) the key is shown open in place of the picture.
  */
-function enrolInPage(enrolment, account) {
+function enrolInPage(enrolment, account, qrSvg) {
   const card = document.createElement("section");
   card.className = "card enrol";
   card.innerHTML = `
@@ -518,7 +560,12 @@ function enrolInPage(enrolment, account) {
       <button class="secondary cancel">Cancel</button>
     </div>
     <p class="muted err feedback"></p>`;
-  card.querySelector(".qr").innerHTML = qrSvg(enrolment.qrUrl);
+  if (qrSvg) {
+    card.querySelector(".qr").innerHTML = qrSvg(enrolment.qrUrl);
+  } else {
+    card.querySelector(".qr").hidden = true;
+    card.querySelector("details").open = true;
+  }
   card.querySelector(".key").textContent = enrolment.secret;
   card.querySelector(".account").textContent = account;
 
@@ -560,8 +607,17 @@ function enrolInPage(enrolment, account) {
  * every console before it fetches anything. `resume` is whatever the page
  * stashed before a re-authentication redirect that has just completed, or
  * null.
+ *
+ * Until the sign-in state is known the page says "Checking your sign-in…"
+ * (its markup: `<body data-auth="pending">` and a pending `#status`), and
+ * console.css keeps Sign in out of sight, so someone already signed in is
+ * not offered it first. This sets `data-auth` to "in" or "out" once known.
+ *
+ * `showApp: false` leaves `#app` hidden for the page to show once its own
+ * check passes: the operator desk and the institution page are only for
+ * some accounts, and showed their controls before saying whose they were.
  */
-export function requireSignIn(onReady) {
+export function requireSignIn(onReady, { showApp = true } = {}) {
   const signInBtn = document.getElementById("signIn");
   const signOutBtn = document.getElementById("signOut");
   const who = document.getElementById("who");
@@ -620,10 +676,13 @@ export function requireSignIn(onReady) {
     // replaced the user object the listener was called with.
     const user = auth.currentUser;
     const signedIn = Boolean(user);
+    document.body.dataset.auth = signedIn ? "in" : "out";
+    if (!signedIn) clearPendingStatus();
     signInBtn.hidden = signedIn;
     signOutBtn.hidden = !signedIn;
     if (signedOut) signedOut.hidden = signedIn;
     who.textContent = signedIn ? user.email : "";
+    who.title = who.textContent; // the whole address, where a phone cuts it short
     if (!signedIn) {
       readyUid = null;
       appEl.hidden = true;
@@ -636,7 +695,9 @@ export function requireSignIn(onReady) {
     resumeHanded = true;
     try {
       await ensureDashboardMfa();
-      appEl.hidden = false;
+      mark("semper:auth-ready");
+      clearPendingStatus();
+      if (showApp) appEl.hidden = false;
       onReady(user, resume);
     } catch (e) {
       readyUid = null;
@@ -776,11 +837,62 @@ export function saveBlob(blob, filename) {
 }
 
 /** Write a message into the page's status line. */
+/**
+ * A Performance API mark, for measuring a page load in DevTools or with
+ * `performance.getEntriesByName(name)`: `semper:auth-ready` when sign-in and
+ * the second factor are settled, `semper:first-data` when a page first shows
+ * what it loaded (`markFirstData`). Absent support is not an error.
+ */
+function mark(name) {
+  try {
+    performance.mark(name);
+  } catch { /* no Performance API */ }
+}
+
+let firstDataMarked = false;
+
+/** Mark the first time this page shows data it loaded (see `mark`). */
+export function markFirstData() {
+  if (firstDataMarked) return;
+  firstDataMarked = true;
+  mark("semper:first-data");
+}
+
 export function setStatus(message, isError = false) {
   const el = document.getElementById("status");
   if (!el) return;
+  delete el.dataset.pending;
   el.textContent = message;
   el.className = isError ? "muted err" : "muted";
+}
+
+/** Clear "Checking your sign-in…" if nothing has replaced it since. */
+function clearPendingStatus() {
+  const el = document.getElementById("status");
+  if (el && "pending" in el.dataset) setStatus("");
+}
+
+/** How long a wait goes before the status line says why it is long. */
+export const SLOW_AFTER_MS = 4000;
+export const SLOW_NOTE = "Still working — the server can take a few seconds to start.";
+
+/**
+ * Say `message` on the status line while `promise` runs, and if it is still
+ * running after `after` ms, add why: the API scales to zero when idle, and
+ * its first answer after that can take ten seconds or more. Resolves or
+ * rejects as `promise` does; what the line says afterwards is the caller's.
+ */
+export async function whileWaiting(promise, message, { after = SLOW_AFTER_MS } = {}) {
+  setStatus(message);
+  const timer = setTimeout(() => {
+    const el = document.getElementById("status");
+    if (el && el.textContent === message) setStatus(`${message} ${SLOW_NOTE}`);
+  }, after);
+  try {
+    return await promise;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Pure helpers live in util.js, where `node --test` can reach them; the pages

@@ -24,6 +24,12 @@ interface CloudApi {
 
     suspend fun getMe(idToken: String): MeResponse
 
+    /**
+     * Whether the account this phone was registered to was erased. Unlike every
+     * other call it never re-creates a profile for an erased account.
+     */
+    suspend fun getErasureStatus(idToken: String): ErasureStatus
+
     suspend fun getConfig(idToken: String): AppConfigDto
 
     suspend fun exportAccount(idToken: String, dest: File)
@@ -40,7 +46,11 @@ interface CloudApi {
 
     suspend fun setImprovementConsent(idToken: String, granted: Boolean)
 
-    suspend fun listSessions(idToken: String, verify: Boolean = false): SessionsResponse
+    /**
+     * The caller's cloud analyses: this app's (by `X-App-Id`) when [app] is
+     * null, else the named app's, or the whole account's for [ALL_APPS] (ADR-014).
+     */
+    suspend fun listSessions(idToken: String, verify: Boolean = false, app: String? = null): SessionsResponse
 
     suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse
 
@@ -76,6 +86,11 @@ interface CloudApi {
         chunkSize: Int,
         onBytes: (Long) -> Unit = {},
     ): Pair<String, String>
+
+    companion object {
+        /** [listSessions]' `app` for every app's analyses, as the console asks (ADR-014). */
+        const val ALL_APPS = "all"
+    }
 }
 
 /** The signed-in user's Firebase ID token, refreshed when near expiry (ADR-002). */

@@ -6,6 +6,7 @@ import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.report.EngineStats
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,11 +46,11 @@ class SessionRecordBuildTest {
     /**
      * Every field the run fills, as literals: [input] and [outcome] carry a
      * different value per field, so a swapped or dropped one shows. The clock
-     * and the auto-name derived from it are taken from [built].
+     * is taken from [built]; the auto-name is the reference's base name.
      */
     private fun expectedRow(built: SessionRecord, syncState: SessionRecord.SyncState) = SessionRecord(
         id = "s1",
-        name = SessionNaming.defaultSessionName("plate.tif", built.createdAt),
+        name = "plate",
         createdAt = built.createdAt,
         updatedAt = built.updatedAt,
         frameCount = 2,
@@ -107,6 +108,22 @@ class SessionRecordBuildTest {
     }
 
     @Test
+    fun `a video run keeps its clip name and frame times, and is named after the clip`() {
+        val video = input.copy(
+            reference = RunReference("/ref.png", "tensile_03", ImageSize(1920, 1080)),
+            videoName = "tensile_03",
+            frameTimesMs = listOf(40L, 80L, 120L),
+        )
+
+        val record = repository.buildSessionRecord(context, video, outcome, cloudEnabled = false)
+
+        assertEquals("tensile_03", record.name)
+        assertEquals("tensile_03", record.videoName)
+        assertEquals(listOf(40L, 80L, 120L), record.frameTimesMs)
+        assertTrue(record.isVideo)
+    }
+
+    @Test
     fun `a re-run keeps the user's own name`() {
         val first = repository.buildSessionRecord(context, input, outcome, cloudEnabled = false)
         SessionStore.upsert(context, first.copy(name = "Mine", renamedByUser = true))
@@ -115,5 +132,17 @@ class SessionRecordBuildTest {
 
         assertEquals("Mine", rerun.name)
         assertEquals(first.createdAt, rerun.createdAt)
+    }
+
+    @Test
+    fun `a new auto-name steps around another session's name but keeps its own on a re-run`() {
+        val other = repository.buildSessionRecord(context, input.copy(localSessionId = "s0"), outcome, false)
+        SessionStore.upsert(context, other)
+        val second = repository.buildSessionRecord(context, input, outcome, cloudEnabled = false)
+        assertEquals("plate (2)", second.name)
+
+        SessionStore.upsert(context, second)
+        val rerun = repository.buildSessionRecord(context, input, outcome, cloudEnabled = false)
+        assertEquals("its own name is no clash", "plate (2)", rerun.name)
     }
 }

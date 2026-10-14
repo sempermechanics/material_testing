@@ -31,16 +31,36 @@ runtime, and a person only discovers in production:
    `backend/app/errors.py`, or a reconciliation reason. A renamed code
    otherwise leaves the page's sentence for it unreachable, and the user sees
    the raw code. `tests/test_error_codes.py` holds the same line for the app.
+9. Every page preloads exactly the modules it runs, so the browser fetches
+   them in one wave instead of one wave per level of imports: a
+   `<link rel="modulepreload">` for each module its scripts import, directly
+   or not, by relative path or from www.gstatic.com, and none for a module
+   only imported on demand (`import("./qr.js")`). Plus the preload of
+   `/__/firebase/init.json` in the mode auth.js fetches it, and no preload
+   that sends credentials. A missing preload costs a round trip; one too
+   many downloads code the page never runs.
+10. Every page starts as "checking your sign-in": `<body data-auth="pending">`
+   (console.css keeps Sign in hidden until auth.js knows) and a `#status`
+   that is a polite live region, so each step of a load is read out.
+11. No Hosting CSP lets inline script run: no `'unsafe-inline'` or
+   `'unsafe-eval'` in any `script-src`. Every other page under `public/`
+   (the legal pages, anything added later) has no inline script or handler,
+   so the strict default policy cannot break it.
 
 Checks 2, 3, 7 and 8 read every module a page runs: its `<script src>` and,
-transitively, what those import by relative path.
+transitively, what those import by relative path, including on demand.
 
-Run: `python scripts/check_console.py`. Exit 1 on the first failure found,
-after reporting all of them.
+Checks 1-3 also cover the auth continue-URL pages (`finishSignIn`,
+`finishReset`).
+
+Run: `python scripts/check_console.py [--root <repo>]`. Exit 1 on the first
+failure found, after reporting all of them. `backend/tests/test_check_console.py`
+plants each failure in a small tree and runs this against it.
 """
 
 from __future__ import annotations
 
+import argparse
 import glob
 import json
 import os
@@ -49,22 +69,43 @@ import shutil
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HOSTING = os.path.join(ROOT, "firebase-hosting")
-PUBLIC = os.path.join(HOSTING, "public")
-CONSOLE = os.path.join(PUBLIC, "console")
-GATEWAY = os.path.join(ROOT, "backend", "gateway", "openapi.yaml")
-ERRORS = os.path.join(ROOT, "backend", "app", "errors.py")
-RECONCILE = os.path.join(ROOT, "backend", "app", "repo", "reconcile.py")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# The pages that carry a dashboard. `finishSignIn` and `finishReset` are auth
-# continue-URLs served under the strict global policy and are not consoles.
-PAGES = [
-    os.path.join(CONSOLE, "index.html"),
-    os.path.join(CONSOLE, "account", "index.html"),
-    os.path.join(CONSOLE, "institution", "index.html"),
-    os.path.join(CONSOLE, "operator", "index.html"),
-]
+# Set by `set_root`: the tree checked is the repository unless `--root` names
+# another (backend/tests/test_check_console.py plants failures in a copy).
+ROOT = HOSTING = PUBLIC = CONSOLE = GATEWAY = ERRORS = RECONCILE = ""
+PAGES: list[str] = []
+AUTH_PAGES: list[str] = []
+
+
+def set_root(root: str) -> None:
+    """Point every check at the tree under `root`."""
+    global ROOT, HOSTING, PUBLIC, CONSOLE, GATEWAY, ERRORS, RECONCILE, PAGES, AUTH_PAGES
+    ROOT = os.path.abspath(root)
+    HOSTING = os.path.join(ROOT, "firebase-hosting")
+    PUBLIC = os.path.join(HOSTING, "public")
+    CONSOLE = os.path.join(PUBLIC, "console")
+    GATEWAY = os.path.join(ROOT, "backend", "gateway", "openapi.yaml")
+    ERRORS = os.path.join(ROOT, "backend", "app", "errors.py")
+    RECONCILE = os.path.join(ROOT, "backend", "app", "repo", "reconcile.py")
+    # The pages that carry a dashboard: every check below.
+    PAGES = [
+        os.path.join(CONSOLE, "index.html"),
+        os.path.join(CONSOLE, "account", "index.html"),
+        os.path.join(CONSOLE, "institution", "index.html"),
+        os.path.join(CONSOLE, "operator", "index.html"),
+    ]
+    # The auth continue-URLs. Not consoles — they call no API and load no
+    # Firebase, so checks 4-9 have nothing to read — but checks 1-3 hold:
+    # their scripts are files (the global CSP is script-src 'self', check 11),
+    # present and parsing, and the ids they ask for exist.
+    AUTH_PAGES = [
+        os.path.join(PUBLIC, "finishSignIn", "index.html"),
+        os.path.join(PUBLIC, "finishReset", "index.html"),
+    ]
+
+
+set_root(REPO_ROOT)
 
 failures: list[str] = []
 
@@ -72,26 +113,50 @@ _RELATIVE_IMPORT = re.compile(
     r"""^\s*(?:import|export)\b[^;]*?\bfrom\s*["'](\.{1,2}/[^"']+)["']|^\s*import\s*["'](\.{1,2}/[^"']+)["']""",
     re.M,
 )
+#: `import("./qr.js")`: a module fetched on demand, not when the page loads.
+_DYNAMIC_IMPORT = re.compile(r"""\bimport\(\s*["'](\.{1,2}/[^"']+)["']\s*\)""")
+#: A module imported from another origin (the Firebase SDK).
+_REMOTE_IMPORT = re.compile(
+    r"""^\s*(?:import|export)\b[^;]*?\bfrom\s*["'](https://[^"']+)["']""", re.M,
+)
 
 
-def page_modules(page: str) -> list[str]:
-    """Every module a page runs: each `<script src>` and, transitively, every
-    module those import by relative path. A page module split into parts
-    keeps every check below; reading only the entry script would let a moved
-    `$("id")` or `/v1` path escape them."""
-    html = read(page)
-    queue = [
-        os.path.normpath(os.path.join(os.path.dirname(page), src))
-        for src in re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', html)
+def resolve_src(page: str, src: str) -> str:
+    """The file a page's `src` names: under public/ when the path is absolute
+    (the auth pages are served at two addresses, so a relative path would
+    break at one of them), else beside the page."""
+    if src.startswith("/"):
+        return os.path.normpath(os.path.join(PUBLIC, src.lstrip("/")))
+    return os.path.normpath(os.path.join(os.path.dirname(page), src))
+
+
+def page_scripts(page: str) -> list[str]:
+    """The modules a page names in `<script src>`."""
+    return [
+        resolve_src(page, src)
+        for src in re.findall(r'<script\b[^>]*\bsrc="([^"]+)"', read(page))
     ]
+
+
+def page_modules(page: str, *, on_demand: bool = True) -> list[str]:
+    """Every module a page runs: each `<script src>` and, transitively, every
+    module those import by relative path — and, unless `on_demand` is false,
+    those imported on demand. A page module split into parts keeps every
+    check below; reading only the entry script would let a moved `$("id")`
+    or `/v1` path escape them."""
+    queue = page_scripts(page)
     seen: list[str] = []
     while queue:
         module = queue.pop(0)
         if module in seen or not os.path.isfile(module):
             continue
         seen.append(module)
-        for a, b in _RELATIVE_IMPORT.findall(read(module)):
-            queue.append(os.path.normpath(os.path.join(os.path.dirname(module), a or b)))
+        code = read(module)
+        targets = [a or b for a, b in _RELATIVE_IMPORT.findall(code)]
+        if on_demand:
+            targets += _DYNAMIC_IMPORT.findall(code)
+        for target in targets:
+            queue.append(os.path.normpath(os.path.join(os.path.dirname(module), target)))
     return seen
 
 
@@ -113,19 +178,23 @@ def check_scripts() -> None:
         print("note: node not on PATH — module syntax not checked", file=sys.stderr)
 
     parsed: set[str] = set()
-    for page in PAGES:
+    for page in PAGES + AUTH_PAGES:
         html = read(page)
 
         for match in re.finditer(r"<script\b([^>]*)>(.*?)</script>", html, re.S):
             attrs, body = match.group(1), match.group(2)
-            if body.strip():
+            if body.strip() and page in AUTH_PAGES:
+                fail(page, "inline <script> body — the global CSP is "
+                           "script-src 'self', so it never runs; move it to a "
+                           "file beside the page and load it with an absolute src=")
+            elif body.strip():
                 fail(page, "inline <script> body — the console CSP is "
                            "script-src 'self', so this never runs in production; "
                            "move it to a module file and load it with src=")
             src = re.search(r'src="([^"]+)"', attrs)
             if not src:
                 continue
-            module = os.path.normpath(os.path.join(os.path.dirname(page), src.group(1)))
+            module = resolve_src(page, src.group(1))
             if not os.path.isfile(module):
                 fail(page, f"loads {src.group(1)}, which does not exist")
 
@@ -157,11 +226,124 @@ def check_scripts() -> None:
                        "console CSP; use addEventListener in the module")
 
 
+_INLINE_HANDLER = re.compile(r"\son[a-z]+\s*=", re.I)
+
+
+def check_script_policy() -> None:
+    path = os.path.join(HOSTING, "firebase.json")
+    for block in json.loads(read(path))["hosting"].get("headers", []):
+        for header in block.get("headers", []):
+            if header["key"] != "Content-Security-Policy":
+                continue
+            directive = re.search(r"script-src\s+([^;]+)", header["value"])
+            sources = directive.group(1).split() if directive else []
+            for loose in ("'unsafe-inline'", "'unsafe-eval'"):
+                if loose in sources:
+                    fail(path, f"the {block['source']} CSP's script-src allows "
+                               f"{loose}; no page needs it, and it is what turns "
+                               "an injected <script> into running code")
+
+    checked = set(PAGES + AUTH_PAGES)
+    for page in sorted(glob.glob(os.path.join(PUBLIC, "**", "*.html"), recursive=True)):
+        if page in checked or os.path.commonpath([page, CONSOLE]) == CONSOLE:
+            continue
+        html = read(page)
+        inline = any(body.strip() for body in re.findall(r"<script\b[^>]*>(.*?)</script>", html, re.S))
+        if inline or _INLINE_HANDLER.search(html) or "javascript:" in html.lower():
+            fail(page, "inline script, handler or javascript: URL — the global "
+                       "CSP is script-src 'self', so it never runs; move it to "
+                       "a file beside the page")
+
+
+# ---------------- 9: each page preloads exactly what it runs --------------
+
+_LINK = re.compile(r"<link\b([^>]*)>")
+
+
+def _attr(attrs: str, name: str) -> str | None:
+    found = re.search(r"\b" + name + r'="([^"]*)"', attrs)
+    return found.group(1) if found else None
+
+
+def _href(module: str, page: str) -> str:
+    """`module` as the page would write it in an href."""
+    return os.path.relpath(module, os.path.dirname(page)).replace(os.sep, "/")
+
+
+def check_preloads() -> None:
+    for page in PAGES:
+        html = read(page)
+        links = [m.group(1) for m in _LINK.finditer(html)]
+        preloaded, remote = set(), set()
+        init_json = False
+        for attrs in links:
+            rel = _attr(attrs, "rel")
+            href = _attr(attrs, "href") or ""
+            if rel not in ("modulepreload", "preload"):
+                continue
+            if _attr(attrs, "crossorigin") == "use-credentials":
+                fail(page, f"preloads {href} with credentials — every request "
+                           "these pages make is anonymous, so the browser "
+                           "would fetch it a second time")
+            if rel == "preload":
+                if href == "/__/firebase/init.json":
+                    init_json = (_attr(attrs, "as") == "fetch"
+                                 and _attr(attrs, "crossorigin") == "anonymous")
+                continue
+            if href.startswith("https://"):
+                remote.add(href)
+            else:
+                preloaded.add(os.path.normpath(os.path.join(os.path.dirname(page), href)))
+
+        if not init_json:
+            fail(page, 'no <link rel="preload" href="/__/firebase/init.json" '
+                       'as="fetch" crossorigin="anonymous"> — auth.js waits for '
+                       "that file before anything else can start, and a preload "
+                       "in another mode is not reused")
+
+        static = page_modules(page, on_demand=False)
+        on_demand = set(page_modules(page)) - set(static)
+        wanted = set(static) - set(page_scripts(page))
+        for module in sorted(wanted - preloaded):
+            fail(page, f"does not preload {_href(module, page)}, which it runs — "
+                       f'add <link rel="modulepreload" href="{_href(module, page)}">')
+        for module in sorted(preloaded - wanted):
+            why = ("is only imported on demand" if module in on_demand
+                   else "is a <script src> of the page already" if module in page_scripts(page)
+                   else "is not imported by this page")
+            fail(page, f"preloads {_href(module, page)}, which {why}")
+
+        imported = {url for module in static for url in _REMOTE_IMPORT.findall(read(module))}
+        for url in sorted(imported - remote):
+            fail(page, f'does not preload {url}, which it imports — add '
+                       f'<link rel="modulepreload" href="{url}">')
+        for url in sorted(remote - imported):
+            fail(page, f"preloads {url}, which no module it runs imports")
+
+
+# ---------------- 10: pages start pending, with a live status line --------
+
+
+def check_pending() -> None:
+    for page in PAGES:
+        html = read(page)
+        if not re.search(r'<body\b[^>]*\bdata-auth="pending"', html):
+            fail(page, '<body> lacks data-auth="pending" — a signed-in visitor '
+                       "is offered Sign in until auth.js has checked")
+        status = re.search(r'<p\b[^>]*\bid="status"[^>]*>', html)
+        attrs = status.group(0) if status else ""
+        for want in ('role="status"', 'aria-live="polite"', "data-pending"):
+            if want not in attrs:
+                fail(page, f"#status lacks {want} — the status line is how "
+                           "every wait is explained, and a screen reader "
+                           "hears it only from a live region")
+
+
 # ---------------- 3: every id a module asks for, its page defines ---------
 
 
 def check_element_ids() -> None:
-    for page in PAGES:
+    for page in PAGES + AUTH_PAGES:
         html = read(page)
         declared = set(re.findall(r'\bid="([^"]+)"', html))
 
@@ -352,12 +534,27 @@ def check_codes() -> None:
                          f"declare — a renamed code leaves this sentence unreachable")
 
 
-def main() -> int:
+def run(root: str = REPO_ROOT) -> list[str]:
+    """Every check against the tree under `root`; returns the failures."""
+    set_root(root)
+    failures.clear()
     check_scripts()
     check_element_ids()
     check_placeholders(check_hosting())
     check_gateway()
     check_codes()
+    check_preloads()
+    check_pending()
+    check_script_policy()
+    return list(failures)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
+    parser.add_argument("--root", default=REPO_ROOT,
+                        help="repository root to check (default: this checkout)")
+    args = parser.parse_args(argv)
+    run(args.root)
 
     if failures:
         print("Console checks failed:\n", file=sys.stderr)

@@ -28,9 +28,10 @@ class BackupSplitTest {
 
     @Test
     fun `raw images and engine results are restore-essential`() {
-        // Role "raw" covers the reference AND the deformed originals (the decision is
+        // "ref" holds the reference, "raw" the deformed originals (the decision is
         // role-level, not per-artifact) — a restore brings back everything a local
         // analysis run would have produced.
+        assertTrue(SessionZip.isRestoreEssential(SessionZip.REFERENCE_ROLE))
         assertTrue(SessionZip.isRestoreEssential("raw"))
         assertTrue(SessionZip.isRestoreEssential("dat"))
     }
@@ -48,7 +49,7 @@ class BackupSplitTest {
     @Test
     fun `a realistic artifact set splits into originals-plus-results and derived-only`() {
         val artifacts = listOf(
-            "raw" to SessionZip.REFERENCE_NAME,
+            SessionZip.REFERENCE_ROLE to SessionZip.REFERENCE_NAME,
             "raw" to "def_0.tif",
             "raw" to "def_1.tif",
             "dat" to "frame_0000.dat",
@@ -61,7 +62,7 @@ class BackupSplitTest {
         val (bundle, extras) = artifacts.partition { SessionZip.isRestoreEssential(it.first) }
 
         val expectedBundle = listOf(
-            "raw" to SessionZip.REFERENCE_NAME,
+            SessionZip.REFERENCE_ROLE to SessionZip.REFERENCE_NAME,
             "raw" to "def_0.tif",
             "raw" to "def_1.tif",
             "dat" to "frame_0000.dat",
@@ -102,7 +103,7 @@ class BackupSplitTest {
 
     @Test
     fun `a future schema is still treated as split`() {
-        assertTrue(CloudRestore.isSplitLayout("indic.session.metadata/4"))
+        assertTrue(CloudRestore.isSplitLayout("indic.session.metadata/5"))
     }
 
     // ── Save to Files still gets one complete archive ────────────────────────

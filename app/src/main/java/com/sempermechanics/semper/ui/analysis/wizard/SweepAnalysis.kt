@@ -9,6 +9,7 @@ import com.sempermechanics.semper.data.session.RunInput
 import com.sempermechanics.semper.data.session.RunMetrics
 import com.sempermechanics.semper.data.session.RunOutcome
 import com.sempermechanics.semper.data.session.RunReference
+import com.sempermechanics.semper.data.session.SessionNaming
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SkippedNode
@@ -17,6 +18,7 @@ import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.ui.analysis.run.AfterSave
+import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.afterSave
 import com.sempermechanics.semper.ui.analysis.run.baseName
@@ -25,9 +27,6 @@ import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.sweep.toSkippedNode
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /*
  * Virtual strain gauge study (see SweepStudy): the sweep's run, and the
@@ -42,16 +41,18 @@ import java.util.Locale
 internal suspend fun AnalysisViewModel.runSweep(
     appContext: Context,
     spec: RunSpec,
+    inputs: RunInputs,
     onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
     traceSection("Semper.analysis.sweep") {
-        runSweepBody(appContext, spec, onProgress)
+        runSweepBody(appContext, spec, inputs, onProgress)
     }
 }
 
 private fun AnalysisViewModel.runSweepBody(
     appContext: Context,
     spec: RunSpec,
+    inputs: RunInputs,
     onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome {
     val sweep = checkNotNull(spec.sweep) { "not a sweep" }
@@ -62,30 +63,36 @@ private fun AnalysisViewModel.runSweepBody(
         "frames" to SemperAnalytics.frameCountBucket(plan.size),
         "testType" to testType.wireName,
     )
-    val bytes = refBytes ?: error("Reference missing")
-    val startedAt = System.currentTimeMillis()
+    if (inputs.reference.bytes == null) error("Reference missing")
 
-    val limited = sessionLimitOutcome(appContext, plan.size)
-    if (limited != null) {
+    // Admitted here, the sweep saves its session even if the cap fills meanwhile.
+    val admission = admitRun(appContext, plan.size, sweep = true)
+    if (admission is RunAdmission.Blocked) {
         sweepEvent(appContext, SemperAnalytics.ANALYSIS_FAILED, "reason" to "session_limit")
-        return limited
+        return admission.outcome
     }
-    return solveSweep(appContext, spec, bytes, startedAt, onProgress)
+    return solveSweep(appContext, spec, inputs, admission.admitted, onProgress)
 }
 
-/** Solves every combination of [spec]'s plan against [bytes] and saves the ones that solved. */
+/**
+ * Solves every combination of [spec]'s plan against [inputs] and saves the
+ * ones that solved; [admitted] is whether the quota let the sweep start as a
+ * new session, so its save goes through if the cap fills meanwhile.
+ */
 private fun AnalysisViewModel.solveSweep(
     appContext: Context,
     spec: RunSpec,
-    bytes: ByteArray,
-    startedAt: Long,
+    inputs: RunInputs,
+    admitted: Boolean,
     onProgress: (SweepStudyRunner.Progress) -> Unit,
 ): BatchAnalysisOutcome {
+    val startedAt = System.currentTimeMillis()
     val sweep = checkNotNull(spec.sweep)
     val plan = sweep.plan
-    val localSessionId = resolveLocalSessionId()
-    val batchDir = SessionStore.dirFor(appContext, localSessionId)
-    batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
+    // Its own session, never a single run's: a sweep after one is a new record.
+    val session = openRunSession(appContext, sweep = true)
+    val localSessionId = session.id
+    val batchDir = session.dir
     // A clean snapshot, as the batch path takes: a sweep used to inherit the
     // previous run's stop code, reference and planned-frame count.
     resetRunResult(batchDir.absolutePath, spec)
@@ -93,12 +100,12 @@ private fun AnalysisViewModel.solveSweep(
     sweepSkippedNodes = emptyList()
 
     val result = SweepStudyRunner.run(
-        bytes,
-        realRefWidth,
-        realRefHeight,
+        checkNotNull(inputs.reference.bytes),
+        inputs.reference.size.width,
+        inputs.reference.size.height,
         SweepStudyRunner.Params(
             plan = plan,
-            defFramePath = defFilePaths[sweep.frameIndex],
+            defFramePath = inputs.frames.paths[sweep.frameIndex],
             roiX = spec.roi.x,
             roiY = spec.roi.y,
             roiW = spec.roi.w,
@@ -132,7 +139,11 @@ private fun AnalysisViewModel.solveSweep(
         )
     }
 
-    return finishSolvedSweep(appContext, SweepSession(localSessionId, batchDir, bytes, result, spec, executionTimeMs))
+    return finishSolvedSweep(
+        appContext,
+        SweepSession(localSessionId, batchDir, inputs, result, spec, executionTimeMs),
+        admitted = admitted,
+    )
 }
 
 /**
@@ -140,15 +151,18 @@ private fun AnalysisViewModel.solveSweep(
  * and says how it ended, reading the save as a batch run's is ([afterSave]):
  * a full quota ends it at the session limit, and an index that could not be
  * read or written as not saved. [cloudEnabled] is whether a saved session
- * queues its upload.
+ * queues its upload. [admitted] is a sweep the quota let start as a new
+ * session ([RunAdmission.Admitted]): its save goes through though the cap
+ * filled while it solved.
  */
 @WorkerThread
 internal fun AnalysisViewModel.finishSolvedSweep(
     appContext: Context,
     run: SweepSession,
     cloudEnabled: Boolean = CloudSync.uploadsEnabled(appContext),
+    admitted: Boolean = false,
 ): BatchAnalysisOutcome {
-    val saved = persistSweepSession(appContext, run, cloudEnabled)
+    val saved = persistSweepSession(appContext, run, cloudEnabled, admitted)
     val outcome = BatchAnalysisOutcome(
         engineErrorCode = saved.stop.wireCode,
         firstFrameValidPoints = run.result.runs.first().pointsSolved,
@@ -188,11 +202,11 @@ private fun sweepEvent(appContext: Context, event: String, vararg params: Pair<S
 private fun SweepStudyRunner.SweepResult.skippedNodes(): List<SkippedNode> =
     skipped.mapIndexed { index, point -> point.toSkippedNode(skippedCodes[index]) }
 
-/** What a finished sweep's session is assembled from. */
+/** What a finished sweep's session is assembled from; [inputs] are the images as the sweep was launched with them. */
 internal class SweepSession(
     val localSessionId: String,
     val batchDir: File,
-    val reference: ByteArray,
+    val inputs: RunInputs,
     val result: SweepStudyRunner.SweepResult,
     val spec: RunSpec,
     val executionTimeMs: Int,
@@ -208,30 +222,34 @@ private fun AnalysisViewModel.persistSweepSession(
     appContext: Context,
     run: SweepSession,
     cloudEnabled: Boolean,
+    admitted: Boolean,
 ): AfterSave {
     val result = run.result
     val sweep = checkNotNull(run.spec.sweep)
-    val refPngPath = sessions.writeReferenceCopy(run.batchDir, run.reference, realRefWidth, realRefHeight)
-    lastRefPath = refPngPath
+    val reference = run.inputs.reference
+    val frames = run.inputs.frames
+    val refPngPath = writeSweepReference(run)
 
     val frameIndex = sweep.frameIndex
-    val rawName = sessions.persistRawDeformed(run.batchDir, frameIndex, defFilePaths, defOriginalNames)
-    if (rawName.isNotBlank()) {
+    val rawName = sessions.persistRawDeformed(run.batchDir, frameIndex, frames.paths, frames.originalNames)
+    // Followed only when it moved: one copied out of a single run's session
+    // stays where it is, that run's input for its next re-run.
+    if (rawName.isNotBlank() && !File(frames.paths[frameIndex]).exists()) {
         val moved = File(run.batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).resolve(rawName)
         repointDeformedPathsOnMain(
-            defFilePaths.toMutableList().also { it[frameIndex] = moved.absolutePath },
+            frames.paths.toMutableList().also { it[frameIndex] = moved.absolutePath },
         )
     }
 
     val first = result.runs.first().point
     val defDisplay = rawName.ifBlank {
-        defOriginalNames.originalNameOr(frameIndex, File(defFilePaths[frameIndex]).name)
+        frames.originalNames.originalNameOr(frameIndex, File(frames.paths[frameIndex]).name)
     }.baseName()
     val summary = sweepSummary(appContext, run.localSessionId, result, sweep, defDisplay)
     val input = RunInput(
         localSessionId = run.localSessionId,
         dir = run.batchDir,
-        reference = RunReference(refPngPath, refName, refSize),
+        reference = RunReference(refPngPath, reference.name, reference.size),
         settings = run.spec.recordSettings()
             .copy(subset = first.subset, step = first.step, strainWin = first.vsg)
             .also { recordRunSettings(it) },
@@ -261,7 +279,18 @@ private fun AnalysisViewModel.persistSweepSession(
         sweepSkippedNodes = this.sweepSkippedNodes,
         headline = summary.headline,
     )
-    return afterSave(RunStop.fromWireCode(result.engineErrorCode), saveRunRecord(appContext, record, cloudEnabled))
+    return afterSave(
+        RunStop.fromWireCode(result.engineErrorCode),
+        saveRunRecord(appContext, record, cloudEnabled, admitted),
+    )
+}
+
+/** Writes the viewable copy of [run]'s reference into its session and returns its path, the run's [lastRefPath]. */
+private fun AnalysisViewModel.writeSweepReference(run: SweepSession): String {
+    val reference = run.inputs.reference
+    val bytes = checkNotNull(reference.bytes) { "Reference missing" }
+    return sessions.writeReferenceCopy(run.batchDir, bytes, reference.size.width, reference.size.height)
+        .also { lastRefPath = it }
 }
 
 /** The Home-list name, headline and per-frame labels of a finished sweep. */
@@ -284,17 +313,19 @@ private fun sweepSummary(
     val solvedLabels = result.runs.map { labelByPoint[it.point].orEmpty() }
     val totalPlanned = sweep.plan.size
     val existing = SessionStore.get(appContext, localSessionId)
-    // Regenerate the sweep auto-name each run (keyed to the original createdAt
-    // so the timestamp is stable), unless the user renamed the session — so a
-    // single re-run that becomes a sweep now reads as a sweep, and vice-versa.
-    val stamp = timestamp(existing?.createdAt ?: System.currentTimeMillis())
+    // Regenerate the sweep auto-name each re-run unless the user renamed the
+    // session. A sweep after a single run is a new session (resolveLocalSessionId),
+    // so it is named as a sweep from the start and the single run keeps its
+    // name. No date: the Home row shows it; a clash gets " (2)".
     val name = if (existing?.renamedByUser == true) {
         existing.name
     } else {
-        appContext.getString(
-            R.string.session_sweep_name_fmt,
-            defDisplay.substringBeforeLast('.').ifBlank { defDisplay },
-            stamp,
+        SessionNaming.uniqueName(
+            appContext.getString(
+                R.string.session_sweep_name_fmt,
+                SessionNaming.withoutMediaExtension(defDisplay).ifBlank { defDisplay },
+            ),
+            SessionStore.namesOtherThan(appContext, localSessionId),
         )
     }
     val headline = appContext.resources.getQuantityString(
@@ -308,7 +339,3 @@ private fun sweepSummary(
     )
     return SweepSummary(solvedLabels, name, headline)
 }
-
-/** The "MMM d, HH:mm:ss" stamp used in default session names / sweep labels. */
-private fun timestamp(millis: Long): String =
-    SimpleDateFormat("MMM d, HH:mm:ss", Locale.US).format(Date(millis))

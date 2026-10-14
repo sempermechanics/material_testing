@@ -91,7 +91,8 @@ class WaitingUploadsTest {
     @Test
     fun `a backup gone from the cloud is still queued once`() {
         store("s1", SyncState.PENDING)
-        store("s5", SyncState.SYNCED) // not in the cloud listing
+        store("s5", SyncState.SYNCED) // not in the cloud listing, nor in another app's
+        api.onListAppSessions = { _, _ -> SessionsResponse() }
 
         reconcile(api)
 

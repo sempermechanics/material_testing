@@ -3,7 +3,6 @@ package com.sempermechanics.semper.ui.viewer
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import androidx.lifecycle.lifecycleScope
-import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.commitOnDone
 import com.sempermechanics.semper.ui.common.hideKeyboard
@@ -100,17 +99,10 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
         host.inspect.dismissProbe()
         host.summary.show()
         binding.tvFrameCounter.text = host.summary.counterText()
+        binding.tvFrameCounter.visibility = View.VISIBLE
         binding.layoutFrameJump.visibility = View.GONE
         host.syncFieldBars()
-        binding.tvFinding.text = if (host.resultsOnScreen) {
-            host.getString(R.string.results_title)
-        } else {
-            host.getString(
-                R.string.viewer_edge_title_fmt,
-                host.currentTypeString,
-                host.getString(R.string.summary_title),
-            )
-        }
+        binding.tvFinding.text = host.captions.title()
         updateNavButtons()
         host.bumpChrome()
     }
@@ -119,6 +111,8 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
         showingSummary = false
         host.summary.hide()
         host.syncFieldBars()
+        // On a frame the jump field ("3 / 5") is the count; the pill is the summary's.
+        binding.tvFrameCounter.visibility = View.GONE
         binding.layoutFrameJump.visibility = View.VISIBLE
         updateNavButtons()
         // Re-apply the frame's own labels and heatmap after the summary's.

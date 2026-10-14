@@ -2,7 +2,10 @@ package com.sempermechanics.semper.ui.analysis.frames
 
 import android.app.Application
 import android.net.Uri
+import android.view.View
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
+import androidx.core.view.isVisible
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.imaging.video.ExtractionRequest
@@ -17,10 +20,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
 
 /**
  * The sampling sheet says what the clip reported and what a sampling will
- * deliver, and Extract hands over that sampling, sample times included.
+ * deliver, and Extract hands over that sampling.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -41,11 +45,32 @@ class VideoSamplingSheetTest {
     )
 
     @Test
-    fun `the sheet shows the clip and the sampling, and Extract hands over the planned times`() {
+    fun `the slider tops out at the source rate, and an unknown rate assumes 30`() {
+        assertEquals(30, VideoSampling(meta, maxFrames = 100).maxFps)
+        assertEquals(30, VideoSampling(meta.copy(fpsKnown = false, fps = 0.0), maxFrames = 100).maxFps)
+        assertEquals(2, VideoSampling(meta.copy(fps = 1.0), maxFrames = 100).maxFps)
+        assertEquals(60, VideoSampling(meta.copy(fps = 240.0), maxFrames = 100).maxFps)
+    }
+
+    @Test
+    fun `the segment stops at the last frame's start`() {
+        val sampling = VideoSampling(meta, maxFrames = 100)
+        val (start, end) = sampling.segmentMs(listOf(1f, 4f))
+        assertEquals(1_000L, start)
+        assertTrue(end < 4_000L)
+    }
+
+    @Test
+    fun `the estimate never passes the cap`() {
+        assertEquals(5, VideoSampling(meta, maxFrames = 5).estimate(listOf(0f, 4f), fps = 30.0))
+    }
+
+    @Test
+    fun `the sheet shows the clip and the sampling, and Extract hands it over`() {
         val bed = WizardTestBed().also { beds += it }
         var request: ExtractionRequest? = null
         val sheet = VideoSamplingSheet(bed.activity, onExtract = { request = it })
-            .show(Uri.parse("content://v/1"), meta, syncTimesUs = emptyList())
+            .show(Uri.parse("content://v/1"), meta)
         bed.idle()
 
         val info = sheet.findViewById<TextView>(R.id.tvVideoInfo)!!.text.toString()
@@ -53,9 +78,11 @@ class VideoSamplingSheetTest {
         assertEquals("10 fps", sheet.findViewById<TextView>(R.id.tvFpsValue)!!.text.toString())
         val segment = "${VideoFrameExtractor.formatClock(0)} – ${VideoFrameExtractor.formatClock(4_000L)}"
         assertEquals(segment, sheet.findViewById<TextView>(R.id.tvSegmentValue)!!.text.toString())
-        // Fewer than two key frames: only the frame rate is offered.
-        assertFalse(sheet.findViewById<MaterialButtonToggleGroup>(R.id.rgExtractMode)!!.isShown)
 
+        // Keyframes give no count up front, so no estimate line until Interval.
+        assertFalse(sheet.findViewById<TextView>(R.id.tvEstimate)!!.isVisible)
+        sheet.findViewById<MaterialButtonToggleGroup>(R.id.rgExtractMode)!!.check(R.id.btnModeUniform)
+        assertTrue(sheet.findViewById<TextView>(R.id.tvEstimate)!!.isVisible)
         val estimate = sheet.findViewById<TextView>(R.id.tvEstimate)!!.text.toString()
         assertTrue(estimate, estimate.startsWith("≈ 40 frames: 1 reference + 39 deformed"))
 
@@ -66,26 +93,20 @@ class VideoSamplingSheetTest {
         assertEquals(90, sent.rotationDegrees)
         assertEquals(false, sent.preferKeyframes)
         assertTrue(sent.maxFrames > 0)
-        // The count the sheet promised is the count it asks for.
-        assertEquals(40, sent.timesMs.size)
     }
 
     @Test
-    fun `key frames are offered when the clip marks two or more, and Extract sends their times`() {
+    fun `the mode toggle's info button explains both modes and the reference`() {
         val bed = WizardTestBed().also { beds += it }
-        var request: ExtractionRequest? = null
-        val sync = listOf(0L, 1_000_000L, 2_000_000L, 3_000_000L)
-        val sheet = VideoSamplingSheet(bed.activity, onExtract = { request = it })
-            .show(Uri.parse("content://v/1"), meta, syncTimesUs = sync)
+        val sheet = VideoSamplingSheet(bed.activity, onExtract = {}).show(Uri.parse("content://v/1"), meta)
         bed.idle()
 
-        val toggle = sheet.findViewById<MaterialButtonToggleGroup>(R.id.rgExtractMode)!!
-        assertTrue(toggle.isShown)
-        toggle.check(R.id.btnModeKeyframes)
-        sheet.findViewById<android.view.View>(R.id.btnExtractFrames)!!.performClick()
-
-        val sent = request!!
-        assertEquals(true, sent.preferKeyframes)
-        assertEquals(listOf(0.0, 1000.0, 2000.0, 3000.0), sent.timesMs)
+        sheet.findViewById<View>(R.id.btnVideoModeInfo)!!.performClick()
+        bed.idle()
+        val info = ShadowDialog.getLatestDialog() as AlertDialog
+        assertEquals(
+            bed.activity.getString(R.string.video_mode_info),
+            info.findViewById<TextView>(android.R.id.message)!!.text.toString(),
+        )
     }
 }

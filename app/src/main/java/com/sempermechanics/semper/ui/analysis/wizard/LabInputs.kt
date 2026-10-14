@@ -26,14 +26,18 @@ import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 
 /**
  * Time of each deformed frame after the reference, index-aligned with
- * [defFilePaths], as video extraction knows it ([DeformedFrame.videoTimeMs]).
- * Image batches leave it empty; their times come from [defCaptureTimesMs]
- * and [refCaptureTimeMs].
+ * [defFilePaths]: a video frame's clip time ([DeformedFrame.timeMs]) less the
+ * reference's ([refVideoTimeMs]; 0 when unknown). Image batches leave it
+ * empty; their times come from [defCaptureTimesMs] and [refCaptureTimeMs].
  */
-var AnalysisViewModel.defFrameTimesMs: List<Long>
-    get() = deformedFrames.map { it.videoTimeMs ?: return emptyList() }
+var AnalysisViewModel.defTimesAfterRefMs: List<Long>
+    get() {
+        val ref = refVideoTimeMs ?: 0L
+        return deformedFrames.map { (it.timeMs ?: return emptyList()) - ref }
+    }
     set(value) {
-        deformedFrames = deformedFrames.mapIndexed { i, f -> f.copy(videoTimeMs = value.getOrNull(i)) }
+        val ref = refVideoTimeMs ?: 0L
+        deformedFrames = deformedFrames.mapIndexed { i, f -> f.copy(timeMs = value.getOrNull(i)?.plus(ref)) }
     }
 
 /**
@@ -100,7 +104,7 @@ fun AnalysisViewModel.clearTypedLoads() {
  * Empty when neither is known, which matches the log by row order.
  */
 private fun AnalysisViewModel.frameTimesForLoads(): List<Long> =
-    defFrameTimesMs.ifEmpty { PhotoCaptureTime.relativeTimesMs(refCaptureTimeMs, defCaptureTimesMs) }
+    defTimesAfterRefMs.ifEmpty { PhotoCaptureTime.relativeTimesMs(refCaptureTimeMs, defCaptureTimesMs) }
 
 /** An imported load log. Its [text] goes to the draft so a process death can parse it again. */
 fun AnalysisViewModel.setLoadLog(csv: ParsedLoadCsv, name: String, text: String) {
@@ -185,6 +189,7 @@ fun AnalysisViewModel.mechanicalInputs(forSweep: Boolean): MechanicalTestInputs 
 /** Back to no lab inputs: no load log, no dimensions. The test type stays. */
 fun AnalysisViewModel.clearLabInputs() {
     refCaptureTimeMs = null
+    refVideoTimeMs = null
     clearMachineLoads()
     crossSectionMm2 = 0f
     geometry = SpecimenGeometry.NONE

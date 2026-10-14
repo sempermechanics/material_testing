@@ -17,8 +17,6 @@ runtime rather than named here.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
-
 # --- authentication / authorisation ----------------------------------------
 MISSING_BEARER = "missing_bearer"
 INVALID_TOKEN = "invalid_token"
@@ -35,6 +33,10 @@ DEVICE_IN_USE = "device_in_use"
 DEVICE_NOT_ACTIVE = "device_not_active"
 #: `X-App-Id` names an app this backend does not bind devices for (ADR-010).
 UNKNOWN_APP = "unknown_app"
+#: 410 from `POST /v1/devices/register`: `X-App-Id` is a retired id
+#: (`apps.RETIRED`), whose registration would replace the key of the app that
+#: succeeded it on the same phone. Only those builds receive it.
+APP_RETIRED = "app_retired"
 
 # --- Cloud Tasks callback --------------------------------------------------
 INVALID_TASK_TOKEN = "invalid_task_token"
@@ -262,10 +264,7 @@ CLIENT_BRANCHED = frozenset(
 # --- refusals ---------------------------------------------------------------
 #: The HTTP status of every code the repo refuses with. Status is a property of
 #: the code, so a route never maps codes to statuses itself; `main.py` answers
-#: any `Refusal` from this table. Two routes answer one code differently, and
-#: say so where they do (`restatus`): `license_revoked` is 409 when staff
-#: convert a licence or IT holds a seat, and `license_seat_disabled` is 403 when
-#: a key is typed in the app (TD-185).
+#: any `Refusal` from this table, whatever the route (ADR-020).
 STATUS: dict[str, int] = {
     # Nothing there, or nothing the caller may see.
     USER_NOT_FOUND: 404,
@@ -334,14 +333,3 @@ class Refusal(Exception):
     @property
     def detail(self) -> str:
         return f"{self.code}: {self.suffix}" if self.suffix else self.code
-
-
-@contextmanager
-def restatus(overrides: dict[str, int]):
-    """Answer the named codes with a different status inside this block."""
-    try:
-        yield
-    except Refusal as refusal:
-        if refusal.code in overrides:
-            refusal.status = overrides[refusal.code]
-        raise

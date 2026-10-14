@@ -18,6 +18,7 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.DraftRestore
 import com.sempermechanics.semper.ui.analysis.wizard.WizardState
 import com.sempermechanics.semper.ui.analysis.wizard.saveWizardState
+import com.sempermechanics.semper.ui.analysis.wizard.toDeformedFrames
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -99,6 +100,7 @@ class WizardStateTest {
         lineCutHorizontal = false
         sweepFrameIndex = 1
         workingLocalId = "abc123"
+        workingIsSweep = true
     }
 
     /** What the system hands back after the kill, with the draft the stop wrote. */
@@ -136,6 +138,8 @@ class WizardStateTest {
         assertEquals(1, after.sweepFrameIndex)
         // The re-run keeps its Home row instead of making a second one.
         assertEquals("abc123", after.workingLocalId)
+        // ...and its kind, so a single run after the sweep still makes its own.
+        assertTrue(after.workingIsSweep)
         // Not yet: the heavy inputs wait for restoreDraft.
         assertNull(after.refBytes)
         assertTrue(after.defFilePaths.isEmpty())
@@ -156,6 +160,31 @@ class WizardStateTest {
         assertEquals(3, after.wizardStep)
         // Once only.
         assertEquals(DraftRestore.NONE, runBlocking { after.restoreDraft() })
+    }
+
+    @Test
+    fun `a video's clip name and frame times come back with its frames`() {
+        val before = editedWizard().apply {
+            deformedFrames = deformedFrames.mapIndexed { i, f -> f.copy(timeMs = 40L * (i + 1)) }
+            defFromVideo = true
+            defVideoName = "tensile_03"
+        }
+        val after = afterProcessDeath(before)
+
+        assertEquals("tensile_03", after.defVideoName)
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(listOf(40L, 80L), after.defFrameTimesMs)
+        assertEquals(before.deformedFrames, after.deformedFrames)
+    }
+
+    @Test
+    fun `picked images save no frame times, and a time list of another length is dropped`() {
+        val images = editedWizard()
+        assertTrue(WizardState.frames(images).timesMs.isEmpty())
+        assertNull(images.defFrameTimesMs)
+
+        val short = WizardState.frames(images).copy(timesMs = listOf(40L))
+        assertTrue(short.toDeformedFrames().all { it.timeMs == null })
     }
 
     @Test

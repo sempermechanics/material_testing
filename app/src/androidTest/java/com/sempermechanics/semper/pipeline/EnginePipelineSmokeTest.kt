@@ -8,13 +8,30 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.sempermechanics.semper.ProgressCallback
 import com.sempermechanics.semper.SemperNativeLib
+import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.data.session.SessionStore
+import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.Roi
+import com.sempermechanics.semper.field.RunStop
+import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
+import com.sempermechanics.semper.ui.analysis.run.BatchRun
+import com.sempermechanics.semper.ui.analysis.run.RunSpec
+import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
+import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
+import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
+import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
+import kotlinx.coroutines.Job
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -311,5 +328,93 @@ class EnginePipelineSmokeTest {
         val def = warp(makeReference(), Matrix().apply { setTranslate(3f, 2f) }).toPngBytes()
         val n = compute(ref, def, bufferPoints = 4) // room for only 4 points
         assertTrue("expected a bounded, non-crashing count, got $n", n in 0..4)
+    }
+
+    // ── The batch loop itself ────────────────────────────────────────────
+
+    /**
+     * [runBatchAnalysisBody] end to end: the one loop that calls
+     * `computeFullFieldDirect` per frame and writes the `.dat` files. The JVM
+     * suite cannot load the engine, so this is the only test that runs it.
+     * Three frames, each shifted further: every frame's file must exist and
+     * hold its own translation, and the run must save its Home row.
+     */
+    @Test
+    fun batchLoopWritesEveryFrameAndSavesTheSession() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val shifts = listOf(1f to 0f, 2f to 1f, 3f to 2f)
+        val ref = makeReference()
+        val inputs = File(ctx.cacheDir, "batch-loop-test").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val frames = shifts.mapIndexed { i, (dx, dy) ->
+            val file = File(inputs, "def_$i.png")
+            file.writeBytes(warp(ref, Matrix().apply { setTranslate(dx, dy) }).toPngBytes())
+            DeformedFrame(file.absolutePath, file.name)
+        }
+
+        // A known session id: a re-run of a row costs no quota, so the run
+        // never consults the account's session limit.
+        val sessionId = "batchlooptest"
+        SessionStore.forget(ctx, sessionId)
+        val vm = AnalysisViewModel().apply {
+            workingLocalId = sessionId
+            refBytes = ref.toPngBytes()
+            realRefWidth = W
+            realRefHeight = H
+            refName = "ref.png"
+            deformedFrames = frames
+        }
+        val spec = RunSpec.of(DicParams(subset = SUBSET, step = STEP, strainWindow = 15), Roi(0, 0, W, H), null, false, null)
+
+        try {
+            val ticks = mutableListOf<BatchProgressUpdate>()
+            val run = BatchRun(spec, ctx.cacheDir, System.currentTimeMillis(), Job(), vm.snapshotRunInputs())
+            // TD-173: what the wizard does once the run has its inputs never reaches it.
+            vm.refBytes = null
+            vm.refName = "other.png"
+            vm.deformedFrames = emptyList()
+            val outcome = vm.runBatchAnalysisBody(ctx, run) { ticks += it }
+
+            assertEquals(RunStop.Finished, outcome.stop)
+            assertEquals(shifts.size, outcome.totalFrames)
+            assertTrue("the run's Home row was not saved", outcome.saved)
+            val row = SessionStore.get(ctx, sessionId)
+            assertEquals(shifts.size, row?.frameCount)
+            assertEquals("ref.png", row?.refName)
+            assertEquals(frames.map { it.name }, row?.defNames)
+
+            val batchDir = File(outcome.batchDirPath)
+            shifts.forEachIndexed { i, (dx, dy) ->
+                val dat = SessionPaths.frameDat(batchDir, i)
+                val decoded = DicResult.decodeDatFile(dat)
+                assertNotNull("frame $i has no readable .dat", decoded)
+                val data = decoded!!
+                val points = data.size / DicResult.STRIDE
+                assertFieldMatchesWarp(
+                    SolveResult(data, FloatArray(0), points, (W / STEP) * (H / STEP)),
+                    Matrix().apply { setTranslate(dx, dy) },
+                    tolPx = 0.25f,
+                    minCoverageFrac = 0.25f,
+                )
+            }
+
+            // What the overlay draws: frame-by-frame ticks, then a completed tick
+            // carrying every frame's convergence.
+            val frameTicks = ticks.filter { it.frameIndex in shifts.indices }
+            assertEquals(shifts.indices.toSet(), frameTicks.map { it.frameIndex }.toSet())
+            assertTrue(frameTicks.all { it.plannedFrames == shifts.size && it.framePercent in 0f..100f })
+            val done = ticks.last()
+            assertEquals("the last tick is the completed one", shifts.size, done.frameIndex)
+            assertNotNull("the completed tick carries the convergence", done.perFrameConvergence)
+            val convergence = done.perFrameConvergence!!
+            assertEquals(shifts.size, convergence.size)
+            assertTrue("every solved frame has a convergence", convergence.none { it.isNaN() })
+        } finally {
+            SessionStore.forget(ctx, sessionId)
+            SessionStore.dirFor(ctx, sessionId).deleteRecursively()
+            inputs.deleteRecursively()
+        }
     }
 }

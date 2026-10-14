@@ -3,6 +3,7 @@ package com.sempermechanics.semper.cloud
 import com.sempermechanics.semper.data.net.AdminUserDto
 import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.CloudApi
+import com.sempermechanics.semper.data.net.ErasureStatus
 import com.sempermechanics.semper.data.net.FileCompleteRequest
 import com.sempermechanics.semper.data.net.MeResponse
 import com.sempermechanics.semper.data.net.SessionCreateRequest
@@ -27,6 +28,7 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     val calls = mutableListOf<String>()
 
     var onMe: suspend (String) -> MeResponse = { unscripted("getMe") }
+    var onErasureStatus: suspend (String) -> ErasureStatus = { unscripted("getErasureStatus") }
     var onGetConfig: suspend (String) -> AppConfigDto = { unscripted("getConfig") }
     var onExportAccount: suspend (String, File) -> Unit = { _, _ -> unscripted("exportAccount") }
     var onRegisterDevice: suspend (String) -> Unit = { unscripted("registerDevice") }
@@ -36,12 +38,20 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     var onAcceptTerms: suspend (String, String) -> Unit = { _, _ -> unscripted("acceptTerms") }
     var onSetImprovementConsent: suspend (String, Boolean) -> Unit = { _, _ -> unscripted("setImprovementConsent") }
     var onListSessions: suspend (String, Boolean) -> SessionsResponse = { _, _ -> unscripted("listSessions") }
+
+    /** `listSessions` with an `app` ([CloudApi.ALL_APPS] for the account), recorded as `listSessions?app=…`. */
+    var onListAppSessions: suspend (String, String) -> SessionsResponse =
+        { _, app -> unscripted("listSessions?app=$app") }
     var onDeleteAccount: suspend (String) -> Unit = { unscripted("deleteAccount") }
     var onDeleteSession: suspend (String, String) -> Unit = { _, _ -> unscripted("deleteSession") }
+    var onListSessionUploads: suspend (String, String) -> SessionUploadsResponse =
+        { _, _ -> unscripted("listSessionUploads") }
     var onReplaceSessionMetadata: suspend (String, String, String) -> Unit =
         { _, _, _ -> unscripted("replaceSessionMetadata") }
 
     override suspend fun getMe(idToken: String) = record("getMe") { onMe(idToken) }
+
+    override suspend fun getErasureStatus(idToken: String) = record("getErasureStatus") { onErasureStatus(idToken) }
 
     override suspend fun getConfig(idToken: String) = record("getConfig") { onGetConfig(idToken) }
 
@@ -63,8 +73,11 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     override suspend fun setImprovementConsent(idToken: String, granted: Boolean) =
         record("setImprovementConsent") { onSetImprovementConsent(idToken, granted) }
 
-    override suspend fun listSessions(idToken: String, verify: Boolean) =
+    override suspend fun listSessions(idToken: String, verify: Boolean, app: String?) = if (app == null) {
         record("listSessions") { onListSessions(idToken, verify) }
+    } else {
+        record("listSessions?app=$app") { onListAppSessions(idToken, app) }
+    }
 
     override suspend fun deleteAccount(idToken: String) = record("deleteAccount") { onDeleteAccount(idToken) }
 
@@ -74,12 +87,12 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     override suspend fun replaceSessionMetadata(idToken: String, sessionId: String, metadataJson: String) =
         record("replaceSessionMetadata") { onReplaceSessionMetadata(idToken, sessionId, metadataJson) }
 
+    override suspend fun listSessionUploads(idToken: String, sessionId: String): SessionUploadsResponse =
+        record("listSessionUploads") { onListSessionUploads(idToken, sessionId) }
+
     // The upload and restore paths are not driven through this fake yet.
     override suspend fun createSession(idToken: String, request: SessionCreateRequest): SessionCreateResponse =
         unscripted("createSession")
-
-    override suspend fun listSessionUploads(idToken: String, sessionId: String): SessionUploadsResponse =
-        unscripted("listSessionUploads")
 
     override suspend fun completeFile(idToken: String, fileId: String, request: FileCompleteRequest): Unit =
         unscripted("completeFile")

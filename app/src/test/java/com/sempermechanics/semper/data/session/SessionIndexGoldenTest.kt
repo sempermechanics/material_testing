@@ -5,6 +5,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.fixtures.CleanAppState
 import com.sempermechanics.semper.fixtures.sessionRecord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,7 +21,8 @@ import java.io.File
  *
  * The expected file was captured from wave 4's index code (the wave-4 review
  * compared that code's output with wave 3's, 74980e5b, and found it identical).
- * Regenerate it only for a deliberate format change.
+ * Regenerate it only for a deliberate format change. The video fields are
+ * optional and left out when null, so the rows above write as they always did.
  */
 @RunWith(RobolectricTestRunner::class)
 class SessionIndexGoldenTest {
@@ -95,6 +99,50 @@ class SessionIndexGoldenTest {
         val actual = File(context.filesDir, "sessions/index.json").readText(Charsets.UTF_8)
 
         assertEquals(expected(), actual)
+    }
+
+    @Test
+    fun `a video row writes its clip name and frame times, and reads them back`() {
+        val video = batch.copy(id = "video-1", videoName = "tensile_03", frameTimesMs = listOf(40L, 80L, 120L))
+        SessionStore.upsert(context, video, allowOverLimit = true)
+
+        val written = File(context.filesDir, "sessions/index.json").readText(Charsets.UTF_8)
+
+        assertTrue(written.contains(""""videoName":"tensile_03","frameTimesMs":[40,80,120]"""))
+        assertEquals(video, SessionStore.get(context, "video-1"))
+    }
+
+    @Test
+    fun `a row without video fields writes neither, and an old row reads them as null`() {
+        SessionStore.upsert(context, batch, allowOverLimit = true)
+
+        val written = File(context.filesDir, "sessions/index.json").readText(Charsets.UTF_8)
+
+        assertFalse(written.contains("videoName"))
+        assertFalse(written.contains("frameTimesMs"))
+        val read = checkNotNull(SessionStore.get(context, "batch-1"))
+        assertNull(read.videoName)
+        assertNull(read.frameTimesMs)
+        assertEquals(batch, read)
+    }
+
+    @Test
+    fun `a skipped node with no recorded code writes no code and reads it back as none`() {
+        val restored = sweep.copy(
+            id = "restored-1",
+            sweepSkippedNodes = listOf(SkippedNode(41, 9, 121, null)),
+            sweepSkipSubsets = listOf(41),
+            sweepSkipSteps = listOf(9),
+            sweepSkipStrainWindows = listOf(121),
+            sweepSkipCodes = listOf(null),
+        )
+        SessionStore.upsert(context, restored, allowOverLimit = true)
+
+        val written = File(context.filesDir, "sessions/index.json").readText(Charsets.UTF_8)
+
+        assertTrue(written.contains(""""sweepSkipCodes":[null]"""))
+        assertTrue(written.contains(""""sweepSkippedNodes":[{"subset":41,"step":9,"strainWindow":121}]"""))
+        assertEquals(restored, SessionStore.get(context, "restored-1"))
     }
 
     private fun expected(): String = checkNotNull(javaClass.classLoader)

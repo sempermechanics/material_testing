@@ -6,11 +6,13 @@
  * `/v1/sessions`, which carries the quota alongside the page.
  */
 import {
-  requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when, day,
+  requireSignIn, api, apiBlob, saveBlob, setStatus, esc, when, day, confirmInPage, markFirstData,
+  whileWaiting,
 } from "../auth.js";
-import { errorDetail, holdsLicence } from "../util.js";
+import { errorDetail, holdsLicence, placeholderRows, retryRow } from "../util.js";
 import { explain as refusalText } from "../messages.js";
 import { mountSwitcher } from "../switcher.js";
+import { licencesAdministered } from "../roles.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,10 +20,15 @@ let licence = {};        // the `license` block of /v1/me
 let sessions = [];       // every page loaded so far
 let nextToken = "";
 let quota = null;        // the `quota` block of /v1/sessions
+// The institution licences naming this address, for the dashboard switch:
+// read once, alongside /v1/me rather than after it, and kept for the
+// switch's redraw when the account is read again.
+let administered;
 
 requireSignIn(() => {
   $("signedOut").hidden = true;
   showFactorPill();
+  administered = licencesAdministered().then((out) => out.licenses);
   loadAccount();
   loadSessions({ reset: true });
 });
@@ -51,10 +58,14 @@ async function loadAccount() {
     licence = me.license || {};
     accountError = "";
     renderLicence();
-    mountSwitcher("account", { me });
+    markFirstData();
+    mountSwitcher("account", { me, licenses: administered });
   } catch (e) {
     accountError = `Could not read your account: ${e.message}`;
     setStatus(accountError, true);
+    // The placeholders would otherwise read as still loading.
+    $("pills").innerHTML = "";
+    $("explain").textContent = "The licence could not be read. Reload the page to try again.";
   }
 }
 
@@ -143,10 +154,12 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
 }
 
 $("release").addEventListener("click", async () => {
-  if (!confirm(
-    "Give up your seat? Your saved work stays exactly as it is, and you " +
-    "take another seat the next time you use Semper — if one is free.",
-  )) return;
+  if (!(await confirmInPage({
+    title: "Give up your seat",
+    message: "Give up your seat? Your saved work stays exactly as it is, and you " +
+      "take another seat the next time you use Semper — if one is free.",
+    confirm: "Give up seat",
+  }))) return;
   setStatus("Returning your seat…");
   try {
     await api("/v1/licenses/release", { method: "POST" });
@@ -173,12 +186,14 @@ $("unbindMt").addEventListener("click", () => unbind("materialtesting", "Materia
  * named in the query; the backend reads no app as Semper.
  */
 async function unbind(app, name) {
-  if (!confirm(
-    `Move ${name} to a different device?\n\n` +
-    `Nothing is deleted and nothing is cancelled. ${name} stops being ` +
-    "licensed on your current device, and attaches to the next device you " +
-    "sign in on. Your analyses come with you once it has.",
-  )) return;
+  if (!(await confirmInPage({
+    title: `Move ${name}`,
+    message: `Move ${name} to a different device?\n\n` +
+      `Nothing is deleted and nothing is cancelled. ${name} stops being ` +
+      "licensed on your current device, and attaches to the next device you " +
+      "sign in on. Your analyses come with you once it has.",
+    confirm: "Move",
+  }))) return;
   setStatus("Unlocking…");
   try {
     const path = app ? `/v1/licenses/unbind?app=${encodeURIComponent(app)}` : "/v1/licenses/unbind";
@@ -220,14 +235,24 @@ function unbindError(e) {
 
 $("more").addEventListener("click", () => loadSessions({ reset: false }));
 
+let sessionsLoad = 0; // the latest list load; an older answer is dropped
+
 async function loadSessions({ reset }) {
-  if (reset) { sessions = []; nextToken = ""; }
-  setStatus("Loading your analyses…");
+  const ticket = ++sessionsLoad;
+  if (reset) {
+    sessions = [];
+    nextToken = "";
+    $("rows").innerHTML = placeholderRows(6, 3);
+  }
+  // One page at a time: a second click on Show more while the first was in
+  // flight asked for the same page again and listed it twice.
+  $("more").disabled = true;
   try {
     // Every app's analyses: a browser sends no X-App-Id, and without
     // `app=all` the backend would list only Semper's (ADR-014).
     const page = nextToken ? `&page_token=${encodeURIComponent(nextToken)}` : "";
-    const data = await api(`/v1/sessions?app=all${page}`);
+    const data = await whileWaiting(api(`/v1/sessions?app=all${page}`), "Loading your analyses…");
+    if (ticket !== sessionsLoad) return;
     sessions = sessions.concat(data.sessions || []);
     nextToken = (data.page || {}).nextPageToken || "";
     $("more").hidden = !nextToken;
@@ -236,7 +261,12 @@ async function loadSessions({ reset }) {
     renderSessions();
     setStatus(accountError, Boolean(accountError));
   } catch (e) {
-    setStatus(`Could not list your analyses: ${e.message}`, true);
+    if (ticket !== sessionsLoad) return;
+    const message = `Could not list your analyses: ${e.message}`;
+    setStatus(message, true);
+    if (!sessions.length) $("rows").innerHTML = retryRow(6, message);
+  } finally {
+    if (ticket === sessionsLoad) $("more").disabled = false;
   }
 }
 
@@ -289,7 +319,7 @@ function sessionRow(s) {
   const canDownload = (s.completedCount || 0) > 0;
   return `
     <tr>
-      <td>${esc(s.specimen || s.localSessionId || s.sessionId)}
+      <td>${esc(s.name || s.specimen || s.localSessionId || s.sessionId)}
           <div class="muted mono">${esc(s.sessionId)}</div></td>
       <td>${esc(appName(s.app))}</td>
       <td>${state}</td>
@@ -305,6 +335,7 @@ function sessionRow(s) {
 // One listener on the body rather than one per row: the table is rebuilt
 // on every page load, and re-binding each time leaks handlers.
 $("rows").addEventListener("click", (e) => {
+  if (e.target.closest("button[data-retry]")) return loadSessions({ reset: true });
   const sid = e.target?.dataset?.download;
   if (sid) download(sid, e.target);
 });

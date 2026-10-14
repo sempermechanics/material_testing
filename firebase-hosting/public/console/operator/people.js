@@ -2,8 +2,8 @@
  * moves on record, accounts waiting for approval, and a phone released from
  * an unlicensed account.
  */
-import { api, setStatus, esc } from "../auth.js";
-import { seatDevices } from "../util.js";
+import { api, setStatus, esc, confirmInPage, tellInPage } from "../auth.js";
+import { seatDevices, placeholderRows, retryRow } from "../util.js";
 import { explain } from "../messages.js";
 import { $, labelOf } from "./state.js";
 import { showLicence } from "./licences.js";
@@ -14,11 +14,13 @@ export async function clearLicenceDevice(id) {
   // The support answer to "my phone died". Emptying the lock is the whole
   // change: the licence binds to whichever device signs in next, so
   // nothing is re-issued and nothing is typed at the customer's end.
-  if (!window.confirm(
-    `Unbind ${labelOf(id)} from the device it is on?\n\n` +
-    "The next device they sign in on takes it. Their entitlement and " +
-    "their analyses are untouched — this is not a revoke.",
-  )) return;
+  if (!(await confirmInPage({
+    title: `Unbind ${labelOf(id)}`,
+    message: `Unbind ${labelOf(id)} from the device it is on?\n\n` +
+      "The next device they sign in on takes it. Their entitlement and " +
+      "their analyses are untouched — this is not a revoke.",
+    confirm: "Unbind",
+  }))) return;
   try {
     const out = await api(`/v1/admin/licenses/${encodeURIComponent(id)}`, {
       method: "PATCH",
@@ -52,11 +54,13 @@ export async function showDeviceHistory(id) {
         (prevMt ? `  left ${prevMt} (Material Testing)` : "") +
         (next ? `  → ${next}` : "");
     });
-    window.alert(
-      lines.length
+    // One move a line: the card keeps single line breaks.
+    await tellInPage({
+      title: "Device history",
+      message: lines.length
         ? `Device history for ${labelOf(id)}\n\n${lines.join("\n")}`
         : `No device moves recorded for ${labelOf(id)} yet.`,
-    );
+    });
   } catch (e) {
     setStatus(`Could not load device history: ${e.message}`, true);
   }
@@ -64,11 +68,27 @@ export async function showDeviceHistory(id) {
 
 /* ---------------------------------------------------------- accounts */
 
-$("reloadUsers").addEventListener("click", loadUsers);
+$("reloadUsers").addEventListener("click", () => loadUsers());
 
-export async function loadUsers() {
+const PENDING_USERS = "/v1/admin/users?status=PENDING&limit=50";
+
+/** Start reading who waits for approval, for `loadUsers` (see startLicenceLoad). */
+export function startUsersLoad() {
+  const data = api(PENDING_USERS);
+  data.catch(() => {}); // read, or discarded, by loadUsers
+  return data;
+}
+
+let usersLoad = 0; // the latest load; an older answer is not drawn over it
+
+/** Fetch and show who waits for approval, or show the read already `started`. */
+export async function loadUsers(started) {
+  const ticket = ++usersLoad;
+  $("userRows").innerHTML = placeholderRows(4, 2);
+  $("reloadUsers").disabled = true;
   try {
-    const data = await api("/v1/admin/users?status=PENDING&limit=50");
+    const data = await (started || api(PENDING_USERS));
+    if (ticket !== usersLoad) return;
     const rows = data.users || [];
     $("userRows").innerHTML = rows.length
       ? rows.map((u) => `
@@ -85,8 +105,10 @@ export async function loadUsers() {
           </tr>`).join("")
       : '<tr><td colspan="4" class="muted">Nobody waiting.</td></tr>';
   } catch (e) {
-    $("userRows").innerHTML =
-      `<tr><td colspan="4" class="err">Could not load: ${esc(e.message)}</td></tr>`;
+    if (ticket !== usersLoad) return;
+    $("userRows").innerHTML = retryRow(4, `Could not load: ${e.message}`);
+  } finally {
+    if (ticket === usersLoad) $("reloadUsers").disabled = false;
   }
 }
 
@@ -119,6 +141,7 @@ $("releasePhone").addEventListener("click", async () => {
 });
 
 $("userRows").addEventListener("click", async (ev) => {
+  if (ev.target.closest("button[data-retry]")) return loadUsers();
   const btn = ev.target.closest("button[data-approve]");
   if (!btn) return;
   btn.disabled = true;

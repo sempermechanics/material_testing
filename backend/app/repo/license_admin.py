@@ -32,6 +32,9 @@ from ._base import (
     _now,
     _seat_lease_counted,
     _update_refs,
+    _get,
+    _stream,
+    _update_doc,
 )
 from .claims import (
     _license_mirror_patch,
@@ -90,7 +93,7 @@ def _search_licenses(col, q: str, include_demo: bool, include_revoked: bool) -> 
     for field, value in lookups:
         if not value:
             continue
-        for doc in col.where(field, "==", value).limit(SEARCH_LIMIT).stream():
+        for doc in _stream(col.where(field, "==", value).limit(SEARCH_LIMIT)):
             found[doc.id] = doc.to_dict() or {}
     rows = [
         (doc_id, lic) for doc_id, lic in found.items()
@@ -104,7 +107,7 @@ def _search_licenses(col, q: str, include_demo: bool, include_revoked: bool) -> 
 
 def get_license_public(license_id: str) -> dict | None:
     """One licence as the desk shows it, for refreshing a single row."""
-    snap = db().collection("licenses").document(license_id).get()
+    snap = _get(db().collection("licenses").document(license_id))
     return _license_public(license_id, snap.to_dict() or {}) if snap.exists else None
 
 
@@ -123,18 +126,18 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
     Holders are read in one call and written in batches, not one round trip
     each."""
     ref = db().collection("licenses").document(license_id)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         return None
     lic = snap.to_dict() or {}
     if not _is_revoked(lic):
-        ref.update({
+        _update_doc(ref, {
             "status": STATUS_REVOKED,
             "revokedAt": _base.firestore.SERVER_TIMESTAMP,
             "revokedByUid": admin_uid,
         })
     if _is_institution(lic):
-        seats = list(ref.collection("seats").stream())
+        seats = _stream(ref.collection("seats"))
         # Every seat's holder, revoked seats included: a seat revoke whose
         # demotion never landed (reconcile's `still_licensed`) is repaired here.
         _drop_users_to_demo_if_licensed(
@@ -150,7 +153,7 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
             (s.reference, seat_patch) for s in seats
             if (s.to_dict() or {}).get("status") != STATUS_REVOKED
         ])
-        ref.update({"seatsUsed": 0, "leasesActive": 0})
+        _update_doc(ref, {"seatsUsed": 0, "leasesActive": 0})
         # Answer with the counts just written. The desk merges this reply
         # into its row, and the pre-revoke snapshot showed a revoked licence
         # with every seat still taken until the list reloaded.
@@ -266,7 +269,7 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
     `license_edit_error` refuses.
     """
     ref = db().collection("licenses").document(license_id)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         return None
     lic = snap.to_dict() or {}
@@ -304,7 +307,7 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
         update["graceDays"] = max(0, int(update["graceDays"]))
     update["updatedAt"] = _base.firestore.SERVER_TIMESTAMP
     update["updatedByUid"] = admin_uid
-    ref.update(update)
+    _update_doc(ref, update)
 
     # The sentinels are for Firestore; the mirror and the response read the
     # licence as it now stands.
@@ -327,7 +330,7 @@ def _clear_seat_leases(ref) -> None:
     """Drop every lease on a licence that no longer uses them."""
     _update_refs([
         (doc.reference, {**_lease_clear_patch(), "updatedAt": _base.firestore.SERVER_TIMESTAMP})
-        for doc in ref.collection("seats").stream()
+        for doc in _stream(ref.collection("seats"))
         if _seat_lease_counted(doc.to_dict() or {})
     ])
 
@@ -338,7 +341,7 @@ def _license_holder_uids(ref, lic: dict) -> list[str]:
         redeemer = lic.get("redeemedByUid")
         return [redeemer] if redeemer else []
     out = []
-    for seat_doc in ref.collection("seats").stream():
+    for seat_doc in _stream(ref.collection("seats")):
         seat = seat_doc.to_dict() or {}
         if _is_revoked(seat):
             continue
@@ -399,6 +402,6 @@ def _drop_user_to_demo_if_licensed(uid: str, license_id: str) -> None:
     taken the seat's lease away (revoke, hold, whole-licence revoke), and the
     copy left behind read as a seat still in use on the account page."""
     user_ref = db().collection("users").document(uid)
-    user_snap = user_ref.get()
+    user_snap = _get(user_ref)
     if user_snap.exists and (user_snap.to_dict() or {}).get("licenseId") == license_id:
-        user_ref.update(_demo_drop_patch())
+        _update_doc(user_ref, _demo_drop_patch())

@@ -7,6 +7,7 @@ package com.sempermechanics.semper.data.session
 
 import android.content.Context
 import androidx.annotation.WorkerThread
+import com.sempermechanics.semper.data.cloud.SessionMetadataDoc
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.net.AccountCache
@@ -88,11 +89,16 @@ object SessionStore {
     @WorkerThread
     fun get(context: Context, id: String): SessionRecord? = list(context).firstOrNull { it.id == id }
 
+    /** The names every session but [id] goes by: what a new auto-name must not repeat ([SessionNaming.uniqueName]). */
+    @WorkerThread
+    fun namesOtherThan(context: Context, id: String): Set<String> =
+        list(context).filter { it.id != id }.mapTo(HashSet()) { it.name }
+
     /** What [save] did with a row. */
     enum class UpsertOutcome {
         SAVED,
 
-        /** A new row was refused: the account is at its analysis quota ([SessionQuotaGate]). */
+        /** A new row was refused: the account is at its analysis quota ([SessionQuota]). */
         QUOTA_FULL,
 
         /** The index is unreadable (so it must not be overwritten), or the write failed. */
@@ -100,10 +106,12 @@ object SessionStore {
     }
 
     /**
-     * Insert or update a session row. New sessions are hard-stopped when the
-     * account is at its analysis quota ([SessionQuotaGate]) — re-runs of an
-     * existing id still save.
-     * @param allowOverLimit true for cloud restore (session already counts against quota).
+     * Insert or update a session row. A new row is refused when the account is
+     * at its analysis quota ([SessionQuota.blocked], with the index's rows as
+     * the phone's count); re-runs of an existing id still save.
+     * @param allowOverLimit true for a cloud restore (the session already
+     *   counts against the quota) and for a run the quota admitted at its start
+     *   (`RunAdmission.Admitted`): a run under way when the cap fills still saves.
      */
     @WorkerThread
     fun save(
@@ -116,15 +124,29 @@ object SessionStore {
             Timber.e("Refusing upsert: session index is corrupt")
             return@synchronized UpsertOutcome.INDEX_UNAVAILABLE
         }
-        val isNew = existing.none { it.id == record.id }
-        if (isNew && !allowOverLimit && !SessionQuotaGate.allowNewSession(context, existing.size)) {
+        val previous = existing.firstOrNull { it.id == record.id }
+        if (previous == null && !allowOverLimit && SessionQuota.blocked(context, existing.size)) {
+            Timber.w("Hard stop: refusing new session at the analysis limit (%d on the phone)", existing.size)
             return@synchronized UpsertOutcome.QUOTA_FULL
         }
-        val next = existing.filterNot { it.id == record.id } + record
+        val others = existing.filterNot { it.id == record.id }
+        val next = others + withFreeName(record, previous, others)
         if (!write(context, next)) return@synchronized UpsertOutcome.INDEX_UNAVAILABLE
-        AccountCache.refreshSessionLimit(context, next.size)
         UpsertOutcome.SAVED
     }
+
+    /**
+     * [record] under a name no row in [others] has. The check and the write share
+     * [save]'s lock, so two runs or restores saving at once cannot both take one
+     * name: the later one gets the next ` (n)` ([SessionNaming.uniqueName]). A row
+     * that keeps the name it had ([previous]'s) keeps it as it is.
+     */
+    private fun withFreeName(record: SessionRecord, previous: SessionRecord?, others: List<SessionRecord>) =
+        if (record.name.isBlank() || record.name == previous?.name) {
+            record
+        } else {
+            record.copy(name = SessionNaming.uniqueName(record.name, others.mapTo(HashSet()) { it.name }))
+        }
 
     /**
      * [save], as a yes or no.
@@ -149,18 +171,31 @@ object SessionStore {
         }
 
     /**
-     * Rename an analysis. The name is in metadata.json, which a restore reads
-     * it from, so a backed-up analysis, or one with a backup on its way, is
-     * marked [SessionRecord.metadataStale] and [SessionMetadataSync] re-sends it.
+     * Rename an analysis. A name another analysis has takes the next free
+     * ` (n)` ([SessionNaming.uniqueName]), decided under the index lock.
+     * The name is in metadata.json, which a restore reads it from, so a
+     * backed-up analysis, or one with a backup on its way, is marked
+     * [SessionRecord.metadataStale] and [SessionMetadataSync] re-sends it.
+     * @return the name the row now has, or null when the index could not be written.
      */
     @WorkerThread
-    fun rename(context: Context, id: String, newName: String) = update(context, id) {
-        it.copy(
-            name = newName,
-            renamedByUser = true,
-            metadataStale = it.metadataStale || (newName != it.name && it.hasCloudCopy),
-            updatedAt = System.currentTimeMillis(),
-        )
+    fun rename(context: Context, id: String, newName: String): String? = synchronized(lock) {
+        var applied: String? = null
+        val written = mutateIndex(context) { rows ->
+            val taken = rows.filter { it.id != id }.mapTo(HashSet()) { it.name }
+            rows.map { row ->
+                if (row.id != id) return@map row
+                val name = if (newName == row.name) newName else SessionNaming.uniqueName(newName, taken)
+                applied = name
+                row.copy(
+                    name = name,
+                    renamedByUser = true,
+                    metadataStale = row.metadataStale || (name != row.name && row.hasCloudCopy),
+                    updatedAt = System.currentTimeMillis(),
+                )
+            }
+        }
+        applied.takeIf { written }
     }
 
     /**
@@ -319,7 +354,35 @@ object SessionStore {
                 write(context, healed)
             }
         indexCorrupt = rows == null
-        return rows
+        return rows?.let { repairNames(context, it) }
+    }
+
+    /**
+     * [rows] with the names earlier builds left (two rows of one name, a
+     * restored row named after its reference's file) put right by
+     * [CloudNaming.repaired] and written back; [rows] as they are when nothing
+     * needs it or the write fails. Only names change, on this phone only: no
+     * id, directory or cloud copy is touched, so the check is cheap enough for
+     * every read, and finds nothing once done.
+     */
+    private fun repairNames(context: Context, rows: List<SessionRecord>): List<SessionRecord> {
+        val fixed = CloudNaming.repaired(rows, ::restoredMetadataName) ?: return rows
+        val changed = fixed.indices.count { fixed[it].name != rows[it].name }
+        Timber.i("Renamed %d analyses whose names clashed or kept a file extension", changed)
+        return if (write(context, fixed)) fixed else rows
+    }
+
+    /** The name [row]'s restored `metadata.json` gives ([CloudNaming.restoredName]); null without a readable one. */
+    private fun restoredMetadataName(row: SessionRecord): String? {
+        val file = SessionLayout(File(row.sessionDir)).metadataJson
+        if (!file.isFile) return null
+        return try {
+            val doc = SessionMetadataDoc.decode(file.readText())
+            CloudNaming.restoredName(doc.name, doc.specimen)
+        } catch (e: Exception) {
+            Timber.w(e, "Unreadable metadata.json; naming the row from its reference")
+            null
+        }
     }
 
     /** @return false if the index was corrupt and the mutation was refused. */
@@ -336,7 +399,9 @@ object SessionStore {
     }
 
     /**
-     * Atomic replace: backup prior good file, write tmp, flush, rename.
+     * Atomic replace: backup prior good file, write tmp, flush, rename. Stores
+     * the row count it wrote as the quota's phone count, so the count
+     * [SessionQuota.blockedNow] reads on the main thread is the live one.
      * @return false only if something unexpected fails mid-write (rare).
      */
     private fun write(context: Context, records: List<SessionRecord>): Boolean {
@@ -357,10 +422,11 @@ object SessionStore {
                 }
             }
             indexCorrupt = false
-            return true
         } catch (e: Exception) {
             Timber.e(e, "Failed to write session index")
             return false
         }
+        AccountCache.refreshSessionLimit(context, records.size)
+        return true
     }
 }

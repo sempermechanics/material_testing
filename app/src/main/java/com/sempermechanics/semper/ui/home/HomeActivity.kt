@@ -96,8 +96,8 @@ class HomeActivity : AppCompatActivity() {
         override fun handleOnBackPressed() {
             Dialogs.confirm(
                 this@HomeActivity,
-                R.string.exit_semper_title,
-                R.string.exit_semper_message,
+                getText(R.string.exit_semper_title),
+                null,
                 R.string.exit,
             ) {
                 finish()
@@ -253,7 +253,7 @@ class HomeActivity : AppCompatActivity() {
                 SessionStore.list(this@HomeActivity).size
             }
             AccountCache.refreshSessionLimit(this@HomeActivity, localCount)
-            quotaCard.openLimitScreenIfReached()
+            quotaCard.openLimitScreenIfReached(localCount)
         }
     }
 
@@ -298,8 +298,9 @@ class HomeActivity : AppCompatActivity() {
             quotaCard.render(sessions.size)
             // A refresh can drop rows out from under a selection.
             selection.updateSelectionBar()
-            // Local count alone can trip the hard-stop flag (before cloud reconcile).
-            AccountCache.refreshSessionLimit(this@HomeActivity, sessions.size)
+            // No quota count stored from here: these rows leave out the ones a
+            // queued delete is about to remove, and the quota counts every row
+            // the index holds, which SessionStore stores with each write.
         }
     }
 
@@ -355,8 +356,8 @@ class HomeActivity : AppCompatActivity() {
             // no local data is simply unopenable — no download offer.
             record.isRestorable(hasLocal) && showsCloudState() -> Dialogs.confirm(
                 this,
-                R.string.download_analysis_title,
-                R.string.download_analysis_body,
+                getString(R.string.restore_analysis_title_fmt, record.name),
+                getText(R.string.restore_analysis_body),
                 R.string.restore_action,
             ) { startRestore(listOf(record)) }
             else -> SessionOpenHelper.openOrExplain(this, record, hasLocal)

@@ -38,7 +38,7 @@ class CloudBackupListingTest {
         CloudBackupListing.record(
             context,
             listOf(
-                dto("c1", "s1", status = "COMPLETED", name = "Beam", bytes = 21L),
+                dto("c1", "s1", status = "COMPLETED", specimen = "Beam", bytes = 21L),
                 dto("c2", "s2", status = "UPLOADING"),
                 dto("c3", "s3", status = null),
             ),
@@ -79,6 +79,52 @@ class CloudBackupListingTest {
         store(record("s1", cloudId = "c1", frames = 0))
 
         assertEquals(emptyList<String>(), CloudBackupListing.offered(context).map { it.cloudId })
+    }
+
+    // ── Labels ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `offered backups read as their rows will, without an extension and never alike`() {
+        store(record("mine", cloudId = "").copy(name = "steel_00"))
+        CloudBackupListing.record(
+            context,
+            listOf(
+                dto("c1", "s1", specimen = "steel_00.png", bytes = 128L),
+                dto("c2", "s2", specimen = "pmma_00.png", bytes = 216L),
+                dto("c3", "s3", specimen = "pmma_00.png", bytes = 216L),
+                dto("c4", "s4", specimen = "concrete_00.jpg"),
+                dto("c5", "s5", specimen = null),
+            ),
+        )
+
+        assertEquals(
+            listOf("steel_00 (2)", "pmma_00", "pmma_00 (2)", "concrete_00", ""),
+            CloudBackupListing.offered(context).map { it.name },
+        )
+        val saved = CloudBackupListing.read(context)[0].name
+        assertEquals("the saved listing keeps the backend's name", "steel_00.png", saved)
+    }
+
+    @Test
+    fun `a backup with the analysis's name is offered by it, and one without by its reference (TD-208)`() {
+        CloudBackupListing.record(
+            context,
+            listOf(
+                named("c1", "steel_24.png", "steel_24 sweep"),
+                named("c2", "pmma_00.png", "Second pull"),
+                named("c3", "pmma_00.png", "Second pull"),
+                // An older app sent no name; an older backend lists none.
+                named("c4", "concrete_00.jpg", ""),
+                named("c5", "concrete_01.jpg", null),
+                // An auto-name of an older shape reads as a restore will name it.
+                named("c6", "beam.png", "beam · Oct 9, 17:57:31"),
+            ),
+        )
+
+        assertEquals(
+            listOf("steel_24 sweep", "Second pull", "Second pull (2)", "concrete_00", "concrete_01", "beam"),
+            CloudBackupListing.offered(context).map { it.name },
+        )
     }
 
     // ── Hide ────────────────────────────────────────────────────────────────
@@ -193,19 +239,39 @@ class CloudBackupListingTest {
         assertTrue(SessionStore.list(context).isEmpty())
     }
 
+    @Test
+    fun `backups of one analysis restored together each get a row of their own`() {
+        // Three backups of one analysis share its local id.
+        val targets = listOf(
+            RestoreStart.Target("c1aaaaaaaaaaaa", "s1", "pmma_00"),
+            RestoreStart.Target("c2bbbbbbbbbbbb", "s1", "pmma_00 (2)"),
+            RestoreStart.Target("c3cccccccccccc", "s1", "pmma_00 (3)"),
+            RestoreStart.Target("c4dddddddddddd", "s4", "steel_00"),
+        )
+
+        val rows = RestoreStart.withDistinctRows(targets).map { it.targetLocalId }
+
+        assertEquals(listOf("s1", "restored-c2bbbbbbbbbb", "restored-c3cccccccccc", "s4"), rows)
+        assertEquals(targets.map { it.name }, RestoreStart.withDistinctRows(targets).map { it.name })
+    }
+
     private fun dto(
         cloudId: String,
         localId: String,
         status: String? = "COMPLETED",
-        name: String? = null,
+        specimen: String? = null,
         bytes: Long = 0L,
     ) = CloudSessionDto(
         sessionId = cloudId,
         localSessionId = localId,
-        specimen = name,
+        specimen = specimen,
         status = status,
         totalBytes = bytes,
     )
+
+    /** A finished backup listed with the analysis's [name] beside its [specimen]. */
+    private fun named(cloudId: String, specimen: String, name: String?) =
+        dto(cloudId, "local-$cloudId", specimen = specimen).copy(name = name)
 
     private fun backup(cloudId: String, localId: String) = CloudBackupListing.Backup(cloudId, localId, "", 0L)
 

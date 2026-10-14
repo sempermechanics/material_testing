@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.analysis.run
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.RunStop
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -17,6 +18,13 @@ class EngineFailureTest {
         assertEquals(R.string.sweep_reason_vsg, EngineFailure.shortReasonRes(0))
         assertEquals(R.string.sweep_fail_unknown_fmt, EngineFailure.reasonRes(42))
         assertEquals(R.string.sweep_reason_unknown_fmt, EngineFailure.shortReasonRes(42))
+    }
+
+    @Test
+    fun `no recorded code says only that the node was skipped and not a strain-window failure`() {
+        assertEquals(R.string.sweep_node_skipped, EngineFailure.reasonRes(null))
+        assertEquals(R.string.sweep_node_skipped, EngineFailure.shortReasonRes(null))
+        assertEquals(R.string.url_faq_engine_vsg, EngineFailure.faqUrlRes(null))
     }
 
     @Test
@@ -53,6 +61,18 @@ class EngineFailureTest {
             R.string.sweep_reason_low_convergence,
             EngineFailure.shortReasonRes(RunStop.LowConvergence.wireCode),
         )
+    }
+
+    @Test
+    fun `only the one-sentence convergence reason keeps more behind Why`() {
+        assertEquals(R.string.error_low_convergence_why, EngineFailure.whyRes(RunStop.LowConvergence.wireCode))
+        listOf(
+            EngineFailure.ENGINE_ERROR_FEATURES,
+            EngineFailure.ENGINE_ERROR_ROI,
+            EngineFailure.ENGINE_ERROR_INIT,
+            0,
+            42,
+        ).forEach { assertNull("code $it", EngineFailure.whyRes(it)) }
     }
 
     @Test

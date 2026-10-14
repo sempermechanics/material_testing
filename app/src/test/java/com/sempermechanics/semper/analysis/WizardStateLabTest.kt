@@ -18,7 +18,7 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.DraftRestore
 import com.sempermechanics.semper.ui.analysis.wizard.WizardState
 import com.sempermechanics.semper.ui.analysis.wizard.defCaptureTimesMs
-import com.sempermechanics.semper.ui.analysis.wizard.defFrameTimesMs
+import com.sempermechanics.semper.ui.analysis.wizard.defTimesAfterRefMs
 import com.sempermechanics.semper.ui.analysis.wizard.saveWizardState
 import com.sempermechanics.semper.ui.analysis.wizard.setLoadLog
 import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsKg
@@ -120,7 +120,7 @@ class WizardStateLabTest {
             crossSectionMm2 = 12.5f
             loadAxisX = false
             this.geometry = geometry
-            defFrameTimesMs = listOf(500L, 1_000L)
+            defTimesAfterRefMs = listOf(500L, 1_000L)
             setLoadLog((MachineLoadCsv.parse(LOAD_LOG) as LoadCsvParse.Ok).csv, "run1.csv", LOAD_LOG)
             loadLogStartS = 0.5f
             typedLoadsEntry = TypedLoads.Entry.INCREMENTAL
@@ -137,7 +137,7 @@ class WizardStateLabTest {
         assertEquals(TypedLoads.Entry.INCREMENTAL, after.typedLoadsEntry)
 
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
-        assertEquals(listOf(500L, 1_000L), after.defFrameTimesMs)
+        assertEquals(listOf(500L, 1_000L), after.defTimesAfterRefMs)
         assertEquals(before.parsedLoadCsv, after.parsedLoadCsv)
         assertEquals(2, after.machineLoads?.matchedFrames)
     }

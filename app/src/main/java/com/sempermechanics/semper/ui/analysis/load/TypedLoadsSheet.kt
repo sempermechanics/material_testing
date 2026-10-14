@@ -30,7 +30,7 @@ import com.sempermechanics.semper.data.mechanical.TypedLoads
 import com.sempermechanics.semper.data.mechanical.TypedLoads.Entry
 import com.sempermechanics.semper.imaging.video.VideoFrameExtractor
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.analysis.wizard.defFrameTimesMs
+import com.sempermechanics.semper.ui.analysis.wizard.defTimesAfterRefMs
 import com.sempermechanics.semper.ui.analysis.wizard.setTypedLoads
 import com.sempermechanics.semper.ui.analysis.wizard.typedLoadsKg
 import kotlinx.coroutines.Dispatchers
@@ -74,7 +74,7 @@ internal object TypedLoadsSheet {
                 path = path,
                 label = activity.getString(labelRes, index + 1),
                 detail = if (video) {
-                    viewModel.defFrameTimesMs.getOrNull(index)?.let(VideoFrameExtractor::formatClock).orEmpty()
+                    viewModel.defTimesAfterRefMs.getOrNull(index)?.let(VideoFrameExtractor::formatClock).orEmpty()
                 } else {
                     viewModel.defOriginalNames.getOrNull(index).orEmpty()
                 },

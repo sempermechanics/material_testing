@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.settings
 
 import androidx.annotation.WorkerThread
 import com.sempermechanics.semper.data.net.CloudSessionDto
+import com.sempermechanics.semper.data.session.CloudNaming
 import com.sempermechanics.semper.data.session.SessionRecord
 
 /** Where one analysis lives, which decides its row's wording and actions. */
@@ -109,8 +110,11 @@ object AnalysisEntries {
             match?.let { matched += it.sessionId }
             AnalysisEntry(record.name, record, match, hasLocalData = hasLocal(record))
         }
-        val cloudOnly = cloud.filterNot { it.sessionId in matched }
-            .map { AnalysisEntry(it.specimen ?: it.sessionId, null, it) }
+        val unmatched = cloud.filterNot { it.sessionId in matched }
+        // Named as their rows will be: the analysis's name (else the reference's), no image extension, no two alike.
+        val listed = unmatched.map { CloudNaming.listedName(it.name, it.specimen) }
+        val names = CloudNaming.backupNames(listed, records.map { it.name })
+        val cloudOnly = unmatched.zip(names) { dto, name -> AnalysisEntry(name.ifBlank { dto.sessionId }, null, dto) }
         return onPhone + cloudOnly
     }
 }

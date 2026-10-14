@@ -11,9 +11,9 @@ Windows: `gradlew.bat`. Quote `-Pandroid.testInstrumentationRunnerArguments…` 
 |---------|------|
 | `./gradlew ciReleaseGate` | Spotless, detekt, lintDebug, unit tests, R8, assembleRelease |
 | `./gradlew :app:testDebugUnitTest spotlessCheck :app:detekt :app:lintDebug` | Tier 1 without R8 |
-| `./gradlew :app:koverLog :app:koverVerify` | Coverage log + floor (49; measured 75.1 % on 2026-10-03; enforced in CI tier 1 and `ciReleaseGate`) |
+| `./gradlew :app:koverLog :app:koverVerify` | Coverage log + floors (lines 71, branches 57; measured 73.93 / 59.40 % on 2026-10-14 with Activities and Dialogs counted; Semper's are 75 / 57; CI tier 1, `ciReleaseGate`, release). Every test PR raises them to measured − 2: [TESTING.md](docs/app/TESTING.md#coverage-floors) |
 | `./gradlew :app:connectedDebugAndroidTest -PabiFilters=x86_64 "-Pandroid.testInstrumentationRunnerArguments.notPackage=com.sempermechanics.semper.benchmark"` | Emulator instrumented; exclude benchmark package on debug |
-| `cd backend && python -m pytest tests/ -q --cov=app --cov-fail-under=75` | Backend (install lock + `requirements-test.txt`) |
+| `cd backend && python -m pytest tests/ -q --cov=app --cov-fail-under=93` | Backend (install lock + `requirements-test.txt`) |
 | `python scripts/render_legal_pages.py --check` | Hosted legal pages match `docs/legal/` |
 | `python scripts/check_console.py` | Console pages: wiring, CSP, placeholders, gateway paths |
 | `gitleaks detect --config .gitleaks.toml` | Secret scan |
@@ -60,6 +60,13 @@ Engine tests are **not** this CI. From the submodule: see [docs/engine/TESTING.m
   The script then runs `scripts/check_live_console.py`, which fails if the live site still holds a
   `__` placeholder; run it by hand after any other Hosting deploy.
 - PRs target `main`. No force-push to `main`. No `--no-verify`.
+
+## Working
+
+- Use subagents to multitask as much as possible whenever it is clearly safe: independent
+  searches, reads and reviews, and edits to disjoint files or in separate worktrees, launched
+  together. Keep in one agent anything that shares files, a device or emulator, or the same
+  checkout's Gradle build (`app/build/`), and anything outward-facing (deploys, Firestore, pushes).
 
 ## Docs to update in the same PR
 

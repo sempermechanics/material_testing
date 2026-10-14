@@ -9,20 +9,25 @@ private const val UNMEASURED = -1
 /**
  * The draft's frame list as [DeformedFrame]s. A size counts only when both
  * sides are positive, as `WizardState.applyFrames` keeps it; anything else
- * (the `-1` marker, a missing entry) is a null size.
+ * (the `-1` marker, a missing entry) is a null size. Clip times count only
+ * when there is one per frame: a list of another length cannot say which
+ * frame each belongs to, so every frame then has none.
  */
-internal fun WizardState.Frames.toDeformedFrames(): List<DeformedFrame> = paths.mapIndexed { i, path ->
-    val w = widths.getOrElse(i) { UNMEASURED }
-    val h = heights.getOrElse(i) { UNMEASURED }
-    DeformedFrame(
-        path = path,
-        name = names.getOrElse(i) { "" },
-        date = dates.getOrElse(i) { DeformedFrame.UNKNOWN_DATE },
-        size = ImageSize(w, h).takeIf { it.isKnown },
-        captureTimeMs = captureTimesMs.getOrNull(i),
-        videoTimeMs = timesMs.getOrNull(i),
-        typedLoadKg = typedLoadsKg.getOrNull(i),
-    )
+internal fun WizardState.Frames.toDeformedFrames(): List<DeformedFrame> {
+    val times = timesMs.takeIf { it.size == paths.size }
+    return paths.mapIndexed { i, path ->
+        val w = widths.getOrElse(i) { UNMEASURED }
+        val h = heights.getOrElse(i) { UNMEASURED }
+        DeformedFrame(
+            path = path,
+            name = names.getOrElse(i) { "" },
+            date = dates.getOrElse(i) { DeformedFrame.UNKNOWN_DATE },
+            size = ImageSize(w, h).takeIf { it.isKnown },
+            timeMs = times?.get(i),
+            captureTimeMs = captureTimesMs.getOrNull(i),
+            typedLoadKg = typedLoadsKg.getOrNull(i),
+        )
+    }
 }
 
 /** [frames] in the draft's layout, `-1` for an unmeasured size, as `WizardState.frames` writes it. */
@@ -32,7 +37,7 @@ internal fun wizardFramesOf(frames: List<DeformedFrame>): WizardState.Frames = W
     dates = frames.map { it.date },
     widths = frames.map { it.size?.width ?: UNMEASURED },
     heights = frames.map { it.size?.height ?: UNMEASURED },
-    timesMs = frames.mapNotNull { it.videoTimeMs }.takeIf { it.size == frames.size }.orEmpty(),
+    timesMs = DeformedFrame.timesOf(frames).orEmpty(),
     captureTimesMs = frames.map { it.captureTimeMs }.takeIf { t -> t.any { it != null } }.orEmpty(),
     typedLoadsKg = frames.map { it.typedLoadKg }.takeIf { kg -> kg.any { it != null } }.orEmpty(),
 )

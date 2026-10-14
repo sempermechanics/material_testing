@@ -135,6 +135,7 @@ private fun AnalysisViewModel.clearInputs() {
     deformedFrames = emptyList()
     frameSizeError = null
     defFromVideo = false
+    defVideoName = null
     refSize = ImageSize.UNKNOWN
     refName = AnalysisViewModel.NO_REFERENCE_NAME
     hasCustomRoi = false

@@ -15,6 +15,10 @@ from ._base import (
     _now,
     _run_tx,
     SCHEMA_VERSION,
+    _get,
+    _commit,
+    _set_doc,
+    _create_doc,
 )
 from .entitlement import (
     ensure_entitlement,
@@ -23,7 +27,7 @@ from .entitlement import (
 
 # ---------------- devices ----------------
 def get_device(device_id: str):
-    snap = db().collection("devices").document(device_id).get()
+    snap = _get(db().collection("devices").document(device_id))
     return {**snap.to_dict(), "deviceId": device_id} if snap.exists else None
 
 
@@ -67,10 +71,10 @@ def _release_devices(user_ref, devices: dict[str, str], patch: dict) -> None:
     for app, device in devices.items():
         patch.update(_release_patch(device, app))
         device_ref = db().collection("devices").document(device)
-        if device_ref.get().exists:
+        if _get(device_ref).exists:
             _retire_device(batch, device_ref, statuses.DEVICE_SUPERSEDED)
     batch.update(user_ref, patch)
-    batch.commit()
+    _commit(batch)
 
 
 def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER) -> dict:
@@ -93,7 +97,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER) -> dict:
     # stale ACTIVE docs that still held their device ids against other
     # accounts via the device_in_use check.
     active_field = apps.field("activeDeviceId", app)
-    user_snap = user_ref.get()
+    user_snap = _get(user_ref)
     previous = (user_snap.to_dict() or {}).get(active_field) if user_snap.exists else None
     batch = db().batch()
     if previous and previous != body.deviceId:
@@ -107,7 +111,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER) -> dict:
         apps.field("releasedDeviceId", app): _base.firestore.DELETE_FIELD,
         apps.field("releasedAt", app): _base.firestore.DELETE_FIELD,
     })
-    batch.commit()
+    _commit(batch)
     user = _load_user(uid)
     if user:
         ensure_entitlement(user, body.deviceId)
@@ -117,14 +121,12 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER) -> dict:
 # ---------------- challenge / nonce ----------------
 def issue_nonce(uid: str, device_id: str) -> str:
     nonce = secrets.token_urlsafe(32)
-    db().collection("challenges").document(nonce).set(
-        {
-            "uid": uid,
-            "deviceId": device_id,
-            "expireAt": _now() + timedelta(seconds=120),
-            "schemaVersion": SCHEMA_VERSION,
-        }
-    )
+    _set_doc(db().collection("challenges").document(nonce), {
+        "uid": uid,
+        "deviceId": device_id,
+        "expireAt": _now() + timedelta(seconds=120),
+        "schemaVersion": SCHEMA_VERSION,
+    })
     return nonce
 
 
@@ -141,7 +143,7 @@ def consume_nonce(nonce: str, uid: str, device_id: str) -> bool:
 
     @_base.firestore.transactional
     def _consume(tx):
-        snap = ref.get(transaction=tx)
+        snap = _get(ref, tx)
         if not snap.exists:
             return False
         d = snap.to_dict()
@@ -169,15 +171,13 @@ def claim_client_nonce(nonce: str, uid: str, device_id: str, expire_at) -> bool:
     server-issued IDs never contain '.', so the two kinds cannot collide.
     """
     try:
-        db().collection("challenges").document(nonce).create(
-            {
-                "uid": uid,
-                "deviceId": device_id,
-                "kind": "client",
-                "expireAt": expire_at,
-                "schemaVersion": SCHEMA_VERSION,
-            }
-        )
+        _create_doc(db().collection("challenges").document(nonce), {
+            "uid": uid,
+            "deviceId": device_id,
+            "kind": "client",
+            "expireAt": expire_at,
+            "schemaVersion": SCHEMA_VERSION,
+        })
         return True
     except AlreadyExists:
         return False

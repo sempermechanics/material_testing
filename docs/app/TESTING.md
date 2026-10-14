@@ -16,13 +16,13 @@ chunk own?" here.
 | **results** | `.dat` decode, CSV, heatmap, PDF, GIF | `results/DicResultCsvTest`, `AnalysisCsvSectionsTest`, `DicResultDecodeTest`, `VisualizationEngineTest`, `ReportBuilderTest`, `ReportBuilderMeanStdParityTest`, `GifEncoderTest`, `SummaryAnimationTest`, `PdfReportGeneratorTest` | `report/PdfReportDeviceTest` |
 | **viewer** | Result viewer controls, frame cache bounds, the Intent contract both entry points write and all four readers parse | `viewer/FrameNumberEntryTest`, `ScrubFrameCacheTest`, `ViewerFieldPillsTest`, `ShareCenterTest`, `viewer/TouchImageViewScrubTest`, `ui/viewer/ViewerArgsTest`, `TouchImageViewTest`, `SettingsUsedSheetTest`, `analysis/RunSpecTest` | `ui/viewer/ViewerEntryParityDeviceTest` |
 | **cloud** | Upload, API, restore, quota, account deletion | `cloud/ApiDtosContractTest`, `ApiErrorMappingTest`, `UploadResumableTest`, `DicUploadWorkerOutcomesTest`, `RestoreAndImportSafetyTest`, `RestoreStartTest`, `CloudBackupListingTest`, `QuotaGateTest`, `AccountDeletionTest`, `SessionEverythingExporterTest`, `data/cloud/SessionUploadBundlerTest` | `data/cloud/SessionUploadBundlerDeviceTest` |
-| **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `AppSettingsMigrateTest` | — |
+| **settings** | Settings sections, contacting support, account deletion | `settings/AnalysisEntriesTest`, `HelpSupportSectionTest`, `DeleteAccountReauthTest`, `AccountDeletionDeathTest`, `AppSettingsMigrateTest` | — |
 | **analytics** | Consent-gated Firebase Analytics events | `diagnostics/SemperAnalyticsTest` | — |
 | **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |
 | **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
 | **lab** | Tensile and bending sessions: E from the phone's own `.dat` files, the viewer opening on Results, the Elastic region toggle, the lab-report PDF; viewer gestures (flick and slow swipe scrub one frame, pinch, pan, tap to probe); the beam-edge tap editor under real touches (bottom mark held to the top's x, zoom kept between taps) | `report/*` (`ElasticModulusTest`, `BeamDeflectionTest`, `LabReportTest`, …) | `e2e/LabWorkflowDeviceTest`, `e2e/BeamTapEditorGestureTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
-| **benchmark** | Startup / screen / viewer-scrub / lab Results Macrobenchmarks; hot-path microbenchmarks | — | `:app` androidTest `benchmark/HotPathMicroBenchmark`, `:benchmark` module (both in CI's `tier-benchmark`: label `benchmark` / workflow_dispatch) |
+| **benchmark** | Startup / screen / viewer-scrub / lab Results Macrobenchmarks; hot-path microbenchmarks | — | `:app` androidTest `benchmark/HotPathMicroBenchmark`, `:benchmark` module (both in CI's `tier-benchmark`: label `benchmark` / workflow_dispatch / a PR touching a hot path) |
 
 ## Overlap rules
 
@@ -31,6 +31,29 @@ chunk own?" here.
   `System.loadLibrary`, OpenMP threading, JNI marshalling.
 - **JVM tests** own Kotlin orchestration and data contracts. Do not add JVM
   tests that re-assert displacement accuracy.
+
+## Wire contracts (`contracts/`)
+
+The JSON the app and the backend exchange is pinned once, in the top-level
+`contracts/` directory: one realistic body per request the app sends
+(`*_request.json`) and per response it reads (`*_response.json`). Two suites
+read the same files:
+
+- `cloud/ApiDtosContractTest` (app): a request fixture decodes into its DTO
+  and re-encodes unchanged, so the DTO sends exactly those keys; a response
+  fixture decodes, and every field its DTO reads is a key the fixture has (a
+  renamed field would otherwise decode to its default). Gradle gets the
+  directory through the `semper.contracts.dir` system property and tracks it
+  as a test input.
+- `backend/tests/test_wire_contracts.py`: each request validates against the
+  pydantic model its route takes, with no key the model would drop; each
+  response is compared, keys and JSON types both ways, with what the real
+  routes return when driven from device registration to a finished backup.
+
+A backend response that grows a field fails the backend test until the fixture
+has it. A field removed or renamed on either side fails one of the two suites;
+change the client first, since installed builds keep reading the old name. The
+`app` and `backend` CI filters both include `contracts/**`.
 
 ## Shared fixtures
 
@@ -46,6 +69,19 @@ hand-rolled copies (#315, #330).
 | `CleanAppState` | `fixtures/CleanAppState.kt` | A JUnit rule: signed out, no saved sessions, before and after each test (token store, remote config, session index and folders) |
 | `MockWebServerRule` | OkHttp's `mockwebserver3.junit4` | Starting and closing a `MockWebServer` per test; do not start one by hand |
 | `WizardTestBed`, `FakeWizardHost` | `ui/analysis/WizardTestBed.kt` | The wizard's parts one at a time: its views in a plain themed Activity, a fresh `AnalysisViewModel`, and a host that counts what each part asks of it. Pass `resumed = false` for a part that registers a result launcher |
+
+## Swapping a dispatcher
+
+A class whose background work a test must hold or run inline takes the
+dispatcher as a constructor parameter defaulting to `Dispatchers.IO` (the
+wizard parts, e.g. `ReferenceImportController`; `MediaPickerSheet.show`); a
+view model takes it the same way and is built through a `viewModelFactory`
+(`SaveExportViewModel.factory`). An Activity or Fragment, which the system
+constructs, keeps it in a per-instance `@VisibleForTesting internal var` that
+the test sets on `controller.get()` before `setup()`
+(`ResultViewerActivity.frameSetDispatcher`, `SaveExportActivity.copyDispatcher`).
+Never a companion or top-level `var`: it is process-global, so a test that
+fails before restoring it leaks its dispatcher into every later test in the JVM.
 
 ## Running by chunk
 
@@ -69,6 +105,31 @@ handing their path in on the intent.
 than a decoder of ours: the encoder is written against the GIF89a spec by hand,
 so the only claim worth making is that a third-party decoder agrees.
 
+**Golden oracles.** The `.dat` and GIF outputs are pinned byte for byte against
+committed files in `app/src/test/resources/oracles/`, compared by
+`fixtures/Goldens.kt`:
+
+| Golden | Test | Pins |
+|---|---|---|
+| `field_small.dat` | `results/DatFieldOracleTest` | A field written through `DicFieldIo` as the batch loop writes it: the 32-byte `x y u v exx eyy exy znssd` record, little-endian, valid points only — and that `decodeDatFile` reads it back |
+| `summary_u.gif`, `summary_exx.gif` | `results/SummaryGifOracleTest` | A whole `SummaryAnimation` build (decode, fit widened to the moved points, deformed heatmap render, jet palette, LZW): the bytes the viewer shows and Share sends. Regenerated 2026-10-13 when the GIF moved to the deformed configuration (TD-139, [ADR-011](../adr/ADR-011-viewer-deformed-frame.md#as-built-td-139-2026-10-13)) |
+
+Parity tests (`VisualizationEngineTest`, `ReportBuilderTest`) compare the code
+against an older copy of itself, and the round trips (`DatCodecTest`,
+`GifEncoderTest`) against itself; both stay green when a change moves both
+sides together. The goldens do not. A change that is *meant* to move an output
+regenerates them and the diff of the binary file is the review:
+
+```bash
+./gradlew :app:testDebugUnitTest -PupdateGoldens --tests "*Oracle*"
+```
+
+The batch loop that writes the `.dat` files, `runBatchAnalysisBody`, cannot run
+on the JVM (no engine library). `pipeline/EnginePipelineSmokeTest.batchLoopWritesEveryFrameAndSavesTheSession`
+runs it on the emulator: three shifted frames, each `.dat` must hold its own
+translation within 0.25 px, and the run must save its Home row. CI runs it in
+Tier 3, which an engine bump or JNI change now triggers.
+
 `analysis/WizardStateTest` covers the wizard's process-death restore on the
 JVM, `ui/analysis/wizard/WizardDraftRestoreTest` covers it through a real Parcel on a
 device, and neither can kill the process. The kill is a scripted pass: take
@@ -89,12 +150,16 @@ the session store in a state you can come back to.
 ## Performance benchmarks
 
 Two suites, answering different questions. Neither runs in the normal gate — both
-need a device, and they are gated in CI behind the `benchmark` label.
+need a device. CI's `tier-benchmark` job runs them on the `benchmark` label, a
+`run_benchmark` dispatch, or a PR that touches a hot path (the `hot_path` filter in
+`ci.yml`).
 
 **Micro (`:app` androidTest) — "did this operation get cheaper?"**
 Measures median `timeNs` **and `allocationCount`** for the hot paths (`valueRanges`,
-`buildReport`, `generateHeatmap`, GIF encode, `computeFieldExtrema`, `decodeDatFile`,
-the spatial index). `allocationCount` is the honest memory signal: the workload is
+`buildReport`, `generateHeatmap`, `generateDeformedHeatmap`, GIF encode,
+`computeFieldExtrema`, `decodeDatFile`, the spatial index). `generateDeformedHeatmap_oneFrame`
+renders a frame moved by u = 0.02·x, v = 0.01·y px: the other cases' synthetic frame
+drifts by up to ~300 px, which would warp most of the deformed map off the canvas. `allocationCount` is the honest memory signal: the workload is
 fixed, so a change in allocations is caused by the code and nothing else.
 
 ```bash
@@ -115,11 +180,19 @@ Results land in logcat (`adb logcat -d -s Benchmark:I`).
 **Macro (`:benchmark`) — "what does the user feel?"**
 `ViewerScrubBenchmark` seeds a synthetic session via the benchmark-variant-only
 `BenchmarkSeedActivity` and scrubs frames, reporting frame timing, max heap and the
-`Semper.viewer.decodeDat` trace section. `LabResultsBenchmark` has the same seeder
-fabricate a tensile session with a load per frame (`--ez results true`, 30 and 150
-frames), opens it on Results and toggles Whole test / Elastic region, reporting frame
-timing and the `Semper.viewer.stressStrain` trace section (the curve build over every
-frame's `.dat`).
+`Semper.viewer.decodeDat` trace section. The seeder also writes the `field_ranges.bin`
+sidecar a real batch run leaves, so the viewer's colour-scale pass reads it as it does
+on a phone; without it the benchmark measured the no-sidecar fallback instead (TD-87).
+`scrub10Frames` and `scrub150Frames` open frames with no photo of their own, so each is
+drawn on the reference. `scrub150FramesWithPhotos` passes the seeder `--ez framePhotos true`:
+a separate session whose frames move moderately and each have a flat grey PNG in
+`raw_deformed/`, so the viewer draws every frame over its photo with
+`generateDeformedHeatmap` ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md)). It is
+report-only: `benchmark/gates.json` has no reference for it.
+`LabResultsBenchmark` has the same seeder fabricate a tensile session with a load per
+frame (`--ez results true`, 30 and 150 frames), opens it on Results and toggles Whole
+test / Elastic region, reporting frame timing and the `Semper.viewer.stressStrain` trace
+section (the curve build over every frame's `.dat`).
 
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
@@ -130,9 +203,10 @@ CI's `tier-benchmark` job passes the same `suppressErrors` (plus
 `enabledRules=Macrobenchmark`) on an **API 34** emulator;
 `benchmark/build.gradle.kts` sets the same suppress list so a local emulator run
 matches CI. On the same emulator the job then runs the micro suite with the
-`am instrument` command above. Numbers are smoke, not
-a regression gate; both suites' `*-benchmarkData.json` are uploaded, as
-`macrobenchmark-results` and `microbenchmark-results`.
+`am instrument` command above. Those numbers are not gated; both suites'
+`*-benchmarkData.json` are uploaded, as `macrobenchmark-results` and
+`microbenchmark-results`. On a PR the micro suite then runs again, A/B against the
+PR's base, and that is a gate (below).
 
 Four things that will otherwise cost you an afternoon:
 
@@ -210,6 +284,25 @@ What it says:
   x86_64), not a regression. Compare allocations like for like: phone to phone,
   emulator image to the same image.
 
+### CI microbenchmark A/B (TD-199)
+
+An emulator's absolute times say nothing (its speed moves from runner to runner), so
+on a PR `tier-benchmark` judges the hot paths by their change against the PR's base.
+It builds the base (A) and the PR (B) as debug app + androidTest APKs, in the one
+checkout, then `scripts/micro_ab.py` runs `HotPathMicroBenchmark` from each on the
+same emulator in A B B A order, so drift hits both builds equally. For each
+benchmark it pools every `timeNs` run of a build (50 a round) and fails the job if
+B's median is more than `microAbMargin` (15 %, `benchmark/gates.json`) over A's.
+The log shows both medians, the change and both allocation counts; the rounds are
+uploaded as `microbenchmark-ab`. A benchmark only one build has (the PR adds or
+removes it) is reported and not compared. Method tracing is off for these runs
+(`profiling.mode none`).
+
+A PR that means to slow a hot path (a correctness fix that costs time) gets the
+`perf-accepted` label: the comparison still runs and prints a warning, but passes.
+Labels apply from the next push. To re-read a run, download `microbenchmark-ab` and
+run `python scripts/micro_ab.py --analyse <folder>`.
+
 ### Real-device gates
 
 [`benchmark/gates.json`](../../benchmark/gates.json) turns these Pixel 6 medians into
@@ -225,9 +318,11 @@ python scripts/ci_test_report.py --gates benchmark/gates.json \
 It prints `GATE ok …` per reference, an `::error` per breach, and exits 1 if any gate
 is over. Gates are keyed by the device the JSON records (`context.build.device`, `oriole`
 for the Pixel 6); a device the file does not list, CI's emulator included, is reported
-and never gated, and CI does not pass `--gates`. To gate another phone, add its
-codename with medians from a clean run of both suites. Microbenchmark times are not
-gated: debuggable and not AOT-compiled, they are relative numbers only.
+and never gated, and CI does not pass `--gates`. Without `--gates` the script only
+reports and always exits 0. To gate another phone, add its codename with medians from
+a clean run of both suites. Microbenchmark times have no reference here: debuggable and
+not AOT-compiled, they are relative numbers, gated only against the PR's base in CI
+(below).
 
 **The phone's state (TD-135, [ADR-008](../adr/ADR-008-startup-gates-phone-state.md)).**
 A startup time moves 30–40 % with heat and the charger, so a result is gated only
@@ -295,6 +390,53 @@ memory) as much as the app (TD-135); the state check and A/B run above are the
 answer. The references themselves were taken in an unrecorded state and are owed a
 re-take under that protocol.
 
+### Coverage floors
+
+Three suites are gated on coverage, each two points under what it measured:
+
+| Suite | Measured (2026-10-08) | Floor | Where |
+|---|---|---|---|
+| App JVM (Kover, lines) | 73.93 % (2026-10-14; Semper 77.12 %) | 71 (Semper 75) | `app/build.gradle.kts` `kover.verify` |
+| App JVM (Kover, branches) | 59.40 % (2026-10-14; Semper 59.99 %) | 57 | same |
+| Backend (pytest-cov, lines) | 95.47 % | 93 | `.github/actions/backend-gate/action.yml` |
+| Backend + Firestore emulator tier | 95.54 % | 93 | `ci.yml` tier 4, `--cov-append` |
+| Console JS (`scripts/console_coverage.mjs`, lines merged by file) | 98.30 % | 96 | `ci.yml` `console-pages` |
+
+**Every PR that adds tests re-measures and raises the floors it moved** to
+measured − 2 (rounded down), in the same PR, with the date in the comment
+beside the number. Never lower a floor to turn a build green; the one
+exception is a PR that changes *what* is measured (an exclude removed), which
+resets the floor and says why.
+
+Measuring:
+
+```bash
+./gradlew :app:testDebugUnitTest :app:koverXmlReport   # totals: app/build/reports/kover/report.xml
+cd backend && pytest tests/ -q --cov=app               # TOTAL line
+NODE_V8_COVERAGE=/tmp/console-cov node --test "firebase-hosting/tests/*.test.mjs"
+node scripts/console_coverage.mjs /tmp/console-cov     # a row per file, then the total
+```
+
+The console figure comes from `scripts/console_coverage.mjs`, not Node's
+`--experimental-test-coverage`. The harness opens each page as `page.js?load=N`,
+and Node keeps every URL apart: a file's row showed one copy, and the total fell
+as tests opened pages more often (55 % for code that is 98 % covered). The script
+reads the raw V8 coverage, merges a file's copies, takes each line from the
+innermost range that holds it, and counts every `.js` under `public/` except
+`vendor/`, loaded or not. `console/chrome.js` shows 0 %: pages load it from its own
+`<script>` tag, and no test does.
+
+Kover leaves out only the generated bindings (`app/build.gradle.kts`
+`kover.reports.filters`). Activities, Adapters and Dialogs were excluded until
+2026-10-08; Robolectric runs most of them, so they now count. That reset the app
+floors from 73 / 58 to 72 / 54: on the old, narrower set the same suite measured
+76.84 / 60.80 %.
+
+Device tests wait on conditions, not on the clock: `awaitCondition(what) { done }`
+and `awaitDrawnFrame()` (before a screenshot) in `androidTest/.../fixtures/DeviceWaits.kt`.
+The only sleeps left are the touch pacing in `RoiEditorGestureTest`, where the
+gesture detectors read the event timing.
+
 ### Known coverage gaps
 
 Worth knowing before you assume something is protected:
@@ -349,8 +491,13 @@ Re-run them after a change to the solve, the strain window, `ElasticModulus` or
   submodule and runs in the engine repo's CI, not here
   ([docs/engine/TESTING.md](../engine/TESTING.md))
 - Backend API → backend pytest (`backend/tests/`)
-- Real Firebase Auth → `auth/FirebaseAuthIntegrationTest`. These self-skip
-  (JUnit `assumeTrue`) unless `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD`
-  are passed as instrumentation args. CI does not supply them, so they are
-  skipped there today — to run them, provide the args locally or wire the
-  secrets into the emulator job.
+- Real Firebase Auth → `auth/FirebaseAuthIntegrationTest`: email/password
+  sign-in, an ID token and its refresh against the app's Firebase project, then
+  sign-out. Tier 3 passes the CI test account from the repo secrets
+  `FIREBASE_TEST_EMAIL` / `FIREBASE_TEST_PASSWORD` (TD-200). Without them (a local
+  run, a fork's or Dependabot's PR) the cases skip (JUnit `assumeTrue`); locally,
+  pass both with `-Pandroid.testInstrumentationRunnerArguments.FIREBASE_TEST_EMAIL=…`.
+  The password must have no comma: Gradle cuts an argument there (TD-86).
+  The account and both secrets come from `scripts/create_ci_firebase_account.sh`
+  (gcloud as an owner of `indicvision-dic-app-auth`, gh as a repo admin); `--rotate`
+  gives the account a new password and updates the secret.

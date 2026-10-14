@@ -8,7 +8,7 @@
  * summary, where messages land); this module owns the rows, what each button
  * sends, and what a refusal says.
  */
-import { api, esc } from "./auth.js";
+import { api, esc, confirmInPage } from "./auth.js";
 import { explain } from "./messages.js";
 import { seatCells, inviteCells } from "./util.js";
 
@@ -80,18 +80,27 @@ const ACT_ERRORS = {
 /**
  * Wire a roster table. `base()` is the open licence's path, "" when none is;
  * `report(message, isError)` shows what happened; `reload()` reads the
- * licence again after a change (the page re-renders through `render`).
+ * licence again after a change (the page re-renders through `render`), and
+ * `retry()` (default `reload`) answers the Retry of a failed load.
  * Returns `render(seats, invites)`, which fills `rows`.
  */
-export function wireRoster({ rows, email, add, base, report, reload }) {
+export function wireRoster({ rows, email, add, base, report, reload, retry = reload }) {
+  // Each action takes the roster's path before it asks, so an answer given after
+  // another roster was opened (or this one closed) still goes to the one asked on.
   async function act(action, uid) {
     const spec = ACTIONS[action];
-    if (action === "remove" && !confirm("Remove this member? Their saved analyses stay untouched.")) {
+    const root = base();
+    if (!root) return;
+    if (action === "remove" && !(await confirmInPage({
+      title: "Remove member",
+      message: "Remove this member? Their saved analyses stay untouched.",
+      confirm: "Remove",
+    }))) {
       return;
     }
     report(`${spec.verb}…`);
     try {
-      await api(`${base()}/seats/${encodeURIComponent(uid)}`,
+      await api(`${root}/seats/${encodeURIComponent(uid)}`,
         { method: spec.method, ...(spec.body ? { body: JSON.stringify(spec.body) } : {}) });
       await reload();
     } catch (e) {
@@ -100,10 +109,16 @@ export function wireRoster({ rows, email, add, base, report, reload }) {
   }
 
   async function withdraw(inviteId) {
-    if (!confirm("Withdraw this invitation? Nobody has claimed it yet.")) return;
+    const root = base();
+    if (!root) return;
+    if (!(await confirmInPage({
+      title: "Withdraw invitation",
+      message: "Withdraw this invitation? Nobody has claimed it yet.",
+      confirm: "Withdraw",
+    }))) return;
     report("Withdrawing…");
     try {
-      await api(`${base()}/invites/${encodeURIComponent(inviteId)}`, { method: "DELETE" });
+      await api(`${root}/invites/${encodeURIComponent(inviteId)}`, { method: "DELETE" });
       await reload();
     } catch (e) {
       report(`Could not withdraw: ${e.message}`, true);
@@ -145,6 +160,7 @@ export function wireRoster({ rows, email, add, base, report, reload }) {
     if (!btn) return;
     if (btn.dataset.act) act(btn.dataset.act, btn.dataset.uid);
     else if (btn.dataset.invite) withdraw(btn.dataset.invite);
+    else if ("retry" in btn.dataset) retry();
   });
   add.addEventListener("click", addMember);
   email.addEventListener("keydown", (e) => { if (e.key === "Enter") addMember(); });

@@ -4,27 +4,32 @@ import android.content.Context
 import android.os.Trace
 import androidx.annotation.AnyThread
 import androidx.annotation.MainThread
+import androidx.annotation.WorkerThread
 import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.SemperNativeLib
-import com.sempermechanics.semper.data.net.AccountCache
+import com.sempermechanics.semper.data.session.SessionLayout
+import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.BatchRun
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
+import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.util.UUID
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -43,12 +48,12 @@ internal class RunChannels {
         extraBufferCapacity = PROGRESS_BUFFER,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val batchOutcome = MutableSharedFlow<Result<BatchAnalysisOutcome>>(extraBufferCapacity = 1)
+    val batchOutcome = PendingOutcome<Result<BatchAnalysisOutcome>>()
     val sweepProgress = MutableSharedFlow<SweepStudyRunner.Progress?>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val sweepOutcome = MutableSharedFlow<Result<BatchAnalysisOutcome>>(extraBufferCapacity = 1)
+    val sweepOutcome = PendingOutcome<Result<BatchAnalysisOutcome>>()
     var batchJob: Job? = null
     var sweepJob: Job? = null
 
@@ -58,11 +63,51 @@ internal class RunChannels {
 }
 
 /**
+ * A run's outcome, held until a started screen takes it, and taken once.
+ *
+ * The outcomes used to be a `MutableSharedFlow` with no replay, collected
+ * only while the wizard is started. An emission with no collector is
+ * dropped, so a run that ended while the wizard was in the background never
+ * tore its chrome down or opened its result. Held here instead, in
+ * the view model as ADR-016 asks: [post] keeps the outcome, and
+ * [consumeEach] hands it over when a collector starts and clears it in the
+ * same atomic step, so a later collector (the screen started again) does not
+ * handle it a second time.
+ */
+internal class PendingOutcome<T : Any> {
+    /** A box compared by identity, so taking one outcome never takes an equal one posted after it. */
+    private class Posted<T>(val value: T)
+
+    private val slot = MutableStateFlow<Posted<T>?>(null)
+
+    /** True while an outcome waits for a screen to take it. */
+    val isPending: Boolean get() = slot.value != null
+
+    /** Holds [value] until a screen takes it. Any thread. */
+    fun post(value: T) {
+        slot.value = Posted(value)
+    }
+
+    /**
+     * Hands each posted outcome to [handle] exactly once, the one held now
+     * included, and clears it. The compare-and-set is the claim: of two
+     * collectors that see the same outcome, only one handles it. Never
+     * returns; run it on a scope bound to the screen's lifecycle.
+     */
+    suspend fun consumeEach(handle: (T) -> Unit): Nothing = slot.collect { posted ->
+        if (posted != null && slot.compareAndSet(posted, null)) handle(posted.value)
+    }
+}
+
+/**
  * Runs the batch on [viewModelScope] so destroying the Activity mid-run does
  * not cancel a minutes-long native solve. Progress is published on
- * [AnalysisViewModel.progress]; completion (or failure) on
- * [AnalysisViewModel.batchOutcome].
+ * [AnalysisViewModel.progress]; completion (or failure) is held on
+ * [AnalysisViewModel.batchOutcome] until the screen takes it. The run's
+ * images are frozen here, on Main, before it leaves for the native thread
+ * ([snapshotRunInputs]).
  */
+@MainThread
 @Suppress("TooGenericExceptionCaught") // any failure is the run's outcome
 fun AnalysisViewModel.launchBatchAnalysis(
     appContext: Context,
@@ -71,6 +116,7 @@ fun AnalysisViewModel.launchBatchAnalysis(
     processingStartTime: Long,
 ) {
     if (runs.batchJob?.isActive == true) return
+    val inputs = snapshotRunInputs()
     runs.batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
         runs.progress.tryEmit(null)
         SemperAnalytics.event(
@@ -78,15 +124,16 @@ fun AnalysisViewModel.launchBatchAnalysis(
             SemperAnalytics.ANALYSIS_STARTED,
             mapOf(
                 "mode" to "batch",
-                "frames" to SemperAnalytics.frameCountBucket(defFilePaths.size),
+                "frames" to SemperAnalytics.frameCountBucket(inputs.frames.paths.size),
                 "testType" to testType.wireName,
             ),
         )
         try {
-            val outcome = runBatchAnalysis(appContext, spec, cacheDir, processingStartTime) { update ->
+            val newRun = { job: CoroutineContext -> BatchRun(spec, cacheDir, processingStartTime, job, inputs) }
+            val outcome = runBatchAnalysis(appContext, newRun) { update ->
                 if (isActive) runs.progress.tryEmit(update)
             }
-            runs.batchOutcome.emit(Result.success(outcome))
+            runs.batchOutcome.post(Result.success(outcome))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -96,7 +143,7 @@ fun AnalysisViewModel.launchBatchAnalysis(
                 SemperAnalytics.ANALYSIS_FAILED,
                 mapOf("mode" to "batch", "reason" to "exception"),
             )
-            runs.batchOutcome.emit(Result.failure(e))
+            runs.batchOutcome.post(Result.failure(e))
         } finally {
             runs.progress.tryEmit(null)
         }
@@ -104,16 +151,15 @@ fun AnalysisViewModel.launchBatchAnalysis(
 }
 
 /**
- * Full-field batch compute + offline upload queue. All JNI calls run on the native dispatcher.
+ * Full-field batch compute + offline upload queue, the run [newRun] makes of
+ * the job it runs as. All JNI calls run on the native dispatcher.
  */
 private suspend fun AnalysisViewModel.runBatchAnalysis(
     appContext: Context,
-    spec: RunSpec,
-    cacheDir: File,
-    startedAtMs: Long,
+    newRun: (job: CoroutineContext) -> BatchRun,
     onProgress: (BatchProgressUpdate) -> Unit,
 ): BatchAnalysisOutcome = withContext(SemperNativeLib.nativeDispatcher) {
-    val run = BatchRun(spec, cacheDir, startedAtMs, coroutineContext)
+    val run = newRun(coroutineContext)
     traceSection("Semper.analysis.batch") {
         runBatchAnalysisBody(appContext, run, onProgress)
     }
@@ -125,24 +171,27 @@ private suspend fun AnalysisViewModel.runBatchAnalysis(
  * and was equally worth not losing to a rotation. It ran on the Activity's
  * own scope until now, which cancelled it on destroy and left the partial
  * session behind. Progress arrives on [AnalysisViewModel.sweepProgress], the
- * result on [AnalysisViewModel.sweepOutcome].
+ * result is held on [AnalysisViewModel.sweepOutcome] until the screen takes it.
+ * Its images are frozen here, as a batch run's are.
  */
+@MainThread
 @Suppress("TooGenericExceptionCaught") // any failure is the sweep's outcome
 fun AnalysisViewModel.launchSweep(appContext: Context, spec: RunSpec) {
     require(spec.sweep != null) { "not a sweep" }
     if (runs.sweepJob?.isActive == true) return
+    val inputs = snapshotRunInputs()
     runs.sweepJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
         runs.sweepProgress.tryEmit(null)
         try {
-            val outcome = runSweep(appContext, spec) { update ->
+            val outcome = runSweep(appContext, spec, inputs) { update ->
                 if (isActive) runs.sweepProgress.tryEmit(update)
             }
-            runs.sweepOutcome.emit(Result.success(outcome))
+            runs.sweepOutcome.post(Result.success(outcome))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.e(e, "Parameter sweep failed")
-            runs.sweepOutcome.emit(Result.failure(e))
+            runs.sweepOutcome.post(Result.failure(e))
         } finally {
             runs.sweepProgress.tryEmit(null)
         }
@@ -150,42 +199,104 @@ fun AnalysisViewModel.launchSweep(appContext: Context, spec: RunSpec) {
 }
 
 /**
- * Hard stop before any native work: a new session cannot exceed the account
- * quota. Re-runs over an existing [AnalysisViewModel.workingLocalId] are still
- * allowed. Returns the outcome to abort with, or null when the run may proceed.
+ * What the session quota made of a run at its start ([admitRun]). Only
+ * starting is blocked: a run admitted here saves its session even if the cap
+ * fills while it runs ([admitted] is the save's `allowOverLimit`).
  */
-internal fun AnalysisViewModel.sessionLimitOutcome(appContext: Context, plannedFrames: Int): BatchAnalysisOutcome? {
-    if (!wouldCreateNewSession()) return null
-    AccountCache.refreshSessionLimit(appContext, SessionStore.list(appContext).size)
+internal sealed interface RunAdmission {
+    /** At the limit: the run ends with [outcome] before any native work. */
+    class Blocked(val outcome: BatchAnalysisOutcome) : RunAdmission
+
+    /** A new session [SessionQuota.blocked] let start. */
+    data object Admitted : RunAdmission
+
+    /**
+     * A re-run over the working session's row: nothing new to admit. Its save
+     * updates that row; one that finds the row gone is a new row, and the
+     * save applies the rule.
+     */
+    data object Rerun : RunAdmission
+
+    /** Whether the run's save may go past the cap. */
+    val admitted: Boolean get() = this == Admitted
+}
+
+/**
+ * Hard stop before any native work: a new session cannot start at the
+ * account's limit ([SessionQuota.blocked], with the index's live rows; this
+ * runs on the native thread). Re-runs of the same kind over an existing
+ * [AnalysisViewModel.workingLocalId] are not checked; a run of the other
+ * kind, a sweep when [sweep], is a new session ([resolveLocalSessionId]).
+ */
+@WorkerThread
+internal fun AnalysisViewModel.admitRun(
+    appContext: Context,
+    plannedFrames: Int,
+    sweep: Boolean,
+): RunAdmission = when {
+    !wouldCreateNewSession(sweep) -> RunAdmission.Rerun
     // Before the config is fetched a demo account is held to the demo cap
     // (LicenseEntitlements.analysisCap); a licensed one has no local cap.
     // The upload is gated separately in CloudSync until config is known.
-    return if (AccountCache.isSessionLimitReached(appContext)) {
+    !SessionQuota.blocked(appContext, SessionStore.list(appContext).size) -> RunAdmission.Admitted
+    else -> {
         Timber.w("Hard stop: analysis blocked at session limit")
-        BatchAnalysisOutcome(
-            engineErrorCode = RunStop.SessionLimit.wireCode,
-            firstFrameValidPoints = 0,
-            totalFrames = plannedFrames,
-            executionTimeMs = 0,
-            batchDirPath = "",
+        RunAdmission.Blocked(
+            BatchAnalysisOutcome(
+                engineErrorCode = RunStop.SessionLimit.wireCode,
+                firstFrameValidPoints = 0,
+                totalFrames = plannedFrames,
+                executionTimeMs = 0,
+                batchDirPath = "",
+            ),
         )
-    } else {
-        null
     }
 }
 
-/** The working session's id, taking a new one when there is none. */
-internal fun AnalysisViewModel.resolveLocalSessionId(): String =
-    workingLocalId ?: UUID.randomUUID().toString().take(SESSION_ID_LENGTH).also { workingLocalId = it }
+/**
+ * The working session's id for a run, a sweep when [sweep]: the one the last
+ * run saved under when it was of the same kind, otherwise a new one. A single
+ * run and a sweep never share a session: switching kinds is like new inputs,
+ * a new record, and the earlier one keeps its row, `.dat` files and images.
+ */
+internal fun AnalysisViewModel.resolveLocalSessionId(sweep: Boolean): String {
+    workingLocalId?.takeIf { workingIsSweep == sweep }?.let { return it }
+    return UUID.randomUUID().toString().take(SESSION_ID_LENGTH).also {
+        workingLocalId = it
+        workingIsSweep = sweep
+    }
+}
+
+/**
+ * The session a run, a sweep when [sweep], writes ([resolveLocalSessionId]),
+ * its directory cleared of the results a previous run of the same kind left
+ * there: the `.dat` files and the summary's field-range sidecar, which
+ * `SummaryAnimation.globalRanges` would otherwise take for a new run with as
+ * many frames. The deformed images stay; they may be this run's own inputs,
+ * and each run prunes them once it is done with them.
+ */
+@WorkerThread
+internal fun AnalysisViewModel.openRunSession(appContext: Context, sweep: Boolean): RunSession {
+    val id = resolveLocalSessionId(sweep)
+    val dir = SessionStore.dirFor(appContext, id)
+    dir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
+    SessionLayout(dir).fieldRanges.delete()
+    return RunSession(id, dir)
+}
+
+/** A run's session: its Home-list id and its directory. */
+internal class RunSession(val id: String, val dir: File)
 
 /** Characters of a random UUID a new working session's id keeps. */
 private const val SESSION_ID_LENGTH = 12
 
 /**
  * Follows the deformed images to wherever a run left them. They are moved
- * into the session directory rather than copied, so the staged cache paths
- * this view model was handed at import time go stale the moment a run
- * finishes; a re-run reading them would find nothing.
+ * from the import cache into the session directory rather than copied, so the
+ * staged cache paths this view model was handed at import time go stale the
+ * moment a run finishes; a re-run reading them would find nothing. An image
+ * in another session's directory is copied, never moved: it is that
+ * session's own input.
  * [AnalysisViewModel.defFrameSizes] is keyed by path, so it is re-keyed alongside.
  *
  * Main thread only, like every wizard input field; a run on the native

@@ -8,7 +8,6 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.workDataOf
 import com.sempermechanics.semper.data.DicUploadWorker
-import com.sempermechanics.semper.data.account.AuthRepository
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudErase.accountGone
 import com.sempermechanics.semper.data.cloud.CloudErase.toEraseResult
@@ -41,7 +40,8 @@ import timber.log.Timber
  * If the cloud copy is later deleted (or never finished), the app would keep
  * claiming "Synced" forever — local state silently drifting from server truth.
  * [reconcile] asks the backend what actually exists and repairs the difference,
- * re-queueing uploads for anything that went missing.
+ * re-queueing uploads for anything that went missing; a row restored from the
+ * other app's backup is not missing ([CloudReconcile.list]).
  */
 object CloudSync {
 
@@ -121,9 +121,9 @@ object CloudSync {
                     CloudReconcile.refreshRemoteConfig(appContext, this, token, throttled)
                     // The expensive per-session reconcile below is throttled; the cheap
                     // config fetch above is not, so quota still recovers between reconciles.
-                    if (throttled) null else this.listSessions(token, verify = deep)
+                    if (throttled) null else CloudReconcile.list(appContext, this, token, verify = deep)
                 }
-                val cloud = when (listed) {
+                val listing = when (listed) {
                     is Authed.Ok -> listed.value ?: run {
                         Timber.d("Reconcile skipped — last successful check %d s ago", sinceLast / MS_PER_SECOND)
                         return@withContext Outcome.Skipped
@@ -134,20 +134,16 @@ object CloudSync {
                     is Authed.Failed -> return@withContext CloudReconcile.reconcileFailure(listed.failure)
                 }
 
+                val cloud = listing.cloud
                 // Home offers the backups this phone has no row for from this.
                 CloudBackupListing.record(appContext, cloud.sessions)
-
-                // Only COMPLETED cloud sessions count as a real backup.
-                val backedUp = cloud.sessions
-                    .filter { it.status == UploadWorkOutcomes.STATUS_COMPLETED && it.localSessionId.isNotBlank() }
-                    .map { it.localSessionId }
-                    .toSet()
 
                 // Waiting rows respect the save-to-cloud toggle; a repair does not,
                 // because it restores a backup the user already had.
                 val repaired = CloudReconcile.repairRows(
                     appContext,
-                    backedUp,
+                    listing.backedUp,
+                    listing.keep,
                     reupload,
                     requeue = reupload && uploadsEnabled(appContext, api),
                 )
@@ -246,16 +242,32 @@ object CloudSync {
         context: Context,
         api: CloudApi = SemperApi.get(context),
         tokens: TokenSource = TokenProvider,
-    ): AccountDeletion = withContext(Dispatchers.IO) {
-        val appContext = context.applicationContext
-        val auth = AuthRepository(appContext, api, tokens)
-        CloudErase.deleteAccount(
-            eraseCloud = { CloudErase.eraseAccountInCloud(api, tokens).accountGone },
-            deleteIdentity = { auth.deleteIdentity().isSuccess },
-            wipeLocal = { SessionStore.deleteAll(appContext) },
-            signOut = { auth.signOut() },
-        )
+    ): AccountDeletion = CloudErase.deleteAccount(context, api, tokens) {
+        CloudErase.eraseAccountInCloud(api, tokens).accountGone
     }
+
+    /** Whether an account whose erase went unanswered is gone ([CloudErase.probeErasedAccount]). */
+    enum class AccountProbe {
+        /** Erased: the phone's half of the deletion is owed. */
+        GONE,
+
+        /** The erase never landed: nothing is owed. */
+        STILL_THERE,
+
+        /** No answer (offline, a 5xx, no token): ask again later. */
+        UNKNOWN,
+    }
+
+    /**
+     * The phone's half of a deletion whose cloud erase already landed, for a
+     * process that died before finishing it: the same identity delete, wipe
+     * and sign-out as [deleteAccount], without sending the erase again.
+     */
+    suspend fun finishAccountDeletion(
+        context: Context,
+        api: CloudApi = SemperApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ): AccountDeletion = CloudErase.deleteAccount(context, api, tokens) { true }
 
     /** Delete only this device's heavy artifacts; the cloud backup and index row stay. */
     suspend fun eraseLocalOnly(context: Context, localSessionId: String) = withContext(Dispatchers.IO) {

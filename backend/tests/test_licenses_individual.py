@@ -273,7 +273,7 @@ def _contended_binds(monkeypatch, starved, rival=None):
             if calls["n"] <= starved:
                 if rival is not None:
                     ref, device = rival
-                    ref.update({"deviceIdLock": device})
+                    repo._update_doc(ref, {"deviceIdLock": device})
                 raise ValueError("Failed to commit transaction") from Aborted("contention")
             return body(tx, *a, **k)
         return _run

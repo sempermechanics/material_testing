@@ -91,15 +91,39 @@ object AnalysisCsvWriter {
         "Exy" to DicResult.IDX_EXY,
     )
 
-    fun write(out: File, sweep: Boolean, frames: List<Frame>, metadata: Metadata) {
+    /**
+     * Writes [frames] in two passes: every frame's field statistics, then every
+     * frame's point rows. [onFrame] hears (point rows?, frames done) before each
+     * frame of each pass and once at the end of each. A frame's point rows can
+     * take seconds, so [onRows] also hears (frames done, fraction of the frame in
+     * progress) every [ROWS_PER_REPORT] rows of it, the fraction in [0, 1).
+     * Both only watch, so the bytes are the same with or without them.
+     */
+    fun write(
+        out: File,
+        sweep: Boolean,
+        frames: List<Frame>,
+        metadata: Metadata,
+        onFrame: (pointRows: Boolean, done: Int) -> Unit = { _, _ -> },
+        onRows: (done: Int, fraction: Double) -> Unit = { _, _ -> },
+    ) {
         open(out, sweep, metadata).use { appender ->
-            frames.forEach { frame ->
+            frames.forEachIndexed { done, frame ->
+                onFrame(false, done)
                 frame.data()?.let { data -> appender.appendFieldStats(frame, data) }
             }
+            onFrame(false, frames.size)
             appender.startPointSection()
-            frames.forEach { appender.append(it) }
+            frames.forEachIndexed { done, frame ->
+                onFrame(true, done)
+                appender.append(frame) { fraction -> onRows(done, fraction) }
+            }
+            onFrame(true, frames.size)
         }
     }
+
+    /** Point rows a frame writes between two `onRows` reports of [write] / [Appender.append]. */
+    const val ROWS_PER_REPORT = 4096
 
     /**
      * Streaming writer. Two ways to drive it, both giving [write]'s layout:
@@ -260,7 +284,11 @@ object AnalysisCsvWriter {
             }
         }
 
-        fun append(frame: Frame) {
+        /**
+         * [frame]'s point rows. [onRows] hears the fraction of the frame written
+         * every [ROWS_PER_REPORT] rows; it only watches.
+         */
+        fun append(frame: Frame, onRows: (fraction: Double) -> Unit = {}) {
             val index = frameIndex++
             val data = frame.data() ?: return
             writeFrame(
@@ -270,6 +298,7 @@ object AnalysisCsvWriter {
                 row,
                 formatter,
                 mechanicalSuffixColumns(frame.loadN, metadata.stressModel),
+                onRows,
             )
             collect(index, frame.loadN, data)
         }
@@ -294,7 +323,11 @@ object AnalysisCsvWriter {
         }
     }
 
-    /** Appends one frame's solved points, each row led by [prefix]. */
+    /**
+     * Appends one frame's solved points, each row led by [prefix]. After every
+     * [ROWS_PER_REPORT]th row, [onRows] hears the share of the frame's points
+     * before that row's point: rising, and below 1 since that point is not in it.
+     */
     private fun writeFrame(
         w: Writer,
         data: FloatArray,
@@ -302,8 +335,10 @@ object AnalysisCsvWriter {
         row: StringBuffer,
         formatter: DicResult.CsvPointFormatter,
         mechanical: String,
+        onRows: (fraction: Double) -> Unit,
     ) {
         val suffix = motionSuffixColumns(RigidBodyFit.fit(data)) + "," + mechanical
+        var rows = 0
         var i = 0
         while (i < data.size) {
             if (DicResult.isSolvedPoint(data[i + DicResult.IDX_ZNSSD])) {
@@ -314,6 +349,7 @@ object AnalysisCsvWriter {
                 row.append(suffix)
                 row.append('\n')
                 w.append(row)
+                if (++rows % ROWS_PER_REPORT == 0) onRows(i.toDouble() / data.size)
             }
             i += DicResult.STRIDE
         }

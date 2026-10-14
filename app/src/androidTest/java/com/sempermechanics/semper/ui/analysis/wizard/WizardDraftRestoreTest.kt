@@ -12,6 +12,7 @@ import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.fixtures.awaitCondition
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -61,11 +62,7 @@ class WizardDraftRestoreTest {
     }
 
     private fun awaitDraft(what: String, done: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + TIMEOUT_MS
-        while (!done()) {
-            check(System.currentTimeMillis() < deadline) { "the view model never mirrored its $what" }
-            Thread.sleep(POLL_MS)
-        }
+        awaitCondition("the view model to mirror its $what", TIMEOUT_MS, done)
     }
 
     @Test
@@ -123,7 +120,7 @@ class WizardDraftRestoreTest {
             realRefWidth = 640
             realRefHeight = 480
             deformedFrames = paths.map { DeformedFrame(it, File(it).name, size = ImageSize(640, 480)) }
-            defFrameTimesMs = listOf(500L, 1_000L, 1_500L)
+            defTimesAfterRefMs = listOf(500L, 1_000L, 1_500L)
             testType = TestType.BENDING
             this.geometry = geometry
             setLoadLog(parsed, "run1.csv", LOAD_LOG)
@@ -140,7 +137,7 @@ class WizardDraftRestoreTest {
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
         assertEquals(TestType.BENDING, after.testType)
         assertEquals(geometry, after.geometry)
-        assertEquals(listOf(500L, 1_000L, 1_500L), after.defFrameTimesMs)
+        assertEquals(listOf(500L, 1_000L, 1_500L), after.defTimesAfterRefMs)
         assertEquals("run1.csv", after.loadCsvName)
         assertEquals(before.parsedLoadCsv, after.parsedLoadCsv)
         assertEquals(before.machineLoads?.loadsN, after.machineLoads?.loadsN)
@@ -172,6 +169,5 @@ class WizardDraftRestoreTest {
             1.5,300.0
         """.trimIndent()
         const val TIMEOUT_MS = 5_000L
-        const val POLL_MS = 20L
     }
 }

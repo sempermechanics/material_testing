@@ -2,7 +2,7 @@ package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.app.Activity
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.net.AccountCache
+import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.navigation.AppIntents
@@ -32,18 +32,21 @@ object AnalysisNavHelper {
      * Returns false having already navigated to whichever gate applies. Both
      * checks are guarded by [AnalysisViewModel.wouldCreateNewSession], so a
      * **run already in flight, or a re-run of an existing session, always
-     * passes** — losing a seat mid-analysis must never abort work.
+     * passes** — losing a seat mid-analysis must never abort work. A run of
+     * the other kind than the working session's ([sweep] says which this is)
+     * is a new session, and is checked like one.
      */
     suspend fun ensureCanStart(
         host: Activity,
         viewModel: AnalysisViewModel,
-    ): Boolean = ensureSeat(host, viewModel) && ensureSessionQuota(host, viewModel)
+        sweep: Boolean,
+    ): Boolean = ensureSeat(host, viewModel, sweep) && ensureSessionQuota(host, viewModel, sweep)
 
     /**
      * Hard stop when this account holds no floating seat.
      *
      * A **separate** gate from the quota one rather than a widening of it: an
-     * institution member is licensed, so [AccountCache.isSessionLimitReached] is
+     * institution member is licensed, so [SessionQuota.blocked] is
      * false for them by definition and they would otherwise pass every
      * existing check.
      *
@@ -55,31 +58,33 @@ object AnalysisNavHelper {
     suspend fun ensureSeat(
         host: Activity,
         viewModel: AnalysisViewModel,
+        sweep: Boolean,
     ): Boolean {
-        if (!viewModel.wouldCreateNewSession()) return true
+        if (!viewModel.wouldCreateNewSession(sweep)) return true
         if (!LicenseEntitlements.isSeatRequiredToStart(host)) return true
         openSeatRequired(host)
         return false
     }
 
     /**
-     * Hard stop for a new session when the quota is **known and full**. Returns
-     * false after navigating to the limit screen; re-runs of an existing session
-     * still pass, and an unknown quota does not block — analysis is on-device and
-     * only its upload is gated (see [com.sempermechanics.semper.data.cloud.CloudSync]).
-     * Reads the local session index off the main thread.
+     * Hard stop for a new session at the account's limit ([SessionQuota.blocked]).
+     * Returns false after navigating to the limit screen; re-runs of an existing
+     * session still pass, and a licensed account with no config yet does not
+     * block — analysis is on-device and only its upload is gated (see
+     * [com.sempermechanics.semper.data.cloud.CloudSync]). Counts the local
+     * session index's rows off the main thread.
      */
     @Suppress("ReturnCount") // early-outs for re-run / under-quota / blocked
     suspend fun ensureSessionQuota(
         host: Activity,
         viewModel: AnalysisViewModel,
+        sweep: Boolean,
     ): Boolean {
-        if (!viewModel.wouldCreateNewSession()) return true
+        if (!viewModel.wouldCreateNewSession(sweep)) return true
         val localCount = withContext(Dispatchers.IO) {
             SessionStore.list(host).size
         }
-        AccountCache.refreshSessionLimit(host, localCount)
-        if (!AccountCache.isSessionLimitReached(host)) return true
+        if (!SessionQuota.blocked(host, localCount)) return true
         openSessionLimit(host)
         return false
     }
@@ -141,6 +146,7 @@ object AnalysisNavHelper {
             loadAxisX = mechanical.loadAxisX,
             loadsN = mechanical.loadsN.take(frameNames.size),
             geometry = mechanical.geometry,
+            frameTimesMs = viewModel.defFrameTimesMs.takeUnless { sweep },
         )
     }
 }

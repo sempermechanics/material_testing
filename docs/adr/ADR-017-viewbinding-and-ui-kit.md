@@ -54,6 +54,7 @@ Conventions:
 | A wizard warning row | `WarnChip` (`ui/common/dialog/WarnChip.kt:19`) | Show/hide by hand |
 | A bottom sheet of rows | `inflateSheet` + `Sheet.row` (`ui/common/dialog/Sheet.kt:48`, `:26`) | A `BottomSheetDialog` per screen |
 | A busy spinner over controls | `View.setBusy` (`ui/common/Busy.kt:15`) | |
+| A wait shown in one view slot, only past 300 ms, still with animations off | `InlineBusy` (`ui/common/InlineBusy.kt:32`), latest wins through `SerialJob` | A spinner shown at once, or nothing |
 | One refresh at a time, a burst folded into one more | `ConflatedRefresh` (`ui/common/ConflatedRefresh.kt:22`) | |
 
 **Still hand-built, and why.**
@@ -69,12 +70,13 @@ Conventions:
   the non-cancellable beta notice and deletion progress
   (`ui/home/FirstRunPrompts.kt:48`, `ui/settings/SettingsYourDataSection.kt:251`).
 - **The wizard's batch and sweep jobs** keep their own `Job` fields
-  (`ui/analysis/wizard/RunChannels.kt:52-53`): they run on the native
+  (`ui/analysis/wizard/RunChannels.kt:53-54`): they run on the native
   dispatcher, and `SerialJob` is main-thread only.
-- **46 `findViewById` calls remain.** 23 are the sweep page
+- **39 `findViewById` calls remain.** 23 are the sweep page
   (`SweepSetupController`, `SweepRangeFields`), which still finds its views on the
-  page instead of taking its binding. 7 are `TransferBannerController`, which
-  wraps a strip included in two hosts. Most of the rest are kit pieces that
+  page instead of taking its binding. (`TransferBannerController`'s 7 went with the
+  export-progress change, 2026-10-08: it binds the strip it wraps with
+  `ViewTransferBannerBinding.bind`.) Most of the rest are kit pieces that
   work on any host's view (a row by id, `android.R.id.content`, Material's
   bottom-sheet container).
 
@@ -108,7 +110,7 @@ Free today, and every new screen adds lookups that fail only at run time.
 ## Trade-off analysis
 
 ViewBinding generates a class per layout, a little build time and APK size
-(the generated classes are excluded from Kover, `app/build.gradle.kts:383-384`).
+(the generated classes are excluded from Kover, `app/build.gradle.kts:408-409`).
 The kit is one more place to look, but each helper replaced between 3 and
 about 65 copies, and some copies had drifted (sign-out confirm wording,
 spinner visibility, the thumbnail tag bug).

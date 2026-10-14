@@ -22,6 +22,9 @@ object PrefFiles {
         val DIAGNOSTICS_ENABLED = PrefKey.boolean("diagnostics_enabled")
         val DIAGNOSTICS_ASKED = PrefKey.boolean("diagnostics_asked")
 
+        /** Running mean of grid points solved per second on this phone; 0 before the first run. */
+        val RUN_POINTS_PER_SECOND = PrefKey.int("run_points_per_second")
+
         /** Retired; [AppSettings.migrate] removes it. */
         val KEEP_EVERY_RERUN = PrefKey.boolean("keep_every_rerun")
     }
@@ -150,6 +153,14 @@ object PrefFiles {
         val ANNOUNCED = PrefKey.string("announced", "")
     }
 
+    /** `BackupFailureLedger`. */
+    object BackupOutcomes {
+        const val NAME = "semper_backup_outcomes"
+
+        /** Comma-separated work ids whose failure was already announced. */
+        val ANNOUNCED = PrefKey.string("announced", "")
+    }
+
     /** `AuthRepository`'s email-link sign-in. */
     object EmailLink {
         const val NAME = "semper_emaillink"
@@ -160,6 +171,21 @@ object PrefFiles {
     object SessionDeletesPrefs {
         const val NAME = "session_deletes"
         val SHOWN_OUTCOMES = PrefKey.stringSet("shown_outcomes")
+    }
+
+    /**
+     * [AccountDeletionMarker]: an account erase that was sent, and how far it
+     * got, so a deletion the process did not live to finish ends at the next start.
+     * Outlives sign-out and the local wipe on purpose.
+     */
+    object AccountDeletion {
+        const val NAME = "semper_account_deletion"
+
+        /** An [AccountDeletionMarker.Stage] name, or absent when nothing is owed. */
+        val STAGE = PrefKey.string("stage")
+
+        /** The account the erase was sent for (`AccountCache.cachedUid`), "" when unknown. */
+        val UID = PrefKey.string("uid", "")
     }
 
     /** Every file name above, for a test or a wipe that must not miss one. */
@@ -174,7 +200,9 @@ object PrefFiles {
         CloudListing.NAME,
         CloudSyncPrefs.NAME,
         RestoreOutcomes.NAME,
+        BackupOutcomes.NAME,
         EmailLink.NAME,
         SessionDeletesPrefs.NAME,
+        AccountDeletion.NAME,
     )
 }

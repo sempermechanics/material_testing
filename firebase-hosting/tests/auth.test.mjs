@@ -2,11 +2,11 @@
 // Behaviour of console/auth.js — API calls, step-up, second factor, enrolment
 // and the revoke gate — against the fake Firebase SDK in fakes/ (see
 // harness.mjs for how the gstatic imports are redirected).
-import { beforeEach, afterEach } from "node:test";
+import { beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
   test, fake, FakeUser, readyUser, reset, settle, stillPending, rejection,
-  net, json, storage, prompts, codes, page, $, loadAuth,
+  net, json, storage, prompts, codes, confirms, alerts, page, $, loadAuth, until,
 } from "./harness.mjs";
 
 // Dynamic, so that these load after harness.mjs registered its hooks.
@@ -399,11 +399,11 @@ test("ensureDashboardMfa sends an enrolled session without the factor back to Go
   assert.equal($("status").textContent, "Confirming your second factor with Google…");
 });
 
-/** The enrolment card auth.js put on the page. */
-function enrolCard() {
-  const card = page.inserted.find((e) => e.className === "card enrol");
-  assert.ok(card, "enrolment card shown");
-  return card;
+/** The enrolment card auth.js put on the page, once qr.js (imported on demand) has loaded. */
+async function enrolCard() {
+  const find = () => page.inserted.find((e) => e.className === "card enrol");
+  await until(find, "the enrolment card");
+  return find();
 }
 
 test("an account with no factor must enrol TOTP in the page before anything else", async () => {
@@ -413,7 +413,7 @@ test("an account with no factor must enrol TOTP in the page before anything else
   assert.equal($("status").textContent, "Enrol an authenticator app to open any Semper dashboard.");
   assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0, "a fresh sign-in enrols without a step-up");
 
-  const card = enrolCard();
+  const card = await enrolCard();
   assert.equal(card.anchor, $("status"));
   assert.equal(card.position, "afterend");
   assert.match(card.querySelector(".qr").innerHTML, /^<svg/);
@@ -451,7 +451,7 @@ test("cancelling enrolment rejects ERR_CANCELLED and enrols nothing", async () =
   signIn(new FakeUser());
   const done = auth.ensureDashboardMfa();
   await settle();
-  const card = enrolCard();
+  const card = await enrolCard();
   card.querySelector(".cancel").click();
   assert.equal((await rejection(done)).message, auth.ERR_CANCELLED);
   assert.ok(card.removed);
@@ -550,6 +550,40 @@ test("the ask card sits under the status line, its text never markup, and goes o
   assert.equal(card.removed, true);
 });
 
+/* ------------------------------------------- confirmInPage, tellInPage */
+
+test("a confirm card answers yes or no, its text never markup, and goes once answered", async () => {
+  confirms.answer(true, false);
+  assert.equal(await auth.confirmInPage({ title: "Revoke <b>X</b>", message: "Sure?\n\nReally?" }), true);
+  assert.equal(await auth.confirmInPage({ title: "Revoke X", message: "Again?", confirm: "Revoke" }), false);
+  assert.deepEqual(confirms.asked, ["Sure?\n\nReally?", "Again?"]);
+  const [first, second] = confirms.cards;
+  assert.equal(first.anchor, $("status"));
+  assert.equal(first.querySelector("h2").textContent, "Revoke <b>X</b>", "the title went in as text");
+  assert.equal(first.querySelector("h2").querySelectorAll("b").length, 0);
+  assert.equal(first.querySelector("input"), null, "a yes / no card has no box");
+  assert.equal(first.querySelector(".confirm").textContent, "Continue");
+  assert.equal(first.querySelector(".confirm").focused, true);
+  assert.equal(second.querySelector(".confirm").textContent, "Revoke");
+  assert.equal(second.querySelector(".cancel").textContent, "Cancel");
+  assert.equal(first.removed && second.removed, true);
+});
+
+test("a tell card shows its message with one Close button and goes once closed", async () => {
+  await auth.tellInPage({ title: "Device history", message: "Device history for X\n\na\nb" });
+  assert.deepEqual(alerts, ["Device history for X\n\na\nb"]);
+  const [card] = confirms.cards;
+  assert.equal(card.querySelector(".cancel"), null);
+  assert.equal(card.querySelector(".confirm").textContent, "Close");
+  assert.equal(card.removed, true);
+});
+
+test("the browser's own dialogs are refused: some browsers show none", () => {
+  assert.throws(() => window.confirm("x"), /window.confirm is not used/);
+  assert.throws(() => window.alert("x"), /window.alert is not used/);
+  assert.throws(() => window.prompt("x"), /window.prompt is not used/);
+});
+
 test("the revoke password is asked for in a password box", async () => {
   signIn(new FakeUser({ providers: ["password"], password: "pw", factors: [{}], authAgeSeconds: 600 }));
   prompts.answer(null);
@@ -558,3 +592,46 @@ test("the revoke password is asked for in a password box", async () => {
   assert.equal(card.querySelector("h2").textContent, "Re-enter your password");
   assert.equal(card.querySelector("input").type, "password");
 });
+
+/* ------------------------------------------------------------- waiting */
+
+test("a wait says what it is waiting for, and after 4 s why it is long", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    let answer;
+    const call = auth.whileWaiting(new Promise((r) => { answer = r; }), "Loading licences…");
+    assert.equal($("status").textContent, "Loading licences…");
+    mock.timers.tick(3999);
+    assert.equal($("status").textContent, "Loading licences…");
+    mock.timers.tick(1);
+    assert.equal($("status").textContent,
+      "Loading licences… Still working — the server can take a few seconds to start.");
+    answer("rows");
+    assert.equal(await call, "rows");
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("a quick answer never shows the slow note, and a newer message is not overwritten", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    assert.equal(await auth.whileWaiting(Promise.resolve(1), "Loading…"), 1);
+    mock.timers.tick(5000);
+    assert.equal($("status").textContent, "Loading…");
+
+    const slow = auth.whileWaiting(new Promise(() => {}), "Checking your access…");
+    slow.catch(() => {});
+    auth.setStatus("Something else happened.");
+    mock.timers.tick(5000);
+    assert.equal($("status").textContent, "Something else happened.");
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("a failed wait rejects as the call did", async () => {
+  const e = await rejection(auth.whileWaiting(Promise.reject(new Error("boom")), "Loading…"));
+  assert.equal(e.message, "boom");
+});
+

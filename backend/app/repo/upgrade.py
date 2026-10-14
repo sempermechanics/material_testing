@@ -25,6 +25,8 @@ from ._base import (
     get_license,
     _license_mode,
     _load_user,
+    _update_doc,
+    _delete_doc,
 )
 from .claims import (
     claim_seat,
@@ -106,7 +108,7 @@ def convert_to_institution(
                          carried_locks={a: lic.get(apps.field("deviceIdLock", a)) or ""
                                         for a in apps.ALL})
         if err:
-            new_ref.delete()
+            _delete_doc(new_ref)
             raise Refusal(_public_claim_error(err))
         claimed = holder_uid
     elif address:
@@ -119,7 +121,7 @@ def convert_to_institution(
     # The holder's account points at the new licence now, so the revoke's
     # demotion (guarded on `licenseId`) passes them by.
     revoke_license(license_id, admin_uid)
-    db().collection("licenses").document(license_id).update({
+    _update_doc(db().collection("licenses").document(license_id), {
         "supersededBy": new_id,
         "supersededAt": _base.firestore.SERVER_TIMESTAMP,
     })

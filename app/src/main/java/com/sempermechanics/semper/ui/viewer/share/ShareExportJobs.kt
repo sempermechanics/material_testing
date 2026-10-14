@@ -5,6 +5,7 @@ import android.net.Uri
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -53,7 +54,7 @@ internal class ShareExportJobs(
     data class Running(
         val id: String,
         val title: String,
-        val percent: Int = 0,
+        val percent: Double = 0.0,
         val status: String? = null,
         /** Sent to the banner (Back, or a tap outside the dialog) rather than watched in the dialog. */
         val background: Boolean = false,
@@ -103,10 +104,13 @@ internal class ShareExportJobs(
         title: String,
         destUri: Uri?,
         direct: Boolean,
-        produce: suspend (report: (Int, String) -> Unit) -> Pair<File, String>,
+        produce: suspend (report: ExportReport) -> Pair<File, String>,
     ) {
         _running.update { it + (id to Running(id, title)) }
-        val job = scope.launch {
+        // Undispatched, so the body is already inside the try below when start
+        // returns: a job cancelled before its first dispatch would otherwise never
+        // run at all, and its Cancelled outcome would never be sent.
+        val job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             val outcome = try {
                 val (file, mime) = withContext(Dispatchers.Default) {
                     produce { percent, status -> progress(id, percent, status) }
@@ -146,7 +150,7 @@ internal class ShareExportJobs(
         _running.update { all -> all[id]?.let { all + (id to it.copy(background = true)) } ?: all }
     }
 
-    private fun progress(id: String, percent: Int, status: String) {
+    private fun progress(id: String, percent: Double, status: String) {
         _running.update { all -> all[id]?.let { all + (id to it.copy(percent = percent, status = status)) } ?: all }
     }
 

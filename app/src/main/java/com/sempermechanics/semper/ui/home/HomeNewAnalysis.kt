@@ -15,7 +15,7 @@ import com.sempermechanics.semper.ui.settings.SettingsActivity
 /** The + button, the gear, and the empty state's button (which is the + button). */
 internal fun HomeActivity.wireButtons() {
     val fab = binding.fabNewAnalysis
-    HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab)
+    HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab, binding.sessionList)
     fab.setOnClickListener {
         // Two independent reasons new work cannot start. The seat check is
         // first because an institution member is licensed, so the quota

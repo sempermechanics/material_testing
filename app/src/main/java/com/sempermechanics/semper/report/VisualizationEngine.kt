@@ -1,7 +1,8 @@
 // The public face of the heatmap renders: each entry point takes the field,
 // the grid and its optional bounds and cap, and there is one per render the
-// viewer, the report, the GIF and the tests call.
-@file:Suppress("LongParameterList")
+// viewer, the report, the GIF and the tests call (plus generateFrameHeatmap,
+// the one choice between the two frame renders), hence TooManyFunctions too.
+@file:Suppress("LongParameterList", "TooManyFunctions")
 
 package com.sempermechanics.semper.report
 
@@ -141,8 +142,8 @@ object VisualizationEngine {
      * way [generateHeatmap] lies on the reference. The colour range is taken
      * over the same accepted values, so both renders share one scale.
      *
-     * The viewer's frames only. The summary GIF and the report keep the
-     * reference render, whose bytes are pinned.
+     * Reached through [generateFrameHeatmap] by the viewer and by every export
+     * of a frame (ADR-011, TD-139).
      */
     fun generateDeformedHeatmap(
         data: FloatArray,
@@ -156,6 +157,29 @@ object VisualizationEngine {
     ): BakedHeatmap {
         val plane = generateDeformedHeatmapIndices(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
         return BakedHeatmap(HeatmapRenderer.toBitmap(plane), plane.min, plane.max)
+    }
+
+    /**
+     * One frame's map as the viewer draws it: [generateDeformedHeatmap] when the
+     * frame is shown on its own photo ([displaced]), else [generateHeatmap] for
+     * the reference. The viewer, the PNG export and the report's field images
+     * all call this with the same choice, so what is exported is what was on
+     * screen (ADR-011, TD-139).
+     */
+    fun generateFrameHeatmap(
+        displaced: Boolean,
+        data: FloatArray,
+        imgW: Int,
+        imgH: Int,
+        valIndex: Int,
+        step: Int,
+        customMin: Float? = null,
+        customMax: Float? = null,
+        maxLongEdge: Int? = null,
+    ): BakedHeatmap = if (displaced) {
+        generateDeformedHeatmap(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
+    } else {
+        generateHeatmap(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
     }
 
     /** The index plane behind [generateDeformedHeatmap]. See [DeformedHeatmap.generateDeformedHeatmapIndices]. */

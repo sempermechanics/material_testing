@@ -12,6 +12,256 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-10 — The first Firestore restore drill passed; backend redeploy from `bd1246c3`
+
+**Restore drill (TD-156, #404, #411, #422).** No export had ever been restored.
+- The operator ran `scripts/setup-restore-drill.sh` on 2026-10-09. It created the
+  drill project `indicvision-dic-restore-drill`, its asia-south1 database, the
+  `restore-drill@` identity (Firestore owner on the drill project only, reached
+  through the `github` WIF pool) and the five `restore-drill` variables.
+- Two first runs failed:
+  - The new identity's WIF binding had not propagated: `getAccessToken` answered 403.
+  - The import checks `storage.buckets.get` on the backup bucket, which
+    `objectViewer` does not grant. The operator added `legacyBucketReader` for the
+    drill identity and the drill's Firestore agent, and the script now grants it and
+    retries the steps a new project makes slow (#411).
+- Run 38023354431 passed: export `20261009T090852Z` imported in **111 s (the RTO)**.
+  Every collection count and a 25-session relationship sample matched the export's
+  manifest, and the drill database was purged. Recorded in
+  [PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md); the drill runs monthly.
+
+**Backend redeploy**, runs 38023338217 (staging) and 38023582092 (production) from
+`bd1246c3`, started by the operator. No backend file changed since `029a12c4` (entry
+below): both smokes passed, new revisions took 100 %, and each gateway job found that
+the live config already served the spec (`v202610091239-93` staging,
+`v202610091241-94` production).
+
+## 2026-10-09 — Backend and gateway deploy: the app id in the access log, JSON log lines, one status per refusal (#409)
+
+Staging run 37931002871 and production run 37931251516 from `029a12c4`, started by the
+operator, `gateway_mode: apply`. Both smokes passed (`/readyz`, `firestore: ok`);
+`semper-api-37931251516-1` took 100 %. The gateways switched to `v202610091239-93`
+(staging) and `v202610091241-94` (production).
+
+What changed for callers (#409):
+- **Access log:** every line names the app id the call sent (`appId`: a listed id,
+  `none` or `unknown`; TD-176 step 1).
+- **Log lines:** on Cloud Run each is one JSON object with a `severity`, so Cloud
+  Logging stores `jsonPayload` and the documented `jsonPayload.*` filters and alerts
+  can match. Lines from before this deploy stay `textPayload`.
+- **`/v1/config`:** sends `licensePrefix` only while the licence is the effective mode
+  (TD-145). `/v1/me` is unchanged.
+- **Gateway:** `page_size` and `page_token` are declared on `/uploads` and `/files`
+  (TD-159).
+- **Refusals:** `license_revoked` is 403 and `license_seat_disabled` 409 on every route
+  (TD-185, [ADR-020](../adr/ADR-020-backend-refusal-model.md)).
+
+Checked on 2026-10-10: production access lines carry `appId`
+(`com.sempermechanics.semper` and `com.sempermechanics.materialtesting` seen; no
+`com.indicvision.*` yet).
+
+## 2026-10-09 — Backend and gateway deploy: the account-erasure check (#400)
+
+Staging run 37923499929 and production run 37923748503 from `ae5f4ec4`, started by the
+operator, `gateway_mode: apply`. Both smokes passed; `semper-api-37923748503-1` took
+100 %. The gateways switched to `v202610091128-91` (staging) and `v202610091130-92`
+(production).
+
+What changed for callers:
+- **`GET /v1/me/erasure`** (TD-206): whether this phone's device record is gone or
+  someone else's, for the app's check after an account deletion that never answered.
+  It reads the ID token alone (`deps.token_uid`), so asking does not re-create an
+  erased account's profile. Answers 401 without a token through the gateway.
+- Also in this build, tests only: real Firebase ID tokens verified end to end
+  (TD-201), the ops scripts' tests (TD-202), the account-deletion probe pins (TD-165).
+
+## 2026-10-08 — Backend deploys with `gateway_mode: apply`: both gateways' configs re-encoded
+
+**Why:** the hand deploy of 2026-10-07 created `v202610070547-manual` (staging) and
+`v202610070628-manual` (production) with mis-encoded text. Every `—` and `→` in their
+description text read as `â€”` and `â†’`, the 29 lines the dry-runs of #375's deploys
+reported (entry below). Routes and security were not affected. Both runs below
+rendered `backend/gateway/openapi.yaml` and switched the gateway to a fresh config.
+No backend file changed after #375's deploy (`b6ee1544`), so each new revision runs
+the same code.
+
+**Staging**, run 37775762411 from `4dd18929`:
+- The candidate passed `/readyz` (`firestore: ok`, `drive: ok`).
+  `semper-api-staging-37775762411-1` took 100 %, and the images were re-pinned.
+- `semper-gw-staging` switched from `v202610070547-manual` to `v202610081220-89`.
+
+**Production**, run 37776947585 from `06c425bd`, started by the operator (#381, in
+between, changed only console tests and CI):
+- The same smoke passed. `semper-api-37776947585-1` took 100 %, and the images were
+  re-pinned.
+- `semper-gw` switched from `v202610070628-manual` to `v202610081230-90`.
+
+**Checked on both:**
+- **The workflow's outside check:** `GET /v1/config` answers 401 without a token,
+  and the preflight answers 200.
+- **The new configs**, read back with `gcloud api-gateway api-configs describe --view
+  FULL`: no mis-encoded sequence, and 28 `—` and one `→`, as in the source.
+- **The dashboards' preflight** still answers `access-control-max-age: 7200`.
+
+The `-manual` configs stay as each gateway's rollback target.
+
+## 2026-10-08 — Hosting and backend deploys: a page-not-found page, and the CORS preflight cached for two hours (#375)
+
+Hosting and staging from `cfa057c8` (`main` after #375). Production from `b6ee1544`:
+the commits between them, #377 and #378, change only Hosting and docs, so production
+ran the same backend code as staging.
+
+**Hosting**, with `scripts/deploy-console.sh` against `semper-gw`: one file uploaded,
+`public/404.html`, and the script's live check found the gateway filled in.
+- `/nope-xyz` and `/console/operator/nope` on `app.sempermechanics.com` now answer
+  404 with "This page doesn't exist". Before, they got Firebase's stock page.
+- The page goes to `/login` after 5 s, with a bar and a Go there now link. It uses
+  no script, so it works under the `/console/**` policy too.
+- `/console/config.js` and the CSP on `/login` carry no `__API_…` placeholder.
+
+**Staging backend**, `deploy-backend.yml` run 37773100006, gateway `dry-run`:
+- The candidate passed the `/readyz` smoke (`firestore: ok`, `drive: ok`).
+  `semper-api-staging-37773100006-1` took 100 %, and the serving and rollback images
+  were re-pinned.
+- `semper-gw-staging` answers the dashboards' preflight with
+  `access-control-max-age: 7200`. The origin, methods and headers are unchanged.
+- **Gateway:** the dry-run diff against the live `v202610070547-manual` config
+  showed 29 changed lines. All are `—` and `→` in description text, which the live
+  config holds mis-encoded (`â€”`, `â†’`) since the 2026-10-07 hand deploy. There is no
+  route or security change, so no gateway update is needed for #375.
+
+**Production backend**, `deploy-backend.yml` run 37774012180, gateway `dry-run`,
+started by the operator:
+- The candidate passed the same smoke. `semper-api-37774012180-1` took 100 %, and the
+  serving and rollback images were re-pinned.
+- `semper-gw` answers the preflight with `access-control-max-age: 7200`; it answered
+  `600` before the run.
+- The dry-run against `v202610070628-manual` showed the same 29 encoding-only lines,
+  so `semper-gw` is unchanged.
+
+## 2026-10-08 — Hosting deploy: the default CSP runs no inline script (#377, TD-204)
+
+#377 (`05f71c58`) was deployed with `scripts/deploy-console.sh` and the live check
+passed. The default `**` policy is now `script-src 'self'` (it allowed
+`'unsafe-inline'`, which no page needed after `finishReset` moved to `reset.js`).
+Live after the deploy: `/terms/`, `/privacy/`, `/finishSignIn/` and `/finishReset/`
+send `script-src 'self'`; `/console/` and `/login` keep their own policy; Firebase's
+`/__/auth/handler` sends no custom CSP. In a browser on the live site `finishReset`
+filled its link, Terms rendered and `/login` reached its signed-out state, with no
+CSP violation logged. `check_console.py` check 11 keeps every policy and page that way.
+
+## 2026-10-08 — Testing program merged (#366–#368, #370, #371); Hosting deploy of #371
+
+Five stacked PRs from the test review, merged in order once each `CI OK` was green:
+- **#366** CI tiers follow the diff: an engine or JNI change runs the emulator and
+  arm64 tiers on its PR, keep-rule and build-script changes run R8, Tier 1 compiles
+  androidTest and `:benchmark`, `main` pushes are path-aware, and a weekly
+  `schedule` runs the full matrix. Tier 1 uploads JUnit and Kover reports.
+- **#367** Real coverage floors (measured − 2, raised by every test PR): Kover lines
+  and branches, the backend with the Firestore emulator tier appended, and the
+  console modules.
+- **#368** Committed golden `.dat` and GIF files (`-PupdateGoldens` to regenerate);
+  `DicFieldIo` tests; the batch loop runs on the emulator.
+- **#370** Settings, viewer, restore and admin tests; Kover counts Activities,
+  Adapters and Dialogs; device tests wait on conditions, not sleeps.
+- **#371** Shared `contracts/` wire bodies (app and backend), the composite-index
+  check, `check_console.py`'s own tests, backend thin spots (`drive.py` 65 → 99 %).
+  Two fixes: `console/roster.js` took the roster path after Remove / Withdraw was
+  confirmed, so a confirmation answered after opening another licence's roster went
+  to that licence; and `ShareExportJobs.start` lost the Cancelled outcome of an
+  export cancelled before its first dispatch (a 10 s CI timeout).
+
+Floors after #371: app lines 72 / branches 54 (74.50 / 56.41 %, Activities now
+counted), backend 93 (95.47 %; 95.54 % with the emulator tier), console lines 53
+(55.32 %, counted per page load: TD-203). TD-199–TD-204 hold the gaps left open.
+
+#371 (`f0a5e367`) was deployed with `scripts/deploy-console.sh` and the live check
+passed: the live `console/roster.js` takes the path before asking, and
+`/finishReset/` loads `/finishReset/reset.js` (200) with no inline script.
+
+## 2026-10-08 — Hosting deploys: every wait explained, and the dashboards on every screen size (#369, #372)
+
+#369 (`676762b2`, merged at 16:09 IST) and #372 (`04c74669`, 16:18 IST) were each
+deployed with `scripts/deploy-console.sh`, and both live checks passed. What #369
+changed:
+- **No signed-out flash.** Every page starts `<body data-auth="pending">` with
+  "Checking your sign-in…", and Sign in stays hidden until `auth.js` knows (a CSS
+  fallback shows it after 8 s if the scripts never run). The operator desk and
+  institution seats keep `#app` hidden until the role or licence check passes.
+- **Each wait is named** on the status line, a polite live region: "Checking your
+  access…", "Loading licences…", "Loading the roster…", "Loading your analyses…".
+  After 4 s it adds "Still working — the server can take a few seconds to start."
+- **Tables show placeholder rows while they load**, and a failed load says so in the
+  table with a Retry that reruns only that load. A list's buttons are disabled while
+  it loads, and a late answer for an earlier request is dropped.
+- **The operator desk** puts the licence table first, opens Issue a licence as a card
+  from its toolbar, and keeps Edit on each row with the rest under a More menu
+  (Revoke and Delete last).
+- **Screen sizes:** on phones every table becomes a stack of cards and the header keeps
+  to two rows; on tablets tables scroll inside their card with the first column
+  pinned; on touch screens every control is at least 44 px; keyboard focus is always
+  outlined.
+- `scripts/check_console.py` check 10 requires the pending body and the live
+  `#status` on every page. The console tests: 214.
+
+The live check of #369 on a phone found the account and institution headers on three
+rows, not two: the page title wrapped under the brand. #372 is CSS only: under 600 px
+the brand shows just its mark, the title gets room to wrap on itself, and the card
+heading rule skips full-width rows.
+
+Measured from the browser pane, signed in as `damodar@indicvision.com`:
+- Five warm loads of the operator desk after #369: median 1372 ms to the licences on
+  screen, within the 1078–1454 ms range measured after #365.
+- The live sequence was "Checking your sign-in…", then "Checking your access…", then
+  placeholder rows under "Loading licences…", then the licences, with no Sign in
+  button shown on the way.
+- A first load after the API had idled: `/v1/me` took 15.2 s, the wait the
+  "Still working" line (shown after 4 s) is there to explain.
+
+## 2026-10-08 — Hosting deploy: each dashboard's code in one wave, its data read together (#365)
+
+#365 (`25aed416`) was deployed with `scripts/deploy-console.sh`, and its live check
+passed. #362 and #364 were already live (the entry below), so every typed key,
+password and confirmation was by then asked for in the page. What #365 changed:
+- Every page preloads its whole module graph and `init.json`, and preconnects to
+  sign-in and the API.
+- The QR library loads only for enrolment.
+- The operator desk sends its licence list, approvals and switch list together with
+  `/v1/me` instead of after it.
+
+Measured from the browser pane, signed in as `damodar@indicvision.com`, five warm loads
+of the operator desk before and after, timed to the licences on screen:
+
+| | Before | After |
+|---|---|---|
+| Median | 1689 ms | 1303 ms |
+| Range | 1591–2040 ms | 1078–1454 ms |
+| `init.json` arrives | about 700 ms | 120–380 ms |
+| Licence list starts | about 300 ms after `/v1/me` | with `/v1/me` |
+
+No file was fetched twice, `qrcode` was not loaded, and `/login` still forwards. The
+first load after a long idle took 10.7 s, all of it `/v1/me` waiting for the API to
+start. That is the wait the dashboards' "Still working — the server can take a few
+seconds to start." line (next change) explains.
+
+## 2026-10-08 — Hosting deploy: no browser confirm or alert left in the consoles (#364)
+
+From `0aff4722`, merged at 13:52 IST, with `scripts/deploy-console.sh`. Its live check
+found the gateway filled in on `app.sempermechanics.com`. #362, deployed before this,
+had moved the typed keys and the revoke password off `window.prompt`. #364 moved the
+nine `confirm()` calls and the one `alert()` left into the page as well:
+- revoke and delete, both the who-is-affected step and the step after the return from
+  Google;
+- New device and device history (one move a line);
+- the roster's Remove and Withdraw;
+- the account page's give-a-seat-back and move-a-device.
+
+All of them are built by one `pageCard` in `auth.js`, as `askInPage`, `confirmInPage`
+and `tellInPage`. On both hosts, `auth.js`, `roster.js`, `console.css`,
+`operator/lifecycle.js`, `operator/people.js` and `account/account.js` matched `main`,
+and `config.js` and the console CSP named the production gateway. Nobody clicked
+through the new cards signed in at the time; the console tests (188) drive each one.
+
 ## 2026-10-08 — Hosting deploys: the authenticator code asked for in the page, with Try again (#358, #361)
 
 The consoles asked for the authenticator code with `window.prompt`. The Claude desktop

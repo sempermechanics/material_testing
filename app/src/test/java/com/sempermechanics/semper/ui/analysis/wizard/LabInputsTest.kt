@@ -131,7 +131,7 @@ class LabInputsTest {
     @Test
     fun `video frame times win over any photo times`() {
         timedPhotoBatch()
-        vm.defFrameTimesMs = listOf(500L, 1_500L, 2_500L)
+        vm.defTimesAfterRefMs = listOf(500L, 1_500L, 2_500L)
         vm.refreshMachineLoads()
 
         assertEquals(listOf(50f, 150f, 250f), vm.machineLoads!!.loadsN)

@@ -1,10 +1,19 @@
 package com.sempermechanics.semper.imaging.video
 
+import android.app.Application
+import android.net.Uri
+import com.sempermechanics.semper.imaging.AviReader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+/** Sampling plans; Robolectric only for the [Uri] an [ExtractionRequest] carries. */
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class)
 class VideoFrameExtractorTest {
 
     @Test
@@ -106,6 +115,78 @@ class VideoFrameExtractorTest {
         assertEquals(5, plan.timestampsUs.size)
         assertEquals(keyframes.first(), plan.timestampsUs.first())
         assertEquals(keyframes.last(), plan.timestampsUs.last())
+    }
+
+    // ---- AVI rung: Key frames from the idx1 flags (TD-154) -----------------
+
+    /** 50 frames at 25 fps (0 … 1960 ms), keyframes where [key] says. */
+    private fun avi(hasIndex: Boolean = true, key: (Int) -> Boolean) = AviReader.Video(
+        width = 8,
+        height = 8,
+        fourcc = "XVID",
+        bitCount = 24,
+        topDown = false,
+        fps = 25.0,
+        codecPrivate = null,
+        hasIndex = hasIndex,
+        frames = List(50) { AviReader.Frame(offset = it * 16L, size = 8, keyframe = key(it)) },
+    )
+
+    private fun request(preferKeyframes: Boolean, startMs: Long = 0, endMs: Long = 1960) = ExtractionRequest(
+        uri = Uri.EMPTY,
+        fpsExtract = 5.0,
+        startMs = startMs,
+        endMs = endMs,
+        maxFrames = 100,
+        preferKeyframes = preferKeyframes,
+    )
+
+    /** 5 fps over 0–1960 ms at 25 fps: every fifth frame. */
+    private val uniformIndices = (0..45 step 5).toList()
+
+    @Test
+    fun `Key frames mode on an indexed AVI with sparse keyframes picks the keyframes`() {
+        val plan = VideoKeyframeHelper.aviFramePlan(avi { it % 12 == 0 }, request(preferKeyframes = true))
+
+        assertTrue(plan.isKeyframePlan)
+        assertEquals(listOf(0, 12, 24, 36, 48), plan.indices)
+    }
+
+    @Test
+    fun `Key frames mode on an index-less AVI samples uniformly`() {
+        // Without idx1 the reader marks every frame a keyframe; that says nothing.
+        val plan = VideoKeyframeHelper.aviFramePlan(avi(hasIndex = false) { true }, request(preferKeyframes = true))
+
+        assertFalse(plan.isKeyframePlan)
+        assertEquals(uniformIndices, plan.indices)
+    }
+
+    @Test
+    fun `Key frames mode on an all-keyframe AVI samples uniformly`() {
+        val plan = VideoKeyframeHelper.aviFramePlan(avi { true }, request(preferKeyframes = true))
+
+        assertFalse(plan.isKeyframePlan)
+        assertEquals(uniformIndices, plan.indices)
+    }
+
+    @Test
+    fun `Fixed interval mode ignores an AVI's keyframes`() {
+        val plan = VideoKeyframeHelper.aviFramePlan(avi { it % 12 == 0 }, request(preferKeyframes = false))
+
+        assertFalse(plan.isKeyframePlan)
+        assertEquals(uniformIndices, plan.indices)
+    }
+
+    @Test
+    fun `Key frames mode on a segment holding fewer than two keyframes samples uniformly`() {
+        // Keyframes at 0, 480, 960 … ms: none starts inside 500–900 ms.
+        val plan = VideoKeyframeHelper.aviFramePlan(
+            avi { it % 12 == 0 },
+            request(preferKeyframes = true, startMs = 500, endMs = 900),
+        )
+
+        assertFalse(plan.isKeyframePlan)
+        assertEquals(listOf(12, 17, 22), plan.indices)
     }
 
     @Test
