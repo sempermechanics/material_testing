@@ -16,7 +16,7 @@ record that replaced it.
 | [007](ADR-007-licence-lifecycle.md) | Licence lifecycle: one per person, replace by revoke, delete into a 30-day hold | Accepted, built (TTL policies owed) | — |
 | [008](ADR-008-startup-gates-phone-state.md) | Real-device startup gates check the phone's state; a trip is settled A/B | Accepted, built (references owed) | TD-135 (material_testing), TD-155 |
 | [010](ADR-010-device-binding-per-app.md) | Device binding per app: one phone per app, not per account | Accepted, built | TD-137, TD-138 |
-| [011](ADR-011-viewer-deformed-frame.md) | The viewer draws each frame on its own photo, at the displaced positions | Accepted, built (ported from material_testing 2026-10-01) | TD-139 |
+| [011](ADR-011-viewer-deformed-frame.md) | The viewer draws each frame on its own photo, at the displaced positions | Accepted, built (ported from material_testing 2026-10-01); exports follow 2026-10-13 | TD-139 (closed) |
 | [013](ADR-013-session-metadata-replace.md) | A backed-up session's metadata.json can be replaced | Accepted, built, deployed 2026-10-01 | material_testing TD-150 |
 | [014](ADR-014-session-app-tag.md) | Cloud sessions are tagged with the app that backed them up | Accepted, built, deployed 2026-10-01 | TD-153 |
 | [015](ADR-015-package-layout.md) | Feature subpackages of about 15 files and files of about 500 lines; workers, JNI classes and Activities keep their names | Accepted, built; amended 2026-10-03 | — |

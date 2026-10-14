@@ -29,7 +29,27 @@ internal class FieldImageExport(
 ) {
 
     /**
-     * Annotated PNG of one field for one frame's data. Composited at the
+     * What a frame's field PNGs are drawn on: its own photo ([displaced], the map
+     * and markers where the points moved to), or the reference when the frame
+     * has none on disk or it does not decode. The viewer makes the same choice
+     * ([com.sempermechanics.semper.ui.viewer.ViewerImageLoader.onFramePhoto]).
+     */
+    class FrameBase(val bitmap: Bitmap, val displaced: Boolean)
+
+    /**
+     * One frame's [FrameBase], decoded once for all its fields. Make one per
+     * frame and [recycleBaseCache] it before the next, so an export over many
+     * frames holds one frame's photo at a time.
+     */
+    class FrameBaseCache {
+        internal val bases = mutableMapOf<Triple<Int, Int, Int>, FrameBase>()
+    }
+
+    /**
+     * Annotated PNG of one field for one frame's data, drawn as the viewer draws
+     * that frame (ADR-011, TD-139): on the frame's own photo with the map at the
+     * displaced positions ([VisualizationEngine.generateFrameHeatmap]), else on
+     * the reference. Composited at the
      * [VisualizationEngine.REPORT_MAX_EDGE]-capped size rather than full sensor
      * resolution: a 26 MP reference otherwise held four ~100 MB ARGB bitmaps at once
      * (heatmap + base + out + decode) per field. Marker coordinates are scaled by the
@@ -40,36 +60,39 @@ internal class FieldImageExport(
         dataIndex: Int,
         typeString: String,
         frameIndex: Int,
-        baseCache: MutableMap<Pair<Int, Int>, Bitmap>? = null,
+        baseCache: FrameBaseCache? = null,
     ): Bitmap {
-        // Optional cache: multi-field export reuses one decoded reference bitmap.
+        // Optional cache: multi-field export reuses one decoded base bitmap.
         val size = s.imageSize
         val renderScale =
             VisualizationEngine.cappedRenderScale(size.width, size.height, VisualizationEngine.REPORT_MAX_EDGE)
         val renderW = (size.width * renderScale).toInt().coerceAtLeast(1)
         val renderH = (size.height * renderScale).toInt().coerceAtLeast(1)
 
-        val heatmap = VisualizationEngine.generateHeatmap(
-            data,
-            size.width,
-            size.height,
-            dataIndex,
-            s.stepAt(frameIndex),
-            null,
-            null,
-            maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
-        )
-        // Each full-size bitmap is freed in finally, so a throw part-way (no
-        // reference to draw on, an OOM) does not strand the others.
-        var base: Bitmap? = null
+        // The base decides how the map is drawn, so it is loaded first.
+        val base = loadFrameBase(frameIndex, renderW, renderH, baseCache)
+        // Each full-size bitmap is freed in finally, so a throw part-way (an
+        // OOM) does not strand the others.
+        var heatmap: Bitmap? = null
         var out: Bitmap? = null
         var done = false
         try {
-            base = loadCappedBase(renderW, renderH, baseCache)
+            val baked = VisualizationEngine.generateFrameHeatmap(
+                base.displaced,
+                data,
+                size.width,
+                size.height,
+                dataIndex,
+                s.stepAt(frameIndex),
+                null,
+                null,
+                maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
+            )
+            heatmap = baked.bitmap
             out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(out)
-            canvas.drawBitmap(base, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
-            canvas.drawBitmap(heatmap.bitmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
+            canvas.drawBitmap(base.bitmap, null, Rect(0, 0, renderW, renderH), Paint(Paint.FILTER_BITMAP_FLAG))
+            canvas.drawBitmap(heatmap, 0f, 0f, Paint().apply { alpha = HEATMAP_ALPHA })
             // Signed, as the PDF does: with absolute values "MIN" marked the strain
             // nearest zero under a label giving the most negative.
             val extrema = ReportBuilder.computeFieldExtrema(data, dataIndex, absoluteStrainValues = false)
@@ -78,7 +101,7 @@ internal class FieldImageExport(
                 canvas,
                 renderW,
                 renderH,
-                heatmap.range,
+                baked.range,
                 extrema,
                 data,
                 ReportBuilder.FieldAnnotation(
@@ -86,59 +109,69 @@ internal class FieldImageExport(
                     unit = unit,
                     dataIndex = dataIndex,
                     imageName = s.sourceImageName(frameIndex),
+                    displaced = base.displaced,
                 ),
                 coordScale = renderScale,
             )
             done = true
             return out
         } finally {
-            heatmap.bitmap.recycle()
+            heatmap?.recycle()
             // A cached base belongs to the cache; the display bitmap to the viewer.
-            if (baseCache == null && base != null && base !== s.baseImage) base.recycle()
+            if (baseCache == null && base.bitmap !== s.baseImage) base.bitmap.recycle()
             if (!done) out?.recycle()
         }
     }
+
+    /**
+     * The [FrameBase] of the frame at [frameIndex], decoded no larger than the
+     * capped composite it draws into: the frame's own photo, found and decoded
+     * as the viewer does ([ViewerReportFactory.Source.deformedImagePathAt],
+     * [BitmapDecoder.decodeFileForView]), else the reference.
+     */
+    private fun loadFrameBase(frameIndex: Int, renderW: Int, renderH: Int, cache: FrameBaseCache?): FrameBase {
+        val key = Triple(frameIndex, renderW, renderH)
+        cache?.bases?.get(key)?.let { return it }
+        val photo = s.reportSource.deformedImagePathAt(frameIndex)?.let { decodeCapped(it, renderW, renderH) }
+        val base = if (photo != null) {
+            FrameBase(photo, displaced = true)
+        } else {
+            FrameBase(loadCappedReference(renderW, renderH), displaced = false)
+        }
+        // The viewer's display bitmap is never cached: the cache recycles what it holds.
+        if (base.bitmap !== s.baseImage) cache?.bases?.put(key, base)
+        return base
+    }
+
+    private fun decodeCapped(path: String, renderW: Int, renderH: Int): Bitmap? = BitmapDecoder.decodeFileForView(
+        path,
+        renderW,
+        renderH,
+        VisualizationEngine.REPORT_MAX_EDGE,
+        rawWidth = s.imageSize.width,
+        rawHeight = s.imageSize.height,
+    )
 
     /**
      * Reference image for compositing, decoded no larger than the capped composite it
      * draws into — prefer the on-disk reference (inSampleSize-decoded) over the
      * viewer's display bitmap so export quality doesn't depend on viewer scale.
      */
-    private fun loadCappedBase(
-        renderW: Int,
-        renderH: Int,
-        cache: MutableMap<Pair<Int, Int>, Bitmap>? = null,
-    ): Bitmap {
-        val key = renderW to renderH
-        cache?.get(key)?.let { return it }
-        s.refImagePath?.let { path ->
-            BitmapDecoder.decodeFileForView(
-                path,
-                renderW,
-                renderH,
-                VisualizationEngine.REPORT_MAX_EDGE,
-                rawWidth = s.imageSize.width,
-                rawHeight = s.imageSize.height,
-            )?.let { decoded ->
-                cache?.put(key, decoded)
-                return decoded
-            }
-        }
+    private fun loadCappedReference(renderW: Int, renderH: Int): Bitmap {
+        s.refImagePath?.let { path -> decodeCapped(path, renderW, renderH)?.let { return it } }
         val display = s.baseImage ?: error("No reference image for export")
-        val scaled = if (display.width == renderW && display.height == renderH) {
+        return if (display.width == renderW && display.height == renderH) {
             display
         } else {
             display.scale(renderW, renderH)
         }
-        if (scaled !== display) cache?.put(key, scaled)
-        return scaled
     }
 
-    fun recycleBaseCache(cache: MutableMap<Pair<Int, Int>, Bitmap>) {
-        cache.values.forEach { bmp ->
-            if (bmp !== s.baseImage) bmp.recycle()
+    fun recycleBaseCache(cache: FrameBaseCache) {
+        cache.bases.values.forEach { base ->
+            if (base.bitmap !== s.baseImage) base.bitmap.recycle()
         }
-        cache.clear()
+        cache.bases.clear()
     }
 
     /** Writes [bmp] as a PNG and frees it, whether or not the write succeeds. */
@@ -166,7 +199,7 @@ internal class FieldImageExport(
      */
     fun allFieldPhotos(onField: (done: Int, total: Int, label: String) -> Unit = { _, _, _ -> }): List<File> {
         val data = s.frameData()
-        val baseCache = mutableMapOf<Pair<Int, Int>, Bitmap>()
+        val baseCache = FrameBaseCache()
         return try {
             FIELDS.mapIndexed { done, (label, idx) ->
                 onField(done, FIELDS.size, label)

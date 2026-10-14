@@ -170,6 +170,33 @@ class DeformedHeatmapTest {
     }
 
     @Test
+    fun `displaced bounds read only the frame's floats of a reused buffer`() {
+        val data = field(u = 5f, v = -2f)
+        // A longer buffer whose tail holds an earlier, larger frame's point far away.
+        val reused = data.copyOf(data.size + DicResult.STRIDE)
+        reused[data.size + DicResult.IDX_X] = 500f
+        reused[data.size + DicResult.IDX_ZNSSD] = 0.01f
+        assertArrayEquals(
+            DicResult.acceptedPointsBounds(data, displaced = true),
+            DicResult.acceptedPointsBounds(reused, displaced = true, floatCount = data.size),
+            0f,
+        )
+    }
+
+    @Test
+    fun `the frame render is the viewer's choice of the two`() {
+        val data = field(u = 6f, v = 3f)
+        fun pixels(bitmap: android.graphics.Bitmap) = IntArray(w * h).also { bitmap.getPixels(it, 0, w, 0, 0, w, h) }
+        val displaced = VisualizationEngine.generateFrameHeatmap(true, data, w, h, DicResult.IDX_EXX, step)
+        val deformed = VisualizationEngine.generateDeformedHeatmap(data, w, h, DicResult.IDX_EXX, step)
+        assertArrayEquals(pixels(deformed.bitmap), pixels(displaced.bitmap))
+        val onReference = VisualizationEngine.generateFrameHeatmap(false, data, w, h, DicResult.IDX_EXX, step)
+        val reference = VisualizationEngine.generateHeatmap(data, w, h, DicResult.IDX_EXX, step)
+        assertArrayEquals(pixels(reference.bitmap), pixels(onReference.bitmap))
+        assertTrue(!pixels(displaced.bitmap).contentEquals(pixels(onReference.bitmap)))
+    }
+
+    @Test
     fun `a tap on the deformed frame finds the point that moved there`() {
         val data = field(u = 10f, v = 0f)
         val index = PointSpatialIndex.build(ViewerInspectController.displacedPositions(data), step)

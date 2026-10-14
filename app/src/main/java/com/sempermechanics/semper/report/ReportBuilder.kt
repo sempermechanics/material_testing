@@ -73,6 +73,15 @@ object ReportBuilder {
         val deformedImageName: String,
         /** At 940e57d cloud worker PDFs drew MAX only; viewer PDFs drew MAX+MIN. */
         val drawMinMarker: Boolean = true,
+        /**
+         * True when [defImgForCover] is this frame's own photo. The field images
+         * are then drawn the way the viewer draws that frame: on that photo, the
+         * map and its markers where the points moved to
+         * ([VisualizationEngine.generateFrameHeatmap], ADR-011, TD-139). False
+         * (no photo on disk, or it did not decode) keeps the reference under
+         * the reference-position map, as the viewer falls back.
+         */
+        val fieldsOnFramePhoto: Boolean = false,
     )
 
     fun appBuildLabel(): String {
@@ -133,6 +142,10 @@ object ReportBuilder {
     internal fun buildReport(params: ReportBuildParams, onBitmap: (Bitmap) -> Unit): ReportData {
         val data = params.data
         val baseImg = params.baseImg
+        // What each field image is drawn on: the frame's own photo when it has
+        // one, as the viewer shows it, else the reference.
+        val displaced = params.fieldsOnFramePhoto
+        val fieldBase = if (displaced) params.defImgForCover else baseImg
         val fieldResults = mutableListOf<FieldResult>()
         var correlationHeatmap: Bitmap? = null
 
@@ -206,7 +219,8 @@ object ReportBuilder {
                 val renderW = (params.imgW * renderScale).toInt().coerceAtLeast(1)
                 val renderH = (params.imgH * renderScale).toInt().coerceAtLeast(1)
 
-                val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateHeatmap(
+                val (heatmapBmp, actualMin, actualMax) = VisualizationEngine.generateFrameHeatmap(
+                    displaced,
                     data,
                     params.imgW,
                     params.imgH,
@@ -227,9 +241,9 @@ object ReportBuilder {
                         val composite = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)
                         try {
                             val tempCanvas = Canvas(composite)
-                            // baseImg may be larger than the capped composite; scale it in.
+                            // The base may be larger than the capped composite; scale it in.
                             tempCanvas.drawBitmap(
-                                baseImg,
+                                fieldBase,
                                 null,
                                 Rect(0, 0, renderW, renderH),
                                 Paint(Paint.FILTER_BITMAP_FLAG),
@@ -248,6 +262,7 @@ object ReportBuilder {
                                     dataIndex = dataIndex,
                                     imageName = params.deformedImageName,
                                     drawMinMarker = params.drawMinMarker,
+                                    displaced = displaced,
                                 ),
                                 coordScale = renderScale,
                             )
@@ -316,8 +331,10 @@ object ReportBuilder {
     /**
      * What a baked field image says about itself: the field's name and unit,
      * the data column the MAX / MIN values are read from (null shows the
-     * scale's ends instead), the image it was drawn on, and whether MIN is
-     * marked as well as MAX.
+     * scale's ends instead), the image it was drawn on, whether MIN is
+     * marked as well as MAX, and whether the markers go where their points
+     * moved to ([displaced]: the image is the frame's own photo, under a
+     * [VisualizationEngine.generateDeformedHeatmap] map).
      */
     data class FieldAnnotation(
         val typeString: String,
@@ -325,6 +342,7 @@ object ReportBuilder {
         val dataIndex: Int? = null,
         val imageName: String? = null,
         val drawMinMarker: Boolean = true,
+        val displaced: Boolean = false,
     )
 
     /**

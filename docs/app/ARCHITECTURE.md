@@ -52,7 +52,7 @@ on 2026-10-03.
 | `ui/analysis/sweep/` | 18 | Parameter sweep: `SweepSetupController` with `SweepRangeFields` / `SweepFramePicker` (the step-2 frame field and its picker dialog), `SweepStudy` / `SweepStudyRunner`, the lattice (`SweepControls`, `SweepProfiles`, `SweepGraphExport`), the run overlay's `LiveSweepLattice`, and plot views (`SweepPlotView` with viewport, axes, palette; `PlotStyle`), line-cut preview |
 | `ui/viewer/` | 19 | `ResultViewerActivity` and its controllers (`ViewerChromeController`, `ViewerImageLoader`, `ViewerFrameLoader`, `ViewerScaleController`, `FrameJumpController`, `ViewerCaptions`, `ViewerShareController`, `FieldPopup`), `SaveExportActivity`, their ViewModels, `ViewerArgs` ([ADR-003](../adr/ADR-003-viewerargs-read-side.md)), scrub cache, `ViewerFieldPills`, the ⓘ details sheet; heatmaps draw each frame on its own photo at the displaced positions ([ADR-011](../adr/ADR-011-viewer-deformed-frame.md)) |
 | `ui/viewer/share/` | 13 | `ShareCenter` (its sheet copy in `ShareSheetCopy`) → `ShareExportJobs` (held by `ResultViewerViewModel`) → `ShareExportBuilder` (`FieldImageExport`, `BundleExport`, `DataExport`); `ExportProgress` (each kind's per-frame / per-field progress); `ShareExportController`, `ShareKind`, `SendToSheet`, `ViewerReportFactory` |
-| `ui/viewer/summary/` | 3 | Summary GIF (`SummaryAnimation`), caption, `ViewerSummaryController` |
+| `ui/viewer/summary/` | 3 | Summary GIF (`SummaryAnimation`, each frame at the displaced positions), caption, `ViewerSummaryController` |
 | `ui/viewer/inspect/` | 5 | Tap-to-probe: `InspectOverlayView`, `PointSpatialIndex`, `TouchImageView`, field histogram view |
 | `ui/settings/` | 15 | `SettingsActivity` (restore, download, delete) and its sections: account, cloud, analyses, storage, preferences, your data, help, footer; `AccountDeletionRun`, `BusyTransfers`; scroll body via `SettingsScrollContentView` |
 | `ui/admin/` | 1 | Admin screen — approve/revoke users via `/v1/admin/*` |
@@ -249,6 +249,21 @@ change export UX.
 Two exports deliberately bypass it: Settings' **Download** already has its
 destination (§4 of [WORKFLOWS.md](WORKFLOWS.md)), and the lattice's **Save graph**
 goes to the system chooser directly.
+
+Every export of a frame draws what the viewer draws for it
+([ADR-011](../adr/ADR-011-viewer-deformed-frame.md), TD-139). The field PNGs
+(`FieldImageExport.renderAnnotated`) and the report's field images
+(`ReportBuilder.buildReport`, from `ViewerReportFactory` and the cloud bundle)
+look up the frame's own photo as the viewer does (`deformedImagePath`), decode it
+capped and once per frame, and draw on it with
+`VisualizationEngine.generateFrameHeatmap(displaced = true)`, the viewer's own
+render, with the MAX / MIN markers where their points moved to. A frame whose
+photo is gone or does not decode falls back to the reference and the
+reference-position map, as the viewer does. The summary GIF has no photo (its
+palette is the jet ramp and the canvas colour), so `SummaryAnimation` draws
+every frame displaced (`generateDeformedHeatmapIndices`) in one box widened to
+take in the whole sequence's movement; the viewer's summary slot shows that
+same GIF.
 
 Long exports are not modal. The progress dialog (`ui/common/dialog/DeterminateProgressDialog`)
 shows the job's status, its percent to one decimal and the time left (`EtaEstimator`);

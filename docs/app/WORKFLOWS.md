@@ -700,6 +700,7 @@ onto a combination, with no summary slot and no Animations share target).
 |---|---|---|
 | [ ] 8.2a.1 | Open a result | It lands on the summary, which builds and then loops. The **edge title** reads "Summary"; the **counter** pill counts the frames it plays ("5 frames") and the frame jump field is hidden |
 | [ ] 8.2a.1b | Open a result with a sub-frame ROI (or a small accepted patch) | The summary GIF is framed on that coloured region — same rest-fit contain scale as the live viewer, not a letterboxed full photo |
+| [ ] 8.2a.1c | Watch the summary of a run whose specimen visibly deforms | The map moves with the specimen frame to frame (each frame drawn where its points moved to, as on a frame's own photo) and stays inside the GIF's box for the whole loop |
 | [ ] 8.2a.1a | Watch it build | Determinate progress with a status ("Reading frames…", then "Rendering <field>…") and a **Cancel** button |
 | [ ] 8.2a.2 | Watch a short (≤33 frame) analysis | Each frame is visible for about 300 ms |
 | [ ] 8.2a.3 | Watch a 500-frame analysis | Every frame is there and the loop still finishes inside 10 s |
@@ -754,18 +755,18 @@ a centre double-tap brings the bars back when they have faded.
 |---|---|---|
 | [ ] 8.5.1 | Tap Share | Sheet headed **Share**, with the frame on screen at the header's end ("frame 2 of 5"; "combination 2 of 5" on a sweep). Six flat one-line rows split by hairlines, no cards: icon, title, file type at the end — **This field** PNG, **All fields** 5 PNG, **Animations** 5 GIF, **Report** PDF, **Data** CSV, **Everything** ZIP |
 | [ ] 8.5.1a | Same, with TalkBack on | Each row reads what it shares: "Share this field (U of frame.jpg) as PNG", "Share all 5 fields of frame.jpg as PNG", "Share the report of all 5 frames as PDF", … |
-| [ ] 8.5.2 | **This field** | One annotated PNG of the field and frame on screen |
+| [ ] 8.5.2 | **This field** | One annotated PNG of the field and frame on screen, drawn as the viewer draws it: on that frame's own photo, the map and MAX / MIN markers where the points moved to; on the reference, map at the reference positions, when the frame's photo is not on the phone (8.1.1b) |
 | [ ] 8.5.3 | **All fields** | Five PNGs for the current frame, zipped for hand-off. Each PNG's stamp names the **source image**; the file names still come from the analysis name |
 | [ ] 8.5.3a | **Animations** `[single]` | Five GIFs, one per field, zipped; each loops when opened in a gallery app. Row is absent on a parameter sweep |
 | [ ] 8.5.3b | Same, immediately on entering the viewer `[single]` | Fields not built yet are built under the progress dialog — never silently missing |
-| [ ] 8.5.4 | **Report** | One PDF: every frame's pages plus a telemetry page |
+| [ ] 8.5.4 | **Report** | One PDF: every frame's pages plus a telemetry page. Each frame's field images sit on that frame's own photo with the map where the points moved to, as in the viewer (the reference when the photo is not on the phone) |
 | [ ] 8.5.5 | **Data** | One CSV for the whole analysis: `#` preamble (version, reference, strain method, ROI, per-frame U/V/Exx/Eyy/Exy max/min/mean), blank line, then point header `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd,shift_u_px,shift_v_px,shift_rot_deg` — the three motion columns are written for every session, empty when a frame admits no fit; sweeps insert `subset_px,step_px,strain_window,vsg_px` after `image` (`strain_window` in points, empty for a sweep stored before points; `vsg_px` the VSG) |
 | [ ] 8.5.6 | **Everything** | Raw photos, per-frame results for all five fields, the CSV and the PDF; single-setting also includes the five field GIFs under `animations/` |
 | [ ] 8.5.7 | Check the filename of anything you export | It carries the specimen / analysis name, not a generic `export.zip` |
 | [ ] 8.5.8 | Export a very large analysis | Determinate progress dialog, then either a file or a message naming the failure — never a crash, and never an OOM from rendering the report |
 | [ ] 8.5.8b | Watch the dialog of a CSV, **All fields**, **Animations** or **Everything** export | It spins until the first report, then names what it is on ("Frame 12 of 40 · heatmaps", "Field 2 of 5 · V heatmap", "Frame 3 of 40 · Exx animation"), shows the percent to one decimal on the right and, after about 3 s, "About N s left" under the bar. No kind spins for its whole run; only **This field** (one render) has no steps. On a dense analysis the CSV's "Frame k of N · point rows" keeps moving inside the frame, and the end of **Everything** shows "Adding the raw photos", heatmaps, then "Writing the archive" climbing to 100 % rather than holding |
 | [ ] 8.5.8a | Dismiss that dialog with Back, or by tapping outside | The export keeps running behind a **transfer banner** at the top of the viewer, with the same status, percent and time left, Cancel and ‹ › paging — the same strip Settings uses (§4.0) |
-| [ ] 8.5.9 | Check an exported PNG | Heatmap baked in, min/max annotated, composited to a **1280 px long edge** — not the reference's full sensor resolution |
+| [ ] 8.5.9 | Check an exported PNG | Heatmap baked in, min/max annotated, composited to a **1280 px long edge** — not the reference's full sensor resolution. Beside the viewer on the same frame and field: the same photo, the map in the same place |
 
 ### 8.5a Send to — the export handoff
 

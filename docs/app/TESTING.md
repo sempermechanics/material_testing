@@ -111,7 +111,7 @@ committed files in `app/src/test/resources/oracles/`, compared by
 | Golden | Test | Pins |
 |---|---|---|
 | `field_small.dat` | `results/DatFieldOracleTest` | A field written through `DicFieldIo` as the batch loop writes it: the 32-byte `x y u v exx eyy exy znssd` record, little-endian, valid points only — and that `decodeDatFile` reads it back |
-| `summary_u.gif`, `summary_exx.gif` | `results/SummaryGifOracleTest` | A whole `SummaryAnimation` build (decode, fit, heatmap render, jet palette, LZW): the bytes the viewer shows and Share sends |
+| `summary_u.gif`, `summary_exx.gif` | `results/SummaryGifOracleTest` | A whole `SummaryAnimation` build (decode, fit widened to the moved points, deformed heatmap render, jet palette, LZW): the bytes the viewer shows and Share sends. Regenerated 2026-10-13 when the GIF moved to the deformed configuration (TD-139, [ADR-011](../adr/ADR-011-viewer-deformed-frame.md#as-built-td-139-2026-10-13)) |
 
 Parity tests (`VisualizationEngineTest`, `ReportBuilderTest`) compare the code
 against an older copy of itself, and the round trips (`DatCodecTest`,

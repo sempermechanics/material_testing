@@ -18,8 +18,10 @@ import java.nio.ByteOrder
  * The summary GIF — what the viewer's summary slot shows and Share sends —
  * pinned byte for byte (`oracles/summary_u.gif`, `oracles/summary_exx.gif`).
  *
- * The whole path runs: `.dat` decode, the fit box, the reference-configuration
- * heatmap render to palette indices, the jet palette and the LZW encoder. The
+ * The whole path runs: `.dat` decode, the fit box (widened to where the points
+ * moved), the deformed-configuration heatmap render to palette indices (ADR-011,
+ * TD-139: regenerated 2026-10-13 when the GIF moved off the reference
+ * configuration), the jet palette and the LZW encoder. The
  * other GIF tests check a round trip and that the encoder agrees with itself;
  * these fail on any change to the bytes a user receives, including one that
  * moves the encoder and its reader together.
