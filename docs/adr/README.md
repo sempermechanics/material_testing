@@ -28,6 +28,7 @@ record that replaced it.
 | [019](ADR-019-sempermechanics-app-id.md) | The app is `com.sempermechanics.semper`; "indic" leaves the code, and the engine submodule is `engine/` | Accepted, built (not released) | TD-176 |
 | [020](ADR-020-backend-refusal-model.md) | Backend refusals are one exception (`errors.Refusal`) with one status table (`errors.STATUS`) | Accepted, built | TD-185, TD-186 |
 | [021](ADR-021-retire-firestore-repo-facade.md) | Retire the `firestore_repo` facade; `app.repo` is a plain package and tests patch through `repo_view.patch` | Accepted, built | TD-190 |
+| [022](ADR-022-semper-ui-plus-lab-tests.md) | Material Testing is Semper's UI plus two test choices; a fork change to a shared screen is gated on the test | Accepted, built | — |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md). ADR-008, ADR-009,
-ADR-011, ADR-012 and ADR-013 are material_testing's; ADR-010, ADR-014 and ADR-015 to ADR-021 are semperdic-app's (ADR-008's harness, ADR-011's viewer and ADR-013's route are in both). The numbers are shared so they do not collide.
+ADR-011, ADR-012, ADR-013 and ADR-022 are material_testing's; ADR-010, ADR-014 and ADR-015 to ADR-021 are semperdic-app's (ADR-008's harness, ADR-011's viewer and ADR-013's route are in both). The numbers are shared so they do not collide.

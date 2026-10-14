@@ -11,7 +11,7 @@ Phone-camera **2D digital image correlation (DIC)** for the first-semester
 machine's load log. The app gives you E and fills in your lab report.
 
 <p align="center">
-  <img src="docs/images/test-type.png" width="220" alt="Which test? Tensile, Bending or 2D DIC">
+  <img src="docs/images/test-type.png" width="220" alt="Which test? 2D DIC, Tensile or Bending">
   &nbsp;
   <img src="docs/images/step1-tensile.png" width="220" alt="Tensile setup: frames, load log, cross-section">
   &nbsp;
@@ -31,7 +31,7 @@ machine's load log. The app gives you E and fills in your lab report.
 | **Tensile** | Photos or video, the load log (N or kN), cross-section area | Stress–strain curve, **E** from the straight part, peak stress |
 | **Bending** | Video, the timed load log, span / width / thickness, two taps on the beam edges | Load–deflection graph, σb and E for each load step, **E from the slope** |
 
-**Share → Lab report (PDF)** fills in the journal layout: aim, observations, table,
+**Share → Lab report** fills in the journal layout: aim, observations, table,
 calculation, graphs and results.
 
 <p align="center">
@@ -40,7 +40,8 @@ calculation, graphs and results.
   <img src="docs/images/lab-report-bending.png" width="540" alt="Bending lab report, three pages">
 </p>
 
-The full field is there too: U and V displacement (about 1/100 px), Exx, Eyy and Exy
+Pick **2D DIC** instead and it is Semper, unchanged: the same wizard, viewer and
+exports. The full field is there for every test: U and V displacement (about 1/100 px), Exx, Eyy and Exy
 strain as heatmaps, and PDF, CSV, PNG, GIF and ZIP exports. The C++ engine runs
 **offline**. Cloud backup is optional.
 
@@ -62,6 +63,9 @@ reports: [docs/app/REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)
 > - **Own app, shared backend.** It installs as `com.sempermechanics.materialtesting` (ADR-019; `com.indicvision.semper.materialtesting` before), beside
 >   Semper, with its own signing key, and signs in to Semper's Firebase project and backend
 >   ([ADR-009](docs/adr/ADR-009-material-testing-app-identity.md)).
+> - **Semper's screens.** Every screen is Semper's; the app adds the **Which test?** sheet
+>   and what Tensile and Bending bring, and nothing else
+>   ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).
 > - **Deploys.** The backend deploys from the parent repo only, so the deploy workflows here fail if run.
 > - **`main`.** Changes need a PR and a green `CI OK`.
 
