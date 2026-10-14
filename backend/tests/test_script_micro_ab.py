@@ -70,7 +70,8 @@ def test_bench_name_drops_the_warning_prefix(ab, name, expected):
 
 
 def test_default_app_id(ab, tmp_path):
-    assert ab.default_app_id() == "com.sempermechanics.semper"
+    # A Semper checkout or its Material Testing fork (docs/ops/FORK_SYNC.md); both run these scripts.
+    assert ab.default_app_id() in {"com.sempermechanics.semper", "com.sempermechanics.materialtesting"}
     assert ab.default_app_id(tmp_path / "absent.kts") == ab.FALLBACK_APP
 
 

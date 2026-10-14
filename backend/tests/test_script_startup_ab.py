@@ -72,7 +72,8 @@ def test_default_app_id_falls_back_when_missing_or_ambiguous(ab, tmp_path):
 
 
 def test_default_app_id_of_this_checkout(ab):
-    assert ab.default_app_id() == "com.sempermechanics.semper"
+    # A Semper checkout or its Material Testing fork (docs/ops/FORK_SYNC.md); both run these scripts.
+    assert ab.default_app_id() in {"com.sempermechanics.semper", "com.sempermechanics.materialtesting"}
 
 
 def test_describe_state(ab):
