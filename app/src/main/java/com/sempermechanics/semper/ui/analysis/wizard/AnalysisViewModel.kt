@@ -163,9 +163,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
 
     // ── Lab test: what the load card records (logic in LabInputs.kt) ──────
     // Chosen on Home before the media picker, so the wizard knows on open
-    // whether to ask for machine loads. Tensile is the fallback for a wizard
-    // reached without the extra, which only a stale launcher shortcut can do.
-    var testType: TestType = TestType.TENSILE
+    // whether to ask for machine loads. A wizard reached without the extra (a
+    // stale launcher shortcut) is plain 2D DIC: Semper's wizard, no load card.
+    var testType: TestType = TestType.DIC_2D
 
     /** Specimen cross-section in mm², typed on the load card; 0 until it is. */
     var crossSectionMm2: Float = 0f

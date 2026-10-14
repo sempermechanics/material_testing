@@ -13,6 +13,7 @@ import com.sempermechanics.semper.data.mechanical.TestType
  * The first question a new analysis asks: which mechanical test the frames
  * come from. Shown from Home's **+** before the media picker, so the wizard
  * already knows whether to ask for machine loads by the time it opens.
+ * [ORDER] puts 2D DIC, Semper's own analysis, first; the two lab tests follow.
  *
  * A sheet rather than a wizard step: the wizard's chrome indexes a fixed page
  * list and counts its steps in the toolbar, and every one of those would shift
@@ -24,12 +25,7 @@ object TestTypeSheet {
         val sheet = BottomSheetDialog(activity)
         val root = activity.layoutInflater.inflate(R.layout.sheet_test_type, null)
         sheet.setContentView(root)
-        val rows = listOf(
-            R.id.btnTestTensile to TestType.TENSILE,
-            R.id.btnTestBending to TestType.BENDING,
-            R.id.btnTestDic2d to TestType.DIC_2D,
-        )
-        rows.forEach { (id, type) ->
+        ORDER.forEach { (id, type) ->
             root.findViewById<View>(id).setOnClickListener {
                 sheet.dismiss()
                 onPicked(type)
@@ -37,6 +33,13 @@ object TestTypeSheet {
         }
         sheet.show()
     }
+
+    /** Each row of the sheet, top to bottom, with the test it picks. */
+    val ORDER: List<Pair<Int, TestType>> = listOf(
+        R.id.btnTestDic2d to TestType.DIC_2D,
+        R.id.btnTestTensile to TestType.TENSILE,
+        R.id.btnTestBending to TestType.BENDING,
+    )
 
     /** The user-facing name of a type, for the ⓘ sheet and reports. */
     fun label(activity: AppCompatActivity, type: TestType): String = activity.getString(labelRes(type))

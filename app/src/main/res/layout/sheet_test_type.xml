@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Home's + asks this first (TestTypeSheet). Drawn like Semper's other sheets
+     (sheet_share.xml): a title, then flat rows split by hairlines. 2D DIC, which
+     is Semper's analysis, comes first; the two lab tests follow. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/surface"
     android:orientation="vertical"
-    android:paddingHorizontal="16dp"
+    android:paddingHorizontal="20dp"
     android:paddingTop="10dp"
-    android:paddingBottom="16dp">
+    android:paddingBottom="20dp">
 
     <View
         android:layout_width="34dp"
@@ -18,64 +20,59 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
         android:text="@string/test_type_title"
         android:textColor="@color/text_primary"
         android:textSize="17sp"
         android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:layout_marginBottom="12dp"
-        android:text="@string/test_type_subtitle"
-        android:textColor="@color/text_secondary"
-        android:textSize="13sp" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnTestTensile"
-        style="@style/Widget.Semper.Button.Outlined"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/test_type_tensile" />
+        android:divider="@drawable/divider_hairline"
+        android:orientation="vertical"
+        android:showDividers="middle">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="8dp"
-        android:text="@string/test_type_sub_loads"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp" />
+        <LinearLayout
+            android:id="@+id/btnTestDic2d"
+            style="@style/Widget.Semper.ShareRow"
+            android:orientation="vertical">
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnTestBending"
-        style="@style/Widget.Semper.Button.Outlined"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/test_type_bending" />
+            <TextView
+                style="@style/Widget.Semper.TestTypeTitle"
+                android:text="@string/test_type_dic2d" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="8dp"
-        android:text="@string/test_type_sub_flexural"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp" />
+            <TextView
+                style="@style/Widget.Semper.TestTypeSub"
+                android:text="@string/test_type_sub_dic2d" />
+        </LinearLayout>
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnTestDic2d"
-        style="@style/Widget.Semper.Button.Outlined"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/test_type_dic2d" />
+        <LinearLayout
+            android:id="@+id/btnTestTensile"
+            style="@style/Widget.Semper.ShareRow"
+            android:orientation="vertical">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="@string/test_type_sub_dic2d"
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp" />
+            <TextView
+                style="@style/Widget.Semper.TestTypeTitle"
+                android:text="@string/test_type_tensile" />
+
+            <TextView
+                style="@style/Widget.Semper.TestTypeSub"
+                android:text="@string/test_type_sub_loads" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnTestBending"
+            style="@style/Widget.Semper.ShareRow"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/Widget.Semper.TestTypeTitle"
+                android:text="@string/test_type_bending" />
+
+            <TextView
+                style="@style/Widget.Semper.TestTypeSub"
+                android:text="@string/test_type_sub_flexural" />
+        </LinearLayout>
+    </LinearLayout>
 </LinearLayout>

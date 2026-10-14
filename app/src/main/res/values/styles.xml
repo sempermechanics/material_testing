@@ -103,6 +103,23 @@
         <item name="android:textSize">15sp</item>
     </style>
 
+    <!-- Material Testing's "Which test?" rows (sheet_test_type.xml): a share
+         row's title, with a line under it saying what the test gives. -->
+    <style name="Widget.Semper.TestTypeTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="Widget.Semper.TestTypeSub">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
     <style name="Widget.Semper.ShareRowType">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>

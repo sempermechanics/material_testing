@@ -4,12 +4,14 @@ import android.app.Application
 import android.content.Intent
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.prefs.WizardDraft
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisCancel
+import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -80,5 +82,14 @@ class WizardTestTypeTest {
         val expected = app.getString(R.string.info_strain_window) + " " +
             app.getString(R.string.info_strain_window_bending)
         assertEquals(expected, strainInfoText(wizard(TestType.BENDING)))
+    }
+
+    @Test
+    fun `a wizard opened with no test type is plain 2D DIC`() {
+        val activity = wizard(type = null)
+        val vm = ViewModelProvider(activity)[AnalysisViewModel::class.java]
+
+        assertEquals(TestType.DIC_2D, vm.testType)
+        assertEquals(app.getString(R.string.info_strain_window), strainInfoText(activity))
     }
 }
