@@ -132,8 +132,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="forgot_password">Forgot Password?</string>
     <string name="or">or</string>
     <string name="continue_with_google">Continue with Google</string>
-    <string name="min_0_0">Min: 0.0</string>
-    <string name="max_0_0">Max: 0.0</string>
     <string name="frame_1_1">Frame: 1 / 1</string>
 
     <!-- Result viewer: summary animation and frame jump -->
@@ -148,8 +146,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
          literal extremum, which is what the ⓘ details sheet shows instead. -->
     <string name="scale_max_fmt">≥ %1$s %2$s</string>
     <string name="scale_min_fmt">≤ %1$s %2$s</string>
-    <string name="summary_building_fmt">Rendering %1$s… %2$d of %3$d</string>
-    <string name="summary_scanning_fmt">Reading frames… %1$d of %2$d</string>
+    <!-- A colour-scale end before its range is known (the summary's sequence
+         pass, or the first frame still drawing), in place of a fake "0.0". -->
+    <string name="scale_label_pending" translatable="false">—</string>
+    <!-- The summary's progress pill, one short line: the field is on the U chip
+         above, so it is not repeated here. -->
+    <string name="summary_building_fmt">Building summary · %1$d of %2$d</string>
+    <string name="summary_scanning_fmt">Reading frames · %1$d of %2$d</string>
+    <string name="summary_cancel_desc">Cancel summary</string>
     <string name="summary_failed">Could not build the animation.</string>
     <string name="summary_no_data">No correlated data to animate.</string>
     <string name="summary_needs_android_9">Showing the first frame — animation needs Android 9 or newer.</string>
@@ -707,21 +711,25 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="frame_order_date_desc">Newest first</string>
     <string name="frame_order_manual">Manual</string>
     <string name="frame_order_manual_hint">Drag thumbnails to reorder</string>
+    <!-- First-run tips (CoachMarkController). Keep each to about three lines on a
+         phone: a sentence or two, nothing an info button already explains. -->
     <string name="coach_skip">Skip</string>
     <string name="coach_next">Next</string>
     <string name="coach_done">Got it</string>
-    <string name="coach_home_fab">Import photos or a video to start an analysis</string>
+    <!-- Which tip of a sequence is showing, e.g. "1 of 3". -->
+    <string name="coach_step_count">%1$d of %2$d</string>
+    <string name="coach_home_fab">Import photos or a video to start an analysis.</string>
 
-    <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
-    <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
-    <string name="coach_analysis_mode">Single solve or parameter sweep?</string>
-    <string name="coach_analysis_roi">Choose RoI or defaults to full image.</string>
+    <string name="coach_analysis_ref">Add the reference image here. You can change it any time.</string>
+    <string name="coach_analysis_def">Add the deformed frames next. Sort them by name or date, or drag to reorder.</string>
+    <string name="coach_analysis_mode">Choose a single solve or a parameter sweep.</string>
+    <string name="coach_analysis_roi">Set an ROI here, or keep the full image.</string>
     <string name="coach_analysis_advanced">Change parameters when you need finer control.</string>
-    <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
-    <string name="coach_sweep_line_cut">Strain will be read along this centre line of the region of interest.</string>
-    <string name="coach_sweep_graph">Each node is one combination: subset size across, strain window up. Filled nodes solved — tap one to focus its curve, double-tap to open it. Hollow ones failed; tap for the reason.</string>
-    <string name="coach_sweep_scrub">Drag across the plot to read the focused curve\'s value at any position — it\'s marked with a dot in its own colour.</string>
-    <string name="coach_sweep_ranges">Set the ranges the sweep covers; each pair of subset and strain window is one analysis.</string>
+    <string name="coach_sweep_lattice">Each dot in the planned lattice is one analysis.</string>
+    <string name="coach_sweep_line_cut">Strain is read along this centre line of the ROI.</string>
+    <string name="coach_sweep_graph">Each dot is one combination: subset size across, VSG up. Tap a filled one to focus its curve; tap a hollow one for the reason.</string>
+    <string name="coach_sweep_scrub">Drag across the plot to read the focused curve at any point.</string>
+    <string name="coach_sweep_ranges">Set the ranges to sweep. Each subset and strain window pair is one analysis.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
     
     <!-- The ROI row: the region, then the points the engine solves in it at this step. -->
@@ -743,10 +751,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Use %d image</item>
         <item quantity="other">Use %d images</item>
     </plurals>
-    <string name="coach_picker_images">Images from the gallery</string>
-    <string name="coach_picker_files">Files opens the system file picker</string>
-    <string name="coach_picker_multi">Tap several images to add them together</string>
-    <string name="coach_picker_files_select_all">In the next screen, Select all is under the three-dot menu (top right)</string>
+    <string name="coach_picker_images">Pick images from your gallery here.</string>
+    <string name="coach_picker_files">Files opens the system file picker.</string>
+    <string name="coach_picker_multi">Tap several images to add them at once.</string>
+    <string name="coach_picker_files_select_all">In Files, Select all is under the three-dot menu at the top right.</string>
     <string name="warn_faq_desc">Why this warning</string>
     <string name="action_why">Why?</string>
     <string name="faq_redirect_title">Open in browser?</string>

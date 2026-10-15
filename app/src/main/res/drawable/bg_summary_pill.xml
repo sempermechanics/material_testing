@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The viewer's summary progress pill: a light card above the scrubber, the
+     same surface and hairline as the app's cards. Force dark inverts it. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/surface" />
+    <corners android:radius="12dp" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/surface_outline" />
+</shape>

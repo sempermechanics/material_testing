@@ -86,6 +86,12 @@ once whether it may send crash diagnostics. Nothing is collected unless you say
 yes, and you can change your mind at any time under **Settings → Your data →
 Send crash reports**.
 
+**First-run tips.** The first time you reach a screen, a short tip card points
+at the control it describes, with the rest of the screen dimmed. When a screen
+has several tips the card counts them ("1 of 3") and offers **Skip** beside
+**Next**; the last tip, and a screen with only one, shows **Got it**. Skip or
+Got it puts that screen's tips away for good.
+
 <img src="images/home.png" width="300" alt="Home screen">
 
 The app icon follows your phone's dark theme: the S in black on a light
@@ -517,7 +523,7 @@ window and land on different VSGs. The lattice plots each node at its VSG, so on
 window sits higher at a larger subset's step.
 
 The lattice preview on this step is **inert** — taps do nothing until it has
-run. The coach mark points it out on a first visit.
+run. A first-run tip points it out.
 
 ### Reading the result lattice
 
@@ -535,8 +541,8 @@ ever carries meaning at a time.
 
 The screen is built to be worked with one thumb. It scrolls — summary line,
 lattice, controls, then plot — while **Save graph** and **View** stay pinned at
-the bottom. The y axis is the **VSG (px)**; the lattice draws compact, so
-the coach mark on first visit is what names the axes.
+the bottom. The x axis is the **subset size** and the y axis the **VSG (px)**;
+the lattice draws compact, with tick numbers and a "px" unit but no axis titles.
 
 **Choosing a combination**
 
@@ -620,7 +626,10 @@ looping field overview of the whole sequence — every frame, never longer than
 10 seconds, about 300 ms a frame until the frame count forces it faster. It is
 framed on the same coloured region the live view rest-fits to (your ROI, or the
 accepted points), scaled to fill — not a letterboxed full photo. While it builds
-you get a progress readout and a **Cancel**. **Next** enters the
+a pill above the frame scrubber says how far it has got ("Reading frames · 2 of 5",
+then "Building summary · 3 of 5") over a thin bar, with a **✕** that cancels; it
+stays up when the other controls fade. Until the sequence range is known the colour
+scale's ends read "—". **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
 field. The field button stays available while it plays. A parameter sweep opens from
 the lattice onto one combination instead; there is no overview slot.
@@ -825,7 +834,7 @@ Write above that block; leave it in place.
 | Frames in the wrong order | Sort on step 1, then re-run |
 | Run vanished | The app was killed. No resume — run it again in the foreground |
 | Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
-| Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
+| Summary still says "Building summary" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
 | Summary shows one frame, not a loop | Android 8 or older. Single-setting field GIFs still export |
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Cloud icon stuck on Upload pending | Offline, Wi-Fi-only, or backup off |
