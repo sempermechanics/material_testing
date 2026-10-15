@@ -33,6 +33,7 @@ import com.sempermechanics.semper.ui.analysis.frames.VideoSamplingSheet
 import com.sempermechanics.semper.ui.analysis.frames.WizardMediaPickers
 import com.sempermechanics.semper.ui.analysis.frames.checkFrameSizes
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
+import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import com.sempermechanics.semper.ui.analysis.rerun.RerunImportController
 import com.sempermechanics.semper.ui.analysis.rerun.RerunInputs
 import com.sempermechanics.semper.ui.analysis.roi.RoiResolveHelper
@@ -63,6 +64,7 @@ import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
 import com.sempermechanics.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * The analysis setup wizard: page 1 loads reference/deformed images (or
@@ -397,9 +399,14 @@ class StaticAnalysisActivity :
             if (list.isNotEmpty()) importDeformed(list.map { it.toUri() })
         }
         // Home's Re-run: a new analysis from a saved one's photos and settings.
-        intent.getStringExtra(IntentKeys.RERUN_SESSION_ID)?.let {
+        intent.getStringExtra(IntentKeys.RERUN_SESSION_ID)?.let { id ->
+            val picked = intent.getStringExtra(IntentKeys.RERUN_REFERENCE_PATH)?.let { path ->
+                PickedReference(File(path), intent.getStringExtra(IntentKeys.RERUN_REFERENCE_NAME).orEmpty())
+            }
             intent.removeExtra(IntentKeys.RERUN_SESSION_ID)
-            rerun.load(it)
+            intent.removeExtra(IntentKeys.RERUN_REFERENCE_PATH)
+            intent.removeExtra(IntentKeys.RERUN_REFERENCE_NAME)
+            rerun.load(id, picked)
         }
     }
 

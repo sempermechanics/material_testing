@@ -38,6 +38,9 @@ object CacheJanitor {
     /** The reference image `StaticAnalysisActivity` hands to `RoiDrawActivity`. */
     const val TEMP_ROI_REF = "temp_roi_ref.bin"
 
+    /** The reference Home hands the wizard for an older analysis's Re-run, decoded. */
+    const val RERUN_REFERENCE_CACHE = "rerun_reference.bin"
+
     /** The cloud account export, before the user picks where to save it. */
     const val ACCOUNT_EXPORT = "semper-account-export.json"
 
@@ -47,7 +50,7 @@ object CacheJanitor {
      * inflate the Temporary files size while Clear left them untouched. Named
      * here and used by their writers, so a rename cannot leave one unreclaimed.
      */
-    private val REGENERABLE_FILE_NAMES = setOf(ROI_MASK_CACHE, TEMP_ROI_REF, ACCOUNT_EXPORT)
+    private val REGENERABLE_FILE_NAMES = setOf(ROI_MASK_CACHE, TEMP_ROI_REF, RERUN_REFERENCE_CACHE, ACCOUNT_EXPORT)
 
     /** The directory share and export bundles are written to, created if missing. */
     fun shareDir(cacheDir: File): File = File(cacheDir, SHARE_SUBDIR).apply { mkdirs() }

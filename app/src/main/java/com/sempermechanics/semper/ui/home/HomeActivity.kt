@@ -24,7 +24,8 @@ import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.analysis.rerun.RerunInputs
+import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
+import com.sempermechanics.semper.ui.analysis.rerun.RerunSource
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
 import com.sempermechanics.semper.ui.common.Insets
@@ -41,7 +42,6 @@ import com.sempermechanics.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Home: the record of every analysis done on this phone (metadata from
@@ -117,6 +117,9 @@ class HomeActivity : AppCompatActivity() {
         }
 
     private var mediaPicker: MediaPickerSheet? = null
+
+    /** An older analysis's Re-run: its reference picked again. Registers launchers, so built with the screen. */
+    private val rerunReference = RerunReferencePicker(this, onPicked = ::openRerun)
     private val requestMediaPermission =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             mediaPicker?.onPermissionResult()
@@ -230,25 +233,36 @@ class HomeActivity : AppCompatActivity() {
     /**
      * Re-run: opens the wizard on a new analysis copied from [record]'s
      * photos and settings (owner decision, 2026-10-15: a saved analysis is
-     * never re-run in place). One saved before Re-run existed, restored from
-     * the cloud, or freed up has no original photos here, and says so. The
-     * new analysis counts toward the limit like any other.
+     * never re-run in place). One saved before Re-run kept its reference, or
+     * restored, asks for its reference again ([RerunReferencePicker]); one
+     * whose frames are not here (freed up) says so. The new analysis counts
+     * toward the limit like any other, so the gates come first.
      */
     private fun startRerun(record: SessionRecord) {
         lifecycleScope.launch {
-            val ready = withContext(Dispatchers.IO) { RerunInputs.readComplete(File(record.sessionDir)) != null }
+            val source = withContext(Dispatchers.IO) { RerunSource.of(record) }
             when {
-                !ready -> Dialogs.info(
+                source == RerunSource.MISSING -> Dialogs.info(
                     this@HomeActivity,
                     R.string.rerun_unavailable_title,
                     R.string.rerun_photos_missing_body,
                 )
-                mayStartNewAnalysis() -> startActivity(
-                    Intent(this@HomeActivity, StaticAnalysisActivity::class.java)
-                        .putExtra(IntentKeys.RERUN_SESSION_ID, record.id),
-                )
+                !mayStartNewAnalysis() -> Unit
+                source == RerunSource.NEEDS_REFERENCE -> rerunReference.ask(record)
+                else -> openRerun(record, null)
             }
         }
+    }
+
+    /** The wizard on [record]'s Re-run, with the reference picked again when [picked]. */
+    private fun openRerun(record: SessionRecord, picked: PickedReference?) {
+        val intent = Intent(this, StaticAnalysisActivity::class.java)
+            .putExtra(IntentKeys.RERUN_SESSION_ID, record.id)
+        if (picked != null) {
+            intent.putExtra(IntentKeys.RERUN_REFERENCE_PATH, picked.file.absolutePath)
+                .putExtra(IntentKeys.RERUN_REFERENCE_NAME, picked.name)
+        }
+        startActivity(intent)
     }
 
     /**

@@ -13,6 +13,7 @@ import com.sempermechanics.semper.ui.analysis.run.RunChrome
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
+import com.sempermechanics.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -40,9 +41,14 @@ internal class RerunImportController(
 ) {
     private var job: Job? = null
 
-    /** Starts a new analysis from the one Home lists as [sessionId]. */
+    /**
+     * Starts a new analysis from the one Home lists as [sessionId]: from its
+     * kept inputs, or, given [picked], from its frames and the reference the
+     * user picked again ([RerunLoader.loadWithReference]), which is deleted
+     * once read.
+     */
     @MainThread
-    fun load(sessionId: String) {
+    fun load(sessionId: String, picked: PickedReference? = null) {
         if (chrome.isBusy) return
         chrome.beginImport { job?.cancel() }
         chrome.overlay.processingStartTime = System.currentTimeMillis()
@@ -53,15 +59,13 @@ internal class RerunImportController(
         )
         job = activity.lifecycleScope.launch {
             try {
-                val loaded = withContext(io) {
-                    val record = SessionStore.get(activity, sessionId)
-                    record?.let { RerunLoader.load(File(it.sessionDir), activity.cacheDir) }
-                }
+                val loaded = withContext(io) { read(sessionId, picked) }
                 if (loaded == null) {
                     Dialogs.info(activity, R.string.rerun_unavailable_title, R.string.rerun_photos_missing_body)
                 } else {
                     viewModel.applyRerun(loaded)
                     onApplied(loaded.inputs)
+                    if (loaded.maskDropped) Feedback.toast(activity, R.string.rerun_mask_not_saved, long = true)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -74,6 +78,20 @@ internal class RerunImportController(
                 checkReady()
             }
         }
+    }
+
+    /** The Re-run of [sessionId], from its kept inputs or with [picked]; null when it cannot be had. */
+    private suspend fun read(sessionId: String, picked: PickedReference?): LoadedRerun? = try {
+        val record = SessionStore.get(activity, sessionId)
+        val reference = picked?.file?.takeIf { it.isFile }?.readBytes()
+        when {
+            record == null -> null
+            picked == null -> RerunLoader.load(File(record.sessionDir), activity.cacheDir)
+            reference == null -> null
+            else -> RerunLoader.loadWithReference(record, reference, picked.name, activity.cacheDir)
+        }
+    } finally {
+        picked?.file?.delete()
     }
 
     /** Stops a copy in flight: the screen is going. */

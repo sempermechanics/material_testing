@@ -9,9 +9,7 @@ import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.ImageSize
-import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
-import com.sempermechanics.semper.ui.analysis.wizard.ReferencePreviewLoader
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.media.displayNameOf
@@ -20,7 +18,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.io.InputStream
 
 /**
  * Loads a picked reference image into the view model, decoding it on [io]:
@@ -47,7 +44,7 @@ class ReferenceImportController(
         pick.launch(activity.lifecycleScope) {
             try {
                 val name = withContext(io) { displayNameOf(activity.contentResolver, uri) }
-                val isRaw = name.endsWith(".dng", true) || name.endsWith(".raw", true)
+                val isRaw = isRawName(name)
                 val loaded = if (busy != null) busy.decoding(isRaw) { read(uri, isRaw, busy) } else read(uri, isRaw)
                 if (loaded == null) {
                     FaqRedirect.snackbar(
@@ -75,30 +72,11 @@ class ReferenceImportController(
     }
 
     /** Reads and decodes [uri]; a RAW's size goes to [busy] first, for the slot's line. */
-    private suspend fun read(uri: Uri, isRaw: Boolean, busy: ReferenceSlotBusy? = null): LoadedReference? {
+    private suspend fun read(uri: Uri, isRaw: Boolean, busy: ReferenceSlotBusy? = null): DecodedReference? {
         if (isRaw && busy != null) busy.decodingSize(withContext(io) { rawSizeOf(activity.contentResolver, uri) })
         return withContext(io) {
-            activity.contentResolver.openInputStream(uri)?.use { stream -> decode(stream, isRaw) }
+            activity.contentResolver.openInputStream(uri)?.use { stream -> decodeReference(stream, isRaw) }
         }
-    }
-
-    private class LoadedReference(val bytes: ByteArray, val size: ImageSize, val preview: Bitmap?)
-
-    /** Decode / dimension / preview work for a reference pick. Null when it cannot be decoded. */
-    @WorkerThread
-    private suspend fun decode(stream: InputStream, isRaw: Boolean): LoadedReference? {
-        if (isRaw) {
-            return BitmapDecoder.rgbaAndPreviewFromStream(stream)?.let { decoded ->
-                LoadedReference(decoded.rgba, ImageSize(decoded.width, decoded.height), decoded.preview)
-            }
-        }
-        val bytes = stream.readBytes()
-        // Sizes from the native decoder, which applies EXIF as the engine does.
-        val loaded = ReferencePreviewLoader.load(
-            ReferencePreviewLoader.Request(bytes, 0, 0, BitmapDecoder.PREVIEW_MAX_EDGE),
-        )
-        return LoadedReference(bytes, ImageSize(loaded.width, loaded.height), loaded.bitmap)
-            .takeIf { loaded.width > 0 && loaded.height > 0 }
     }
 }
 

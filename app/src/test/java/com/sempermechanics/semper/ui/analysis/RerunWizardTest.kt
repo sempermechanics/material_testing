@@ -10,6 +10,7 @@ import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.slider.Slider
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.prefs.WizardDraft
+import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.SessionLayout
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicParams
@@ -46,6 +47,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowToast
 import java.io.File
 import java.util.concurrent.Executor
 
@@ -177,6 +179,51 @@ class RerunWizardTest {
         fun checked(group: Int) = wizard.findViewById<MaterialButtonToggleGroup>(group).checkedButtonId
         assertEquals(R.id.rbModeSweep, checked(R.id.rgAnalysisMode))
         assertEquals(R.id.rbAxisY, checked(R.id.rgLineCutAxis))
+    }
+
+    @Test
+    fun `an older analysis's Re-run takes the reference picked again and its saved frames`() {
+        val dir = SessionStore.dirFor(app, "old")
+        val layout = SessionLayout(dir)
+        val names = listOf("b.png", "a.png")
+        names.forEachIndexed { i, name ->
+            layout.rawDeformed(name).apply { parentFile?.mkdirs() }.writeText("image $name")
+            layout.frameDat(i).writeText("dat")
+        }
+        val record = sessionRecord(
+            id = "old",
+            subset = params.subset,
+            step = params.step,
+            strainWindow = params.strainWindow,
+            imgW = W,
+            imgH = H,
+            roiX = 4,
+            roiY = 4,
+            roiW = 40,
+            roiH = 30,
+            sessionDir = dir.absolutePath,
+            defNames = names,
+        )
+        assertTrue(SessionStore.upsert(app, record, true))
+        val picked = File(app.cacheDir, CacheJanitor.RERUN_REFERENCE_CACHE).apply { writeBytes(ByteArray(W * H * 4)) }
+        val intent = Intent(app, StaticAnalysisActivity::class.java)
+            .putExtra(IntentKeys.RERUN_SESSION_ID, "old")
+            .putExtra(IntentKeys.RERUN_REFERENCE_PATH, picked.absolutePath)
+            .putExtra(IntentKeys.RERUN_REFERENCE_NAME, "again.dng")
+
+        val wizard = Robolectric.buildActivity(StaticAnalysisActivity::class.java, intent).also { built = it }
+            .setup().get()
+        val vm = ViewModelProvider(wizard)[AnalysisViewModel::class.java]
+        await("the copied frames") { vm.defCount == 2 && vm.step == WizardStep.SETTINGS }
+
+        assertEquals("again.dng", vm.refName)
+        assertEquals(names, vm.defOriginalNames)
+        assertTrue(vm.defFilePaths.none { File(it).canonicalPath.startsWith(dir.canonicalPath) })
+        assertEquals(Roi(4, 4, 40, 30), vm.roi)
+        assertEquals(params.step, wizard.findViewById<Slider>(R.id.sliderStepSize).value.toInt())
+        assertEquals(app.getString(R.string.rerun_mask_not_saved), ShadowToast.getTextOfLatestToast())
+        assertFalse("the hand-off is read once", picked.exists())
+        assertEquals("the saved frames stay", 2, layout.rawDeformedDir.listFiles()?.size)
     }
 
     private companion object {

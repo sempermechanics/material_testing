@@ -241,8 +241,18 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="rerun_unavailable_title">Can\'t re-run this analysis</string>
     <!-- Re-run of a backed-up analysis that is not on this phone. -->
     <string name="rerun_photos_in_cloud_body">Its photos aren\'t on this phone. Restore it first.</string>
-    <!-- Re-run of one this phone has no original photos for (restored, freed up, or saved before Re-run). -->
+    <!-- Re-run of one this phone has no frames for (only in the cloud, or freed up). -->
     <string name="rerun_photos_missing_body">This phone doesn\'t have its original photos.</string>
+    <!-- Re-run of an analysis saved before Re-run kept its reference (or restored): pick it again. -->
+    <string name="rerun_pick_reference_title">Pick its reference photo</string>
+    <string name="rerun_pick_reference_body">This analysis was saved before Re-run kept its reference. Choose the same reference photo; its frames and settings come from the analysis.</string>
+    <string name="rerun_choose_photo">Choose photo</string>
+    <string name="rerun_choose_another_photo">Choose another photo</string>
+    <string name="rerun_checking_photo">Checking the photo…</string>
+    <!-- The picked reference's size differs from the analysis's: width × height, then the analysis's. -->
+    <string name="rerun_reference_size_mismatch">This photo is %1$d × %2$d; the analysis used %3$d × %4$d.</string>
+    <!-- Shown once when an older analysis's drawn region is re-run as its rectangle. -->
+    <string name="rerun_mask_not_saved">The mask wasn\'t saved; the region is a rectangle.</string>
     <string name="rerun_copy_failed_body">Its photos couldn\'t be copied. Check the free space on this phone.</string>
     <string name="rerun_copying">Copying the analysis\'s photos…</string>
     <!-- After a rename to a name another analysis has. -->

@@ -729,8 +729,16 @@ towards your analyses like any other and is named after the reference, with
 *(2)* added while the first is still on Home. A parameter sweep keeps only the
 one frame it was solved against, so its Re-run has that frame alone. Re-run
 needs the original photos on this phone: an **Only in cloud** row asks you to
-restore it first, and an analysis restored from the cloud, freed up, or made
-before Re-run existed has none, so it says so.
+restore it first, and a freed-up one says this phone doesn't have them.
+
+An analysis made before Re-run kept its reference, or restored from the cloud
+(the backup does not carry Re-run's copy), asks you to **Pick its reference
+photo**: choose the same photo again, and its frames and settings come from the
+analysis. The photo must be the analysis's size; another says "This photo is
+W × H; the analysis used W × H." and lets you choose again or cancel. Such an
+analysis kept only its region's rectangle, so a region you drew comes back as
+that rectangle, and the app says once "The mask wasn't saved; the region is a
+rectangle." Redraw the shape on the ROI step if it was not a rectangle.
 
 **Backups that are not on this phone.** On a new phone, or after a reinstall,
 Home shows a card above the list — "4 analyses in your cloud backup aren't on
