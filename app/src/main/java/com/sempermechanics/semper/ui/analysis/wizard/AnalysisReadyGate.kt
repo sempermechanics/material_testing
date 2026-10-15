@@ -3,10 +3,13 @@ package com.sempermechanics.semper.ui.analysis.wizard
 import android.content.Context
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.mechanical.TestType
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.databinding.ActivityStaticAnalysisBinding
 import com.sempermechanics.semper.databinding.WizardStepSettingsContentBinding
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
+import com.sempermechanics.semper.ui.analysis.recommend.RunEstimate
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
 
@@ -40,6 +43,48 @@ class AnalysisReadyGate(
 
         settings.btnDefineRoi.isEnabled = (viewModel.refBytes != null) && !isProcessing
         binding.btnBack.isEnabled = !isProcessing
+        showEstimate()
+    }
+
+    /**
+     * "1100 × 800 px · 8,800 points" on the ROI row, and "Compute · about
+     * 1 min" on the button. Runs on every step or region change, so the count
+     * follows both. The time comes from this phone's past runs; without any,
+     * the button says Compute alone.
+     */
+    private fun showEstimate() {
+        val subset = settings.sliderSubsetSize.value.toInt()
+        val step = settings.sliderStepSize.value.toInt()
+        val roi = Roi.forSolve(subset, viewModel.hasCustomRoi, viewModel.roi, viewModel.refSize)
+        val points = roi?.let { RunEstimate.gridPoints(it.w, it.h, step) } ?: 0
+        val res = binding.root.resources
+        showRoi(points)
+
+        val rate = AppSettings.runPointsPerSecond(binding.root.context)
+        val seconds = RunEstimate.seconds(points, viewModel.defCount, rate)
+        binding.btnCalculateFullField.text = if (seconds != null) {
+            res.getString(R.string.run_compute_eta_fmt, RunEstimate.duration(res, seconds))
+        } else {
+            res.getString(R.string.run_analysis)
+        }
+    }
+
+    /**
+     * The ROI row's line: the region, "Full image" or "w × h px", then its
+     * [points] once there are any. A sweep solves at a step per combination
+     * (subset ÷ N), not the single step the count assumes, so in sweep mode
+     * the row names the region alone. The mode toggle re-checks readiness,
+     * so the line follows it both ways.
+     */
+    private fun showRoi(points: Int) {
+        val res = binding.root.resources
+        val region = if (viewModel.hasCustomRoi) {
+            res.getString(R.string.roi_custom_fmt, viewModel.roiW, viewModel.roiH)
+        } else {
+            res.getString(R.string.roi_full_image)
+        }
+        val counted = points > 0 && !viewModel.sweepMode
+        settings.tvInstruction.text = if (counted) RunEstimate.regionLabel(res, region, points) else region
     }
 
     /** Why Next is off: the first input still missing, the lab test's included; blank when none is. */

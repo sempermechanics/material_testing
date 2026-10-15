@@ -1,14 +1,21 @@
 package com.sempermechanics.semper.ui.viewer
 
+import android.content.res.Resources
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.imaging.video.VideoKeyframeHelper
 import com.sempermechanics.semper.report.ReportBuilder
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
+import com.sempermechanics.semper.ui.common.InlineBusy
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel.FieldMetrics
 import com.sempermechanics.semper.ui.viewer.summary.SummaryCaption
 
 /**
- * The viewer's edge title and the field's stats: max and min (with where they
- * are) and mean, in the caption and in the info peek sheet.
+ * The viewer's edge title (what is on screen: [title]) and the field's stats:
+ * max and min (with where they are) and mean, in the caption and in the info
+ * peek sheet. Also the "Opening steel_00 · 40 frames" pill while the first
+ * frame loads.
  *
  * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
  */
@@ -17,23 +24,56 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
     /** The stats text last shown, kept for the info peek sheet. */
     private var detailStats: String = ""
 
+    /** The opening pill's wait, from [showOpening] until [openingDone]. */
+    private var opening: InlineBusy? = null
+    private var openingToken = 0
+
+    /**
+     * Starts the opening wait: past 300 ms, a spinner and "Opening <name> · N
+     * frames" float over the canvas until [openingDone]. Call once, in onCreate.
+     */
+    fun showOpening() {
+        val binding = host.binding
+        val busy = InlineBusy(host, binding.viewerOpening, spinner = binding.viewerOpeningSpinner)
+        opening = busy
+        openingToken = busy.start {
+            val frames = if (host.frameSetLoaded) host.frameCount() else host.args.frameNames.size
+            binding.tvViewerOpening.text = openingText(host.resources, host.args.refName, frames)
+        }
+    }
+
+    /** The first frame drew, or none will: the opening pill goes. */
+    fun openingDone() {
+        opening?.stop(openingToken)
+        opening = null
+    }
+
     /** Max / min (with coordinates) / mean for the info peek sheet. */
     fun detailStatsText(): String = detailStats.ifBlank { host.getString(R.string.stat_empty) }
+
+    /**
+     * The edge title. The field chip names the field, and the pill under the
+     * frame counts it, so the title names what is on screen: "Summary", the
+     * frame's file name, a video frame's time in its clip, or a sweep node's
+     * subset and window ([frameTitle]). While a lab test's Results stand in
+     * for the summary, "Results".
+     */
+    fun title(): String = when {
+        host.resultsOnScreen -> host.getString(R.string.results_title)
+        host.isShowingSummary -> host.getString(R.string.summary_title)
+        else -> {
+            val position = host.currentFrameIndex
+            val node = if (host.isSweep) host.frameParams.at(position) else null
+            val timeMs = host.args.frameTimesMs?.getOrNull(host.plannedFrameIndex(position))
+            frameTitle(host.resources, host.frameDisplayName(position), node, timeMs)
+        }
+    }
 
     /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. Main thread only. */
     fun applyFieldMetrics(metrics: FieldMetrics, index: Int) {
         val binding = host.binding
         val unit = if (DicResult.isStrainFieldIndex(index)) "mε" else "px"
-        val frameBit = if (host.isShowingSummary) {
-            host.getString(R.string.summary_title)
-        } else {
-            "${host.currentFrameIndex + 1} / ${host.batchFiles.size.coerceAtLeast(1)}"
-        }
-        binding.tvFinding.text = if (host.resultsOnScreen) {
-            host.getString(R.string.results_title)
-        } else {
-            host.getString(R.string.viewer_edge_title_fmt, host.currentTypeString, frameBit)
-        }
+        binding.tvFinding.text = title()
 
         if (host.isShowingSummary) {
             detailStats = SummaryCaption.text(host.resources, host.summary.boundsFor(index), index, unit)
@@ -71,5 +111,38 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
             host.getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
         }
         binding.tvStatsCaption.text = detailStats
+    }
+
+    companion object {
+        /**
+         * A frame's title. A sweep [node] reads "Subset 15 · window 3", its
+         * strain window counted in data points as the lattice and the wizard
+         * count it (the step is always subset ÷ N, so it is left out); a node
+         * whose VSG is no whole window, from before windows were counted in
+         * points, keeps its stored label [name]. A video frame with its clip
+         * time [timeMs] reads that time, "0:01.25". Any other frame is [name]
+         * without its extension: "steel_03", or "Frame 3" for an unnamed one.
+         */
+        fun frameTitle(resources: Resources, name: String, node: DicParams? = null, timeMs: Long? = null): String =
+            when {
+                node != null -> SweepStudy.windowPointsFor(node.strainWindow, node.step)
+                    ?.let { resources.getString(R.string.viewer_sweep_title_fmt, node.subset, it) }
+                    ?: name
+                timeMs != null -> VideoKeyframeHelper.formatFrameTime(timeMs)
+                else -> name.substringBeforeLast('.').ifBlank { name }
+            }
+
+        /**
+         * "Opening steel_00 · 40 frames": the reference's name without its
+         * extension (else "analysis"), and the frame count when known.
+         */
+        fun openingText(resources: Resources, refName: String, frames: Int): String {
+            val name = refName.substringBeforeLast('.').ifBlank { resources.getString(R.string.viewer_opening_unnamed) }
+            return if (frames > 0) {
+                resources.getQuantityString(R.plurals.viewer_opening_frames_fmt, frames, name, frames)
+            } else {
+                resources.getString(R.string.viewer_opening_fmt, name)
+            }
+        }
     }
 }

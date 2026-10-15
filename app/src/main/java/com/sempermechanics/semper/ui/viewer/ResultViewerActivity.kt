@@ -258,6 +258,8 @@ class ResultViewerActivity : AppCompatActivity() {
 
         summary = ViewerSummaryController(this)
 
+        // Past 300 ms, "Opening … · N frames" until the first frame draws.
+        captions.showOpening()
         // The directory listings, and a stat per frame, used to run here on the
         // main thread on every open. The first frame (and, with it, everything
         // the batch drives) starts once they are read, as it did before.
@@ -358,6 +360,7 @@ class ResultViewerActivity : AppCompatActivity() {
             }
         } else {
             frameJump.showingSummary = false
+            captions.openingDone()
             FaqRedirect.snackbar(this, R.string.no_batch_data, R.string.url_faq_no_batch_data)
         }
         val waiting = afterFrameSet.toList()
@@ -423,10 +426,7 @@ class ResultViewerActivity : AppCompatActivity() {
         inspect.clearSpatialIndex()
         images.updateHeatmapFitBounds(data)
         images.showFrameBase(index)
-        val displayName = frameDisplayName(index)
-        if (!isShowingSummary) {
-            binding.tvFrameCounter.text = "$displayName (${index + 1} / ${batchFiles.size})"
-        }
+        // The frame's name is the edge title (ViewerCaptions.title); the jump field counts.
         frameJump.syncFrameNumber()
         // updateVisualization warms this frame's stats off the main thread
         // and pushes them to the caption when the render completes.

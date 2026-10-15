@@ -32,6 +32,7 @@ import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportController
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderController
 import com.sempermechanics.semper.ui.analysis.frames.ReferenceImportController
+import com.sempermechanics.semper.ui.analysis.frames.ReferenceSlotBusy
 import com.sempermechanics.semper.ui.analysis.frames.VideoSamplingSheet
 import com.sempermechanics.semper.ui.analysis.frames.WizardMediaPickers
 import com.sempermechanics.semper.ui.analysis.frames.checkFrameSizes
@@ -63,7 +64,6 @@ import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.Motion
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
-import com.sempermechanics.semper.ui.common.onButtonChecked
 import com.sempermechanics.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.launch
 
@@ -107,6 +107,7 @@ class StaticAnalysisActivity :
     private lateinit var runs: WizardRunLauncher
     private lateinit var imports: FrameImportController
     private lateinit var reference: ReferenceImportController
+    private lateinit var referenceBusy: ReferenceSlotBusy
 
     /** Only inflated for tests that take a load per frame; see [setupLoadCard]. */
     internal var loadCard: AnalysisLoadCard? = null
@@ -187,8 +188,8 @@ class StaticAnalysisActivity :
             loadCard?.refresh()
         })
         subsets = SubsetRecommendationController(this, viewModel, binding, settings, host = this)
-        settings.rgInterpolator.onButtonChecked { clearRunStatus() }
-        params = WizardParamFields(this, viewModel, settings, subsets, host = this).also { it.bind() }
+        params = WizardParamFields(this, viewModel, settings, subsets, host = this, onGeometryChanged = ::checkReady)
+            .also { it.bind() }
 
         wizardChrome = AnalysisWizardChrome(this, binding, settingsPage, sweepPage)
         wizardCoach = AnalysisWizardCoach(this, CoachMarkController(this), binding, settings, sweepPage)
@@ -198,7 +199,6 @@ class StaticAnalysisActivity :
         wizardSlots = AnalysisWizardSlots(
             viewModel = viewModel,
             binding = binding,
-            settings = settings,
             formatChip = formatChip,
             frameOrderAdapter = frameOrder.adapter,
             onLineCutPreview = { sweepController.refreshLineCutPreview() },
@@ -212,10 +212,11 @@ class StaticAnalysisActivity :
 
     private fun buildImports() {
         imports = FrameImportController(this, viewModel, chrome, settings.tvStaticResult, ::checkReady)
+        referenceBusy = ReferenceSlotBusy(this, binding)
         reference = ReferenceImportController(this, viewModel, onLoaded = { preview ->
             refPreviewBmp = preview
             onImagesChanged(newReference = true, newFrames = false)
-        })
+        }, busy = referenceBusy)
     }
 
     /**
@@ -225,7 +226,7 @@ class StaticAnalysisActivity :
     private fun wireButtons() {
         val pickers = WizardMediaPickers(this, onReference = reference::load, onDeformed = ::importDeformed)
         val roiStudio = RoiStudioLauncher(this, viewModel, onRoiChanged = {
-            wizardSlots.updateRoiSummary()
+            wizardSlots.updateRoiThumbnail()
             checkReady()
             subsets.request()
         })
@@ -318,7 +319,7 @@ class StaticAnalysisActivity :
         if (newReference) wizardSlots.refreshRefSlot(refPreviewBmp)
         if (newFrames) wizardSlots.refreshDefSlot()
         // A different-size reference resets the ROI (applyNewReference).
-        if (newReference) wizardSlots.updateRoiSummary()
+        if (newReference) wizardSlots.updateRoiThumbnail()
         // Frames may have been loaded before this reference.
         viewModel.checkFrameSizes(resources)
         clearRunStatus()
@@ -389,7 +390,7 @@ class StaticAnalysisActivity :
         if (target >= WizardStep.SETTINGS) viewModel.settingsReviewed = true
 
         if (target == WizardStep.SETTINGS) {
-            wizardSlots.updateRoiSummary()
+            wizardSlots.updateRoiThumbnail()
             // Cheap no-op when the reference/ROI have not changed since the
             // last measurement; covers inputs that arrived before this page.
             subsets.request()
@@ -415,7 +416,7 @@ class StaticAnalysisActivity :
         }
         intent.getStringExtra(IntentKeys.PICKED_VIDEO_URI)?.let {
             intent.removeExtra(IntentKeys.PICKED_VIDEO_URI)
-            VideoSamplingSheet(this, onExtract = ::extractVideoFrames).open(it.toUri())
+            VideoSamplingSheet(this, onExtract = ::extractVideoFrames, busy = referenceBusy).open(it.toUri())
         }
         intent.getStringArrayListExtra(IntentKeys.PICKED_DEF_URIS)?.let { list ->
             intent.removeExtra(IntentKeys.PICKED_DEF_URIS)

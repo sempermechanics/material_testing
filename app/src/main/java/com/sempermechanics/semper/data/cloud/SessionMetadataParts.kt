@@ -9,10 +9,11 @@ import com.sempermechanics.semper.data.cloud.SessionMetadataDoc.Sweep
 import com.sempermechanics.semper.data.mechanical.loadOfFrame
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
+import com.sempermechanics.semper.report.ReportImageNames
 
 internal fun frameOf(record: SessionRecord, index: Int, image: String): Frame {
     val label = if (record.isSweep) {
-        record.sweepLabels.getOrElse(index) { "Combination_${index + 1}" }
+        ReportImageNames.sweepLabel(record.sweepLabels, index)
     } else {
         "Frame_${index + 1}"
     }

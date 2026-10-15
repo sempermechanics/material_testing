@@ -144,6 +144,9 @@ object ViewerReportFactory {
                 baseImg,
                 defImg ?: baseImg,
                 nameIndex = source.nameIndexAt(frameIndex),
+                // The field images go where the viewer draws this frame: on its
+                // own photo when that decoded, else on the reference.
+                onFramePhoto = defImg != null,
             )
             return ReportBuilder.buildReport(params).copy(mechanical = source.mechanicalCoverAt(frameIndex))
         } finally {

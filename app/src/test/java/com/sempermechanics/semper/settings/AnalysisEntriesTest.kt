@@ -125,6 +125,35 @@ class AnalysisEntriesTest {
     }
 
     @Test
+    fun `cloud-only rows read without an extension and never like another row`() {
+        val entries = AnalysisEntries.merge(
+            records = listOf(record("local-1", name = "steel_00")),
+            cloud = listOf(
+                CloudSessionDto(sessionId = "cloud-1", localSessionId = "a", specimen = "steel_00.png"),
+                CloudSessionDto(sessionId = "cloud-2", localSessionId = "b", specimen = "pmma_00.png"),
+                CloudSessionDto(sessionId = "cloud-3", localSessionId = "c", specimen = "pmma_00.png"),
+            ),
+        )
+
+        assertEquals(listOf("steel_00", "steel_00 (2)", "pmma_00", "pmma_00 (2)"), entries.map { it.name })
+    }
+
+    @Test
+    fun `a cloud-only row takes the analysis's name, and the reference's when the backup has none (TD-208)`() {
+        val entries = AnalysisEntries.merge(
+            records = listOf(record("local-1", name = "Sweep")),
+            cloud = listOf(
+                CloudSessionDto(sessionId = "cloud-1", localSessionId = "a", specimen = "steel.png", name = "Sweep"),
+                CloudSessionDto(sessionId = "cloud-2", localSessionId = "b", specimen = "steel.png", name = " "),
+                CloudSessionDto(sessionId = "cloud-3", localSessionId = "c", specimen = "pmma_00.png", name = null),
+                CloudSessionDto(sessionId = "cloud-4", localSessionId = "d", specimen = null, name = "Named only"),
+            ),
+        )
+
+        assertEquals(listOf("Sweep", "Sweep (2)", "steel", "pmma_00", "Named only"), entries.map { it.name })
+    }
+
+    @Test
     fun `local-only analyses report phone only`() {
         val entries = AnalysisEntries.merge(
             records = listOf(record("local-1", syncState = SessionRecord.SyncState.LOCAL_ONLY)),

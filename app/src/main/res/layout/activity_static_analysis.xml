@@ -26,6 +26,17 @@
         app:navigationIconTint="@color/viewer_chrome_text"
         app:titleCentered="false"
         android:elevation="0dp">
+
+        <!-- One dot per wizard page; the toolbar title names the page. -->
+        <TextView
+            android:id="@+id/tvStepDots"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="@dimen/space_16"
+            android:letterSpacing="0.1"
+            android:textSize="12sp"
+            tools:text="● ● ○" />
     </com.google.android.material.appbar.MaterialToolbar>
 
     <!-- ===================== Pages ===================== -->
@@ -143,6 +154,49 @@
                                 android:text="@string/action_change" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Over the dropzone or card while a pick is read (ReferenceSlotBusy):
+                         a skeleton thumbnail while an image decodes, a spinner while a
+                         video's metadata is read. Shown only past 300 ms. -->
+                    <LinearLayout
+                        android:id="@+id/refBusy"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_slot_busy"
+                        android:gravity="center_vertical"
+                        android:minHeight="46dp"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <View
+                            android:id="@+id/refBusySkeleton"
+                            android:layout_width="46dp"
+                            android:layout_height="46dp"
+                            android:background="@drawable/bg_skeleton_thumb" />
+
+                        <com.google.android.material.progressindicator.CircularProgressIndicator
+                            android:id="@+id/refBusySpinner"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_16"
+                            android:indeterminate="true"
+                            android:visibility="gone"
+                            app:indicatorColor="@color/sky_primary"
+                            app:indicatorSize="18dp"
+                            app:trackThickness="2dp" />
+
+                        <TextView
+                            android:id="@+id/tvRefBusy"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/space_12"
+                            android:layout_weight="1"
+                            android:maxLines="1"
+                            android:ellipsize="end"
+                            android:textColor="@color/viewer_chrome_muted"
+                            android:textSize="12sp"
+                            tools:text="Decoding RAW · 24 MP" />
+                    </LinearLayout>
                 </FrameLayout>
 
                 <!-- Deformed frames slot -->
@@ -349,6 +403,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:baselineAligned="false"
         android:background="@color/viewer_canvas"
         android:elevation="0dp"
         android:padding="12dp">
@@ -371,6 +426,10 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCalculateFullField"
             style="@style/Widget.Semper.Button.Cta"
+            android:maxLines="1"
+            app:autoSizeMaxTextSize="16sp"
+            app:autoSizeMinTextSize="12sp"
+            app:autoSizeTextType="uniform"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_marginStart="6dp"
@@ -387,6 +446,10 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRunSweep"
             style="@style/Widget.Semper.Button.Cta"
+            android:maxLines="1"
+            app:autoSizeMaxTextSize="16sp"
+            app:autoSizeMinTextSize="12sp"
+            app:autoSizeTextType="uniform"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_marginStart="6dp"
@@ -403,6 +466,10 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnNext"
             style="@style/Widget.Semper.Button.Cta"
+            android:maxLines="1"
+            app:autoSizeMaxTextSize="16sp"
+            app:autoSizeMinTextSize="12sp"
+            app:autoSizeTextType="uniform"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_marginStart="6dp"
@@ -413,7 +480,7 @@
             android:minHeight="48dp"
             android:paddingTop="0dp"
             android:paddingBottom="0dp"
-            android:text="@string/next_settings" />
+            android:text="@string/action_next" />
     </LinearLayout>
   </LinearLayout>
 
@@ -430,9 +497,10 @@
         android:visibility="gone">
 
         <com.google.android.material.card.MaterialCardView
-            android:layout_width="300dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
+            android:layout_marginHorizontal="@dimen/space_24"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="22dp"
             app:cardElevation="12dp">
@@ -441,142 +509,119 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:gravity="center"
-                android:padding="28dp">
+                android:padding="@dimen/space_24">
 
-                <TextView
-                    android:id="@+id/overlayTitle"
-                    android:layout_width="wrap_content"
+                <!-- Header: what is running ("Frame 4 of 5", "Analysis 6 of 9",
+                     an import's title, the end state) and the whole job's percent. -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/computing_strain_field"
-                    android:textAppearance="@style/TextAppearance.Semper.SectionHeader" />
-
-                <FrameLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginBottom="16dp">
-
-                    <com.google.android.material.progressindicator.CircularProgressIndicator
-                        android:id="@+id/overlayProgress"
-                        android:layout_width="132dp"
-                        android:layout_height="132dp"
-                        android:layout_gravity="center"
-                        app:indicatorColor="@color/sky_primary"
-                        app:trackColor="@color/sky_container"
-                        app:indicatorSize="132dp"
-                        app:trackThickness="10dp"
-                        app:indicatorInset="0dp"
-                        android:max="1000"
-                        android:progress="0" />
+                    android:baselineAligned="true"
+                    android:orientation="horizontal">
 
                     <TextView
-                        android:id="@+id/overlayPercent"
+                        android:id="@+id/tvRunHeader"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:accessibilityLiveRegion="polite"
+                        android:text="@string/initializing_engine"
+                        android:textAppearance="@style/TextAppearance.Semper.SectionHeader"
+                        tools:text="Frame 4 of 5" />
+
+                    <TextView
+                        android:id="@+id/tvRunPercent"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_gravity="center"
-                        tools:text="0%"
+                        android:layout_marginStart="@dimen/space_12"
+                        android:fontFeatureSettings="tnum"
                         android:textColor="@color/sky_primary"
-                        android:textSize="24sp"
-                        android:textStyle="bold" />
-                </FrameLayout>
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        tools:text="79.0%" />
+                </LinearLayout>
 
+                <TextView
+                    android:id="@+id/tvRunEta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_4"
+                    android:text="@string/eta_estimating"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <!-- An import's or a video extraction's progress. -->
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/overlayBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_16"
+                    android:max="1000"
+                    android:visibility="gone"
+                    app:indicatorColor="@color/sky_primary"
+                    app:trackColor="@color/sky_container"
+                    app:trackThickness="6dp"
+                    app:trackCornerRadius="3dp" />
+
+                <!-- A batch run's convergence per frame. -->
+                <com.sempermechanics.semper.ui.analysis.run.ConvergenceBinsView
+                    android:id="@+id/runBins"
+                    android:layout_width="match_parent"
+                    android:layout_height="72dp"
+                    android:layout_marginTop="@dimen/space_16" />
+
+                <LinearLayout
+                    android:id="@+id/runSweepGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_16"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <com.sempermechanics.semper.ui.analysis.sweep.SweepLatticeView
+                        android:id="@+id/runSweepLattice"
+                        android:layout_width="match_parent"
+                        android:layout_height="136dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_4"
+                        android:text="@string/run_sweep_legend"
+                        android:textAppearance="@style/TextAppearance.Semper.Caption" />
+                </LinearLayout>
+
+                <!-- An import's status, or the combination a sweep is solving. -->
                 <TextView
                     android:id="@+id/overlayStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:text="@string/initializing_engine"
-                    android:textColor="@color/text_primary"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="@dimen/space_8"
+                    android:fontFeatureSettings="tnum"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
 
                 <TextView
-                    android:id="@+id/overlayElapsed"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/elapsed_0s"
-                    android:textAppearance="@style/TextAppearance.Semper.Caption" />
-
-                <LinearLayout
-                    android:id="@+id/runTilesRow"
+                    android:id="@+id/tvRunStrikeWarn"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:orientation="horizontal">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="6dp"
-                        android:background="@color/surface_muted"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/run_points_solved"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp" />
-
-                        <TextView
-                            android:id="@+id/tvRunPoints"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            tools:text="0%"
-                            android:textColor="@color/text_primary"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:background="@color/surface_muted"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/run_convergence"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp" />
-
-                        <TextView
-                            android:id="@+id/tvRunConvergence"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            tools:text="0%"
-                            android:textColor="@color/text_primary"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                </LinearLayout>
+                    android:layout_marginTop="@dimen/space_8"
+                    android:textColor="@color/semantic_warning"
+                    android:textSize="12sp"
+                    android:visibility="gone"
+                    tools:text="Frame 24: 41% converged. One more low frame stops the run."
+                    tools:visibility="visible" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnRunCancel"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="@dimen/space_12"
                     android:text="@string/action_cancel"
                     android:textColor="@color/semantic_danger" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:gravity="center"
-                    android:text="@string/please_keep_the_app_open"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </FrameLayout>

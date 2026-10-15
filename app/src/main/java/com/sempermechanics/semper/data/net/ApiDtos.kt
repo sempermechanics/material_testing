@@ -12,6 +12,10 @@ private const val DEFAULT_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
  * docs/backend/CLOUD_ARCHITECTURE_GCP.md for the full API.
  */
 
+/** GET /v1/me/erasure: whether this phone's account was erased (TD-206). */
+@Serializable
+data class ErasureStatus(val erased: Boolean)
+
 @Serializable
 data class MeResponse(
     val uid: String,
@@ -154,13 +158,27 @@ data class SessionCreateRequest(
     val metrics: Map<String, Float> = emptyMap(),
     /** The app's local analysis id, so cloud sessions can be matched back to it. */
     val localSessionId: String = "",
-)
+    /**
+     * The analysis's name, which the backup list shows ([CloudSessionDto.name]).
+     * At most [NAME_MAX_CHARS]: the backend refuses a longer one. A backend
+     * from before the field ignores it.
+     */
+    val name: String = "",
+) {
+    companion object {
+        /** `SessionCreate.name`'s `max_length` in backend/app/models.py. */
+        const val NAME_MAX_CHARS = 200
+    }
+}
 
 @Serializable
 data class CloudSessionDto(
     val sessionId: String,
     val localSessionId: String = "",
+    /** The reference image's file name; what an older backup is listed by. */
     val specimen: String? = null,
+    /** The analysis's name; blank (or absent from an older backend) for a backup made without one. */
+    val name: String? = null,
     val status: String? = null,
     val fileCount: Int = 0,
     val completedCount: Int = 0,

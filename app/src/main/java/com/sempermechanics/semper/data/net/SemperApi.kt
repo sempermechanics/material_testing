@@ -18,6 +18,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.File
+import java.net.URLEncoder
 
 /** Seat routes take no body; the backend reads the caller from the token. */
 private const val EMPTY_JSON = "{}"
@@ -74,7 +75,18 @@ class SemperApi @VisibleForTesting internal constructor(
         ::endpoint,
         deviceId = { device.getDeviceId() },
         sign = { device.signMessage(it) },
+        recovery = DeviceKeyRecovery(reRegister = ::registerDeviceAgain),
     )
+
+    /**
+     * Registers this device's key again after a signed call was refused
+     * `bad_signature` ([DeviceKeyRecovery]): the sign-in's [registerDevice],
+     * and the `device_registered` flag it sets.
+     */
+    private suspend fun registerDeviceAgain(idToken: String) {
+        registerDevice(idToken)
+        AccountCache.setDeviceRegistered(appContext, true)
+    }
 
     private inline fun <reified T> decode(resp: Response): T = json.decodeFromString(resp.body.string())
 
@@ -88,6 +100,15 @@ class SemperApi @VisibleForTesting internal constructor(
     /** GET /v1/me. Throws [NotApprovedException] for a PENDING/SUSPENDED user. */
     override suspend fun getMe(idToken: String): MeResponse =
         calls.bearer(idToken, { url(endpoint("/v1/me")) }, ApiAnswer::failMe) { decode(it) }
+
+    /**
+     * GET /v1/me/erasure — whether this phone's account was erased. The backend
+     * checks the ID token alone, so asking does not re-create the profile of
+     * an erased account (TD-206); the answer is about this phone's device id,
+     * which [SemperApiCalls.bearer] sends.
+     */
+    override suspend fun getErasureStatus(idToken: String): ErasureStatus =
+        calls.bearer(idToken, { url(endpoint("/v1/me/erasure")) }) { decode(it) }
 
     /**
      * GET /v1/config — resolved product limits for this account.
@@ -237,13 +258,17 @@ class SemperApi @VisibleForTesting internal constructor(
      * [verify] makes the backend also confirm each page's session blobs still
      * exist in Drive (catching artifacts deleted straight in Drive). It costs
      * Drive calls per page, so it's for explicit refreshes, not every resume.
+     *
+     * [app] names whose analyses to list ([CloudApi.ALL_APPS] for the whole
+     * account, ADR-014); null lists this app's.
      */
-    override suspend fun listSessions(idToken: String, verify: Boolean): SessionsResponse {
+    override suspend fun listSessions(idToken: String, verify: Boolean, app: String?): SessionsResponse {
         val pages = fetchAllPages(
             fetch = { token ->
                 val query = buildString {
                     append("page_size=$SESSIONS_PAGE_SIZE")
                     if (verify) append("&verify=true")
+                    if (app != null) append("&app=").append(URLEncoder.encode(app, Charsets.UTF_8.name()))
                     if (token != null) append('&').append(pageTokenParam(token))
                 }
                 calls.bearer(idToken, { url(endpoint("/v1/sessions?$query")) }, ApiAnswer::failApprovedOnly) {
@@ -317,14 +342,16 @@ class SemperApi @VisibleForTesting internal constructor(
      * prefix of entries it needs, instead of the whole archive.
      */
     override suspend fun downloadRange(idToken: String, fileId: String, dest: File, rangeStart: Long, length: Long) =
-        drive.downloadFile(
-            fileId,
-            dest,
-            endpoint(""), // the base; DriveTransfer appends its own paths
-            expectedBytes = length,
-            rangeStart = rangeStart,
-            signedGetHeaders = calls.signedGet(idToken),
-        )
+        calls.signedDownload(idToken) { signedGetHeaders ->
+            drive.downloadFile(
+                fileId,
+                dest,
+                endpoint(""), // the base; DriveTransfer appends its own paths
+                expectedBytes = length,
+                rangeStart = rangeStart,
+                signedGetHeaders = signedGetHeaders,
+            )
+        }
 
     /** GET /v1/files/{id}/content into [dest], device-attested per window: [DriveTransfer.downloadFile]. */
     override suspend fun downloadFile(
@@ -333,14 +360,16 @@ class SemperApi @VisibleForTesting internal constructor(
         dest: File,
         expectedBytes: Long,
         onBytes: suspend (haveBytes: Long) -> Unit,
-    ) = drive.downloadFile(
-        fileId,
-        dest,
-        endpoint(""), // the base; DriveTransfer appends its own paths
-        expectedBytes = expectedBytes,
-        onBytes = onBytes,
-        signedGetHeaders = calls.signedGet(idToken),
-    )
+    ) = calls.signedDownload(idToken) { signedGetHeaders ->
+        drive.downloadFile(
+            fileId,
+            dest,
+            endpoint(""), // the base; DriveTransfer appends its own paths
+            expectedBytes = expectedBytes,
+            onBytes = onBytes,
+            signedGetHeaders = signedGetHeaders,
+        )
+    }
 
     // ------------------------------------------------------------------- admin
 

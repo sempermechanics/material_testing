@@ -18,9 +18,10 @@ import org.robolectric.annotation.Config
  *
  * [baseBundle] is that Bundle written out by hand, key by key, as the build
  * before the wizard's value types (`Roi`, `ImageSize`, `SweepRanges`,
- * `WizardStep`) wrote it. In this fork that build also wrote the lab
- * test's keys (`testType` … `typedLoadsEntry`, and `refCaptureMs` when the
- * reference photo had an EXIF time), so they are part of the format too.
+ * `WizardStep`) wrote it. `workingIsSweep` and `videoName` came later ([currentBundle]).
+ * In this fork that build also wrote the lab test's keys (`testType` …
+ * `typedLoadsEntry`, and `refCaptureMs` when the reference photo had an EXIF
+ * time), so they are part of the format too.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -61,11 +62,31 @@ class WizardStateBundleFormatTest {
         putString("typedLoadsEntry", "INCREMENTAL")
     }
 
+    /** [baseBundle] as this build writes it: with the working session's kind and the video's name. */
+    private fun currentBundle(): Bundle = baseBundle().apply {
+        putBoolean("workingIsSweep", true)
+        putString("videoName", "tensile_03")
+    }
+
     @Test
-    fun `a Bundle the base build saved restores and saves again unchanged`() {
+    fun `a Bundle this build saved restores and saves again unchanged`() {
+        val restored = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to currentBundle())))
+
+        assertSameBundle(currentBundle(), restored.saveWizardState())
+    }
+
+    @Test
+    fun `a Bundle the base build saved restores, its run kind unknown so the next run is a new session`() {
         val restored = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to baseBundle())))
 
-        assertSameBundle(baseBundle(), restored.saveWizardState())
+        // The base build did not save whether its session was a single run or
+        // a sweep; reusing it could write one kind over the other.
+        val expected = baseBundle().apply {
+            putString("workingLocalId", null)
+            putBoolean("workingIsSweep", false)
+            putString("videoName", null)
+        }
+        assertSameBundle(expected, restored.saveWizardState())
     }
 
     @Test
@@ -86,14 +107,18 @@ class WizardStateBundleFormatTest {
             putString("orderDirection", "ASCENDING")
             putString("frameSizeError", null)
             putBoolean("fromVideo", false)
+            putString("videoName", null)
             putBoolean("sweepMode", false)
             putIntArray("sweepRanges", intArrayOf(0, 0, 0, 0, 3, 3, 3))
             putDouble("subsetOverlap", SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM))
             putBoolean("lineCutHorizontal", true)
             putInt("vsgFrameIndex", -1)
             putString("workingLocalId", null)
+            putBoolean("workingIsSweep", false)
             putString("framesFingerprint", WizardState.fingerprint(WizardState.encodeFrames(WizardState.Frames())))
-            putString("testType", "tensile")
+            // A fresh wizard is plain 2D DIC since ADR-022 (it was tensile); a
+            // Bundle that says "tensile" still reads back as tensile (baseBundle).
+            putString("testType", "dic2d")
             putFloat("crossSectionMm2", 0f)
             putBoolean("loadAxisX", true)
             putFloatArray("geometry", floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f))

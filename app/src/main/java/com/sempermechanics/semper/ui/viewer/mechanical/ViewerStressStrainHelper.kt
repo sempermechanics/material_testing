@@ -174,6 +174,7 @@ class ViewerStressStrainHelper(
         }
         plot.isVisible = true
         plot.compactAxes = true
+        plot.scrubShowsPoint = true
         // The summary is the whole test, so no frame is highlighted there.
         val current = if (host.isShowingSummary) null else curve.at(host.plannedFrameIndex(host.currentFrameIndex))
         val (xAxis, yAxis) = axisLabels(host, curve.model)

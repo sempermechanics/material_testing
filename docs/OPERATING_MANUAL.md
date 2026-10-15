@@ -1,45 +1,854 @@
 # Material Testing operating manual
 
-How to go from photos of a speckled specimen to E, a lab report and full-field strain.
-Before this:
-- **Lighting and rig stability** are covered in [app/NOISE_FLOOR_STRAIN_ACCURACY.md](app/NOISE_FLOOR_STRAIN_ACCURACY.md).
-- **Speckle paint, cameras and wider DIC practice** are in the iDICs *Good Practices Guide*.
+How to get displacement and strain fields out of a DIC image set, using the app.
+
+Material Testing is Semper with two lab tests added. **+** asks which test it
+is: **2D DIC** is Semper's analysis, unchanged, and everything in §1–§11 is
+about it; **Tensile** and **Bending** add a load log, the specimen's size, a
+**Results** page with E, and a lab report ([§12](#12-lab-tests)).
+
+Lighting, rig stability, and the measurement floor — why they dominate strain
+noise on a static check — are covered in
+[app/NOISE_FLOOR_STRAIN_ACCURACY.md](app/NOISE_FLOOR_STRAIN_ACCURACY.md). For
+broader DIC practice (speckle paint, cameras, calibration), see *A Good
+Practices Guide for Digital Image Correlation* (iDICs). This manual starts once
+you have images.
+
+<!-- **For:** a graduate researcher who knows DIC basics — subsets, correlation,
+strain fields — and has not used this app. -->
 
 | | |
 |---|---|
-| [1. What it does](#1-what-it-does) | [7. Region of interest](#7-region-of-interest) |
-| [2. Lab tests](#2-lab-tests) | [8. Parameter sweeps](#8-parameter-sweeps) |
-| [3. Getting in](#3-getting-in) | [9. Reading results](#9-reading-results) |
-| [4. Images it accepts](#4-images-it-accepts) | [10. Exports](#10-exports) |
-| [5. Running an analysis](#5-running-an-analysis) | [11. Managing analyses](#11-managing-analyses) |
-| [6. Parameters](#6-parameters) | [12. Troubleshooting](#12-troubleshooting) |
-
-Screenshots: light theme, captured on 2026-09-23 ([images/CAPTURE_CHECKLIST.md](images/CAPTURE_CHECKLIST.md)).
+| [1. What it does](#1-what-it-does) | [7. Parameter sweeps](#7-parameter-sweeps) |
+| [2. Getting in](#2-getting-in) | [8. Reading results](#8-reading-results) |
+| [3. Images it accepts](#3-images-it-accepts) | [9. Exports](#9-exports) |
+| [4. Running an analysis](#4-running-an-analysis) | [10. Managing analyses](#10-managing-analyses) |
+| [5. Parameters](#5-parameters) | [11. Troubleshooting](#11-troubleshooting) |
+| [6. Region of interest](#6-region-of-interest) | [12. Lab tests](#12-lab-tests) |
 
 ---
 
+> **`delete-dialog.png` below still shows the pre-2026-08 UI** — recapturing it
+> needs a signed-in account with a cloud-backed analysis. `home.png` shows the
+> list as of 2026-10-10, but only local analyses, so every cloud icon reads *Not
+> backed up*; the other cloud states and the Settings **Download** row still need
+> a real-account pass. `settings.png` shows the
+> current UI but only its local-only state. Every other screenshot on this page
+> matches the current UI. The diagrams
+> (`pipeline.svg`, `wizard.svg`, `subset-step.svg`, `vsg.svg`, `lattice.svg`) are
+> conceptual, not screen captures, and are current. Remaining work:
+> [images/CAPTURE_CHECKLIST.md](images/CAPTURE_CHECKLIST.md).
+
 ## 1. What it does
 
-You give it one reference frame and N deformed frames. It gives you five fields for each frame.
+You give it one reference frame and N deformed frames. It matches subsets on a
+grid and returns five fields per frame.
 
 ![Pipeline](images/pipeline.svg)
 
 | Field | Unit |
 |---|---|
-| **U**, **V**: displacement | px |
-| **Exx**, **Eyy**, **Exy**: strain | mε (millistrain) |
+| **U**, **V** — displacement | px |
+| **Exx**, **Eyy**, **Exy** — strain | mε (millistrain) |
 
-- **Pixels, not mm.** The exception is bending: your two taps on the beam's thickness
-  give mm per px for the deflection and E. The heatmaps stay in pixels.
-- **Everything runs on the phone.** Cloud backup stores the results only.
+Two things to know up front:
+
+- **Displacements are in pixels.** There is no scale calibration. Convert to
+  physical units yourself.
+- **Everything runs on the phone.** Cloud backup stores results only.
 
 ---
 
-## 2. Lab tests
+## 2. Getting in
 
-**+** asks which test it is. That choice decides what the wizard asks for, and you make it once per analysis.
+Accounts need approval, not just sign-up.
 
-<img src="images/test-type.png" width="260" alt="Which test? Tensile, Bending or 2D DIC">
+1. Sign in with Google or email.
+2. **Passwords** need 8+ characters with upper and lower case, a digit and a
+   special character. **Generate secure password** fills a strong one in for you
+   and reveals it so you can save it. **Forgot password** mails you a link;
+   opening it on this device reopens the app on a set-new-password form, where
+   the same rules apply. You never leave the app to reset a password.
+3. **Signing up with email?** Creating the account sends a verification link and
+   puts you back on the sign-in form with your address still filled in. Open the
+   link, then sign in there. Until you do, sign-in is refused and a fresh link is
+   sent each time you try.
+4. New accounts land on **Pending approval**. Support is emailed automatically
+   at this point — you do not have to ask to be noticed.
+5. Tap **Request access** if you want to add context. It opens a prefilled
+   email; send it.
+6. After an admin approves you, tap **Check status**.
+
+**Nothing polls.** The screen never updates on its own. Use the button.
+
+Google and email-link sign-ins skip step 2 — both already prove the address.
+
+Offline works if you have been approved on this device before. Import, solve and
+read results all work without a network. Uploads wait.
+
+**Crash reports are opt-in.** After the beta notice on first run the app asks
+once whether it may send crash diagnostics. Nothing is collected unless you say
+yes, and you can change your mind at any time under **Settings → Your data →
+Send crash reports**.
+
+<img src="images/home.png" width="300" alt="Home screen">
+
+The app icon follows your phone's dark theme: the S in black on a light
+disc, or in white on jet black. It changes the next time the app is open after
+you switch. With **Themed icons** on (Wallpaper & style), the launcher tints
+it with your wallpaper's colours instead.
+
+Home lists your analyses. Tap one to open it. Long-press for select, rename,
+delete. Pull down to sync. **+** asks which test it is — **2D DIC**, **Tensile**
+or **Bending** ([§12](#12-lab-tests)) — then opens the picker: pick existing
+photos or a video. There is no in-app camera; the app measures images you
+already have.
+
+The list is grouped by day under small headers: *Today*, *Yesterday*, then a
+date such as *Oct 7* (with the year for an earlier year), in your phone's
+language and timezone. Each analysis is a card showing the last frame's U
+displacement as its thumbnail (the reference image until that is drawn, or when
+the frames are not on the phone), the name, and a line such as
+`40 frames · 96.3%`: the frame count and the share of points that converged.
+A convergence under 85% is amber. A run that stopped early reads
+`39 of 50 frames` and ends with why it stopped; a parameter sweep reads
+`9 of 9 solved`. A video analysis says so, with where its frames sit in the
+clip: `Video · 40 frames, 0:00–0:12 · 91.2%`. A selected card turns light blue.
+A new analysis is named after its reference image without the image's
+extension, `steel_00` (a dotted name such as `tensile.v2` stays whole);
+a second one from the same image becomes `steel_00 (2)`. A video analysis is
+named after the clip, `tensile_03` from `tensile_03.mp4` (`Video` when the
+clip's name cannot be read), and a sweep after its frame, `steel_24 sweep`.
+No two analyses on the phone share a name: a restored one, or a rename to a
+name already in the list, takes the next `(2)`, `(3)` (a rename says
+"Saved as …"). A restore keeps the name the analysis had when it was backed
+up; an old auto-name reads as today's (`steel_00 · Oct 9, 17:57:31` and
+`steel_00.png` restore as `steel_00`). Rows an earlier version left sharing a
+name, or named `steel_00.png`, are put right the same way when the list
+loads (the oldest keeps the plain name); other names stay. The cloud icon at the
+row's end says where the backup stands:
+
+| Icon | Means |
+|---|---|
+| Cloud with a tick | Backed up |
+| Cloud with an up arrow | Upload pending, or backing up now |
+| Crossed-out cloud | Not backed up (red: the backup failed) |
+| Cloud with a down arrow | Only in cloud, or restoring now |
+
+While a backup or restore runs, a thin bar under the row fills and the line
+reads `Backing up · 35.0%`.
+
+---
+
+## 3. Images it accepts
+
+Hard rules:
+
+| Rule | If broken |
+|---|---|
+| All frames the same pixel size as the reference | Blocking error; you cannot run |
+| At least one reference + one deformed frame | **Next** stays off |
+| At most *Max frames* (default 50) | Extras dropped, with a toast |
+
+**Formats.** PNG and TIFF are best. JPEG works but raises an accuracy warning —
+compression damages the intensity gradients correlation needs. RAW and DNG
+import **only through Files**, not Photos.
+
+**Texture check.** On import the app measures your speckle. Weak pattern → a
+warning naming a bigger subset size. Treat it as a comment on the pattern, not
+just a setting.
+
+**Video.** Pick a video and a sampling sheet opens: **Keyframes** or
+**Interval** (the ⓘ beside them says what each extracts), a frame rate for
+Interval, the segment, and for Interval a live frame-count estimate. Frame 0
+becomes the reference, named after the clip, and each frame keeps its time in
+the clip. While the video's
+length and frame rate are read, the reference slot shows a small spinner and
+**Reading video…**.
+
+**While a reference decodes.** If it takes longer than about a third of a
+second, the reference slot shows a grey placeholder thumbnail and **Decoding
+image**, or **Decoding RAW · 24 MP** for a RAW or DNG (the megapixels only when
+the file's header gives its size). A quick decode shows nothing. With
+animations turned off in Android's settings, the placeholder holds still and
+spinners are left out.
+
+---
+
+## 4. Running an analysis
+
+![Wizard](images/wizard.svg)
+
+### Step 1 — Load frames
+
+<img src="images/step1-frames.png" width="300" alt="Step 1 with three deformed frames loaded">
+
+Tap each dropzone and pick your images:
+
+<img src="images/new-analysis-source.png" width="300" alt="The New analysis sheet">
+
+The **New analysis** sheet opens full height on an **Images** tab — your device's
+gallery, three columns, with videos badged so you can tell them apart. For about
+1 second the grid is dimmed behind a large centred hint so you read "Select
+the reference image" before tiles unlock. Tapping the **Files** tab hands you to the
+system file browser instead; that is still the only route to RAW and DNG. Picking
+deformed frames is multi-select: tap the tiles you want and confirm with
+**Use N**. Select-all lives in the three-dot menu.
+
+The sheet asks for media permission the first time the Images tab needs it:
+
+<img src="images/media-picker-permission-empty.png" width="300" alt="Media picker permission empty state">
+
+The Files tab needs no permission at all, so a phone that denies gallery access
+can still work entirely through Files — it opens the system file browser:
+
+<img src="images/media-picker-files-saf.png" width="300" alt="Files tab opening the system file browser">
+
+The strip shows the deformed frames with order badges.
+
+**The app measures your speckle as soon as the reference loads.** It
+autocorrelates a window of the reference and reports the average speckle
+diameter. If that falls outside the 3–9 px band the iDICs Good Practices Guide
+asks for, a warning chip appears under the dropzones saying what it measured and
+what it means:
+
+<img src="images/speckle-warning.png" width="300" alt="Step 1 speckle size warning">
+
+The chip is advice, not a block — the run proceeds either way. Under 3 px the
+pattern is finer than the method can resolve and no subset size fixes it; over
+9 px it will correlate, but a finer pattern would give more measurement points
+across the same area. Either way the fix is a different photograph, which is
+why the chip sits here with the images.
+
+A separate chip appears **on step 2, under the subset slider**, when the speckle
+is inside the band but the subset is too small to span three of them. It names
+the subset that would, and it clears as you move the slider past it — the
+control and the warning are on the same screen on purpose:
+
+<img src="images/speckle-span-warning.png" width="300" alt="Step 2 subset-span warning under the subset slider">
+
+**The badge order is the analysis order.** Frame 1 here is frame 1 everywhere
+after. Tap the sort icon to change it:
+
+<img src="images/frame-order-menu.png" width="300" alt="Frame order menu">
+
+| Sort | Use when |
+|---|---|
+| A–Z / Z–A | Filenames carry the sequence |
+| Oldest first / Newest first | Filenames don't; uses capture time, then EXIF |
+| Manual | Neither works — drag the thumbnails |
+
+You cannot get back to the picker's original order once sorted. With one
+deformed frame the control is hidden.
+
+### Step 2 — Settings
+
+<img src="images/step2-parameters.png" width="300" alt="Step 2 parameters">
+
+The toolbar names the page (**Parameters**, or **Sweep setup** in sweep mode)
+and shows a dot per page, the current one in blue. The page is one flat list,
+top to bottom:
+
+- **Single** or **Sweep** — Single solves every frame once. A parameter sweep
+  solves one frame many times ([§7](#7-parameter-sweeps)).
+- **Region of interest** — a thumbnail of the reference with the region drawn on
+  it, and the points the engine solves in it at the current step: "Full image ·
+  30,968 points", or "1100 × 800 px · 8,800 points" once you draw one. The count
+  follows the step and the region. In Sweep the row names the region alone:
+  each combination solves at its own step. **Edit** opens the editor
+  ([§6](#6-region-of-interest)).
+- **Correlation** (Single) — subset size, step and strain window, then a closed
+  **Advanced** section with overlap and interpolation ([§5](#5-parameters)),
+  with **Reset** at the right of the heading. If you copied a set of parameters
+  from a sweep lattice, a paste icon sits beside Reset and fills subset, step
+  and strain window in one tap; when that changes the overlap, Advanced opens
+  to show it.
+- **Frame to sweep** and **Planned lattice** (Sweep) — in place of Correlation;
+  see [§7](#7-parameter-sweeps).
+
+Once this phone has finished a run, **Compute** reads "Compute · about 1 min":
+a running mean of the points per second your own runs reached, never a guess.
+Before that it reads **Compute**. In Sweep the button is **Next**, to the
+sweep settings. Switching between Single and Sweep clears the last run's
+status line.
+
+### While it runs
+
+<img src="images/running.png" width="300" alt="Progress dialog">
+
+The card's header reads *Frame 23 of 40* with the whole run's percentage at its
+end, then the time left (once a few seconds of progress give a steady rate).
+Under it, one bin per planned frame shows **convergence per frame**: a finished
+frame is a blue bar as tall as its convergence, red under the dashed line at
+50%; the frame being solved is a pale outlined bar rising with its progress;
+frames still to come are empty slots. Over 100 frames, neighbouring frames share
+a bin that shows the lowest of them, so a low frame is never hidden. Once every
+frame is solved the header reads *Completed 40 of 40 frames · saving* while the
+run writes the analysis. After one low frame an amber line warns that one more
+stops the run.
+**Cancel** stops the run
+where it is, within a moment — it does not wait out the frame being solved.
+Nothing is kept. Back is blocked. Cancelling a parameter sweep abandons the whole
+sweep, not just the combination in flight.
+
+The same overlay covers importing frames and extracting video, but there it
+shows a progress bar and counts frames instead: the convergence bins are hidden,
+because nothing is being solved yet. A parameter sweep's header reads *Analysis
+7 of 9* with the percentage, then the time left, and its planned lattice takes
+the bins' place: every combination starts as a grey ring, fills when it solves,
+turns into a red ring if it is skipped, and the one being solved is circled. The
+status under it names that combination; at the end the header reads *Solved 9
+of 9 analyses · saving*. Cancelling an import asks for confirmation and leaves nothing behind.
+
+**A run stops itself if the images decorrelate.** Two consecutive frames below
+50% convergence end it — the frames after them would be no better. The
+message's title names the frame it gave up on ("Stopped at frame 40"), its text
+says how many frames were kept and why, and **Why?** adds the image's name and
+the longer explanation.
+
+This is a **short run, not a failed one**: the frames solved before the collapse
+are real data, they are saved as an analysis, and acknowledging the message takes
+you straight into them. A 50-frame test that decorrelated at frame 40 still gives
+you frames 1–39.
+
+**The reason is kept with the analysis.** Its Home row reads "39 of 50 frames"
+followed by why it stopped, and **Settings used** (the ⓘ in the viewer) lists
+*Stopped early* and *Frames solved*. You do not have to remember the run — or
+have been the person who made it.
+
+**Keep the app open.** A run has no resume. If Android kills the app, the run is
+gone.
+
+### After
+
+| Result | You land on |
+|---|---|
+| Single setting | Result viewer, frame 1 |
+| Parameter sweep | Result lattice |
+| Some sweep points failed | `N of M skipped` toast, then the lattice |
+| Engine failed | A dialog naming the cause, and which frame and image it failed on |
+| Every sweep combination failed | The lattice, every node hollow — tap one for its reason. **View** and **Save graph** are disabled |
+
+Re-running the same inputs updates the same analysis. Different inputs make a
+new one, which counts towards your quota. Picking the reference again counts as
+different inputs, even when it is the same image, and so does importing the
+frames again. So does switching between **Single setting** and **Parameter
+sweep**: a sweep after a single run (or a single run after a sweep) is a new
+analysis, and the earlier one is kept as it was.
+
+---
+
+## 5. Parameters
+
+Single mode only. Slider or typed field, each with an ⓘ. Overlap and
+interpolation sit under **Advanced**, closed until you tap it (the chevron
+turns); the overlap is a typed field, and it follows the step.
+
+| Parameter | Range | Reset to |
+|---|---|---|
+| Subset size | 15–121, odd | Recommended |
+| Step size | 1–`min(30, subset/2)` | 5 |
+| Subset overlap | 0.50–0.99 (`1 − step / subset`) | Follows step |
+| Strain window | 3–31 points, odd | 5 |
+| Interpolation | 4×4 bicubic / 6×6 Keys | 4×4 bicubic |
+
+### Subset and step
+
+![Subset and step](images/subset-step.svg)
+
+The app recommends a subset from **your** reference image, using the SSSIG model
+of Pan et al. (Opt. Express 16(10), 2008): displacement error scales as
+1/√SSSIG, so it grows the subset until the gradient content clears the threshold
+for 0.007 px accuracy, sampled on a 4×4 grid and taken as the median.
+
+It is a starting point. Touch the slider and it stops tracking the image.
+**Reset** brings it back.
+
+While the speckle is measured (past about a third of a second) the chip beside
+**Subset size** reads **Measuring speckle…**. When it lands:
+
+- A chip beside **Subset size** reads **Speckle 4.3 px** — the same measurement
+  as the step 1 chip, in amber when it is outside the 3–9 px good-practice band.
+  TalkBack reads the band out with it.
+- The slider slides to the recommended size (it jumps when animations are off).
+- A blue band is shaded behind the slider track from the smallest size that both
+  clears the SSSIG threshold and spans three speckles, up to the slider's end.
+  Larger subsets still correlate; they only blur the field more. The subset's ⓘ
+  says what the band means.
+
+They update as the reference changes, and go if the reference is removed or the
+measurement fails. Below them, a warning chip appears if the subset you are on
+cannot span three speckles, and names the size that would; it clears as soon as
+the slider passes that size. The ROI row counts the points the region holds at
+the current step ("Full image · 30,968 points").
+
+On a pattern coarser than about 40 px no allowed subset spans three dots, so no
+size is named — the over-resolved chip on step 1 is the honest answer there, and
+raising the slider to its maximum would not fix it.
+
+**Subset overlap** is how much neighbouring windows cover each other after a
+step: `overlap = 1 − step / subset`. The two controls stay in sync. The iDICs
+Good Practices Guide keeps overlap at least 0.5 and strictly below 1.0;
+typical values are about 0.50–0.75.
+
+### Strain window and VSG
+
+The strain window is a count of data points. Beside its value, muted text shows
+the VSG it gives at the current step — "41 px VSG" — and follows as you change
+either. Sessions from
+before the window was counted in points show their VSG alone.
+
+![Virtual strain gauge](images/vsg.svg)
+
+```
+VSG = (strain window − 1) × step + 1     [px]
+```
+
+Quote the VSG, not the window: it is the distance one strain value actually
+covers. The sweep varies the **window** and reports the resulting VSG per node —
+the window is the knob, the VSG is the number you publish.
+
+### Interpolation
+
+Sub-pixel interpolation, a dropdown under **Advanced**. Leave it on 4×4
+bicubic unless interpolation bias is your subject.
+
+### Max frames
+
+In Settings, not here. 10–500, default 50. Caps frames per analysis.
+
+---
+
+## 6. Region of interest
+
+<img src="images/roi-editor.png" width="300" alt="ROI editor">
+
+**Draw** — pick Rect or Square, drag on the image. Drag inside to move, corners
+to resize. The HUD gives size and position live.
+
+**Zoom** — pinch to zoom (up to 10×) and pan with two fingers; double-tap for
+2× and back to fit. One finger always draws, so edges can be placed finer zoomed in.
+
+**Manual** — type X, Y, W, H and Apply.
+
+**Crop / Erase** — Crop sets the area to correlate. Erase punches holes in it,
+for grips, fiducials or anything that will decorrelate. Add as many as you need.
+
+| Button | Does |
+|---|---|
+| **Save ROI** | Keeps it, returns to step 2 |
+| **Use full image** | Saves the whole frame |
+| **Reset** | Clears the canvas |
+| **Cancel** | Discards — back to full image |
+
+An ROI smaller than the subset will not run.
+
+---
+
+## 7. Parameter sweeps
+
+### Why
+
+Strain is a derivative, so its size depends on how much you smooth. Small VSG:
+peak strain rises, noise rises. Large VSG: peak gets flattened. A sweep shows
+where your answer stops depending on the setting — the convergence argument the
+Good Practices Guide asks for (Tip 5.4).
+
+A sweep uses **one** deformed frame.
+
+### Setting it up (step 2, then step 3)
+
+Step 2 (**Sweep setup**) picks what is swept and shows the plan:
+
+- **Frame to sweep** — a field with the picked frame's name and "23 / 40" at its
+  end, a thumbnail before it and an ⓘ after it. It starts on the middle frame.
+  Tap the field to open the frame picker: a scrolling list of the frames, a
+  frame-number field, and a preview of the frame you are on; **OK** makes it the
+  swept frame. Tap the thumbnail to see the frame large over the dimmed page;
+  tap anywhere to close it. The ⓘ says which frame to pick: the one with the
+  most deformation, since the sweep solves only that one. With a single
+  deformed frame there is nothing to pick and the row is hidden.
+- **Planned lattice** — one node per analysis, subset across and VSG up, with
+  the count beside the heading ("9 runs"). The gear on its heading shows **No.
+  of subsets** and **No. of strain windows**, the samples per range.
+
+Step 3 (**Sweep settings**) sets the ranges. The lattice on step 2 follows any
+change, so **Back** shows the new plan:
+
+- **Subset** and **Strain window**, the ranges; the latter's title row ends
+  with "15–101 px VSG", the span of VSGs the plan covers.
+- **Step size** as subset ÷ N, and under a closed **Advanced** the overlap that
+  gives.
+- **Line cut axis** — **X** or **Y**, over a strip preview of the
+  reference with the region and the cut through its centre. Tap the strip to
+  open it larger, in the reference's own shape; a wide reference then runs past
+  the screen edge and scrolls sideways. Tap again to close it.
+
+The run button reads "Run 9", and "Run 9 · 33 s" once this phone has finished
+a run (TalkBack reads "Run 9 analyses, about 33 seconds"): each analysis solves
+the one frame at its own step, timed at the points per second your runs
+reached.
+
+<img src="images/step3-sweep.png" width="300" alt="Sweep summary, step 3">
+
+| Control | Range |
+|---|---|
+| Frame to sweep | list + number + preview, opened from the field (step 2) |
+| Subset range | 15–121, odd (step 3) |
+| Strain window range | 3–31 points, odd, default 3–11 — min and max (step 3) |
+| Samples | 1–8 per axis (step 2, lattice gear) |
+| Step size | subset ÷ N, N 2–9, default 3. The overlap under **Advanced** is `1 − 1/N`. Pixel step is `round(subset / N)` (step 3) |
+| Line cut axis | X / Y (step 3) |
+
+Runtime is the product of the two sample counts. 8 × 8 is 64 solves. Start at
+3 × 3.
+
+The sweep varies the **strain window** directly, not the VSG. VSG is still what
+you quote — it is shown per node and in the settings sheet — but it is derived
+(`(window − 1) × step + 1`), so two combinations with different steps can share a
+window and land on different VSGs. The lattice plots each node at its VSG, so one
+window sits higher at a larger subset's step.
+
+The lattice preview on this step is **inert** — taps do nothing until it has
+run. The coach mark points it out on a first visit.
+
+### Reading the result lattice
+
+![Lattice](images/lattice.svg)
+
+<img src="images/result-lattice.png" width="300" alt="Result lattice">
+
+| | |
+|---|---|
+| Filled dot | Solved. All solved nodes share one colour; the focused one gains a ring |
+| Hollow red ring | Skipped — tap it and the reason names the combination and what went wrong |
+
+Colour on the plot below is reserved for the focused curve, so only one hue
+ever carries meaning at a time.
+
+The screen is built to be worked with one thumb. It scrolls — summary line,
+lattice, controls, then plot — while **Save graph** and **View** stay pinned at
+the bottom. The y axis is the **VSG (px)**; the lattice draws compact, so
+the coach mark on first visit is what names the axes.
+
+**Choosing a combination**
+
+- **Tap** a node, or use the **‹ · ›** stepper above the plot to walk the solved
+  nodes in order. The chip between the arrows names the current one.
+- **Double-tap** or **long-press** a node — opens that result. So does **View**.
+- Tapping a hollow node explains why that combination was skipped.
+
+**Reading the plot**
+
+- The **All / Node** pill above the plot chooses how much is drawn. **All** is
+  the default: every combination, the focused one at full strength in colour and
+  the rest sharing one muted neutral. **Node** narrows it to the focused
+  combination alone.
+- **Drag across the plot** — a guide follows your finger, a dot marks the curve
+  and the value is printed beside it. The **slider** under the plot does the same
+  thing and stays in sync with the drag, which is easier one-handed.
+- The readout under the plot shows `x=…  y=…` for one unmuted curve, or `x=…`
+  plus each `label=value` when **All** is showing several series.
+- **Pinch to zoom**, **two-finger drag** to pan, **double-tap** to reset. The
+  zoom survives stepping to another node; changing component resets it, because
+  Exx, Eyy and Exy differ in magnitude.
+- The **Exx / Eyy / Exy** selector switches component.
+
+**Taking the answer with you**
+
+- **Double-tap or long-press the parameter chip** to copy that combination's
+  subset, step and strain window. Start a new single-setting analysis and a **Paste params** chip on
+  step 2 fills them in — this is how you go from "the sweep says 41 · 5 · 15" to
+  running the whole batch at it.
+- **Save graph** writes a PNG and hands it straight to the system share sheet —
+  it is the one export that does not go through **Send to**. The file carries a
+  header naming the study, the reference image and deformed count, and the
+  focused combination's parameters (plus the combination count when the plot is
+  showing **All**); the plot; and a single-column colour legend. It is rendered fit-to-data, so your
+  on-screen zoom neither leaks into the file nor is disturbed by saving.
+
+Look for the VSG where the curves stop separating.
+
+---
+
+## 8. Reading results
+
+<img src="images/result-viewer.png" width="300" alt="Result viewer">
+
+**Opening.** If the first frame takes longer than about a third of a second to
+appear, a small pill in the middle reads **Opening steel_00 · 40 frames** (the
+reference's name and the frame count) until that frame draws.
+
+The field button (top left) switches field. Pinch to zoom (~10×), drag to pan; both survive a
+field change. Double-tap zooms or resets. A horizontal fling while fit-to-screen
+steps frames. Chrome auto-hides after a short idle; pan or scrub brings it back,
+and so does a tap in the middle of the screen or a downward swipe. The figure
+itself runs edge to edge, under the system bars. The ⓘ sheet holds the specimen
+name, max / min (with coordinates), mean, a histogram of this frame's accepted
+values, and the settings used for this analysis. The looping summary has no
+mean and no histogram — its ⓘ sheet quotes only the GIF colour-bar ends.
+
+**Colour scale.** Default on a **single frame** is a **clamp at this frame's 2nd and 98th percentiles**,
+which is why the hairline reads "≤" and "≥" rather than "Min"/"Max" — a handful of
+outliers must not flatten the whole map. On a single frame the ⓘ sheet still
+gives you the true extrema, and the two are allowed to disagree. While the
+summary animation is up, the colour bar and ⓘ both quote the **lowest scale-min
+and highest scale-max across every frame** — those two ends need not come from
+the same frame. Tap the bar to set fixed min/max
+(remembered per field). **Auto** drops a custom override and returns to the
+clamped bounds on a frame, or to that sequence envelope on the summary. On a single-setting analysis the
+summary GIF and share field GIFs still use a whole-sequence scale so the
+loop stays comparable.
+
+**Tap to probe.** There is no Inspect / X,Y / Max-Min row. A short tap on the
+heatmap — including the centre — places a crosshair and a plain-text reading at
+the nearest correlated point. The bars hide on an idle timer, not from a tap;
+a centre double-tap brings them back when they have faded. Drag past the touch
+slop pans (or flings to the next frame when unzoomed); pinch still zooms. Tap
+the readout chip to dismiss. Switching field or frame keeps the probe at the
+same image location and updates the value.
+
+**The summary comes first** on a single-setting analysis. The viewer opens on a
+looping field overview of the whole sequence — every frame, never longer than
+10 seconds, about 300 ms a frame until the frame count forces it faster. It is
+framed on the same coloured region the live view rest-fits to (your ROI, or the
+accepted points), scaled to fill — not a letterboxed full photo. While it builds
+you get a progress readout and a **Cancel**. **Next** enters the
+frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
+field. The field button stays available while it plays. A parameter sweep opens from
+the lattice onto one combination instead; there is no overview slot.
+
+(Playback needs Android 9 or newer. Below that you get the first frame
+and a note; single-setting field GIFs still export.)
+
+**Frames.** Prev / Next step through. The title at the top names what is on
+screen — *Summary*, the frame's file name without its extension, or a video
+frame's time in its clip (`0:01.25`) — and the
+field button beside it names the field. Between the arrows, a frame shows
+`i / N`, and the summary `5 frames`. Tap the frame number, type another and
+press Go to jump straight to that frame — useful at 150 frames.
+Anything out of range leaves you where you are. On a sweep each frame is a
+parameter combination, titled like `Subset 15 · window 3` (the strain window in
+data points; the step is always the subset divided by the sweep's N).
+
+### Settings used
+
+<img src="images/settings-used.png" width="300" alt="Settings used sheet">
+
+The ⓘ button. On a still frame: true min, max and mean, then a histogram of
+every accepted point (including values the colour bar has clamped away). Tap a
+bar for that bin's range and count. On the summary GIF the histogram is omitted.
+Then everything the result was computed with — and on a sweep, the
+line-cut plot. The strain-window row gives both numbers, e.g. "13-point window ·
+VSG 61 px", `(13 − 1) × 5 + 1` (the relation is in [§5](#5-parameters)). A session
+from before the window was counted in points shows "VSG 15 px" alone. A run that stopped early also
+carries **Stopped early** and **Frames solved** here.
+
+**Changing settings later never changes an old result.** This sheet is your
+provenance record.
+
+---
+
+## 9. Exports
+
+**Share** gives six targets, one line each: a title and, at the end, the file type
+(**This field** PNG, **All fields** 5 PNG, **Animations** 5 GIF, **Report** PDF,
+**Data** CSV, **Everything** ZIP). The header names the frame the photos come from
+("frame 2 of 5"; "combination 2 of 5" on a sweep). With TalkBack, each row says
+what it shares. Each ends at a **Send to** sheet with two rows:
+**Save to Files** (a folder picker, so it lands somewhere you choose and stays) or
+**Share** (the usual system chooser). For everything but the single photo the
+sheet comes up **first**, so the file is written straight into the folder you
+picked instead of being staged and handed over. Exports are named after the
+analysis, so a folder of them is still readable a month later. While an export
+runs, its progress dialog says what it is on ("Frame 12 of 40 · heatmaps"), the
+percent to one decimal ("34.6%") and, after a few seconds, "About 35 s left". A long
+export does not hold the screen: dismiss the progress dialog and it carries on behind
+a strip at the top, with the same progress and a Cancel.
+
+| Export | Contents |
+|---|---|
+| This field | One PNG: current field and frame, annotated, composited to a 1280 px long edge |
+| All fields | Five PNGs for this frame, zipped; each stamp names the source image |
+| Animations | Single-setting only: five looping field GIFs on one whole-sequence scale, zipped |
+| Report | One PDF: every frame, plus a telemetry page |
+| Data | One CSV: `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd` — a sweep adds `subset_px, step_px, strain_window, vsg_px` |
+| Everything | One ZIP: raw photos + all fields + CSV + PDF; single-setting also includes the field GIFs |
+
+On a single-setting analysis the field GIFs are shared as a set, not one at a
+time — they are only comparable because they share a scale, and the set is what
+carries that.
+
+Build on the **CSV**. Coordinates are image pixels, displacements pixels,
+strains scientific notation. `znssd` is the match residual — filter on it to drop
+badly correlated points. Number formatting is locale-independent.
+
+For a paper, export **Everything** and keep it with your raw images. Inputs,
+fields and parameters in one archive is what makes the result reproducible.
+
+---
+
+## 10. Managing analyses
+
+Long-press a row to select. Pencil renames (one row only), bin deletes. When
+every selected row is **Only in cloud**, a cloud-download button restores them
+all at once; each row shows its own progress.
+
+**Backups that are not on this phone.** On a new phone, or after a reinstall,
+Home shows a card above the list — "4 analyses in your cloud backup aren't on
+this phone." **Restore** lists them, all ticked; untick any you don't want and
+they restore in the background. **Hide** puts the card away until the account
+gets a backup this phone has not seen; hidden backups stay in the cloud and
+Settings → Analyses data management can still restore them. Demo accounts have
+no cloud backup, so they never see the card.
+
+<img src="images/home-selection.png" width="300" alt="Selection mode">
+
+**What delete does depends on whether there is a cloud copy.** With none, it
+goes from the phone and that is that:
+
+<img src="images/delete-dialog.png" width="300" alt="Delete confirmation">
+
+With a backup you are asked *where* instead — **From this phone** (the cloud
+copy stays), **From the cloud** (the phone's copy stays), or **Everywhere**. A
+deleted cloud copy cannot be recovered, so read that dialog before tapping.
+
+**Deleting on this device only is not losing it.** The row stays on Home, marked
+**Only in cloud**, and tapping it offers to **Restore** the analysis to the phone.
+It restores in the background, and you stay on Home. That is the point of the mark: a cloud-backed analysis is one tap
+from being local again, so freeing space is a reversible decision.
+
+<img src="images/settings.png" width="300" alt="Settings sections">
+
+**Cloud backup**: turn **Save to cloud** on and it offers to back up what is
+already local; off, new analyses stay on the phone and existing cloud copies
+remain. **Wi-Fi only** holds uploads until Wi-Fi. The line under the switches
+says whether everything is backed up, or how many analyses are not. **Analyses data management**
+lists local and cloud together, with three actions per row:
+
+| Action | Does | Shows when |
+|---|---|---|
+| **Download** | Saves a `Session.zip` to a folder you pick — you choose the destination *before* it starts, and the bytes go straight there | Any row with a cloud copy, including ones already on the phone |
+| **Restore** | Pulls the analysis back into the app so it opens normally | Only when the local frames are missing |
+| **Delete** | Removes the backup, with a **5-second Undo** | Any row with a backup |
+
+Downloads and restores keep running if you leave Settings, and report back when
+they land.
+
+**Storage** is the section to reach for when the phone fills up. It measures what
+the analyses and the temporary files actually occupy, and gives you three tools:
+
+| Control | Does |
+|---|---|
+| **Free up N MB** | Drops the local frames of analyses that are already backed up, N being what that frees. They become "Only in cloud" rows; nothing un-backed-up is touched. It shows only when there is something to free |
+| **Clear** | At the end of the **Temporary files** row: removes regenerable files — import leftovers, transfer scratch, exports waiting to be shared. Gone when there is nothing to clear |
+| **Auto-free space** | A slider, 0 (Off) to 64 GB, its value beside the title ("Over 8 GB"); the ⓘ explains it. Set it and the app reclaims space at start-up whenever usage is over the budget, oldest backed-up analyses first |
+
+**Background transfers survive leaving the screen and are honest about failure.**
+An upload or restore runs even if you navigate away, showing a system
+notification while it works ("4.2 of 12.0 MB · 1.1 MB/s", "34.6% · About 35 s
+left"), and — while you are on Home — the row's own progress line and bar ("Backing
+up · 4.2 of 12 MB"), for downloads as well as uploads. When it ends, the
+notification says so ("steel_00 is backed up"), or gives the reason it failed with
+**Retry** for a backup or a restore, and the row's cloud icon updates. From
+Android 13 on those end-of-transfer notifications appear only once you allow
+Semper's notifications in the system settings. A backup that *fails for good*
+(another device holds the account, the analysis is too large, or a render ran out
+of memory) turns the icon red; tap it for a dialog explaining why, with **Try
+again**. A restore that fails (the backup
+was deleted, or is not this account's) says so once, on whichever of Home or
+Settings you are on. You are no longer left guessing.
+
+**Your data** also holds **Send crash reports**. That one switch governs both
+crash diagnostics and anonymous product analytics — which screens and actions get
+used, in coarse buckets. Neither carries your images, results, specimen names or
+addresses, and nothing is sent until you turn it on.
+
+**Your data** holds the two exports and the account delete. **Export my data**
+builds a ZIP of everything on this phone; **Download cloud data** asks
+the server for its copy. Both show progress and finish at the same **Send to**
+sheet as any other export.
+
+**Delete account** (Settings → Your data) asks you to confirm your
+identity first, on the sign-in screen itself — whichever way you normally sign
+in: password, Google, or an emailed link. Your address is filled in and cannot be
+changed; you are proving *this* account. Back out and nothing happens. Once
+confirmed it erases the cloud copy, this device, and the sign-in itself, and
+signs you out. If the cloud cannot be reached nothing is deleted at all. A
+licence goes back first: an institution seat is freed for someone else, and an
+individual licence is released and re-offered to the same address, so signing
+up again with it is licensed straight away.
+
+**Quota.** From 80% of the cap, a chip under the Home title reads
+`N / M analyses used`; it turns red at the cap. Below 80% it is hidden.
+Only a run that makes a new analysis is checked against it: a re-run of the
+same inputs is not, but one after picking a new reference or new frames, or
+after switching between a single run and a sweep, is.
+Not a paywall — email support from the limit screen, or delete something and
+tap **Re-check**.
+
+**Help & support** is the last section, and it now opens the **Manual** directly
+as well. **Send feedback** is for "this could be better" — it opens a mail with
+your app version and phone model and nothing else. Prefer the
+[Manual](https://sempermechanics.com/manual/) for how-to. Report bugs and
+request features from **Settings → Help & support** (opens the Support page).
+The section also shows
+`support@sempermechanics.com` — selectable, so you can copy it if this device has no
+mail app — and **Email support**, which opens a mail already carrying your
+account, device ID, app version and phone model for private or account issues.
+Write above that block; leave it in place.
+
+---
+
+## 11. Troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| Run blocked, size message | A frame differs in pixel size from the reference |
+| **Next** off on step 1 | Missing the reference or all deformed frames |
+| "ROI too small" | ROI smaller than the subset — enlarge it or shrink the subset |
+| Engine failure: feature detection | The pair could not be correlated. Pattern, or wrong pair |
+| Engine failure: ROI | Region too small or fully masked |
+| Low-texture warning | Weak speckle for this region |
+| Sweep skipped nodes | Those combinations don't fit — usually big subsets in a small ROI. Tap a hollow node for its reason |
+| Run stopped itself partway | Convergence fell below 50% twice running — the pair has decorrelated. The message names the frame, and the frames before it are kept |
+| Sweep ended early | Same rule: two combinations under 50% and it stops rather than sweep the rest |
+| Password rejected on sign-up | 8+ chars, upper and lower case, a digit and a special character — or tap **Generate secure password** |
+| Only the first N frames | *Max frames* capped it |
+| Frames in the wrong order | Sort on step 1, then re-run |
+| Run vanished | The app was killed. No resume — run it again in the foreground |
+| Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
+| Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
+| Summary shows one frame, not a loop | Android 8 or older. Single-setting field GIFs still export |
+| Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
+| Cloud icon stuck on Upload pending | Offline, Wi-Fi-only, or backup off |
+| Cloud icon crossed out in red | The backup failed. Tap the icon — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |
+| Restore never arrived | If it failed for good, Home and Settings both show a message saying so; otherwise it retries on a flaky network |
+| Row says "Only in cloud" | Its local frames were freed (by you, or by the auto-free budget). Tap it and choose **Restore** |
+| Phone out of space | **Settings → Storage → Free up N MB**, and consider setting an auto-free budget |
+| Still pending approval | Tap **Check status** — it never polls |
+| Sign-in refused after signing up | Open the verification link in your email, then try again |
+| Nothing here matches | **Settings → Help & support** — [Support](https://sempermechanics.com/support/) or **Email support** (the mail carries your account, device and build) |
+
+---
+
+<!-- ## 12. Limits
+
+- An interrupted run is lost. No resume.
+- Background transfers notify while they run, but nothing tells you they finished.
+- No spatial calibration — pixels only.
+- Coach marks show once and cannot be replayed.
+- Approval never polls.
+- No open-source licences screen (Privacy Policy and Terms are linked from About).
+- ROI shapes are rectangle and square only. -->
+
+---
+
+## 12. Lab tests
+
+**+** asks which test it is: **2D DIC**, **Tensile** or **Bending**. That choice decides what the wizard asks for, and you make it once per analysis. **2D DIC** is everything in §1–§11; the two tests add what follows.
+
+<img src="images/test-type.png" width="260" alt="Which test? 2D DIC, Tensile or Bending">
 
 Formulas, accuracy and worked numbers: [app/STUDENT_LAB_WORKFLOW.md](app/STUDENT_LAB_WORKFLOW.md).
 
@@ -54,7 +863,7 @@ Formulas, accuracy and worked numbers: [app/STUDENT_LAB_WORKFLOW.md](app/STUDENT
 2. **Load log.** The machine's CSV with one load per row, in N or kN. With photos, a log that matches the frame count is paired in order.
    With a video, or photos that carry an EXIF capture time (reference too), a timed log is matched by time: a frame takes a row within 100 ms, or has no load.
 3. **Cross-section** in mm², and the **strain axis** (the pulling direction in the photo).
-4. Set the ROI on the gauge section and tap **Compute** (§5).
+4. Set the ROI on the gauge section and tap **Compute** (§4).
 
 **Results** is the first page of the viewer. It shows:
 - the curve;
@@ -71,14 +880,14 @@ The strain is **ΔL / L₀** from a virtual extensometer between the two ends of
 <img src="images/results-bending.png" width="260" alt="Bending Results: load–deflection graph and E">
 </p>
 
-1. **Video** of the beam's side face at mid-span, filmed from a tripod. Extract at **1 fps**, or take its **Key frames** (§4).
+1. **Video** of the beam's side face at mid-span, filmed from a tripod. Extract on **Interval** at 1 fps, or take its **Keyframes** (§4).
 2. **Timed load log** (`time, load`). Frames are matched to it by time. If the log started later than the video,
    put the gap in **Log started after the reference**, in seconds (negative if the log started first).
    Hanger mass in kg × 9.81 = load in N.
 3. **Span, width and thickness** in mm.
 4. **Beam height → Set.** Double-tap to zoom, then tap the top edge and then the bottom edge right under the load.
    The readout gives mm/px. Under 40 px a 1 px slip moves E by several percent, so zoom in or film closer.
-5. ROI on the beam, then **Compute**.
+5. ROI on the beam, then **Compute** (§4).
 
 In **Results**:
 - **E from the graph** (the slope of W against δ) is the number to trust.
@@ -87,7 +896,7 @@ In **Results**:
 
 ### The lab report
 
-**Share → Lab report (PDF)** fills in the handwritten report's layout.
+**Share → Lab report** fills in the handwritten report's layout.
 Blank lines are left where the app has no value, such as the final diameter, name and date.
 
 <img src="images/lab-report-tensile.png" width="720" alt="Tensile lab report: setup, observations, table, calculation, graphs, results">
@@ -97,292 +906,24 @@ Blank lines are left where the app has no value, such as the final diameter, nam
 ### 2D DIC: the fields only
 
 Pick **2D DIC** when you only want the displacement and strain maps, with no load log and no specimen size.
-The wizard has no load card; pick the photos, set the ROI and tap **Compute** (§5).
+The wizard has no load card; pick the photos, set the ROI and tap **Compute** (§4).
 The analysis is saved as a plain DIC analysis: no **Results** page, no lab report, and no **Test type** row in ⓘ.
-
----
-
-## 3. Getting in
-
-<img src="images/home.png" width="260" alt="Home: your analyses">
-
-| | |
-|---|---|
-| **Sign in** | Google or email. Accounts need **approval**. Support is emailed automatically; tap **Check status** later (the app never polls) |
-| **Email sign-up** | Open the verification link first; until then sign-in is refused and a fresh link is sent |
-| **Passwords** | 8+ characters: upper and lower case, a digit and a symbol. **Generate secure password** makes one. **Forgot password** resets inside the app |
-| **Offline** | Import, solve and read all work once this device has been approved. Uploads wait |
-| **Crash reports** | Off until you say yes. Change it in **Settings → Your data** |
-
-**Home:**
-- **Tap** a row to open it.
-- **Long-press** to rename or delete.
-- **Pull down** to sync.
-- **+** starts a new analysis. There is no in-app camera; the app measures photos you already have.
-
----
-
-## 4. Images it accepts
-
-| Rule | If broken |
-|---|---|
-| Every frame the same pixel size as the reference | Blocking error |
-| One reference and at least one deformed frame | **Next** stays off |
-| At most *Max frames* (default 50, set in Settings) | The extras are dropped, with a toast |
-
-- **Formats.**
-  - PNG and TIFF are best.
-  - JPEG works, but it warns that compression costs accuracy.
-  - RAW and DNG come in **only through Files**.
-- **Video.** Pick one, then the time segment and either:
-  - **Frame rate:** frames evenly at the rate you choose;
-  - **Key frames:** the encoder's own key frames, which are stored whole and are the sharpest input for DIC. Shown when the file marks two or more.
-
-  The frame count updates as you go, and the first frame becomes the reference.
-
-<img src="images/video-extract.png" width="260" alt="Video sampling: frame rate, time segment, frame count">
-
----
-
-## 5. Running an analysis
-
-![Wizard](images/wizard.svg)
-
-### Step 1: frames (and loads)
-
-<p>
-<img src="images/new-analysis-source.png" width="260" alt="Images tab: your gallery">
-<img src="images/media-picker-files-saf.png" width="260" alt="Files tab: the system file browser">
-</p>
-
-- **Images** is your gallery, with videos badged. The first time, it asks for media permission.
-- **Files** is the system browser, and it needs no permission. It's the only way in for RAW and DNG.
-  For many frames: long-press one file, then **⋮ → Select all**.
-- **Speckle chip.** The app measures the speckle as soon as the reference loads. Outside 3–9 px you get a chip.
-  It's advice, not a block: the fix is a different photo. Before an ROI is set, the dark background can inflate the reading.
-  Step 2 re-measures inside the ROI.
-
-**The badge order is the analysis order.** The sort icon changes it:
-
-<img src="images/frame-order-menu.png" width="260" alt="Frame order menu">
-
-| Sort | Use when |
-|---|---|
-| Name A–Z / Z–A | The filenames carry the sequence |
-| Date oldest / newest | The filenames don't (uses capture time, then EXIF) |
-| Manual | Neither works, so drag the thumbnails |
-
-### Step 2: settings
-
-<img src="images/step2-parameters.png" width="260" alt="Step 2: mode, ROI, parameters">
-
-- **Single** solves every frame once. **Sweep** solves one frame many times (§8).
-- **Region of interest.** **Edit** opens the editor (§7).
-- **Parameters** (§6). The subset is suggested from your speckle.
-  - A chip under the slider names a bigger subset if the current one spans fewer than three speckles.
-  - **Paste params** fills in a combination copied from a sweep.
-
-### While it runs
-
-<img src="images/running.png" width="260" alt="Progress dialog">
-
-- **Cancel** stops within a moment, and nothing is kept.
-- **Keep the app open.** There is no resume.
-- **Decorrelation stops the run.** Two frames in a row under 50% convergence end it. The frames before that are kept and saved, and the reason is recorded on Home and in ⓘ.
-
-| Result | You land on |
-|---|---|
-| Tensile or bending | **Results** (curve or graph), then › through the frames |
-| 2D DIC, or an older analysis with no test type | The looping summary, then the frames |
-| Sweep | The result lattice |
-| Engine failed | A dialog naming the cause, the frame and the image |
-
-Re-running the same inputs updates the same analysis. Different inputs make a new one.
-
----
-
-## 6. Parameters
-
-![Subset and step](images/subset-step.svg)
-
-| Parameter | Range | Reset to | Raise when | Lower when |
-|---|---|---|---|---|
-| Subset | 15–121, odd | Suggested | Correlation fails, speckle is weak | You need detail across a gradient |
-| Step | 1 to min(30, subset/2) | 5 | Runtime matters | You need a denser field |
-| Overlap | 0.50–0.99 = 1 − step/subset | Follows step | — | — |
-| Strain window | 3–31 points, odd | 5 points; bending 9 | Strain is noisy | Detail is being smoothed away |
-| Kernel | 4×4 Bicubic / 6×6 Keys | 4×4 | You are studying interpolation bias | — |
-
-- **The suggested subset** follows the SSSIG criterion (Pan et al. 2008). It's the median over a 4×4 grid, sized to reach 0.007 px.
-  It stops following the image once you touch the slider. **Reset** brings it back.
-- **The strain window is a count of data points.** The virtual strain gauge (VSG) is the
-  distance it covers, in px, shown under the slider as you change the window or the step.
-  Strain is a plane fitted to every point within (window − 1) / 2 steps of the centre, so the
-  same window covers more pixels at a coarser step. Quote the VSG, not the window, in a paper.
-  Sessions from before the window was counted in points show their VSG alone.
-
-![Virtual strain gauge](images/vsg.svg)
-
-```
-VSG = (strain window − 1) × step + 1     [px]
-```
-
----
-
-## 7. Region of interest
-
-<img src="images/roi-editor.png" width="260" alt="ROI editor, Manual entry">
-
-| Control | Does |
-|---|---|
-| **Draw** (Rect / Square) | Drag to draw. Drag inside to move, drag a corner to resize |
-| Pinch / two fingers / double-tap | Zoom (up to 10×), pan, and 2× ↔ fit. One finger always draws |
-| **Manual** | Type X, Y, W and H, then tap **Apply** |
-| **Crop / Erase** | Crop sets the area to solve. Erase cuts holes (grips, marks) |
-| **Save ROI** / **Use full image** / **Reset** / **Cancel** | Keep it / whole frame / clear / discard |
-
-An ROI smaller than the subset won't run.
-
----
-
-## 8. Parameter sweeps
-
-Strain depends on how much you smooth. A sweep solves **one** frame over a lattice of subset × strain window.
-It shows you where the answer stops changing (Good Practices Guide, Tip 5.4).
-
-<p>
-<img src="images/step3-sweep.png" width="260" alt="Sweep summary, step 3">
-<img src="images/result-lattice.png" width="260" alt="Result lattice">
-</p>
-
-- **Set up:** ranges on step 2, and step = subset ÷ N (N 2–9, default 3).
-  Samples per axis (1–8) are on step 3. Runtime is the product, so start at 3 × 3.
-- **Lattice:**
-  - a filled dot is solved; a hollow red ring was skipped (tap it for the reason);
-  - **‹ ›** walks the nodes;
-  - double-tap or long-press opens that result.
-- **Plot:**
-  - **All / Node** chooses how many curves are drawn;
-  - drag or the slider reads values;
-  - pinch zooms, and double-tap resets.
-- **Taking it with you:**
-  - double-tap the parameter chip to copy the combination, then **Paste params** in a new single run;
-  - **Save graph** shares a PNG.
-
-Pick the VSG where the curves stop separating.
-
----
-
-## 9. Reading results
-
-<p>
-<img src="images/result-viewer.png" width="260" alt="Exx heatmap with a probe">
-<img src="images/settings-used.png" width="260" alt="ⓘ: stats, histogram, settings used">
-</p>
-
-| Gesture | Does |
-|---|---|
-| Field pill (U V Exx Eyy Exy) | Switches field. Zoom and probe stay |
-| Pinch / drag / double-tap | Zoom (~10×) / pan / zoom or reset |
-| Tap | Probe: a crosshair and the value at the nearest point |
-| ‹ › or type a number | Step or jump to a frame |
-| Tap the colour bar | Fix min/max for each field. **Auto scale** undoes it |
-
-- **The colour scale** clamps at this frame's 2nd and 98th percentiles, hence "≤" and "≥". The true extremes are in ⓘ.
-- **ⓘ** shows:
-  - max, min and mean, and a histogram of every accepted point;
-  - every setting used, the loads and stress for typed tests, and the Results block.
-- **ⓘ is your provenance.** Changing settings later never changes an old result.
-
----
-
-## 10. Exports
-
-<img src="images/share-sheet.png" width="260" alt="Share sheet">
-
-Every export ends at **Save to Files** (a folder you pick) or **Share**. Files are named after the analysis.
-Long exports carry on in the background.
-
-| Export | Contents |
-|---|---|
-| **Lab report (PDF)** | Tensile and bending: the write-up in the lab journal's layout (§2) |
-| Single Field | This field and frame as a PNG |
-| All fields | This frame's five PNGs, zipped |
-| Animations | Five looping GIFs on one scale for the whole sequence |
-| PDF report | Every frame, a telemetry page, and the stress–strain or load–deflection page |
-| CSV data | `image,x_px,y_px,u_px,v_px,exx,eyy,exy,znssd`, plus `#` lines with loads, E and the load steps |
-| Everything (.zip) | Photos, fields, CSV, PDF and GIFs |
-
-**For a paper, keep the Everything zip with your raw images.** In the CSV, filter on `znssd` to drop poorly matched points.
-
----
-
-## 11. Managing analyses
-
-<p>
-<img src="images/home-selection.png" width="260" alt="Selection mode">
-<img src="images/delete-dialog.png" width="260" alt="Delete confirmation">
-<img src="images/settings.png" width="260" alt="Settings sections">
-</p>
-
-- **Select:** long-press a row. The pencil renames and the bin deletes. When every selected
-  row is **Only in cloud**, the cloud button restores them all at once.
-- **Delete with a cloud copy** asks where to delete from: **Delete from this phone**,
-  **Delete the cloud backup** or **Delete everywhere**. A phone-only delete leaves an
-  **Only in cloud** row; tap it and choose **Restore**, and it restores in the background.
-- **Backups not on this phone** (a new phone, or a reinstall): a card above the list offers
-  them. **Restore** lists them all ticked; **Hide** puts the card away until a new backup
-  appears. Demo accounts have no cloud backup, so never see it.
-
-| Settings section | Holds |
-|---|---|
-| **Cloud backup** | On/off and Wi-Fi only |
-| **Analyses data management** | Local and cloud rows: **Download** (zip to a folder), **Restore** (when the local frames are missing), **Delete** (5 s Undo) |
-| **Storage** | **Free up space** (drops frames that are backed up), **Clear cache**, and an **auto-free budget** (0–64 GB) |
-| **Your data** | Crash reports and analytics (off by default), **Export my data**, cloud data download, **Delete account** (confirm who you are first) |
-| **Analysis preferences** | Max frames (10–500): a ceiling on imported and video frames |
-| **Help & support** | The manual, feedback, support email (carries device and build) |
-
-- **Transfers keep going when you leave the screen.** A permanent failure shows a dialog with **Try again**.
-- **Quota:** the Home chip reads `N / M analyses used` and turns red at the cap. Email support, or delete an analysis and tap **Re-check**.
-
----
-
-## 12. Troubleshooting
-
-| Symptom | Cause, fix |
-|---|---|
-| **Next** off on step 1 | The line above **Next** says what's missing (frames, load log, area, dimensions, load point) |
-| No E, or E ≤ 0 | Wrong strain axis, or no straight early part. Check the axis and the load units |
-| Bending E far off | Too few pixels across the thickness, taps not on the edges, or the log offset is wrong |
-| Load rows don't match frames | Time match: set **Log started after the reference**; log at ≥ 10 rows/s so each frame has a row within 100 ms. Photos without EXIF capture times: one row per frame |
-| Extension "—" in the report | One end of the region left the view on that frame |
-| Size error | A frame differs in pixel size from the reference |
-| "ROI too small" | The ROI is smaller than the subset |
-| Engine failure | Feature detection: the pair can't be matched. ROI: too small or fully erased |
-| Run stopped partway | It decorrelated (two frames under 50%). The earlier frames are kept |
-| Sweep nodes skipped | Big subsets in a small ROI. Tap the hollow node |
-| Only the first N frames | *Max frames* capped the run |
-| Run vanished | The app was killed. Re-run it in the foreground |
-| Summary shows one frame | Android 8 or older. The GIFs still export |
-| Badge stuck Pending / Failed | Offline, Wi-Fi only, or backup off / tap it for the reason and **Try again** |
-| Row says "Only in cloud" | Its frames were freed. Tap it and choose **Restore** |
-| Still pending approval | Tap **Check status** |
-| Nothing here matches | **Settings → Help & support** |
 
 ---
 
 ## Appendix A — Parameters
 
-| Parameter | Range | Default |
-|---|---|---|
-| Subset | 15–121, odd | Suggested |
-| Step | 1–30 | 5 |
-| Strain window | 3–31 points, odd | 5; bending 9 |
-| Kernel | 4×4 / 6×6 | 4×4 Bicubic |
-| Max frames | 10–500 | 50 |
-| Sweep step denominator | 2–9 | 3 |
-| Sweep samples | 1–8 per axis | 3 |
+| Parameter | Range | Default | Raise when | Lower when |
+|---|---|---|---|---|
+| Subset | 15–121, odd | Recommended | Speckle is weak; correlation fails | You need resolution across a sharp gradient |
+| Step | 1–30 | 5 | Runtime matters | You need a denser field |
+| Strain window | 3–31 points, odd | 5 | Strain is noisy | Detail is being smoothed away |
+| Interpolation | 4×4 / 6×6 | 4×4 bicubic | Studying interpolation bias | — |
+| Max frames | 10–500 | 50 | Long sequences | Runs are killed for memory |
+| Sweep subset range | 15–121, odd | Around recommended | — | — |
+| Sweep strain window range | 3–31 points, odd | 3–11 | Strain is noisy | Detail is being smoothed away |
+| Step denominator | 2–9 | — | Denser correlation | Faster runs |
+| Samples | 1–8 per axis | 3 | Finer detail | Runtime is the product |
 
 `VSG = (strain window − 1) × step + 1` (px; window in points)
 
@@ -390,17 +931,17 @@ Long exports carry on in the background.
 
 | Term | Meaning here |
 |---|---|
-| Reference | The unloaded frame everything is matched against |
+| Reference | The undeformed frame everything is matched against |
 | Deformed frame | One load step |
-| Subset / Step | The window matched at each point / the spacing between points |
-| Strain window / VSG | The window is a count of data points; the VSG is the distance it covers, `(window − 1) × step + 1` px, the diameter of the circle of points fitted for one strain value |
-| ROI | Region of interest, with optional erased holes |
-| SSSIG | The sum of squared subset intensity gradients, which drives the suggested subset |
-| ZNSSD | The match residual (0 is perfect; ≤ 0.15 accepted) |
+| Subset | The pixel window matched at each point |
+| Step | Spacing between grid points |
+| Strain window | A count of data points (odd): strain is a plane fitted to every point within (window − 1) / 2 steps |
+| VSG | Virtual strain gauge — what one strain value covers, `(window − 1) × step + 1` px |
+| ROI | Region of interest, optionally with erased holes |
+| SSSIG | Sum of squared subset intensity gradients — drives the subset recommendation |
+| ZNSSD | Correlation residual, one per point, in the CSV |
 | mε | Millistrain |
-| E | Young's modulus: the slope of stress against strain, or from the load–deflection slope for a beam |
-| σb | Bending stress M·y/I |
-| Load step | Consecutive frames at the same hanger load, averaged into one row |
+| Parameter sweep | One frame solved across a lattice of subset × VSG |
 
 ## Appendix C — Administrators
 
@@ -420,7 +961,7 @@ backend sends nothing and says nothing, and the pending list is your only signal
 Every account is **Demo** (25 saved analyses, no share, no backup/restore
 *feature*) until a licensed key is activated. A demo account's analyses are
 still **recorded** — images and results upload and are stored exactly as a
-licensed account's are — but the app shows demo no sync badge, banner or
+licensed account's are — but the app shows demo no sync icon, banner or
 Settings backup section, and the backend refuses demo retrieval (`/content`,
 bundle → `feature_not_licensed`). Recording is open so that installed builds
 predating licensing keep backing up after the backend deploy; a licence turns

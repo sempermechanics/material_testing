@@ -1,11 +1,15 @@
 package com.sempermechanics.semper.ui.analysis
 
 import android.content.Intent
+import android.text.TextUtils
+import android.view.View
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.load.AnalysisLoadCard
+import com.sempermechanics.semper.ui.common.dialog.Dialogs
 import com.sempermechanics.semper.ui.common.dialog.Feedback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,6 +45,23 @@ internal fun StaticAnalysisActivity.setupLoadCard() {
         onChanged = ::checkReady,
         confirmOpenFaq = ::confirmOpenFaq,
     )
+    if (viewModel.testType == TestType.BENDING) bindBendingStrainInfo()
+}
+
+/**
+ * Bending's strain window starts wider (`TestType.defaultStrainWindow`), so
+ * its ⓘ adds why to Semper's text. Runs after the settings page bound the
+ * button (`WizardParamFields.bind`), and replaces that listener.
+ */
+private fun StaticAnalysisActivity.bindBendingStrainInfo() {
+    findViewById<View>(R.id.btnStrainInfo).setOnClickListener {
+        val body = TextUtils.concat(
+            getText(R.string.info_strain_window),
+            " ",
+            getText(R.string.info_strain_window_bending),
+        )
+        Dialogs.info(this, getText(R.string.strain_window), body)
+    }
 }
 
 /** Bending: tap the beam's edges on the reference; needs the photo and the thickness first. */

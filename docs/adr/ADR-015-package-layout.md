@@ -49,8 +49,8 @@ File counts are main sources only; the first move's table is in this file's hist
 | `diagnostics/` | 4 | `Diagnostics`, `CrashReportingTree`, `EngineDebug`, `SemperAnalytics` (the old `analytics/` package) |
 | `navigation/` | 2 | `AppIntents`, `IntentKeys` |
 | `data/` | 11 | The six workers (pinned): `BackupDeleteWorker`, `DicBundleDownloadWorker`, `DicRestoreWorker`, `DicUploadWorker`, `LicenseConfigWorker`, `SessionMetadataWorker`. Beside `DicUploadWorker`, the steps it was split into: `UploadStaging`, `UploadSessionPlanner`, `UploadRun`, `UploadFailures`, `UploadTuning` |
-| `data/session/` | 17 | Local sessions: `SessionStore`, `SessionRecord` (+ `SessionRecordFields`), `SessionPaths`, `SessionLayout`, `SessionNaming`, `SessionRepository`, `SessionHeadline`, `SessionQuotaGate`, `SessionZip`, `ZipDirectory`, `DatCodec`, `LocalArtifacts`, `SkippedNode`, `StorageBudget`, `CacheJanitor`, `SessionEverythingExporter` |
-| `data/cloud/` | 18 | Backup and sync: `CloudSync`, `CloudErase`, `CloudReconcile`, `CloudBackupListing`, `CloudAccountExport`, `SessionDeletes`, `SessionMetadataSync`, `SessionMetadataDoc`, `SessionUploadBundler`, `SessionUploadMetadata`, `UploadWorkOutcomes`, `UploadProgressSampler`, `UploadErrors`, `TransferWork`, `WorkTags`, `TransferLog`, `TransferNotifications`, `CorruptTransferException` |
+| `data/session/` | 17 | Local sessions: `SessionStore`, `SessionRecord` (+ `SessionRecordFields`), `SessionPaths`, `SessionLayout`, `SessionNaming`, `SessionRepository`, `SessionHeadline`, `SessionQuota`, `SessionZip`, `ZipDirectory`, `DatCodec`, `LocalArtifacts`, `SkippedNode`, `StorageBudget`, `CacheJanitor`, `SessionEverythingExporter` |
+| `data/cloud/` | 23 | Backup and sync: `CloudSync`, `CloudErase`, `CloudReconcile`, `CloudBackupListing`, `CloudAccountExport`, `SessionDeletes`, `SessionMetadataSync`, `SessionMetadataDoc`, `SessionUploadBundler`, `SessionUploadMetadata`, `UploadWorkOutcomes`, `UploadProgressSampler`, `UploadErrors`, `TransferWork`, `WorkTags`, `TransferLog`, `TransferMeter`, `TransferNotifications`, `TransferProgressUpdates`, `TransferResultNotifications`, `TransferRetryReceiver`, `TransferFailureLedgers`, `CorruptTransferException` |
 | `data/cloud/restore/` | 10 | `CloudRestore`, `RestoreBundleFetcher`, `RestoreUnpacker`, `RestoreZipVerifier`, `RestoreStart` (+ `RestoreFailureLedger`), `RestoreDownloadOutcomes`, `DownloadFailure`, `DownloadProgress`, `SafDestination`, `UnrestorableBackupException` |
 | `data/account/` | 15 | `AuthRepository`, `AuthLinks`, `AccessStatus`, `AccessStatusResolver`, `FirebaseOp`, `ReauthCredentials`, `DevAuth`, `DeviceEnv`, `DeviceKeys`, `LicenseEntitlements`, `LicenseErrors`, `SeatLease`, `SeatHeartbeat`, `LegalTerms`, `TotpMfa` |
 | `data/prefs/` | 6 | `AppSettings`, `CoachPrefs`, `ParamClipboard`, `WizardDraft`, `PrefKey`, `PrefFiles` |
@@ -75,12 +75,12 @@ File counts are main sources only; the first move's table is in this file's hist
 | `ui/common/auth/` | 6 | `AuthRoute`, `SignOutRun`, `SignOutConfirm`, `SupportMail`, `SupportMailContext`, `ExternalLinks` |
 | `ui/common/media/` | 6 | `MediaPickerSheet`, `MediaGridAdapter`, `MediaSourceChooser`, `MediaStoreBrowser`, `ThumbnailLoader`, `SquareFrameLayout` |
 | `ui/common/transfer/` | 4 | `TransferWorkObserver`, `TransferBannerController`, `DeleteFeedback`, `RestoreFailureNotice` |
-| `ui/home/`, `ui/settings/`, `ui/auth/`, `ui/admin/`, `ui/limit/` | 11, 15, 11, 1, 2 | One screen each, plus the parts each Activity was split into (`Home*`, `Settings*Section`, `Auth*`) |
+| `ui/home/`, `ui/settings/`, `ui/auth/`, `ui/admin/`, `ui/limit/` | 14, 15, 11, 1, 2 | One screen each, plus the parts each Activity was split into (`Home*`, `Settings*Section`, `Auth*`) |
 | `util/` | 12 | `AtomicFiles`, `Streams`, `Zips`, `Digests`, `Mime`, `CallerCancellation`, `SuspendRunCatching`, … |
 
 Eight packages are still over the ~15-file guide: `data/net/` (23),
 `report/` (22), `ui/analysis/wizard/` (22), `ui/viewer/` (19),
-`data/cloud/` (18), `data/session/` (17), `ui/analysis/sweep/` (17) and
+`data/cloud/` (23), `data/session/` (17), `ui/analysis/sweep/` (17) and
 `ui/analysis/run/` (16). They are left for later feature splits; none of them
 mixes features the way the flat packages did.
 

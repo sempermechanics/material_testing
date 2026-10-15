@@ -47,6 +47,9 @@ data class ReportSource(
      * from [frameNames]: the viewer passes the planned frame (they differ past
      * a skipped frame), a sweep and the cloud bundle the frame itself.
      * [analysisDate] defaults to now, as both callers stamp it.
+     * [onFramePhoto] says [defImgForCover] is the frame's own photo, not the
+     * reference standing in for it: the field images are then drawn on it, at
+     * the displaced positions, as the viewer shows that frame (TD-139).
      */
     @Suppress("LongParameterList") // the frame's own inputs; the rest is this source
     fun forFrame(
@@ -56,6 +59,7 @@ data class ReportSource(
         defImgForCover: Bitmap,
         nameIndex: Int = frameIndex,
         analysisDate: String = ReportBuilder.currentAnalysisDate(),
+        onFramePhoto: Boolean = false,
     ): ReportBuilder.ReportBuildParams = ReportBuilder.ReportBuildParams(
         data = data,
         baseImg = baseImg,
@@ -74,6 +78,7 @@ data class ReportSource(
         referenceImageName = ReportImageNames.reference(refName),
         deformedImageName = ReportImageNames.deformed(frameNames, nameIndex),
         drawMinMarker = drawMinMarker,
+        fieldsOnFramePhoto = onFramePhoto,
     )
 
     companion object {
@@ -87,7 +92,7 @@ data class ReportSource(
         fun forRecord(record: SessionRecord): ReportSource = ReportSource(
             sessionId = record.id,
             refName = record.refName,
-            frameNames = record.frameNames,
+            frameNames = bundleFrameNames(record),
             imgW = record.imgW,
             imgH = record.imgH,
             roi = RoiData(record.roiX, record.roiY, record.roiW, record.roiH),
@@ -101,5 +106,20 @@ data class ReportSource(
             engineStats = EngineStats.fromList(record.engineStats),
             drawMinMarker = false,
         )
+
+        /**
+         * The names the cloud bundle's PDFs print: a sweep frame with no label
+         * gets the `Combination_N` its folder and `metadata.json` use
+         * ([ReportImageNames.sweepLabel]), where [SessionRecord.frameNames]
+         * would leave it to print `Frame_N`. The viewer keeps the record's own
+         * list: its captions and exports still say `Frame N` for such a frame.
+         */
+        private fun bundleFrameNames(record: SessionRecord): List<String> = if (record.isSweep) {
+            List(maxOf(record.defNames.size, record.sweepLabels.size)) {
+                ReportImageNames.sweepLabel(record.sweepLabels, it)
+            }
+        } else {
+            record.defNames
+        }
     }
 }

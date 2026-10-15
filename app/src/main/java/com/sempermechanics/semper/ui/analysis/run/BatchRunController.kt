@@ -22,7 +22,9 @@ import kotlinx.coroutines.launch
  * terminal results into UI callbacks owned by [StaticAnalysisActivity].
  *
  * Both runs live on the view model's scope, so this is the only place that
- * knows whether an Activity is still around to be told how they ended.
+ * knows whether an Activity is still around to be told how they ended. An
+ * outcome that arrives while the screen is stopped waits in the view model
+ * and is handled, once, when the screen starts again.
  */
 @SuppressLint("SetTextI18n") // same result strings as the former Activity handlers
 class BatchRunController(
@@ -46,7 +48,8 @@ class BatchRunController(
         /** Why a run produced nothing, naming the frame it stopped on. */
         fun engineFailureMessage(code: Int, frameIndex: Int, frameName: String?): String
 
-        fun showEngineFailureDialog(message: String, titleRes: Int, faqUrlRes: Int)
+        /** [why], when given, is the longer explanation behind the dialog's Why?. */
+        fun showEngineFailureDialog(message: String, titleRes: Int, faqUrlRes: Int, why: String? = null)
 
         fun clearEngineFailFaq()
 
@@ -64,17 +67,11 @@ class BatchRunController(
                 launch {
                     viewModel.progress.collect { progress ->
                         if (progress == null) return@collect
-                        overlayController.update(
-                            percent = progress.percent,
-                            status = progress.status,
-                            title = progress.status,
-                            pointsSolved = progress.pointsSolved,
-                            convergencePercent = progress.convergencePercent,
-                        )
+                        overlayController.updateRun(progress)
                     }
                 }
                 launch {
-                    viewModel.batchOutcome.collect { result ->
+                    viewModel.batchOutcome.consumeEach { result ->
                         handleBatchOutcome(result)
                     }
                 }
@@ -84,7 +81,7 @@ class BatchRunController(
                     }
                 }
                 launch {
-                    viewModel.sweepOutcome.collect { result ->
+                    viewModel.sweepOutcome.consumeEach { result ->
                         handleSweepOutcome(result)
                     }
                 }
@@ -188,7 +185,8 @@ class BatchRunController(
         } else {
             EngineFailure.faqUrlRes(outcome.engineErrorCode)
         }
+        val why = if (zeroPoints) null else EngineFailure.whyRes(outcome.engineErrorCode)?.let(activity::getString)
         tvResult.text = "❌ Error: $errorMessage"
-        host.showEngineFailureDialog(errorMessage, R.string.analysis_failed_title, faqRes)
+        host.showEngineFailureDialog(errorMessage, R.string.analysis_failed_title, faqRes, why)
     }
 }

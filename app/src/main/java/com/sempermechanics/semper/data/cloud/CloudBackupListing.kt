@@ -8,6 +8,7 @@ import com.sempermechanics.semper.data.prefs.PrefFiles.CloudListing
 import com.sempermechanics.semper.data.prefs.get
 import com.sempermechanics.semper.data.prefs.privatePrefs
 import com.sempermechanics.semper.data.prefs.put
+import com.sempermechanics.semper.data.session.CloudNaming
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import org.json.JSONArray
@@ -37,7 +38,7 @@ object CloudBackupListing {
         val backups = sessions.filter {
             it.status == UploadWorkOutcomes.STATUS_COMPLETED && it.sessionId.isNotBlank()
         }.map {
-            Backup(it.sessionId, it.localSessionId, it.specimen.orEmpty(), it.totalBytes)
+            Backup(it.sessionId, it.localSessionId, CloudNaming.listedName(it.name, it.specimen), it.totalBytes)
         }
         val ids = backups.map { it.cloudId }.toSet()
         val prefs = prefs(context)
@@ -74,11 +75,22 @@ object CloudBackupListing {
         return backups.filterNot { (it.localId.isNotBlank() && it.localId in localIds) || it.cloudId in cloudIds }
     }
 
-    /** What Home offers: backups not on this phone that the user has not hidden. */
+    /** What Home offers: backups not on this phone that the user has not hidden, [labelled]. */
     @WorkerThread
     fun offered(context: Context): List<Backup> {
         val hidden = hiddenIds(context)
-        return notOnPhone(read(context), SessionStore.list(context)).filterNot { it.cloudId in hidden }
+        val records = SessionStore.list(context)
+        return labelled(notOnPhone(read(context), records).filterNot { it.cloudId in hidden }, records)
+    }
+
+    /**
+     * [backups] named as their rows will be ([CloudNaming.backupNames]): no
+     * image extension, and a ` (n)` where one would read like another backup
+     * or a row on the phone ([records]). The restore starts its row under this name.
+     */
+    fun labelled(backups: List<Backup>, records: List<SessionRecord>): List<Backup> {
+        val names = CloudNaming.backupNames(backups.map { it.name }, records.map { it.name })
+        return backups.zip(names) { backup, name -> backup.copy(name = name) }
     }
 
     /** Stop offering these on Home. A backup added later is offered again. */

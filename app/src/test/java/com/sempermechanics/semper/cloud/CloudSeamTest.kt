@@ -143,6 +143,7 @@ class CloudSeamTest {
                 quota = QuotaDto(used = 1, max = 25),
             )
         }
+        api.onListAppSessions = { _, _ -> SessionsResponse() } // nor another app's
 
         val outcome = reconcile()
 

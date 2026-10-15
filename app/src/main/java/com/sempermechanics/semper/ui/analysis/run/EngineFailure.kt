@@ -26,9 +26,13 @@ object EngineFailure {
         CANCELLED,
         VSG,
         UNKNOWN,
+
+        /** No code was recorded: a sweep node from a backup made before codes were kept. */
+        SKIPPED,
     }
 
-    private fun cause(engineErrorCode: Int): Cause = when (engineErrorCode) {
+    private fun cause(engineErrorCode: Int?): Cause = when (engineErrorCode) {
+        null -> Cause.SKIPPED
         ENGINE_ERROR_FEATURES -> Cause.FEATURES
         ENGINE_ERROR_ROI -> Cause.ROI
         ENGINE_ERROR_INIT -> Cause.INIT
@@ -41,9 +45,9 @@ object EngineFailure {
         else -> Cause.VSG
     }
 
-    /** Full explanation for dialogs. */
+    /** Full explanation for dialogs; a null code (none recorded) says only that it was skipped. */
     @StringRes
-    fun reasonRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
+    fun reasonRes(engineErrorCode: Int?): Int = when (cause(engineErrorCode)) {
         Cause.FEATURES -> R.string.sweep_fail_features
         Cause.ROI -> R.string.sweep_fail_roi
         Cause.INIT -> R.string.sweep_fail_init
@@ -51,14 +55,16 @@ object EngineFailure {
         Cause.CANCELLED -> R.string.run_fail_cancelled
         Cause.UNKNOWN -> R.string.sweep_fail_unknown_fmt
         Cause.VSG -> R.string.sweep_reason_vsg
+        Cause.SKIPPED -> R.string.sweep_node_skipped
     }
 
     /**
-     * One-line label for lattice nodes. Code 0 → strain window; unknown positive → [Cause.UNKNOWN].
-     * The unknown label formats the code, so show it through [shortReason].
+     * One-line label for lattice nodes. Code 0 → strain window; unknown positive → [Cause.UNKNOWN];
+     * null (no code recorded) → plain "skipped". The unknown label formats the code, so show
+     * it through [shortReason].
      */
     @StringRes
-    fun shortReasonRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
+    fun shortReasonRes(engineErrorCode: Int?): Int = when (cause(engineErrorCode)) {
         Cause.FEATURES -> R.string.sweep_reason_decorrelated
         Cause.ROI -> R.string.sweep_reason_subset_too_big
         Cause.INIT -> R.string.sweep_reason_decode
@@ -66,11 +72,34 @@ object EngineFailure {
         Cause.CANCELLED -> R.string.run_reason_cancelled
         Cause.UNKNOWN -> R.string.sweep_reason_unknown_fmt
         Cause.VSG -> R.string.sweep_reason_vsg
+        Cause.SKIPPED -> R.string.sweep_node_skipped
     }
 
     /** The [shortReasonRes] label as text, with [engineErrorCode] filled in where it is named. */
-    fun shortReason(context: Context, engineErrorCode: Int): String =
+    fun shortReason(context: Context, engineErrorCode: Int?): String =
         context.getString(shortReasonRes(engineErrorCode), engineErrorCode)
+
+    /**
+     * The longer explanation behind a dialog's **Why?**, for a reason whose
+     * [reasonRes] is one short sentence; null when [reasonRes] already says it all.
+     */
+    @StringRes
+    fun whyRes(engineErrorCode: Int): Int? = when (cause(engineErrorCode)) {
+        Cause.CONVERGENCE -> R.string.error_low_convergence_why
+        else -> null
+    }
+
+    /**
+     * Why a run stopped, short enough to follow "22 of 40 frames kept.": the
+     * one-sentence [reasonRes] where there is one ([whyRes] holds the rest),
+     * else the [shortReason] label.
+     */
+    fun stopReason(context: Context, engineErrorCode: Int): String =
+        if (whyRes(engineErrorCode) != null) {
+            context.getString(reasonRes(engineErrorCode), engineErrorCode)
+        } else {
+            shortReason(context, engineErrorCode)
+        }
 
     /**
      * Why a single run's first frame kept no points (engine code 0). Code 0
@@ -125,12 +154,12 @@ object EngineFailure {
     }
 
     @StringRes
-    fun faqUrlRes(engineErrorCode: Int): Int = when (cause(engineErrorCode)) {
+    fun faqUrlRes(engineErrorCode: Int?): Int = when (cause(engineErrorCode)) {
         Cause.FEATURES -> R.string.url_faq_engine_features
         Cause.ROI -> R.string.url_faq_engine_roi
         Cause.INIT -> R.string.url_faq_engine_init
         Cause.CONVERGENCE -> R.string.url_faq_engine_convergence
         // No FAQ covers a cancel, and no screen links one for it.
-        Cause.CANCELLED, Cause.UNKNOWN, Cause.VSG -> R.string.url_faq_engine_vsg
+        Cause.CANCELLED, Cause.UNKNOWN, Cause.VSG, Cause.SKIPPED -> R.string.url_faq_engine_vsg
     }
 }

@@ -135,6 +135,15 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      */
     var defFromVideo: Boolean = false
 
+    /** The clip [defFilePaths] were sampled from ("tensile_03", or "Video"); null for picked images. */
+    var defVideoName: String? = null
+
+    /**
+     * Each deformed frame's time in its clip, index-aligned with [defFilePaths];
+     * null unless every frame has one (picked images have none).
+     */
+    val defFrameTimesMs: List<Long>? get() = DeformedFrame.timesOf(deformedFrames)
+
     /** The reference's true pixel size, as the engine measures it; [ImageSize.UNKNOWN] before one is picked. */
     var refSize: ImageSize = ImageSize.UNKNOWN
 
@@ -154,9 +163,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
 
     // ── Lab test: what the load card records (logic in LabInputs.kt) ──────
     // Chosen on Home before the media picker, so the wizard knows on open
-    // whether to ask for machine loads. Tensile is the fallback for a wizard
-    // reached without the extra, which only a stale launcher shortcut can do.
-    var testType: TestType = TestType.TENSILE
+    // whether to ask for machine loads. A wizard reached without the extra (a
+    // stale launcher shortcut) is plain 2D DIC: Semper's wizard, no load card.
+    var testType: TestType = TestType.DIC_2D
 
     /** Specimen cross-section in mm², typed on the load card; 0 until it is. */
     var crossSectionMm2: Float = 0f
@@ -183,6 +192,13 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
 
     /** EXIF capture time of the picked reference photo; null for a video frame or a photo without one. */
     var refCaptureTimeMs: Long? = null
+
+    /**
+     * The video reference frame's time in its clip, ms; null for a photo. A
+     * video frame's time after the reference, which a timed load log is
+     * matched by, is its [DeformedFrame.timeMs] less this.
+     */
+    var refVideoTimeMs: Long? = null
 
     /**
      * Seconds after the reference frame at which the load log's first row was
@@ -263,7 +279,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     /** The runs' channels; [progress] and the rest are their read-only faces. */
     internal val runs = RunChannels()
     val progress: SharedFlow<BatchProgressUpdate?> = runs.progress.asSharedFlow()
-    val batchOutcome: SharedFlow<Result<BatchAnalysisOutcome>> = runs.batchOutcome.asSharedFlow()
+
+    /** The batch run's end, held until the screen takes it ([PendingOutcome]). */
+    internal val batchOutcome: PendingOutcome<Result<BatchAnalysisOutcome>> get() = runs.batchOutcome
 
     var lastBatchDirPath: String?
         get() = _runResult.value.batchDirPath
@@ -403,7 +421,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     var sweepSkippedNodes: List<SkippedNode> = emptyList()
 
     val sweepProgress: SharedFlow<SweepStudyRunner.Progress?> = runs.sweepProgress.asSharedFlow()
-    val sweepOutcome: SharedFlow<Result<BatchAnalysisOutcome>> = runs.sweepOutcome.asSharedFlow()
+
+    /** The sweep's end, held until the screen takes it ([PendingOutcome]). */
+    internal val sweepOutcome: PendingOutcome<Result<BatchAnalysisOutcome>> get() = runs.sweepOutcome
 
     fun isReadyToCompute(): Boolean = refBytes != null && defFilePaths.isNotEmpty()
 
@@ -443,14 +463,19 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     }
 
     /**
-     * Identity of the working session on the Home list. Every re-run reuses it,
-     * so the exploration loop keeps updating one row instead of leaving a trail
-     * of near-identical ones. New inputs reset it via [clearPreviousResults].
+     * Identity of the working session on the Home list. Every re-run of the
+     * same kind reuses it, so the exploration loop keeps updating one row
+     * instead of leaving a trail of near-identical ones. New inputs reset it
+     * via [clearPreviousResults]; a run of the other kind (single ↔ sweep)
+     * takes a new one ([resolveLocalSessionId]), so the earlier record is kept.
      */
     var workingLocalId: String? = null
 
-    /** True when the next completed run would create a new Home-list row. */
-    fun wouldCreateNewSession(): Boolean = workingLocalId == null
+    /** Whether [workingLocalId] names a sweep's record; meaningless while that is null. */
+    var workingIsSweep: Boolean = false
+
+    /** True when the next completed run, a sweep when [sweep], would create a new Home-list row. */
+    fun wouldCreateNewSession(sweep: Boolean): Boolean = workingLocalId == null || workingIsSweep != sweep
 
     /**
      * Cooperative cancel: checked between frames here, and forwarded to the

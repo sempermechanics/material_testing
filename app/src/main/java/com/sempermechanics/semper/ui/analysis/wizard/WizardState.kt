@@ -42,6 +42,7 @@ internal object WizardState {
     private const val REF_H = "refH"
     private const val REF_NAME = "refName"
     private const val REF_CAPTURE_MS = "refCaptureMs"
+    private const val REF_VIDEO_MS = "refVideoMs"
     private const val HAS_REFERENCE = "hasReference"
     private const val HAS_MASK = "hasMask"
     private const val HAS_CUSTOM_ROI = "hasCustomRoi"
@@ -58,12 +59,14 @@ internal object WizardState {
     private const val ORDER_DIRECTION = "orderDirection"
     private const val FRAME_SIZE_ERROR = "frameSizeError"
     private const val FROM_VIDEO = "fromVideo"
+    private const val VIDEO_NAME = "videoName"
     private const val SWEEP_MODE = "sweepMode"
     private const val SWEEP_RANGES = "sweepRanges"
     private const val SUBSET_OVERLAP = "subsetOverlap"
     private const val LINE_CUT_HORIZONTAL = "lineCutHorizontal"
     private const val SWEEP_FRAME_INDEX = "vsgFrameIndex"
     private const val WORKING_LOCAL_ID = "workingLocalId"
+    private const val WORKING_IS_SWEEP = "workingIsSweep"
     private const val TEST_TYPE = "testType"
     private const val CROSS_SECTION_MM2 = "crossSectionMm2"
     private const val LOAD_AXIS_X = "loadAxisX"
@@ -75,9 +78,10 @@ internal object WizardState {
 
     /**
      * Index-aligned lists behind the deformed-frames card; `-1` = size not
-     * measured. [timesMs] is empty unless the frames came from a video;
-     * [captureTimesMs] is empty unless they are photos (null: no EXIF time).
-     * [typedLoadsKg] is bending's typed hanger mass per frame (null: blank).
+     * measured. [timesMs] is each video frame's time in its clip: empty for
+     * picked images, and for a draft an older app saved. [captureTimesMs] is
+     * empty unless the frames are photos (null: no EXIF time). [typedLoadsKg]
+     * is bending's typed hanger mass per frame (null: blank).
      */
     @Serializable
     data class Frames(
@@ -105,6 +109,7 @@ internal object WizardState {
         putInt(REF_H, viewModel.refSize.height)
         putString(REF_NAME, viewModel.refName)
         viewModel.refCaptureTimeMs?.let { putLong(REF_CAPTURE_MS, it) }
+        viewModel.refVideoTimeMs?.let { putLong(REF_VIDEO_MS, it) }
         putBoolean(HAS_REFERENCE, viewModel.refBytes != null)
         putBoolean(HAS_MASK, viewModel.roiMaskBytes != null)
         putBoolean(HAS_CUSTOM_ROI, viewModel.hasCustomRoi)
@@ -114,12 +119,14 @@ internal object WizardState {
         putString(ORDER_DIRECTION, viewModel.defOrderDirection.name)
         putString(FRAME_SIZE_ERROR, viewModel.frameSizeError)
         putBoolean(FROM_VIDEO, viewModel.defFromVideo)
+        putString(VIDEO_NAME, viewModel.defVideoName)
         putBoolean(SWEEP_MODE, viewModel.sweepMode)
         putIntArray(SWEEP_RANGES, viewModel.sweepRanges.toIntArray())
         putDouble(SUBSET_OVERLAP, viewModel.subsetOverlap)
         putBoolean(LINE_CUT_HORIZONTAL, viewModel.lineCutHorizontal)
         putInt(SWEEP_FRAME_INDEX, viewModel.sweepFrameIndex)
         putString(WORKING_LOCAL_ID, viewModel.workingLocalId)
+        putBoolean(WORKING_IS_SWEEP, viewModel.workingIsSweep)
         putString(FRAMES_FINGERPRINT, fingerprint(framesJson))
         putString(TEST_TYPE, viewModel.testType.wireName)
         putFloat(CROSS_SECTION_MM2, viewModel.crossSectionMm2)
@@ -139,6 +146,7 @@ internal object WizardState {
         viewModel.refSize = ImageSize(b.getInt(REF_W), b.getInt(REF_H))
         b.getString(REF_NAME)?.let { viewModel.refName = it }
         viewModel.refCaptureTimeMs = if (b.containsKey(REF_CAPTURE_MS)) b.getLong(REF_CAPTURE_MS) else null
+        viewModel.refVideoTimeMs = if (b.containsKey(REF_VIDEO_MS)) b.getLong(REF_VIDEO_MS) else null
         viewModel.hasCustomRoi = b.getBoolean(HAS_CUSTOM_ROI)
         b.getRoi(ROI)?.let { viewModel.roi = it }
         b.getString(ORDER_MODE)?.let { name -> FrameOrderMode.entries.find { it.name == name } }
@@ -147,12 +155,17 @@ internal object WizardState {
             ?.let { viewModel.defOrderDirection = it }
         viewModel.frameSizeError = b.getString(FRAME_SIZE_ERROR)
         viewModel.defFromVideo = b.getBoolean(FROM_VIDEO)
+        viewModel.defVideoName = b.getString(VIDEO_NAME)
         viewModel.sweepMode = b.getBoolean(SWEEP_MODE)
         SweepRanges.fromIntArray(b.getIntArray(SWEEP_RANGES))?.let { viewModel.sweepRanges = it }
         viewModel.subsetOverlap = b.getDouble(SUBSET_OVERLAP, viewModel.subsetOverlap)
         viewModel.lineCutHorizontal = b.getBoolean(LINE_CUT_HORIZONTAL, true)
         viewModel.sweepFrameIndex = b.getInt(SWEEP_FRAME_INDEX, -1)
-        viewModel.workingLocalId = b.getString(WORKING_LOCAL_ID)
+        // A Bundle from before the kind was saved cannot say whether its
+        // session is a single run or a sweep, and a run of the other kind
+        // must not write over it: the next run starts a new record instead.
+        viewModel.workingLocalId = b.getString(WORKING_LOCAL_ID)?.takeIf { b.containsKey(WORKING_IS_SWEEP) }
+        viewModel.workingIsSweep = b.getBoolean(WORKING_IS_SWEEP)
         TestType.fromWire(b.getString(TEST_TYPE))?.let { viewModel.testType = it }
         viewModel.crossSectionMm2 = b.getFloat(CROSS_SECTION_MM2)
         viewModel.loadAxisX = b.getBoolean(LOAD_AXIS_X, true)

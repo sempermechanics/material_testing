@@ -5,7 +5,6 @@ import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
-import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -45,11 +44,10 @@ class RunChromeTest {
         cancel = Button(activity)
         val helper = ComputeOverlayController(
             overlay = overlay,
-            title = TextView(activity),
-            progress = ProgressBar(activity),
+            header = TextView(activity),
             percent = TextView(activity),
             status = TextView(activity),
-            elapsed = TextView(activity),
+            eta = TextView(activity),
         )
         chrome = RunChrome(activity, helper, cancel)
     }
@@ -96,7 +94,7 @@ class RunChromeTest {
     }
 
     @Test
-    fun `keep running leaves the import going`() {
+    fun `Keep importing leaves the import going`() {
         var stopped = false
         chrome.beginImport { stopped = true }
         chrome.confirmCancel()
@@ -105,6 +103,10 @@ class RunChromeTest {
         assertEquals(
             activity.getString(R.string.cancel_import_body),
             asked.findViewById<TextView>(android.R.id.message)?.text.toString(),
+        )
+        assertEquals(
+            activity.getString(R.string.keep_importing),
+            asked.getButton(AlertDialog.BUTTON_NEGATIVE).text.toString(),
         )
         asked.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
         shadowOf(Looper.getMainLooper()).idle()

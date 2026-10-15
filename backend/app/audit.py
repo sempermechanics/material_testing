@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from google.cloud import firestore
 
-from .repo._base import SCHEMA_VERSION, db
+from .repo._base import SCHEMA_VERSION, _add_doc, _stream, db
 
 log = logging.getLogger("audit")
 
@@ -27,7 +27,8 @@ DEVICE_HISTORY_ACTIONS = frozenset(
 
 def record(uid=None, device_id=None, action="", outcome="OK", target=None, detail=None, ip=None):
     try:
-        db().collection("audit_logs").add(
+        _add_doc(
+            db().collection("audit_logs"),
             {
                 "ts": firestore.SERVER_TIMESTAMP,
                 "uid": uid,
@@ -57,23 +58,21 @@ def list_license_device_history(license_id: str, *, limit: int = 50) -> list[dic
     fetch = min(limit * 4, 400)
     rows: list[dict] = []
     try:
-        exact = (
+        exact = _stream(
             db().collection("audit_logs")
             .where("target.id", "==", license_id)
             .limit(fetch)
-            .stream()
         )
         for snap in exact:
             rows.append(_public_audit(snap.id, snap.to_dict() or {}))
         # Seat targets are `{licenseId}/{uid}`. A range on the string is enough
         # for the automatic single-field index; filter actions below.
         prefix = f"{license_id}/"
-        seats = (
+        seats = _stream(
             db().collection("audit_logs")
             .where("target.id", ">=", prefix)
             .where("target.id", "<", prefix + "\uffff")
             .limit(fetch)
-            .stream()
         )
         for snap in seats:
             rows.append(_public_audit(snap.id, snap.to_dict() or {}))

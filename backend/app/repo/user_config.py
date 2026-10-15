@@ -24,6 +24,8 @@ from ._base import (
     _license_mode,
     _mode_patch,
     _now,
+    _get,
+    _update_doc,
 )
 
 
@@ -245,7 +247,11 @@ def resolve_user_config(user: dict) -> dict:
             if dat_codec_override is not None
             else settings.DAT_CODEC_ENCODING_ENABLED
         ),
-        "licensePrefix": summary["prefix"],
+        # Only while the licence entitles: the app shows "Licensed as …"
+        # whenever this is set (TD-145), and a Demo key, a lapsed or revoked
+        # licence, or a floating seat with no lease all run as Demo. /v1/me
+        # still names a held licence's prefix, under its own `held` flag.
+        "licensePrefix": summary["prefix"] if is_licensed else "",
     }
 
 
@@ -298,7 +304,7 @@ _CONFIG_CASTERS = {
 def set_user_config(uid: str, patch: dict) -> dict | None:
     """Persist per-user limit overrides. Returns resolved config, or None if missing."""
     ref = db().collection("users").document(uid)
-    snap = ref.get()
+    snap = _get(ref)
     if not snap.exists:
         return None
     allowed = tuple(_CONFIG_CASTERS)
@@ -315,6 +321,6 @@ def set_user_config(uid: str, patch: dict) -> dict | None:
     if "mode" in deletes:
         deletes["plan"] = _base.firestore.DELETE_FIELD
     if update or deletes:
-        ref.update({**update, **deletes, "updatedAt": _base.firestore.SERVER_TIMESTAMP})
+        _update_doc(ref, {**update, **deletes, "updatedAt": _base.firestore.SERVER_TIMESTAMP})
     return resolve_user_config(_apply_patch({**(snap.to_dict() or {}), "uid": uid},
                                             {**update, **deletes}))

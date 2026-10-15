@@ -5,6 +5,7 @@ import androidx.annotation.WorkerThread
 import com.sempermechanics.semper.ProgressCallback
 import com.sempermechanics.semper.SemperNativeLib
 import com.sempermechanics.semper.data.cloud.CloudSync
+import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.RunInput
 import com.sempermechanics.semper.data.session.RunMetrics
 import com.sempermechanics.semper.data.session.RunOutcome
@@ -21,12 +22,14 @@ import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.report.newMetrics
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
+import com.sempermechanics.semper.ui.analysis.recommend.RunEstimate
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
+import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
+import com.sempermechanics.semper.ui.analysis.wizard.admitRun
+import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
-import com.sempermechanics.semper.ui.analysis.wizard.resolveLocalSessionId
-import com.sempermechanics.semper.ui.analysis.wizard.sessionLimitOutcome
 import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 import java.io.File
@@ -54,23 +57,27 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     onProgress: (BatchProgressUpdate) -> Unit,
 ): BatchAnalysisOutcome {
     val spec = run.spec
-    val limited = sessionLimitOutcome(appContext, defFilePaths.size)
-    if (limited != null) {
+    // The images as they were at launch: the wizard's fields are Main's (TD-173).
+    val reference = run.inputs.reference
+    val frames = run.inputs.frames
+    // Admitted here, the run saves its session even if the cap fills meanwhile.
+    val admission = admitRun(appContext, frames.paths.size, sweep = false)
+    if (admission is RunAdmission.Blocked) {
         SemperAnalytics.event(
             appContext,
             SemperAnalytics.ANALYSIS_FAILED,
             mapOf("mode" to "batch", "reason" to "session_limit"),
         )
-        return limited
+        return admission.outcome
     }
 
     // Results live in app-private persistent storage (NOT cacheDir, which
-    // the OS may evict): one directory per Home-list session.
-    val localSessionId = resolveLocalSessionId()
-    val batchDir = SessionStore.dirFor(appContext, localSessionId)
-    // The Home row this run replaces, if it is a re-run. Its frames go next.
+    // the OS may evict): one directory per Home-list session, never a sweep's.
+    val session = openRunSession(appContext, sweep = false)
+    val localSessionId = session.id
+    val batchDir = session.dir
+    // The Home row this run replaces, if it is a re-run; its frames are gone.
     val previous = SessionStore.get(appContext, localSessionId)
-    batchDir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
 
     // Start every run from a clean result snapshot carrying its spec. Fields
     // below (engineStats, refPath, settings, stopCode, plannedFrames) are only
@@ -80,26 +87,23 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
     EngineDebug.attach(spec.debugDir)
 
-    val plannedFrames = defFilePaths.size
-    val refBytes = refBytes ?: error("Reference missing")
+    val plannedFrames = frames.paths.size
+    // A video's frame times, one per planned frame, as the session row keeps them.
+    val frameTimesMs = frames.timesMs?.takeIf { it.size == plannedFrames }
+    val videoName = frames.videoName
+    val refBytes = reference.bytes ?: error("Reference missing")
 
     var firstFrameValidPoints = 0
     var firstFrameCorrelatedPoints = -1
     var firstFrameAvgIters = 0f
     var stop: RunStop = RunStop.Finished
 
-    onProgress(
-        BatchProgressUpdate(
-            0f,
-            "Caching reference in engine…",
-            "Caching Reference in Native Engine...",
-        ),
-    )
+    onProgress(BatchProgressUpdate(0f, "Caching reference in engine…", plannedFrames = plannedFrames))
     SemperNativeLib.initializeReference(
         refBytes,
         spec.mask,
-        realRefWidth,
-        realRefHeight,
+        reference.size.width,
+        reference.size.height,
     )
 
     val roi = spec.roi
@@ -110,17 +114,20 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val outputBuffer = DicFieldIo.allocateDirect(maxPoints)
 
     cancelRequested = false
-    var totalPointsSolved = 0
     var lastConvergence = -1f
     val convergenceGate = ConvergenceGate()
     var failedFrameIndex = -1
     var solvedFrames = 0
+    // Each frame's convergence as the gate saw it, NaN until then; the overlay
+    // draws it and warns one low frame before the gate stops the run.
+    val frameConvergence = FloatArray(plannedFrames) { Float.NaN }
 
     // The raw deformed originals sit alongside the reference so exports (and
     // reopened sessions) can bundle them. They are MOVED in from the import
     // cache, not copied, so one set of images exists on disk instead of two —
     // which makes this directory the run's own input on a re-run. Stale frames
-    // are therefore pruned after the loop, never wiped before it.
+    // are therefore pruned after the loop, never wiped before it. (A frame in
+    // a sweep's session is copied instead: keepDeformedFrame.)
     val rawDeformedDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply { mkdirs() }
 
     // The filenames actually written into raw_deformed/, index-aligned with
@@ -129,7 +136,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val persistedRawNames = MutableList(plannedFrames) { "" }
 
     // Where each frame's image ended up, so the view model can follow the move.
-    val resolvedDefPaths = defFilePaths.toMutableList()
+    val resolvedDefPaths = frames.paths.toMutableList()
 
     // Every field's sigma-clamped (p02, p98) for this frame, computed once here
     // while the frame's data is already decoded in outputBuffer — persisted so
@@ -146,13 +153,12 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     )
     val perFrameSummaryRanges = mutableListOf<Map<Int, Pair<Float, Float>?>>()
 
-    for ((frameIndex, defPath) in defFilePaths.withIndex()) {
+    for ((frameIndex, defPath) in frames.paths.withIndex()) {
         run.job.ensureActive()
         if (cancelRequested) {
             stop = RunStop.Cancelled
             break
         }
-        val frameLabel = "Processing Frame ${frameIndex + 1}/$plannedFrames..."
         onProgress(
             BatchProgressUpdate(
                 percent = (frameIndex.toFloat() / plannedFrames) * 100,
@@ -161,7 +167,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                 } else {
                     "Correlating & solving…"
                 },
-                timerText = frameLabel,
+                frameIndex = frameIndex,
+                plannedFrames = plannedFrames,
+                perFrameConvergence = frameConvergence.copyOf(),
             ),
         )
 
@@ -182,20 +190,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             try {
                 // Persist the untouched original under the user's own filename
                 // so exports keep default names.
-                val rawName = defOriginalNames.originalNameOr(frameIndex, source.name).baseName()
-                // Keep the default name; only index-prefix if it would collide.
-                val target = File(rawDeformedDir, rawName).let {
-                    if (it.exists()) {
-                        File(rawDeformedDir, String.format(Locale.US, "%04d_%s", frameIndex, rawName))
-                    } else {
-                        it
-                    }
-                }
-                // Both directories are app-private storage, so this is a rename
-                // rather than a second multi-megabyte write. The fallback writes
-                // the bytes already read for JNI rather than AtomicFiles.promote's
-                // copy, which would read the file a second time.
-                if (!source.renameTo(target)) target.writeBytes(defBytes)
+                val rawName = frames.originalNames.originalNameOr(frameIndex, source.name).baseName()
+                val target = keepDeformedFrame(source, defBytes, rawDeformedDir, rawName, frameIndex)
                 // Record the name we ACTUALLY wrote: the session index (and the
                 // cloud upload) must be able to find these files again.
                 persistedRawNames[frameIndex] = target.name
@@ -216,7 +212,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
                         } else {
                             "Correlating & solving…"
                         },
-                        timerText = frameLabel,
+                        frameIndex = frameIndex,
+                        plannedFrames = plannedFrames,
+                        framePercent = percentage.toFloat(),
                     ),
                 )
             }
@@ -281,8 +279,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         }
 
         solvedFrames++
-        totalPointsSolved += validPointsCount
         lastConvergence = metricsCatcher[EngineStats.SLOT_CONVERGENCE]
+        frameConvergence[frameIndex] = lastConvergence
         if (convergenceGate.record(lastConvergence)) {
             stop = RunStop.LowConvergence
             failedFrameIndex = frameIndex
@@ -292,9 +290,24 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             BatchProgressUpdate(
                 percent = ((frameIndex + 1).toFloat() / plannedFrames) * 100,
                 status = "Processing frame ${frameIndex + 1} of $plannedFrames",
-                timerText = frameLabel,
-                pointsSolved = totalPointsSolved,
-                convergencePercent = lastConvergence,
+                frameIndex = frameIndex,
+                plannedFrames = plannedFrames,
+                framePercent = 100f,
+                perFrameConvergence = frameConvergence.copyOf(),
+            ),
+        )
+    }
+
+    // Every frame solved: the overlay says so while the run saves.
+    if (stop == RunStop.Finished) {
+        onProgress(
+            BatchProgressUpdate(
+                percent = 100f,
+                status = "Saving…",
+                frameIndex = plannedFrames,
+                plannedFrames = plannedFrames,
+                framePercent = 100f,
+                perFrameConvergence = frameConvergence.copyOf(),
             ),
         )
     }
@@ -324,12 +337,19 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         ?.delete()
 
     val executionTimeMs = (System.currentTimeMillis() - run.startedAtMs).toInt()
+    // The parameters page estimates a run's time from what this phone has solved.
+    if (solvedFrames > 0 && stop != RunStop.Cancelled) {
+        val points = RunEstimate.gridPoints(spec.roi.w, spec.roi.h, spec.params.step)
+        val previous = AppSettings.runPointsPerSecond(appContext)
+        val rate = RunEstimate.nextRate(previous, points, solvedFrames, executionTimeMs.toLong())
+        AppSettings.setRunPointsPerSecond(appContext, rate)
+    }
     var recordSaved = false
     var indexUnavailable = false
     // The names actually on disk in raw_deformed/ — reopening a session,
     // exporting and cloud upload resolve images by these.
     val defNames = persistedRawNames.mapIndexed { i, persisted ->
-        persisted.ifBlank { defOriginalNames.originalNameOr(i, resolvedDefPaths[i]).baseName() }
+        persisted.ifBlank { frames.originalNames.originalNameOr(i, resolvedDefPaths[i]).baseName() }
     }
 
     // A cancelled first run saves nothing. A cancelled re-run is saved like a
@@ -338,15 +358,17 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     if (firstFrameValidPoints > 0 && (stop != RunStop.Cancelled || previous != null)) {
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
-        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, realRefWidth, realRefHeight)
+        val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, reference.size.width, reference.size.height)
         lastRefPath = refPngPath
 
         val cloudEnabled = CloudSync.uploadsEnabled(appContext)
         val input = RunInput(
             localSessionId = localSessionId,
             dir = batchDir,
-            reference = RunReference(refPngPath, refName, refSize),
+            reference = RunReference(refPngPath, reference.name, reference.size),
             settings = spec.recordSettings().also { recordRunSettings(it) },
+            videoName = videoName,
+            frameTimesMs = frameTimesMs,
         )
         val outcome = RunOutcome(
             frameCount = solvedFrames,
@@ -361,7 +383,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             plannedFrameCount = plannedFrames.also { lastPlannedFrames = it },
         )
         val record = sessions.buildSessionRecord(appContext, input, outcome, cloudEnabled, spec.mechanical)
-        val saved = afterSave(stop, saveRunRecord(appContext, record, cloudEnabled))
+        val saved = afterSave(stop, saveRunRecord(appContext, record, cloudEnabled, admission.admitted))
         stop = saved.stop
         recordSaved = saved.recordSaved
         indexUnavailable = saved.indexUnavailable
@@ -369,7 +391,15 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         val framesOnDisk = batchDir.listFiles { f -> f.extension == "dat" }?.size ?: 0
         val after = afterUnsavedRerun(
             previous,
-            UnsavedRerun(framesOnDisk, stop.wireCode, plannedFrames, spec.recordSettings(), defNames),
+            UnsavedRerun(
+                framesOnDisk,
+                stop.wireCode,
+                plannedFrames,
+                spec.recordSettings(),
+                defNames,
+                videoName,
+                frameTimesMs,
+            ),
         )
         when {
             after == null -> SessionStore.forget(appContext, localSessionId)
@@ -408,9 +438,11 @@ internal data class AfterSave(val stop: RunStop, val recordSaved: Boolean, val i
 
 /**
  * What the save [result] of a run that stopped with [stop] makes of it. A full
- * quota (the limit filled between the pre-check and the save) stops the run
- * as [RunStop.SessionLimit], whatever stopped it; an index that could not be
- * read or written is not the quota, and leaves [stop] as it was.
+ * quota stops the run as [RunStop.SessionLimit], whatever stopped it; only a
+ * save no start check admitted can meet one (a re-run whose row was deleted
+ * meanwhile), since an admitted run saves past the cap ([RunAdmission]). An
+ * index that could not be read or written is not the quota, and leaves [stop]
+ * as it was.
  */
 internal fun afterSave(stop: RunStop, result: SessionStore.UpsertOutcome): AfterSave = when (result) {
     SessionStore.UpsertOutcome.SAVED -> AfterSave(stop, recordSaved = true, indexUnavailable = false)
@@ -456,6 +488,32 @@ internal fun batchEndEvent(appContext: Context, outcome: BatchAnalysisOutcome, s
             ),
         )
     }
+}
+
+/**
+ * Keeps frame [frameIndex]'s deformed image [source], whose [bytes] the run
+ * has already read, in [rawDeformedDir] under [rawName], index-prefixed only
+ * if that name is taken; returns the file it is kept as. An image from the
+ * import cache is moved: both directories are app-private storage, so that
+ * is a rename rather than a second multi-megabyte write, and the fallback
+ * writes [bytes] rather than read the file a second time. One in another
+ * session's directory (the sweep this wizard saved before) is copied and
+ * left where it is: it is that session's own image.
+ */
+internal fun keepDeformedFrame(
+    source: File,
+    bytes: ByteArray,
+    rawDeformedDir: File,
+    rawName: String,
+    frameIndex: Int,
+): File {
+    val target = File(rawDeformedDir, rawName).let {
+        if (it.exists()) File(rawDeformedDir, String.format(Locale.US, "%04d_%s", frameIndex, rawName)) else it
+    }
+    val sessionDir = rawDeformedDir.absoluteFile.parentFile
+    val copyOnly = sessionDir != null && SessionPaths.isInOtherSession(source, sessionDir)
+    if (copyOnly || !source.renameTo(target)) target.writeBytes(bytes)
+    return target
 }
 
 /** Persists [ranges], one entry per written frame, for [indices]; best-effort. */

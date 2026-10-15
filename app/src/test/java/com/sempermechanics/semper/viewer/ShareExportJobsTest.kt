@@ -7,6 +7,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -21,6 +22,9 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 /**
  * The export jobs the viewer's ViewModel holds: ids, concurrent jobs, cancel
@@ -85,12 +89,49 @@ class ShareExportJobsTest {
     }
 
     @Test
+    fun `a job cancelled before its first dispatch still reports Cancelled`() = runBlocking {
+        // The scope's thread is held until after the cancel, so the job cannot
+        // have started on it: the case CI hit as a 10 s timeout.
+        val gate = CountDownLatch(1)
+        val thread = Executors.newSingleThreadExecutor()
+        val held = CoroutineScope(
+            SupervisorJob() + Executor { task ->
+                thread.execute {
+                    gate.await()
+                    task.run()
+                }
+            }.asCoroutineDispatcher(),
+        )
+        try {
+            val heldJobs = ShareExportJobs(
+                held,
+                ApplicationProvider.getApplicationContext<android.app.Application>().contentResolver,
+            )
+            val id = heldJobs.newId("csv")
+            // The generator waits, so it cannot finish on Default before cancel:
+            // the undispatched start would then complete Ready inside start(),
+            // the race behind this test's CI flake.
+            val never = CompletableDeferred<Unit>()
+            heldJobs.start(id, "CSV", null, direct = false) {
+                never.await()
+                file("x") to "text/csv"
+            }
+            heldJobs.cancel(id)
+            gate.countDown()
+            assertEquals(ShareExportJobs.Outcome.Cancelled(id), withTimeout(TIMEOUT_MS) { heldJobs.outcomes.first() })
+        } finally {
+            held.cancel()
+            thread.shutdownNow()
+        }
+    }
+
+    @Test
     fun `progress and the background flag reach the running entry`() = runBlocking {
         val release = CompletableDeferred<Unit>()
         val reported = CompletableDeferred<Unit>()
         val id = jobs.newId("pdf")
         jobs.start(id, "PDF", null, direct = true) { report ->
-            report(40, "Frame 2 of 5…")
+            report(40.5, "Frame 2 of 5…")
             reported.complete(Unit)
             release.await()
             file("pdf") to "application/pdf"
@@ -99,7 +140,7 @@ class ShareExportJobsTest {
         jobs.sendToBackground(id)
 
         assertEquals(
-            ShareExportJobs.Running(id, "PDF", 40, "Frame 2 of 5…", background = true),
+            ShareExportJobs.Running(id, "PDF", 40.5, "Frame 2 of 5…", background = true),
             jobs.running.value.getValue(id),
         )
         release.complete(Unit)

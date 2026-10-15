@@ -103,8 +103,6 @@ class MediaPickerSheetTest {
         )
         FakeMediaProvider.lastSelectionArgs = emptyList()
         FakeMediaProvider.queriedOnMain = null
-        // Inline, so each test sees the grid as soon as the main thread idles.
-        MediaPickerSheet.queryDispatcher = Dispatchers.Unconfined
     }
 
     @After
@@ -114,7 +112,6 @@ class MediaPickerSheetTest {
         // of the suite (TD-199). Destroying the Activity does not dismiss it.
         ShadowDialog.getShownDialogs().forEach { it.dismiss() }
         screen.close()
-        MediaPickerSheet.queryDispatcher = Dispatchers.IO
     }
 
     private fun grantGallery() {
@@ -128,6 +125,7 @@ class MediaPickerSheetTest {
             requestPermission = { permissionRequests++ },
             onBrowseSaf = { safBrowses++ },
             onPicked = { picks += it },
+            queryDispatcher = INLINE,
         )
         idle()
         return ShadowDialog.getLatestDialog()
@@ -185,7 +183,7 @@ class MediaPickerSheetTest {
 
     @Test
     fun `a granted permission reloads the grid`() {
-        val picker = MediaPickerSheet.show(activity, MediaSourceChooser.Mode.DEFORMED, {}, {}, {})
+        val picker = MediaPickerSheet.show(activity, MediaSourceChooser.Mode.DEFORMED, {}, {}, {}, INLINE)
         idle()
         val sheet = ShadowDialog.getLatestDialog()
         assertEquals(0, sheet.adapter().itemCount)
@@ -213,8 +211,8 @@ class MediaPickerSheetTest {
 
     @Test
     fun `the gallery is queried off the main thread`() {
-        MediaPickerSheet.queryDispatcher = Dispatchers.IO
         grantGallery()
+        // The default dispatcher, as Home and the wizard open it.
         MediaPickerSheet.show(activity, MediaSourceChooser.Mode.HOME_REFERENCE, {}, {}, {})
         val sheet = ShadowDialog.getLatestDialog()
 
@@ -305,5 +303,8 @@ class MediaPickerSheetTest {
     private companion object {
         const val IMAGE = MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE
         const val VIDEO = MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+
+        /** Queries inline, so each test sees the grid as soon as the main thread idles. */
+        val INLINE = Dispatchers.Unconfined
     }
 }

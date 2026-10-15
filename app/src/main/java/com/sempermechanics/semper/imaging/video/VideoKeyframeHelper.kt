@@ -3,17 +3,22 @@
     "LongParameterList",
     "ReturnCount",
     "LoopWithTooManyJumpStatements",
+    "TooGenericExceptionCaught",
 )
 
 package com.sempermechanics.semper.imaging.video
 
+import android.content.Context
 import android.media.MediaExtractor
+import android.net.Uri
+import com.sempermechanics.semper.imaging.AviReader
+import timber.log.Timber
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /**
- * Pure helper functions for video timestamp calculation, keyframe extraction planning,
+ * Helper functions for video timestamp calculation, keyframe extraction planning,
  * and time clock formatting.
  */
 internal object VideoKeyframeHelper {
@@ -27,6 +32,70 @@ internal object VideoKeyframeHelper {
         val isKeyframePlan: Boolean,
     )
 
+    /** The AVI frames a request asks for, by [indices], and whether they are its keyframes. */
+    class AviFramePlan(val indices: List<Int>, val isKeyframePlan: Boolean)
+
+    /**
+     * [resolveExtractionPlan] for [request], every rung's one entry: the clip's
+     * [keyframeTimestampsUs] in Key frames mode when there are two or more, else
+     * uniform at the request's rate. A Key frames request that fell back to
+     * uniform is logged under [rung]; the result carries no field for it.
+     */
+    fun planFor(request: ExtractionRequest, keyframeTimestampsUs: List<Long>, rung: String): ExtractionPlan {
+        val plan = resolveExtractionPlan(
+            keyframeTimestampsUs = keyframeTimestampsUs,
+            startMs = request.startMs,
+            endMs = request.endMs,
+            fpsExtract = request.fpsExtract,
+            maxFrames = request.maxFrames,
+            forceUniform = !request.preferKeyframes,
+        )
+        if (request.preferKeyframes && !plan.isKeyframePlan) {
+            Timber.i("%s rung: fewer than two key frames in the segment; Key frames mode samples uniformly", rung)
+        }
+        return plan
+    }
+
+    /**
+     * The frames of [video] that [request] asks for. In Key frames mode these are
+     * the keyframes `idx1` marks in the segment; a file with no index, or all-intra,
+     * has none to offer ([AviReader.Video.keyframeTimesUs]) and is sampled uniformly.
+     * An AVI has no seekable timeline of its own: sampling times map onto frame
+     * indices, and repeats collapse so a rate above the stream's own cannot ask for
+     * the same frame twice.
+     */
+    fun aviFramePlan(video: AviReader.Video, request: ExtractionRequest): AviFramePlan {
+        val segmentUs = request.startMs * MICROS_PER_MILLI..request.endMs * MICROS_PER_MILLI
+        val keyframesUs = if (request.preferKeyframes) {
+            video.keyframeTimesUs().filter { it in segmentUs }
+        } else {
+            emptyList()
+        }
+        val plan = planFor(request, keyframesUs, rung = "AVI")
+        return AviFramePlan(plan.timestampsUs.map(video::frameIndexAt).distinct(), plan.isKeyframePlan)
+    }
+
+    /**
+     * The sync frames of [uri]'s video track within [[startUs], [endUs]], read by
+     * a [MediaExtractor] of its own: the retriever rung has none. Empty when the
+     * clip will not open or has no video track.
+     */
+    fun findKeyframeTimestampsUs(context: Context, uri: Uri, startUs: Long, endUs: Long): List<Long> {
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(context, uri, null)
+            HardwareVideoDecoder.findVideoTrack(extractor)
+                ?.let { track -> findKeyframeTimestampsUs(extractor, track, startUs, endUs) }
+                .orEmpty()
+        } catch (e: Exception) {
+            Timber.w(e, "Key frame lookup failed")
+            emptyList()
+        } finally {
+            runCatching { extractor.release() }
+                .onFailure { Timber.w(it, "MediaExtractor release failed") }
+        }
+    }
+
     /**
      * Formats milliseconds into a clock display string (M:SS).
      */
@@ -35,6 +104,19 @@ internal object VideoKeyframeHelper {
         val minutes = totalSeconds / SECONDS_PER_MINUTE
         val seconds = totalSeconds % SECONDS_PER_MINUTE
         return String.format(Locale.US, "%d:%02d", minutes, seconds)
+    }
+
+    /** Formats milliseconds as a frame's clip time, M:SS.cc: 1250 reads "0:01.25". */
+    fun formatFrameTime(ms: Long): String {
+        val centis = ms.coerceAtLeast(0L) / 10
+        val totalSeconds = centis / 100
+        return String.format(
+            Locale.US,
+            "%d:%02d.%02d",
+            totalSeconds / SECONDS_PER_MINUTE,
+            totalSeconds % SECONDS_PER_MINUTE,
+            centis % 100,
+        )
     }
 
     /**

@@ -68,7 +68,7 @@ class _FrozenSeatQuery:
     def limit(self, _n):
         return self
 
-    def stream(self):
+    def stream(self, **_kw):
         return iter(self._docs)
 
 

@@ -54,7 +54,11 @@ object LicenseEntitlements {
      */
     fun licenseKind(context: Context): String = AppRemoteConfig.licenseKind(context)
 
-    /** Key prefix shown for support (never the full key). Empty on demo. */
+    /**
+     * Key prefix shown for support (never the full key). Not proof of a
+     * licence: a backend older than the licensed-only prefix sends one for a
+     * held key that is not active, so check [isLicensed] before showing it.
+     */
     fun licensePrefix(context: Context): String = AppRemoteConfig.licensePrefix(context)
 
     /**
@@ -71,7 +75,7 @@ object LicenseEntitlements {
      * Whether starting new work needs a seat this account does not have.
      *
      * A **parallel** gate to the quota one, not a widening of it: an
-     * institution member is [MODE_LICENSED], so `isSessionLimitReached` and
+     * institution member is [MODE_LICENSED], so `SessionQuota.blocked` and
      * `analysisCap` only fire for them at the licensed ceiling. Without this
      * a member with no seat would sail past every existing check.
      *

@@ -47,7 +47,7 @@ internal sealed interface StagingOutcome {
  * also skips the expensive report/zip work on every retry.
  *
  * Archives are split by what a restore actually needs: `Session.zip` holds only
- * raw/ and dat/ — everything needed to rebuild a working session — while the
+ * ref/, raw/ and dat/ — everything needed to rebuild a working session — while the
  * derived deliverables (csv/, reports/, processed/) go to `Extras.zip`. Nothing
  * reads those back after a restore; they are regenerated on export.
  */
@@ -96,10 +96,11 @@ internal class UploadStaging(private val context: Context, private val record: S
         }
         val artifacts = mutableListOf(UploadArtifact(ArtifactRoles.METADATA, SessionLayout.METADATA_JSON, metaFile))
 
-        // The reference image is already stable on disk.
+        // The reference image is already stable on disk. It has its own archive
+        // folder (`ref/`), so a frame the user named `Reference.png` stays a frame.
         val refFile = File(record.refPath)
         if (refFile.exists() && refFile.length() > 0) {
-            artifacts += UploadArtifact(ArtifactRoles.RAW, SessionZip.REFERENCE_NAME, refFile)
+            artifacts += UploadArtifact(SessionZip.REFERENCE_ROLE, SessionZip.REFERENCE_NAME, refFile)
         }
 
         // A sweep repeats the one image it ran on across every frame, so the
@@ -276,7 +277,7 @@ internal class UploadStaging(private val context: Context, private val record: S
 
     /**
      * Build (or reuse) one archive named [zipName] from [members], entries named
-     * `role/name` (`raw/Reference.png`, `dat/frame_0000.dat`, …) so restore can
+     * `role/name` (`ref/Reference.png`, `dat/frame_0000.dat`, …) so restore can
      * rebuild the exact per-role layout. Built once into the persistent staging
      * dir and reused byte-identically on retries — zip entry timestamps differ
      * across rebuilds, which would break the declared sha256/size of a resumed

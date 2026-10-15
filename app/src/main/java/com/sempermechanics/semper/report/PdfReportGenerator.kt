@@ -32,8 +32,21 @@ import java.io.OutputStream
  */
 object PdfReportGenerator {
 
+    /** What a [Progress.Status] is on. The caller words it; nothing here is drawn. */
+    enum class Stage { FRAME, COVER, MAPS, STRESS_STRAIN, TELEMETRY, FINISHING }
+
     sealed class Progress {
-        data class Status(val message: String, val percent: Int) : Progress()
+        /**
+         * At [percent] of the document, on [stage]. A [Stage.FRAME] status
+         * names the frame being drawn, 1-based, as [frame] of [frameCount];
+         * both are 0 for the other stages.
+         */
+        data class Status(
+            val stage: Stage,
+            val percent: Int,
+            val frame: Int = 0,
+            val frameCount: Int = 0,
+        ) : Progress()
         object Complete : Progress()
         data class Error(val ex: Exception) : Progress()
     }
@@ -46,6 +59,7 @@ object PdfReportGenerator {
     private const val FRAMES_PROGRESS_START = 2
     private const val FRAMES_PROGRESS_SPAN = 92
     private const val TELEMETRY_PROGRESS = 96
+    private const val FINALIZING_PROGRESS = 98
 
     /** Raster width for the vector wordmark; PDF draws it at [PdfLayoutEngine.BRAND_LOGO_WIDTH]. */
     private const val BRAND_LOGO_RASTER_WIDTH = 1040
@@ -94,7 +108,7 @@ object PdfReportGenerator {
         for (index in 0 until frameCount) {
             currentCoroutineContext().ensureActive()
             val percent = FRAMES_PROGRESS_START + (index * FRAMES_PROGRESS_SPAN / frameCount)
-            emit(Progress.Status("Frame ${index + 1} of $frameCount…", percent))
+            emit(Progress.Status(Stage.FRAME, percent, frame = index + 1, frameCount = frameCount))
             val data = dataAt(index) ?: continue
             if (telemetrySource == null) telemetrySource = data
             znssdFrames += ZnssdFrame(data.globalAvgZnssd, data.znssdAcceptedPoints)
@@ -109,11 +123,11 @@ object PdfReportGenerator {
         }
 
         if (stressStrain != null && !stressStrain.curve.isEmpty) {
-            emit(Progress.Status("Plotting stress–strain…", TELEMETRY_PROGRESS))
+            emit(Progress.Status(Stage.STRESS_STRAIN, TELEMETRY_PROGRESS))
             MechanicalPdfPages.drawStressStrainPages(layout, stressStrain)
         }
         telemetrySource?.let {
-            emit(Progress.Status("Compiling Engine Telemetry...", TELEMETRY_PROGRESS))
+            emit(Progress.Status(Stage.TELEMETRY, TELEMETRY_PROGRESS))
             drawTelemetryPage(layout, it, TelemetrySummary.batch(znssdFrames))
         }
     }.flowOn(Dispatchers.Default)
@@ -124,25 +138,26 @@ object PdfReportGenerator {
         resources: Resources? = null,
     ): Flow<Progress> = renderPdf(outputStream, resources) { layout ->
         currentCoroutineContext().ensureActive()
-        emit(Progress.Status("Building Cover Page...", 10))
+        emit(Progress.Status(Stage.COVER, 10))
         drawCoverPage(layout, data, "Master DIC Analysis Report", frameCount = null)
 
         currentCoroutineContext().ensureActive()
-        emit(Progress.Status("Rendering Visualization Maps...", 30))
+        emit(Progress.Status(Stage.MAPS, 30))
         drawFieldPages(layout, data)
 
         currentCoroutineContext().ensureActive()
-        emit(Progress.Status("Compiling Engine Telemetry...", 90))
+        emit(Progress.Status(Stage.TELEMETRY, 90))
         drawTelemetryPage(layout, data, TelemetrySummary.single(data))
-
-        emit(Progress.Status("Finalizing PDF...", 98))
     }.flowOn(Dispatchers.IO)
 
     /**
      * One PDF document into [outputStream]: [draw] lays its pages out on a
      * [PdfLayoutEngine] (the wordmark from [resources] heads each page), then
-     * the document is written and [Progress.Complete] follows. A failure is
-     * emitted as [Progress.Error] rather than thrown; cancellation is not caught.
+     * the document is written under a [Stage.FINISHING] status at
+     * [FINALIZING_PROGRESS] (one call over every page, so a batch is not left
+     * under its telemetry status while every frame's pages are written) and
+     * [Progress.Complete] follows. A failure is emitted as [Progress.Error]
+     * rather than thrown; cancellation is not caught.
      */
     private fun renderPdf(
         outputStream: OutputStream,
@@ -154,6 +169,7 @@ object PdfReportGenerator {
         val layout = PdfLayoutEngine(pdfDocument, brandLogo)
         try {
             draw(layout)
+            emit(Progress.Status(Stage.FINISHING, FINALIZING_PROGRESS))
             // Finish the still-open page before writing — PdfDocument rejects
             // writeTo()/close() while any page is unfinished.
             layout.finishCurrentPage()

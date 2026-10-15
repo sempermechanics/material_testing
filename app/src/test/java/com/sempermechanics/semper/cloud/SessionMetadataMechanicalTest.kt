@@ -40,8 +40,8 @@ class SessionMetadataMechanicalTest {
     private var targets = 0
 
     @Test
-    fun `schema is 6 and still counts as a split layout`() {
-        assertEquals("indic.session.metadata/6", SessionUploadMetadata.SCHEMA)
+    fun `schema is 7 and still counts as a split layout`() {
+        assertEquals("indic.session.metadata/7", SessionUploadMetadata.SCHEMA)
         assertEquals(4, SessionUploadMetadata.SCHEMA_MECHANICAL_TEST)
         assertEquals(5, SessionUploadMetadata.SCHEMA_SPECIMEN_GEOMETRY)
         assertEquals(6, SessionUploadMetadata.SCHEMA_LOAD_POINT)

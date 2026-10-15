@@ -11,7 +11,9 @@ from .config import settings
 from .validation import DeviceId, DocumentId, SessionId
 
 # "bundle" = Session.zip, holding only what a restore needs to rebuild a working
-# session: raw/ (reference + deformed originals) and dat/ (engine results).
+# session: ref/ (the reference; raw/Reference.png before metadata schema /4),
+# raw/ (deformed originals) and dat/ (engine results). The backend never reads
+# inside it, so "ref" is an archive folder, not a Role.
 # "extras" = Extras.zip, holding the derived deliverables — csv/, reports/,
 # processed/. Nothing in the app reads those back after a restore (they are
 # regenerated on export), so keeping them out of the bundle is what lets a restore
@@ -100,6 +102,9 @@ class FileSpec(BaseModel):
 
 class SessionCreate(BaseModel):
     specimen: str = Field(min_length=1, max_length=200)
+    # The analysis's own name, which the backup list shows (TD-208). Optional:
+    # an older app sends none, and its sessions are listed by `specimen`.
+    name: str = Field(default="", max_length=200)
     files: List[FileSpec] = Field(min_length=1, max_length=5000)
     metrics: dict = {}
     # The app's local analysis id. Lets the client reconcile its local sync

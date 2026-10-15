@@ -37,7 +37,7 @@ internal class LabExport(
      * starts its own). The plot is a [SweepPlotView] drawn off screen, which
      * must happen on the main thread.
      */
-    suspend fun stressStrainPage(report: (Int, String) -> Unit): PdfReportGenerator.StressStrainPage? {
+    suspend fun stressStrainPage(report: ExportReport): PdfReportGenerator.StressStrainPage? {
         val curve = if (s.loadsN.isEmpty() || s.isSweep) null else sessionCurve(report)
         if (curve == null || curve.isEmpty) return null
         val axisLabels = ViewerStressStrainHelper.axisLabels(context, curve.model)
@@ -58,13 +58,13 @@ internal class LabExport(
     }
 
     /** The student lab report: the handwritten journal layout, filled with this session. */
-    suspend fun labReportPdf(report: (Int, String) -> Unit): File {
+    suspend fun labReportPdf(report: ExportReport): File {
         val curve = sessionCurve(report)
         report(LAB_REPORT_PROGRESS, context.getString(R.string.share_generating_pdf))
         val size = s.imageSize
         val capped = VisualizationEngine.cappedDims(size.width, size.height, VisualizationEngine.REPORT_MAX_EDGE)
         val reference = withContext(Dispatchers.IO) {
-            runCatching { images.loadCappedBase(capped.width, capped.height) }.getOrNull()
+            runCatching { images.loadCappedReference(capped.width, capped.height) }.getOrNull()
         }
         val roi = s.reportSource.roi
         val roiRect = if (roi.w > 0 && roi.h > 0) {
@@ -81,14 +81,14 @@ internal class LabExport(
      * The session's stress–strain curve: the viewer's when it has built one,
      * otherwise a walk over the batch here (one decode per frame).
      */
-    private suspend fun sessionCurve(report: (Int, String) -> Unit): StressStrain.Curve =
+    private suspend fun sessionCurve(report: ExportReport): StressStrain.Curve =
         s.stressStrain ?: withContext(Dispatchers.Default) {
             val byFrame = SessionPaths.datByPlannedFrame(s.batchFiles)
             StressStrain.build(
                 loadsN = s.loadsN.toList(),
                 model = s.stressModel,
                 frameData = { frame -> byFrame[frame]?.let { DicResult.decodeDatFile(it) } },
-                onProgress = { done -> report(0, "Stress–strain $done / ${s.loadsN.size}…") },
+                onProgress = { done -> report(0.0, "Stress–strain $done / ${s.loadsN.size}…") },
             )
         }
 
@@ -97,6 +97,6 @@ internal class LabExport(
         const val STRESS_STRAIN_PLOT_W = 1800
         const val STRESS_STRAIN_PLOT_H = 1200
 
-        const val LAB_REPORT_PROGRESS = 60
+        const val LAB_REPORT_PROGRESS = 60.0
     }
 }

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers, MutableHeaders
 
-from . import errors
+from . import apps, errors
 from . import observability as obs
 from .config import settings
 from .routers import (
@@ -25,7 +25,7 @@ from .routers import (
     sessions,
 )
 
-logging.basicConfig(level=logging.INFO)
+obs.configure_logging(structured=settings.ON_CLOUD_RUN)
 log = logging.getLogger("semper")
 _access_log = logging.getLogger("semper.access")
 
@@ -88,13 +88,20 @@ app = FastAPI(
 
 # Browser dashboards only. Bearer tokens, no cookies, so no credentials mode;
 # the phone sends no Origin and never hits this.
+# max_age: a browser may reuse a preflight answer for this long. Every
+# dashboard call carries Authorization, so each new path or method costs an
+# OPTIONS round trip before the real request; at 600 s a desk left open
+# re-asked every ten minutes. 7200 s is Chromium's ceiling (Firefox allows
+# more), so a larger number would buy nothing. A deploy that narrows the
+# origins still takes effect at once: the real response carries no
+# Access-Control-Allow-Origin for a dropped origin, whatever the browser cached.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CONSOLE_ORIGINS,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
     allow_credentials=False,
-    max_age=600,
+    max_age=7200,
 )
 
 
@@ -212,6 +219,7 @@ class EdgeMiddleware:
             errorCode=None if status < 400 else f"http_{status}",
             opClass=op_class,
             routeTemplate=route_template,
+            appId=apps.logged_application_id(Headers(scope=scope).get("x-app-id")),
             **(counts if isinstance(counts, dict) else {}),
         )
 

@@ -190,8 +190,11 @@ signup cannot claim a privileged domain it does not own.
 
 Device identity = an EC P-256 key pair generated **inside** Android Keystore
 (`StrongBox` when available). The private key is non-exportable; only the
-public key and a stable `deviceId` (a random UUID, *not* IMEI/serial/MAC) leave
-the device.
+public key and a stable `deviceId` leave the device: `and-{ANDROID_ID}`, or a
+random `dev-{uuid}` where `ANDROID_ID` is unusable, kept in the app's own
+preferences after first use (`DeviceKeys.deviceId`); never IMEI/serial/MAC.
+`ANDROID_ID` is scoped to the signing key, so every app signed with one key
+reports the same id (see *One key per device id* below).
 
 ```mermaid
 sequenceDiagram
@@ -215,7 +218,7 @@ sequenceDiagram
     A->>A: sig = Keystore.sign(nonce || method || path[?query] || bodySHA256)
     A->>R: POST /v1/sessions ... headers: X-Device-Id, X-Nonce, X-Signature
     R->>F: load devices/{deviceId}.publicKeyPem; verify sig; consume nonce
-    R-->>A: 200 (or 401 bad_signature / 409 nonce_replay)
+    R-->>A: 200 (or 401 bad_signature / 401 nonce_invalid_or_replayed)
 ```
 
 **One-user-one-device binding.** `devices/{deviceId}.uid` is unique per active
@@ -226,9 +229,39 @@ the stored public key and returns `201` with `healed: true` (see
 new hardware means an admin revokes the prior device first. (There is no
 `:rebind` endpoint — that was a design idea, not something implemented.)
 
+**One key per device id.** `devices/{deviceId}` holds one public key and names
+no app in its id (`repo/devices.py` `register_device`). Apps signed with the
+same key share an `ANDROID_ID`, so they share the id and the key slot:
+whichever registered last holds it, and the other's signed calls fail
+`401 bad_signature` (2026-10-10: the retired `com.indicvision.semper`, still
+installed, took the Pixel's slot and Semper's backups failed). Two changes
+bound it:
+
+- **Retired ids may not register.** `POST /v1/devices/register` answers
+  `410 app_retired` (audited `DEVICE_REGISTER` / `DENIED`) to an `X-App-Id` in
+  `apps.RETIRED` (`com.indicvision.semper`, `com.indicvision.semper.materialtesting`)
+  and writes nothing. Their other routes are served as before: they no longer
+  replace a key, and the access log still has to show when none is left
+  (TD-176).
+- **The app takes its key back.** A signed call refused `bad_signature`
+  registers again, the same id for the same account, and is sent once more
+  (`DeviceKeyRecovery`, `data/net/SemperApiCalls.kt`). For that request the
+  route is a plain overwrite: the device document is rewritten (key, `app`,
+  model, `registeredAt`) with status ACTIVE, the app's `activeDeviceId` is
+  unchanged, the release-hold fields are deleted, no other device is retired
+  (`previous == deviceId`), no licence or seat lock moves, and
+  `ensure_entitlement` acts only as on any registration (an account with no
+  licence yet, or a Demo account whose failed invite claim is due a retry). Audited
+  `DEVICE_REBIND`; it spends one `device_register_bucket` token.
+
+Two apps with one signing key on one phone (debug builds of Semper and
+Material Testing) still take the slot from each other, at most once a minute
+per app process; keying devices by app needs a migration of the shared
+database (TD-209).
+
 **One device per app, not per account** ([ADR-010](../adr/ADR-010-device-binding-per-app.md)).
-Semper and Material Testing share accounts, and Android gives each app on a
-phone its own `ANDROID_ID`, so the same phone is two device ids. Every app
+Semper and Material Testing share accounts, and Android gives apps signed with
+different keys different `ANDROID_ID`s, so the same phone is two device ids. Every app
 call carries `X-App-Id` (its `applicationId`; none means Semper, an unlisted
 one is `400 unknown_app`), and "the account's device" above means that app's:
 Semper's is `activeDeviceId`, Material Testing's `activeDeviceIdMaterialTesting`
@@ -307,7 +340,7 @@ sequenceDiagram
     participant R as Cloud Run
     participant T as Cloud Tasks
     participant D as Google Drive (Shared Drive)
-    W->>R: POST /v1/sessions {specimen, files:[…]} (ID token + device sig)
+    W->>R: POST /v1/sessions {specimen, name, files:[…]} (ID token + device sig)
     R->>Firestore: sessions/{sid} = PROVISIONING, files/{fid} = PENDING
     R->>T: create task provision-{sid} (OIDC, deterministic name)
     R-->>W: 200 {sessionId, status:"PROVISIONING", uploads:[]}
@@ -397,7 +430,12 @@ sequenceDiagram
 week. On restart the worker issues `PUT uploadUrl` with
 `Content-Range: bytes */TOTAL` (zero-length body) → Drive replies `308` with the
 last-received byte in the `Range` header → worker resumes from there. No bytes
-re-sent. WorkManager's `BackoffPolicy.EXPONENTIAL` + network constraint handles
+re-sent. Every chunk's `308` is read the same way: the next chunk starts at
+`Range` end + 1 (no `Range` = 0), not after the bytes just sent, since Drive
+may keep fewer; the running md5 is then rebuilt over what Drive holds. An
+unreadable or out-of-file `Range`, or three PUTs in a row that Drive keeps
+nothing new from, fails the attempt for a WorkManager retry
+(`data/net/drive/DriveUploader.kt`). WorkManager's `BackoffPolicy.EXPONENTIAL` + network constraint handles
 retry/offline.
 
 **Integrity.** At `:complete` the backend asks Drive for the object's real
@@ -465,20 +503,42 @@ API Gateway deadline; a truncated chunk resumes from the `.part` file length
 changing `gateway/openapi.yaml` deadlines, recreate the API Gateway **api-config**
 (Cloud Run deploy alone does not update the gateway).
 
-**One Session.zip per session (current), not per-file objects.** The product now
-uploads a single `bundle`-role `Session.zip` holding `raw/`, `dat/`, `csv/` and
-the report archives (plus a small `metadata.json` at the session root), so a
-session costs ~1–2 Firestore file docs instead of 3F+4. `metadata.json` is
-schema `indic.session.metadata/6`: `/3` plus an optional `test` object (type,
-cross-section, load axis / unit / source / mapping, and from `/5` a `geometry`
-object holding the bending dimensions; from `/6` `geometry.loadPoint`, the
-bending thickness taps, written only when set) and a `loadN` per frame
-when the session has machine loads. The backend stores it verbatim; only the
-app's restore reads the additions. It is the one file a backup can change after
-it completes: `PUT /v1/sessions/{sid}/metadata` writes the app's current
-metadata over the same Drive object and updates the file doc's size and
-checksums, for a change made after the backup: a rename, or a bending
-deflection or tensile curve correction ([ADR-013](../adr/ADR-013-session-metadata-replace.md)). This trades in-Drive
+**Two archives per session (current), not per-file objects.** The product
+uploads a `bundle`-role `Session.zip`, an `extras`-role `Extras.zip` and a small
+`metadata.json` at the session root, so a session costs ~3 Firestore file docs
+instead of 3F+4. The backend never opens the archives; the app reads them back.
+Their layout follows the `schema` in `metadata.json`
+(`SessionUploadMetadata.SCHEMA`):
+
+| `schema` | `Session.zip` | `Extras.zip` |
+|---|---|---|
+| `indic.session.metadata/2` and older | `raw/` (reference as `raw/Reference.png`, frames by their own names), `dat/`, `csv/`, `reports/`, `processed/` | none |
+| `/3` | `raw/` (reference as `raw/Reference.png`), `dat/` | `csv/`, `reports/`, `processed/` |
+| `/4` (since 2026-10-13) | `ref/Reference.png` (the reference), `raw/` (frames only), `dat/` | as `/3` |
+| Material Testing `/4`–`/6` | as `/3` | as `/3` |
+| Material Testing `/7` (since the 2026-10-14 sync) | as `/4` | as `/3` |
+
+`/4` gives the reference its own folder because a frame keeps the user's file
+name, and one named `Reference.png` collided with it. A restore takes
+`ref/Reference.png` as the reference, and `raw/Reference.png` only from an
+archive with no `ref/` entry (`RestoreUnpacker.destFor`). An app older than `/4`
+restores a `/4` backup **without its reference**: it puts `ref/Reference.png`
+loose in the session directory. Material Testing numbers its own versions
+after `/3`: its `/4`–`/6` added an optional `test` object (type, cross-section,
+load axis / unit / source / mapping; from `/5` a `geometry` object with the
+bending dimensions; from `/6` `geometry.loadPoint`, the bending thickness taps)
+and a `loadN` per frame when the session has machine loads, in the `/3`
+layout. Its `/7` is those fields in the `ref/` layout. No reader branches on a
+number past `/3`: the reference is found by its entry and each lab field by
+its presence. The backend stores the file verbatim.
+
+`metadata.json` is the one file a backup can change after it completes: `PUT /v1/sessions/{sid}/metadata`
+writes the app's current metadata over the same Drive object and updates the file
+doc's size and checksums. Semper sends it after a rename, Material Testing also
+after a deflection or curve correction, made after the backup ([ADR-013](../adr/ADR-013-session-metadata-replace.md)).
+A non-blank string `name` in that body (trimmed, cut to 200 characters) also
+becomes the session doc's `name`, so `GET /v1/sessions` lists the new name; a
+body without one leaves it (`repo.session_name_of`). This trades in-Drive
 browsability of individual frames for far fewer resumable inits and Firestore
 writes. The `raw/processed/reports/metadata` subfolder tree below is the older
 per-file layout, kept for reference.
@@ -542,7 +602,14 @@ sessions/{sessionId}
                                   stamps them.
                                   GET /v1/sessions lists one app's;
                                   /files answers only that app)
-  specimen: string
+  specimen: string                (the reference image's file name)
+  name: string                    (the analysis's name, ≤ 200 chars, from
+                                  POST /v1/sessions and moved by a re-sent
+                                  metadata.json's `name` (PUT …/metadata).
+                                  "" or absent on a session from an app that
+                                  sent none: GET /v1/sessions lists `name: ""`
+                                  and the app names the backup from
+                                  `specimen` (TD-208))
   status: "PENDING" | "PROVISIONING" | "PROVISION_FAILED"
         | "UPLOADING" | "COMPLETED" | "FAILED"
         (PROVISIONING and UPLOADING are IN_FLIGHT_STATUSES — both still
@@ -646,7 +713,12 @@ audit_logs/{autoId}               (append-only)
   `__name__` (`sessions(uid)`, `users(access_status)`, `files(sessionId)`) are
   served by the automatic single-field indexes. Deploy with
   `firebase deploy --only firestore:indexes` — a missing index shows up as a
-  `FAILED_PRECONDITION` at runtime, not at deploy time.
+  `FAILED_PRECONDITION` at runtime, not at deploy time, and neither the fake
+  store nor the emulator enforces one. `backend/tests/test_firestore_query_indexes.py`
+  is the check: each query's shape (collection, filters, order) is declared
+  there, an AST walk of `app/` keeps the declarations in step with the code,
+  and a shape that needs a composite index the file lacks fails with the
+  index to add.
 - **Exempt** large/opaque fields from indexing (`publicKeyPem`, `uploadUrl`,
   `sha256`) to cut index cost and stay off the 40 KB/1500-field limits.
 - **TTL policy** on `challenges.expireAt` is a *field* policy, not an index. It
@@ -875,6 +947,47 @@ The shape it deploys into, and why:
 No mounted secrets. All identity comes from the attached SA + metadata server.
 HTTPS-only is the default; consider Cloud Armor / a WAF once public.
 
+### 10.1 Firestore call deadlines
+
+The JSON routes' gateway deadline is 60 s
+([`backend/gateway/openapi.yaml`](../../backend/gateway/openapi.yaml), top-level
+`deadline`). The Firestore client's own defaults are longer: 60 s for a get or
+a write and 300 s for a query or `get_all`, and its retry starts over on
+`DEADLINE_EXCEEDED`. So until TD-197 was closed, a hung call kept a threadpool
+thread busy for minutes after the gateway had answered 504.
+
+Every Firestore call in `backend/app` now goes through a helper in
+[`repo/_base.py`](../../backend/app/repo/_base.py) (`_get`, `_stream`,
+`_count`, `_get_all`, `_commit`, `_set_doc`, `_create_doc`, `_update_doc`,
+`_delete_doc`, `_add_doc`). Each helper passes a `timeout` and a matching
+`retry`:
+
+| Kind | Timeout | Retried on | Worst case |
+|---|---|---|---|
+| Document get, also inside a transaction | 10 s | `INTERNAL`, `UNAVAILABLE` | ~20 s |
+| Query, `.count()`, `get_all` | 20 s | `INTERNAL`, `UNAVAILABLE` | ~40 s |
+| Write: set, create, update, delete, batch commit, audit `add` | 10 s | `RESOURCE_EXHAUSTED`, `UNAVAILABLE` (commit's own predicate) | ~20 s |
+
+- **The retry window equals the timeout.** The retry does not start a sleep
+  that would cross the window. api-core gives an attempt that starts with less
+  than a second left the full timeout again, so the worst case is about twice
+  the value. That is still under 60 s.
+- **`DEADLINE_EXCEEDED` is not retried.** An attempt that used up its time
+  ends the call. The route then answers 500, as it does for any other
+  Firestore error it does not handle (`readyz` answers 503
+  `firestore_unreachable`).
+- **`_stream` returns a list.** The deadline covers the whole server stream,
+  so the helper reads the stream to the end before the caller writes anything.
+- **Not covered.** A transaction's begin and commit take no timeout in the
+  client's public API (google-cloud-firestore 2.32), so they keep the 60 s
+  default. The reads inside a transaction are covered.
+
+`tests/test_firestore_timeouts.py` fails on a raw `.get()`, `.stream()`,
+`get_all`, `.commit()` or document write anywhere in `backend/app` outside
+those helpers. It also checks that the values reach the client. The
+`firestore_calls_carry_a_deadline` fixture in `tests/conftest.py` fails any
+test whose app code reaches the store double without a timeout.
+
 ---
 
 ## 11. Application Default Credentials (ADC)
@@ -1084,9 +1197,21 @@ Signing.
   dependency); reachable only on the private run.app URL with an invoker token.
 - **Structured JSON access log** — UTC `timestamp`, `requestId`, `method`,
   `path`, `status`, `latencyMs`, `outcome`, `uid` / `deviceId` when resolved,
-  `opClass` / `routeTemplate` for usage rollups, optional `fileCount` /
+  `opClass` / `routeTemplate` for usage rollups, `appId`, optional `fileCount` /
   `frameCount` on session create, and `errorCode` on failures
   (`backend/app/observability.py` + middleware). Never logs tokens/signatures/URIs.
+  `appId` is the `X-App-Id` header when it is a listed app id (old
+  `com.indicvision.*` ids included), `none` without one, and `unknown` for
+  anything else, so caller text never reaches the log
+  (`apps.logged_application_id`); a refused `unknown_app` call is logged too.
+  On Cloud Run every log line, this one included, is one JSON object
+  (`observability.JsonLineFormatter`, set by `configure_logging` from
+  `backend/app/main.py:28`): an event keeps its fields and gains `severity`,
+  plain text becomes `{severity, message, logger}`, and a traceback goes in
+  `stack_trace`. Cloud Logging stores it as `jsonPayload`, so filter on
+  `jsonPayload.appId`, `jsonPayload.outcome`, and so on. Lines written before
+  that change are `textPayload` behind an `INFO:semper.access:` prefix. Locally
+  the lines stay plain text.
   `routeTemplate` is the route's **declared** path with every parameter as
   `{id}` (`/v1/licenses/{id}/revoke`), registered from the routers at startup;
   only an undeclared path (a 404) falls back to collapsing long segments.
@@ -1108,7 +1233,7 @@ dedicated rotation exists.
 
 | Signal | How to wire | Threshold (starting point) | Action |
 |---|---|---|---|
-| Unhandled / reported errors | Error Reporting ingests `@type` ReportedErrorEvent lines and Cloud Run stderr | New error group or >5 events / 5 min | Page on-call; check `/readyz` and recent deploys |
+| Unhandled / reported errors | Error Reporting ingests the `@type` ReportedErrorEvent lines (`jsonPayload`) and the `stack_trace` of a logged exception | New error group or >5 events / 5 min | Page on-call; check `/readyz` and recent deploys |
 | `outcome=server_error` access lines | Log-based metric on `jsonPayload.outcome="server_error"` | >10 / 5 min | Investigate revision; consider traffic rollback |
 | `errorCode=firestore_unreachable` or `drive_*` | Log-based metric on `jsonPayload.errorCode` | Any sustained >2 min | Dependency outage — do not roll app code first |
 | `AUTH_DENIED` audit / auth warnings | Metric on audit action or `invalid_token` spike | >50 / 5 min from many IPs | Possible attack; tighten gateway quota |
@@ -2018,7 +2143,9 @@ policy is restated for them verbatim in `firebase.json`. For the same reason
 both pages carry a `<base href>`: a relative path in them would resolve
 against the site root at the pretty address and one directory too high.
 Every other page — the legal pages,
-the auth continue-URLs — keeps the strict `default-src 'self'`. `connect-src` is
+the auth continue-URLs — keeps the strict `default-src 'self'`, with
+`script-src 'self'` and no `'unsafe-inline'` since 2026-10-08 (check 11 of
+`scripts/check_console.py` keeps every policy, and every page, that way). `connect-src` is
 widened for the API and Firebase Auth's token endpoints. `script-src` is
 widened to exactly two origins and never to `'unsafe-inline'`:
 `https://www.gstatic.com` for the SDK modules and `https://apis.google.com`
@@ -2039,7 +2166,9 @@ script, the ids a module asks for, rewrite targets, every `/v1` path declared
 on the gateway, and `__API_BASE_URL__` / `__API_ORIGIN__` still being
 placeholders in the committed files. `scripts/deploy-console.sh` substitutes
 them for the deploy and its `trap` restores them afterwards — committing a
-substituted host fails that check.
+substituted host fails that check. The gate has its own tests
+(`backend/tests/test_check_console.py`), which plant each failure in a small
+tree and run it with `--root`.
 
 **The same Hosting site carries the app's auth continue links.** They live
 under `/auth/` on `app.sempermechanics.com` (`AUTH_HOST` in
@@ -2273,7 +2402,12 @@ licence revoked out from under the account both still have a kind and a
 prefix, so the page shows licence details and "Move licence" only when `held`. Both were already in `license_summary`, and `/v1/config` already
 returned them — but `/v1/config` is the larger answer, and a browser asking
 "what am I?" should not have to fetch product limits to find out whether it
-holds a seat until 14:20.
+holds a seat until 14:20. The prefix is the one field the two answer
+differently: `/v1/config` sends `licensePrefix` only while the mode is
+`licensed` (`backend/app/repo/user_config.py:252`), because builds before #405
+show "Licensed as …" whenever it is set (TD-145; the app now also checks
+`LicenseEntitlements.isLicensed`); a held but inactive licence's prefix is on
+`/v1/me` alone.
 
 #### `GET /v1/sessions/{sid}/bundle`
 
@@ -2432,7 +2566,7 @@ that keep the phone from contradicting it.
 
 - **A seat check parallel to the quota check.** An institution member without
   a live lease is not over any quota — a licensed account never is — so
-  `AccountCache.isSessionLimitReached` would let them through every existing
+  `SessionQuota.blocked` would let them through every existing
   gate. `LicenseEntitlements.isSeatRequiredToStart` is a separate predicate. It
   gates the Home **+** before the source menu opens (`HomeActivity`) and both
   compute paths (`AnalysisNavHelper`), guarded by

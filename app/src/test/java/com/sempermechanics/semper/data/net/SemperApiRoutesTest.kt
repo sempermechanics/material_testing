@@ -41,9 +41,18 @@ class SemperApiRoutesTest {
             chain.proceed(chain.request().newBuilder().url(target).build())
         }.build()
         SemperApi(ApplicationProvider.getApplicationContext<Context>(), "https://api.test") { endpoint ->
-            SemperApiCalls(toServer, endpoint, deviceId = { "device-1" }, sign = { Digests.toHex(it) })
+            SemperApiCalls(
+                toServer,
+                endpoint,
+                deviceId = { "device-1" },
+                sign = { Digests.toHex(it) },
+                recovery = DeviceKeyRecovery(reRegister = { reRegistered++ }),
+            )
         }
     }
+
+    /** How often the device key was registered again ([DeviceKeyRecovery]). */
+    private var reRegistered = 0
 
     @Before
     fun setUp() = ClientNonce.observeServerTime(System.currentTimeMillis())
@@ -121,6 +130,17 @@ class SemperApiRoutesTest {
     }
 
     @Test
+    fun `a signed route recovers a bad signature whatever its own refusal mapping`() {
+        answer(401, "bad_signature")
+        answer(200)
+        runBlocking { api.setUserStatus("tok", "u1", "approve") }
+
+        assertEquals(1, reRegistered)
+        assertEquals("/v1/admin/users/u1/approve", server.takeRequest().target)
+        assertEquals("/v1/admin/users/u1/approve", server.takeRequest().target)
+    }
+
+    @Test
     fun `listSessionFiles walks every page of the manifest`() {
         answer(
             200,
@@ -135,6 +155,21 @@ class SemperApiRoutesTest {
         assertEquals("COMPLETED", manifest.status)
         assertEquals("/v1/sessions/s1/files", server.takeRequest().target)
         assertEquals("/v1/sessions/s1/files?page_token=s1_raw_b.png", server.takeRequest().target)
+    }
+
+    @Test
+    fun `listSessions names the app only when asked, the account for all`() {
+        answer(200, body = """{"sessions":[{"sessionId":"a","localSessionId":"l1"}],"quota":{"used":2,"max":25}}""")
+        answer(200, body = """{"sessions":[],"page":{"nextPageToken":"t 1","hasMore":true}}""")
+        answer(200, body = """{"sessions":[{"sessionId":"b"}],"quota":{"used":2,"max":25}}""")
+
+        runBlocking { api.listSessions("tok") }
+        val everyApp = runBlocking { api.listSessions("tok", app = CloudApi.ALL_APPS) }
+
+        assertEquals("/v1/sessions?page_size=100", server.takeRequest().target)
+        assertEquals("/v1/sessions?page_size=100&app=all", server.takeRequest().target)
+        assertEquals("/v1/sessions?page_size=100&app=all&page_token=t+1", server.takeRequest().target)
+        assertEquals(listOf("b"), everyApp.sessions.map { it.sessionId })
     }
 
     @Test

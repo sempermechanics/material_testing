@@ -4,8 +4,14 @@ Enough of the client surface for the repo package (`app/repo/`) to run in
 tests without a live backend: documents, `.set/.update/.get/.delete`, filtered and
 one-field ordered queries, `.count()`,
 batches, and a pass-through transaction. Install it with `install(monkeypatch)`.
+
+Every method that is a round trip on the real client takes its `retry` and
+`timeout` keywords and records them in `CALLS` (TD-197). A call that app code
+reached without them also lands in `UNTIMED`, which `conftest` checks after
+every test.
 """
 import operator
+import sys
 from datetime import datetime, timezone
 
 from google.api_core.exceptions import AlreadyExists, NotFound
@@ -37,6 +43,38 @@ class Increment:
 
     def __init__(self, value):
         self.value = value
+
+
+#: (method, timeout, retry, calling module) for every round trip, newest last.
+CALLS: list[tuple] = []
+#: (method, app module, line) for each round trip that app code reached
+#: without a timeout or a retry: a call that skipped the `_base` helpers.
+UNTIMED: list[tuple] = []
+
+
+def _note(method, timeout, retry):
+    """Record one round trip.
+
+    The caller is two frames up: the fake's own method, then whoever called
+    it. The fake's internal calls (a batch applying its writes, `get_all`
+    reading each reference) are not round trips and are skipped. A test that
+    wraps a fake method must pass `retry` and `timeout` through.
+    """
+    frame = sys._getframe(2)
+    caller = frame.f_globals.get("__name__", "")
+    if caller == __name__:
+        return
+    CALLS.append((method, timeout, retry, caller))
+    if timeout is not None and retry is not None:
+        return
+    while frame is not None:
+        module = frame.f_globals.get("__name__", "")
+        if module == __name__:
+            return  # inside the fake, through a test's wrapper of a method
+        if module.startswith("app."):
+            UNTIMED.append((method, module, frame.f_lineno))
+            return
+        frame = frame.f_back
 
 
 def transactional(fn):
@@ -77,21 +115,25 @@ class _DocRef:
     def _bucket(self):
         return self._store._data.setdefault(self._collection, {})
 
-    def get(self, transaction=None):
+    def get(self, transaction=None, *, retry=None, timeout=None):
+        _note("get", timeout, retry)
         data = self._bucket().get(self.id)
         return _Snapshot(self.id, data, self)
 
-    def set(self, data):
+    def set(self, data, *, retry=None, timeout=None):
+        _note("set", timeout, retry)
         self._bucket()[self.id] = _resolve(data)
 
-    def create(self, data):
+    def create(self, data, *, retry=None, timeout=None):
+        _note("create", timeout, retry)
         # Real Firestore raises AlreadyExists; get_or_create_user catches it to
         # settle a first-sign-in race, so the double has to raise it too.
         if self.id in self._bucket():
             raise AlreadyExists(f"document {self._collection}/{self.id} exists")
         self._bucket()[self.id] = _resolve(data)
 
-    def update(self, patch):
+    def update(self, patch, *, retry=None, timeout=None):
+        _note("update", timeout, retry)
         cur = self._bucket().get(self.id)
         if cur is None:
             # The real client raises NotFound, and callers catch that — a KeyError
@@ -107,7 +149,8 @@ class _DocRef:
             else:
                 cur[k] = v
 
-    def delete(self):
+    def delete(self, *, retry=None, timeout=None):
+        _note("delete", timeout, retry)
         self._bucket().pop(self.id, None)
 
     def collection(self, name):
@@ -238,14 +281,16 @@ class _Query:
             rows = rows[: self._limit]
         return rows
 
-    def stream(self):
+    def stream(self, *, retry=None, timeout=None):
+        _note("stream", timeout, retry)
         return iter(self._matching())
 
     def count(self):
         rows = self._matching()
 
         class _Countable:
-            def get(_self):
+            def get(_self, *, retry=None, timeout=None):
+                _note("count", timeout, retry)
                 return [[_AggResult(len(rows))]]
 
         return _Countable()
@@ -290,7 +335,8 @@ class _Batch:
     def update(self, ref, data):
         self._ops.append(("update", ref, data))
 
-    def commit(self):
+    def commit(self, *, retry=None, timeout=None):
+        _note("commit", timeout, retry)
         ops, self._ops = self._ops, []
         for kind, ref, payload in ops:
             if kind == "delete":
@@ -309,7 +355,8 @@ class FakeClient:
     def collection(self, name):
         return _Collection(self, name)
 
-    def get_all(self, references, transaction=None):
+    def get_all(self, references, transaction=None, *, retry=None, timeout=None):
+        _note("get_all", timeout, retry)
         # The real client yields in arbitrary order; reversing keeps callers
         # honest about keying results by id rather than by position.
         return [ref.get() for ref in reversed(list(references))]

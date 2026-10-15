@@ -13,7 +13,7 @@ Secrets / Environments reality: [ENVIRONMENTS.md](ENVIRONMENTS.md).
 |------|-----------------|-------|
 | PASS / improved to PASS | Security headers, deny-all rules (checked in), validation, erasure without silent 2k cap, readiness, structured logs, async notify, authz tests, pagination/export, deploy template, legal drafts, candidate smoke deploy, attested uploads pin, live assetlinks + legal Hosting | Repo + pilot |
 | PARTIAL | Distributed rate limit (gateway YAML + in-process), backups/PITR, Crashlytics, WorkManager, GitHub Environment *reviewers* on Free plan | Need console / plan upgrade |
-| UNKNOWN | Firebase API-key restrictions, App Check, Auth abuse limits, vendor retention, cookie inventory, branch ruleset if plan blocks it | External — see below |
+| UNKNOWN | Firebase API-key restrictions, App Check, Auth abuse limits, vendor retention, cookie inventory | External — see below |
 | FAIL remaining | None intended in security/data-integrity **repo** scope; remaining gaps are console / process | |
 
 Strict binary PASS against all applicable external controls is **not** claimed.
@@ -43,14 +43,18 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       has no `roles/editor`. Open: `indic-deployer`'s project-wide
       `storage.admin` and `iam.serviceAccountUser` (TD-71), and Shared Drive
       Manager rights for `indic-api`.
-- [ ] Run and record one **Firestore restore drill** (TD-156: it has never run). The drill is automated
-      (`.github/workflows/firestore-restore-drill.yml`). Its **`restore-drill`
-      GitHub Environment** (separate from `production-backup`) exists but has no
-      variables (checked 2026-10-08), and no drill project exists yet. Still owed: the
-      drill project and identity, the five variables the workflow checks first,
-      and one recorded RTO
-      ([FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md),
-      Configuring the `restore-drill` environment).
+- [x] Run and record one **Firestore restore drill** (TD-156). **Passed 2026-10-10**,
+      run [38023354431](https://github.com/sempermechanics/semperdic-app/actions/runs/38023354431)
+      of `.github/workflows/firestore-restore-drill.yml`, into the drill project
+      `indicvision-dic-restore-drill` (set up 2026-10-09 with
+      `scripts/setup-restore-drill.sh`). **RTO: 111 s** for the import.
+      **Recovery point:** the export `20261009T090852Z` (2026-10-09 09:08:52 UTC),
+      the newest daily export at the time. Verification (`scripts/firestore_verify.py`
+      against the export's `manifest.json`): every collection's document count
+      matched and a 25-session `session → files` sample matched; the drill
+      database was purged afterwards. The drill now runs monthly; a failed run
+      means the restore path is unproven again
+      ([FIRESTORE_DATA_PROTECTION.md](../backend/FIRESTORE_DATA_PROTECTION.md)).
 - [x] Confirm PITR / scheduled export job actually scheduled in GCP. The export
       script already refuses to run without PITR, and now also fails if the
       `challenges.expireAt` TTL policy is not ACTIVE. Checked 2026-09-24:
@@ -70,7 +74,8 @@ Strict binary PASS against all applicable external controls is **not** claimed.
 - [x] Firestore emulator tier runs in CI (`FIRESTORE_EMULATOR_HOST` is set in the
       Tier 4 job). It found three real defects the in-memory fake could not
       express — see "Contention fixes" below.
-- [x] Coverage gated at 75% (`--cov-fail-under`), currently 78%.
+- [x] Coverage gated at 93 % (`--cov-fail-under`), measured 95.47 % (2026-10-08); with
+      the emulator tier appended, 95.54 %, gated at 93 % in CI tier 4.
 - [x] Dependency audit (`pip-audit`) and hashed lock verification in CI.
 - [x] **Dependency-outage readiness test**: `test_health.py` asserts `/healthz`
       stays 200 while both dependencies raise, and `/readyz` returns 503 with the
@@ -84,9 +89,9 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       variables (`staging`, `production` and `production-backup` hold a few of their
       own). No environment has protection rules or a branch policy (checked
       2026-10-08). Still open: required reviewers. See [ENVIRONMENTS.md](ENVIRONMENTS.md).
-- [ ] Branch ruleset / protection with required `CI OK`. The repo is public, so
-      the plan allows it, but on 2026-10-08 `main` had neither (protection answers
-      404 and there are no rulesets); enforced by process until it is set.
+- [x] Branch ruleset with required `CI OK`: ruleset `main` (id 24720948, set
+      2026-10-08) on the default branch requires `CI OK` and blocks force-push
+      and deletion (`gh api repos/sempermechanics/semperdic-app/rules/branches/main`).
 - [x] Staging candidate smoke before traffic shift
       (`deploy-backend.yml`: tagged revision + ID-token `/readyz`). Record a
       deliberate rollback drill when convenient.
@@ -111,7 +116,7 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       follow-up process in [RELEASING.md](RELEASING.md) (milestone triage + reply
       when fixed).
 - [x] Cloud account export (`GET /v1/me/export`) is reachable from the app —
-      Settings → Your data → "Download my cloud account data".
+      Settings → Your data → "Download cloud data".
 - [x] Release signing cert listed in
       `firebase-hosting/public/.well-known/assetlinks.json` (debug + release).
 - [ ] Counsel review of the Terms (India law, Chennai arbitration, liability
@@ -459,7 +464,7 @@ no isolation and no retries):
 | Firebase MCP / active project | Confirm in console |
 | GitHub Environments | All five exist (`staging`, `production`, `release`, `production-backup`, `restore-drill`); none has reviewers or a branch policy, and `restore-drill` has no variables (2026-10-08) |
 | Secrets / vars | Prefer **repo-level** on Free private orgs; Environment names still select workflow targets |
-| Branch protection / ruleset | None on `main` (2026-10-08: protection 404, no rulesets); process-only until set |
+| Branch protection / ruleset | Ruleset `main` (id 24720948, 2026-10-08): requires `CI OK`, no force-push, no deletion; no bypass actors |
 
 ## Risk acceptance
 

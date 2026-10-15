@@ -118,8 +118,8 @@ HomeActivity ─┬─ beta notice + diagnostics prompt (first run) ......... B1
               ├─ session list ...... ui/home/SessionListAdapter → ui/home/SessionOpenHelper → A7 / A8
               ├─ selection mode .... ui/home/SessionSelectionController → B4 / B12
               ├─ pull to refresh ... data/cloud/CloudSync.reconcile(deep = true) ....... B7
-              ├─ row badges ........ WorkInfo from B1 / B2
-              ├─ quota chip ........ data/net/AccountCache + AppRemoteConfig → A9
+              ├─ row state icons ... WorkInfo from B1 / B2
+              ├─ quota chip ........ data/net/AccountCache + AppRemoteConfig → A9 (shown from 80% of the cap)
               └─ FAB ............... ui/common/media/MediaPickerSheet (A3a) → A5
 ```
 
@@ -128,7 +128,7 @@ HomeActivity ─┬─ beta notice + diagnostics prompt (first run) ......... B1
 | Entry | `ui/home/HomeActivity` |
 | Chain | `data/session/SessionStore.list` (local index) ⋈ `data/cloud/CloudSync.reconcile` (cloud) |
 | Writes | Session index (rename, delete, sync state), coach-mark flags in `data/prefs/CoachPrefs` |
-| Fails as | Message pill + a "why + retry" dialog on the sync badge, fed by the worker's `IntentKeys.UPLOAD_FAIL_REASON` / `DicRestoreWorker.KEY_ERROR` |
+| Fails as | Message pill + a "why + retry" dialog on the row's cloud icon, fed by the worker's `IntentKeys.UPLOAD_FAIL_REASON` / `DicRestoreWorker.KEY_ERROR` |
 | Tests | `session/SessionStoreAtomicTest`, `cloud/QuotaGateTest` |
 
 ### A3a New-analysis media picker
@@ -156,8 +156,10 @@ delete stay on the Activity.
 | Help & support | `ui/settings/SettingsHelpSupportSection` | mailto / hosted pages |
 
 Long jobs are non-modal: `ui/common/transfer/TransferBannerController` carries restores,
-bundle downloads and both exports. Terminal restore failures are observed here
-as well as on Home.
+bundle downloads and both exports. Each page shows its status, the percent to one
+decimal and, once `EtaEstimator` has an answer, "About N s left"; a restore or download
+reads "4.2 of 12.0 MB · 1.1 MB/s" from its worker's progress Data (`TransferBytes`).
+Terminal restore failures are observed here as well as on Home.
 
 Tests: `settings/AnalysisEntriesTest`, `settings/HelpSupportSectionTest`,
 `settings/DeleteAccountReauthTest`, `settings/AppSettingsMigrateTest`,
@@ -188,7 +190,7 @@ One Activity, three pages (`WizardStep`); pages 2 and 3 inflate from ViewStubs.
 | Field | Value |
 |---|---|
 | Writes | `<sessionDir>/frame_%04d.dat` (`data/session/SessionPaths`), `raw_deformed/`, reference copy and the index row via `data/session/SessionRepository.buildSessionRecord` → `ui/analysis/run/RunRecordSave.saveRunRecord` → `data/session/SessionStore.save` |
-| Then | Once the row is saved, `saveRunRecord` calls `data/cloud/CloudSync.enqueueUpload` → B1 when cloud backup is on. `afterSave` reads the save's `UpsertOutcome` for both, a sweep's through `SweepAnalysis.finishSolvedSweep` → `persistSweepSession`: a full quota ends the run at the session limit and opens the session-limit screen; an index that could not be read or written shows **Analysis not saved**. Either way a sweep's lattice does not open, and the sweep records `analysis_failed` with reason `session_limit` or `index_unavailable` (`SweepAnalysis.sweepEndEvent`) |
+| Then | Once the row is saved, `saveRunRecord` calls `data/cloud/CloudSync.enqueueUpload` → B1 when cloud backup is on. `afterSave` reads the save's `UpsertOutcome` for both, a sweep's through `SweepAnalysis.finishSolvedSweep` → `persistSweepSession`: a full quota ends the run at the session limit and opens the session-limit screen; an index that could not be read or written shows **Couldn't save results**. Either way a sweep's lattice does not open, and the sweep records `analysis_failed` with reason `session_limit` or `index_unavailable` (`SweepAnalysis.sweepEndEvent`) |
 | Fails as | `EngineFailure.reasonRes` dialog with **Why?** → FAQ; stop reason persisted on the record (`stopCode`, `plannedFrameCount`) so it survives a restart, and in the backup's `metadata.json` `metrics` so it survives a restore. A re-run that saves nothing updates or drops its Home row to match what is left on disk (`BatchAnalysis.afterUnsavedRerun`); a cancelled re-run is saved as a partial run |
 | Signals | Timber; `android.os.Trace` sections; `diagnostics/SemperAnalytics` analysis started / completed / failed (consent-gated, buckets only) |
 | Tests | `analysis/SweepStudyTest`, `analysis/SubsetRecommenderTest`, `analysis/ConvergenceGateTest`, `session/FailureProvenanceTest`, `results/DicResultDecodeTest`, `EngineFailureTest`, `AnalysisViewModelTest`, instrumented `pipeline/EnginePipelineSmokeTest` |
@@ -203,9 +205,9 @@ progress is a buffered `SharedFlow`, not a `StateFlow`.
 | Field | Value |
 |---|---|
 | Entry | `ui/analysis/RoiDrawActivity` (started for result by A5.2) |
-| Chain | `ui/analysis/roi/StudioOverlayView` (draw / hit-test / mask) → `StudioOverlayMaskEncoder` → `util/OverlayFormats`; resolved back by `ui/analysis/roi/RoiResolveHelper` |
+| Chain | `ui/analysis/roi/StudioOverlayView` (draw / hit-test / mask) → `StudioOverlayMaskEncoder`; resolved back by `ui/analysis/roi/RoiResolveHelper` |
 | Writes | Mask file at `IntentKeys.MASK_FILE_PATH`; ROI rect in `IntentKeys.ROI_*` |
-| Tests | `util/OverlayFormatsTest` |
+| Tests | `ui/analysis/roi/StudioOverlayViewTest`, `StudioOverlayGeometryTest`, `StudioOverlayViewportTest`, `RoiResolveHelperTest`, `ui/analysis/RoiDrawActivityTest` |
 
 Circle / ellipse / freeform are implemented in `StudioOverlayView` but not
 exposed by `activity_roi_draw.xml` — see §11 of [app/WORKFLOWS.md](app/WORKFLOWS.md).
@@ -242,7 +244,8 @@ demand, never on open; report compositing is capped at
 ### A9 Session limit
 
 `ui/limit/SessionLimitActivity` → `CloudSync.reconcile(deep = true)` +
-`AccountCache` quota → back to A3 when the cap clears. Reached from Home cold
+`SessionQuota.blocked` (the one quota rule, [app/WORKFLOWS.md §9](app/WORKFLOWS.md#9-session-limit))
+→ back to A3 when the cap clears. Reached from Home cold
 start, the FAB, the quota chip, a pre-run check (`AnalysisNavHelper.ensureSessionQuota`)
 or a quota rejection during B1. Not a paywall: the way past it is an email.
 
@@ -278,11 +281,11 @@ CloudSync.enqueueUpload → DicUploadWorker.doWork → backUp
 
 | Field | Value |
 |---|---|
-| Triggered by | `saveRunRecord` after a run, the Home badge retry, Settings **Back up now**, turning **Save to cloud** on, and each reconcile that lists the cloud, for rows still PENDING (`CloudSync.reconcile`) |
+| Triggered by | `saveRunRecord` after a run, the Home cloud icon retry, Settings **Back up now**, turning **Save to cloud** on, and each reconcile that lists the cloud, for rows still PENDING (`CloudSync.reconcile`) |
 | Decisions | `data/cloud/UploadWorkOutcomes` — HTTP → retry/fail, resume classification, staging reuse, verified `Session.zip`, incomplete staging (`classifyIncompleteStaging`: retry while the reference/`.dat` inputs exist, the row was saved < 15 min ago, or they have been missing < 10 min by the `<sessionDir>/upload_inputs_missing_since` marker; else terminal `inputs_missing`) |
 | Writes | `<sessionDir>/upload_staging/`, sync state + `cloudSessionId` on the index row; `StorageBudget.enforce` runs at the end |
-| Fails as | Terminal: `IntentKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + badge dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
-| Signals | `data/cloud/TransferNotifications` foreground notification; `IntentKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
+| Fails as | Terminal: `IntentKeys.UPLOAD_FAIL_REASON` in the worker output → Home pill + cloud icon dialog. Retryable: `Result.retry()` with a Timber `Upload RETRY` line |
+| Signals | `data/cloud/TransferNotifications` foreground notification (bar, bytes, rate, percent, time left); `data/cloud/TransferResultNotifications` "… is backed up" / failure reason with Retry (`TransferRetryReceiver`); `IntentKeys.UPLOAD_PHASE` / `UPLOAD_PERCENT` progress, plus `TRANSFER_BYTES_*` while bytes go to Drive; `SemperAnalytics` cloud_upload_* buckets; the backend's `X-Request-Id` appended by `UploadWorkOutcomes.withRef` |
 | Tests | `cloud/UploadResumableTest`, `cloud/DicUploadWorkerOutcomesTest`, `cloud/UploadChunkSizingTest`, `cloud/BackupSplitTest`, `cloud/SessionZipTest`, `cloud/WaitingUploadsTest` |
 
 `doWork` may be broken into named steps, but the resume contract depends on
@@ -339,7 +342,10 @@ Storage section shows.
 `CloudSync.reconcile(deep = …)` from Home pull-to-refresh and the limit screen →
 `SemperApi.listSessions` (paged, `verify=true` on a deep refresh) → C8. Repairs
 sync state, re-enqueues B1 for local-only rows, refreshes the quota in
-`AccountCache` / `AppRemoteConfig`.
+`AccountCache` / `AppRemoteConfig`. A SYNCED row missing from this app's list
+is repaired only after one `?app=all` listing shows no other app's backup of
+it either (`CloudReconcile.list`, ADR-014, TD-153); if that listing fails, no
+row is repaired that pass.
 
 **A Drive outage must not look like deleted data**: local metadata is dropped
 only when the backend *confirms* a blob is missing (`C8` returns `MISSING`, not
@@ -350,10 +356,14 @@ only when the backend *confirms* a blob is missing (`C8` returns `MISSING`, not
 | Export | Entry | Chain |
 |---|---|---|
 | Everything on this phone | Settings **Export my data** | `data/session/SessionEverythingExporter` → `SessionZip` / `ZipDirectory` → `SendToSheet` |
-| Everything in the cloud | Settings **Download my cloud account data** | `SemperApi.exportAccount` (streamed) → C12 → `SendToSheet` |
+| Everything in the cloud | Settings **Download cloud data** | `SemperApi.exportAccount` (streamed) → C12 → `SendToSheet` |
 | Viewer exports | A8 Share | `ui/viewer/share/ShareCenter` → `report/*` → `SendToSheet` |
 
-All three run behind `ui/common/transfer/TransferBannerController`, not a modal dialog.
+The two Settings exports run behind `ui/common/transfer/TransferBannerController`, not a
+modal dialog. A viewer export starts in `ui/common/dialog/DeterminateProgressDialog`
+(status, percent to one decimal, time left; every kind but the one-photo share reports
+frame by frame or field by field, `ui/viewer/share/ExportProgress`) and moves to the same
+banner when the dialog is dismissed.
 Tests: `cloud/SessionEverythingExporterTest`, `results/*`.
 
 ### B9 Delete the account 🔒
@@ -388,13 +398,14 @@ Tests: `diagnostics/SemperAnalyticsTest`.
 |---|---|
 | Key | `data/account/DeviceKeys` — EC P-256 in the AndroidKeyStore, private key never leaves it |
 | Register | `SemperApi.registerDevice` → C2 (409 = this account or device is bound elsewhere) |
-| Per call | `SemperApi.fetchChallenge` → C3, then `signedHeaders` signs `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → verified by `C4` |
+| Per call | `SemperApiSigning`: a client nonce (`ClientNonce`), or `fetchChallenge` → C3 once the server refused one; `signedHeaders` signs `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → verified by `C4` |
+| Recover | A `401 bad_signature` (another app with this signing key registered the same device id, TD-209) → `DeviceKeyRecovery` registers again (C2, same id, a key overwrite) and the call is sent once more: `SemperApiCalls.signed`, and `signedDownload` for restores. At most one registration per call and one a minute per process; the second refusal is the failure |
 | Tokens | `data/net/TokenProvider` / `AccountCache` — Firebase ID tokens are held in memory, never persisted |
 
 ### B12 Local session index
 
 `data/session/SessionStore` (atomic index write, `synchronized`, corruption flag) +
-`data/SessionRecord` + `data/session/SessionQuotaGate` + `data/session/SessionPaths` (the one
+`data/SessionRecord` + `data/session/SessionQuota` + `data/session/SessionPaths` (the one
 place that knows `frame_%04d.dat` and `raw_deformed/`).
 Tests: `session/SessionStoreAtomicTest`, `upgrade/PrefsUpgradeSmokeTest`.
 
@@ -411,10 +422,22 @@ parameter chip and pasted in A5.2. In memory only.
 
 ### B15 Transfer progress surfaces
 
-One notification channel (`semper_transfers`, `data/cloud/TransferNotifications`)
-carrying upload, restore and download; per-row badges and bars on Home; the
-`TransferBannerController` strip in Settings and the viewer. There are no
-completion notifications by design — terminal failures surface in-app.
+One notification channel (`semper_transfers`). `data/cloud/TransferNotifications`
+builds the running upload, restore and download notifications: a spinning bar until the
+worker reports, then the bar, "4.2 of 12.0 MB · 1.1 MB/s" and "34.6% · About 35 s left"
+(`TransferMeter`; an upload still staging says "Preparing the backup"). The upload
+updates it from `UploadProgressSampler`; the two downloads at most once a second
+(`TransferProgressUpdates`). `data/cloud/TransferResultNotifications` posts the outcome:
+"steel_00 is backed up / restored / saved", or "… was not …" with the reason and, for a
+backup or a restore, a Retry that `TransferRetryReceiver` turns into the same unique
+work again. A failure without a reason (the upload's quota stop) and a retry post
+nothing. Outcomes need the notification permission, which the app declares but never
+asks for, so from Android 13 on they show only once the user allows notifications.
+On Home each row has its state icon, and while a transfer runs a progress line and bar
+fed by the same byte counts (`TransferWorkObserver.RowProgress`, "Backing up · 4.2 of
+12 MB"); the `TransferBannerController` strip in Settings and the viewer. Tests:
+`data/cloud/TransferNotificationTextTest`, `data/cloud/TransferRetryReceiverTest`,
+`data/cloud/TransferMeterTest`.
 
 ---
 
@@ -435,7 +458,7 @@ pieces are `deps.py` (auth), `repo/` (all Firestore access, one module per aggre
 
 | Id | Concern | File | What it does |
 |---|---|---|---|
-| C17 | Access log | `main.py` `EdgeMiddleware` (one ASGI middleware) | One JSON line per request: `requestId`, `opClass`, `routeTemplate`, status, latency, outcome, uid/deviceId when known. Stamps **`X-Request-Id`** on the response — the app now echoes it into failure reasons (B1/B2), so a user's screenshot joins to this line |
+| C17 | Access log | `main.py` `EdgeMiddleware` (one ASGI middleware) | One JSON line per request: `requestId`, `opClass`, `routeTemplate`, status, latency, outcome, uid/deviceId when known, `appId` (the `X-App-Id` when it is a listed id, else `none` / `unknown`; TD-176). Stamps **`X-Request-Id`** on the response — the app now echoes it into failure reasons (B1/B2), so a user's screenshot joins to this line |
 | C17a | Route classes | `observability.classify_route` | `health` / `attest` / `login` / `config` / `account` / `backup` / `sync` / `restore` / `admin`; ids in paths collapse to `{id}` so nothing identifying lands in `routeTemplate` |
 | C18 | Audit trail 🔒 | `audit.record` | Append-only `audit_logs`: AUTH_DENIED, DEVICE_*, SESSION_CREATE/DELETE, UPLOAD_COMPLETE, FILE_DOWNLOAD, DATA_EXPORT, ACCOUNT_DELETE, ADMIN_*. Best-effort — an audit write never fails the request |
 | C19 | Access-request mail 🔒 | `notify.access_request` | On first PENDING user, mails support via Resend on a daemon worker with retry + per-uid idempotency. Off (silently) without `RESEND_API_KEY` |
@@ -449,8 +472,9 @@ pieces are `deps.py` (auth), `repo/` (all Firestore access, one module per aggre
 | Id | Workflow | Entry | Chain |
 |---|---|---|---|
 | C1 | Identify the caller | `deps.current_user` | `google_auth.verify_id_token` → `repo.get_or_create_user` (auto-approve rules, device binding, `DeviceInUseError` → 409) → 403 unless APPROVED. First PENDING user triggers C19 |
-| C2 | Register a device | `POST /v1/devices/register` (`routers/devices.py`) | One account per device and one device per account: a different bound device is `device_conflict`, a device owned by another uid is `device_in_use` (audited). Re-registering the same id heals the stored public key |
+| C2 | Register a device | `POST /v1/devices/register` (`routers/devices.py`) | One account per device and one device per account: a different bound device is `device_conflict`, a device owned by another uid is `device_in_use` (audited). Re-registering the same id heals the stored public key (`DEVICE_REBIND`; no device retired, no lock moved). A retired `com.indicvision.*` `X-App-Id` is `410 app_retired` (audited), since it shares the device id of its successor |
 | C3 | Mint a nonce | `POST /v1/challenge` | `repo.issue_nonce(uid, deviceId)` — single-use, bound to the pair |
+| C1t | Token only | `deps.token_uid` | `google_auth.verify_id_token` (plus App Check when a device is named) and nothing else: no profile read or created. Only `GET /v1/me/erasure`, which must not bring back an erased account |
 | C4 | Verify a device-signed call | `deps.verified_device` | ACTIVE device → `consume_nonce` (replay = 401) → ECDSA P-256 over `(nonce ‖ METHOD ‖ path) ‖ SHA-256(body)` → `bad_signature` audited on failure |
 | C14 | Admin | `routers/admin.py` | Listing and **device-history** need only an admin ID token; **approve / revoke / config-patch / mint additionally require a step-up** — a device attestation, or a second factor plus a recent sign-in for the staff console — so a stolen ID token alone cannot change access. Whole-licence revoke uses a tighter freshness window. All audited |
 
@@ -461,22 +485,23 @@ pieces are `deps.py` (auth), `repo/` (all Firestore access, one module per aggre
 | C-me | `GET /v1/me` | C1 | uid, email, role, access_status. 409 = device conflict |
 | C-config | `GET /v1/config` | C1 | Resolved limits (per-user override → fleet default) — feeds B13 |
 | C12 | `GET /v1/me/export` 🔒 | C4 | GDPR Art. 20. **Streamed** — profile, devices, then each session with its file manifest, `"complete": true` written last so a truncated transfer is detectable. `Cache-Control: no-store`. Audited as DATA_EXPORT |
+| C13e | `GET /v1/me/erasure` | C1t | Whether this phone's device record is gone or someone else's, the app's check after an erase that never answered (`CloudErase.probeErasedAccount`). Rate-limited in the handler on the erase bucket |
 | C13 | `DELETE /v1/me` 🔒 | C4 | GDPR erasure. Drive subtree **first** (one call via the stored user-folder pointer, else per-session by stored id), Firestore second — never the other way round. Per-phase timings in the audit detail. Only the audit trail survives |
 
 ### Session and file routes
 
 | Id | Route | Auth | Notes |
 |---|---|---|---|
-| C5 | `POST /v1/sessions` | C4 | Idempotent on `localSessionId` while in flight. Quota + file-count check → **reserve the session doc before any Drive I/O** → batch-write file docs → enqueue provisioning (C15) or provision inline with rollback. The session is tagged with the asking app (`app`, ADR-014) |
+| C5 | `POST /v1/sessions` | C4 | Idempotent on `localSessionId` while in flight. Quota + file-count check → **reserve the session doc before any Drive I/O** → batch-write file docs → enqueue provisioning (C15) or provision inline with rollback. The session is tagged with the asking app (`app`, ADR-014). An optional `name` (≤ 200 chars) is the analysis's name, which the list shows; an older app sends none (TD-208) |
 | C15 | Provisioning | `session_provision.provision_session` | Opens one Drive resumable URI per unprovisioned file, bounded fan-out. Idempotent: only files with no `uploadUrl` are touched. Inline failure → `purge_session` (Drive **and** Firestore); queued failure → `PROVISION_FAILED` so a poller stops waiting |
 | C16 | `POST /v1/tasks/provision-session` | `tasks.tasks_caller` | Cloud Tasks callback, authenticated by the OIDC token's audience **and** invoker service-account email. Not reachable with a user token |
 | C6 | `GET /v1/sessions/{sid}/uploads` | C4 | The resume list. Carries Drive capability URIs, which is why it is attested (the ID-token-only migration window was retired 2026-09-26, FI-7). `status` PROVISIONING means "poll", not "nothing to do" |
 | C7 | `POST /v1/files/{id}/complete` | C4 | Verifies against Drive's own metadata: size, md5 (skipped only when Drive has none), and that the object's `parents` contains this session's folder — the confused-deputy guard. Advances the session the **file** belongs to, never the one the client named |
-| C8 | `GET /v1/sessions` | C1 | The asking app's sessions (`X-App-Id`; `?app=semper\|materialtesting\|all` overrides, ADR-014), each with its `app`; `quota.used` is the whole account's. Cursor-paginated; `?verify=true` probes this page's folders in Drive. Purges metadata **only** on a confirmed `MISSING`; an `UNKNOWN` is counted and reported so the client knows the check was incomplete |
+| C8 | `GET /v1/sessions` | C1 | The asking app's sessions (`X-App-Id`; `?app=semper\|materialtesting\|all` overrides, ADR-014), each with its `app` and `name` (`""` when the backup was made without one: the app then names it from `specimen`, the reference's file name); `quota.used` is the whole account's. Cursor-paginated; `?verify=true` probes this page's folders in Drive. Purges metadata **only** on a confirmed `MISSING`; an `UNKNOWN` is counted and reported so the client knows the check was incomplete |
 | C9 | `GET /v1/sessions/{sid}/files` | C1 | The restore manifest, cursor-paginated (it used to truncate at 2000). Answers only the app that backed the session up; the other app gets `404 session_not_found` (ADR-014) |
 | C10 | `GET /v1/files/{id}/content` | C4 | The one route that streams file bytes out. Forwards `Range` to Drive and returns 206 so a restore resumes; audits only the window starting at byte 0; sanitises the client-supplied filename before it reaches `Content-Disposition` |
 | C11 | `DELETE /v1/sessions/{sid}` 🔒 | C4 | Drive folder then Firestore metadata; nothing soft-deleted |
-| C21 | `PUT /v1/sessions/{sid}/metadata` | C4 | Replaces a COMPLETED session's metadata.json in place, for a change made after the backup (a rename, a bending deflection or a tensile curve correction; ADR-013). Refuses an unfinished upload (409 `session_not_complete`), another session's metadata or an unknown schema (422), over 256 KB (413). The file doc's size and checksums follow the new bytes. The only write to a completed file |
+| C21 | `PUT /v1/sessions/{sid}/metadata` | C4 | Replaces a COMPLETED session's metadata.json in place, for a change made after the backup (a rename; in Material Testing also a deflection or tensile curve correction; ADR-013). Refuses an unfinished upload (409 `session_not_complete`), another session's metadata or an unknown schema (422), over 256 KB (413). The file doc's size and checksums follow the new bytes, and a non-blank `name` in the body becomes the session's listed `name` (TD-208). The only write to a completed file |
 | C-health | `GET /healthz`, `GET /readyz` | none | Liveness never probes dependencies; readiness pings Firestore + Drive and answers with stable `DependencyError` codes |
 
 Backend tests mirror these one-to-one — `backend/tests/test_route_authz_matrix.py`
@@ -492,7 +517,7 @@ app), and the rest of `backend/tests/`.
 
 | Id | Workflow | File | Trigger |
 |---|---|---|---|
-| D1 | CI gate | `.github/workflows/ci.yml` | PR to `main`, push to `main`, or `workflow_dispatch` (`full_ci` runs every tier on any branch). Path filters pick the tiers; `full-ci` / `e2e` / `release` / `benchmark` labels widen them |
+| D1 | CI gate | `.github/workflows/ci.yml` | PR to `main`, push to `main`, weekly `schedule` (full matrix), or `workflow_dispatch` (`full_ci` runs every tier on any branch). Path filters pick the tiers on PRs and `main` pushes alike; `full-ci` / `e2e` / `release` / `benchmark` labels widen them |
 | D2 | Secret scan | same, `secret-scan` job | Every run, full history, `.gitleaks.toml` |
 | D3 | Legal pages match source, and docs point at real files | same, `legal-pages` job | Every run: `python scripts/render_legal_pages.py --check` (edit `docs/legal/`, never `firebase-hosting/public/`) and `python scripts/check_doc_paths.py` (§E3) |
 | D4 | Backend deploy | `.github/workflows/deploy-backend.yml` | Manual |
@@ -515,7 +540,7 @@ Details and failure triage: [ops/CI.md](ops/CI.md).
 | A wrong number in the viewer or ⓘ sheet | The extras it was opened with: `AnalysisNavHelper.openResults` (fresh run) or `ui/home/SessionOpenHelper.intentFor` (reopen) → read in `ResultViewerActivity` / `SettingsUsedSheet` / `ViewerReportFactory`. **Check which of the two packed it** — see E2.1 |
 | A wrong number in an export | `report/ReportBuilder` (fusion), `report/AnalysisCsvWriter`, `report/VisualizationEngine`; the source of truth is `DicResult.decodeDatFile` over `frame_%04d.dat` |
 | "Analysis failed" wording | `ui/analysis/run/EngineFailure` (code → string) + `field/RunStop` (the stop codes); the code itself comes from the engine or `ConvergenceGate` |
-| A backup that failed | Home badge dialog text = `IntentKeys.UPLOAD_FAIL_REASON` from `UploadRun.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
+| A backup that failed | Home cloud icon dialog text = `IntentKeys.UPLOAD_FAIL_REASON` from `UploadRun.failure` → `UploadWorkOutcomes` for the decision. `adb logcat -s Semper` shows `Upload RETRY`/reject lines in release too |
 | A restore that failed | `DicRestoreWorker.KEY_ERROR` (the `ApiException` message) → `CloudRestore` → `RestoreDownloadOutcomes` for retry vs terminal |
 | Any cloud 4xx/5xx | The reason carries `(ref: <id>)` — that is the backend's `X-Request-Id`. Search the Cloud Run log for `requestId="<id>"` to get the exact access line (`opClass`, `routeTemplate`, `errorCode`, latency) |
 | A cloud call that is rejected consistently | `backend/app/errors.py` names the `detail` code; the client's branch is in `data/net/ApiErrors.kt` + `SemperApi.failSigned` |

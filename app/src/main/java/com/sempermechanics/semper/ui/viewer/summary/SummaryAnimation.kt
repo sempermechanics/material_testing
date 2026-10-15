@@ -39,6 +39,10 @@ import java.util.concurrent.ConcurrentHashMap
  * - **Exact colours.** Frames are rendered straight to jet-palette indices and
  *   handed to [GifEncoder] with that palette, so nothing is quantised.
  *
+ * Each frame is drawn in the deformed configuration, its points where they
+ * moved to, as the viewer draws a frame on its own photo (ADR-011, TD-139), in
+ * one box that covers the whole sequence's movement.
+ *
  * Frames are encoded one at a time and never accumulated, so a 150-frame
  * animation costs the same memory as a one-frame one.
  */
@@ -216,28 +220,43 @@ class SummaryAnimation(private val spec: Spec) {
     }
 
     /**
-     * Custom ROI from [Spec.fitBounds], else the first readable frame's accepted
-     * points, else the full image — same priority as the viewer rest pose.
+     * The box every frame of the GIF shows, the viewer's rest box over the whole
+     * sequence: custom ROI from [Spec.fitBounds], else the first readable frame's
+     * accepted points, else the full image — same priority as the viewer rest
+     * pose — widened, as the viewer's is on a frame's own photo, to take in where
+     * every frame's points moved to (each frame is drawn displaced), and kept
+     * inside the image. One pass over the frames, reusing one buffer.
      */
-    private fun fitBoundsForEncode(): FloatArray {
+    private suspend fun fitBoundsForEncode(): FloatArray {
         resolvedFit?.let { return it }
-        val fromSpec = spec.fitBounds
-        if (fromSpec != null && fromSpec.size >= HeatmapFit.BOX_LEN) {
-            resolvedFit = fromSpec
-            return fromSpec
-        }
+        val size = ImageSize(spec.imgW, spec.imgH)
+        var box = spec.fitBounds?.takeIf { it.size >= HeatmapFit.BOX_LEN }?.copyOf(HeatmapFit.BOX_LEN)
+        var buffer: FloatArray? = null
         for (file in spec.batchFiles) {
-            val data = DicResult.decodeDatFile(file) ?: continue
-            val size = ImageSize(spec.imgW, spec.imgH)
-            val box = HeatmapFit.resolve(size, Roi.full(size), accepted = DicResult.acceptedPointsBounds(data))
-            resolvedFit = box
-            return box
+            currentCoroutineContext().ensureActive()
+            val decoded = runCatching { DatDecoder.decodeInto(file, buffer) }.getOrNull() ?: continue
+            buffer = decoded.data
+            val fit = box ?: HeatmapFit.resolve(
+                size,
+                Roi.full(size),
+                accepted = DicResult.acceptedPointsBounds(decoded.data, floatCount = decoded.floatCount),
+            )
+            DicResult.acceptedPointsBounds(decoded.data, displaced = true, floatCount = decoded.floatCount)
+                ?.let { moved -> widenBox(fit, moved) }
+            box = fit
         }
-        val full = floatArrayOf(0f, 0f, spec.imgW.toFloat(), spec.imgH.toFloat())
-        resolvedFit = full
-        return full
+        val resolved = box?.let { clampToImage(it, spec.imgW.toFloat(), spec.imgH.toFloat()) }
+            ?: floatArrayOf(0f, 0f, spec.imgW.toFloat(), spec.imgH.toFloat())
+        resolvedFit = resolved
+        return resolved
     }
 
+    /**
+     * One frame as the viewer draws a frame on its own photo (ADR-011, TD-139):
+     * each point where it moved to, [VisualizationEngine.generateDeformedHeatmapIndices].
+     * The GIF carries no photo (its palette is the jet ramp and the canvas
+     * colour), so every frame is drawn displaced, photo on disk or not.
+     */
     private fun renderFrame(
         data: FloatArray,
         dataIndex: Int,
@@ -246,7 +265,7 @@ class SummaryAnimation(private val spec: Spec) {
         fit: FloatArray,
     ): VisualizationEngine.IndexPlane {
         val renderCap = HeatmapFit.renderLongEdgeCap(spec.imgW, spec.imgH, fit, MAX_EDGE)
-        val plane = VisualizationEngine.generateHeatmapIndices(
+        val plane = VisualizationEngine.generateDeformedHeatmapIndices(
             data = data,
             imgW = spec.imgW,
             imgH = spec.imgH,
@@ -409,4 +428,21 @@ class SummaryAnimation(private val spec: Spec) {
         private fun widen(seen: Pair<Float, Float>?, range: Pair<Float, Float>): Pair<Float, Float> =
             if (seen == null) range else minOf(seen.first, range.first) to maxOf(seen.second, range.second)
     }
+}
+
+/** [box] made to also cover [moved], in place. */
+private fun widenBox(box: FloatArray, moved: FloatArray) {
+    box[HeatmapFit.LEFT] = minOf(box[HeatmapFit.LEFT], moved[HeatmapFit.LEFT])
+    box[HeatmapFit.TOP] = minOf(box[HeatmapFit.TOP], moved[HeatmapFit.TOP])
+    box[HeatmapFit.RIGHT] = maxOf(box[HeatmapFit.RIGHT], moved[HeatmapFit.RIGHT])
+    box[HeatmapFit.BOTTOM] = maxOf(box[HeatmapFit.BOTTOM], moved[HeatmapFit.BOTTOM])
+}
+
+/** [box] cut to a [w] × [h] image, in place: a point moved past its edge has no pixels to draw. */
+private fun clampToImage(box: FloatArray, w: Float, h: Float): FloatArray {
+    box[HeatmapFit.LEFT] = box[HeatmapFit.LEFT].coerceIn(0f, w)
+    box[HeatmapFit.TOP] = box[HeatmapFit.TOP].coerceIn(0f, h)
+    box[HeatmapFit.RIGHT] = box[HeatmapFit.RIGHT].coerceIn(0f, w)
+    box[HeatmapFit.BOTTOM] = box[HeatmapFit.BOTTOM].coerceIn(0f, h)
+    return box
 }

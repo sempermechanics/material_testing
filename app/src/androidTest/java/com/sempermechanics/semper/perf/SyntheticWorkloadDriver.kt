@@ -371,7 +371,7 @@ class SyntheticWorkloadDriver {
         // detail is read back from logcat by the host script (Timber.d "Uploading %s
         // (%d bytes)…", Timber.i "Uploading %s: %d files" — debug-build only) rather than
         // duplicated here, so the measured transfer is the exact one a real backup performs.
-        val bundleMembers = listOf(SessionZip.Member("raw", SessionZip.REFERENCE_NAME, refFile)) +
+        val bundleMembers = listOf(SessionZip.Member(SessionZip.REFERENCE_ROLE, SessionZip.REFERENCE_NAME, refFile)) +
             deformedMembers + datMembers
 
         // Component: build Session.zip (restore-essential payload)

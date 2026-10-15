@@ -9,9 +9,11 @@ import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.AccountCache
+import com.sempermechanics.semper.data.session.CloudNaming
 import com.sempermechanics.semper.data.session.SessionHeadline
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
+import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.util.LenientObjectListSerializer
 import com.sempermechanics.semper.util.OptBooleanSerializer
@@ -186,7 +188,7 @@ data class SessionMetadataDoc(
         /**
          * Nodes when there are any, else the legacy lists through
          * [SkippedNode.fromLegacyArrays]: their combinations must agree in
-         * length, and a missing `codes` list reads as [SkippedNode.UNRECORDED_CODE].
+         * length, and a missing `codes` list leaves each [SkippedNode.code] null.
          */
         fun toSkippedNodes(): List<SkippedNode> =
             nodes?.takeIf { it.isNotEmpty() }?.filterNotNull()?.map { it.toSkippedNode() }
@@ -205,7 +207,8 @@ data class SessionMetadataDoc(
         @Serializable(with = OptIntSerializer::class) val strainWindow: Int? = null,
         @Serializable(with = OptIntSerializer::class) val code: Int? = null,
     ) {
-        fun toSkippedNode(): SkippedNode = SkippedNode(subset ?: 0, step ?: 0, strainWindow ?: 0, code ?: 0)
+        /** A missing `code` stays null: the backup predates codes, which is not the engine's 0. */
+        fun toSkippedNode(): SkippedNode = SkippedNode(subset ?: 0, step ?: 0, strainWindow ?: 0, code)
     }
 
     @Serializable
@@ -235,7 +238,8 @@ data class SessionMetadataDoc(
      * reader built it: [existing] keeps its name, creation time and rename flag;
      * everything else comes from the file, under the reader's defaults. A
      * placeholder row ([RestoreStart.isPlaceholder]) was made when the restore
-     * started, so its creation time is the backup's ([madeAt]), not its own.
+     * started, so its creation time is the backup's ([madeAt]), not its own,
+     * and unless the user renamed it, its name is the file's ([restoredName]).
      * Throws, as the reader does, when legacy skip lists disagree in length.
      */
     @Suppress("LongParameterList") // the restore target's fields, plus the clock
@@ -257,9 +261,9 @@ data class SessionMetadataDoc(
                 ?: madeAt() ?: existing?.createdAt ?: now,
             updatedAt = now,
             frameCount = frameCount ?: defNames.size,
-            subset = engine.subset ?: DEFAULT_SUBSET,
-            step = engine.step ?: DEFAULT_STEP,
-            strainWindow = engine.strainWindow ?: DEFAULT_STRAIN_WINDOW,
+            subset = engine.subset ?: DicParams.DEFAULT_SUBSET,
+            step = engine.step ?: DicParams.DEFAULT_STEP,
+            strainWindow = engine.strainWindow ?: DicParams.DEFAULT_STRAIN_WINDOW,
             imgW = engine.imageWidth ?: 0,
             imgH = engine.imageHeight ?: 0,
             roiX = roi.x,
@@ -287,9 +291,16 @@ data class SessionMetadataDoc(
         .mapNotNull { stamp -> stamp?.takeIf(String::isNotBlank)?.let(::parseUtcStamp) }
         .firstOrNull()
 
-    /** The row's name: the existing row's, else the file's, else the specimen's, else "Restored". */
+    /**
+     * The row's name: the existing row's when it is a real analysis or one the
+     * user renamed, else the file's ([CloudNaming.restoredName]). A placeholder
+     * row ([RestoreStart.isPlaceholder]) was named from the backup list, which
+     * knows only the reference's file name, so the file's name replaces it.
+     * [com.sempermechanics.semper.data.session.SessionStore.save] makes it unique.
+     */
     private fun restoredName(existing: SessionRecord?): String =
-        existing?.name?.takeIf { it.isNotBlank() } ?: (name ?: "").ifBlank { specimen ?: "Restored" }
+        existing?.takeIf { it.name.isNotBlank() && (it.renamedByUser || !RestoreStart.isPlaceholder(it)) }?.name
+            ?: CloudNaming.restoredName(name, specimen)
 
     /** [record] with the run's engine settings, telemetry, metrics and sweep from this file. */
     private fun withRun(record: SessionRecord, engine: Engine, defNames: List<String>): SessionRecord {
@@ -346,10 +357,6 @@ data class SessionMetadataDoc(
     }
 
     companion object {
-        private const val DEFAULT_SUBSET = 41
-        private const val DEFAULT_STEP = 5
-        private const val DEFAULT_STRAIN_WINDOW = 15
-
         /** Lenient like org.json's reader; keys it does not know are skipped. */
         private val READER = Json {
             ignoreUnknownKeys = true

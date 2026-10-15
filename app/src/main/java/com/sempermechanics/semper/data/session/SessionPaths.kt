@@ -32,6 +32,15 @@ object SessionPaths {
 
     fun frameDat(sessionDir: File, index: Int): File = File(sessionDir, frameDatName(index))
 
+    /**
+     * Home's result thumbnail: the last frame's U field, rendered once and
+     * cached here. Derived, never uploaded or restored, and stale once a frame
+     * `.dat` is newer than it (a re-run or a restore rewrote the frames).
+     */
+    const val RESULT_THUMB_PNG = "thumb_result.png"
+
+    fun resultThumb(sessionDir: File): File = File(sessionDir, RESULT_THUMB_PNG)
+
     private val FRAME_DAT_NAME = Regex("""frame_(\d+)\.dat""")
 
     /**
@@ -59,4 +68,20 @@ object SessionPaths {
      */
     fun datByPlannedFrame(datFiles: List<File>): Map<Int, File> =
         plannedFrameIndices(datFiles).zip(datFiles).distinctBy { it.first }.toMap()
+
+    /**
+     * True when [file] belongs to a session other than [sessionDir]: it is
+     * under the sessions root ([sessionDir]'s parent, as `SessionStore.dirFor`
+     * makes it) but not under [sessionDir]. A run must copy such an image,
+     * never move it: it is that other session's own input, which the wizard
+     * reaches after a run of the other kind (single and sweep never share a
+     * session).
+     */
+    fun isInOtherSession(file: File, sessionDir: File): Boolean {
+        val own = sessionDir.absoluteFile.normalize()
+        val root = own.parentFile ?: return false
+        val path = file.absoluteFile.normalize().path
+        fun isUnder(dir: File) = path.startsWith(dir.path + File.separator)
+        return isUnder(root) && !isUnder(own)
+    }
 }

@@ -32,9 +32,13 @@ internal fun solvedLatticeNodes(sweep: ViewerSweepArgs?): List<SweepLatticeView.
 
 /**
  * The combinations [sweep] could not solve, each with the short [reason] for
- * its engine code; [ViewerArgs.from] has already folded any legacy keys in.
+ * its engine code (null when none was recorded); [ViewerArgs.from] has already
+ * folded any legacy keys in.
  */
-internal fun skippedLatticeNodes(sweep: ViewerSweepArgs?, reason: (code: Int) -> String): List<SweepLatticeView.Node> {
+internal fun skippedLatticeNodes(
+    sweep: ViewerSweepArgs?,
+    reason: (code: Int?) -> String,
+): List<SweepLatticeView.Node> {
     val nodes = sweep?.let { SkippedNode.decodeJson(it.skippedJson) }.orEmpty()
     return nodes.map { node ->
         SweepLatticeView.Node(

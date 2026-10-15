@@ -800,11 +800,11 @@ Firestore directly.
 - `DicUploadWorker` fires (network-gated). Verify in Drive:
   ```
   session/<sid>/
-  ├── raw/       Reference.png, Deformed_*.png
-  ├── csv/       Data_<frame>.csv
-  ├── reports/   Master_Report_*.pdf
-  └── metadata/  metadata_<frame>.json   (device/time/engine info)
+  ├── metadata.json   (device/time/engine info; its `schema` names the layout)
+  ├── Session.zip     ref/Reference.png, raw/<frame images>, dat/frame_*.dat
+  └── Extras.zip      csv/, reports/, processed/
   ```
+  Archive layouts by `schema`: [CLOUD_ARCHITECTURE_GCP.md §4](CLOUD_ARCHITECTURE_GCP.md).
 - Firestore: `sessions/<sid>` → `COMPLETED`; `files/*` have `driveFileId`.
 - Backend logs for a run: `gcloud run services logs read semper-api --region asia-south1 --limit 50`.
 

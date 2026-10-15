@@ -97,6 +97,9 @@ non-modal `TransferBannerController` strip.
 
 - **Bit-exact fields.** Do not change `.dat` packing, ZNSSD threshold, or DatCodec
   oracles unless the engine contract major-bumps. GIF bytes are pinned 0-delta.
+  The golden files that hold both are `app/src/test/resources/oracles/`
+  (`results/DatFieldOracleTest`, `results/SummaryGifOracleTest`); regenerating
+  one (`-PupdateGoldens`) is a reviewed decision, never a fix for a red build.
 - **JNI buffer is bounded.** Allocate to the ROI grid; a point count over capacity
   is an engine failure, never a read past the buffer.
 - **Do not split** VisualizationEngine loops, GifEncoder LZW, ReportBuilder fusion,
@@ -127,25 +130,31 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-08)
+## Current state (2026-10-14)
 
+- **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
+  **Which test?** offers 2D DIC (Semper's analysis, first), Tensile and Bending; a fork
+  change to a shared screen runs only for a lab test. The 2026-10-14 sync put five back
+  to Semper's behaviour: the video sampling sheet, the sweep plots' scrub label, the
+  plain CSV (version 1), the strain window's ⓘ and the sheet's order and fallback.
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`; last merged `3154ebc`, 2026-10-08 (its #345–#362: the
-  restored-backup pairing in Settings and the analyses list's count and scrollbar,
-  the 2 GB unit-test JVM and closed test beds (TD-200), console changes (no browser
-  prompts), the live-site check and the authenticator-code retry); before that
-  `85650da`, 2026-10-07 (#122: package move ADR-015,
+  --grep=semperdic-app`). Being merged: `8ba7081`, 2026-10-14, on
+  `sync/semperdic-8ba7081` (its #363–#435: exports on the deformed frame, the
+  backup's `ref/` entry, clip times and Keyframes on every rung, frozen run inputs,
+  unique names, device-key recovery, themed icons, the UI and copy passes). Its
+  metadata schema is `/7` here (ours past `/3` are not the parent's numbers). Before
+  that `3154ebc`, 2026-10-08, and `85650da`, 2026-10-07 (#122: package move ADR-015,
   app id ADR-019, engine at `engine/`); rules in the parent's
   `docs/ops/FORK_SYNC.md`). This app id's Firebase client is in
   `google-services.json`; App Check for it waits for a Play listing. The parent deploys, and its TD rows jump to TD-122. General
   fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
   upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
   `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
-  ADR and TD numbers are shared: ADR-008, 009, 011 and 012 and TD-133–135,
+  ADR and TD numbers are shared: ADR-008, 009, 011, 012 and 022 and TD-133–135,
   TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-201 (semperdic-app took TD-200 in its #350); check
+  free in both registers is TD-210 (semperdic-app took up to TD-209); check
   both before taking one.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
@@ -171,8 +180,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   (TD-65's row).
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
   counts frames off the curve).
-- **Wizard (#46, #48).** **Which test?** offers 2D DIC: plain DIC, no load card, and
-  the session records no test type. The load card's ⓘ shows the CSV header and a
+- **Wizard (#46, #48).** **Which test?** offers 2D DIC first: Semper's wizard, no load
+  card, and the session records no test type. The load card's ⓘ shows the CSV header and a
   diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room
   on every screen with a text field: wizard, ROI editor, viewer frame jump (#71, TD-99).
   The ROI editor zooms (pinch to 10×, double-tap 2× / fit) and pans with two fingers
@@ -194,9 +203,11 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Owed.**
   - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): how ROI zoom and pan feel
     on a real screen (§6.21–6.25; the gestures themselves pass in e2e on the emulator).
-    From §5.1a: a phone-recorded MP4
-    (5.1a.12) and a real UTM clip. The rest of §5.1a, including Key frames with loads
-    (5.1a.16), passes on a Pixel 6 with synthetic clips (2026-09-26). MP4 and codec AVI
+    §5.1a again on Semper's sampling sheet, which the 2026-10-14 sync brought in
+    (the fork's own sheet passed on a Pixel 6 with synthetic clips on 2026-09-26),
+    including a load log matched to Keyframes (5.1a.14), a phone-recorded MP4 and a
+    real UTM clip. A Material Testing build beside a Semper build for 2D DIC
+    (§3b), and the screenshots ADR-022 lists. MP4 and codec AVI
     frames are now stretched to full range (TD-134), not yet re-measured on a phone. The Galaxy S21+'s demo account is over its cap (45 / 25), so a new
     analysis there needs a licensed key or deletes first.
   - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
@@ -223,7 +234,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 ## Traps
 
 - An undeclared route 404s in production with nothing in the logs: ESPv2 is an allowlist. `test_gateway_parity.py` checks the spec — [§20.9](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
-- A query that needs a composite index fails `FAILED_PRECONDITION` at runtime, not deploy: run `scripts/deploy-firestore.sh indexes` (Git Bash, Node >= 20) and wait for the build before the backend that queries it (the staff licence list needs three) — [§5](docs/backend/CLOUD_ARCHITECTURE_GCP.md). TTL policies live in that file's `fieldOverrides`; never deploy it with `--force`, which deletes any the file omits.
+- A query that needs a composite index fails `FAILED_PRECONDITION` at runtime, not deploy (`test_firestore_query_indexes.py` catches one missing from the file; declare a new query's shape there): run `scripts/deploy-firestore.sh indexes` (Git Bash, Node >= 20) and wait for the build before the backend that queries it (the staff licence list needs three) — [§5](docs/backend/CLOUD_ARCHITECTURE_GCP.md). TTL policies live in that file's `fieldOverrides`; never deploy it with `--force`, which deletes any the file omits.
 - `MAX_SESSIONS_PER_USER` is deleted; a deployment still setting it silently gets `DEMO_MAX_ANALYSES` (25) — [§7](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - List env vars (`CONSOLE_ORIGINS`, `ADMIN_EMAILS`) are space-separated; the deploy action splits on commas — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Test phones are shared between sessions: before `adb install -r`, check `ps -A | grep instrument` and the app's `lastUpdateTime` — an install kills a running `am instrument`, and another session's install can replace the build under test. Never the connected task on a phone — [TESTING.md](docs/app/TESTING.md).

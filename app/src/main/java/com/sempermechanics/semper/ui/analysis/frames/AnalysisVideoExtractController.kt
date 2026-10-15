@@ -52,7 +52,7 @@ class AnalysisVideoExtractController(
         onFinished: () -> Unit,
     ): Job {
         overlayController.processingStartTime = System.currentTimeMillis()
-        overlayController.show(title = "Extracting Frames", status = "Reading video…", showRunTiles = false)
+        overlayController.show(title = "Extracting Frames", status = "Reading video…", showConvergence = false)
 
         return activity.lifecycleScope.launch(io) {
             try {
@@ -111,11 +111,13 @@ class AnalysisVideoExtractController(
         // A video frame has no EXIF time, and the beam's taps were on the old reference.
         viewModel.refCaptureTimeMs = null
         viewModel.onReferenceReplaced()
-        // Each frame carries its time after the reference (videoTimeMs), which
-        // a timed load log is matched by; no typed loads come with it.
+        // Each frame carries its clip time; less the reference's, that is what
+        // a timed load log is matched by (defTimesAfterRefMs). No typed loads come with it.
+        viewModel.refVideoTimeMs = result.reference.timeMs
         viewModel.deformedFrames = result.batch.frames
         viewModel.defOrderMode = FrameOrderMode.PICKER
         viewModel.defOrderDirection = FrameOrderDirection.ASCENDING
         viewModel.defFromVideo = result.batch.fromVideo
+        viewModel.defVideoName = result.batch.videoName
     }
 }

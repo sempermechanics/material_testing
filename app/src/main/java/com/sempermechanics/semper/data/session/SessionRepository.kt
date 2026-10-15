@@ -78,6 +78,9 @@ class SessionRepository {
      * else under `raw_deformed/` is left over from an earlier run. The source
      * itself may already be in there (a re-run, since runs move their images in
      * rather than copying), so it is resolved before the directory is pruned.
+     * A source in another session's directory (the single run this wizard
+     * saved before the sweep) is copied and left in place: it is that
+     * session's image ([SessionPaths.isInOtherSession]).
      */
     fun persistRawDeformed(
         batchDir: File,
@@ -97,10 +100,14 @@ class SessionRepository {
         return runCatching {
             rawDir.listFiles()?.forEach { it.delete() }
             val target = File(rawDir, name)
-            // Both directories are app-private storage, so this is a rename
-            // rather than a second multi-megabyte write; the copy is the
-            // fallback for the rare cross-volume case.
-            AtomicFiles.promote(source, target)
+            if (SessionPaths.isInOtherSession(source, batchDir)) {
+                source.copyTo(target, overwrite = true)
+            } else {
+                // Both directories are app-private storage, so this is a rename
+                // rather than a second multi-megabyte write; the copy is the
+                // fallback for the rare cross-volume case.
+                AtomicFiles.promote(source, target)
+            }
             target.name
         }.onFailure { Timber.w(it, "Could not persist the sweep's deformed frame") }.getOrDefault("")
     }
@@ -125,13 +132,17 @@ class SessionRepository {
         val settings = input.settings
         val metrics = outcome.metrics
         val convergence = metrics.engineStats.getOrNull(EngineStats.SLOT_CONVERGENCE) ?: 0f
-        // Regenerate the auto-name for THIS run's kind (single here), keyed to the
-        // original createdAt so re-runs don't churn the timestamp — but never
-        // override a name the user set themselves.
+        // Regenerate the auto-name for THIS run's kind (single here) — but never
+        // override a name the user set themselves. It never collides with
+        // another session's name, but may keep this session's own.
         val autoName = if (existing?.renamedByUser == true) {
             existing.name
         } else {
-            SessionNaming.defaultSessionName(input.reference.name, createdAt)
+            SessionNaming.runSessionName(
+                input.reference.name,
+                input.videoName,
+                SessionStore.namesOtherThan(appContext, input.localSessionId),
+            )
         }
         return SessionRecord(
             id = input.localSessionId,
@@ -158,6 +169,8 @@ class SessionRepository {
             engineStats = metrics.engineStats,
             stopCode = outcome.stopCode,
             plannedFrameCount = outcome.plannedFrameCount,
+            videoName = input.videoName,
+            frameTimesMs = input.frameTimesMs,
             strainMethod = "VSG",
             pointsConverged = metrics.pointsConverged,
             avgIterations = metrics.avgIterations,
@@ -191,12 +204,18 @@ data class SessionRecordSettings(
 /** The reference a run is saved with: its display copy, its original file name and its real size. */
 data class RunReference(val pngPath: String, val name: String, val size: ImageSize)
 
-/** Where a run is saved and what it ran on: the session's id and directory, its reference, its settings. */
+/**
+ * Where a run is saved and what it ran on: the session's id and directory, its
+ * reference, its settings, and for frames sampled from a video, the clip's
+ * [videoName] and each frame's time in it ([frameTimesMs], one per planned frame).
+ */
 data class RunInput(
     val localSessionId: String,
     val dir: File,
     val reference: RunReference,
     val settings: SessionRecordSettings,
+    val videoName: String? = null,
+    val frameTimesMs: List<Long>? = null,
 )
 
 /** The first frame's engine metrics and the run's time, as the session row keeps them. */
