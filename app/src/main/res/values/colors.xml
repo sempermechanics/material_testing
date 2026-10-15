@@ -57,7 +57,7 @@
 
     <!-- bg_probe_chip is deliberately dark in BOTH themes (a dark puck reads over any
          jet colour), so its ink and rim stay light in both — no night override. Used
-         by the probe readout and the summary progress card. -->
+         by the probe readout. -->
     <color name="viewer_probe_ink">#FFFFFFFF</color>
     <color name="viewer_probe_stroke">#73FFFFFF</color>
 

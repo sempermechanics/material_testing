@@ -701,7 +701,9 @@ onto a combination, with no summary slot and no Animations share target).
 | [ ] 8.2a.1 | Open a result | It lands on the summary, which builds and then loops. The **edge title** reads "Summary"; the **counter** pill counts the frames it plays ("5 frames") and the frame jump field is hidden |
 | [ ] 8.2a.1b | Open a result with a sub-frame ROI (or a small accepted patch) | The summary GIF is framed on that coloured region — same rest-fit contain scale as the live viewer, not a letterboxed full photo |
 | [ ] 8.2a.1c | Watch the summary of a run whose specimen visibly deforms | The map moves with the specimen frame to frame (each frame drawn where its points moved to, as on a frame's own photo) and stays inside the GIF's box for the whole loop |
-| [ ] 8.2a.1a | Watch it build | Determinate progress with a status ("Reading frames…", then "Rendering <field>…") and a **Cancel** button |
+| [ ] 8.2a.1a | Watch it build | A light pill just above the scrubber: one untruncated line ("Reading frames · 2 of 5", then "Building summary · 3 of 5"), a thin bar (indeterminate until the first count) and a **✕** ("Cancel summary" to TalkBack, which also reads each count). It stays up while the chrome auto-hides and goes when the loop plays |
+| [ ] 8.2a.1d | Tap **✕** while it builds | The build stops and the pill goes |
+| [ ] 8.2a.1e | Read the scale labels while it reads frames | "—" at both ends, never "Max: 0.0" / "Min: 0.0"; the "≥ … / ≤ …" ends appear once the sequence range is known |
 | [ ] 8.2a.2 | Watch a short (≤33 frame) analysis | Each frame is visible for about 300 ms |
 | [ ] 8.2a.3 | Watch a 500-frame analysis | Every frame is there and the loop still finishes inside 10 s |
 | [ ] 8.2a.4 | Compare early and late frames of a growing test | Colour rises through the sequence — one scale throughout, no per-frame renormalising |

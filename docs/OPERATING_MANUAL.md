@@ -607,7 +607,10 @@ looping field overview of the whole sequence — every frame, never longer than
 10 seconds, about 300 ms a frame until the frame count forces it faster. It is
 framed on the same coloured region the live view rest-fits to (your ROI, or the
 accepted points), scaled to fill — not a letterboxed full photo. While it builds
-you get a progress readout and a **Cancel**. **Next** enters the
+a pill above the frame scrubber says how far it has got ("Reading frames · 2 of 5",
+then "Building summary · 3 of 5") over a thin bar, with a **✕** that cancels; it
+stays up when the other controls fade. Until the sequence range is known the colour
+scale's ends read "—". **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
 field. The field button stays available while it plays. A parameter sweep opens from
 the lattice onto one combination instead; there is no overview slot.
@@ -812,7 +815,7 @@ Write above that block; leave it in place.
 | Frames in the wrong order | Sort on step 1, then re-run |
 | Run vanished | The app was killed. No resume — run it again in the foreground |
 | Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
-| Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
+| Summary still says "Building summary" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
 | Summary shows one frame, not a loop | Android 8 or older. Single-setting field GIFs still export |
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Cloud icon stuck on Upload pending | Offline, Wi-Fi-only, or backup off |
