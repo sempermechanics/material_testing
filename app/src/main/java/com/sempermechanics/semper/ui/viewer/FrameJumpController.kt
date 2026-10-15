@@ -100,6 +100,11 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
         host.summary.show()
         binding.tvFrameCounter.text = host.summary.counterText()
         binding.tvFrameCounter.visibility = View.VISIBLE
+        // Hiding the field takes its focus, and losing focus commits what it
+        // holds: its "1" would leave the summary at once. Empty it first so that
+        // commit restores nothing; Prev asked for the summary, not a typed number.
+        syncFrameNumber()
+        binding.etFrameNumber.clearFocus()
         binding.layoutFrameJump.visibility = View.GONE
         binding.tvFinding.text = host.captions.title()
         updateNavButtons()
