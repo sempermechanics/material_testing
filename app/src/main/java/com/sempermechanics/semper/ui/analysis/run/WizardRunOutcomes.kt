@@ -112,8 +112,10 @@ class WizardRunOutcomes(
     override fun onSweepFinished(outcome: BatchAnalysisOutcome?) {
         when {
             outcome == null -> Feedback.toast(activity, R.string.sweep_failed, long = true)
+            // A cancelled sweep kept nothing, and says nothing.
+            outcome.stop == RunStop.Cancelled -> Unit
             outcome.stop == RunStop.SessionLimit -> AnalysisNavHelper.openSessionLimit(activity)
-            outcome.totalFrames == 0 -> if (outcome.stop != RunStop.Cancelled) openFailedSweep(outcome)
+            outcome.totalFrames == 0 -> openFailedSweep(outcome)
             else -> openSweep(outcome)
         }
     }

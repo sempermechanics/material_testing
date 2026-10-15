@@ -286,10 +286,13 @@ a bin that shows the lowest of them, so a low frame is never hidden. Once every
 frame is solved the header reads *Completed 40 of 40 frames · saving* while the
 run writes the analysis. After one low frame an amber line warns that one more
 stops the run.
-**Cancel** stops the run
+**Cancel** asks first (*Cancel analysis?*), then stops the run
 where it is, within a moment — it does not wait out the frame being solved.
-Nothing is kept. Back is blocked. Cancelling a parameter sweep abandons the whole
-sweep, not just the combination in flight.
+Nothing from the run is kept: not the frames it solved, not a row on Home, not
+a backup, and it does not count towards your analyses. Cancelling a re-run of
+an analysis you already have leaves that analysis exactly as it was. Back asks
+the same question. Cancelling a parameter sweep abandons the whole sweep, not
+just the combination in flight, and saves none of it.
 
 The same overlay covers importing frames and extracting video, but there it
 shows a progress bar and counts frames instead: the convergence bins are hidden,

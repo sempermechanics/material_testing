@@ -262,21 +262,20 @@ class BatchRunControllerTest {
     }
 
     @Test
-    fun `a cancelled re-run whose save missed the index still says it was not saved`() {
-        val line = TextView(ApplicationProvider.getApplicationContext<Application>())
-        controller(Gate(), resultLine = line).handleBatchOutcome(
-            Result.success(
-                outcome(RunStop.Cancelled.wireCode, validPoints = 500, frames = 2)
-                    .copy(saved = false, indexUnavailable = true),
-            ),
+    fun `a cancelled run, which kept nothing, opens nothing and says nothing`() {
+        val line = TextView(ApplicationProvider.getApplicationContext<Application>()).apply { text = "before" }
+        val before = ShadowDialog.getLatestDialog()
+        var partial = false
+        var shown: Shown? = null
+        controller(Gate(), onPartial = { partial = true }, resultLine = line) { shown = it }.handleBatchOutcome(
+            Result.success(outcome(RunStop.Cancelled.wireCode, validPoints = 0, frames = 0).copy(saved = false)),
         )
 
-        assertEquals(activity.getString(R.string.analysis_not_saved_title), line.text.toString())
-        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-        assertEquals(
-            activity.getString(R.string.analysis_index_unavailable_body),
-            dialog.findViewById<TextView>(android.R.id.message)?.text.toString(),
-        )
+        assertFalse("no frames-kept dialog", partial)
+        assertNull("no failure dialog", shown)
+        assertEquals(before, ShadowDialog.getLatestDialog())
+        assertNull("no viewer", shadowOf(activity).nextStartedActivity)
+        assertEquals("before", line.text.toString())
     }
 
     @Test

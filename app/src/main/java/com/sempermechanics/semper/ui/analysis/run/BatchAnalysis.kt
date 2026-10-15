@@ -31,6 +31,7 @@ import com.sempermechanics.semper.ui.analysis.wizard.admitRun
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import timber.log.Timber
 import java.io.File
 import java.util.Locale
@@ -41,7 +42,8 @@ import java.util.Locale
  * fragment it. Buffer allocate / overrun / `.dat` write are [DicFieldIo].
  */
 // One JNI loop over the deformed frames, writing `.dat` results: its size,
-// branching, jumps and per-frame catch are inherent, and it stays whole.
+// branching, jumps, per-frame catch and the cancel's early return are
+// inherent, and it stays whole.
 @Suppress(
     "CyclomaticComplexMethod",
     "LongMethod",
@@ -49,6 +51,7 @@ import java.util.Locale
     "MagicNumber",
     "TooGenericExceptionCaught",
     "NestedBlockDepth",
+    "ReturnCount",
 )
 @WorkerThread
 internal fun AnalysisViewModel.runBatchAnalysisBody(
@@ -73,10 +76,13 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
     // Results live in app-private persistent storage (NOT cacheDir, which
     // the OS may evict): one directory per Home-list session, never a sweep's.
+    // The loop writes them to the session's staging folder; only a run that
+    // is not cancelled moves them into the session (RunSession.commit).
     val session = openRunSession(appContext, sweep = false)
     val localSessionId = session.id
     val batchDir = session.dir
-    // The Home row this run replaces, if it is a re-run; its frames are gone.
+    val resultsDir = session.staging
+    // The Home row this run replaces, if it is a re-run; its frames go when the run commits.
     val previous = SessionStore.get(appContext, localSessionId)
 
     // Start every run from a clean result snapshot carrying its spec. Fields
@@ -113,7 +119,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val maxPoints = gridW * gridH
     val outputBuffer = DicFieldIo.allocateDirect(maxPoints)
 
-    cancelRequested = false
+    // The cancel flag was cleared at launch (launchBatchAnalysis), not here: a
+    // Cancel confirmed while the reference cached must still stop the run.
     var lastConvergence = -1f
     val convergenceGate = ConvergenceGate()
     var failedFrameIndex = -1
@@ -154,8 +161,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val perFrameSummaryRanges = mutableListOf<Map<Int, Pair<Float, Float>?>>()
 
     for ((frameIndex, defPath) in frames.paths.withIndex()) {
-        run.job.ensureActive()
-        if (cancelRequested) {
+        // A job cancelled with its view model is a cancel too: it keeps nothing
+        // either, and the cancel below rethrows it once the run is undone.
+        if (cancelRequested || !run.job.isActive) {
             stop = RunStop.Cancelled
             break
         }
@@ -267,7 +275,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
         if (validPointsCount == 0) continue
 
-        DicFieldIo.write(outputBuffer, validPointsCount, SessionPaths.frameDat(batchDir, frameIndex))
+        DicFieldIo.write(outputBuffer, validPointsCount, SessionPaths.frameDat(resultsDir, frameIndex))
         run {
             // Same bytes just written, reinterpreted as the point-record floats
             // VisualizationEngine.valueRanges expects — no extra decode, this data
@@ -298,6 +306,19 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         )
     }
 
+    // A cancel keeps nothing: no frames, no row, no upload. A re-run's session
+    // is left exactly as it was, since its results never left the staging.
+    // One confirmed while the last frame solved counts too.
+    if (cancelRequested) stop = RunStop.Cancelled
+    if (stop == RunStop.Cancelled) {
+        discardCancelledBatch(appContext, session, frames.paths, resolvedDefPaths)
+        run.job.ensureActive()
+        return cancelledOutcome((System.currentTimeMillis() - run.startedAtMs).toInt())
+    }
+    // Any other end replaces the previous run's results with this one's,
+    // whether or not it then saves a record (a partial stop keeps its frames).
+    session.commit()
+
     // Every frame solved: the overlay says so while the run saves.
     if (stop == RunStop.Finished) {
         onProgress(
@@ -314,7 +335,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
     // One entry per frame actually written above — matches what batchFiles will
     // list on a later read, so SummaryAnimation.globalRanges's frame-count check
-    // accepts this cache. A cancelled/failed run's shorter list still writes
+    // accepts this cache. A partial or failed run's shorter list still writes
     // correctly: it just describes fewer frames, consistent with fewer .dat files
     // existing. Best-effort — a write failure here only costs the cache its
     // speedup, never correctness (globalRanges falls back to decoding).
@@ -338,7 +359,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
     val executionTimeMs = (System.currentTimeMillis() - run.startedAtMs).toInt()
     // The parameters page estimates a run's time from what this phone has solved.
-    if (solvedFrames > 0 && stop != RunStop.Cancelled) {
+    if (solvedFrames > 0) {
         val points = RunEstimate.gridPoints(spec.roi.w, spec.roi.h, spec.params.step)
         val previous = AppSettings.runPointsPerSecond(appContext)
         val rate = RunEstimate.nextRate(previous, points, solvedFrames, executionTimeMs.toLong())
@@ -352,10 +373,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         persisted.ifBlank { frames.originalNames.originalNameOr(i, resolvedDefPaths[i]).baseName() }
     }
 
-    // A cancelled first run saves nothing. A cancelled re-run is saved like a
-    // partial one: the previous run's frames are already gone, so its row
-    // would otherwise go on describing them.
-    if (firstFrameValidPoints > 0 && (stop != RunStop.Cancelled || previous != null)) {
+    // A cancelled run never gets here (it returned above). A first frame that
+    // kept no points saves no record of its own.
+    if (firstFrameValidPoints > 0) {
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, reference.size.width, reference.size.height)

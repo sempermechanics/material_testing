@@ -523,7 +523,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
     <string name="run_reason_cancelled">Cancelled before every frame was solved</string>
-    <string name="run_fail_cancelled">The analysis was cancelled before every frame was solved. The frames solved before the cancel are kept.</string>
+    <string name="run_fail_cancelled">The analysis was cancelled. Nothing from the run is kept.</string>
     <!-- A single run whose first frame kept no points (engine code 0), split by how many points ICGN accepted there. -->
     <plurals name="run_fail_strain_window_fmt">
         <item quantity="one">%1$d point correlated, but it did not have enough solved neighbours to fill the strain window (VSG %2$d px at step %3$d px), so no strain could be fitted. Use a smaller strain window, a smaller step, or a larger region of interest.</item>
@@ -617,7 +617,9 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="progress_rate_fmt">%1$.1f %2$s/s</string>
     <string name="progress_joined_fmt">%1$s · %2$s</string>
     <string name="cancel_run_title">Cancel analysis?</string>
-    <string name="cancel_run_body">Results so far are discarded.</string>
+    <string name="cancel_run_body">Nothing from this run is kept.</string>
+    <!-- Cancel during a re-run of an analysis already on Home: the saved one is untouched. -->
+    <string name="cancel_rerun_body">Nothing from this run is kept. Your saved analysis stays as it was.</string>
     <string name="cancel_import_title">Cancel import?</string>
     <string name="cancel_import_body">Your previous selection is kept.</string>
     <string name="keep_running">Keep running</string>

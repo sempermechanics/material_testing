@@ -136,7 +136,8 @@ object CacheJanitor {
             entry.name.startsWith(FrameImportHelper.STAGING_DIR_PREFIX) -> true
             entry.name == FrameImportHelper.PREVIOUS_DIR_NAME -> true
             // A finished run moves its frames out, leaving this empty; a
-            // cancelled one leaves the frames it never reached. Only startup
+            // partial one leaves the frames it never reached, and a cancelled
+            // one puts back every frame it moved. Only startup
             // may assume no other screen still holds these paths, and only
             // when no wizard draft is waiting to restore them.
             entry.name == FrameImportHelper.COMMITTED_DIR_NAME -> mode == SweepMode.STARTUP && !keepImport
