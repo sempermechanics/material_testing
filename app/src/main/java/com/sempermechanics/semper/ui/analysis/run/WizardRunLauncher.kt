@@ -45,13 +45,16 @@ class WizardRunLauncher(
         activity.lifecycleScope.launch {
             if (!AnalysisNavHelper.ensureCanStart(activity, viewModel, sweep = false)) return@launch
 
-            chrome.beginRun { viewModel.cancelRequested = true }
+            // Frozen here, on Main, so the sheet names the reference the run solves against.
+            val inputs = viewModel.snapshotRunInputs()
+            chrome.beginRun(reference = inputs.reference.name) { viewModel.cancelRequested = true }
             checkReady()
 
             // Survives Activity destroy; progress/outcome observed via StateFlow / SharedFlow.
             viewModel.launchBatchAnalysis(
                 activity.applicationContext,
                 spec,
+                inputs,
                 activity.cacheDir,
                 chrome.overlay.processingStartTime,
             )

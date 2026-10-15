@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,6 +31,11 @@ class ComputeOverlayRunTest {
     private lateinit var bar: ProgressBar
     private lateinit var bins: ConvergenceBinsView
     private lateinit var strike: TextView
+    private lateinit var eta: TextView
+    private lateinit var caption: TextView
+    private lateinit var doneIcon: View
+    private lateinit var cancel: View
+    private lateinit var sheet: View
     private lateinit var overlay: ComputeOverlayController
 
     @Before
@@ -44,15 +50,23 @@ class ComputeOverlayRunTest {
         bar = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal)
         bins = ConvergenceBinsView(activity)
         strike = TextView(activity)
+        eta = TextView(activity)
+        caption = TextView(activity)
+        doneIcon = View(activity).apply { visibility = View.GONE }
+        cancel = View(activity)
+        sheet = View(activity)
         overlay = ComputeOverlayController(
-            overlay = View(activity),
+            overlay = sheet,
             header = header,
             percent = percent,
             status = status,
-            eta = TextView(activity),
+            eta = eta,
             bar = bar,
             bins = bins,
             strikeWarn = strike,
+            binsCaption = caption,
+            doneIcon = doneIcon,
+            cancel = cancel,
         )
     }
 
@@ -77,10 +91,10 @@ class ComputeOverlayRunTest {
         assertEquals(View.GONE, bar.visibility)
         assertEquals(View.GONE, status.visibility)
 
-        overlay.show("Importing Images", "Caching images…", showConvergence = false)
+        overlay.show("Importing photos", "Caching images…", showConvergence = false)
         assertEquals(View.GONE, bins.visibility)
         assertEquals(View.VISIBLE, bar.visibility)
-        assertEquals("Importing Images", header.text.toString())
+        assertEquals("Importing photos", header.text.toString())
         assertEquals("Caching images…", status.text.toString())
     }
 
@@ -112,7 +126,7 @@ class ComputeOverlayRunTest {
 
     @Test
     fun `an import tick moves the bar and its status`() {
-        overlay.show("Importing Images", "Caching images…", showConvergence = false)
+        overlay.show("Importing photos", "Caching images…", showConvergence = false)
         overlay.update(percent = 42.5f, status = "Importing image 5 of 12")
         flush()
         assertEquals(425, bar.progress)
@@ -178,5 +192,57 @@ class ComputeOverlayRunTest {
         assertEquals(View.GONE, strike.visibility)
         assertEquals(0, bins.bins.size)
         assertEquals(activity.getString(R.string.initializing_engine), header.text.toString())
+    }
+
+    @Test
+    fun `a batch run's caption shows with its bins and an import's does not`() {
+        overlay.show()
+        assertEquals(View.VISIBLE, caption.visibility)
+
+        overlay.show("Importing photos", "Caching images…", showConvergence = false)
+        assertEquals(View.GONE, caption.visibility)
+    }
+
+    @Test
+    fun `the line under the header names the reference without its extension, then the time left`() {
+        overlay.show(reference = "steel_00.png")
+        assertEquals("steel_00 · Estimating time left…", eta.text.toString())
+
+        overlay.updateRun(tick(frame = 0, framePercent = 50f, planned = 5))
+        flush()
+        assertTrue(eta.text.toString(), eta.text.startsWith("steel_00 · "))
+
+        overlay.show("Importing photos", "Caching images…", showConvergence = false)
+        assertEquals("an import has no reference", "Estimating time left…", eta.text.toString())
+    }
+
+    @Test
+    fun `a solved run's sheet shows the check, the frames, the time and the lowest convergence`() {
+        overlay.show(reference = "steel_00.png")
+        overlay.updateRun(tick(frame = 1, framePercent = 100f, convergence = floatArrayOf(96f, 41f, Float.NaN)))
+        flush()
+
+        overlay.showDone(frames = 5, executionTimeMs = 6_600, convergence = floatArrayOf(96f, 94.7f, 99f, 97f, 95f))
+
+        assertEquals(View.VISIBLE, sheet.visibility)
+        assertEquals(View.VISIBLE, doneIcon.visibility)
+        assertEquals("5 frames solved", header.text.toString())
+        assertEquals("7 s · lowest 94% converged", eta.text.toString())
+        assertEquals(View.GONE, percent.visibility)
+        assertEquals(View.GONE, strike.visibility)
+        assertEquals("Cancel's place is kept", View.INVISIBLE, cancel.visibility)
+        assertTrue(bins.bins.all { it.state == ConvergenceBinsView.State.DONE })
+
+        overlay.show()
+        assertEquals("the next run starts without the check", View.GONE, doneIcon.visibility)
+        assertEquals(View.VISIBLE, percent.visibility)
+        assertEquals(View.VISIBLE, cancel.visibility)
+    }
+
+    @Test
+    fun `a solved run's time reads in minutes past a minute, and without convergence it is the time alone`() {
+        overlay.showDone(frames = 1, executionTimeMs = 125_000, convergence = null)
+        assertEquals("1 frame solved", header.text.toString())
+        assertEquals("2 min 5 s", eta.text.toString())
     }
 }

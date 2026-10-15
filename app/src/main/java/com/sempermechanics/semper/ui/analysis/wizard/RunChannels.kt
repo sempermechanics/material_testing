@@ -13,6 +13,7 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.BatchRun
+import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
 import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
@@ -104,19 +105,19 @@ internal class PendingOutcome<T : Any> {
  * not cancel a minutes-long native solve. Progress is published on
  * [AnalysisViewModel.progress]; completion (or failure) is held on
  * [AnalysisViewModel.batchOutcome] until the screen takes it. The run's
- * images are frozen here, on Main, before it leaves for the native thread
- * ([snapshotRunInputs]).
+ * images, [inputs], are frozen by the caller on Main before it leaves for the
+ * native thread ([snapshotRunInputs]).
  */
 @MainThread
 @Suppress("TooGenericExceptionCaught") // any failure is the run's outcome
-fun AnalysisViewModel.launchBatchAnalysis(
+internal fun AnalysisViewModel.launchBatchAnalysis(
     appContext: Context,
     spec: RunSpec,
+    inputs: RunInputs,
     cacheDir: File,
     processingStartTime: Long,
 ) {
     if (runs.batchJob?.isActive == true) return
-    val inputs = snapshotRunInputs()
     runs.batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
         runs.progress.tryEmit(null)
         SemperAnalytics.event(

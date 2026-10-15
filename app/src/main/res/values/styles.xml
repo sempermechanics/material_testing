@@ -252,6 +252,15 @@
         <item name="android:textStyle">bold</item>
     </style>
 
+    <!-- The run sheet docked at the bottom of the wizard: rounded on top only. -->
+    <style name="ShapeAppearance.Semper.RunSheet" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">22dp</item>
+        <item name="cornerSizeTopRight">22dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
     <style name="TextAppearance.Semper.Caption" parent="TextAppearance.MaterialComponents.Caption">
         <item name="android:textColor">@color/text_secondary</item>
     </style>

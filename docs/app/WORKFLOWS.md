@@ -465,17 +465,20 @@ sheet itself and for real vendor decoders and camera AVIs.
 
 ### 5.4 Running
 
-The same overlay is reused for importing frames and extracting video, but the
+The run sheet docks at the bottom over a light scrim (the wizard stays visible
+above it and takes no touches), its bottom padding clear of the gesture bar. The
+same sheet is reused for importing frames and extracting video, but the
 convergence bins are **hidden** there — nothing is being solved. Import and
 extraction show a determinate progress bar, their status line and time left instead.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 5.4.1 | Start a run | Header row: "Frame N of M" with the percentage at its end (one decimal); under it "Estimating time left…" then "About N s left"; no title, ring, pace, elapsed or "Keep Semper open" line |
-| [ ] 5.4.2 | Watch the bins during a solve | One bin per planned frame: finished frames blue at their convergence height (red under the dashed 50% line), the frame being solved a pale outlined bin rising with its own progress, the rest empty slots. After the last frame the header reads "Completed M of M frames · saving" |
+| [ ] 5.4.1 | Start a run | A sheet docked at the bottom, full width, rounded on top only, with the wizard visible through a light scrim; Cancel a red text button at its end, clear of the gesture bar. Header row: "Frame N of M" with the percentage at its end (one decimal); under it the reference's name without its extension, then "Estimating time left…" and later "About N s left" ("steel_00 · About 2 s left"); no title, ring, pace, elapsed or "Keep Semper open" line |
+| [ ] 5.4.2 | Watch the bins during a solve | One bin per planned frame on an axis labelled 100 and 50: finished frames blue at their convergence height (red under the dashed 50% line), the frame being solved a pale outlined bin rising with its own progress, the rest empty slots; "Convergence per frame" under them. Up to 12 frames, each finished bin carries its whole-number convergence above it (red under 50) and the running bin its progress in blue; with few frames the bins stay narrow and centred. After the last frame the header reads "Completed M of M frames · saving" |
+| [ ] 5.4.2e | Let a run solve every frame | For a moment the sheet shows a green check, "M frames solved" and "S s · lowest P% converged", then the viewer opens. A run that stops early, fails or is cancelled shows no such moment |
 | [ ] 5.4.2d | Run more than 100 frames | Neighbouring frames share a bin that shows the lowest of them; a low frame still shows red |
 | [ ] 5.4.2c | Run a pair that decorrelates (blurred or swapped frames) | After the first frame under 50% an amber line names it and warns one more stops the run; the second stops it as before |
-| [ ] 5.4.2a | Watch the overlay while frames import or a video extracts | The bins are absent; the header is the import's title with its percentage, then a determinate bar, the count of frames under it, and time left |
+| [ ] 5.4.2a | Watch the sheet while frames import or a video extracts | The bins are absent; the header is "Importing photos" or "Extracting frames" with its percentage, then time left, a determinate bar, and the count of frames under it ("Reading video…" before a video's first frame) |
 | [ ] 5.4.2b | Tap **Cancel** during an import | A confirm dialog ("Cancel import?", with **Keep importing** and **Cancel**); confirming leaves no half-imported frames behind |
 | [ ] 5.4.3 | Leave the device untouched during a long run | The screen does not sleep |
 | [ ] 5.4.4 | Press Back mid-run | Blocked, with a toast |
@@ -484,7 +487,8 @@ extraction show a determinate progress bar, their status line and time left inst
 | [ ] 5.4.6a | Cancel a long frame (big ROI, small step) | Same: no multi-second wait on the progress overlay after confirming |
 | [ ] 5.4.6b | Start a new run straight after cancelling one | It runs normally — the cancel does not carry over |
 | [ ] 5.4.6c | Cancel a sweep at combination 3 of 16 | The **whole sweep** stops — it does not go on to combination 4 |
-| [ ] 5.4.7 | Start a sweep | Header row "Analysis i of N" with the percentage; the planned lattice replaces the bins, all grey rings, with the combination being solved circled; the status under it reads "Solving subset S · step T · W-point window" |
+| [ ] 5.4.7 | Start a sweep | Header row "Analysis i of N" with the percentage; the planned lattice replaces the bins, all grey rings with the combination being solved circled, its labels horizontal in the app's font: the lowest and highest VSG at the left, the smallest and largest subset under the axis with "subset px" between, no legend line; the status under it reads "Subset S · window V px" |
+| [ ] 5.4.7b | Watch the line under the sweep's status | Hidden until a combination ends, then "Last: P% converged · N points" (N grouped, "30,968"), or "Last: skipped" in red |
 | [ ] 5.4.7a | Watch the sweep lattice | Each combination fills as it solves or becomes a red ring if skipped; percentage and time left advance per combination; at the end the header reads "Solved K of N analyses · saving" |
 | [ ] 5.4.8 | Background the app mid-run | The run does not survive process death — no resume is offered |
 

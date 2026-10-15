@@ -28,12 +28,15 @@ import java.util.concurrent.TimeUnit
 @Config(application = Application::class)
 class ComputeOverlaySweepTest {
 
+    private lateinit var activity: AppCompatActivity
     private lateinit var status: TextView
     private lateinit var header: TextView
     private lateinit var percent: TextView
     private lateinit var bar: ProgressBar
     private lateinit var bins: ConvergenceBinsView
     private lateinit var sweepGroup: FrameLayout
+    private lateinit var last: TextView
+    private lateinit var lattice: SweepLatticeView
     private lateinit var overlay: ComputeOverlayController
 
     private val plan = listOf(
@@ -45,7 +48,7 @@ class ComputeOverlaySweepTest {
 
     @Before
     fun setUp() {
-        val activity = Robolectric.buildActivity(AppCompatActivity::class.java)
+        activity = Robolectric.buildActivity(AppCompatActivity::class.java)
             .also { it.get().setTheme(R.style.Theme_Semper) }
             .setup()
             .get()
@@ -55,6 +58,8 @@ class ComputeOverlaySweepTest {
         bar = ProgressBar(activity)
         bins = ConvergenceBinsView(activity)
         sweepGroup = FrameLayout(activity)
+        last = TextView(activity)
+        lattice = SweepLatticeView(activity).apply { compact = true }
         overlay = ComputeOverlayController(
             overlay = View(activity),
             header = header,
@@ -63,7 +68,7 @@ class ComputeOverlaySweepTest {
             eta = TextView(activity),
             bar = bar,
             bins = bins,
-            sweepLattice = LiveSweepLattice(sweepGroup, SweepLatticeView(activity)),
+            sweepLattice = LiveSweepLattice(sweepGroup, lattice, last),
         )
     }
 
@@ -71,13 +76,18 @@ class ComputeOverlaySweepTest {
         shadowOf(Looper.getMainLooper()).idleFor(200, TimeUnit.MILLISECONDS)
     }
 
-    private fun tick(runIndex: Int, outcomes: List<NodeOutcome>) = SweepStudyRunner.Progress(
+    private fun tick(
+        runIndex: Int,
+        outcomes: List<NodeOutcome>,
+        points: Int = 0,
+        convergence: Float = -1f,
+    ) = SweepStudyRunner.Progress(
         runIndex = runIndex,
         totalRuns = plan.size,
         percent = outcomes.count { it != NodeOutcome.PENDING } * 100 / plan.size,
         point = plan[runIndex],
-        pointsSolved = 0,
-        convergencePercent = -1f,
+        pointsSolved = points,
+        convergencePercent = convergence,
         outcomes = outcomes,
     )
 
@@ -104,7 +114,8 @@ class ComputeOverlaySweepTest {
         flush()
 
         assertEquals("Analysis 3 of 4", header.text.toString())
-        assertEquals("Solving subset 31 · step 10 · 9-point window", status.text.toString())
+        // Window 9 points at step 10 is a VSG of (9 - 1) × 10 + 1 = 81 px.
+        assertEquals("Subset 31 · window 81 px", status.text.toString())
         assertEquals("50.0%", percent.text.toString())
     }
 
@@ -119,5 +130,53 @@ class ComputeOverlaySweepTest {
         assertEquals("Solved 3 of 4 analyses · saving", header.text.toString())
         assertEquals(View.GONE, status.visibility)
         assertEquals("100.0%", percent.text.toString())
+    }
+
+    @Test
+    fun `the run overlay's lattice draws its range labels, not the compact ticks`() {
+        overlay.show("Sweep", "4 analyses", showConvergence = false, sweepPlan = plan)
+        assertEquals(false, lattice.compact)
+    }
+
+    @Test
+    fun `the last line is hidden until a combination ends, then says how it went`() {
+        overlay.show("Sweep", "4 analyses", showConvergence = false, sweepPlan = plan)
+        val pending = List(plan.size) { NodeOutcome.PENDING }
+        overlay.updateSweep(tick(0, pending))
+        flush()
+        assertEquals(View.GONE, last.visibility)
+
+        val first = listOf(NodeOutcome.SOLVED) + pending.drop(1)
+        // The end of one combination and the start of the next land in one flush.
+        overlay.updateSweep(tick(0, first, points = 30_968, convergence = 96.4f))
+        overlay.updateSweep(tick(1, first))
+        flush()
+        assertEquals(View.VISIBLE, last.visibility)
+        assertEquals("Last: 96% converged · 30,968 points", last.text.toString())
+        assertEquals(activity.getColor(R.color.text_secondary), last.currentTextColor)
+    }
+
+    @Test
+    fun `a skipped combination is said in red`() {
+        overlay.show("Sweep", "4 analyses", showConvergence = false, sweepPlan = plan)
+        val outcomes = listOf(NodeOutcome.SOLVED, NodeOutcome.SKIPPED, NodeOutcome.PENDING, NodeOutcome.PENDING)
+        overlay.updateSweep(tick(2, outcomes))
+        flush()
+
+        assertEquals("Last: skipped", last.text.toString())
+        assertEquals(activity.getColor(R.color.semantic_danger), last.currentTextColor)
+
+        overlay.show("Sweep", "4 analyses", showConvergence = false, sweepPlan = plan)
+        assertEquals("a new sweep starts without it", View.GONE, last.visibility)
+    }
+
+    @Test
+    fun `a solved combination whose own tick was dropped says only that it solved`() {
+        overlay.show("Sweep", "4 analyses", showConvergence = false, sweepPlan = plan)
+        val outcomes = listOf(NodeOutcome.SOLVED, NodeOutcome.PENDING, NodeOutcome.PENDING, NodeOutcome.PENDING)
+        overlay.updateSweep(tick(1, outcomes))
+        flush()
+
+        assertEquals("Last: solved", last.text.toString())
     }
 }

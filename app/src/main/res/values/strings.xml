@@ -16,7 +16,8 @@
     <string name="next_frame">Next frame</string>
 
     <string name="analysis_caching_images">Caching images…</string>
-    <string name="analysis_importing_title">Importing Images</string>
+    <string name="analysis_importing_title">Importing photos</string>
+    <string name="video_extracting_title">Extracting frames</string>
     <plurals name="analysis_importing_fmt">
         <item quantity="one">Importing image %1$d of %2$d</item>
         <item quantity="other">Importing image %1$d of %2$d</item>
@@ -483,8 +484,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Beside the sweep's strain-window title: the smallest and largest VSG the plan fits. -->
     <string name="strain_win_vsg_range_fmt">%1$d–%2$d px VSG</string>
     <string name="planned_lattice_heading">Planned lattice</string>
-    <string name="run_sweep_legend">Filled: solved · grey: waiting · red: skipped</string>
-    <string name="sweep_running_fmt">Solving subset %1$d · step %2$d · %3$d-point window</string>
+    <!-- The run sheet under a sweep's lattice: the combination being solved
+         (its window is the VSG in px), then how the last one to end went. -->
+    <string name="run_sweep_now_fmt">Subset %1$d · window %2$d px</string>
+    <plurals name="run_sweep_last_fmt">
+        <item quantity="one">Last: %1$d%% converged · %2$s point</item>
+        <item quantity="other">Last: %1$d%% converged · %2$s points</item>
+    </plurals>
+    <string name="run_sweep_last_solved">Last: solved</string>
+    <string name="run_sweep_last_skipped">Last: skipped</string>
     <string name="run_analysis_of_fmt">Analysis %1$d of %2$d</string>
     <!-- W is the strain window in data points; with St it fixes the VSG,
          (W − 1) × St + 1 px, so the label needs no VSG of its own. -->
@@ -549,8 +557,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>
-    <string name="vsg_lattice_axis_subset">Subset size (px)</string>
-    <string name="vsg_lattice_axis_vsg">VSG (px)</string>
+    <!-- The run sheet's lattice: between the smallest and largest subset under its axis. -->
+    <string name="vsg_lattice_axis_subset_range">subset px</string>
     <!-- Compact lattice: unit folded onto the rightmost subset tick instead of a
          separate axis title (see SweepLatticeView.compact). -->
     <string name="vsg_lattice_axis_subset_unit_fmt">%1$d px</string>
@@ -591,6 +599,17 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="line_cut_axis_strain">Strain (mε)</string>
 
     <string name="run_frame_of_fmt">Frame %1$d of %2$d</string>
+    <!-- The run sheet's line under its header: the reference's name, then the time left. -->
+    <string name="run_subline_fmt">%1$s · %2$s</string>
+    <string name="run_bins_caption">Convergence per frame</string>
+    <!-- The run sheet for a moment after a run solved every frame, before the viewer opens. -->
+    <plurals name="run_done_frames_fmt">
+        <item quantity="one">%1$d frame solved</item>
+        <item quantity="other">%1$d frames solved</item>
+    </plurals>
+    <string name="run_done_seconds_fmt">%1$d s</string>
+    <string name="run_done_minutes_fmt">%1$d min %2$d s</string>
+    <string name="run_done_detail_fmt">%1$s · lowest %2$d%% converged</string>
     <plurals name="run_bins_cd">
         <item quantity="one">Frame %1$d of %2$d, %3$d converged above %4$d%%</item>
         <item quantity="other">Frame %1$d of %2$d, %3$d converged above %4$d%%</item>

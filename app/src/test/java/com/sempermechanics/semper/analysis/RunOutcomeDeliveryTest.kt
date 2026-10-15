@@ -90,7 +90,8 @@ class RunOutcomeDeliveryTest {
                 sweepsFinished += outcome
             }
         }
-        BatchRunController(activity, viewModel, chrome, TextView(activity), host).observe()
+        // No done moment: these tests count the viewer opening as the outcome is handled.
+        BatchRunController(activity, viewModel, chrome, TextView(activity), host, doneHoldMs = 0L).observe()
         idle()
         return ac
     }
