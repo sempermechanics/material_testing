@@ -57,6 +57,7 @@ class RunChrome(
      * either way, and a re-run of a saved analysis also says that analysis
      * stays as it was.
      */
+    @Suppress("LongParameterList") // batch and sweep share it; each passes only its own, by name
     fun beginRun(
         title: String? = null,
         status: String? = null,

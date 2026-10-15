@@ -89,7 +89,12 @@ class WizardRunLauncher(
             if (!AnalysisNavHelper.ensureCanStart(activity, viewModel, sweep = true)) return@launch
 
             val cancelBody = cancelRunBody(activity.applicationContext, viewModel, sweep = true)
-            chrome.beginRun(activity.getString(R.string.mode_sweep), sweep.planSummary(plan), plan, cancelBody) {
+            chrome.beginRun(
+                title = activity.getString(R.string.mode_sweep),
+                status = sweep.planSummary(plan),
+                sweepPlan = plan,
+                cancelBody = cancelBody,
+            ) {
                 viewModel.cancelRequested = true
             }
             checkReady()
