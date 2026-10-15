@@ -86,6 +86,12 @@ once whether it may send crash diagnostics. Nothing is collected unless you say
 yes, and you can change your mind at any time under **Settings → Your data →
 Send crash reports**.
 
+**First-run tips.** The first time you reach a screen, a short tip card points
+at the control it describes, with the rest of the screen dimmed. When a screen
+has several tips the card counts them ("1 of 3") and offers **Skip** beside
+**Next**; the last tip, and a screen with only one, shows **Got it**. Skip or
+Got it puts that screen's tips away for good.
+
 <img src="images/home.png" width="300" alt="Home screen">
 
 The app icon follows your phone's dark theme: the S in black on a light
@@ -507,7 +513,7 @@ window and land on different VSGs. The lattice plots each node at its VSG, so on
 window sits higher at a larger subset's step.
 
 The lattice preview on this step is **inert** — taps do nothing until it has
-run. The coach mark points it out on a first visit.
+run. A first-run tip points it out.
 
 ### Reading the result lattice
 
@@ -525,8 +531,8 @@ ever carries meaning at a time.
 
 The screen is built to be worked with one thumb. It scrolls — summary line,
 lattice, controls, then plot — while **Save graph** and **View** stay pinned at
-the bottom. The y axis is the **VSG (px)**; the lattice draws compact, so
-the coach mark on first visit is what names the axes.
+the bottom. The x axis is the **subset size** and the y axis the **VSG (px)**;
+the lattice draws compact, with tick numbers and a "px" unit but no axis titles.
 
 **Choosing a combination**
 

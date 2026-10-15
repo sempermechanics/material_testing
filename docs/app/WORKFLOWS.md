@@ -155,7 +155,8 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.2a | Acknowledge the beta notice on a fresh install | A second dialog asks whether to send crash reports; **declining is the default outcome** and nothing is collected until you accept |
 | [ ] 3.2b | Relaunch after answering it | It does not reappear; the choice is mirrored by the Settings toggle (§4, Your data) |
 | [ ] 3.2c | Signed out (a debug build with no API URL): acknowledge, then relaunch and after a process kill; then sign in to an account that has not seen it | Signed out, the notice does not reappear; the account is asked once, since each account acks for itself |
-| [ ] 3.3 | First visit | A coach mark points at the **+** button; Skip and Got it both dismiss it |
+| [ ] 3.3 | First visit | A tip card points at the **+** button. It is a single tip, so it has no "1 of N" count and no Skip, only a filled **Got it**, which dismisses it for good |
+| [ ] 3.3a | Any first-run tip sequence (the picker, wizard steps 1–3, the result lattice) | The card shows "1 of N" in small grey text at the left, a grey text **Skip** and one filled **Next** at the right; a small pointer on the card's edge aims at the ringed control's centre, above or below it, and the card stays clear of the status and navigation bars. The last tip reads **Got it** with no Skip. Skip on any tip ends the sequence and it never returns. Each tip is three lines or fewer on a phone, in both themes; TalkBack reads each tip as it appears |
 | [ ] 3.4 | Look at a session row | A rounded card with a thin outline, 16dp in from the screen edges. Thumbnail, name, then "N frames · 96.3%" (a sweep: "9 of 9 solved", from its own combination lists; the title names it a sweep; a run cut short: "39 of 50 frames · 90.0% · " and its stop reason), and a cloud state icon at the end. No date on the row. The convergence is the first frame's, from its engine stats; under 85% the figure is amber. TalkBack reads it as "96.3% converged". A row from before engine stats were kept shows its stored headline instead |
 | [ ] 3.4d | Look above the rows, with analyses from today, yesterday and earlier | Small grey day headers: "Today", "Yesterday", then a short date such as "Oct 7", with the year for one from another year ("Dec 31, 2025"), in the phone's language and timezone. A header is not a row: it cannot be tapped or selected, and select-all counts only analyses |
 | [ ] 3.4e | Select a row (long-press) | Its card turns light blue with a blue outline and a tick replaces the thumbnail |
@@ -583,8 +584,8 @@ aiming at a small target.
 
 | # | Action | Expected |
 |---|---|---|
-| [ ] 7.1.1 | Open a sweep | Lattice with **subset across and VSG (px) up**: one window in points is a larger VSG at a larger subset's step, so the rows need not line up; the coach mark explains filled vs hollow (no persistent legend row) |
-| [ ] 7.1.1a | Look for axis titles on the result lattice | There are none — it draws compact, so only tick numbers and a "px" unit on the last subset tick. The coach mark is what names the axes |
+| [ ] 7.1.1 | Open a sweep | Lattice with **subset across and VSG (px) up**: one window in points is a larger VSG at a larger subset's step, so the rows need not line up; the first-run tip explains filled vs hollow (no persistent legend row) |
+| [ ] 7.1.1a | Look for axis titles on the result lattice | There are none — it draws compact, so only tick numbers and a "px" unit on the last subset tick. The first-run tip names them: "subset size across, VSG up" |
 | [ ] 7.1.2 | Open a sweep that had failures | Skipped combinations are hollow rings with no fill — any surface behind them shows through |
 | [ ] 7.1.3 | Compare two different filled nodes | Same fill colour — node identity comes from position + the selection ring, not a colour key. The plot below only puts colour on the *focused* curve (§7.2.4) |
 | [ ] 7.1.4 | Read the summary line, above the lattice | "N combinations · S solved · K skipped · step subset÷D" |
