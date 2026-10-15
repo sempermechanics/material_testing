@@ -197,12 +197,15 @@ class RunKindOwnRecordTest {
     fun `a run clears the field-range sidecar its previous run left`() {
         val sweep = vm.openRunSession(ctx, sweep = true)
         val sidecar = SessionLayout(sweep.dir).fieldRanges.apply { writeText("stale ranges") }
-        val dat = SessionPaths.frameDat(sweep.dir, 0).apply { writeText("old") }
+        val dat = SessionPaths.frameDat(sweep.dir, 1).apply { writeText("old") }
 
-        vm.openRunSession(ctx, sweep = true)
+        val rerun = vm.openRunSession(ctx, sweep = true)
+        SessionPaths.frameDat(rerun.staging, 0).writeText("new")
+        rerun.commit()
 
         assertFalse("a stale sidecar would give the re-run the old ranges", sidecar.exists())
         assertFalse(dat.exists())
+        assertEquals("new", SessionPaths.frameDat(sweep.dir, 0).readText())
     }
 
     @Test

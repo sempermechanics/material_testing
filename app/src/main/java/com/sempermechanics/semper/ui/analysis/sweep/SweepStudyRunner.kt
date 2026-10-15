@@ -128,6 +128,9 @@ object SweepStudyRunner {
      * Under-converged combinations are kept and written like any other. The
      * lattice shows each node's own result, which is where a judgement about
      * which settings worked belongs.
+     *
+     * The cancel flag is cleared when the sweep is launched (`launchSweep`),
+     * not here, so a Cancel confirmed before the first solve still stops it.
      */
     @Suppress("LoopWithTooManyJumpStatements") // cancel break + skip continue are intentional
     fun run(
@@ -137,7 +140,6 @@ object SweepStudyRunner {
         params: Params,
         onProgress: (Progress) -> Unit,
     ): SweepResult {
-        cancelRequested = false
         params.outputDir.mkdirs()
         EngineDebug.attach(params.debugDir)
         SemperNativeLib.initializeReference(refBytes, params.maskData, refWidth, refHeight)

@@ -333,6 +333,18 @@ show up as an OOM, a mid-run crash, or a "nothing happened" report:
 - **Cancelling a sweep abandons the sweep.** `SweepStudyRunner` checks the cancel
   token *between* combinations as well as inside a solve, so Cancel does not merely
   skip to the next parameter set.
+- **A cancel keeps nothing.** A batch run and a sweep write their `.dat` files to
+  `<session>/run_staging/` (`SessionPaths.RUN_STAGING_SUBDIR`, from
+  `RunChannels.openRunSession`); only an end that is not a cancel moves them into the
+  session (`RunSession.commit`, which is also when the previous run's results go) and
+  saves the row. A cancel (`BatchAnalysis.runBatchAnalysisBody` → `discardCancelledBatch`,
+  `SweepAnalysis.endSweep`) deletes the staging, puts the deformed images the loop
+  moved back into the import, deletes a new session's folder only if no row names it
+  (`SessionStore.deleteUnsavedDir`), and restores the wizard's working session and
+  last result (`RunChannels.discardRun`). So a cancelled re-run leaves the saved
+  analysis, its row and its backup state exactly as they were, and a cancelled new
+  run consumes no quota (the quota counts index rows). A stop that is not a cancel
+  (low convergence, an engine failure, the session limit) still keeps its frames.
 - **A Drive outage must not look like deleted data.** A verifying refresh drops
   local metadata only when the backend confirms a blob is missing, never on an
   indeterminate answer. See [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md).

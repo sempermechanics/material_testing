@@ -93,6 +93,35 @@ class RunChromeTest {
         assertFalse("Cancel is spent once confirmed", cancel.isEnabled)
     }
 
+    private fun askedBody(): String = dialog().findViewById<TextView>(android.R.id.message)?.text.toString()
+
+    @Test
+    fun `a run's Cancel says nothing of the run is kept`() {
+        chrome.beginRun {}
+        chrome.confirmCancel()
+
+        assertEquals("Nothing from this run is kept.", askedBody())
+        assertEquals(activity.getString(R.string.cancel_run_body), askedBody())
+    }
+
+    @Test
+    fun `a re-run's Cancel also says the saved analysis stays as it was`() {
+        chrome.beginRun(cancelBody = R.string.cancel_rerun_body) {}
+        chrome.confirmCancel()
+
+        assertEquals("Nothing from this run is kept. Your saved analysis stays as it was.", askedBody())
+    }
+
+    @Test
+    fun `no run string says a cancel keeps frames, and an import's cancel still keeps the selection`() {
+        assertEquals("Cancel analysis?", activity.getString(R.string.cancel_run_title))
+        assertEquals(
+            "The analysis was cancelled. Nothing from the run is kept.",
+            activity.getString(R.string.run_fail_cancelled),
+        )
+        assertEquals("Your previous selection is kept.", activity.getString(R.string.cancel_import_body))
+    }
+
     @Test
     fun `Keep importing leaves the import going`() {
         var stopped = false
