@@ -10,6 +10,7 @@ import com.sempermechanics.semper.fixtures.viewerArgs
 import com.sempermechanics.semper.fixtures.writeGridBatch
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -144,5 +145,49 @@ class FrameNumberEntryTest {
 
         assertEquals(1, activity.currentFrameIndex)
         assertEquals("2", activity.field().text.toString())
+    }
+
+    @Test
+    fun `Prev into the summary with the field focused stays on the summary`() {
+        val activity = viewer()
+        activity.field().requestFocus()
+        assertTrue(activity.field().hasFocus())
+
+        // Hiding the field on entry takes its focus; that must not commit its
+        // "1" and bounce straight back to frame 1.
+        activity.findViewById<View>(R.id.btnPrevFrame).performClick()
+        shadowOf(activity.mainLooper).idle()
+
+        assertTrue(activity.isShowingSummary)
+        assertFalse(activity.field().hasFocus())
+    }
+
+    @Test
+    fun `a number typed but not committed is dropped by Prev into the summary`() {
+        val activity = viewer()
+        activity.field().requestFocus()
+        activity.field().setText("4")
+
+        activity.findViewById<View>(R.id.btnPrevFrame).performClick()
+        shadowOf(activity.mainLooper).idle()
+
+        assertTrue(activity.isShowingSummary)
+        assertEquals(0, activity.currentFrameIndex)
+    }
+
+    @Test
+    fun `after the summary a typed number still jumps`() {
+        val activity = viewer()
+        activity.field().requestFocus()
+        activity.findViewById<View>(R.id.btnPrevFrame).performClick()
+        activity.findViewById<View>(R.id.btnNextFrame).performClick()
+        shadowOf(activity.mainLooper).idle()
+        assertFalse(activity.isShowingSummary)
+        assertEquals("1", activity.field().text.toString())
+
+        activity.jumpTo("3")
+
+        assertEquals(2, activity.currentFrameIndex)
+        assertFalse(activity.isShowingSummary)
     }
 }
