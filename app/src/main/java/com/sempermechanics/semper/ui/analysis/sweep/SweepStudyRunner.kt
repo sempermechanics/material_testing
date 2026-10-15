@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.ui.analysis.sweep
 
+import androidx.annotation.VisibleForTesting
 import com.sempermechanics.semper.SemperNativeLib
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.diagnostics.EngineDebug
@@ -58,6 +59,12 @@ object SweepStudyRunner {
      * [outcomes] holds every combination of the plan, in plan order, as of this
      * tick. Always a copy: the progress flow drops old ticks, and each tick
      * carries the whole lattice, so a dropped one loses nothing.
+     *
+     * [lastSolved] is the latest combination that solved, carried on every
+     * tick after it for the same reason: a combination's end and the next
+     * one's start are sent back to back, and the flow keeps only the newest,
+     * so the end tick's own [pointsSolved] and [convergencePercent] rarely
+     * reach the screen.
      */
     data class Progress(
         val runIndex: Int,
@@ -67,7 +74,11 @@ object SweepStudyRunner {
         val pointsSolved: Int,
         val convergencePercent: Float,
         val outcomes: List<NodeOutcome> = emptyList(),
+        val lastSolved: Solved? = null,
     )
+
+    /** A combination that solved: its plan [runIndex], the points it kept and its convergence. */
+    data class Solved(val runIndex: Int, val pointsSolved: Int, val convergencePercent: Float)
 
     /** One completed combination and the file holding its field. */
     data class RunOutcome(
@@ -132,7 +143,6 @@ object SweepStudyRunner {
      * The cancel flag is cleared when the sweep is launched (`launchSweep`),
      * not here, so a Cancel confirmed before the first solve still stops it.
      */
-    @Suppress("LoopWithTooManyJumpStatements") // cancel break + skip continue are intentional
     fun run(
         refBytes: ByteArray,
         refWidth: Int,
@@ -143,8 +153,22 @@ object SweepStudyRunner {
         params.outputDir.mkdirs()
         EngineDebug.attach(params.debugDir)
         SemperNativeLib.initializeReference(refBytes, params.maskData, refWidth, refHeight)
+        return solvePlan(refBytes, File(params.defFramePath).readBytes(), params, onProgress)
+    }
 
-        val defBytes = File(params.defFramePath).readBytes()
+    /**
+     * [run]'s loop, once the engine holds the reference: one solve of
+     * [defBytes] per combination of [params].plan, through [SemperEngine], so
+     * a JVM test can stand in for the engine.
+     */
+    @VisibleForTesting
+    @Suppress("LoopWithTooManyJumpStatements") // cancel break + skip continue are intentional
+    internal fun solvePlan(
+        refBytes: ByteArray,
+        defBytes: ByteArray,
+        params: Params,
+        onProgress: (Progress) -> Unit,
+    ): SweepResult {
         val buffer = allocateFor(params)
         val runs = ArrayList<RunOutcome>(params.plan.size)
         var firstMetrics: FloatArray? = null
@@ -155,6 +179,7 @@ object SweepStudyRunner {
         val skipped = ArrayList<SweepStudy.Point>()
         val skippedCodes = ArrayList<Int>()
         var lastEngineError = 0
+        var lastSolved: Solved? = null
 
         // A cancel short-circuits the remaining solves; the one already running
         // stops on its own, since the engine polls the same flag. Nothing else
@@ -164,7 +189,8 @@ object SweepStudyRunner {
         for ((index, point) in params.plan.withIndex()) {
             if (cancelRequested) break
             val metrics = EngineStats.newMetrics()
-            onProgress(Progress(index, total, index * PERCENT / maxOf(1, total), point, 0, -1f, outcomes.toList()))
+            val starting = index * PERCENT / maxOf(1, total)
+            onProgress(Progress(index, total, starting, point, 0, -1f, outcomes.toList(), lastSolved))
 
             val solved = SemperEngine.solve(refBytes, defBytes, params.engineParams(point), buffer, metrics)
             // One bad node says nothing about the rest — a small subset can fail
@@ -177,7 +203,7 @@ object SweepStudyRunner {
                 lastEngineError = skipCode
                 outcomes[index] = NodeOutcome.SKIPPED
                 val done = (index + 1) * PERCENT / maxOf(1, total)
-                onProgress(Progress(index, total, done, point, 0, -1f, outcomes.toList()))
+                onProgress(Progress(index, total, done, point, 0, -1f, outcomes.toList(), lastSolved))
                 continue
             }
             if (firstMetrics == null) firstMetrics = metrics
@@ -192,6 +218,8 @@ object SweepStudyRunner {
             DicFieldIo.write(buffer, solved, datFile)
             runs.add(RunOutcome(point, datFile, solved))
             outcomes[index] = NodeOutcome.SOLVED
+            val convergence = metrics[EngineStats.SLOT_CONVERGENCE]
+            lastSolved = Solved(index, solved, convergence)
 
             onProgress(
                 Progress(
@@ -200,8 +228,9 @@ object SweepStudyRunner {
                     percent = (index + 1) * PERCENT / maxOf(1, total),
                     point = point,
                     pointsSolved = solved,
-                    convergencePercent = metrics[EngineStats.SLOT_CONVERGENCE],
+                    convergencePercent = convergence,
                     outcomes = outcomes.toList(),
+                    lastSolved = lastSolved,
                 ),
             )
         }

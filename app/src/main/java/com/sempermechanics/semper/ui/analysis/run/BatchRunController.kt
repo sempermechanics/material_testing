@@ -1,12 +1,14 @@
 package com.sempermechanics.semper.ui.analysis.run
 
 import android.annotation.SuppressLint
+import android.provider.Settings
 import android.widget.TextView
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.withStarted
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
@@ -15,6 +17,7 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -33,6 +36,8 @@ class BatchRunController(
     private val chrome: RunChrome,
     private val tvResult: TextView,
     private val host: Host,
+    /** How long a solved run's sheet says so before the viewer opens; 0 with animations off. */
+    private val doneHoldMs: Long = defaultDoneHoldMs(activity),
 ) {
 
     /** What the wizard does with each way a run can end. */
@@ -152,7 +157,42 @@ class BatchRunController(
                 )
                 viewModel.lastDefPath = viewModel.defFilePaths.firstOrNull() ?: ""
                 viewModel.lastBatchDirPath = outcome.batchDirPath
-                host.openResultViewer()
+                showDoneThenOpen(outcome)
+            }
+        }
+    }
+
+    /**
+     * The run solved every frame: the sheet says so for [doneHoldMs] (frames,
+     * time, lowest convergence from the run's ticks), then the viewer
+     * opens: once the screen is started again if it was left in the
+     * background meanwhile, since a stopped screen may not start another.
+     * Straight to the viewer with no hold, or when the screen is already
+     * going. A screen destroyed mid-hold for a configuration change still
+     * opens it; one destroyed for any other reason does not.
+     */
+    private fun showDoneThenOpen(outcome: BatchAnalysisOutcome) {
+        if (doneHoldMs <= 0L || activity.isFinishing || activity.isDestroyed) {
+            host.openResultViewer()
+            return
+        }
+        // The convergence is the overlay's own snapshot of the run's ticks: the
+        // view model's progress replay is already null here (the run's finally).
+        overlayController.showDone(outcome.totalFrames, outcome.executionTimeMs)
+        activity.lifecycleScope.launch {
+            var opened = false
+            try {
+                delay(doneHoldMs)
+                activity.withStarted {
+                    overlayController.hide()
+                    opened = true
+                    host.openResultViewer()
+                }
+            } finally {
+                if (!opened) {
+                    overlayController.hide()
+                    if (activity.isChangingConfigurations) host.openResultViewer()
+                }
             }
         }
     }
@@ -190,3 +230,11 @@ class BatchRunController(
         host.showEngineFailureDialog(errorMessage, R.string.analysis_failed_title, faqRes, why)
     }
 }
+
+/** [BatchRunController]'s done moment: about 800 ms, none when the system's animator duration scale is 0. */
+private fun defaultDoneHoldMs(activity: AppCompatActivity): Long {
+    val scale = Settings.Global.getFloat(activity.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+    return if (scale == 0f) 0L else DONE_HOLD_MS
+}
+
+private const val DONE_HOLD_MS = 800L

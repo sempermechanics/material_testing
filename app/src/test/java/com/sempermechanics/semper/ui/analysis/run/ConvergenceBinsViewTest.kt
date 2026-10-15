@@ -145,10 +145,63 @@ class ConvergenceBinsViewTest {
         view.setRun(planned = 4, frameIndex = 2, framePercent = 30f, convergence = floatArrayOf(96f, 30f, nan, nan))
         view.measure(
             View.MeasureSpec.makeMeasureSpec(300, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(72, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(80, View.MeasureSpec.EXACTLY),
         )
-        view.layout(0, 0, 300, 72)
-        view.draw(Canvas(Bitmap.createBitmap(300, 72, Bitmap.Config.ARGB_8888)))
+        view.layout(0, 0, 300, 80)
+        view.draw(Canvas(Bitmap.createBitmap(300, 80, Bitmap.Config.ARGB_8888)))
         assertEquals(4, view.bins.size)
+    }
+
+    @Test
+    fun `up to twelve bins each finished one and the running one carry their value`() {
+        val values = floatArrayOf(96.9f, 49.9f, nan, nan, nan)
+        view.setRun(planned = 5, frameIndex = 3, framePercent = 62.5f, convergence = values)
+
+        // A frame that kept no points has no value; one just under the gate never reads 50.
+        assertEquals(listOf(96, 49, null, 62, null), ConvergenceBinsView.labelsFor(view.bins))
+    }
+
+    @Test
+    fun `over twelve bins nothing is labelled`() {
+        val values = FloatArray(13) { 95f }
+        view.setRun(planned = 12, frameIndex = 12, framePercent = 100f, convergence = values)
+        assertEquals(12, ConvergenceBinsView.labelsFor(view.bins).count { it != null })
+
+        view.setRun(planned = 13, frameIndex = 13, framePercent = 100f, convergence = values)
+        assertTrue(ConvergenceBinsView.labelsFor(view.bins).all { it == null })
+    }
+
+    @Test
+    fun `a few bins are capped in width and centred, eight dp apart`() {
+        val density = 2f
+        val width = 300f * density
+        val slots = ConvergenceBinsView.slotsFor(count = 5, width = width, density = density)
+
+        assertEquals(ConvergenceBinsView.MAX_BIN_DP * density, slots.binWidth, 0.001f)
+        assertEquals(ConvergenceBinsView.CAPPED_GAP_DP * density, slots.gap, 0.001f)
+        val group = 5 * slots.binWidth + 4 * slots.gap
+        assertEquals("as much room left of the group as right", width - group, 2 * slots.start, 0.001f)
+    }
+
+    @Test
+    fun `capped bins close their gap rather than overflow`() {
+        val density = 1f
+        // 9 bins in 200 px: 19.6 px wide at the uncapped 3 px gap, but 9 × 18 + 8 × 8 = 226 px would overflow.
+        val slots = ConvergenceBinsView.slotsFor(count = 9, width = 200f, density = density)
+
+        assertEquals(18f, slots.binWidth, 0.001f)
+        assertTrue(slots.gap in 3f..8f)
+        assertEquals(200f, 2 * slots.start + 9 * slots.binWidth + 8 * slots.gap, 0.001f)
+        assertTrue(slots.start >= 0f)
+    }
+
+    @Test
+    fun `many bins fill the width with the narrow gap`() {
+        val density = 1f
+        val slots = ConvergenceBinsView.slotsFor(count = 100, width = 300f, density = density)
+
+        assertEquals(0f, slots.start, 0f)
+        assertEquals(1f, slots.gap, 0.001f)
+        assertEquals(300f, 100 * slots.binWidth + 99 * slots.gap, 0.001f)
     }
 }

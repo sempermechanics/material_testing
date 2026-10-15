@@ -50,16 +50,19 @@ class RunChrome(
     /**
      * A run has started: shows the overlay, keeps the screen on, and arms
      * Cancel with [onCancel]. A batch run passes no [title], [status] or
-     * [sweepPlan] and gets the overlay's own, with its convergence graph; a
-     * sweep passes all three and gets its lattice instead, since its solves
-     * are combinations, not frames. [cancelBody] is what Cancel's question
-     * says a cancel does: nothing of the run is kept either way, and a re-run
-     * of a saved analysis also says that analysis stays as it was.
+     * [sweepPlan] and gets the overlay's own, with its convergence graph and
+     * its [reference] name; a sweep passes all three and gets its lattice
+     * instead, since its solves are combinations, not frames. [cancelBody] is
+     * what Cancel's question says a cancel does: nothing of the run is kept
+     * either way, and a re-run of a saved analysis also says that analysis
+     * stays as it was.
      */
+    @Suppress("LongParameterList") // batch and sweep share it; each passes only its own, by name
     fun beginRun(
         title: String? = null,
         status: String? = null,
         sweepPlan: List<SweepStudy.Point> = emptyList(),
+        reference: String? = null,
         @StringRes cancelBody: Int = R.string.cancel_run_body,
         onCancel: () -> Unit,
     ) {
@@ -67,7 +70,7 @@ class RunChrome(
         if (title != null && status != null) {
             overlay.show(title, status, showConvergence = false, sweepPlan = sweepPlan)
         } else {
-            overlay.show()
+            overlay.show(reference = reference)
         }
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         begin(CancelPrompt(R.string.cancel_run_title, cancelBody, R.string.keep_running, onCancel))

@@ -47,14 +47,19 @@ class WizardRunLauncher(
         activity.lifecycleScope.launch {
             if (!AnalysisNavHelper.ensureCanStart(activity, viewModel, sweep = false)) return@launch
 
+            // Frozen here, on Main, so the sheet names the reference the run solves against.
+            val inputs = viewModel.snapshotRunInputs()
             val cancelBody = cancelRunBody(activity.applicationContext, viewModel, sweep = false)
-            chrome.beginRun(cancelBody = cancelBody) { viewModel.cancelRequested = true }
+            chrome.beginRun(reference = inputs.reference.name, cancelBody = cancelBody) {
+                viewModel.cancelRequested = true
+            }
             checkReady()
 
             // Survives Activity destroy; progress/outcome observed via StateFlow / SharedFlow.
             viewModel.launchBatchAnalysis(
                 activity.applicationContext,
                 spec,
+                inputs,
                 activity.cacheDir,
                 chrome.overlay.processingStartTime,
             )
@@ -84,7 +89,12 @@ class WizardRunLauncher(
             if (!AnalysisNavHelper.ensureCanStart(activity, viewModel, sweep = true)) return@launch
 
             val cancelBody = cancelRunBody(activity.applicationContext, viewModel, sweep = true)
-            chrome.beginRun(activity.getString(R.string.mode_sweep), sweep.planSummary(plan), plan, cancelBody) {
+            chrome.beginRun(
+                title = activity.getString(R.string.mode_sweep),
+                status = sweep.planSummary(plan),
+                sweepPlan = plan,
+                cancelBody = cancelBody,
+            ) {
                 viewModel.cancelRequested = true
             }
             checkReady()

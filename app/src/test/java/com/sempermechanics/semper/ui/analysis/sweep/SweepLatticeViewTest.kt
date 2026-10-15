@@ -210,6 +210,27 @@ class SweepLatticeViewTest {
         assertEquals(8, clicks.single().frameIndex)
     }
 
+    /**
+     * The run overlay's lattice labels only the ends of each range, in a
+     * gutter sized to them, so its one column sits within a few dp of the
+     * compact one's, on the same rows; its bigger nodes still hit where drawn.
+     */
+    @Test
+    fun `the run overlay's range-labelled lattice keeps its rows and hit targets`() {
+        view.compact = false
+        view.setNodes(listOf(node(subset = 99, vsg = 21, frame = 7), node(subset = 99, vsg = 61, frame = 8)))
+        layoutAndDraw(W_DP, H_DP)
+
+        tap(columnX(0, columns = 1), rowY(21))
+        waitOutGestureTimeouts()
+
+        assertEquals(7, clicks.single().frameIndex)
+
+        view.setNodes(nodes)
+        layoutAndDraw(W_DP, H_DP)
+        assertEquals("two columns draw their range labels without failing", View.VISIBLE, view.visibility)
+    }
+
     private companion object {
         const val W_DP = 320
         const val H_DP = 200

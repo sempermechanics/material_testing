@@ -51,7 +51,11 @@ class AnalysisVideoExtractController(
         onFinished: () -> Unit,
     ): Job {
         overlayController.processingStartTime = System.currentTimeMillis()
-        overlayController.show(title = "Extracting Frames", status = "Reading video…", showConvergence = false)
+        overlayController.show(
+            title = activity.getString(R.string.video_extracting_title),
+            status = activity.getString(R.string.video_reading),
+            showConvergence = false,
+        )
 
         return activity.lifecycleScope.launch(io) {
             try {

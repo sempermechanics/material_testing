@@ -274,18 +274,27 @@ status line.
 
 ### While it runs
 
-<img src="images/running.png" width="300" alt="Progress dialog">
+<img src="images/running.png" width="300" alt="Run progress sheet">
 
-The card's header reads *Frame 23 of 40* with the whole run's percentage at its
-end, then the time left (once a few seconds of progress give a steady rate).
-Under it, one bin per planned frame shows **convergence per frame**: a finished
-frame is a blue bar as tall as its convergence, red under the dashed line at
-50%; the frame being solved is a pale outlined bar rising with its progress;
-frames still to come are empty slots. Over 100 frames, neighbouring frames share
-a bin that shows the lowest of them, so a low frame is never hidden. Once every
-frame is solved the header reads *Completed 40 of 40 frames · saving* while the
-run writes the analysis. After one low frame an amber line warns that one more
-stops the run.
+A sheet docks at the bottom of the screen, over a light shade that keeps the
+wizard readable above it (it still takes every touch). Its header reads *Frame
+23 of 40* with the whole run's percentage at its end; under it, the reference
+you picked and the time left, *steel_00 · About 2 s left* (once a few seconds
+of progress give a steady rate). Under that, one bin per planned frame shows
+**convergence per frame** on a scale labelled 100 and 50: a finished frame is a
+blue bar as tall as its convergence, red under the dashed line at 50%; the frame
+being solved is a pale outlined bar rising with its progress; frames still to
+come are empty slots. A short run's bins stay narrow, grouped in the middle,
+and up to 12 frames each finished bar carries its convergence above it (red
+under 50) and the running one its progress. Over 100 frames, neighbouring frames
+share a bin that shows the lowest of them, so a low frame is never hidden. Once
+every frame is solved the header reads *Completed 40 of 40 frames · saving*
+while the run writes the analysis. After one low frame an amber line warns that
+one more stops the run.
+
+When every frame solves, the sheet holds for a moment with a green check, *40
+frames solved* and *7 s · lowest 94% converged*, then the results open. A run
+that stops early, fails or is cancelled goes on at once.
 **Cancel** asks first (*Cancel analysis?*), then stops the run
 where it is, within a moment — it does not wait out the frame being solved.
 Nothing from the run is kept: not the frames it solved, not a row on Home, not
@@ -294,14 +303,18 @@ an analysis you already have leaves that analysis exactly as it was. Back asks
 the same question. Cancelling a parameter sweep abandons the whole sweep, not
 just the combination in flight, and saves none of it.
 
-The same overlay covers importing frames and extracting video, but there it
-shows a progress bar and counts frames instead: the convergence bins are hidden,
-because nothing is being solved yet. A parameter sweep's header reads *Analysis
-7 of 9* with the percentage, then the time left, and its planned lattice takes
-the bins' place: every combination starts as a grey ring, fills when it solves,
-turns into a red ring if it is skipped, and the one being solved is circled. The
-status under it names that combination; at the end the header reads *Solved 9
-of 9 analyses · saving*. Cancelling an import asks for confirmation and leaves nothing behind.
+The same sheet covers importing frames (*Importing photos*) and extracting video
+(*Extracting frames*), but there it shows a progress bar and counts frames
+instead: the convergence bins are hidden, because nothing is being solved yet. A
+parameter sweep's header reads *Analysis 7 of 9* with the percentage, then the
+time left, and its planned lattice takes the bins' place, labelled only at the
+ends of its ranges (the smallest and largest VSG at the left, the smallest and
+largest subset under it): every combination starts as a grey ring, fills when it
+solves, turns into a red ring if it is skipped, and the one being solved is
+circled. Under it, *Subset 25 · window 41 px* names that combination, and once
+one has ended a second line says how it went, *Last: 96% converged · 30,968
+points*, or *Last: skipped* in red; at the end the header reads *Solved 9 of 9
+analyses · saving*. Cancelling an import asks for confirmation and leaves nothing behind.
 
 **A run stops itself if the images decorrelate.** Two consecutive frames below
 50% convergence end it — the frames after them would be no better. The
