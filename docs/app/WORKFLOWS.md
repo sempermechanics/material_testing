@@ -584,7 +584,7 @@ aiming at a small target.
 | # | Action | Expected |
 |---|---|---|
 | [ ] 7.1.1 | Open a sweep | Lattice with **subset across and VSG (px) up**: one window in points is a larger VSG at a larger subset's step, so the rows need not line up; the first-run tip explains filled vs hollow (no persistent legend row) |
-| [ ] 7.1.1a | Look for axis titles on the result lattice | There are none — it draws compact, so only tick numbers and a "px" unit on the last subset tick. Since the 2026-10 tip-card pass the first-run tip no longer names the axes either (it says only "Each dot is one combination…") |
+| [ ] 7.1.1a | Look for axis titles on the result lattice | There are none — it draws compact, so only tick numbers and a "px" unit on the last subset tick. The first-run tip names them: "subset size across, VSG up" |
 | [ ] 7.1.2 | Open a sweep that had failures | Skipped combinations are hollow rings with no fill — any surface behind them shows through |
 | [ ] 7.1.3 | Compare two different filled nodes | Same fill colour — node identity comes from position + the selection ring, not a colour key. The plot below only puts colour on the *focused* curve (§7.2.4) |
 | [ ] 7.1.4 | Read the summary line, above the lattice | "N combinations · S solved · K skipped · step subset÷D" |

@@ -704,7 +704,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="coach_analysis_advanced">Change parameters when you need finer control.</string>
     <string name="coach_sweep_lattice">Each dot in the planned lattice is one analysis.</string>
     <string name="coach_sweep_line_cut">Strain is read along this centre line of the ROI.</string>
-    <string name="coach_sweep_graph">Each dot is one combination. Tap a filled one to focus its curve; tap a hollow one for the reason.</string>
+    <string name="coach_sweep_graph">Each dot is one combination: subset size across, VSG up. Tap a filled one to focus its curve; tap a hollow one for the reason.</string>
     <string name="coach_sweep_scrub">Drag across the plot to read the focused curve at any point.</string>
     <string name="coach_sweep_ranges">Set the ranges to sweep. Each subset and strain window pair is one analysis.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
