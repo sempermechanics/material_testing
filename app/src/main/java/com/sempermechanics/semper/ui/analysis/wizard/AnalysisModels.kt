@@ -63,7 +63,8 @@ data class BatchAnalysisOutcome(
     /**
      * Frames that actually produced a field. Below the planned count when the
      * run stopped early — the frames before that point are kept, so this is
-     * what the session holds and what the user should be told.
+     * what the session holds and what the user should be told. 0 for a
+     * cancelled run, which keeps none.
      */
     val totalFrames: Int,
     val executionTimeMs: Int,

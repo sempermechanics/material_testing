@@ -131,9 +131,9 @@ class BatchRunController(
 
         val outcome = result.getOrThrow()
         when {
-            // Ahead of the cancel: a cancelled re-run saves its frames, and must
-            // say so when that save could not reach the index.
             outcome.indexUnavailable -> showNotSaved()
+            // A cancelled run kept nothing (a re-run's saved analysis is as it
+            // was), so there is nothing to show: the wizard just comes back.
             outcome.stop == RunStop.Cancelled -> Unit
             outcome.stop == RunStop.SessionLimit -> AnalysisNavHelper.openSessionLimit(activity)
             // Stopped early (low convergence included) with frames kept. Only a

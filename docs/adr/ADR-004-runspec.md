@@ -167,3 +167,14 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   `repointDeformedPathsOnMain`, the moved frame paths. The reference array is shared rather than copied: the
   wizard replaces its reference, never writes into it. `.dat` oracles
   unchanged.
+- *Later (2026-10-15):* a cancel keeps nothing (owner decision), for a batch
+  run and a sweep. The run writes its `.dat` files to the session's
+  `run_staging/` and only an end that is not a cancel moves them into the
+  session (`RunSession.commit`); a cancel deletes them, puts the frames the
+  loop moved back where it found them, deletes a new session's folder, and
+  restores the wizard's working session and `RunResult`
+  (`RunChannels.discardRun`). A cancelled re-run therefore leaves the saved
+  record, its files and its cloud state as they were, where it used to be
+  saved as a partial run. The JNI call stays in the one loop; only the
+  directory it writes to changed, so the `.dat` bytes (and oracles) are
+  unchanged.

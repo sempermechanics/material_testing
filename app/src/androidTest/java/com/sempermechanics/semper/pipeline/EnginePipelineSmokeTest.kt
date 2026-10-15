@@ -370,6 +370,8 @@ class EnginePipelineSmokeTest {
 
         try {
             val ticks = mutableListOf<BatchProgressUpdate>()
+            // Cleared as launchBatchAnalysis clears it; the loop no longer does.
+            vm.cancelRequested = false
             val run = BatchRun(spec, ctx.cacheDir, System.currentTimeMillis(), Job(), vm.snapshotRunInputs())
             // TD-173: what the wizard does once the run has its inputs never reaches it.
             vm.refBytes = null
@@ -412,6 +414,68 @@ class EnginePipelineSmokeTest {
             assertEquals(shifts.size, convergence.size)
             assertTrue("every solved frame has a convergence", convergence.none { it.isNaN() })
         } finally {
+            SessionStore.forget(ctx, sessionId)
+            SessionStore.dirFor(ctx, sessionId).deleteRecursively()
+            inputs.deleteRecursively()
+        }
+    }
+
+    /**
+     * Cancel keeps nothing (2026-10-15): a re-run of a saved analysis that is
+     * cancelled on its second frame, through the real loop, leaves every file
+     * of the saved one and its Home row exactly as they were.
+     */
+    @Test
+    fun cancelledRerunLeavesTheSavedAnalysisAsItWas() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val ctx = instrumentation.targetContext
+        val ref = makeReference()
+        val inputs = File(ctx.cacheDir, "batch-cancel-test").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val frames = listOf(1f to 0f, 2f to 1f, 3f to 2f).mapIndexed { i, (dx, dy) ->
+            val file = File(inputs, "def_$i.png")
+            file.writeBytes(warp(ref, Matrix().apply { setTranslate(dx, dy) }).toPngBytes())
+            DeformedFrame(file.absolutePath, file.name)
+        }
+        val sessionId = "batchcanceltest"
+        SessionStore.forget(ctx, sessionId)
+        val vm = AnalysisViewModel().apply {
+            workingLocalId = sessionId
+            refBytes = ref.toPngBytes()
+            realRefWidth = W
+            realRefHeight = H
+            refName = "ref.png"
+            deformedFrames = frames
+        }
+        val roi = Roi(0, 0, W, H)
+        val saved = RunSpec.of(DicParams(subset = SUBSET, step = STEP, strainWindow = 15), roi, null, false, null)
+        val rerun = RunSpec.of(DicParams(subset = SUBSET, step = STEP * 2, strainWindow = 15), roi, null, false, null)
+        fun hashes(dir: File) = dir.walkTopDown().filter { it.isFile }
+            .associate { it.relativeTo(dir).path to it.readBytes().contentHashCode() }
+
+        try {
+            vm.cancelRequested = false
+            val first = vm.runBatchAnalysisBody(ctx, BatchRun(saved, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())) {}
+            assertTrue("the first run saved", first.saved)
+            // The run moved its frames into the session; the wizard follows them on Main.
+            instrumentation.waitForIdleSync()
+            val dir = File(first.batchDirPath)
+            val files = hashes(dir)
+            val row = SessionStore.get(ctx, sessionId)
+
+            val run = BatchRun(rerun, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
+            val outcome = vm.runBatchAnalysisBody(ctx, run) { tick ->
+                if (tick.frameIndex == 1) vm.cancelRequested = true
+            }
+
+            assertEquals(RunStop.Cancelled, outcome.stop)
+            assertEquals(0, outcome.totalFrames)
+            assertEquals("the saved analysis's files", files, hashes(dir))
+            assertEquals("its Home row", row, SessionStore.get(ctx, sessionId))
+        } finally {
+            vm.cancelRequested = false
             SessionStore.forget(ctx, sessionId)
             SessionStore.dirFor(ctx, sessionId).deleteRecursively()
             inputs.deleteRecursively()

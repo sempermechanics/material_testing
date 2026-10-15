@@ -482,12 +482,13 @@ extraction show a determinate progress bar, their status line and time left inst
 | [ ] 5.4.2a | Watch the sheet while frames import or a video extracts | The bins are absent; the header is "Importing photos" or "Extracting frames" with its percentage, then time left, a determinate bar, and the count of frames under it ("Reading video…" before a video's first frame) |
 | [ ] 5.4.2b | Tap **Cancel** during an import | A confirm dialog ("Cancel import?", with **Keep importing** and **Cancel**); confirming leaves no half-imported frames behind |
 | [ ] 5.4.3 | Leave the device untouched during a long run | The screen does not sleep |
-| [ ] 5.4.4 | Press Back mid-run | Blocked, with a toast |
-| [ ] 5.4.5 | Tap **Cancel** → "Keep running" ("Cancel analysis?") | The run continues |
-| [ ] 5.4.6 | Tap **Cancel** → confirm | Stops within a moment — not at the end of the frame — and returns to step 2, silently |
+| [ ] 5.4.4 | Press Back mid-run | Asks first, as **Cancel** does ("Cancel analysis?"); **Keep running** carries on |
+| [ ] 5.4.5 | Tap **Cancel** → "Keep running" ("Cancel analysis?", "Nothing from this run is kept.") | The run continues |
+| [ ] 5.4.6 | Tap **Cancel** → confirm on a new analysis | Stops within a moment — not at the end of the frame — and returns to step 2, silently. Nothing from the run is kept: no new row on Home, no backup queued, and the analysis count is unchanged |
 | [ ] 5.4.6a | Cancel a long frame (big ROI, small step) | Same: no multi-second wait on the progress overlay after confirming |
 | [ ] 5.4.6b | Start a new run straight after cancelling one | It runs normally — the cancel does not carry over |
-| [ ] 5.4.6c | Cancel a sweep at combination 3 of 16 | The **whole sweep** stops — it does not go on to combination 4 |
+| [ ] 5.4.6c | Cancel a sweep at combination 3 of 16 | The **whole sweep** stops — it does not go on to combination 4 — and nothing is saved, not even the combinations it solved |
+| [ ] 5.4.6d | Finish a run, change a setting, **Compute** again, then cancel it on frame 2 | The question also says "Your saved analysis stays as it was."; after confirming, the Home row, its frames, thumbnail and backup state are exactly those of the first run |
 | [ ] 5.4.7 | Start a sweep | Header row "Analysis i of N" with the percentage; the planned lattice replaces the bins, all grey rings with the combination being solved circled, its labels horizontal in the app's font: the lowest and highest VSG at the left, the smallest and largest subset under the axis with "subset px" between, no legend line; the status under it reads "Subset S · window V px" |
 | [ ] 5.4.7b | Watch the line under the sweep's status | Hidden until a combination ends, then "Last: P% converged · N points" (N grouped, "30,968"), or "Last: skipped" in red |
 | [ ] 5.4.7a | Watch the sweep lattice | Each combination fills as it solves or becomes a red ring if skipped; percentage and time left advance per combination; at the end the header reads "Solved K of N analyses · saving" |

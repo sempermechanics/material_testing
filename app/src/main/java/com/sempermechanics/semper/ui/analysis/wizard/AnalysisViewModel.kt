@@ -190,6 +190,13 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
         _runResult.value = RunResult(batchDirPath = batchDirPath, spec = spec)
     }
 
+    /** [runResult]'s value, which a cancelled run puts back as it found it ([discardRun]). */
+    internal var lastRunResult: RunResult
+        get() = _runResult.value
+        set(value) {
+            _runResult.value = value
+        }
+
     internal fun recordRunSettings(settings: SessionRecordSettings) {
         _runResult.update { it.copy(settings = settings) }
     }

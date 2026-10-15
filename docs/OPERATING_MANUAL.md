@@ -295,10 +295,13 @@ one more stops the run.
 When every frame solves, the sheet holds for a moment with a green check, *40
 frames solved* and *7 s · lowest 94% converged*, then the results open. A run
 that stops early, fails or is cancelled goes on at once.
-**Cancel** stops the run
+**Cancel** asks first (*Cancel analysis?*), then stops the run
 where it is, within a moment — it does not wait out the frame being solved.
-Nothing is kept. Back is blocked. Cancelling a parameter sweep abandons the whole
-sweep, not just the combination in flight.
+Nothing from the run is kept: not the frames it solved, not a row on Home, not
+a backup, and it does not count towards your analyses. Cancelling a re-run of
+an analysis you already have leaves that analysis exactly as it was. Back asks
+the same question. Cancelling a parameter sweep abandons the whole sweep, not
+just the combination in flight, and saves none of it.
 
 The same sheet covers importing frames (*Importing photos*) and extracting video
 (*Extracting frames*), but there it shows a progress bar and counts frames

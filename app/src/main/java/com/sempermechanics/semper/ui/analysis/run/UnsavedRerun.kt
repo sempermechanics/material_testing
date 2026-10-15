@@ -24,7 +24,8 @@ internal data class UnsavedRerun(
 
 /**
  * What the Home row of a re-run that saved nothing should become. The run
- * deleted the previous frames before it started, so the row can no longer
+ * replaced the previous frames with its own when it ended (a cancelled one
+ * never gets here: it leaves them as they were), so the row can no longer
  * describe them as on this phone.
  *
  * - Nothing on disk and a cloud copy: unchanged. The row reads "Only in

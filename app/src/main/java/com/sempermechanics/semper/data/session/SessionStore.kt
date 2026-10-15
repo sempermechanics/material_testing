@@ -256,6 +256,23 @@ object SessionStore {
         removeRow(context, id)
     }
 
+    /**
+     * Deletes the directory of [id] when no row names it: the session a
+     * cancelled run started and never saved. A row for [id], or an index that
+     * cannot be read, keeps the directory, so this can never delete a saved
+     * analysis. The index is not written. Returns whether the directory is gone.
+     */
+    @WorkerThread
+    fun deleteUnsavedDir(context: Context, id: String): Boolean = synchronized(lock) {
+        val root = root(context)
+        val dir = File(root, id)
+        // Never the sessions root itself, or anything outside it.
+        if (id in setOf("", ".", "..") || dir.parentFile != root || dir.name != id) return@synchronized false
+        val rows = readRows(context) ?: return@synchronized false
+        if (rows.any { it.id == id }) return@synchronized false
+        dir.deleteRecursively()
+    }
+
     /** Drops row [id] and tells the quota how many remain; false when the index refused the write. */
     private fun removeRow(context: Context, id: String): Boolean {
         if (!mutateIndex(context) { it.filterNot { r -> r.id == id } }) return false
