@@ -16,6 +16,7 @@ import com.sempermechanics.semper.data.session.originalNameOr
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.report.EngineStats
+import com.sempermechanics.semper.ui.analysis.rerun.keepSweepRerun
 import com.sempermechanics.semper.ui.analysis.run.AfterSave
 import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
@@ -61,7 +62,7 @@ private fun AnalysisViewModel.runSweepBody(
     if (inputs.reference.bytes == null) error("Reference missing")
 
     // Admitted here, the sweep saves its session even if the cap fills meanwhile.
-    val admission = admitRun(appContext, plan.size, sweep = true)
+    val admission = admitRun(appContext, plan.size)
     if (admission is RunAdmission.Blocked) {
         sweepEvent(appContext, SemperAnalytics.ANALYSIS_FAILED, "reason" to "session_limit")
         return admission.outcome
@@ -89,7 +90,7 @@ private fun AnalysisViewModel.solveSweep(
     val session = openRunSession(appContext, sweep = true)
     // A clean snapshot, as the batch path takes: a sweep used to inherit the
     // previous run's stop code, reference and planned-frame count.
-    resetRunResult(session.dir.absolutePath, spec)
+    resetRunResult(session.dir.absolutePath, spec, session.id)
     // A run that throws must not report the previous sweep's skipped nodes.
     sweepSkippedNodes = emptyList()
 
@@ -176,6 +177,8 @@ internal fun AnalysisViewModel.finishSolvedSweep(
     admitted: Boolean = false,
 ): BatchAnalysisOutcome {
     val saved = persistSweepSession(appContext, run, cloudEnabled, admitted)
+    // That analysis is finished: the next run in this wizard is a new one.
+    if (saved.recordSaved) closeSavedSession()
     val outcome = BatchAnalysisOutcome(
         engineErrorCode = saved.stop.wireCode,
         firstFrameValidPoints = run.result.runs.first().pointsSolved,
@@ -241,14 +244,17 @@ private fun AnalysisViewModel.persistSweepSession(
 
     val frameIndex = sweep.frameIndex
     val rawName = sessions.persistRawDeformed(run.batchDir, frameIndex, frames.paths, frames.originalNames)
-    // Followed only when it moved: one copied out of a single run's session
-    // stays where it is, that run's input for its next re-run.
+    // Followed only when it moved: one copied out of another session stays
+    // where it is, that session's own image.
     if (rawName.isNotBlank() && !File(frames.paths[frameIndex]).exists()) {
         val moved = File(run.batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).resolve(rawName)
         repointDeformedPathsOnMain(
             frames.paths.toMutableList().also { it[frameIndex] = moved.absolutePath },
         )
     }
+
+    // What Home's Re-run starts from: the sweep's settings and its one frame.
+    keepSweepRerun(run.batchDir, run.inputs, run.spec, rawName)
 
     val first = result.runs.first().point
     val defDisplay = rawName.ifBlank {
@@ -321,22 +327,15 @@ private fun sweepSummary(
     val labelByPoint = sweep.plan.zip(sweep.labels).toMap()
     val solvedLabels = result.runs.map { labelByPoint[it.point].orEmpty() }
     val totalPlanned = sweep.plan.size
-    val existing = SessionStore.get(appContext, localSessionId)
-    // Regenerate the sweep auto-name each re-run unless the user renamed the
-    // session. A sweep after a single run is a new session (resolveLocalSessionId),
-    // so it is named as a sweep from the start and the single run keeps its
-    // name. No date: the Home row shows it; a clash gets " (2)".
-    val name = if (existing?.renamedByUser == true) {
-        existing.name
-    } else {
-        SessionNaming.uniqueName(
-            appContext.getString(
-                R.string.session_sweep_name_fmt,
-                SessionNaming.withoutMediaExtension(defDisplay).ifBlank { defDisplay },
-            ),
-            SessionStore.namesOtherThan(appContext, localSessionId),
-        )
-    }
+    // Named as a sweep from the start: its session is always a new one
+    // (openRunSession). No date: the Home row shows it; a clash gets " (2)".
+    val name = SessionNaming.uniqueName(
+        appContext.getString(
+            R.string.session_sweep_name_fmt,
+            SessionNaming.withoutMediaExtension(defDisplay).ifBlank { defDisplay },
+        ),
+        SessionStore.namesOtherThan(appContext, localSessionId),
+    )
     val headline = appContext.resources.getQuantityString(
         R.plurals.session_sweep_headline_fmt,
         result.runs.size,

@@ -6,7 +6,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkManager
 import androidx.work.impl.WorkManagerImpl
 import androidx.work.testing.WorkManagerTestInitHelper
-import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.WorkTags
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.AppConfigDto
@@ -30,15 +29,16 @@ import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
 import com.sempermechanics.semper.ui.analysis.wizard.RunSession
 import com.sempermechanics.semper.ui.analysis.wizard.SweepSession
 import com.sempermechanics.semper.ui.analysis.wizard.admitRun
+import com.sempermechanics.semper.ui.analysis.wizard.closeSavedSession
 import com.sempermechanics.semper.ui.analysis.wizard.endSweep
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPaths
 import com.sempermechanics.semper.util.Digests
-import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -50,11 +50,12 @@ import org.robolectric.Shadows.shadowOf
 import java.io.File
 
 /**
- * Cancel keeps nothing of a run (owner decision, 2026-10-15). A new run that
- * is cancelled leaves no row, no folder and no upload, and costs no quota; a
- * cancelled re-run leaves the saved analysis byte for byte as it was; a
- * cancelled sweep saves nothing. A stop that is not a cancel still keeps its
- * frames. The JVM has no engine, so the batch loop's own steps are driven
+ * Cancel keeps nothing of a run, and a saved analysis is never written over
+ * (owner decisions, 2026-10-15). A new run that is cancelled leaves no row,
+ * no folder and no upload, and costs no quota; a run after a saved one is a
+ * new analysis, which leaves the saved one byte for byte as it was whether it
+ * is cancelled or saves; a cancelled sweep saves nothing. A stop that is not
+ * a cancel still keeps its frames. The JVM has no engine, so the batch loop's own steps are driven
  * here as it takes them: [openRunSession] at its start, [keepDeformedFrame]
  * and a staged `.dat` per frame it reaches, then [discardCancelledBatch] or
  * [RunSession.commit] at its end (the instrumented `EnginePipelineSmokeTest`
@@ -155,6 +156,8 @@ class CancelDiscardsRunTest {
         )
         assertTrue(SessionStore.upsert(ctx, row, allowOverLimit = true))
         vm.lastRefPath = layout.referencePng.absolutePath
+        // As the run body does once its row is saved.
+        vm.closeSavedSession()
         return session
     }
 
@@ -186,11 +189,11 @@ class CancelDiscardsRunTest {
         assertEquals(launched, vm.defFilePaths)
         assertNull("the next run is a new session", vm.workingLocalId)
         assertNull("no result to open", vm.runResult.value.batchDirPath)
-        assertEquals("the one analysis allowed is still free", RunAdmission.Admitted, vm.admitRun(ctx, 3, false))
+        assertEquals("the one analysis allowed is still free", RunAdmission.Admitted, vm.admitRun(ctx, 3))
     }
 
     @Test
-    fun `a cancelled re-run leaves the saved analysis byte for byte as it was`() {
+    fun `a cancelled run after a saved one leaves the saved analysis byte for byte as it was`() {
         val frames = importFrames(3)
         // Saved partial: frame 2 was never reached, so it is still in the import.
         val saved = savedRun(solved = 2)
@@ -200,62 +203,72 @@ class CancelDiscardsRunTest {
         val launched = vm.defFilePaths
         val thumbTime = SessionPaths.resultThumb(saved.dir).lastModified()
 
-        val rerun = vm.openRunSession(ctx, sweep = false)
-        assertEquals(saved.id, rerun.id)
-        assertFalse(rerun.fresh)
-        vm.resetRunResult(rerun.dir.absolutePath, spec)
-        val resolved = solveUpTo(rerun, launched, reached = 3, tag = "rerun")
-        assertEquals("staged, not written over the saved frames", files, hashes(saved.dir).filterKeys { it in files })
+        val next = vm.openRunSession(ctx, sweep = false)
+        assertNotEquals("a new analysis, never the saved one", saved.id, next.id)
+        assertTrue(next.fresh)
+        vm.resetRunResult(next.dir.absolutePath, spec, next.id)
+        val resolved = solveUpTo(next, launched, reached = 3, tag = "next")
+        assertEquals("the saved frames are copied, not moved", files, hashes(saved.dir))
 
-        vm.discardCancelledBatch(ctx, rerun, launched, resolved)
+        vm.discardCancelledBatch(ctx, next, launched, resolved)
         idle()
 
         assertEquals("every file of the saved analysis", files, hashes(saved.dir))
         assertEquals("its row", row, SessionStore.get(ctx, saved.id))
         assertEquals(1, SessionStore.list(ctx).size)
+        assertFalse("no folder for the cancelled one", next.dir.exists())
         assertEquals("no upload", 0, uploadsQueuedFor(saved.id))
         assertEquals("its thumbnail is not made stale", thumbTime, SessionPaths.resultThumb(saved.dir).lastModified())
-        assertTrue("the frame the re-run moved in is back in the import", frames[2].isFile)
+        assertTrue("the frame the run moved in is back in the import", frames[2].isFile)
         assertEquals(launched, vm.defFilePaths)
-        assertEquals(saved.id, vm.workingLocalId)
+        assertNull(vm.workingLocalId)
         assertEquals("the wizard's last result", result, vm.runResult.value)
     }
 
     @Test
-    fun `a stop that is not a cancel replaces the saved frames with the ones it solved`() {
+    fun `computing again after a saving partial stop saves a new row and leaves the first as it was`() {
         importFrames(3)
-        val saved = savedRun(solved = 3)
-        val rerun = vm.openRunSession(ctx, sweep = false)
-        // Low convergence on the second frame: the loop stops with two frames written.
-        solveUpTo(rerun, vm.defFilePaths, reached = 2, tag = "partial")
+        val saved = savedRun(solved = 2)
+        val files = hashes(saved.dir)
+        val row = SessionStore.get(ctx, saved.id)
 
-        rerun.commit()
-        val record = checkNotNull(SessionStore.get(ctx, saved.id))
-            .copy(frameCount = 2, stopCode = RunStop.LowConvergence.wireCode)
-        val after = afterSave(
-            RunStop.LowConvergence,
-            saveRunRecord(ctx, record, cloudEnabled = false, admitted = false),
+        val next = vm.openRunSession(ctx, sweep = false)
+        val resolved = solveUpTo(next, vm.defFilePaths, reached = 3, tag = "next")
+        next.commit()
+        val record = sessionRecord(
+            id = next.id,
+            name = "next",
+            frameCount = 3,
+            sessionDir = next.dir.absolutePath,
+            defNames = resolved.map { File(it).name },
         )
+        val after = afterSave(RunStop.Finished, saveRunRecord(ctx, record, cloudEnabled = false, admitted = true))
+        vm.closeSavedSession()
 
-        assertEquals("partial frame 0", SessionPaths.frameDat(saved.dir, 0).readText())
-        assertEquals("partial frame 1", SessionPaths.frameDat(saved.dir, 1).readText())
-        assertFalse("the old run's third frame", SessionPaths.frameDat(saved.dir, 2).exists())
-        assertFalse("the old run's field ranges", SessionLayout(saved.dir).fieldRanges.exists())
-        assertFalse(rerun.staging.exists())
-        assertEquals(RunStop.LowConvergence, after.stop)
         assertTrue(after.recordSaved)
-        assertEquals(2, SessionStore.get(ctx, saved.id)?.frameCount)
+        assertNotEquals(saved.id, next.id)
+        assertEquals("two analyses", setOf(saved.id, next.id), SessionStore.list(ctx).map { it.id }.toSet())
+        assertEquals("the first, byte for byte", files, hashes(saved.dir))
+        assertEquals("its row", row, SessionStore.get(ctx, saved.id))
+        assertEquals("next frame 2", SessionPaths.frameDat(next.dir, 2).readText())
+        assertFalse(next.staging.exists())
+        assertNull("the next run is a new one again", vm.workingLocalId)
     }
 
     @Test
-    fun `a run leaves the previous results alone until it commits`() {
+    fun `a run in a folder that saved nothing leaves its results alone until it commits`() {
         importFrames(3)
-        val saved = savedRun(solved = 3)
-        val rerun = vm.openRunSession(ctx, sweep = false)
+        val first = vm.openRunSession(ctx, sweep = false)
+        SessionPaths.frameDat(first.staging, 0).writeText("unsaved frame 0")
+        first.commit()
+        SessionLayout(first.dir).fieldRanges.writeText("unsaved ranges")
 
-        assertEquals("saved frame 0", SessionPaths.frameDat(saved.dir, 0).readText())
-        assertTrue(SessionLayout(saved.dir).fieldRanges.exists())
-        assertTrue("an empty staging", rerun.staging.isDirectory && rerun.staging.list().isNullOrEmpty())
+        val next = vm.openRunSession(ctx, sweep = false)
+
+        assertEquals("no row names it", first.id, next.id)
+        assertEquals("unsaved frame 0", SessionPaths.frameDat(first.dir, 0).readText())
+        assertTrue(SessionLayout(first.dir).fieldRanges.exists())
+        assertTrue("an empty staging", next.staging.isDirectory && next.staging.list().isNullOrEmpty())
     }
 
     /** A two-combination sweep against frame 0 that the runner left in [session] with [code]. */
@@ -298,21 +311,22 @@ class CancelDiscardsRunTest {
     }
 
     @Test
-    fun `a cancelled sweep re-run leaves the saved sweep as it was`() {
+    fun `a cancelled sweep after a saved one leaves the saved sweep as it was`() {
         importFrames(1)
         val first = vm.openRunSession(ctx, sweep = true)
         val saved = vm.endSweep(ctx, first, sweepRun(first, code = 0, tag = "saved"), true)
         idle()
         assertTrue(saved.saved)
+        assertNull("a saved sweep closes its session", vm.workingLocalId)
         assertTrue("committed into the session", SessionPaths.frameDat(first.dir, 1).isFile)
         val files = hashes(first.dir)
         val row = SessionStore.get(ctx, first.id)
         val plan = vm.sweepPlan
         val uploads = uploadsQueuedFor(first.id)
 
-        val rerun = vm.openRunSession(ctx, sweep = true)
-        assertEquals(first.id, rerun.id)
-        val outcome = vm.endSweep(ctx, rerun, sweepRun(rerun, RunStop.Cancelled.wireCode, "rerun"), false)
+        val next = vm.openRunSession(ctx, sweep = true)
+        assertNotEquals(first.id, next.id)
+        val outcome = vm.endSweep(ctx, next, sweepRun(next, RunStop.Cancelled.wireCode, "next"), true)
         idle()
 
         assertEquals(RunStop.Cancelled, outcome.stop)
@@ -320,7 +334,8 @@ class CancelDiscardsRunTest {
         assertEquals(row, SessionStore.get(ctx, first.id))
         assertEquals(uploads, uploadsQueuedFor(first.id))
         assertEquals(plan, vm.sweepPlan)
-        assertEquals(first.id, vm.workingLocalId)
+        assertFalse(next.dir.exists())
+        assertNull(vm.workingLocalId)
     }
 
     @Test
@@ -368,18 +383,6 @@ class CancelDiscardsRunTest {
         assertTrue(session.dir.isDirectory)
         assertEquals(listOf(moved.absolutePath), vm.defFilePaths)
         assertTrue(SessionStore.list(ctx).isEmpty())
-    }
-
-    @Test
-    fun `Cancel names the saved analysis only for a re-run of one`() = runBlocking {
-        assertEquals("a new run", R.string.cancel_run_body, cancelRunBody(ctx, vm, sweep = false))
-        vm.workingLocalId = "working"
-        vm.workingIsSweep = false
-        assertEquals("a working session with no row", R.string.cancel_run_body, cancelRunBody(ctx, vm, false))
-        val dir = SessionStore.dirFor(ctx, "working").absolutePath
-        assertTrue(SessionStore.upsert(ctx, sessionRecord(id = "working", sessionDir = dir), allowOverLimit = true))
-        assertEquals("a re-run of a saved one", R.string.cancel_rerun_body, cancelRunBody(ctx, vm, sweep = false))
-        assertEquals("a sweep after it is a new session", R.string.cancel_run_body, cancelRunBody(ctx, vm, true))
     }
 
     @Test

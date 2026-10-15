@@ -161,7 +161,7 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.4d | Look above the rows, with analyses from today, yesterday and earlier | Small grey day headers: "Today", "Yesterday", then a short date such as "Oct 7", with the year for one from another year ("Dec 31, 2025"), in the phone's language and timezone. A header is not a row: it cannot be tapped or selected, and select-all counts only analyses |
 | [ ] 3.4e | Select a row (long-press) | Its card turns light blue with a blue outline and a tick replaces the thumbnail |
 | [ ] 3.4f | Scroll to the end of a long list | Cards are about 68dp tall (12dp around a 44dp thumbnail); the last card scrolls clear above the **+** button (the list's bottom padding follows the button's spot, nine tenths down), and earlier cards pass under it |
-| [ ] 3.4a | Look at the thumbnail of a row whose frames are on the phone | The last frame's U-displacement heatmap, cropped to the field. The reference shows until it is drawn; a cloud-only row keeps the reference. Re-run the analysis and the thumbnail is drawn again from the new frames |
+| [ ] 3.4a | Look at the thumbnail of a row whose frames are on the phone | The last frame's U-displacement heatmap, cropped to the field. The reference shows until it is drawn; a cloud-only row keeps the reference. A Re-run is a new row with its own thumbnail; the row it came from keeps its own |
 | [ ] 3.4b | Make two analyses from the same reference image | The first is named after the image without its extension ("steel_00"; a reference `tensile.v2` keeps the whole name), the second "steel_00 (2)" — no date in the name. Rows named before this change keep their names, except as 3.4i puts right |
 | [ ] 3.4i | Open Home on a phone an earlier version left with two rows of one name, or a restored row named "steel_00.png" | Every row reads differently: the oldest keeps the plain name, the others take "(2)", "(3)"; the "steel_00.png" row reads "steel_00" (or, from its backup's metadata, e.g. "steel_24 sweep"). Its id, files and backup are untouched |
 | [ ] 3.4g | Look at the row of an analysis made from a video | "Video · 40 frames, 0:00–0:12 · 91.2%": the first and last frame's times in the clip, then the convergence, amber under 85% as on any row. TalkBack reads "… 91.2% converged". The same analysis restored from the cloud reads like a photo row ("40 frames · 91.2%"): the clip's times are not backed up |
@@ -185,9 +185,20 @@ The session list and the only entry point to a new analysis.
 | [ ] 3.8b | Let a background backup fail terminally while on Home | A message pill surfaces the reason once (quota-full is excluded — it has its own screen) |
 | [ ] 3.8c | Testers only: sign in to a debug Material Testing on the same phone (same debug key, so the same device id, TD-209), then back up or restore in Semper | It works first time. The first signed call is refused `bad_signature`; Semper registers its key again and sends it once more (logcat: "registered it again"). No prompt, and the licence stays as it was |
 | [ ] 3.9 | Tap a "Not backed up" cloud icon with cloud backup switched off | Settings opens |
-| [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, delete, close |
+| [ ] 3.10 | Long-press a row | Selection bar with count, select-all, rename, re-run (circular arrow), delete, close |
 | [ ] 3.10a | Select several **Only in cloud** rows | A **Restore** (cloud-download) button joins the bar; tapping it queues one restore per row, shows "Restoring 3 analyses…" once, and each row shows its own progress. Add a row that is on the phone and the button goes away. Demo accounts never see it |
-| [ ] 3.11 | Select two rows | Rename disappears; delete still offered |
+| [ ] 3.11 | Select two rows | Rename and Re-run disappear; delete still offered |
+| [ ] 3.11a | Select one row whose frames are on the phone, saved by this version, and tap **Re-run** (TalkBack: "Re-run as a new analysis"; long-press shows "Re-run") | The selection ends and the wizard opens on **Parameters** after a short "Copying the analysis's photos…": the same reference, the same frames in the same order with their names, the same ROI and mask, and every setting as run (subset, step, strain window, overlap, interpolation). **Compute** saves a **new** row ("steel_00 (2)"), counted towards the quota; the first row, its frames, thumbnail and backup are unchanged (owner decision, 2026-10-15) |
+| [ ] 3.11b | Re-run a parameter sweep | The wizard opens on the sweep's settings page in **Parameter sweep** mode: the same subset and window ranges, sample counts, step depth, line-cut axis and planned lattice, with the one frame the sweep solved against |
+| [ ] 3.11c | Re-run an analysis made from a video | Its frames keep their times and the clip's name: the new row reads "Video · 40 frames, 0:00–0:12" |
+| [ ] 3.11d | Re-run, then sort the frames by name or date on step 1 | Only the wizard's copies are renamed; the first analysis still opens, exports and backs up with all its images (TD-211) |
+| [ ] 3.11e | Re-run an **Only in cloud** row | "Can't re-run this analysis" / "Its photos aren't on this phone. Restore it first."; nothing opens and the selection stays |
+| [ ] 3.11f | Re-run a row freed up in Storage | "Can't re-run this analysis" / "This phone doesn't have its original photos."; nothing opens |
+| [ ] 3.11h | Re-run a row restored from the cloud, or saved before Re-run kept its reference | "Pick its reference photo" / "This analysis was saved before Re-run kept its reference. Choose the same reference photo; its frames and settings come from the analysis." with **Choose photo** / **Cancel**. Cancel: nothing opens. Choose photo: the reference picker (Photos, with Files for DNG) |
+| [ ] 3.11i | In 3.11h, pick a photo of another size | "This photo is 3000 × 4000; the analysis used 4000 × 3000." with **Choose another photo** / **Cancel**; the wizard does not open |
+| [ ] 3.11j | In 3.11h, pick the same reference | "Checking the photo…" (Cancel stops it), then the wizard opens on **Parameters** (or the sweep page) with that reference, copies of the saved frames in run order with their names (and a video's times, on a row saved on this phone), the region and every setting. A row whose region was drawn shows once "The mask wasn't saved; the region is a rectangle." and the ROI is that rectangle; a whole-image row shows nothing. **Compute** saves a new row; the first is unchanged |
+| [ ] 3.11k | Rotate the phone while the picker of 3.11h is up, then pick | The check still runs for the same analysis |
+| [ ] 3.11g | Re-run at the quota cap, or on an institution licence with no free seat | The session limit (or seat) screen, as for **+**; the wizard does not open |
 | [ ] 3.12 | Rename a single selection | Text dialog; the new name persists after leaving and returning |
 | [ ] 3.12b | Rename a row to another row's name | It is saved with the next free "(2)", "(3)", and a toast reads "Saved as steel_00 (2)" |
 | [ ] 3.12a | Rename a backed-up analysis, then restore it on another phone (or after a reinstall) | It restores under the new name: the rename re-sends the backup's metadata.json (ADR-013) |
@@ -476,7 +487,7 @@ extraction show a determinate progress bar, their status line and time left inst
 |---|---|---|
 | [ ] 5.4.1 | Start a run | A sheet docked at the bottom, full width, rounded on top only, with the wizard visible through a light scrim; Cancel a red text button at its end, clear of the gesture bar. Header row: "Frame N of M" with the percentage at its end (one decimal); under it the reference's name without its extension, then "Estimating time left…" and later "About N s left" ("steel_00 · About 2 s left"); no title, ring, pace, elapsed or "Keep Semper open" line |
 | [ ] 5.4.2 | Watch the bins during a solve | One bin per planned frame on an axis labelled 100 and 50: finished frames blue at their convergence height (red under the dashed 50% line), the frame being solved a pale outlined bin rising with its own progress, the rest empty slots; "Convergence per frame" under them. Up to 12 frames, each finished bin carries its whole-number convergence above it (red under 50) and the running bin its progress in blue; with few frames the bins stay narrow and centred. After the last frame the header reads "Completed M of M frames · saving" |
-| [ ] 5.4.2e | Let a run solve every frame | For a moment the sheet shows a green check, "M frames solved" and "S s · lowest P% converged", then the viewer opens. A run that stops early, fails or is cancelled shows no such moment |
+| [ ] 5.4.2e | Let a run solve every frame | For a moment the sheet shows a green check, "M frames solved" and "S s · lowest P% converged", then the viewer opens and the wizard closes: **Back** from the viewer lands on Home. A run that stops early, fails or is cancelled shows no such moment |
 | [ ] 5.4.2d | Run more than 100 frames | Neighbouring frames share a bin that shows the lowest of them; a low frame still shows red |
 | [ ] 5.4.2c | Run a pair that decorrelates (blurred or swapped frames) | After the first frame under 50% an amber line names it and warns one more stops the run; the second stops it as before |
 | [ ] 5.4.2a | Watch the sheet while frames import or a video extracts | The bins are absent; the header is "Importing photos" or "Extracting frames" with its percentage, then time left, a determinate bar, and the count of frames under it ("Reading video…" before a video's first frame) |
@@ -488,7 +499,7 @@ extraction show a determinate progress bar, their status line and time left inst
 | [ ] 5.4.6a | Cancel a long frame (big ROI, small step) | Same: no multi-second wait on the progress overlay after confirming |
 | [ ] 5.4.6b | Start a new run straight after cancelling one | It runs normally — the cancel does not carry over |
 | [ ] 5.4.6c | Cancel a sweep at combination 3 of 16 | The **whole sweep** stops — it does not go on to combination 4 — and nothing is saved, not even the combinations it solved |
-| [ ] 5.4.6d | Finish a run, change a setting, **Compute** again, then cancel it on frame 2 | The question also says "Your saved analysis stays as it was."; after confirming, the Home row, its frames, thumbnail and backup state are exactly those of the first run |
+| [ ] 5.4.6d | Re-run a saved analysis from Home (3.11a), change a setting, **Compute**, then cancel it on frame 2 | The question reads only "Nothing from this run is kept."; after confirming there is no new row, and the first analysis's row, frames, thumbnail and backup state are exactly as they were |
 | [ ] 5.4.7 | Start a sweep | Header row "Analysis i of N" with the percentage; the planned lattice replaces the bins, all grey rings with the combination being solved circled, its labels horizontal in the app's font: the lowest and highest VSG at the left, the smallest and largest subset under the axis with "subset px" between, no legend line; the status under it reads "Subset S · window V px" |
 | [ ] 5.4.7b | Watch the line under the sweep's status | Hidden until a combination ends, then "Last: P% converged · N points" (N grouped, "30,968"), or "Last: skipped" in red |
 | [ ] 5.4.7a | Watch the sweep lattice | Each combination fills as it solves or becomes a red ring if skipped; percentage and time left advance per combination; at the end the header reads "Solved K of N analyses · saving" |
@@ -500,7 +511,7 @@ extraction show a determinate progress bar, their status line and time left inst
 |---|---|---|
 | [ ] 5.5.1 | Run on a featureless image pair | Engine failure dialog naming the feature-detection cause, **and the frame and image it failed on**, with a **Why?** that opens the features FAQ behind the leave-the-app confirm |
 | [ ] 5.5.1a | Run a batch where a later frame decorrelates | "Stopped at frame N" — not "Analysis failed" — then "22 of 40 frames kept." and the reason in one sentence; **Why?** adds the frame's image and the decorrelation explanation and leaves the dialog up |
-| [ ] 5.5.1c | Tap **View results** | The kept frames open in the viewer — the run does not leave you back on the settings page |
+| [ ] 5.5.1c | Tap **View results** | The kept frames open in the viewer — the run does not leave you back on the settings page. **Back** from the viewer lands on Home |
 | [ ] 5.5.1d | Press Back on that dialog | Nothing dismisses it; the only way on is through to the results |
 | [ ] 5.5.1e | Return to Home afterwards | The short analysis is listed with the frames it kept — not a phantom row from a run reported as failed |
 | [ ] 5.5.1n | First run of a batch whose frame 1 keeps no points, then later frames solve and one fails or decorrelates | The failure dialog explaining frame 1 (strain window, nothing correlated, or unreadable) — **not** "Stopped at frame N … frames kept": a run is saved only when frame 1 solves, and no Home row appears |
@@ -514,7 +525,7 @@ extraction show a determinate progress bar, their status line and time left inst
 | [ ] 5.5.1m | Pick a video the app cannot read | Snackbar with **Why?** → video-read FAQ |
 | [ ] 5.5.1b | Sweep a decorrelated pair | Stops after two combinations under 50% rather than sweeping the rest |
 | [ ] 5.5.2 | Run with an unusable ROI | Engine failure dialog naming the ROI cause |
-| [ ] 5.5.3 | Finish a single-setting run | Result viewer opens on frame 1 |
+| [ ] 5.5.3 | Finish a single-setting run | Result viewer opens on frame 1. **Back** goes to Home, not into the wizard, and **+** then starts an empty wizard (no reference, frames or settings carried over) |
 | [ ] 5.5.4 | Finish a sweep with some combinations failing | "N of M skipped" toast, then the Lattice |
 | [ ] 5.5.4a | Tap a hollow node | A dialog titled with that combination (S · St · W · VSG) and a one-line reason — decorrelated, subset too large, VSG failure — plus **Why?** to the matching engine FAQ |
 | [ ] 5.5.4f | Reopen that sweep from Home, tap a hollow node | The same specific reason, not the generic "was skipped" — codes are stored on the record |
@@ -523,12 +534,12 @@ extraction show a determinate progress bar, their status line and time left inst
 | [ ] 5.5.4d | Open the lattice for the first time | Coach marks point out the graph, then the strain plot's drag readout |
 | [ ] 5.5.4e | Drag across the strain plot | Every curve's value at that position, each in its own curve's colour |
 | [ ] 5.5.4b | Run a sweep where **every** combination fails | The Lattice opens — not the parameter screen — all nodes hollow, summary says all failed, tapping the summary opens the VSG FAQ confirm, and **View** and **Save graph** are both disabled |
-| [ ] 5.5.5 | Finish a sweep cleanly | Lattice opens with every node filled |
+| [ ] 5.5.5 | Finish a sweep cleanly | Lattice opens with every node filled; **Back** from the lattice goes to Home |
 | [ ] 5.5.6 | Start a new run at the quota | Session limit screen, before any solving. A run already under way when the quota fills still saves (§9, 9.7) |
-| [ ] 5.5.7 | Re-run with the same inputs after changing a parameter | The same Home row is updated, not duplicated. A sweep re-run updates the sweep's row the same way |
-| [ ] 5.5.7a | Run a single analysis, switch to **Parameter sweep** and run it (or the other way round) | A second Home row: changing the run kind is like new inputs, and counts towards the quota. The earlier row keeps its frames, name and results, and opens as before. Switch back and run again, and that is a new row too |
-| [ ] 5.5.8 | Change the inputs and run again | A new Home row is created |
-| [ ] 5.5.8a | Pick the reference again (even the same image) and run, with the quota full | The session limit screen: a new reference is new inputs, so the run would make a new Home row |
+| [ ] 5.5.7 | Try other settings on a finished analysis | There is no way back into its wizard: its results' Back goes Home. **Re-run** it from Home (3.11a); the run saves a new row and never changes the first, for a sweep too (owner decision, 2026-10-15) |
+| [ ] 5.5.7a | Fail a run (an engine failure dialog), change a setting and **Compute** again | The wizard stays after a failure, and the second run is checked and saved like any new analysis; nothing of the failed run is listed |
+| [ ] 5.5.8 | Re-run an analysis twice from Home | Two new rows ("(2)", "(3)"); the first stays as it was |
+| [ ] 5.5.8a | Re-run with the quota full, or Compute in a wizard whose run would fill it | The session limit screen: every run makes a new Home row, so every run is checked |
 
 ---
 
@@ -804,7 +815,7 @@ and the lattice's **Save graph** (§7.3.4, straight to the system chooser).
 | # | Action | Expected |
 |---|---|---|
 | [ ] 8.6.1 | Tap the home icon in the top chrome | Home, with the back stack cleared |
-| [ ] 8.6.2 | Press Back on a single-setting result | Wherever you came from |
+| [ ] 8.6.2 | Press Back (or the top-left arrow, TalkBack "Back") on a single-setting result | Home, whether it was opened from Home or when its run finished; never the wizard, and never "back to settings" |
 | [ ] 8.6.3 | Press Back on a sweep combination | The Lattice |
 | [ ] 8.6.4 | Leave a single-setting result and look at its Home row | The headline is unchanged by viewing — still the first frame's convergence (§3.4), whatever frame or field was on screen |
 | [ ] 8.6.5 | Leave a sweep and look at its Home row | The row still reads "K of N solved"; nothing in the viewer rewrites it |
@@ -856,9 +867,11 @@ row (`SessionStore.save`). In order:
 Only **starting** a new analysis is blocked. A batch or sweep the run's start
 check admitted as a new row (`RunAdmission.Admitted`) saves it even if the cap
 fills while it solves: the save passes `allowOverLimit`, as a cloud restore does.
-A re-run over an existing row is not checked at its start and updates that row;
-if the row was deleted meanwhile, its save is a new row with no admission, the
-rule applies, and a refusal ends the run as `RunStop.SessionLimit` (`afterSave`).
+Every run is checked at its start (`AnalysisNavHelper.ensureCanStart`, then
+`admitRun` on the native thread): a saved analysis is never written over, so
+whatever a run saves is a new row (owner decision, 2026-10-15). A save no start
+check admitted would meet the rule and end as `RunStop.SessionLimit`
+(`afterSave`); no run path makes one today.
 The backend counts account-wide (every app and phone) and refuses only at
 `POST /v1/sessions`, the upload.
 

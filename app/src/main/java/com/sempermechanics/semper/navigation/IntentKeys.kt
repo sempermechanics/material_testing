@@ -18,6 +18,16 @@ object IntentKeys {
     /** Deformed-frame URI strings; consumed once on wizard open. */
     const val PICKED_DEF_URIS = "PICKED_DEF_URIS"
 
+    /** Home's Re-run: the local id of the saved analysis a new one starts from; consumed once. */
+    const val RERUN_SESSION_ID = "RERUN_SESSION_ID"
+
+    /**
+     * With [RERUN_SESSION_ID], for an analysis saved without its Re-run inputs:
+     * the cache file holding the reference the user picked again, and its name.
+     */
+    const val RERUN_REFERENCE_PATH = "RERUN_REFERENCE_PATH"
+    const val RERUN_REFERENCE_NAME = "RERUN_REFERENCE_NAME"
+
     // ── StaticAnalysisActivity  RoiDrawActivity
     const val IMAGE_FILE_PATH = "IMAGE_FILE_PATH"
     const val MASK_FILE_PATH = "MASK_FILE_PATH"

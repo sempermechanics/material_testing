@@ -33,6 +33,9 @@ import com.sempermechanics.semper.ui.analysis.frames.VideoSamplingSheet
 import com.sempermechanics.semper.ui.analysis.frames.WizardMediaPickers
 import com.sempermechanics.semper.ui.analysis.frames.checkFrameSizes
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
+import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
+import com.sempermechanics.semper.ui.analysis.rerun.RerunImportController
+import com.sempermechanics.semper.ui.analysis.rerun.RerunInputs
 import com.sempermechanics.semper.ui.analysis.roi.RoiResolveHelper
 import com.sempermechanics.semper.ui.analysis.roi.RoiStudioLauncher
 import com.sempermechanics.semper.ui.analysis.run.BatchRunController
@@ -61,6 +64,7 @@ import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.dialog.WarnChip
 import com.sempermechanics.semper.ui.common.showUnlessEditing
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * The analysis setup wizard: page 1 loads reference/deformed images (or
@@ -103,6 +107,7 @@ class StaticAnalysisActivity :
     private lateinit var imports: FrameImportController
     private lateinit var reference: ReferenceImportController
     private lateinit var referenceBusy: ReferenceSlotBusy
+    private lateinit var rerun: RerunImportController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -189,6 +194,7 @@ class StaticAnalysisActivity :
             refPreviewBmp = preview
             onImagesChanged(newReference = true, newFrames = false)
         }, busy = referenceBusy)
+        rerun = RerunImportController(this, viewModel, chrome, onApplied = ::showRerun, checkReady = ::checkReady)
     }
 
     /**
@@ -244,6 +250,7 @@ class StaticAnalysisActivity :
         viewModel.cancelRequested = true // also flips the native cancel flag via AnalysisCancel
         if (::imports.isInitialized) imports.cancel()
         if (::reference.isInitialized) reference.cancel()
+        if (::rerun.isInitialized) rerun.cancel()
         // SweepStudyRunner observes the same gate — no separate flag.
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (::chrome.isInitialized) chrome.overlay.release()
@@ -391,7 +398,45 @@ class StaticAnalysisActivity :
             intent.removeExtra(IntentKeys.PICKED_DEF_URIS)
             if (list.isNotEmpty()) importDeformed(list.map { it.toUri() })
         }
+        // Home's Re-run: a new analysis from a saved one's photos and settings.
+        intent.getStringExtra(IntentKeys.RERUN_SESSION_ID)?.let { id ->
+            val picked = intent.getStringExtra(IntentKeys.RERUN_REFERENCE_PATH)?.let { path ->
+                PickedReference(File(path), intent.getStringExtra(IntentKeys.RERUN_REFERENCE_NAME).orEmpty())
+            }
+            intent.removeExtra(IntentKeys.RERUN_SESSION_ID)
+            intent.removeExtra(IntentKeys.RERUN_REFERENCE_PATH)
+            intent.removeExtra(IntentKeys.RERUN_REFERENCE_NAME)
+            rerun.load(id, picked)
+        }
     }
+
+    /**
+     * A Re-run's inputs, already in the view model, on the wizard's pages:
+     * the reference's preview, the settings sliders, the mode and the sweep's
+     * ranges, then the parameters page (or the sweep's), ready to Compute.
+     */
+    private suspend fun showRerun(inputs: RerunInputs) {
+        refPreviewBmp = viewModel.refBytes?.let { decodeRefPreview(it) }
+        val run = inputs.params
+        params.applyRerun(run.subset, run.step, run.strainWindow, run.use6x6)
+        sweepController.showRerun()
+        onImagesChanged(newReference = true, newFrames = true)
+        goToStep(viewModel.step, animate = false)
+    }
+
+    /**
+     * The reference slot's preview of [bytes], through the loader rather than
+     * the native decoder directly: a RAW reference is a headerless RGBA blob,
+     * which OpenCV cannot read.
+     */
+    private suspend fun decodeRefPreview(bytes: ByteArray): Bitmap? = ReferencePreviewLoader.load(
+        ReferencePreviewLoader.Request(
+            bytes = bytes,
+            intentWidth = viewModel.realRefWidth,
+            intentHeight = viewModel.realRefHeight,
+            previewMaxEdge = BitmapDecoder.PREVIEW_MAX_EDGE,
+        ),
+    ).bitmap
 
     /**
      * Redraws the slots from the view model, after first reading back the
@@ -401,19 +446,7 @@ class StaticAnalysisActivity :
     private fun restoreUiFromViewModel() {
         lifecycleScope.launch {
             val restore = viewModel.restoreDraft()
-            val bytes = viewModel.refBytes
-            if (bytes != null) {
-                // Through the loader, not the native decoder directly: a RAW
-                // reference is a headerless RGBA blob, which OpenCV cannot read.
-                refPreviewBmp = ReferencePreviewLoader.load(
-                    ReferencePreviewLoader.Request(
-                        bytes = bytes,
-                        intentWidth = viewModel.realRefWidth,
-                        intentHeight = viewModel.realRefHeight,
-                        previewMaxEdge = BitmapDecoder.PREVIEW_MAX_EDGE,
-                    ),
-                ).bitmap
-            }
+            viewModel.refBytes?.let { refPreviewBmp = decodeRefPreview(it) }
             wizardSlots.refreshRefSlot(refPreviewBmp)
             wizardSlots.refreshDefSlot()
             when (restore) {

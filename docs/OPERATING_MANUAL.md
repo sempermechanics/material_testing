@@ -298,9 +298,9 @@ that stops early, fails or is cancelled goes on at once.
 **Cancel** asks first (*Cancel analysis?*), then stops the run
 where it is, within a moment — it does not wait out the frame being solved.
 Nothing from the run is kept: not the frames it solved, not a row on Home, not
-a backup, and it does not count towards your analyses. Cancelling a re-run of
-an analysis you already have leaves that analysis exactly as it was. Back asks
-the same question. Cancelling a parameter sweep abandons the whole sweep, not
+a backup, and it does not count towards your analyses. A run never touches an
+analysis you already have, so cancelling one leaves those exactly as they
+were. Back asks the same question. Cancelling a parameter sweep abandons the whole sweep, not
 just the combination in flight, and saves none of it.
 
 The same sheet covers importing frames (*Importing photos*) and extracting video
@@ -340,17 +340,19 @@ gone.
 | Result | You land on |
 |---|---|
 | Single setting | Result viewer, frame 1 |
+| Run stopped early | The *Stopped at frame N* message, then the result viewer from **View results** |
 | Parameter sweep | Result lattice |
 | Some sweep points failed | `N of M skipped` toast, then the lattice |
-| Engine failed | A dialog naming the cause, and which frame and image it failed on |
+| Engine failed | A dialog naming the cause, and which frame and image it failed on; you stay in the wizard |
 | Every sweep combination failed | The lattice, every node hollow — tap one for its reason. **View** and **Save graph** are disabled |
 
-Re-running the same inputs updates the same analysis. Different inputs make a
-new one, which counts towards your quota. Picking the reference again counts as
-different inputs, even when it is the same image, and so does importing the
-frames again. So does switching between **Single setting** and **Parameter
-sweep**: a sweep after a single run (or a single run after a sweep) is a new
-analysis, and the earlier one is kept as it was.
+**A finished analysis is done.** Once its results open, the wizard closes:
+**Back** from the result viewer (or the lattice) goes to Home, not back into
+the wizard, and **New analysis** starts empty. A run never changes an analysis
+you already have; every run that saves is a new analysis on Home, which counts
+towards your quota and gets a name of its own (*steel_00 (2)* when the first
+*steel_00* is still there). To try other settings on the same photos, use
+**Re-run** on Home (§10).
 
 ---
 
@@ -595,6 +597,10 @@ Look for the VSG where the curves stop separating.
 appear, a small pill in the middle reads **Opening steel_00 · 40 frames** (the
 reference's name and the frame count) until that frame draws.
 
+**Back** goes to Home, whether you opened the result from Home or it opened
+when a run finished; from a sweep's lattice, Back from a combination returns to
+the lattice, and Back from the lattice to Home.
+
 The field button (top left) switches field. Pinch to zoom (~10×), drag to pan; both survive a
 field change. Double-tap zooms or resets. A horizontal fling while fit-to-screen
 steps frames. Chrome auto-hides after a short idle; pan or scrub brings it back,
@@ -713,6 +719,27 @@ Long-press a row to select. Pencil renames (one row only), bin deletes. When
 every selected row is **Only in cloud**, a cloud-download button restores them
 all at once; each row shows its own progress.
 
+**Re-run** (the circular arrow, one row only) starts a **new** analysis from the
+selected one: the wizard opens on **Parameters** (or the sweep's settings page
+for a parameter sweep) with a copy of the same reference photo, the same frames
+in the same order (a video's frames keep their times and clip name), the same
+ROI and mask, and every setting as it was run. Change what you want and tap
+**Compute**; the analysis you started from is never changed. The new one counts
+towards your analyses like any other and is named after the reference, with
+*(2)* added while the first is still on Home. A parameter sweep keeps only the
+one frame it was solved against, so its Re-run has that frame alone. Re-run
+needs the original photos on this phone: an **Only in cloud** row asks you to
+restore it first, and a freed-up one says this phone doesn't have them.
+
+An analysis made before Re-run kept its reference, or restored from the cloud
+(the backup does not carry Re-run's copy), asks you to **Pick its reference
+photo**: choose the same photo again, and its frames and settings come from the
+analysis. The photo must be the analysis's size; another says "This photo is
+W × H; the analysis used W × H." and lets you choose again or cancel. Such an
+analysis kept only its region's rectangle, so a region you drew comes back as
+that rectangle, and the app says once "The mask wasn't saved; the region is a
+rectangle." Redraw the shape on the ROI step if it was not a rectangle.
+
 **Backups that are not on this phone.** On a new phone, or after a reinstall,
 Home shows a card above the list — "4 analyses in your cloud backup aren't on
 this phone." **Restore** lists them, all ticked; untick any you don't want and
@@ -800,9 +827,9 @@ up again with it is licensed straight away.
 
 **Quota.** From 80% of the cap, a chip under the Home title reads
 `N / M analyses used`; it turns red at the cap. Below 80% it is hidden.
-Only a run that makes a new analysis is checked against it: a re-run of the
-same inputs is not, but one after picking a new reference or new frames, or
-after switching between a single run and a sweep, is.
+Every run is checked against it, since every run that saves makes a new
+analysis (Re-run included); a run already under way when the cap fills still
+saves.
 Not a paywall — email support from the limit screen, or delete something and
 tap **Re-check**.
 
@@ -834,7 +861,7 @@ Write above that block; leave it in place.
 | Sweep ended early | Same rule: two combinations under 50% and it stops rather than sweep the rest |
 | Password rejected on sign-up | 8+ chars, upper and lower case, a digit and a special character — or tap **Generate secure password** |
 | Only the first N frames | *Max frames* capped it |
-| Frames in the wrong order | Sort on step 1, then re-run |
+| Frames in the wrong order | **Re-run** it from Home, sort on step 1, then Compute |
 | Run vanished | The app was killed. No resume — run it again in the foreground |
 | Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
 | Summary still says "Building summary" | A long analysis takes a while to render five fields; the frames are usable meanwhile |

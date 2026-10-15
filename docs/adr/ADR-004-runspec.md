@@ -162,7 +162,7 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   lists copied. The batch loop (`BatchRun.inputs`) and the sweep
   (`SweepSession.inputs`) read their images only from there. Still resolved
   inside the run, as above: the session id (the quota's `admitRun` comes
-  before `wouldCreateNewSession`). The run still reads `cancelRequested`, and
+  before `wouldCreateNewSession`; since ADR-022 every run is admitted). The run still reads `cancelRequested`, and
   writes it, the `last*` result fields and, through
   `repointDeformedPathsOnMain`, the moved frame paths. The reference array is shared rather than copied: the
   wizard replaces its reference, never writes into it. `.dat` oracles
@@ -175,6 +175,12 @@ derived field for field; the proof is mechanical (identical `.dat` hashes).
   restores the wizard's working session and `RunResult`
   (`RunChannels.discardRun`). A cancelled re-run therefore leaves the saved
   record, its files and its cloud state as they were, where it used to be
-  saved as a partial run. The JNI call stays in the one loop; only the
+  saved as a partial run. *Superseded the same day by
+  [ADR-022](ADR-022-rerun-as-copy.md):* there is no in-place re-run any more;
+  once a run saves, the wizard lets go of the session, so a later run (and a
+  cancelled one) is always a new analysis. `RunInputs` gained a `setup`
+  (`RerunSetup`), which a saved run writes to `<session>/rerun/`; the session
+  id comes from `RunChannels.openRunSession` and is carried in
+  `RunResult.sessionId`, and `wouldCreateNewSession` is gone. The JNI call stays in the one loop; only the
   directory it writes to changed, so the `.dat` bytes (and oracles) are
   unchanged.

@@ -11,7 +11,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.sempermechanics.semper.ProgressCallback
 import com.sempermechanics.semper.SemperNativeLib
+import com.sempermechanics.semper.data.net.CloudApi
+import com.sempermechanics.semper.data.net.SemperApi
+import com.sempermechanics.semper.data.session.SessionLayout
 import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.DicResult
@@ -25,9 +29,13 @@ import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import kotlinx.coroutines.Job
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
@@ -62,6 +70,28 @@ class EnginePipelineSmokeTest {
         const val CY = H / 2f
         const val STEP = 5
         const val SUBSET = 31
+    }
+
+    private var realQuotaApi = SessionQuota.api
+
+    /**
+     * Every run is a new analysis and is admitted against the account's
+     * limit; the loop tests below must not depend on the device's account, so
+     * the quota's backend reads as off (no cap) while they run.
+     */
+    @Before
+    fun quotaOff() {
+        realQuotaApi = SessionQuota.api
+        SessionQuota.api = { context ->
+            object : CloudApi by SemperApi.get(context) {
+                override val enabled: Boolean = false
+            }
+        }
+    }
+
+    @After
+    fun quotaBack() {
+        SessionQuota.api = realQuotaApi
     }
 
     // ── Synthetic imagery ────────────────────────────────────────────────
@@ -353,13 +383,9 @@ class EnginePipelineSmokeTest {
             file.writeBytes(warp(ref, Matrix().apply { setTranslate(dx, dy) }).toPngBytes())
             DeformedFrame(file.absolutePath, file.name)
         }
+        val ids = mutableListOf<String>()
 
-        // A known session id: a re-run of a row costs no quota, so the run
-        // never consults the account's session limit.
-        val sessionId = "batchlooptest"
-        SessionStore.forget(ctx, sessionId)
         val vm = AnalysisViewModel().apply {
-            workingLocalId = sessionId
             refBytes = ref.toPngBytes()
             realRefWidth = W
             realRefHeight = H
@@ -378,6 +404,8 @@ class EnginePipelineSmokeTest {
             vm.refName = "other.png"
             vm.deformedFrames = emptyList()
             val outcome = vm.runBatchAnalysisBody(ctx, run) { ticks += it }
+            val sessionId = checkNotNull(vm.runResult.value.sessionId)
+            ids += sessionId
 
             assertEquals(RunStop.Finished, outcome.stop)
             assertEquals(shifts.size, outcome.totalFrames)
@@ -386,6 +414,7 @@ class EnginePipelineSmokeTest {
             assertEquals(shifts.size, row?.frameCount)
             assertEquals("ref.png", row?.refName)
             assertEquals(frames.map { it.name }, row?.defNames)
+            assertTrue("Home's Re-run inputs are kept", SessionLayout(File(outcome.batchDirPath)).rerunInputs.isFile)
 
             val batchDir = File(outcome.batchDirPath)
             shifts.forEachIndexed { i, (dx, dy) ->
@@ -414,19 +443,24 @@ class EnginePipelineSmokeTest {
             assertEquals(shifts.size, convergence.size)
             assertTrue("every solved frame has a convergence", convergence.none { it.isNaN() })
         } finally {
-            SessionStore.forget(ctx, sessionId)
-            SessionStore.dirFor(ctx, sessionId).deleteRecursively()
+            forget(ctx, ids)
             inputs.deleteRecursively()
         }
     }
 
+    private fun forget(ctx: android.content.Context, ids: List<String>) = ids.forEach {
+        SessionStore.forget(ctx, it)
+        SessionStore.dirFor(ctx, it).deleteRecursively()
+    }
+
     /**
-     * Cancel keeps nothing (2026-10-15): a re-run of a saved analysis that is
-     * cancelled on its second frame, through the real loop, leaves every file
-     * of the saved one and its Home row exactly as they were.
+     * A saved analysis is never written over, and Cancel keeps nothing
+     * (2026-10-15): a second run in the same wizard, through the real loop,
+     * is a new analysis, and cancelling it on its second frame leaves every
+     * file of the saved one and its Home row exactly as they were.
      */
     @Test
-    fun cancelledRerunLeavesTheSavedAnalysisAsItWas() {
+    fun cancelledRunAfterASavedOneLeavesItAsItWas() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val ctx = instrumentation.targetContext
         val ref = makeReference()
@@ -439,10 +473,7 @@ class EnginePipelineSmokeTest {
             file.writeBytes(warp(ref, Matrix().apply { setTranslate(dx, dy) }).toPngBytes())
             DeformedFrame(file.absolutePath, file.name)
         }
-        val sessionId = "batchcanceltest"
-        SessionStore.forget(ctx, sessionId)
         val vm = AnalysisViewModel().apply {
-            workingLocalId = sessionId
             refBytes = ref.toPngBytes()
             realRefWidth = W
             realRefHeight = H
@@ -451,33 +482,39 @@ class EnginePipelineSmokeTest {
         }
         val roi = Roi(0, 0, W, H)
         val saved = RunSpec.of(DicParams(subset = SUBSET, step = STEP, strainWindow = 15), roi, null, false, null)
-        val rerun = RunSpec.of(DicParams(subset = SUBSET, step = STEP * 2, strainWindow = 15), roi, null, false, null)
+        val next = RunSpec.of(DicParams(subset = SUBSET, step = STEP * 2, strainWindow = 15), roi, null, false, null)
         fun hashes(dir: File) = dir.walkTopDown().filter { it.isFile }
             .associate { it.relativeTo(dir).path to it.readBytes().contentHashCode() }
+        val ids = mutableListOf<String>()
 
         try {
             vm.cancelRequested = false
             val first = vm.runBatchAnalysisBody(ctx, BatchRun(saved, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())) {}
+            val savedId = checkNotNull(vm.runResult.value.sessionId)
+            ids += savedId
             assertTrue("the first run saved", first.saved)
             // The run moved its frames into the session; the wizard follows them on Main.
             instrumentation.waitForIdleSync()
             val dir = File(first.batchDirPath)
             val files = hashes(dir)
-            val row = SessionStore.get(ctx, sessionId)
+            val row = SessionStore.get(ctx, savedId)
 
-            val run = BatchRun(rerun, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
+            val run = BatchRun(next, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
             val outcome = vm.runBatchAnalysisBody(ctx, run) { tick ->
                 if (tick.frameIndex == 1) vm.cancelRequested = true
             }
+            val nextId = checkNotNull(vm.runResult.value.sessionId)
+            ids += nextId
 
+            assertNotEquals("a new analysis, never the saved one", savedId, nextId)
             assertEquals(RunStop.Cancelled, outcome.stop)
             assertEquals(0, outcome.totalFrames)
             assertEquals("the saved analysis's files", files, hashes(dir))
-            assertEquals("its Home row", row, SessionStore.get(ctx, sessionId))
+            assertEquals("its Home row", row, SessionStore.get(ctx, savedId))
+            assertFalse("no folder for the cancelled one", SessionStore.dirFor(ctx, nextId).exists())
         } finally {
             vm.cancelRequested = false
-            SessionStore.forget(ctx, sessionId)
-            SessionStore.dirFor(ctx, sessionId).deleteRecursively()
+            forget(ctx, ids)
             inputs.deleteRecursively()
         }
     }

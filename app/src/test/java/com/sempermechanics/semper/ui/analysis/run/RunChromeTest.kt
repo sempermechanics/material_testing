@@ -105,14 +105,6 @@ class RunChromeTest {
     }
 
     @Test
-    fun `a re-run's Cancel also says the saved analysis stays as it was`() {
-        chrome.beginRun(cancelBody = R.string.cancel_rerun_body) {}
-        chrome.confirmCancel()
-
-        assertEquals("Nothing from this run is kept. Your saved analysis stays as it was.", askedBody())
-    }
-
-    @Test
     fun `no run string says a cancel keeps frames, and an import's cancel still keeps the selection`() {
         assertEquals("Cancel analysis?", activity.getString(R.string.cancel_run_title))
         assertEquals(

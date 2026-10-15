@@ -96,13 +96,12 @@ class RunSpecTest {
         realRefWidth = 2000
         realRefHeight = 435
         refName = "steel_24.png"
-        workingLocalId = "f0f0406f-8c2"
         // The wizard's editing state: the requested ROI, as the user drew it.
         roiX = requested[0]
         roiY = requested[1]
         roiW = requested[2]
         roiH = requested[3]
-        resetRunResult("/sessions/f0f0406f-8c2", spec)
+        resetRunResult("/sessions/f0f0406f-8c2", spec, "f0f0406f-8c2")
         recordRunSettings(spec.recordSettings())
         lastRefPath = "/sessions/f0f0406f-8c2/reference.png"
         lastStop = RunStop.Finished

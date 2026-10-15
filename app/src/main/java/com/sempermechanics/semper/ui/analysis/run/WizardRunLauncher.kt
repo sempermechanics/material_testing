@@ -1,10 +1,8 @@
 package com.sempermechanics.semper.ui.analysis.run
 
-import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.EngineDebug
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.Roi
@@ -43,14 +41,13 @@ class WizardRunLauncher(
         )
 
         // Hard stop: do not start a new analysis when the session quota is full.
-        // Re-runs that update an existing Home row are still allowed.
+        // Every run is a new analysis; a saved one is never written over.
         activity.lifecycleScope.launch {
-            if (!AnalysisNavHelper.ensureCanStart(activity, viewModel, sweep = false)) return@launch
+            if (!AnalysisNavHelper.ensureCanStart(activity)) return@launch
 
             // Frozen here, on Main, so the sheet names the reference the run solves against.
             val inputs = viewModel.snapshotRunInputs()
-            val cancelBody = cancelRunBody(activity.applicationContext, viewModel, sweep = false)
-            chrome.beginRun(reference = inputs.reference.name, cancelBody = cancelBody) {
+            chrome.beginRun(reference = inputs.reference.name) {
                 viewModel.cancelRequested = true
             }
             checkReady()
@@ -86,14 +83,12 @@ class WizardRunLauncher(
         )
 
         activity.lifecycleScope.launch {
-            if (!AnalysisNavHelper.ensureCanStart(activity, viewModel, sweep = true)) return@launch
+            if (!AnalysisNavHelper.ensureCanStart(activity)) return@launch
 
-            val cancelBody = cancelRunBody(activity.applicationContext, viewModel, sweep = true)
             chrome.beginRun(
                 title = activity.getString(R.string.mode_sweep),
                 status = sweep.planSummary(plan),
                 sweepPlan = plan,
-                cancelBody = cancelBody,
             ) {
                 viewModel.cancelRequested = true
             }
@@ -120,17 +115,4 @@ class WizardRunLauncher(
         }
         return roi
     }
-}
-
-/**
- * What Cancel's question says for the next run, a sweep when [sweep]. A cancel
- * keeps nothing of any run; a re-run over the working session's row, a saved
- * analysis on Home, also says that analysis stays as it was. Reads the index
- * off the main thread. Returns a string resource (not annotated: a suspend
- * function returns an object, which `@StringRes` does not apply to).
- */
-internal suspend fun cancelRunBody(context: Context, viewModel: AnalysisViewModel, sweep: Boolean): Int {
-    val id = viewModel.workingLocalId?.takeUnless { viewModel.wouldCreateNewSession(sweep) }
-    val saved = id != null && SessionStore.listOnIo(context).any { it.id == id }
-    return if (saved) R.string.cancel_rerun_body else R.string.cancel_run_body
 }

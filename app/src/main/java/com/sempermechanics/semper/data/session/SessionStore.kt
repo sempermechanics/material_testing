@@ -106,7 +106,7 @@ object SessionStore {
     /**
      * Insert or update a session row. A new row is refused when the account is
      * at its analysis quota ([SessionQuota.blocked], with the index's rows as
-     * the phone's count); re-runs of an existing id still save.
+     * the phone's count); an update of an existing id still saves.
      * @param allowOverLimit true for a cloud restore (the session already
      *   counts against the quota) and for a run the quota admitted at its start
      *   (`RunAdmission.Admitted`): a run under way when the cap fills still saves.
@@ -247,9 +247,7 @@ object SessionStore {
     }
 
     /**
-     * Removes the index row only; the directory stays. For a re-run that
-     * left nothing for the row to open, while the wizard still reads its
-     * images from the directory.
+     * Removes the index row only; the directory stays.
      */
     @WorkerThread
     fun forget(context: Context, id: String): Unit = synchronized(lock) {

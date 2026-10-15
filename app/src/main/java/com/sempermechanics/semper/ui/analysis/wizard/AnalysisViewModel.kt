@@ -5,11 +5,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import com.sempermechanics.semper.SemperNativeLib
 import com.sempermechanics.semper.data.prefs.WizardDraft
-import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.data.session.SessionRepository
 import com.sempermechanics.semper.data.session.SkippedNode
-import com.sempermechanics.semper.data.session.runStop
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.RunStop
@@ -186,8 +184,9 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     private val _runResult = MutableStateFlow(RunResult())
     val runResult: StateFlow<RunResult> = _runResult.asStateFlow()
 
-    internal fun resetRunResult(batchDirPath: String, spec: RunSpec) {
-        _runResult.value = RunResult(batchDirPath = batchDirPath, spec = spec)
+    /** A clean result for a run in session [sessionId], at [batchDirPath], solving [spec]. */
+    internal fun resetRunResult(batchDirPath: String, spec: RunSpec, sessionId: String? = null) {
+        _runResult.value = RunResult(batchDirPath = batchDirPath, spec = spec, sessionId = sessionId)
     }
 
     /** [runResult]'s value, which a cancelled run puts back as it found it ([discardRun]). */
@@ -199,31 +198,6 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
 
     internal fun recordRunSettings(settings: SessionRecordSettings) {
         _runResult.update { it.copy(settings = settings) }
-    }
-
-    /**
-     * The run result of a re-run whose frames went into the existing Home row
-     * [row] rather than a record of its own: the viewer then opens on that
-     * row's reference, stop code, planned size and settings.
-     */
-    internal fun recordKeptRow(row: SessionRecord) {
-        _runResult.update {
-            it.copy(
-                refPath = row.refPath,
-                stop = row.runStop,
-                plannedFrames = row.plannedFrameCount,
-                settings = SessionRecordSettings(
-                    subset = row.subset,
-                    step = row.step,
-                    strainWin = row.strainWindow,
-                    roiX = row.roiX,
-                    roiY = row.roiY,
-                    roiW = row.roiW,
-                    roiH = row.roiH,
-                    use6x6 = row.use6x6,
-                ),
-            )
-        }
     }
 
     /** The runs' channels; [progress] and the rest are their read-only faces. */
@@ -389,9 +363,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      * frame. Both pickers come through here, so they cannot disagree.
      *
      * - **A new input.** Like a new set of frames, it resets the previous
-     *   results, so the next run starts a new Home row and is checked against
-     *   the quota and seat gates ([wouldCreateNewSession]) instead of
-     *   overwriting the previous reference's session.
+     *   results, so the next run starts in a new session folder.
      * - **The ROI and mask follow the pixel size.** Both are in the pixels of
      *   the image they were drawn on (the mask is one byte per pixel). A
      *   reference of a different size drops them and goes back to the full
@@ -413,19 +385,17 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     }
 
     /**
-     * Identity of the working session on the Home list. Every re-run of the
-     * same kind reuses it, so the exploration loop keeps updating one row
-     * instead of leaving a trail of near-identical ones. New inputs reset it
-     * via [clearPreviousResults]; a run of the other kind (single ↔ sweep)
-     * takes a new one ([resolveLocalSessionId]), so the earlier record is kept.
+     * The session folder the next run writes, while no Home row names it: the
+     * last run of [workingIsSweep]'s kind in this wizard saved nothing, and the
+     * next one of that kind writes there again (`openRunSession`). A run that
+     * saves clears it (`closeSavedSession`): a saved analysis is never written
+     * over (owner decision, 2026-10-15). New inputs clear it too
+     * ([clearPreviousResults]).
      */
     var workingLocalId: String? = null
 
-    /** Whether [workingLocalId] names a sweep's record; meaningless while that is null. */
+    /** Whether [workingLocalId] names a sweep's folder; meaningless while that is null. */
     var workingIsSweep: Boolean = false
-
-    /** True when the next completed run, a sweep when [sweep], would create a new Home-list row. */
-    fun wouldCreateNewSession(sweep: Boolean): Boolean = workingLocalId == null || workingIsSweep != sweep
 
     /**
      * Cooperative cancel: checked between frames here, and forwarded to the

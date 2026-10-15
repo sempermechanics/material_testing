@@ -26,6 +26,7 @@ record that replaced it.
 | [019](ADR-019-sempermechanics-app-id.md) | The app is `com.sempermechanics.semper`; "indic" leaves the code, and the engine submodule is `engine/` | Accepted, built (not released) | TD-176 |
 | [020](ADR-020-backend-refusal-model.md) | Backend refusals are one exception (`errors.Refusal`) with one status table (`errors.STATUS`) | Accepted, built | TD-185, TD-186 |
 | [021](ADR-021-retire-firestore-repo-facade.md) | Retire the `firestore_repo` facade; `app.repo` is a plain package and tests patch through `repo_view.patch` | Accepted, built | TD-190 |
+| [022](ADR-022-rerun-as-copy.md) | A finished analysis is never overwritten; Home's Re-run copies its inputs into a new analysis | Accepted, built | TD-211 |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md); one no longer listed there is closed, and its history is in git. ADR-008, ADR-009,
 ADR-011 (ported here), ADR-012 and ADR-013 are material_testing's (ADR-008's benchmark harness and ADR-013's backend route live here too: the harness is shared code, and the backend deploys from this repo); the numbers are shared so they do not collide.

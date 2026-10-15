@@ -33,6 +33,14 @@ object SessionPaths {
      */
     const val RUN_STAGING_SUBDIR = "run_staging"
 
+    /**
+     * What Home's Re-run starts a new analysis from, under the session dir:
+     * the run's inputs as the wizard held them, its original reference and
+     * mask, and the frames the run never reached (`SessionLayout.rerun*`).
+     * Kept on this phone only: never uploaded, so never restored.
+     */
+    const val RERUN_SUBDIR = "rerun"
+
     /** [RUN_STAGING_SUBDIR] of [sessionDir]. */
     fun runStaging(sessionDir: File): File = File(sessionDir, RUN_STAGING_SUBDIR)
 
