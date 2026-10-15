@@ -77,9 +77,6 @@ class ViewerSummaryPillTest {
 
     /** Prev from frame 1 enters the summary; the build is launched but has not run. */
     private fun ResultViewerActivity.enterSummary() {
-        // Under native graphics the frame field starts out focused; hiding it on
-        // entry would commit its "1" and leave the summary again at once.
-        findViewById<View>(R.id.etFrameNumber).clearFocus()
         findViewById<View>(R.id.btnPrevFrame).performClick()
         assertTrue(isShowingSummary)
     }
