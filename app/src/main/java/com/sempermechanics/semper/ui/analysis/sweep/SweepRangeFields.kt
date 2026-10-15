@@ -106,6 +106,18 @@ internal class SweepRangeFields(
         writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
     }
 
+    /**
+     * Takes the view model's ranges as the user's own, as a Re-run brings
+     * them, and shows them: suggestions leave them alone from here ([seed]),
+     * and only the ROI's ceiling still clamps them.
+     */
+    fun adopt() {
+        userModified = true
+        writeSubsetRange(viewModel.subsetMin, viewModel.subsetMax)
+        writeStrainWinRange(viewModel.strainWinMin, viewModel.strainWinMax)
+        showCountsAndStepDepth()
+    }
+
     private inline fun onSliderInput(fromUser: Boolean, body: () -> Unit) {
         if (bindingSweep) return
         if (fromUser) userModified = true

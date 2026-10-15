@@ -235,6 +235,16 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="session_data_gone_title">Not on this phone</string>
     <string name="session_data_gone_body">If it was backed up, it\'s still in the cloud.</string>
     <string name="action_rename">Rename</string>
+    <!-- Home selection: start a new analysis from the selected one's photos and settings. -->
+    <string name="action_rerun">Re-run</string>
+    <string name="rerun_desc">Re-run as a new analysis</string>
+    <string name="rerun_unavailable_title">Can\'t re-run this analysis</string>
+    <!-- Re-run of a backed-up analysis that is not on this phone. -->
+    <string name="rerun_photos_in_cloud_body">Its photos aren\'t on this phone. Restore it first.</string>
+    <!-- Re-run of one this phone has no original photos for (restored, freed up, or saved before Re-run). -->
+    <string name="rerun_photos_missing_body">This phone doesn\'t have its original photos.</string>
+    <string name="rerun_copy_failed_body">Its photos couldn\'t be copied. Check the free space on this phone.</string>
+    <string name="rerun_copying">Copying the analysis\'s photos…</string>
     <!-- After a rename to a name another analysis has. -->
     <string name="rename_saved_as_fmt">Saved as %1$s</string>
     <string name="action_delete">Delete</string>
@@ -637,8 +647,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="progress_joined_fmt">%1$s · %2$s</string>
     <string name="cancel_run_title">Cancel analysis?</string>
     <string name="cancel_run_body">Nothing from this run is kept.</string>
-    <!-- Cancel during a re-run of an analysis already on Home: the saved one is untouched. -->
-    <string name="cancel_rerun_body">Nothing from this run is kept. Your saved analysis stays as it was.</string>
     <string name="cancel_import_title">Cancel import?</string>
     <string name="cancel_import_body">Your previous selection is kept.</string>
     <string name="keep_running">Keep running</string>
@@ -764,7 +772,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="faq_redirect_open">Open</string>
     <string name="results_title">Results</string>
     <string name="action_share">Share</string>
-    <string name="viewer_back_desc">Back to settings</string>
+    <string name="viewer_back_desc">Back</string>
     <string name="viewer_home_desc">Home</string>
     <string name="viewer_heatmap_overlay_desc">Strain or displacement heatmap overlay</string>
     <string name="viewer_field_fab_desc">Change field</string>

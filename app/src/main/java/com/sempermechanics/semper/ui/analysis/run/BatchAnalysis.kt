@@ -23,11 +23,13 @@ import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.report.newMetrics
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import com.sempermechanics.semper.ui.analysis.recommend.RunEstimate
+import com.sempermechanics.semper.ui.analysis.rerun.keepBatchRerun
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
 import com.sempermechanics.semper.ui.analysis.wizard.admitRun
+import com.sempermechanics.semper.ui.analysis.wizard.closeSavedSession
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
 import kotlinx.coroutines.ensureActive
@@ -64,7 +66,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val reference = run.inputs.reference
     val frames = run.inputs.frames
     // Admitted here, the run saves its session even if the cap fills meanwhile.
-    val admission = admitRun(appContext, frames.paths.size, sweep = false)
+    val admission = admitRun(appContext, frames.paths.size)
     if (admission is RunAdmission.Blocked) {
         SemperAnalytics.event(
             appContext,
@@ -82,14 +84,12 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val localSessionId = session.id
     val batchDir = session.dir
     val resultsDir = session.staging
-    // The Home row this run replaces, if it is a re-run; its frames go when the run commits.
-    val previous = SessionStore.get(appContext, localSessionId)
 
     // Start every run from a clean result snapshot carrying its spec. Fields
     // below (engineStats, refPath, settings, stopCode, plannedFrames) are only
-    // written on the success path, so a re-run that fails early or yields 0 valid points
+    // written on the success path, so a run that fails early or yields 0 valid points
     // would otherwise keep the PREVIOUS run's numbers — the stale-results bug.
-    resetRunResult(batchDir.absolutePath, spec)
+    resetRunResult(batchDir.absolutePath, spec, localSessionId)
 
     EngineDebug.attach(spec.debugDir)
 
@@ -132,9 +132,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // The raw deformed originals sit alongside the reference so exports (and
     // reopened sessions) can bundle them. They are MOVED in from the import
     // cache, not copied, so one set of images exists on disk instead of two —
-    // which makes this directory the run's own input on a re-run. Stale frames
-    // are therefore pruned after the loop, never wiped before it. (A frame in
-    // a sweep's session is copied instead: keepDeformedFrame.)
+    // which makes this directory the next run's own input when this one saves
+    // nothing. Stale frames are therefore pruned after the loop, never wiped
+    // before it. (A frame in another session is copied instead: keepDeformedFrame.)
     val rawDeformedDir = File(batchDir, SessionPaths.RAW_DEFORMED_SUBDIR).apply { mkdirs() }
 
     // The filenames actually written into raw_deformed/, index-aligned with
@@ -191,8 +191,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             continue
         }
         if (source.parentFile?.absolutePath == rawDeformedDir.absolutePath) {
-            // A re-run: the image already lives where it belongs, so there is
-            // nothing to move — and the prune below must not treat it as stale.
+            // Moved here by a run in this wizard that saved nothing: the image
+            // already lives where it belongs, so there is nothing to move, and
+            // the prune below must not treat it as stale.
             persistedRawNames[frameIndex] = source.name
         } else {
             try {
@@ -306,17 +307,18 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         )
     }
 
-    // A cancel keeps nothing: no frames, no row, no upload. A re-run's session
-    // is left exactly as it was, since its results never left the staging.
-    // One confirmed while the last frame solved counts too.
+    // A cancel keeps nothing: no frames, no row, no upload; its results never
+    // left the staging. One confirmed while the last frame solved counts too.
     if (cancelRequested) stop = RunStop.Cancelled
     if (stop == RunStop.Cancelled) {
         discardCancelledBatch(appContext, session, frames.paths, resolvedDefPaths)
         run.job.ensureActive()
         return cancelledOutcome((System.currentTimeMillis() - run.startedAtMs).toInt())
     }
-    // Any other end replaces the previous run's results with this one's,
-    // whether or not it then saves a record (a partial stop keeps its frames).
+    // Any other end moves this run's results into its session, whether or not
+    // it then saves a record (a partial stop keeps its frames). The session is
+    // never a saved analysis (openRunSession): at most the folder of a run in
+    // this wizard that saved nothing.
     session.commit()
 
     // Every frame solved: the overlay says so while the run saves.
@@ -347,12 +349,17 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     val keptRawNames = persistedRawNames.filterTo(HashSet()) { it.isNotBlank() }
     rawDeformedDir.listFiles()?.forEach { if (it.name !in keptRawNames) it.delete() }
 
+    // A run that will save keeps what Home's Re-run starts from, the frames it
+    // stopped before included, which the wizard then follows.
+    if (firstFrameValidPoints > 0) keepBatchRerun(batchDir, run.inputs, spec, resolvedDefPaths)
+
     // On Main: the wizard's fields are not this thread's to write.
     repointDeformedPathsOnMain(resolvedDefPaths)
 
     // With every frame moved out, the committed import is dead weight that
-    // would otherwise survive until the next import. A partial run leaves it
-    // for CacheJanitor, since the un-processed frames are still only there.
+    // would otherwise survive until the next import. A run that saved nothing
+    // and stopped partway leaves it for CacheJanitor, since its un-processed
+    // frames are still only there.
     File(run.cacheDir, FrameImportHelper.COMMITTED_DIR_NAME)
         .takeIf { it.isDirectory && it.list()?.isEmpty() == true }
         ?.delete()
@@ -374,7 +381,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     }
 
     // A cancelled run never gets here (it returned above). A first frame that
-    // kept no points saves no record of its own.
+    // kept no points saves no record.
     if (firstFrameValidPoints > 0) {
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
@@ -407,32 +414,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         stop = saved.stop
         recordSaved = saved.recordSaved
         indexUnavailable = saved.indexUnavailable
-    } else if (previous != null) {
-        val framesOnDisk = batchDir.listFiles { f -> f.extension == "dat" }?.size ?: 0
-        val after = afterUnsavedRerun(
-            previous,
-            UnsavedRerun(
-                framesOnDisk,
-                stop.wireCode,
-                plannedFrames,
-                spec.recordSettings(),
-                defNames,
-                videoName,
-                frameTimesMs,
-            ),
-        )
-        when {
-            after == null -> SessionStore.forget(appContext, localSessionId)
-            // The row now lists the frames this run left on disk, so they are
-            // kept even though the run wrote no record of its own.
-            after !== previous -> {
-                recordSaved = SessionStore.upsert(appContext, after)
-                // The viewer opens on this row (BatchRunController's partial
-                // run), so the run result carries its reference, stop and
-                // size as the full-record branch above does.
-                recordKeptRow(after)
-            }
-        }
+        // That analysis is finished: the next run in this wizard is a new one.
+        if (recordSaved) closeSavedSession()
     }
 
     val outcome = BatchAnalysisOutcome(
@@ -459,10 +442,9 @@ internal data class AfterSave(val stop: RunStop, val recordSaved: Boolean, val i
 /**
  * What the save [result] of a run that stopped with [stop] makes of it. A full
  * quota stops the run as [RunStop.SessionLimit], whatever stopped it; only a
- * save no start check admitted can meet one (a re-run whose row was deleted
- * meanwhile), since an admitted run saves past the cap ([RunAdmission]). An
- * index that could not be read or written is not the quota, and leaves [stop]
- * as it was.
+ * save no start check admitted can meet one, since an admitted run saves past
+ * the cap ([RunAdmission]). An index that could not be read or written is not
+ * the quota, and leaves [stop] as it was.
  */
 internal fun afterSave(stop: RunStop, result: SessionStore.UpsertOutcome): AfterSave = when (result) {
     SessionStore.UpsertOutcome.SAVED -> AfterSave(stop, recordSaved = true, indexUnavailable = false)
@@ -517,7 +499,7 @@ internal fun batchEndEvent(appContext: Context, outcome: BatchAnalysisOutcome, s
  * import cache is moved: both directories are app-private storage, so that
  * is a rename rather than a second multi-megabyte write, and the fallback
  * writes [bytes] rather than read the file a second time. One in another
- * session's directory (the sweep this wizard saved before) is copied and
+ * session's directory (an analysis this wizard saved before) is copied and
  * left where it is: it is that session's own image.
  */
 internal fun keepDeformedFrame(

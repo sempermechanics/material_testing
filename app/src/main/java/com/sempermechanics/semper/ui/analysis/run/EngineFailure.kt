@@ -37,8 +37,9 @@ object EngineFailure {
         ENGINE_ERROR_ROI -> Cause.ROI
         ENGINE_ERROR_INIT -> Cause.INIT
         RunStop.LowConvergence.wireCode -> Cause.CONVERGENCE
-        // A cancelled re-run is saved with this stop code, so Home and the
-        // viewer read it back here; it is no strain-window failure.
+        // Analyses saved before a cancel kept nothing (2026-10-15) carry this
+        // stop code, so Home and the viewer read it back here; it is no
+        // strain-window failure.
         RunStop.Cancelled.wireCode -> Cause.CANCELLED
         0 -> Cause.VSG
         in 1..Int.MAX_VALUE -> Cause.UNKNOWN

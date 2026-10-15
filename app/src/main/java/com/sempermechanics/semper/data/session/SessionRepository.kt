@@ -75,11 +75,11 @@ class SessionRepository {
      *
      * A sweep varies settings, not images, so it keeps exactly one — anything
      * else under `raw_deformed/` is left over from an earlier run. The source
-     * itself may already be in there (a re-run, since runs move their images in
-     * rather than copying), so it is resolved before the directory is pruned.
-     * A source in another session's directory (the single run this wizard
-     * saved before the sweep) is copied and left in place: it is that
-     * session's image ([SessionPaths.isInOtherSession]).
+     * itself may already be in there (moved in by a sweep in this wizard that
+     * saved nothing, since runs move their images in rather than copying), so
+     * it is resolved before the directory is pruned. A source in another
+     * session's directory (an analysis this wizard saved before) is copied and
+     * left in place: it is that session's image ([SessionPaths.isInOtherSession]).
      */
     fun persistRawDeformed(
         batchDir: File,

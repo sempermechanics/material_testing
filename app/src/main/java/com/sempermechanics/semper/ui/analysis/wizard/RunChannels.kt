@@ -216,34 +216,22 @@ internal sealed interface RunAdmission {
     /** At the limit: the run ends with [outcome] before any native work. */
     class Blocked(val outcome: BatchAnalysisOutcome) : RunAdmission
 
-    /** A new session [SessionQuota.blocked] let start. */
+    /** A new analysis [SessionQuota.blocked] let start. */
     data object Admitted : RunAdmission
-
-    /**
-     * A re-run over the working session's row: nothing new to admit. Its save
-     * updates that row; one that finds the row gone is a new row, and the
-     * save applies the rule.
-     */
-    data object Rerun : RunAdmission
 
     /** Whether the run's save may go past the cap. */
     val admitted: Boolean get() = this == Admitted
 }
 
 /**
- * Hard stop before any native work: a new session cannot start at the
+ * Hard stop before any native work: a new analysis cannot start at the
  * account's limit ([SessionQuota.blocked], with the index's live rows; this
- * runs on the native thread). Re-runs of the same kind over an existing
- * [AnalysisViewModel.workingLocalId] are not checked; a run of the other
- * kind, a sweep when [sweep], is a new session ([resolveLocalSessionId]).
+ * runs on the native thread). Every run is checked: a saved analysis is
+ * never written over (owner decision, 2026-10-15), so whatever a run saves is
+ * a new Home row.
  */
 @WorkerThread
-internal fun AnalysisViewModel.admitRun(
-    appContext: Context,
-    plannedFrames: Int,
-    sweep: Boolean,
-): RunAdmission = when {
-    !wouldCreateNewSession(sweep) -> RunAdmission.Rerun
+internal fun AnalysisViewModel.admitRun(appContext: Context, plannedFrames: Int): RunAdmission = when {
     // Before the config is fetched a demo account is held to the demo cap
     // (LicenseEntitlements.analysisCap); a licensed one has no local cap.
     // The upload is gated separately in CloudSync until config is known.
@@ -263,39 +251,40 @@ internal fun AnalysisViewModel.admitRun(
 }
 
 /**
- * The working session's id for a run, a sweep when [sweep]: the one the last
- * run saved under when it was of the same kind, otherwise a new one. A single
- * run and a sweep never share a session: switching kinds is like new inputs,
- * a new record, and the earlier one keeps its row, `.dat` files and images.
- */
-internal fun AnalysisViewModel.resolveLocalSessionId(sweep: Boolean): String {
-    workingLocalId?.takeIf { workingIsSweep == sweep }?.let { return it }
-    return UUID.randomUUID().toString().take(SESSION_ID_LENGTH).also {
-        workingLocalId = it
-        workingIsSweep = sweep
-    }
-}
-
-/**
- * The session a run, a sweep when [sweep], writes ([resolveLocalSessionId]),
- * with an empty [RunSession.staging] for its results. The results a previous
- * run of the same kind left in the directory stay until [RunSession.commit]:
- * a cancelled run never reaches it, so it leaves them as they were. The
- * deformed images stay too; they may be this run's own inputs, and each run
- * prunes them once it is done with them.
+ * The session a run, a sweep when [sweep], writes, with an empty
+ * [RunSession.staging] for its results.
+ *
+ * A saved analysis is never written over (owner decision, 2026-10-15): the
+ * working session is reused only while no Home row names it, which is when
+ * the last run of the same kind in this wizard saved nothing (its first frame
+ * kept no points, or the index refused it). Its folder then holds that run's
+ * frames, the next run's own inputs, and no one's results. Any other run
+ * mints a new id. A single run and a sweep never share a session.
  */
 @WorkerThread
 internal fun AnalysisViewModel.openRunSession(appContext: Context, sweep: Boolean): RunSession {
     val before = WizardRunState(workingLocalId, workingIsSweep, runResult.value, sweepPlan, sweepSkippedNodes)
-    val fresh = wouldCreateNewSession(sweep)
-    val id = resolveLocalSessionId(sweep)
+    val unsaved = workingLocalId?.takeIf { workingIsSweep == sweep && SessionStore.get(appContext, it) == null }
+    val id = unsaved ?: UUID.randomUUID().toString().take(SESSION_ID_LENGTH).also {
+        workingLocalId = it
+        workingIsSweep = sweep
+    }
     val dir = SessionStore.dirFor(appContext, id)
     // A process that died mid-run left its staging behind; it is no one's results.
     val staging = SessionPaths.runStaging(dir).apply {
         deleteRecursively()
         mkdirs()
     }
-    return RunSession(id, dir, staging, fresh, before)
+    return RunSession(id, dir, staging, fresh = unsaved == null, before = before)
+}
+
+/**
+ * A run's save went into the index: that analysis is finished, and the next
+ * run in this wizard is a new one ([openRunSession]), never a re-run over it.
+ */
+internal fun AnalysisViewModel.closeSavedSession() {
+    workingLocalId = null
+    workingIsSweep = false
 }
 
 /**
@@ -373,7 +362,8 @@ private const val SESSION_ID_LENGTH = 12
  * Follows the deformed images to wherever a run left them. They are moved
  * from the import cache into the session directory rather than copied, so the
  * staged cache paths this view model was handed at import time go stale the
- * moment a run finishes; a re-run reading them would find nothing. An image
+ * moment a run finishes; the next run in this wizard reading them would find
+ * nothing. An image
  * in another session's directory is copied, never moved: it is that
  * session's own input.
  * [AnalysisViewModel.defFrameSizes] is keyed by path, so it is re-keyed alongside.

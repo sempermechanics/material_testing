@@ -24,6 +24,7 @@ import com.sempermechanics.semper.data.session.isRestorable
 import com.sempermechanics.semper.databinding.ActivityHomeBinding
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
+import com.sempermechanics.semper.ui.analysis.rerun.RerunInputs
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
 import com.sempermechanics.semper.ui.common.Insets
@@ -40,6 +41,7 @@ import com.sempermechanics.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Home: the record of every analysis done on this phone (metadata from
@@ -197,25 +199,55 @@ class HomeActivity : AppCompatActivity() {
     private fun wireButtons() {
         val fab = binding.fabNewAnalysis
         HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab, binding.sessionList)
-        fab.setOnClickListener {
-            // Two independent reasons new work cannot start. The seat check is
-            // first because an institution member is licensed, so the quota
-            // check below is false for them by definition and would wave them
-            // through. btnEmptyRestore delegates here via performClick(), so
-            // both entry points are covered by this one listener.
-            if (LicenseEntitlements.isSeatRequiredToStart(this)) {
-                AnalysisNavHelper.openSeatRequired(this)
-                return@setOnClickListener
-            }
-            // At the account's analysis limit, block new work behind the persistent
-            // limit screen (email support) instead of letting it fail on upload.
-            if (!quotaCard.openLimitScreenIfReached()) showSourceChooser()
-        }
+        // btnEmptyRestore delegates here via performClick(), so both entry
+        // points are covered by this one listener.
+        fab.setOnClickListener { if (mayStartNewAnalysis()) showSourceChooser() }
         binding.btnHomeSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
         binding.btnEmptyRestore.setOnClickListener {
             fab.performClick()
+        }
+    }
+
+    /**
+     * Whether new work may start, having opened the screen that says why not
+     * when it may not: the + button and Re-run both ask. Two independent
+     * reasons: the seat check is first because an institution member is
+     * licensed, so the quota check below is false for them by definition and
+     * would wave them through. At the account's analysis limit, new work is
+     * blocked behind the persistent limit screen (email support) instead of
+     * failing on upload.
+     */
+    private fun mayStartNewAnalysis(): Boolean {
+        if (LicenseEntitlements.isSeatRequiredToStart(this)) {
+            AnalysisNavHelper.openSeatRequired(this)
+            return false
+        }
+        return !quotaCard.openLimitScreenIfReached()
+    }
+
+    /**
+     * Re-run: opens the wizard on a new analysis copied from [record]'s
+     * photos and settings (owner decision, 2026-10-15: a saved analysis is
+     * never re-run in place). One saved before Re-run existed, restored from
+     * the cloud, or freed up has no original photos here, and says so. The
+     * new analysis counts toward the limit like any other.
+     */
+    private fun startRerun(record: SessionRecord) {
+        lifecycleScope.launch {
+            val ready = withContext(Dispatchers.IO) { RerunInputs.readComplete(File(record.sessionDir)) != null }
+            when {
+                !ready -> Dialogs.info(
+                    this@HomeActivity,
+                    R.string.rerun_unavailable_title,
+                    R.string.rerun_photos_missing_body,
+                )
+                mayStartNewAnalysis() -> startActivity(
+                    Intent(this@HomeActivity, StaticAnalysisActivity::class.java)
+                        .putExtra(IntentKeys.RERUN_SESSION_ID, record.id),
+                )
+            }
         }
     }
 
@@ -266,6 +298,7 @@ class HomeActivity : AppCompatActivity() {
         selectionCount = binding.tvSelectionCount,
         btnSelectionRename = binding.btnSelectionRename,
         btnSelectionRestore = binding.btnSelectionRestore,
+        btnSelectionRerun = binding.btnSelectionRerun,
         selectAllBox = binding.cbSelectionAll,
         fab = binding.fabNewAnalysis,
         backCallback = backCallback,
@@ -273,6 +306,7 @@ class HomeActivity : AppCompatActivity() {
         onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
         restoreEnabled = { showsCloudState() },
         onRestore = { records -> startRestore(records) },
+        onRerun = { record -> startRerun(record) },
         onDeleteQueued = { workId, items ->
             justQueuedDeletes += items.filter { it.mode == SessionDeletes.Mode.EVERYWHERE }.map { it.localId }
             deleteFeedback.queued(workId, items.size)

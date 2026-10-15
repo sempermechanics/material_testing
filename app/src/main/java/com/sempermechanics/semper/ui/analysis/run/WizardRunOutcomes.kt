@@ -159,7 +159,11 @@ class WizardRunOutcomes(
 }
 
 /**
- * Opens the viewer on the run that just finished.
+ * Opens the viewer on the run that just finished, and closes the wizard: the
+ * results' Back goes to Home, never back into the wizard (owner decision,
+ * 2026-10-15). The analysis is saved and finished; another starts from Home,
+ * or from its row's Re-run. Finishing also drops the wizard's draft
+ * (`StaticAnalysisActivity.onDestroy`), so New analysis starts empty.
  *
  * @param sweep true when the frames are parameter combinations rather than
  *   deformed images. The viewer needs each frame's own settings then — the
@@ -183,4 +187,5 @@ private fun openResults(
         sweep = sweep,
         frameNames = frameNames,
     )
+    activity.finish()
 }

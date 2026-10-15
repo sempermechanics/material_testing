@@ -192,6 +192,18 @@ class SweepSetupController(
     fun onRecommendationChanged() = seedSweepSuggestions()
 
     /**
+     * Shows a Re-run's mode and, for a sweep, its line-cut axis and ranges as
+     * the user's own, which suggestions then leave alone. The view model
+     * already holds them.
+     */
+    fun showRerun() {
+        rgAnalysisMode.check(if (viewModel.sweepMode) R.id.rbModeSweep else R.id.rbModeSingle)
+        rgLineCutAxis.check(if (viewModel.lineCutHorizontal) R.id.rbAxisX else R.id.rbAxisY)
+        if (viewModel.sweepMode) rangeFields?.adopt()
+        applyAnalysisModeUi()
+    }
+
+    /**
      * Seeds the sweep inputs with the app's suggestions — a subset window
      * centred on the SSSIG recommendation and a strain window of 3 to 11 points.
      * Runs until the user edits a sweep control; after that their values stand.

@@ -135,6 +135,17 @@
                     android:src="@drawable/ic_edit"
                     app:tint="@color/text_primary" />
 
+                <!-- Shown only for a single selection, like Rename. -->
+                <ImageButton
+                    android:id="@+id/btnSelectionRerun"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/rerun_desc"
+                    android:src="@drawable/ic_rerun"
+                    android:visibility="gone"
+                    app:tint="@color/text_primary" />
+
                 <!-- Shown only when every selected row is cloud-only. -->
                 <ImageButton
                     android:id="@+id/btnSelectionRestore"

@@ -22,8 +22,8 @@ import java.io.IOException
 
 /**
  * Throws away a sweep in [session] that the user cancelled, however many
- * combinations it solved ([discardRun]): no row, no upload, and a re-run's
- * earlier sweep stays exactly as it was. A sweep moves no image before it
+ * combinations it solved ([discardRun]): no row, no upload, and any saved
+ * sweep stays exactly as it was. A sweep moves no image before it
  * saves, so there is none to put back. Like a cancelled batch run, it sends
  * no analytics end event. [executionTimeMs] is how long it ran.
  */

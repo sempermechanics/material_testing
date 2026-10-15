@@ -1,21 +1,30 @@
 package com.sempermechanics.semper.analysis
 
+import android.content.Context
 import android.os.Bundle
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.test.core.app.ApplicationProvider
+import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.RunStop
+import com.sempermechanics.semper.fixtures.CleanAppState
+import com.sempermechanics.semper.fixtures.sessionRecord
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.WizardStep
+import com.sempermechanics.semper.ui.analysis.wizard.closeSavedSession
+import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -29,12 +38,16 @@ import kotlin.concurrent.thread
  * This class is the analysis wizard's brain and the highest-churn file in the
  * app, but it sat in the Kover-excluded `ui` package with no direct coverage.
  * These pin the cheap, load-bearing seams — the compute gate, the working
- * session identity that keeps re-runs on one Home row, and the reset that
- * new inputs depend on — without touching the native solve.
+ * session, which never writes over a saved analysis, and the reset that new
+ * inputs depend on — without touching the native solve.
  */
 @RunWith(RobolectricTestRunner::class)
 class AnalysisViewModelTest {
 
+    @get:Rule
+    val clean = CleanAppState()
+
+    private val ctx: Context = ApplicationProvider.getApplicationContext()
     private lateinit var vm: AnalysisViewModel
 
     private fun frames(vararg paths: String) = paths.map { DeformedFrame(it, it.substringAfterLast('/')) }
@@ -80,25 +93,52 @@ class AnalysisViewModelTest {
     // ------------------------------------------------- working session identity
 
     @Test
-    fun `a fresh view model would create a new session row`() {
-        assertTrue(vm.wouldCreateNewSession(sweep = false))
+    fun `a fresh view model's run opens a new session`() {
+        val session = vm.openRunSession(ctx, sweep = false)
+
+        assertTrue(session.fresh)
+        assertEquals(session.id, vm.workingLocalId)
     }
 
     @Test
-    fun `re-runs over an existing working id do not create another session row`() {
-        vm.workingLocalId = "abc123"
-        assertFalse(vm.wouldCreateNewSession(sweep = false))
+    fun `a run after one that saved nothing writes that folder again`() {
+        val first = vm.openRunSession(ctx, sweep = false)
+
+        val next = vm.openRunSession(ctx, sweep = false)
+
+        assertEquals("no Home row names it: it holds no one's analysis", first.id, next.id)
+        assertFalse(next.fresh)
     }
 
     @Test
-    fun `a run of the other kind would create a new session row`() {
-        vm.workingLocalId = "abc123"
-        vm.workingIsSweep = false
-        assertTrue("a sweep must not write over a single run's row", vm.wouldCreateNewSession(sweep = true))
+    fun `a saved analysis is never written over by the next run`() {
+        val first = vm.openRunSession(ctx, sweep = false)
+        assertTrue(SessionStore.upsert(ctx, sessionRecord(id = first.id, sessionDir = first.dir.path), true))
 
-        vm.workingIsSweep = true
-        assertTrue("a single run must not write over a sweep's row", vm.wouldCreateNewSession(sweep = false))
-        assertFalse(vm.wouldCreateNewSession(sweep = true))
+        val next = vm.openRunSession(ctx, sweep = false)
+
+        assertNotEquals(first.id, next.id)
+        assertTrue(next.fresh)
+    }
+
+    @Test
+    fun `a saved run closes its session, so the next run is a new one`() {
+        vm.openRunSession(ctx, sweep = false)
+
+        vm.closeSavedSession()
+
+        assertNull(vm.workingLocalId)
+        assertFalse(vm.workingIsSweep)
+    }
+
+    @Test
+    fun `a run of the other kind opens its own session`() {
+        val single = vm.openRunSession(ctx, sweep = false)
+
+        val sweep = vm.openRunSession(ctx, sweep = true)
+
+        assertNotEquals("a sweep must not write a single run's folder", single.id, sweep.id)
+        assertTrue(vm.workingIsSweep)
     }
 
     // -------------------------------------------------------------- reset logic
@@ -116,19 +156,6 @@ class AnalysisViewModelTest {
         assertNull(vm.lastRefPath)
         assertNull(vm.lastDefPath)
         assertNull(vm.workingLocalId)
-    }
-
-    @Test
-    fun `clearing results sends the next run back to a new session row`() {
-        vm.workingLocalId = "abc123"
-        assertFalse(vm.wouldCreateNewSession(sweep = false))
-
-        vm.clearPreviousResults()
-
-        assertTrue(
-            "new inputs must start a fresh Home row rather than overwrite the old one",
-            vm.wouldCreateNewSession(sweep = false),
-        )
     }
 
     // ------------------------------------------- RunResult accessor consistency
@@ -203,13 +230,12 @@ class AnalysisViewModelTest {
     }
 
     @Test
-    fun `a new reference starts a new Home row`() {
+    fun `a new reference starts a new session`() {
         ranWithCustomRoi()
-        assertFalse(vm.wouldCreateNewSession(sweep = false))
 
         vm.applyNewReference(ByteArray(8), "second.png", ImageSize(640, 480))
 
-        assertTrue("a new reference overwrote the previous one's session", vm.wouldCreateNewSession(sweep = false))
+        assertNull("a new reference wrote into the previous one's folder", vm.workingLocalId)
         assertNull(vm.lastBatchDirPath)
     }
 
