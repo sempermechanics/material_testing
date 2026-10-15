@@ -43,14 +43,13 @@ class LiveSweepLattice(
 
     /**
      * Redraws the lattice as of [tick], which carries every combination's
-     * outcome. [solved] is the latest tick that ended a combination solved,
-     * whose numbers the last line reads.
+     * outcome and the latest one to solve, whose numbers the last line reads.
      */
-    fun apply(tick: SweepStudyRunner.Progress, solved: SweepStudyRunner.Progress? = null) {
+    fun apply(tick: SweepStudyRunner.Progress) {
         if (plan.isEmpty()) return
         lattice.setNodes(liveLatticeNodes(plan, tick.outcomes, tick.runIndex))
         val line = last ?: return
-        val said = RunOverlayText.sweepLast(line.resources, tick, solved)
+        val said = RunOverlayText.sweepLast(line.resources, tick)
         line.visibility = if (said != null) View.VISIBLE else View.GONE
         if (said != null) {
             line.text = said.text

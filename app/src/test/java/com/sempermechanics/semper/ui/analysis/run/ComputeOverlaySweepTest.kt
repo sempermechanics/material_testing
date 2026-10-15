@@ -81,6 +81,7 @@ class ComputeOverlaySweepTest {
         outcomes: List<NodeOutcome>,
         points: Int = 0,
         convergence: Float = -1f,
+        lastSolved: SweepStudyRunner.Solved? = null,
     ) = SweepStudyRunner.Progress(
         runIndex = runIndex,
         totalRuns = plan.size,
@@ -89,6 +90,7 @@ class ComputeOverlaySweepTest {
         pointsSolved = points,
         convergencePercent = convergence,
         outcomes = outcomes,
+        lastSolved = lastSolved,
     )
 
     @Test
@@ -147,9 +149,10 @@ class ComputeOverlaySweepTest {
         assertEquals(View.GONE, last.visibility)
 
         val first = listOf(NodeOutcome.SOLVED) + pending.drop(1)
-        // The end of one combination and the start of the next land in one flush.
-        overlay.updateSweep(tick(0, first, points = 30_968, convergence = 96.4f))
-        overlay.updateSweep(tick(1, first))
+        // As on a device: the combination's own end tick is dropped by the
+        // progress flow (the next start follows at once), so only the start
+        // of combination 2 arrives, carrying how combination 1 went.
+        overlay.updateSweep(tick(1, first, lastSolved = SweepStudyRunner.Solved(0, 30_968, 96.4f)))
         flush()
         assertEquals(View.VISIBLE, last.visibility)
         assertEquals("Last: 96% converged · 30,968 points", last.text.toString())
@@ -171,7 +174,7 @@ class ComputeOverlaySweepTest {
     }
 
     @Test
-    fun `a solved combination whose own tick was dropped says only that it solved`() {
+    fun `a tick without the solved combination's numbers says only that it solved`() {
         overlay.show("Sweep", "4 analyses", showConvergence = false, sweepPlan = plan)
         val outcomes = listOf(NodeOutcome.SOLVED, NodeOutcome.PENDING, NodeOutcome.PENDING, NodeOutcome.PENDING)
         overlay.updateSweep(tick(1, outcomes))

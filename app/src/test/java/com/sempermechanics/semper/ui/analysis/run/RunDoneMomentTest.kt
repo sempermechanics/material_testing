@@ -99,6 +99,7 @@ class RunDoneMomentTest {
 
     @Test
     fun `a solved run says so for a moment, then opens the viewer`() {
+        val controller = controller().apply { observe() }
         viewModel.runs.progress.tryEmit(
             BatchProgressUpdate(
                 percent = 100f,
@@ -109,7 +110,8 @@ class RunDoneMomentTest {
                 perFrameConvergence = floatArrayOf(96f, 91.8f, 97f),
             ),
         )
-        controller().handleBatchOutcome(Result.success(outcome()))
+        advance(200)
+        controller.handleBatchOutcome(Result.success(outcome()))
 
         assertEquals(View.VISIBLE, sheet.visibility)
         assertEquals("3 frames solved", header.text.toString())
@@ -122,6 +124,60 @@ class RunDoneMomentTest {
         assertEquals(1, viewersOpened)
         assertEquals(View.GONE, sheet.visibility)
     }
+
+    /**
+     * The ticks as `runBatchAnalysisBody` sends them through the view model,
+     * collected by the observing controller as on a device, then the outcome
+     * posted and, in the run's finally, the progress replay set back to null:
+     * the replay is empty by the time the outcome is handled, so the lowest
+     * convergence has to come from what the overlay saw.
+     */
+    @Test
+    fun `the real tick sequence gives the done moment its lowest convergence`() {
+        controller().observe()
+        val solved = floatArrayOf(87.4f, 88.1f, 88.2f, 88.3f, 88.9f)
+        val convergence = FloatArray(5) { Float.NaN }
+        val progress = viewModel.runs.progress
+        progress.tryEmit(null)
+        progress.tryEmit(BatchProgressUpdate(0f, "Caching reference in engine…", plannedFrames = 5))
+        advance(200)
+        for (frame in 0 until 5) {
+            progress.tryEmit(tick(frame, 0f, convergence.copyOf()))
+            for (inFrame in listOf(10f, 55f, 90f)) progress.tryEmit(tick(frame, inFrame, null))
+            convergence[frame] = solved[frame]
+            progress.tryEmit(tick(frame, 100f, convergence.copyOf()))
+            advance(200)
+        }
+        progress.tryEmit(
+            BatchProgressUpdate(
+                percent = 100f,
+                status = "Saving…",
+                frameIndex = 5,
+                plannedFrames = 5,
+                framePercent = 100f,
+                perFrameConvergence = convergence.copyOf(),
+            ),
+        )
+        advance(200)
+
+        viewModel.runs.batchOutcome.post(Result.success(outcome(frames = 5).copy(executionTimeMs = 6_000)))
+        progress.tryEmit(null)
+        advance(1)
+
+        assertEquals("5 frames solved", header.text.toString())
+        assertEquals("6 s · lowest 87% converged", eta.text.toString())
+        advance(HOLD_MS)
+        assertEquals(1, viewersOpened)
+    }
+
+    private fun tick(frame: Int, framePercent: Float, convergence: FloatArray?) = BatchProgressUpdate(
+        percent = (frame + framePercent / 100f) / 5 * 100f,
+        status = "Processing frame ${frame + 1} of 5",
+        frameIndex = frame,
+        plannedFrames = 5,
+        framePercent = framePercent,
+        perFrameConvergence = convergence,
+    )
 
     @Test
     fun `a partial run, a low-convergence stop and a cancel go on at once`() {

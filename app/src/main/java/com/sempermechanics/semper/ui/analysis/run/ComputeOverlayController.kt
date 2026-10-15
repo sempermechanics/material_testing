@@ -89,16 +89,15 @@ class ComputeOverlayController(
 
     @Volatile private var pendingSweep: SweepStudyRunner.Progress? = null
 
-    // The latest sweep tick that ended a combination solved: the next tick, a
-    // combination starting, follows within the flush window and replaces it.
-    @Volatile private var lastSolvedSweep: SweepStudyRunner.Progress? = null
-
     /** The run's reference name, for the line under the header; null for an import or a sweep. */
     private var reference: String? = null
 
     // The run's latest convergence snapshot. Only frame starts and ends carry
     // one; the engine's in-frame ticks between them do not, and each flush
-    // clears pendingRun, so the snapshot has to outlive it.
+    // clears pendingRun, so the snapshot has to outlive it. It outlives hide()
+    // too: the run's chrome comes down before its outcome is handled, and by
+    // then the view model's progress replay is null (the run's finally), so
+    // this is where showDone finds the run's convergence. show() clears it.
     @Volatile private var lastConvergence: FloatArray? = null
 
     private var lastFlushUptimeMs = 0L
@@ -126,6 +125,7 @@ class ComputeOverlayController(
         mainHandler.removeCallbacks(flushRunnable)
         flushScheduled = false
         clearPending()
+        lastConvergence = null
         etaEstimator.reset()
         this.reference = reference
         header.text = title
@@ -153,11 +153,11 @@ class ComputeOverlayController(
     /**
      * A single run has solved: the sheet, back up after the run's chrome came
      * down, shows a check, "5 frames solved" and "7 s · lowest 94% converged"
-     * from [executionTimeMs] and [convergence] (each frame's, as the run's last
-     * tick had them; the bins are redrawn from them). Cancel's place is kept
-     * empty; the caller [hide]s the sheet when it moves on.
+     * from [executionTimeMs] and [convergence]: each frame's, by default the
+     * last snapshot this run's ticks carried (the bins are redrawn from them).
+     * Cancel's place is kept empty; the caller [hide]s the sheet when it moves on.
      */
-    fun showDone(frames: Int, executionTimeMs: Int, convergence: FloatArray?) {
+    fun showDone(frames: Int, executionTimeMs: Int, convergence: FloatArray? = lastConvergence) {
         hide()
         header.text = RunOverlayText.doneHeader(res, frames)
         eta.text = RunOverlayText.doneDetail(res, executionTimeMs, convergence)
@@ -210,7 +210,6 @@ class ComputeOverlayController(
     /** A sweep's tick: the percent, the header, the status and the lattice. */
     fun updateSweep(tick: SweepStudyRunner.Progress) {
         pendingPercent = tick.percent.toFloat().coerceIn(0f, PERCENT)
-        if (tick.outcomes.getOrNull(tick.runIndex) == SweepStudyRunner.NodeOutcome.SOLVED) lastSolvedSweep = tick
         pendingSweep = tick
         scheduleFlush()
     }
@@ -259,7 +258,7 @@ class ComputeOverlayController(
         pendingSweep?.let {
             header.text = RunOverlayText.sweepHeader(res, it)
             status.showText(RunOverlayText.sweepStatus(res, it))
-            sweepLattice?.apply(it, lastSolvedSweep)
+            sweepLattice?.apply(it)
             pendingSweep = null
         }
     }
@@ -270,8 +269,6 @@ class ComputeOverlayController(
         pendingTitle = null
         pendingRun = null
         pendingSweep = null
-        lastSolvedSweep = null
-        lastConvergence = null
     }
 
     companion object {

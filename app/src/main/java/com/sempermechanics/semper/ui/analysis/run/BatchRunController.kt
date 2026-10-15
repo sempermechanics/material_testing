@@ -164,7 +164,7 @@ class BatchRunController(
 
     /**
      * The run solved every frame: the sheet says so for [doneHoldMs] (frames,
-     * time, lowest convergence from the run's last tick), then the viewer
+     * time, lowest convergence from the run's ticks), then the viewer
      * opens: once the screen is started again if it was left in the
      * background meanwhile, since a stopped screen may not start another.
      * Straight to the viewer with no hold, or when the screen is already
@@ -176,8 +176,9 @@ class BatchRunController(
             host.openResultViewer()
             return
         }
-        val convergence = viewModel.progress.replayCache.lastOrNull()?.perFrameConvergence
-        overlayController.showDone(outcome.totalFrames, outcome.executionTimeMs, convergence)
+        // The convergence is the overlay's own snapshot of the run's ticks: the
+        // view model's progress replay is already null here (the run's finally).
+        overlayController.showDone(outcome.totalFrames, outcome.executionTimeMs)
         activity.lifecycleScope.launch {
             var opened = false
             try {

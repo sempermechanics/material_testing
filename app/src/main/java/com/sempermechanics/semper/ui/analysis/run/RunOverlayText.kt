@@ -67,13 +67,14 @@ object RunOverlayText {
 
     /**
      * The second line under the sweep lattice, for the latest combination in
-     * [tick] that has ended: "Last: 96% converged · 30,968 points" from
-     * [solved], the tick that ended it when the overlay saw one, "Last:
-     * skipped", or null before any has ended. A solved combination whose own
-     * tick was dropped says only that it solved.
+     * [tick] that has ended: "Last: 96% converged · 30,968 points" from the
+     * [SweepStudyRunner.Progress.lastSolved] every tick carries, "Last:
+     * skipped", or null before any has ended. Should a tick not carry that
+     * combination's numbers, it says only that it solved.
      */
-    fun sweepLast(res: Resources, tick: SweepStudyRunner.Progress, solved: SweepStudyRunner.Progress?): SweepLast? {
+    fun sweepLast(res: Resources, tick: SweepStudyRunner.Progress): SweepLast? {
         val last = tick.outcomes.indexOfLast { it != NodeOutcome.PENDING }
+        val solved = tick.lastSolved
         return when {
             last < 0 -> null
             tick.outcomes[last] == NodeOutcome.SKIPPED ->
