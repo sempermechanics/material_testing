@@ -131,8 +131,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="forgot_password">Forgot Password?</string>
     <string name="or">or</string>
     <string name="continue_with_google">Continue with Google</string>
-    <string name="min_0_0">Min: 0.0</string>
-    <string name="max_0_0">Max: 0.0</string>
     <string name="frame_1_1">Frame: 1 / 1</string>
 
     <!-- Result viewer: summary animation and frame jump -->
@@ -147,8 +145,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
          literal extremum, which is what the ⓘ details sheet shows instead. -->
     <string name="scale_max_fmt">≥ %1$s %2$s</string>
     <string name="scale_min_fmt">≤ %1$s %2$s</string>
-    <string name="summary_building_fmt">Rendering %1$s… %2$d of %3$d</string>
-    <string name="summary_scanning_fmt">Reading frames… %1$d of %2$d</string>
+    <!-- A colour-scale end before its range is known (the summary's sequence
+         pass, or the first frame still drawing), in place of a fake "0.0". -->
+    <string name="scale_label_pending" translatable="false">—</string>
+    <!-- The summary's progress pill, one short line: the field is on the U chip
+         above, so it is not repeated here. -->
+    <string name="summary_building_fmt">Building summary · %1$d of %2$d</string>
+    <string name="summary_scanning_fmt">Reading frames · %1$d of %2$d</string>
+    <string name="summary_cancel_desc">Cancel summary</string>
     <string name="summary_failed">Could not build the animation.</string>
     <string name="summary_no_data">No correlated data to animate.</string>
     <string name="summary_needs_android_9">Showing the first frame — animation needs Android 9 or newer.</string>

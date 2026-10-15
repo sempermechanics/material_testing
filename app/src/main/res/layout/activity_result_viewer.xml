@@ -56,42 +56,6 @@
                 android:layout_height="match_parent"
                 android:contentDescription="@string/summary_title"
                 android:scaleType="matrix" />
-
-            <LinearLayout
-                android:id="@+id/summaryStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:background="@drawable/bg_probe_chip"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <ProgressBar
-                    android:id="@+id/progressSummary"
-                    style="?android:attr/progressBarStyleHorizontal"
-                    android:layout_width="140dp"
-                    android:layout_height="wrap_content"
-                    android:max="100" />
-
-                <TextView
-                    android:id="@+id/tvSummaryStatus"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textColor="@color/viewer_probe_ink"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnSummaryCancel"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/action_cancel"
-                    android:textColor="@color/viewer_probe_ink"
-                    android:visibility="gone" />
-            </LinearLayout>
         </FrameLayout>
     </RelativeLayout>
 
@@ -223,7 +187,7 @@
             android:shadowDx="0"
             android:shadowDy="1"
             android:shadowRadius="2"
-            android:text="@string/max_0_0"
+            android:text="@string/scale_label_pending"
             android:textColor="@color/viewer_chrome_text"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -245,111 +209,183 @@
             android:shadowDx="0"
             android:shadowDy="1"
             android:shadowRadius="2"
-            android:text="@string/min_0_0"
+            android:text="@string/scale_label_pending"
             android:textColor="@color/viewer_chrome_text"
             android:textSize="13sp"
             android:textStyle="bold" />
     </LinearLayout>
 
+    <!-- Bottom edge: the summary's progress pill sits just above the scrubber.
+         The chrome fades layoutScrubber INVISIBLE, never GONE, so the pill keeps
+         its place while the bars are hidden. -->
     <LinearLayout
-        android:id="@+id/layoutScrubber"
+        android:id="@+id/viewerBottomStack"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="16dp">
+        android:orientation="vertical">
 
-        <ImageButton
-            android:id="@+id/btnPrevFrame"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:background="@drawable/bg_chrome_ghost"
-            android:contentDescription="@string/prev_frame"
-            android:padding="12dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_nav_prev"
-            app:tint="@color/viewer_chrome_text" />
-
+        <!-- While the summary builds: "Building summary · 3 of 5", a close button and a
+             thin bar (ViewerSummaryController). Not part of the auto-hiding chrome: it
+             is progress the user is waiting on. Light surface; force dark inverts it. -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:id="@+id/summaryStatus"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="center"
+            android:layout_marginHorizontal="16dp"
+            android:background="@drawable/bg_summary_pill"
             android:orientation="vertical"
-            android:paddingHorizontal="8dp">
-
-            <TextView
-                android:id="@+id/tvFrameCounter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:ellipsize="middle"
-                android:gravity="center"
-                android:shadowColor="@color/viewer_text_halo"
-                android:shadowDx="0"
-                android:shadowDy="1"
-                android:shadowRadius="2"
-                android:singleLine="true"
-                android:text="@string/frame_1_1"
-                android:textColor="@color/viewer_chrome_text"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
+            android:paddingStart="12dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="2dp"
+            android:paddingBottom="10dp"
+            android:visibility="gone"
+            tools:visibility="visible">
 
             <LinearLayout
-                android:id="@+id/layoutFrameJump"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <EditText
-                    android:id="@+id/etFrameNumber"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@null"
-                    android:gravity="center"
-                    android:hint="@string/frame_number_hint"
-                    android:imeOptions="actionGo"
-                    android:importantForAutofill="no"
-                    android:inputType="number"
-                    android:maxLength="4"
-                    android:minWidth="28dp"
-                    android:paddingVertical="1dp"
-                    android:shadowColor="@color/viewer_text_halo"
-                    android:shadowDx="0"
-                    android:shadowDy="1"
-                    android:shadowRadius="2"
-                    android:textColor="@color/viewer_chrome_text"
-                    android:textColorHint="@color/viewer_chrome_muted"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
                 <TextView
-                    android:id="@+id/tvFrameTotal"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvSummaryStatus"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:shadowColor="@color/viewer_text_halo"
-                    android:shadowDx="0"
-                    android:shadowDy="1"
-                    android:shadowRadius="2"
-                    android:textColor="@color/viewer_chrome_muted"
-                    android:textSize="14sp" />
+                    android:layout_weight="1"
+                    android:accessibilityLiveRegion="polite"
+                    android:paddingVertical="6dp"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp"
+                    tools:text="Building summary · 3 of 5" />
+
+                <ImageButton
+                    android:id="@+id/btnSummaryCancel"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/summary_cancel_desc"
+                    android:padding="11dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_close"
+                    android:visibility="gone"
+                    app:tint="@color/text_secondary"
+                    tools:visibility="visible" />
             </LinearLayout>
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/progressSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:layout_marginEnd="10dp"
+                android:indeterminate="true"
+                android:max="100"
+                app:indicatorColor="@color/sky_primary"
+                app:trackColor="@color/sky_container"
+                app:trackCornerRadius="2dp"
+                app:trackThickness="3dp" />
         </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btnNextFrame"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:background="@drawable/bg_chrome_ghost"
-            android:contentDescription="@string/next_frame"
-            android:padding="12dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_nav_next"
-            app:tint="@color/viewer_chrome_text" />
+        <LinearLayout
+            android:id="@+id/layoutScrubber"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="16dp">
+
+            <ImageButton
+                android:id="@+id/btnPrevFrame"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_chrome_ghost"
+                android:contentDescription="@string/prev_frame"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_nav_prev"
+                app:tint="@color/viewer_chrome_text" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingHorizontal="8dp">
+
+                <TextView
+                    android:id="@+id/tvFrameCounter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="middle"
+                    android:gravity="center"
+                    android:shadowColor="@color/viewer_text_halo"
+                    android:shadowDx="0"
+                    android:shadowDy="1"
+                    android:shadowRadius="2"
+                    android:singleLine="true"
+                    android:text="@string/frame_1_1"
+                    android:textColor="@color/viewer_chrome_text"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/layoutFrameJump"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/etFrameNumber"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@null"
+                        android:gravity="center"
+                        android:hint="@string/frame_number_hint"
+                        android:imeOptions="actionGo"
+                        android:importantForAutofill="no"
+                        android:inputType="number"
+                        android:maxLength="4"
+                        android:minWidth="28dp"
+                        android:paddingVertical="1dp"
+                        android:shadowColor="@color/viewer_text_halo"
+                        android:shadowDx="0"
+                        android:shadowDy="1"
+                        android:shadowRadius="2"
+                        android:textColor="@color/viewer_chrome_text"
+                        android:textColorHint="@color/viewer_chrome_muted"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvFrameTotal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:shadowColor="@color/viewer_text_halo"
+                        android:shadowDx="0"
+                        android:shadowDy="1"
+                        android:shadowRadius="2"
+                        android:textColor="@color/viewer_chrome_muted"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btnNextFrame"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_chrome_ghost"
+                android:contentDescription="@string/next_frame"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_nav_next"
+                app:tint="@color/viewer_chrome_text" />
+        </LinearLayout>
     </LinearLayout>
 
     <TextView
