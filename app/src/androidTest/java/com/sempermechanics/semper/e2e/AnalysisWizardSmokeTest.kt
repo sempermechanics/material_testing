@@ -101,7 +101,8 @@ class AnalysisWizardSmokeTest {
         }
         captureWizardShot("step2-single.png")
 
-        onView(withId(R.id.rbModeSweep)).perform(click())
+        // The overlap scroll above left the mode toggle partly out of view.
+        onView(withId(R.id.rbModeSweep)).perform(scrollTo(), click())
         scenarioRule.scenario.onActivity { activity ->
             assertFalse(activity.findViewById<View>(R.id.advancedParamsCard).isVisible)
             assertTrue(activity.findViewById<View>(R.id.sweepSettingsCard).isVisible)

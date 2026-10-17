@@ -502,13 +502,18 @@ class EnginePipelineSmokeTest {
             val row = SessionStore.get(ctx, savedId)
 
             val run = BatchRun(next, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
+            // The run's own id, read while it runs: Cancel puts runResult back
+            // as the run found it (discardRun), so afterwards it names the saved one.
+            var runningId: String? = null
             val outcome = vm.runBatchAnalysisBody(ctx, run) { tick ->
+                if (runningId == null) runningId = vm.runResult.value.sessionId
                 if (tick.frameIndex == 1) vm.cancelRequested = true
             }
-            val nextId = checkNotNull(vm.runResult.value.sessionId)
+            val nextId = checkNotNull(runningId)
             ids += nextId
 
             assertNotEquals("a new analysis, never the saved one", savedId, nextId)
+            assertEquals("Cancel put the saved run's result back", savedId, vm.runResult.value.sessionId)
             assertEquals(RunStop.Cancelled, outcome.stop)
             assertEquals(0, outcome.totalFrames)
             assertEquals("the saved analysis's files", files, hashes(dir))
