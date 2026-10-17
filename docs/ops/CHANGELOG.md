@@ -12,6 +12,25 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-17 — material_testing: released as v1.4-beta.2
+
+Built by `release.yml` (run 39064543078) from `main` at `d08aae07`: beta channel,
+versionCode 1006, release key. Full-matrix CI run 39061372964 passed on that commit
+first. It is the first release as `com.sempermechanics.materialtesting` (#122,
+ADR-019), so it installs beside the `com.indicvision.semper.materialtesting` builds,
+not over them. The release notes tell testers to back up in the old app before signing
+in to the new one: the old id is refused at registration (410 `app_retired`), and the
+new app's key replaces the old app's on that phone.
+
+The 19 merges since `v1.4-beta.1` (`3afbc76f`, 2026-10-01; this file has no entry for
+it, and its notes are on its GitHub Release) include:
+- Semper's UI with Tensile and Bending added (#133, ADR-022, synced from `8ba7081`).
+- Engine `23034fe`, 0.4.2: anchor-lattice seeding, seeded with rotation and scale
+  (#134, #135).
+
+The steel and PMMA re-run against published data has not been done on 0.4.x. Not yet
+smoked on a phone.
+
 ## 2026-10-10 — The first Firestore restore drill passed; backend redeploy from `bd1246c3`
 
 **Restore drill (TD-156, #404, #411, #422).** No export had ever been restored.
