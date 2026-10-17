@@ -12,6 +12,30 @@ Decisions that outlive their PR are recorded in
 [CLOUD_ARCHITECTURE_GCP.md](../backend/CLOUD_ARCHITECTURE_GCP.md) §20,
 [ARCHITECTURE.md](../app/ARCHITECTURE.md) and [../adr/](../adr/).
 
+## 2026-10-17 — App release `v1.2-beta.4`
+
+Release run 39064532280 on `main` at `33dce87d`, after full-matrix CI run 39061205386
+passed on that commit (tiers 1, 3, 4 and 5). It produced a signed APK, versionCode 1036,
+and the private GitHub pre-release `v1.2-beta.4`. The build carries the 169 PRs merged
+since `v1.2-beta.3` and engine `23034fe` (0.4.2, #445 and #446). It is the first release
+as `com.sempermechanics.semper` ([ADR-019](../adr/ADR-019-sempermechanics-app-id.md)),
+so it installs beside `com.indicvision.semper`, not over it, and backups restore into it.
+Once it registers, the old id is refused (410 `app_retired`, #427), and the old app's
+signed calls fail on that phone. The release notes therefore tell testers to back up in
+the old app first. Not yet smoked on a device. The Current state entry this release
+closes, as it stood:
+
+- **App release `v1.2-beta.3`** (beta, versionCode 35, from `ae05bb87`). On `main` and not
+  in a release yet: the quality program (#310–#332;
+  [QUALITY_PROGRAM_RESULTS.md](QUALITY_PROGRAM_RESULTS.md)); security and data-loss
+  fixes (#393–#400); the UI pass (#385–#396) and the minimal pass (#402–#419); tech-debt
+  fixes (#404–#411, #425); unique analysis names (#426); device key recovery (#427; the
+  shared key slot stays open, TD-209); and the 2026-10-13/14 fixes #428, #429 (the app
+  sends the name), #430, #431, #433, #434 (backup schema `/4`) and #435 (exports drawn
+  on the deformed frame), and #445 (engine `3e3a785`, 0.4.1: anchor-lattice seeding,
+  incremental DIC, all 23 metrics slots through the JNI). Open: the pin to `23034fe` (0.4.2:
+  the lattice is seeded with rotation and scale, Fourier–Mellin; no JNI change).
+
 ## 2026-10-14 — Backend deploy: Firestore call deadlines (#432), backups listed by the analysis's name (#429)
 
 Staging run 38538685399 (`semper-api-staging-38538685399-1`) and production run
