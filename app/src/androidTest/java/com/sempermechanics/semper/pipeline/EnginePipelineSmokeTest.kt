@@ -126,7 +126,7 @@ class EnginePipelineSmokeTest {
             override fun onProgressUpdate(percentage: Int) {}
         }
 
-        // Full parallel pipeline: AKAZE seeding, OpenMP Hessian pre-pass,
+        // Full parallel pipeline: anchor-lattice seeding, OpenMP Hessian pre-pass,
         // Delaunay mesh solve, threaded RGDIC propagation.
         val validPoints = SemperNativeLib.computeFullFieldDirect(
             refBytes, defBytes, ByteArray(0),
@@ -249,7 +249,7 @@ class EnginePipelineSmokeTest {
     @Test
     fun repeatSolveIsBitIdentical() {
         // TD-65: the same inputs solved again on the same device must give the
-        // same bytes. A rotation leaves the border cells outside the AKAZE
+        // same bytes. A rotation leaves the border cells outside the seed
         // mesh to the threaded Path B flood fill, which used to pick each
         // cell's initial guess by thread timing.
         val ref = makeReference().toPngBytes()

@@ -7,6 +7,9 @@ headlessly via [`SyntheticWorkloadDriver`](../../app/src/androidTest/java/com/se
 and captured by a local `characterize.sh` harness (never committed — the driver above
 is the reproducible half).
 
+**Engine:** measured with the AKAZE-seeded engine (pin `1284edf` and earlier). Engine 0.3.0 on
+seeds from an anchor lattice, so the seeding row and the step=20 note below predate it; re-measure
+before quoting them for a newer pin.
 **Device:** Pixel 6 (`oriole`), arm64-v8a, wireless-debugging (adb-over-Wi-Fi).
 **Build:** debug-cloud (`SEMPER_DEV_AUTH_BYPASS=false`, prod `SEMPER_API_BASE_URL`) —
 native `.so` is `-O3` in every variant, so compute numbers are representative; the

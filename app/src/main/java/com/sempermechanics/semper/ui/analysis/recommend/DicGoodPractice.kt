@@ -15,7 +15,7 @@ import kotlin.math.ceil
  * ### Why there is a ceiling as well as a floor
  *
  * The floor is the familiar half of the guidance: below [MIN_SPECKLE_PX] the
- * pattern aliases, AKAZE finds nothing to seed on and the solve returns few
+ * pattern aliases, the anchor lattice finds nothing to lock onto and the solve returns few
  * points or none. The ceiling is the half that usually goes unsaid. Past
  * [MAX_SPECKLE_PX] the pattern is oversampled — the extra pixels carry no
  * extra correlation, but a subset must now be large to span
