@@ -130,7 +130,7 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-14)
+## Current state (2026-10-17)
 
 - **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
   **Which test?** offers 2D DIC (Semper's analysis, first), Tensile and Bending; a fork
@@ -139,8 +139,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   plain CSV (version 1), the strain window's ⓘ and the sheet's order and fallback.
 - **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
   `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`). Being merged: `8ba7081`, 2026-10-14, on
-  `sync/semperdic-8ba7081` (its #363–#435: exports on the deformed frame, the
+  --grep=semperdic-app`). Last: `8ba7081`, 2026-10-14, merged as #133 on 2026-10-15
+  (its #363–#435: exports on the deformed frame, the
   backup's `ref/` entry, clip times and Keyframes on every rung, frozen run inputs,
   unique names, device-key recovery, themed icons, the UI and copy passes). Its
   metadata schema is `/7` here (ours past `/3` are not the parent's numbers). Before
@@ -177,9 +177,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `v0.2.2` (steel E 148.853 GPa; PMMA slope 6800.26 N/mm at the same taps);
   `RealPmmaBendingTest` now holds that run's deflections. The repeat solve is
   bit-identical on a Pixel 6 (arm64); the real-data re-run there is still owed
-  (TD-65's row). #134 moved the pin to `3e3a785` (0.4.1, anchor-lattice seeding); an open
-  PR moves it to `23034fe` (0.4.2, the lattice seeded with rotation and scale). The steel
-  and PMMA re-run on 0.4.2 is owed before the next release.
+  (TD-65's row). #134 and #135 moved the pin to `23034fe` (0.4.2: anchor-lattice
+  seeding, seeded with rotation and scale), released in `v1.4-beta.2` without the steel
+  and PMMA re-run, which is still owed.
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
   counts frames off the curve).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC first: Semper's wizard, no load
@@ -220,7 +220,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
     (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
     TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
     sends `X-App-Id` and signed in licensed on a Pixel 6, which now runs `v1.2-beta.3`
-    (`528afdfc`, versionCode 4). Don't hand out `main`'s CI APK: its versionCode is
+    (`528afdfc`, versionCode 4). Released since: `v1.4-beta.1` (`3afbc76f`, 2026-10-01)
+    and `v1.4-beta.2` (`d08aae07`, 2026-10-17, versionCode 1006). The latter is the first
+    release under the new id and has not yet been smoked on a phone. Don't hand out `main`'s CI APK: its versionCode is
     CI's run number, above every release (TD-148). Signed out (a debug build with no
     API URL), Home's Beta notice is acked once per phone, no longer on every launch
     (#106, TD-149; Pixel 6 2026-09-30); each account still acks once. A release
