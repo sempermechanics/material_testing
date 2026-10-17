@@ -136,15 +136,16 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   fixes (#404–#411, #425); unique analysis names (#426); device key recovery (#427; the
   shared key slot stays open, TD-209); and the 2026-10-13/14 fixes #428, #429 (the app
   sends the name), #430, #431, #433, #434 (backup schema `/4`) and #435 (exports drawn
-  on the deformed frame). Open: the engine pin from `1284edf` (0.2.3) to `3e3a785` (0.4.1:
-  anchor-lattice seeding, incremental DIC, all 23 metrics slots through the JNI).
+  on the deformed frame), and #445 (engine `3e3a785`, 0.4.1: anchor-lattice seeding,
+  incremental DIC, all 23 metrics slots through the JNI). Open: the pin to `23034fe` (0.4.2:
+  the lattice is seeded with rotation and scale, Fourier–Mellin; no JNI change).
 - **material_testing shares this history** and merges this `main` (last at `3154ebc`,
   material_testing#132, 2026-10-08; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). At its next
   sync it must take #434's restore reader (schema `/4`, `ref/Reference.png`) before
   its writer.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
-- **Owed.** At the 0.4.1 pin: the on-device characterization (TD-212). Pixel 6 runs for #435: `HotPathMicroBenchmark` (`buildReport_oneFrame`,
+- **Owed.** At the 0.4.2 pin: the on-device characterization (TD-212). Pixel 6 runs for #435: `HotPathMicroBenchmark` (`buildReport_oneFrame`,
   `generateDeformedHeatmap_oneFrame`, `gifEncode_*`, `decodeDatFile_oneFrame`) and
   `ViewerScrubBenchmark`. Optional: a Hosting deploy (`scripts/deploy-console.sh`) for
   the account console's backup-name column (#429). The public release (website / Play)
