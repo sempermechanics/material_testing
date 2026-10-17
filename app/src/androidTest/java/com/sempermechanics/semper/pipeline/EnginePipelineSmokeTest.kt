@@ -518,7 +518,8 @@ class EnginePipelineSmokeTest {
             assertEquals(0, outcome.totalFrames)
             assertEquals("the saved analysis's files", files, hashes(dir))
             assertEquals("its Home row", row, SessionStore.get(ctx, savedId))
-            assertFalse("no folder for the cancelled one", SessionStore.dirFor(ctx, nextId).exists())
+            // A sibling of the saved one's folder, not SessionStore.dirFor, which creates it.
+            assertFalse("no folder for the cancelled one", File(dir.parentFile, nextId).exists())
         } finally {
             vm.cancelRequested = false
             forget(ctx, ids)
