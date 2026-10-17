@@ -177,8 +177,9 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `v0.2.2` (steel E 148.853 GPa; PMMA slope 6800.26 N/mm at the same taps);
   `RealPmmaBendingTest` now holds that run's deflections. The repeat solve is
   bit-identical on a Pixel 6 (arm64); the real-data re-run there is still owed
-  (TD-65's row). The pin moves to `3e3a785` (0.4.1, anchor-lattice seeding) in an open PR;
-  the steel and PMMA re-run on it is owed before the next release.
+  (TD-65's row). #134 moved the pin to `3e3a785` (0.4.1, anchor-lattice seeding); an open
+  PR moves it to `23034fe` (0.4.2, the lattice seeded with rotation and scale). The steel
+  and PMMA re-run on 0.4.2 is owed before the next release.
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
   counts frames off the curve).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC first: Semper's wizard, no load

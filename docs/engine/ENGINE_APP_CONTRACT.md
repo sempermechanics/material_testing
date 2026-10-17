@@ -191,6 +191,7 @@ What the app does with it:
 - Points correlated on frame 0 are slots 3 + 4 + 19 (`EngineStats.correlatedPoints`). From
   engine 0.3.0, points the anchor lattice solved are in slot 19, not in slot 3 or 4.
 - Slot 10 is seeding time (phase correlation + anchor lattice; AKAZE + RANSAC before 0.3.0).
+  From 0.4.2 it includes the log-polar rotation and scale estimate the lattice is seeded with.
   Slot 16 grades the seed mesh (2 full, 1 sparse, 0 Path C).
 
 ### Return / error codes — Frozen
