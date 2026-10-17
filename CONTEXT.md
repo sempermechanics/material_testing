@@ -41,7 +41,7 @@ Use these words. Do not invent synonyms.
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (`engine/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
+Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (phase correlation + ICGN) → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 
@@ -177,7 +177,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   `v0.2.2` (steel E 148.853 GPa; PMMA slope 6800.26 N/mm at the same taps);
   `RealPmmaBendingTest` now holds that run's deflections. The repeat solve is
   bit-identical on a Pixel 6 (arm64); the real-data re-run there is still owed
-  (TD-65's row).
+  (TD-65's row). The pin moves to `3e3a785` (0.4.1, anchor-lattice seeding) in an open PR;
+  the steel and PMMA re-run on it is owed before the next release.
   Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
   counts frames off the curve).
 - **Wizard (#46, #48).** **Which test?** offers 2D DIC first: Semper's wizard, no load

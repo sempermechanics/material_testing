@@ -21,6 +21,16 @@ class EngineFailureTest {
     }
 
     @Test
+    fun `the engine's strain-window code reads like a zero-point strain-window failure`() {
+        assertEquals(-4, EngineFailure.ENGINE_ERROR_STRAIN_WINDOW)
+        assertEquals(EngineFailure.reasonRes(0), EngineFailure.reasonRes(EngineFailure.ENGINE_ERROR_STRAIN_WINDOW))
+        assertEquals(
+            EngineFailure.shortReasonRes(0),
+            EngineFailure.shortReasonRes(EngineFailure.ENGINE_ERROR_STRAIN_WINDOW),
+        )
+    }
+
+    @Test
     fun `no recorded code says only that the node was skipped and not a strain-window failure`() {
         assertEquals(R.string.sweep_node_skipped, EngineFailure.reasonRes(null))
         assertEquals(R.string.sweep_node_skipped, EngineFailure.shortReasonRes(null))

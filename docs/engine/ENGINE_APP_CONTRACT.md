@@ -23,9 +23,9 @@ respect the surface described here, and declare your change's [tier](#a1-stabili
 | Tier | What it covers | Rule for contributors |
 |---|---|---|
 | **Frozen** | Binary/data formats: output packing, metrics layout, error codes, and the *meaning* of existing `FullFieldParams` fields | Never change in place. A change here is a **major** version bump and requires a coordinated change in the downstream app. |
-| **Stable** | Public function **signatures** in `include/semper/{pipeline,io,cancel,version}.hpp` | May be **extended additively** (new overloads / new functions). Existing signatures, parameter order, defaults, and semantics must not change without a **major** bump. |
+| **Stable** | Public function **signatures** in `include/semper/{pipeline,incremental,io,cancel,version}.hpp` | May be **extended additively** (new overloads / new functions). Existing signatures, parameter order, defaults, and semantics must not change without a **major** bump. |
 | **Additive-only** | Deliberate growth points: trailing `FullFieldParams` fields, unused metrics slots | Append only, each with a default that reproduces prior behavior. Never reorder or repurpose an existing entry. |
-| **Internal** | Everything in `src/`, `tuning.hpp` constants, `PointState`, `types.hpp`, algorithm internals, private headers | Change freely. Behavior is guarded by the golden test, not by this contract. |
+| **Internal** | Everything in `src/`, `tuning.hpp` constants, `types.hpp`, `seeding.hpp`, algorithm internals, private headers | Change freely. Behavior is guarded by the golden test, not by this contract. |
 
 **Semantic versioning:**
 - **major** — any Frozen or Stable break.
@@ -54,12 +54,13 @@ int run_full_field(ReferenceCache& cache,
                    ProgressCallback on_progress = nullptr);
 ```
 
-- **Returns** *(Frozen)*: `>= 0` → number of valid output points. `-2` → invalid ROI. `-3` →
-  init/argument failure. `-99` (`kCancelled`) → cancelled mid-solve.
+- **Returns** *(Frozen)*: `>= 0` → number of valid output points. `-1` → no seed (see
+  [A.4](#return--error-codes--frozen)). `-2` → invalid ROI. `-3` → init/argument failure. `-4` →
+  `strain_window` too small for `step` (engine 0.3.0 on). `-99` (`kCancelled`) → cancelled mid-solve.
 - **Writes** *(Frozen)*: at most `output_capacity` floats, **8 per point** (see [A.4](#a4-frozen-data-formats-the-highest-risk-break-points)).
   Points beyond capacity are **dropped, never overflow** — do not weaken this guarantee.
 - **Metrics** *(Frozen layout)*: when `metrics != nullptr && metrics_len >= 16`, fill telemetry;
-  17 slots preferred. Slot indices are frozen.
+  23 slots preferred. Slot indices are frozen.
 - **Cancellation**: clears the cancel flag on entry, then polls it inside the point loops so a
   cancel lands within a point or two.
 - **You may** make it faster or more accurate however you like (that is Internal behavior, guarded
@@ -76,7 +77,7 @@ struct ReferenceCache {                 // non-copyable, non-movable
     void reset();
     void set_from_gray(const cv::Mat& gray_in, const cv::Mat& roi_mask);
     std::string debug_dir;              // app sets an on-device path; "" disables debug export
-    // internal members (Image* ref_img, akaze_*, mutex, ...) are INTERNAL
+    // internal members (ref_img, precompute, gray, ...) and adopt() are INTERNAL to the app
 };
 ```
 
@@ -154,6 +155,7 @@ OpenMP on Android aborts if driven from varying threads.
 | `getPreviewFromBytes(byte[], int)` | `io::decode_bgr` |
 | `initializeReference(byte[], byte[]?, int, int)` | `io::decode_gray`, `ReferenceCache::set_from_gray` / `reset` |
 | `computeFullFieldDirect(…)` | `io::decode_gray`, `run_full_field` |
+| `initializeIncremental` / `computeIncrementalFrame` / `releaseIncremental` (engine 0.4.0) | `IncrementalSession`; the app does not call them yet. `initializeReference` also closes an open incremental session |
 
 The full engine surface the app depends on is therefore small and closed:
 `run_full_field`, `ReferenceCache` (`reset` / `set_from_gray` / `debug_dir`), `FullFieldParams`,
@@ -175,26 +177,38 @@ field:  x   y   u   v    exx   eyy   exy   corr
 resizing the stride, or repurposing a slot is a **major** break — the app parses this layout
 verbatim by stride.
 
-### Metrics buffer — **17 × `float32`**
+### Metrics buffer — **23 × `float32`**
 
-Layout is defined by `EngineStats.fromArray` in the app. Slot **indices are Frozen**; new
-telemetry appends at the next free slot (Additive-only). `metrics_len == 16` is the minimum
-honored; 17 is preferred.
+The per-slot table is the engine's (`engine/docs/CONTRACT.md`, "Metrics buffer"). Slot
+**indices are Frozen**; new telemetry appends at the next free slot (Additive-only).
+`metrics_len == 16` is the minimum honored; 23 is preferred. The JNI copies the largest prefix
+the Kotlin array holds (16, 17, 19…23) from engine **0.4.1**; before that it stopped at 19.
+
+What the app does with it:
+
+- A run's frames pass 23 floats (`EngineStats.ENGINE_SLOT_COUNT`); stored stats keep the first
+  19 (`EngineStats.SLOT_COUNT`), the layout `EngineStats.fromArray` reads.
+- Points correlated on frame 0 are slots 3 + 4 + 19 (`EngineStats.correlatedPoints`). From
+  engine 0.3.0, points the anchor lattice solved are in slot 19, not in slot 3 or 4.
+- Slot 10 is seeding time (phase correlation + anchor lattice; AKAZE + RANSAC before 0.3.0).
+  Slot 16 grades the seed mesh (2 full, 1 sparse, 0 Path C).
 
 ### Return / error codes — Frozen
 
 | Value | Meaning |
 |---|---|
 | `>= 0` | number of valid output points |
+| `-1` | no seed: no anchor solved, phase correlation did not lock, and the Path C centre search diverged (`full_field_path_c.cpp`; not in the engine's table) |
 | `-2` | invalid ROI |
 | `-3` | init / argument failure |
+| `-4` | `strain_window` too small for `step` (engine 0.3.0 on; before, 0 points) |
 | `-99` (`kCancelled`) | cancelled mid-solve |
 
 ---
 
 ## A.5 Change checklist for contributors
 
-**✅ Free to change — patch, no app impact.** Correlation math, ICGN solver, AKAZE seeding, SIMD
+**✅ Free to change — patch, no app impact.** Correlation math, ICGN solver, seeding, SIMD
 kernels, threading, memory strategy, `tuning.hpp`, anything under `src/` — as long as the golden
 test still passes within tolerance.
 
