@@ -76,10 +76,10 @@ class FrameImportController(
 
 /**
  * Every deformed frame must match the reference pixel for pixel. The engine
- * clamps its AKAZE search window to the reference size and then indexes the
- * deformed image with it, so a mismatch throws inside OpenCV — and the JNI
- * layer swallows that exception, leaving a silently under-seeded solve.
- * Catching it here turns a bad result into a clear, fixable message.
+ * places its grid and subsets in reference coordinates and reads the deformed
+ * image at them; on a frame of another size it skips the phase-correlation
+ * seed and solves anyway, returning a wrong field with no error. Catching it
+ * here turns a bad result into a clear, fixable message.
  *
  * Costs nothing: the sizes were measured during import.
  */

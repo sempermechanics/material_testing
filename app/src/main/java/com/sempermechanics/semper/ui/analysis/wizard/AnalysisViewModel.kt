@@ -81,11 +81,11 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      *
      * The size is measured once at import (the bytes are already in hand
      * there) so the match against the reference costs nothing to re-check
-     * later. The engine clamps its AKAZE search window to the *reference* size
-     * and then applies that same window to the deformed image, so a frame of a
-     * different size makes OpenCV throw — swallowed by a `catch (...)` in the
-     * JNI layer, which silently degrades seeding. [frameSizeError] is what
-     * stops such a batch from ever reaching the engine.
+     * later. The engine places its grid in *reference* coordinates and reads
+     * the deformed image at them; a frame of a different size skips the
+     * phase-correlation seed and is solved anyway, giving a wrong field with no
+     * error. [frameSizeError] is what stops such a batch from ever reaching the
+     * engine.
      */
     var deformedFrames: List<DeformedFrame> = emptyList()
         set(value) {

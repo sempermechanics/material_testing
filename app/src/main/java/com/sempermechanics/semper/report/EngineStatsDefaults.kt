@@ -26,5 +26,16 @@ fun EngineStats.Companion.fromList(stats: List<Float>?): EngineStats {
  * with mesh seeding preset to unknown so an engine that writes only the core
  * slots leaves it meaning "unknown" rather than "fallback".
  */
-fun EngineStats.Companion.newMetrics(): FloatArray =
-    FloatArray(SLOT_COUNT).also { it[SLOT_MESH_SEEDING] = MESH_SEEDING_UNKNOWN.toFloat() }
+fun EngineStats.Companion.newMetrics(size: Int = SLOT_COUNT): FloatArray =
+    FloatArray(size).also { it[SLOT_MESH_SEEDING] = MESH_SEEDING_UNKNOWN.toFloat() }
+
+/**
+ * Points ICGN accepted on a frame, before the strain filter: path A, path B
+ * and, when [metrics] reaches it, the anchor lattice ([SLOT_ANCHOR_POINTS]).
+ * Since engine 0.3.0 anchor-solved points are in neither path slot, so a
+ * shorter array undercounts them.
+ */
+fun EngineStats.Companion.correlatedPoints(metrics: FloatArray): Int {
+    val anchors = if (metrics.size > SLOT_ANCHOR_POINTS) metrics[SLOT_ANCHOR_POINTS] else 0f
+    return (metrics[SLOT_PATH_A_POINTS] + metrics[SLOT_PATH_B_POINTS] + anchors).toInt()
+}

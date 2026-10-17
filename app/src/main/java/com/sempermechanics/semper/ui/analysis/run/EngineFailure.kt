@@ -9,7 +9,10 @@ import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 /** Maps engine error codes to the same user-facing strings on every screen. */
 object EngineFailure {
 
-    /** AKAZE could not match the pair; [RunStop.FeaturesUnmatched] as a stop code. */
+    /**
+     * No seed: no anchor solved, phase correlation did not lock, and the
+     * centre search (Path C) diverged; [RunStop.FeaturesUnmatched] as a stop code.
+     */
     const val ENGINE_ERROR_FEATURES = -1
 
     /** The ROI held no valid points; [RunStop.InvalidRoi] as a stop code. */
@@ -17,6 +20,12 @@ object EngineFailure {
 
     /** An image failed to decode, or the engine could not start; [RunStop.InitFailed] as a stop code. */
     const val ENGINE_ERROR_INIT = -3
+
+    /**
+     * The strain window spans fewer than 3 grid nodes at this step, so no point
+     * could keep a strain fit (engine 0.3.0 on; older engines returned 0 points).
+     */
+    const val ENGINE_ERROR_STRAIN_WINDOW = -4
 
     private enum class Cause {
         FEATURES,
@@ -36,6 +45,7 @@ object EngineFailure {
         ENGINE_ERROR_FEATURES -> Cause.FEATURES
         ENGINE_ERROR_ROI -> Cause.ROI
         ENGINE_ERROR_INIT -> Cause.INIT
+        ENGINE_ERROR_STRAIN_WINDOW -> Cause.VSG
         RunStop.LowConvergence.wireCode -> Cause.CONVERGENCE
         // Analyses saved before a cancel kept nothing (2026-10-15) carry this
         // stop code, so Home and the viewer read it back here; it is no

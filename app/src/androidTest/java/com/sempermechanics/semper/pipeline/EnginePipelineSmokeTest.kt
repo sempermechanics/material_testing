@@ -156,7 +156,7 @@ class EnginePipelineSmokeTest {
             override fun onProgressUpdate(percentage: Int) {}
         }
 
-        // Full parallel pipeline: AKAZE seeding, OpenMP Hessian pre-pass,
+        // Full parallel pipeline: anchor-lattice seeding, OpenMP Hessian pre-pass,
         // Delaunay mesh solve, threaded RGDIC propagation.
         val validPoints = SemperNativeLib.computeFullFieldDirect(
             refBytes, defBytes, ByteArray(0),
@@ -279,7 +279,7 @@ class EnginePipelineSmokeTest {
     @Test
     fun repeatSolveIsBitIdentical() {
         // TD-65: the same inputs solved again on the same device must give the
-        // same bytes. A rotation leaves the border cells outside the AKAZE
+        // same bytes. A rotation leaves the border cells outside the seed
         // mesh to the threaded Path B flood fill, which used to pick each
         // cell's initial guess by thread timing.
         val ref = makeReference().toPngBytes()
@@ -482,7 +482,9 @@ class EnginePipelineSmokeTest {
         }
         val roi = Roi(0, 0, W, H)
         val saved = RunSpec.of(DicParams(subset = SUBSET, step = STEP, strainWindow = 15), roi, null, false, null)
-        val next = RunSpec.of(DicParams(subset = SUBSET, step = STEP * 2, strainWindow = 15), roi, null, false, null)
+        // 21, not 15: at step 2 * STEP a 15 px window spans one grid node, which
+        // engine 0.3.0 on rejects with -4 before frame 1 can cancel.
+        val next = RunSpec.of(DicParams(subset = SUBSET, step = STEP * 2, strainWindow = 21), roi, null, false, null)
         fun hashes(dir: File) = dir.walkTopDown().filter { it.isFile }
             .associate { it.relativeTo(dir).path to it.readBytes().contentHashCode() }
         val ids = mutableListOf<String>()

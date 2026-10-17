@@ -20,6 +20,7 @@ import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.VisualizationEngine
+import com.sempermechanics.semper.report.correlatedPoints
 import com.sempermechanics.semper.report.newMetrics
 import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import com.sempermechanics.semper.ui.analysis.recommend.RunEstimate
@@ -230,7 +231,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         }
 
         outputBuffer.clear()
-        val metricsCatcher = EngineStats.newMetrics()
+        val metricsCatcher = EngineStats.newMetrics(EngineStats.ENGINE_SLOT_COUNT)
 
         val validPointsCount = SemperNativeLib.computeFullFieldDirect(
             refBytes, defBytes, spec.mask,
@@ -267,10 +268,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
         if (frameIndex == 0) {
             firstFrameValidPoints = validPointsCount
-            firstFrameCorrelatedPoints = (
-                metricsCatcher[EngineStats.SLOT_PATH_A_POINTS] + metricsCatcher[EngineStats.SLOT_PATH_B_POINTS]
-                ).toInt()
-            engineStatsArray = metricsCatcher.clone()
+            firstFrameCorrelatedPoints = EngineStats.correlatedPoints(metricsCatcher)
+            // Stored stats stay SLOT_COUNT long; the slots past it are read here only.
+            engineStatsArray = metricsCatcher.copyOf(EngineStats.SLOT_COUNT)
             firstFrameAvgIters = metricsCatcher[EngineStats.SLOT_AVG_ITERS]
         }
 

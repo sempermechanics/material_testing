@@ -29,7 +29,7 @@ Use these words. Do not invent synonyms.
 | `.dat` | Binary field: 8 floats/point (`x y u v exx eyy exy znssd`), 32 bytes |
 | session | One saved analysis on disk (and optionally in the cloud) |
 
-Engine pipeline (`engine/docs/ARCHITECTURE.md`): AKAZE seeds → Delaunay → RGDIC → ICGN → VSG → `.dat`.
+Engine pipeline (`engine/docs/ARCHITECTURE.md`): anchor-lattice seeds (phase correlation + ICGN) → Delaunay → RGDIC → ICGN → VSG → `.dat`.
 
 ## Layout
 

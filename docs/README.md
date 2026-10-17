@@ -83,8 +83,9 @@ Digital Image Correlation measures deformation from photographs:
    differentiated into **strains** (**Exx**, **Eyy**, **Exy**) — how much the
    material stretched and sheared.
 
-That is enough theory for most contributions. The full pipeline — AKAZE feature
-seeding → Delaunay mesh → RGDIC propagation → ICGN refinement → VSG strain — is
+That is enough theory for most contributions. The full pipeline — anchor-lattice
+seeding (phase correlation + ICGN) → Delaunay mesh → RGDIC propagation → ICGN
+refinement → VSG strain — is
 in `engine/docs/ARCHITECTURE.md` inside the engine submodule.
 
 ## Terms you'll meet in the code
