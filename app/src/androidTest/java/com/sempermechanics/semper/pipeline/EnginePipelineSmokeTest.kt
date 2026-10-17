@@ -156,7 +156,7 @@ class EnginePipelineSmokeTest {
             override fun onProgressUpdate(percentage: Int) {}
         }
 
-        // Full parallel pipeline: AKAZE seeding, OpenMP Hessian pre-pass,
+        // Full parallel pipeline: anchor-lattice seeding, OpenMP Hessian pre-pass,
         // Delaunay mesh solve, threaded RGDIC propagation.
         val validPoints = SemperNativeLib.computeFullFieldDirect(
             refBytes, defBytes, ByteArray(0),
@@ -279,7 +279,7 @@ class EnginePipelineSmokeTest {
     @Test
     fun repeatSolveIsBitIdentical() {
         // TD-65: the same inputs solved again on the same device must give the
-        // same bytes. A rotation leaves the border cells outside the AKAZE
+        // same bytes. A rotation leaves the border cells outside the seed
         // mesh to the threaded Path B flood fill, which used to pick each
         // cell's initial guess by thread timing.
         val ref = makeReference().toPngBytes()
@@ -482,7 +482,9 @@ class EnginePipelineSmokeTest {
         }
         val roi = Roi(0, 0, W, H)
         val saved = RunSpec.of(DicParams(subset = SUBSET, step = STEP, strainWindow = 15), roi, null, false, null)
-        val next = RunSpec.of(DicParams(subset = SUBSET, step = STEP * 2, strainWindow = 15), roi, null, false, null)
+        // 21, not 15: at step 2 * STEP a 15 px window spans one grid node, which
+        // engine 0.3.0 on rejects with -4 before frame 1 can cancel.
+        val next = RunSpec.of(DicParams(subset = SUBSET, step = STEP * 2, strainWindow = 21), roi, null, false, null)
         fun hashes(dir: File) = dir.walkTopDown().filter { it.isFile }
             .associate { it.relativeTo(dir).path to it.readBytes().contentHashCode() }
         val ids = mutableListOf<String>()
@@ -500,18 +502,24 @@ class EnginePipelineSmokeTest {
             val row = SessionStore.get(ctx, savedId)
 
             val run = BatchRun(next, ctx.cacheDir, 0L, Job(), vm.snapshotRunInputs())
+            // The run's own id, read while it runs: Cancel puts runResult back
+            // as the run found it (discardRun), so afterwards it names the saved one.
+            var runningId: String? = null
             val outcome = vm.runBatchAnalysisBody(ctx, run) { tick ->
+                if (runningId == null) runningId = vm.runResult.value.sessionId
                 if (tick.frameIndex == 1) vm.cancelRequested = true
             }
-            val nextId = checkNotNull(vm.runResult.value.sessionId)
+            val nextId = checkNotNull(runningId)
             ids += nextId
 
             assertNotEquals("a new analysis, never the saved one", savedId, nextId)
+            assertEquals("Cancel put the saved run's result back", savedId, vm.runResult.value.sessionId)
             assertEquals(RunStop.Cancelled, outcome.stop)
             assertEquals(0, outcome.totalFrames)
             assertEquals("the saved analysis's files", files, hashes(dir))
             assertEquals("its Home row", row, SessionStore.get(ctx, savedId))
-            assertFalse("no folder for the cancelled one", SessionStore.dirFor(ctx, nextId).exists())
+            // A sibling of the saved one's folder, not SessionStore.dirFor, which creates it.
+            assertFalse("no folder for the cancelled one", File(dir.parentFile, nextId).exists())
         } finally {
             vm.cancelRequested = false
             forget(ctx, ids)

@@ -91,6 +91,26 @@ class ReportSourceTest {
         assertTrue(catcher.contentEquals(metrics))
         assertEquals(EngineStats.MESH_SEEDING_UNKNOWN, EngineStats.fromArray(metrics).meshSeedingQuality)
         assertFalse("each call is a fresh array", metrics === EngineStats.newMetrics())
+        val engine = EngineStats.newMetrics(EngineStats.ENGINE_SLOT_COUNT)
+        assertEquals(EngineStats.ENGINE_SLOT_COUNT, engine.size)
+        assertTrue("same preset, longer", metrics.contentEquals(engine.copyOf(EngineStats.SLOT_COUNT)))
+    }
+
+    @Test
+    fun `correlated points add the anchor lattice when the array reaches it`() {
+        val metrics = EngineStats.newMetrics(EngineStats.ENGINE_SLOT_COUNT).also {
+            it[EngineStats.SLOT_PATH_A_POINTS] = 100f
+            it[EngineStats.SLOT_PATH_B_POINTS] = 20f
+            it[EngineStats.SLOT_ANCHOR_POINTS] = 7f
+        }
+        assertEquals(127, EngineStats.correlatedPoints(metrics))
+        // A 19-slot array (an engine before 0.4.1's JNI) has no anchor slot.
+        assertEquals(120, EngineStats.correlatedPoints(metrics.copyOf(EngineStats.SLOT_COUNT)))
+        // Anchor-only frame: no path A or B points, but points did correlate.
+        val anchorsOnly = EngineStats.newMetrics(EngineStats.ENGINE_SLOT_COUNT).also {
+            it[EngineStats.SLOT_ANCHOR_POINTS] = 12f
+        }
+        assertEquals(12, EngineStats.correlatedPoints(anchorsOnly))
     }
 
     // ── The cloud bundle ───────────────────────────────────────────────────

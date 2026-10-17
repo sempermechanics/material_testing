@@ -98,8 +98,8 @@ class SyntheticWorkloadDriver {
 
     /**
      * `step`/`subset` are load knobs, not free parameters: too sparse a grid and the
-     * AKAZE-seeded points never land near enough to a grid vertex for RGDIC to
-     * propagate from (verified on-device — step=20/subset=21 and step=20/subset=31
+     * AKAZE-seeded points never landed near enough to a grid vertex for RGDIC to
+     * propagate from (verified on-device with the AKAZE engine — step=20/subset=21 and step=20/subset=31
      * both converge on zero points against this synthetic speckle; step=6 is the
      * sparsest that still converges reliably).
      */
@@ -282,7 +282,7 @@ class SyntheticWorkloadDriver {
                     it.totalPointsAttempted.toFloat(), it.totalPointsSolved.toFloat(), it.totalPointsRejected.toFloat(),
                     it.pathAPoints.toFloat(), it.pathBPoints.toFloat(), it.simplexCalls.toFloat(),
                     it.simplexSaved.toFloat(), it.finalDeadPoints.toFloat(), it.avgIcgnIterations, it.wallTimeMs,
-                    it.akazeRansacMs, it.hessianPrepassMs, it.delaunayMs, it.strainMs, it.avgThroughputPtsPerMs,
+                    it.seedingMs, it.hessianPrepassMs, it.delaunayMs, it.strainMs, it.avgThroughputPtsPerMs,
                     it.convergencePercent, it.meshSeedingQuality.toFloat(),
                 )
             }.orEmpty(),
@@ -478,7 +478,7 @@ class SyntheticWorkloadDriver {
         log(
             "engine_stats",
             "frame0",
-            extra = "wallTimeMs=${stats.wallTimeMs} akazeRansacMs=${stats.akazeRansacMs} " +
+            extra = "wallTimeMs=${stats.wallTimeMs} seedingMs=${stats.seedingMs} " +
                 "hessianPrepassMs=${stats.hessianPrepassMs} delaunayMs=${stats.delaunayMs} " +
                 "strainMs=${stats.strainMs} avgIcgnIterations=${stats.avgIcgnIterations} " +
                 "avgThroughputPtsPerMs=${stats.avgThroughputPtsPerMs} convergencePercent=${stats.convergencePercent} " +

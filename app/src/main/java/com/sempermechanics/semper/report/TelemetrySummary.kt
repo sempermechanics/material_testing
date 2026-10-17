@@ -51,7 +51,7 @@ internal data class TelemetrySummary(
     companion object {
         /** The telemetry page's wall-time table, in [Locale.US] (see [qualityRows]). */
         fun timingRows(stats: EngineStats): List<List<String>> = listOf(
-            listOf("AKAZE + RANSAC Phase", "%.1f ms".format(Locale.US, stats.akazeRansacMs)),
+            listOf("Seeding Phase", "%.1f ms".format(Locale.US, stats.seedingMs)),
             listOf("Hessian Pre-Pass", "%.1f ms".format(Locale.US, stats.hessianPrepassMs)),
             listOf("Delaunay Mesh Phase", "%.1f ms".format(Locale.US, stats.delaunayMs)),
             listOf("Strain Calculation Phase", "%.1f ms".format(Locale.US, stats.strainMs)),

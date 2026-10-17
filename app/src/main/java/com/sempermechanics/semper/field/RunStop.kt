@@ -29,7 +29,7 @@ sealed class RunStop(val wireCode: Int) {
     /** The run worked through every frame (stop code 0). */
     data object Finished : RunStop(FINISHED)
 
-    /** Engine `-1`: AKAZE could not match the reference and the frame. */
+    /** Engine `-1`: no seed (no anchor solved, no phase lock, and the centre search diverged). */
     data object FeaturesUnmatched : RunStop(FEATURES_UNMATCHED)
 
     /** Engine `-2`: the ROI (or mask) left no grid points. */

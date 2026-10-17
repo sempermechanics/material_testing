@@ -79,14 +79,18 @@ data class EngineStats(
 
     val avgIcgnIterations: Float,
     val wallTimeMs: Float,
-    val akazeRansacMs: Float,
+    /** Slot 10: seeding time. Phase correlation + anchor lattice from engine 0.3.0; AKAZE + RANSAC before. */
+    val seedingMs: Float,
     val hessianPrepassMs: Float,
     val delaunayMs: Float,
     val strainMs: Float,
     val avgThroughputPtsPerMs: Float,
     val convergencePercent: Float,
 
-    /** 2 = full AKAZE mesh, 1 = sparse mesh, 0 = Path C fallback (RGDIC-only), -1 = unknown */
+    /**
+     * 2 = full mesh, 1 = sparse mesh, 0 = Path C fallback (RGDIC-only), -1 = unknown.
+     * Engine 0.3.0 on seeds the mesh from the anchor lattice; older sessions, from AKAZE.
+     */
     val meshSeedingQuality: Int = MESH_SEEDING_UNKNOWN,
 
     /**
@@ -100,8 +104,8 @@ data class EngineStats(
     val icgnMs: Float = 0f,
 ) {
     fun meshSeedingLabel(): String = when (meshSeedingQuality) {
-        2 -> "Full AKAZE Mesh"
-        1 -> "Sparse AKAZE Mesh"
+        2 -> "Full Seed Mesh"
+        1 -> "Sparse Seed Mesh"
         0 -> "Fallback (RGDIC-only, no mesh)"
         else -> "Unknown (legacy data)"
     }
@@ -144,6 +148,19 @@ data class EngineStats(
         /** Full slot count including the optional mesh-seeding and simplex/ICGN-time slots. */
         const val SLOT_COUNT = 19
 
+        /**
+         * Points the anchor lattice solved (engine 0.3.0 on). They are in neither
+         * [SLOT_PATH_A_POINTS] nor [SLOT_PATH_B_POINTS]. Read live during a run
+         * and never stored: stored stats stay [SLOT_COUNT] long.
+         */
+        const val SLOT_ANCHOR_POINTS = 19
+
+        /**
+         * Slots the engine's JNI copies back from 0.4.1: [SLOT_COUNT] plus 19..22
+         * (anchor-solved, dropped by the strain filter, phase lock, mesh coverage).
+         */
+        const val ENGINE_SLOT_COUNT = 23
+
         /** Matches the float[] written by SemperJNI.cpp (16 slots + optional slot 16) */
         fun fromArray(a: FloatArray): EngineStats = if (a.size >= CORE_SLOT_COUNT) {
             EngineStats(
@@ -157,7 +174,7 @@ data class EngineStats(
                 finalDeadPoints = a[7].toInt(),
                 avgIcgnIterations = a[SLOT_AVG_ITERS],
                 wallTimeMs = a[9],
-                akazeRansacMs = a[10],
+                seedingMs = a[10],
                 hessianPrepassMs = a[11],
                 delaunayMs = a[12],
                 strainMs = a[13],

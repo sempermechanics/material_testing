@@ -75,7 +75,7 @@ class PdfReportGeneratorTest {
         finalDeadPoints = 10,
         avgIcgnIterations = 1.5f,
         wallTimeMs = 1234.5f,
-        akazeRansacMs = 12.5f,
+        seedingMs = 12.5f,
         hessianPrepassMs = 3.25f,
         delaunayMs = 7.5f,
         strainMs = 2.5f,
