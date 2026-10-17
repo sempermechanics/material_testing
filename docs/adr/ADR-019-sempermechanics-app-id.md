@@ -1,6 +1,6 @@
 # ADR-019: The app is `com.sempermechanics.semper`; "indic" leaves the code
 
-**Status:** Accepted, built (not yet released)
+**Status:** Accepted, released (Semper `v1.2-beta.4`, Material Testing `v1.4-beta.2`, 2026-10-17)
 **Date:** 2026-10-03
 **Deciders:** app owner
 

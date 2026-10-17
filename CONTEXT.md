@@ -114,7 +114,7 @@ emulator (`scripts/micro_ab.py`, [TESTING.md](docs/app/TESTING.md)); the phone-r
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-14)
+## Current state (2026-10-17)
 
 - **Deployed.** Cloud Run `semper-api` behind API Gateway `semper-gw`, and staging
   `semper-api-staging` behind `semper-gw-staging`, from `c295639d` (2026-10-14; gateways
@@ -129,23 +129,19 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **App id `com.sempermechanics.semper`** ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md),
   2026-10-05); material_testing moves to `com.sempermechanics.materialtesting` when it
   merges this code ([FORK_SYNC](docs/ops/FORK_SYNC.md)).
-- **App release `v1.2-beta.3`** (beta, versionCode 35, from `ae05bb87`). On `main` and not
-  in a release yet: the quality program (#310–#332;
-  [QUALITY_PROGRAM_RESULTS.md](docs/ops/QUALITY_PROGRAM_RESULTS.md)); security and data-loss
-  fixes (#393–#400); the UI pass (#385–#396) and the minimal pass (#402–#419); tech-debt
-  fixes (#404–#411, #425); unique analysis names (#426); device key recovery (#427; the
-  shared key slot stays open, TD-209); and the 2026-10-13/14 fixes #428, #429 (the app
-  sends the name), #430, #431, #433, #434 (backup schema `/4`) and #435 (exports drawn
-  on the deformed frame), and #445 (engine `3e3a785`, 0.4.1: anchor-lattice seeding,
-  incremental DIC, all 23 metrics slots through the JNI). Open: the pin to `23034fe` (0.4.2:
-  the lattice is seeded with rotation and scale, Fourier–Mellin; no JNI change).
-- **material_testing shares this history** and merges this `main` (last at `3154ebc`,
-  material_testing#132, 2026-10-08; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)). At its next
-  sync it must take #434's restore reader (schema `/4`, `ref/Reference.png`) before
-  its writer.
+- **App release `v1.2-beta.4`** (beta, versionCode 1036, from `33dce87d`, 2026-10-17;
+  engine `23034fe`, 0.4.2). It is the first release under the new app id, so it installs
+  beside the old app, not over it. Contents and install steps: the GitHub Release and
+  [CHANGELOG](docs/ops/CHANGELOG.md). Nothing is on `main` beyond it.
+- **material_testing shares this history** and merges this `main` (last at `8ba7081`,
+  material_testing#133, 2026-10-15; [FORK_SYNC.md](docs/ops/FORK_SYNC.md)), which took
+  #434's reader and writer together. It released `v1.4-beta.2` from `d08aae07` on
+  2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
-- **Owed.** At the 0.4.2 pin: the on-device characterization (TD-212). Pixel 6 runs for #435: `HotPathMicroBenchmark` (`buildReport_oneFrame`,
+- **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5),
+  installed beside the old app after a backup there. At the 0.4.2 pin: the on-device
+  characterization (TD-212). Pixel 6 runs for #435: `HotPathMicroBenchmark` (`buildReport_oneFrame`,
   `generateDeformedHeatmap_oneFrame`, `gifEncode_*`, `decodeDatFile_oneFrame`) and
   `ViewerScrubBenchmark`. Optional: a Hosting deploy (`scripts/deploy-console.sh`) for
   the account console's backup-name column (#429). The public release (website / Play)
