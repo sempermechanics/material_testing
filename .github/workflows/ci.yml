@@ -226,6 +226,8 @@ jobs:
               - 'docs/legal/**'
               # Tier 4's ruff is the only lint the ops scripts get.
               - 'scripts/*.py'
+              # Fixtures the scripts' pytest modules read (check_release_apk).
+              - 'scripts/tests/**'
               # The client's copies of the three wire contracts. Without these,
               # a rename on an app-only PR skips the backend tier and the tests
               # holding each pair of lists together never run — which is the one
@@ -741,6 +743,18 @@ jobs:
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
             || { echo "APK is NOT validly signed"; exit 1; }
+
+      # The release hardening gate the Release workflow runs (signed or not:
+      # aapt2 reads an unsigned APK too). No pins are passed here, so the
+      # cert-pins line is a warning.
+      - name: Inspect release APK hardening
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          python3 scripts/check_release_apk.py "$APK" \
+            --aapt2 "$BUILD_TOOLS/aapt2" \
+            --mapping app/build/outputs/mapping/release/mapping.txt
 
       - name: Note unsigned build
         if: env.KEYSTORE_BASE64 == ''

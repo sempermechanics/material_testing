@@ -119,7 +119,9 @@ jobs:
         env:
           VERSION: ${{ github.event.inputs.version }}
 
-      - name: Build signed release APK
+      # The APK (GitHub Release, sideload) and the AAB (Play upload, by hand)
+      # come from one Gradle run, so they share one R8 pass and one mapping.
+      - name: Build signed release APK and bundle
         env:
           SIGNING_KEYSTORE: app/release.keystore
           SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -130,6 +132,11 @@ jobs:
           # INDIC_API_BASE_URL is the var's name before the rename; drop it once
           # SEMPER_API_BASE_URL is set in every environment.
           SEMPER_API_BASE_URL: ${{ vars.SEMPER_API_BASE_URL || vars.INDIC_API_BASE_URL }}
+          # CertificatePinner pins for the API host (comma-separated sha256/...=).
+          # Empty means system trust only; check_release_apk.py warns on it.
+          SEMPER_API_CERT_PINS: ${{ secrets.SEMPER_API_CERT_PINS }}
+          # Public keys the app verifies signed entitlements with (public, so a var).
+          SEMPER_ENTITLEMENT_PUBKEYS: ${{ vars.SEMPER_ENTITLEMENT_PUBKEYS }}
           # Releases sit above every CI run number ever used as a versionCode
           # (main's CI reached 671 before it switched to a fixed 1), so a phone
           # holding an old CI APK takes the next release as an update.
@@ -142,6 +149,7 @@ jobs:
           fi
           ./gradlew --console=plain \
             :app:assembleRelease \
+            :app:bundleRelease \
             -PabiFilters=arm64-v8a \
             -PnativeCompilerLauncher=ccache \
             -PversionName="${VERSION_NAME}" \
@@ -164,6 +172,29 @@ jobs:
           echo "Release APK is signed:"
           "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
             | grep -iE "(Signer #1|V[0-9]+ Signer):? ?certificate SHA-256"
+
+      # What the release build type promises, read back from the APK itself:
+      # not debuggable or testOnly, no debug source-set component, no App Check
+      # debug provider, no cleartext, minSdk as app/build.gradle.kts says, a
+      # non-empty R8 mapping (readiness A1.5; MASWE-0067 / MASWE-0089). Warns,
+      # without failing, when no certificate pin was compiled in.
+      - name: Inspect release APK hardening
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          python3 scripts/check_release_apk.py "$APK" \
+            --aapt2 "$BUILD_TOOLS/aapt2" \
+            --mapping app/build/outputs/mapping/release/mapping.txt
+
+      # An AAB is a signed JAR, not an APK: apksigner does not read it.
+      - name: Verify release bundle signature
+        run: |
+          set -euo pipefail
+          AAB=$(ls app/build/outputs/bundle/release/*.aab | head -1)
+          jarsigner -verify "$AAB" | tee "$RUNNER_TEMP/jarsigner.txt"
+          grep -q "jar verified" "$RUNNER_TEMP/jarsigner.txt" \
+            || { echo "::error::Release bundle is NOT validly signed"; exit 1; }
 
       # google-services publishes default_web_client_id from oauth client_type 3.
       # AuthActivity hides Google SSO when that string is missing. Resource
@@ -216,6 +247,14 @@ jobs:
           name: release-apk
           path: app/build/outputs/apk/release/*.apk
 
+      # For a Play Console upload by hand; nothing here uploads to Play.
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
       # R8 obfuscates release builds, so a field stack trace is unreadable without
       # the mapping for the exact build that produced it. It cannot be regenerated
       # afterwards — if this file is lost, those crashes stay unreadable forever.
@@ -265,6 +304,12 @@ jobs:
           name: release-apk
           path: release-apk/
 
+      - name: Download release bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: release-aab
+          path: release-aab/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
@@ -272,4 +317,6 @@ jobs:
           name: ${{ github.event.inputs.version }}
           body: ${{ github.event.inputs.changelog }}
           prerelease: ${{ github.event.inputs.channel == 'beta' }}
-          files: release-apk/*.apk
+          files: |
+            release-apk/*.apk
+            release-aab/*.aab
