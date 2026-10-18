@@ -29,6 +29,16 @@ class DownloadFailureTest {
     }
 
     @Test
+    fun `the restore kill switch is a pause, not a failure or a refusal`() {
+        val paused = DownloadFailure.of(ApiException(503, """{"detail":"feature_paused"}""", "r1"))
+        assertTrue(paused is DownloadFailure.Paused)
+        assertEquals("r1", (paused as DownloadFailure.Paused).cause.requestId)
+        // Any other 503 is still an outage to ride out.
+        val outage = DownloadFailure.of(ApiException(503, """{"detail":"firestore_unreachable"}"""))
+        assertTrue(outage is DownloadFailure.Transient)
+    }
+
+    @Test
     fun `corrupt bytes and a backup missing a file are unusable`() {
         val corrupt = DownloadFailure.of(CorruptTransferException("session_zip_sha256_mismatch"))
         val zip = DownloadFailure.of(ZipException("bad"))

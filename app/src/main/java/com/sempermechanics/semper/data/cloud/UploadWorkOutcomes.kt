@@ -29,8 +29,8 @@ internal object UploadWorkOutcomes {
         UploadErrors.Kind.QUOTA, UploadErrors.Kind.TOO_LARGE, UploadErrors.Kind.REJECTED -> Result.failure()
         // Stale session or bad bytes — rebuild on the next attempt.
         UploadErrors.Kind.STALE_SESSION, UploadErrors.Kind.INTEGRITY -> Result.retry()
-        // Transient or unknown — keep staging and retry.
-        UploadErrors.Kind.TRANSIENT -> Result.retry()
+        // Paused by a kill switch, transient or unknown — keep staging and retry.
+        UploadErrors.Kind.PAUSED, UploadErrors.Kind.TRANSIENT -> Result.retry()
     }
 
     /** Whether HTTP [code] and [body] mean the account analysis quota is full. */

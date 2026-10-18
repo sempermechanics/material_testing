@@ -6,6 +6,8 @@ import com.sempermechanics.semper.data.net.ApiErrors
 
 /**
  * Maps backend licence/feature [detail] codes to user-facing restore messages.
+ * `feature_paused` (the restore kill switch) reads as paused, the wording the
+ * app uses when it knows of the switch itself, never as a licence refusal.
  */
 object LicenseErrors {
 
@@ -16,6 +18,8 @@ object LicenseErrors {
                 context.getString(R.string.restore_device_mismatch)
             ApiErrors.hasCode(detail, ApiErrors.FEATURE_NOT_LICENSED) ->
                 context.getString(R.string.restore_not_licensed)
+            ApiErrors.hasCode(detail, ApiErrors.FEATURE_PAUSED) ->
+                context.getString(R.string.restore_paused)
             ApiErrors.hasCode(detail, ApiErrors.DRIVE_FILE_GONE) ->
                 context.getString(R.string.restore_backup_gone)
             detail.isBlank() -> context.getString(R.string.restore_failed_generic)
@@ -33,6 +37,8 @@ object LicenseErrors {
         return when {
             ApiErrors.hasCode(detail, ApiErrors.FEATURE_NOT_LICENSED) ->
                 context.getString(R.string.download_not_licensed)
+            ApiErrors.hasCode(detail, ApiErrors.FEATURE_PAUSED) ->
+                context.getString(R.string.restore_paused)
             ApiErrors.hasCode(detail, ApiErrors.LICENSE_DEVICE_MISMATCH) ->
                 context.getString(R.string.restore_device_mismatch)
             ApiErrors.hasCode(detail, ApiErrors.DRIVE_FILE_GONE) ->

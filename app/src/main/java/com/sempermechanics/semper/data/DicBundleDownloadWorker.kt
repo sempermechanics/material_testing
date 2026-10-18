@@ -150,6 +150,15 @@ class DicBundleDownloadWorker internal constructor(
             dest.delete()
             fail(failure.cause.message ?: failure.cause.javaClass.simpleName)
         }
+        is DownloadFailure.Paused -> {
+            // The restore kill switch: not a failure, so no failure event.
+            // The body carries `feature_paused`, which LicenseErrors reads as paused.
+            val e = failure.cause
+            Timber.i("Bundle download paused by the backend")
+            TransferLog.phase(TransferLog.PhaseFields(PHASE, "paused", httpStatus = e.code, requestId = e.requestId))
+            dest.delete()
+            fail(e.body)
+        }
         is DownloadFailure.Transient -> {
             Timber.w(failure.cause, "Bundle download failed; will retry")
             val api = failure.api
