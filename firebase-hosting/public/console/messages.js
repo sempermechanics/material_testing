@@ -72,4 +72,44 @@ export const ACCOUNT = {
     "and removes the sign-in itself for both apps, Semper and Material " +
     "Testing, since they share one account. It cannot be undone: signing " +
     "in again with the same address starts a new, empty account.",
+  // The "Redeem a claim code" card (account/claim.js), shown only while no
+  // licence is attached. A claim code is how a reseller deal, joining an
+  // institution by email domain, or a failed invite reaches an account; the
+  // app itself takes no codes and shows no purchase. No price and no buying
+  // here either.
+  claim: {
+    intro: "A claim code adds a licence or an institution seat to this account.",
+    shape: "That does not look like a whole claim code: it is letters and digits, " +
+      "at least eight, in groups split by dashes. Check it against the one you were given.",
+    working: "Redeeming your claim code…",
+    done: "Claim code redeemed. Open the app and tap Refresh licence, or wait for its next check.",
+    failed: "The claim code could not be redeemed just now. Try again, or email " +
+      "support@sempermechanics.com.",
+    // One sentence per refusal, keyed in camelCase (account/claim.js maps
+    // the backend's codes onto these).
+    refusals: {
+      notFound: "No claim code matches that. Check each character and try again.",
+      revoked: "That claim code has been withdrawn. Ask whoever gave it to you, or email " +
+        "support@sempermechanics.com.",
+      expired: "That claim code has expired. Ask whoever gave it to you for a new one.",
+      emailMismatch: "That claim code was issued to a different email address or institution. " +
+        "Sign in with that account, then try again.",
+      deviceMismatch: "The licence behind that claim code is in use on another phone. Move it " +
+        "from the account it is on, or email support@sempermechanics.com.",
+      alreadyRedeemed: "That claim code has already been used. If it was meant for you, email " +
+        "support@sempermechanics.com.",
+      alreadyLicensed: "This account already has a licence, so the claim code was not used. " +
+        "Reload the page to see it.",
+      seatsExhausted: "Every seat on that institution licence is taken. Ask your institution's " +
+        "IT to free or add one.",
+      seatDisabled: "Your institution has put your seat on hold. Ask your institution's IT to " +
+        "resume it.",
+      deviceInUse: "Your phone is registered to another Semper account. Sign in with that " +
+        "account, or email support@sempermechanics.com to release the phone.",
+      busy: "The server was busy and the claim code was not used. Try again in a moment.",
+      rateLimited: "Too many attempts. Wait a few minutes and try again.",
+      notApproved: "Your account isn't approved yet. Try again once it is.",
+      emailNotVerified: "Verify your email address with your sign-in provider first, then try again.",
+    },
+  },
 };

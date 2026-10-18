@@ -13,6 +13,7 @@ import { errorDetail, holdsLicence, placeholderRows, retryRow } from "../util.js
 import { explain as refusalText, ACCOUNT } from "../messages.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";
+import { showClaim, onClaimed } from "./claim.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -56,6 +57,11 @@ function showFactorPill() {
 // wiping it when it answers second.
 let accountError = "";
 
+// A redeemed claim code re-reads the account, so the licence it attached is
+// shown at once.
+onClaimed(loadAccount);
+
+/** Read /v1/me and draw the licence card; resolves to the error reported, or "". */
 async function loadAccount() {
   try {
     const me = await api("/v1/me");
@@ -72,7 +78,10 @@ async function loadAccount() {
     $("facts").innerHTML = "";
     $("offline").hidden = true;
     $("explain").textContent = "The licence could not be read. Reload the page to try again.";
+    // Whether there is a licence is not known, so nothing is offered.
+    showClaim(false);
   }
+  return accountError;
 }
 
 function renderLicence() {
@@ -117,6 +126,8 @@ function renderLicence() {
   $("unbind").hidden = !held;
   // Each app holds its own device (ADR-010), so each moves on its own.
   $("unbindMt").hidden = !held;
+  // A claim code is for an account with nothing attached yet.
+  showClaim(!held);
   renderQuota();
 }
 
@@ -172,8 +183,9 @@ function explain(licensed, floating, holdsSeat, held, lapsed) {
   }
   if (!licensed) {
     return "You are on the demo. Analyses are capped and cloud backup is off. " +
-           "Ask your Semper contact or your IT department for a licence — it " +
-           "attaches to this address by itself, with nothing to type.";
+           "Ask your Semper contact or your IT department for a licence. Most " +
+           "attach to this address by themselves; if you were given a claim " +
+           "code, redeem it below.";
   }
   if (licence.inGrace) {
     return "Your licence has passed its end date. Nothing is restricted yet, " +
