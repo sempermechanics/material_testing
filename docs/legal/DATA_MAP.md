@@ -13,7 +13,10 @@ nothing that `render_legal_pages.py --check` compares. Where this map and the
 policy disagree, the map describes the code and the disagreement is a finding.
 
 Paths are from the repository root; app paths from
-`app/src/main/java/com/sempermechanics/semper/`.
+`app/src/main/java/com/sempermechanics/semper/`. Brought up to the branch
+`claude/readiness-followups-jhfhj9` at `75bac5f` (2026-10-18): hashed addresses
+in audit rows, the wider erasure and the POST licence search are in code there,
+not yet deployed.
 
 ## Categories of data subject
 
@@ -45,16 +48,16 @@ no client can read or write any of them (`firestore.rules:7-9`).
 | Collection | Personal data | Purpose | Retention |
 |---|---|---|---|
 | `users/{uid}` | `email`, `emailVerified`, `displayName`, `signInProvider`, `role`, `access_status`, `claimedDeviceId`, per-app `activeDeviceId`, `linkedAuthUids`, licence mirror (`licenseId`, mode, terms), `termsAccepted` and `improvementConsent` records (each with a device id and source), `createdAt`, `lastSeenAt` (`backend/app/repo/users.py:200-217`; schema `docs/backend/CLOUD_ARCHITECTURE_GCP.md:544-579`) | Identity, access, licensing, consent records | Until erasure (`backend/app/repo/account.py:206-244`) |
-| `auth_links/{firebaseSub}` | the canonical uid a Firebase subject maps to (`backend/app/repo/users.py:93`) | Merging sign-in methods | **Not deleted on erasure** (TD-243) |
+| `auth_links/{firebaseSub}` | the canonical uid a Firebase subject maps to (`backend/app/repo/users.py:93`) | Merging sign-in methods | Until erasure: every row whose `uid` is the account is deleted (`backend/app/repo/account.py:237-239`). Rows left by erasures before that change stay until a sweep (TD-271) |
 | `devices/{deviceId}` | `uid`, `app`, `publicKeyPem`, `model`, `osVersion`, `appVersion`, `status`, registration and last-assertion times (`backend/app/repo/devices.py:80-92`) | Device binding, request signatures | Until erasure |
 | `challenges/{nonce}` | `uid`, `deviceId` | Replay protection | TTL on `expireAt` (`backend/firestore.indexes.json:104-122`); deleted on use |
 | `sessions/{sid}` | `uid`, `deviceId`, `app`, `specimen` (the reference image's file name), `name` (the analysis name), small run metrics, Drive folder id (`backend/app/repo/sessions.py:450-475`) | Cloud backup index | Until the session or account is erased |
 | `files/{fileId}` | `uid`, `sessionId`, file `name`, size, `sha256`, Drive ids | Upload tracking | Until the session or account is erased |
 | `licenses/{id}` | `emailLock` and `redeemedByUid` (individual); `adminEmails`, `domainLock` (institution); per-app `deviceIdLock`; `createdByUid` | Licensing | Until deleted; then 30 days in `deleted_licenses` |
-| `licenses/{id}/seats/{uid}` | `uid`, `email`, per-app `deviceIdLock`, lease fields (`backend/app/repo/claims.py:246-254`) | Institution roster | A revoked seat keeps `email` (TD-243) |
+| `licenses/{id}/seats/{uid}` | `uid`, `email`, per-app `deviceIdLock`, lease fields (`backend/app/repo/claims.py:246-254`) | Institution roster | A revoked seat keeps `email` until its holder's account is erased, which blanks it on every seat the account held, live seats revoked first (`_blank_seat_addresses`, `backend/app/repo/account.py:186-203`). Seats on other licences are found by a collection-group query whose index must be deployed first (TD-271) |
 | `licenseInvites/{id}` | `email`, `licenseId`, `invitedByUid` (`backend/app/repo/invites.py:155-163`) | Promise of a seat before sign-up | Until redeemed or withdrawn; an individual licence is re-invited to its address after its holder's erasure (`backend/app/repo/account.py:146-148`) |
-| `deleted_licenses/{id}`, `…/deleted_seats/{uid}` | copies of the above | 30-day hold for restore | TTL on `purgeAt` (`backend/firestore.indexes.json:123-160`) |
-| `audit_logs/{autoId}` | `uid`, `deviceId`, `action`, `target`, `detail`, `licenseId` (`backend/app/audit.py:64-78`). An `ip` field exists but no caller sets it. `detail` holds email addresses for licence mint and convert (TD-242) | Security and accountability; customer-visible per licence | **Kept after erasure, no TTL** (TD-237) |
+| `deleted_licenses/{id}`, `…/deleted_seats/{uid}` | copies of the above | 30-day hold for restore | TTL on `purgeAt` (`backend/firestore.indexes.json:123-160`); a held seat's `email` is blanked on its holder's erasure |
+| `audit_logs/{autoId}` | `uid`, `deviceId`, `action`, `target`, `detail`, `licenseId` (`backend/app/audit.py:64-78`). An `ip` field exists but no caller sets it. `detail` holds no address: mint, convert and an `adminEmails` edit record hashes (`emailLockHash`, `adminEmailHashes`, `adminEmailCount`; `audit.address_tag`, `backend/app/audit.py:35-47`). A licence edit records its free-text `note` as typed (TD-270) | Security and accountability; customer-visible per licence | **Kept after erasure, no TTL** (TD-237) |
 
 ### Google Drive (Shared Drive, runtime SA as Manager)
 
@@ -71,7 +74,10 @@ account (`DELETE /v1/me` removes the user folder first,
   licensing events `licenseId` (allowed fields, `observability.py:24-30`). An email
   that must be logged is a 12-hex hash (`short_hash`, `:189-196`).
 - uvicorn's access line and the Cloud Run / API Gateway request logs carry the full
-  URL, including a staff search's address in `?q=` (TD-244).
+  URL. The staff licence search sends its address in a POST body
+  (`POST /v1/admin/licenses/search`, `backend/app/routers/admin.py:166-174`); the
+  GET's `?q=` still answers for one release and would put an address in the URL
+  (TD-273).
 - Retention: the project's log bucket setting, unverified (policy §4 lists it
   UNKNOWN).
 
@@ -119,7 +125,8 @@ transfer exclude preferences and session files
 
 ## Findings recorded elsewhere
 
-TD-237 (audit retention and lock), TD-242 (addresses in audit rows), TD-243
-(erasure leftovers), TD-244 (address in request logs), TD-227 (location), TD-232
+TD-237 (audit retention and lock), TD-270 (free-text `note` in audit rows), TD-271
+(erasure's seat index; erasures before the change), TD-273 (the deprecated search
+query), TD-227 (location), TD-232
 (Data safety, `AD_ID`), TD-36 (policy placeholders). `docs/backend/CLOUD_ARCHITECTURE_GCP.md`
 §5 lists `ua` on `audit_logs`; the code writes none.
