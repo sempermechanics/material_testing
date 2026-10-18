@@ -256,8 +256,11 @@ class Settings:
     # revocation check answers 503 `auth_check_busy`, so one flood cannot
     # spend the quota every step-up needs. Per instance, like every bucket in
     # rate_limit.py.
-    AUTH_ADMIN_CALLS_PER_SECOND = _env_int("AUTH_ADMIN_CALLS_PER_SECOND", "10")
-    AUTH_ADMIN_BURST = _env_int("AUTH_ADMIN_BURST", "20")
+    # At least 1 each: a 0 (meant as "off") would refuse every call for the
+    # life of the instance, so every console step-up would answer 503 and no
+    # account deletion would remove its Firebase user.
+    AUTH_ADMIN_CALLS_PER_SECOND = max(1, _env_int("AUTH_ADMIN_CALLS_PER_SECOND", "10"))
+    AUTH_ADMIN_BURST = max(1, _env_int("AUTH_ADMIN_BURST", "20"))
 
     # --- signed entitlement (A4.1 / A4.3) -----------------------------------
     # PEM of an EC P-256 private key. When set, GET /v1/config adds

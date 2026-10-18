@@ -272,6 +272,11 @@ def test_the_budget_defaults_and_reads_its_env(monkeypatch):
     try:
         fresh = importlib.reload(config).Settings()
         assert (fresh.AUTH_ADMIN_CALLS_PER_SECOND, fresh.AUTH_ADMIN_BURST) == (3, 7)
+        # A 0 or less is not "off": it would refuse every call for good.
+        monkeypatch.setenv("AUTH_ADMIN_CALLS_PER_SECOND", "0")
+        monkeypatch.setenv("AUTH_ADMIN_BURST", "-5")
+        fresh = importlib.reload(config).Settings()
+        assert (fresh.AUTH_ADMIN_CALLS_PER_SECOND, fresh.AUTH_ADMIN_BURST) == (1, 1)
     finally:
         monkeypatch.delenv("AUTH_ADMIN_CALLS_PER_SECOND")
         monkeypatch.delenv("AUTH_ADMIN_BURST")
