@@ -19,6 +19,22 @@ from .roster import RosterAdmin, Tier, roster_router
 router = APIRouter()
 
 
+def _admin_email_detail(admin_emails) -> dict:
+    """`adminEmails` as an audit detail holds it: hashed, with the count
+    (TD-242). Audit rows outlive account erasure and must hold no address."""
+    emails = list(admin_emails or [])
+    return {"adminEmailHashes": audit.address_tags(emails), "adminEmailCount": len(emails)}
+
+
+def _audited_patch(patch: dict) -> dict:
+    """A licence edit as ADMIN_LICENSE_EXTEND records it: each term as text,
+    except `adminEmails`, which is hashed (`_admin_email_detail`)."""
+    out = {k: str(v) for k, v in patch.items() if k != "adminEmails"}
+    if "adminEmails" in patch:
+        out.update(_admin_email_detail(patch["adminEmails"]))
+    return out
+
+
 @router.get("/v1/admin/users")
 def admin_list_users(
     status: AccessStatus = "",
@@ -184,7 +200,7 @@ def admin_create_license(
             admin["uid"], action="ADMIN_LICENSE_MINT",
             target={"type": "license", "id": minted["license"]["id"]},
             detail={"kind": KIND_INSTITUTION, "domainLock": body.domainLock,
-                    "adminEmails": body.adminEmails, "maxSeats": body.maxSeats,
+                    **_admin_email_detail(body.adminEmails), "maxSeats": body.maxSeats,
                     "seating": body.seating},
         )
         return minted
@@ -208,7 +224,7 @@ def admin_create_license(
     audit.record(
         admin["uid"], action="ADMIN_LICENSE_MINT",
         target={"type": "license", "id": minted["license"]["id"]},
-        detail={"kind": KIND_INDIVIDUAL, "emailLock": body.emailLock,
+        detail={"kind": KIND_INDIVIDUAL, "emailLockHash": audit.address_tag(body.emailLock),
                 "deviceIdLock": body.deviceIdLock,
                 "inviteError": minted.get("inviteError") or "",
                 # Set when the address already had an account, which the
@@ -292,7 +308,7 @@ def admin_update_license(
         audit.record(
             admin["uid"], action="ADMIN_LICENSE_EXTEND",
             target={"type": "license", "id": license_id},
-            detail={k: str(v) for k, v in patch.items()},
+            detail=_audited_patch(patch),
         )
     return updated
 
@@ -384,7 +400,7 @@ def admin_convert_license(
         admin["uid"], action="ADMIN_LICENSE_CONVERT",
         target={"type": "license", "id": license_id},
         detail={"to": out["license"]["id"], "domainLock": body.domainLock,
-                "adminEmails": body.adminEmails, "maxSeats": body.maxSeats,
+                **_admin_email_detail(body.adminEmails), "maxSeats": body.maxSeats,
                 "seating": body.seating, "claimedByUid": out["claimedByUid"]},
     )
     return out
