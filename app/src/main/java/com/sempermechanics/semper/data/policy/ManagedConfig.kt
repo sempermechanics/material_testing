@@ -16,11 +16,6 @@ data class ManagedConfig(
      * roster decides who is licensed.
      */
     val accountEmailDomain: String? = null,
-    /**
-     * A short-lived enrollment invite code, or null. Never a licence key: a
-     * key does not belong in a policy every managed phone can read.
-     */
-    val enrollmentInvite: String? = null,
     /** False: cloud backup is off on this phone (no backup screens, no uploads, no restores). */
     val cloudBackupAllowed: Boolean = true,
     /** True: uploads wait for an unmetered network whatever the user's Wi-Fi-only switch says. */
@@ -31,26 +26,22 @@ data class ManagedConfig(
         val UNMANAGED = ManagedConfig()
 
         const val KEY_ACCOUNT_EMAIL_DOMAIN = "accountEmailDomain"
-        const val KEY_ENROLLMENT_INVITE = "enrollmentInvite"
         const val KEY_CLOUD_BACKUP_ALLOWED = "cloudBackupAllowed"
         const val KEY_BACKUP_ON_UNMETERED_ONLY = "backupOnUnmeteredOnly"
 
         private const val MAX_DOMAIN_LENGTH = 253
-        private const val MAX_INVITE_LENGTH = 128
         private val DOMAIN = Regex("^(?=.{1,$MAX_DOMAIN_LENGTH}$)([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$")
-        private val INVITE = Regex("^[A-Za-z0-9_-]{1,$MAX_INVITE_LENGTH}$")
 
         /**
          * The config in [values] (a restrictions `Bundle` read as a map). A
-         * value of the wrong type, or a string that is not a plausible domain
-         * or invite, reads as unset: a typo in the EMM console must not lock
+         * value of the wrong type, or a string that is not a plausible domain,
+         * reads as unset: a typo in the EMM console must not lock
          * the phone out of sign-in or turn backup off.
          */
         fun from(values: Map<String, Any?>): ManagedConfig = ManagedConfig(
             accountEmailDomain = (values[KEY_ACCOUNT_EMAIL_DOMAIN] as? String)
                 ?.trim()?.removePrefix("@")?.lowercase(Locale.ROOT)
                 ?.takeIf { DOMAIN.matches(it) },
-            enrollmentInvite = (values[KEY_ENROLLMENT_INVITE] as? String)?.trim()?.takeIf { INVITE.matches(it) },
             cloudBackupAllowed = values[KEY_CLOUD_BACKUP_ALLOWED] as? Boolean ?: true,
             backupOnUnmeteredOnly = values[KEY_BACKUP_ON_UNMETERED_ONLY] as? Boolean ?: false,
         )

@@ -964,8 +964,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="update_recommended">A newer version of the app is available.</string>
     <string name="restrictions_email_domain_title">Account email domain</string>
     <string name="restrictions_email_domain_description">Your organisation\'s email domain, such as example.edu. Google sign-in offers only accounts in this domain.</string>
-    <string name="restrictions_invite_title">Enrollment invite</string>
-    <string name="restrictions_invite_description">A short-lived invite code for enrolling this device. Never put a licence key here: every managed device can read this value.</string>
     <string name="restrictions_cloud_backup_title">Allow cloud backup</string>
     <string name="restrictions_cloud_backup_description">When off, analyses stay on this device only: no cloud backup, upload or restore.</string>
     <string name="restrictions_unmetered_title">Back up on unmetered networks only</string>

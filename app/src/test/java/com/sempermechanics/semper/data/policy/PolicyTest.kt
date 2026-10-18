@@ -57,14 +57,12 @@ class PolicyTest {
         val config = ManagedConfig.from(
             mapOf(
                 "accountEmailDomain" to " @Example.EDU ",
-                "enrollmentInvite" to " INV-abc_123 ",
                 "cloudBackupAllowed" to false,
                 "backupOnUnmeteredOnly" to true,
             ),
         )
         val expected = ManagedConfig(
             accountEmailDomain = "example.edu",
-            enrollmentInvite = "INV-abc_123",
             cloudBackupAllowed = false,
             backupOnUnmeteredOnly = true,
         )
@@ -73,7 +71,6 @@ class PolicyTest {
         val bad = ManagedConfig.from(
             mapOf(
                 "accountEmailDomain" to "not a domain",
-                "enrollmentInvite" to "has spaces in it",
                 "cloudBackupAllowed" to "false",
                 "backupOnUnmeteredOnly" to 1,
             ),
