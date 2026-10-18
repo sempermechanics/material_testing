@@ -5,3 +5,11 @@
 b50ff99634083ba62b5350624a4917767f042247:contracts/license_activate_request.json:generic-api-key:2
 bc8159727d3322db2a6570f342dd12eab905974d:firebase-hosting/tests/operator-edit.test.mjs:generic-api-key:209
 bc8159727d3322db2a6570f342dd12eab905974d:firebase-hosting/tests/operator-mint.test.mjs:generic-api-key:91
+
+# Made-up licence keys ("SEMP-…") in the tests of the in-app licence key screen,
+# added and then removed on 2026-10-18 (TD-259, superseded by ADR-024). The files
+# no longer exist; only this commit carries them. Listed by fingerprint, as above.
+4081efab81a38db233092750c59002ccaf11b05a:app/src/test/java/com/sempermechanics/semper/ui/account/LicenseActivationTest.kt:generic-api-key:152
+4081efab81a38db233092750c59002ccaf11b05a:app/src/test/java/com/sempermechanics/semper/ui/account/LicenseKeyFormatTest.kt:generic-api-key:16
+4081efab81a38db233092750c59002ccaf11b05a:app/src/test/java/com/sempermechanics/semper/ui/account/ActivateLicenseViewModelTest.kt:generic-api-key:119
+4081efab81a38db233092750c59002ccaf11b05a:app/src/test/java/com/sempermechanics/semper/ui/account/ActivateLicenseActivityTest.kt:generic-api-key:180
