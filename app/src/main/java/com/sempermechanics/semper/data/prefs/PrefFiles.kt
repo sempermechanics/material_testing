@@ -143,6 +143,9 @@ object PrefFiles {
     object Entitlement {
         const val NAME = "semper_entitlement"
         val SEALED = PrefKey.string("sealed")
+
+        /** Set, committed, before a first seal makes its key; cleared with the record's write. */
+        val SEALING = PrefKey.boolean("sealing")
     }
 
     /** `DeviceKeys.deviceId`. */
