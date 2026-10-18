@@ -42,6 +42,22 @@ async def test_the_defaults_gate_nothing(store, client):
     assert "entitlement" not in body
 
 
+async def test_each_app_gets_its_own_release_gate(store, client, monkeypatch):
+    """Semper and Material Testing number their builds separately, so a
+    minimum set for one must not retire the other's builds."""
+    monkeypatch.setattr(settings, "MIN_SUPPORTED_VERSION_CODE", 1040)
+    monkeypatch.setattr(settings, "RECOMMENDED_VERSION_CODE", 1045)
+    monkeypatch.setattr(settings, "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING", 1003)
+    monkeypatch.setattr(settings, "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", 0)
+    semper = (await client.get("/v1/config", headers={"X-App-Id": "com.sempermechanics.semper"})).json()
+    assert (semper["minSupportedVersionCode"], semper["recommendedVersionCode"]) == (1040, 1045)
+    unnamed = (await client.get("/v1/config")).json()
+    assert unnamed["minSupportedVersionCode"] == 1040
+    mt = (await client.get(
+        "/v1/config", headers={"X-App-Id": "com.sempermechanics.materialtesting"})).json()
+    assert (mt["minSupportedVersionCode"], mt["recommendedVersionCode"]) == (1003, 0)
+
+
 async def test_an_old_build_is_still_served(store, client, monkeypatch):
     """Nothing is refused on the version: the app gates itself."""
     monkeypatch.setattr(settings, "MIN_SUPPORTED_VERSION_CODE", 40)
@@ -69,6 +85,8 @@ def test_an_unknown_kill_switch_is_dropped_with_a_warning(caplog):
 def test_the_settings_read_their_env_vars(monkeypatch):
     monkeypatch.setenv("MIN_SUPPORTED_VERSION_CODE", "31")
     monkeypatch.setenv("RECOMMENDED_VERSION_CODE", "36")
+    monkeypatch.setenv("MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING", "21")
+    monkeypatch.setenv("RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", "22")
     monkeypatch.setenv("KILL_SWITCHES", "restore nope")
     monkeypatch.setenv("CHECK_REVOKED_ON_STEP_UP", "true")
     monkeypatch.setenv("ENTITLEMENT_OFFLINE_GRACE_DAYS", "7")
@@ -79,13 +97,17 @@ def test_the_settings_read_their_env_vars(monkeypatch):
     try:
         assert fresh.MIN_SUPPORTED_VERSION_CODE == 31
         assert fresh.RECOMMENDED_VERSION_CODE == 36
+        assert fresh.release_gate("semper") == (31, 36)
+        assert fresh.release_gate("materialtesting") == (21, 22)
         assert fresh.KILL_SWITCHES == ["restore"]
         assert fresh.CHECK_REVOKED_ON_STEP_UP is True
         assert fresh.ENTITLEMENT_OFFLINE_GRACE_DAYS == 7
         assert fresh.ENTITLEMENT_KID == "ent-9"
         assert fresh.ENTITLEMENT_SIGNING_KEY == ""
     finally:
-        for name in ("MIN_SUPPORTED_VERSION_CODE", "RECOMMENDED_VERSION_CODE", "KILL_SWITCHES",
+        for name in ("MIN_SUPPORTED_VERSION_CODE", "RECOMMENDED_VERSION_CODE",
+                     "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING",
+                     "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", "KILL_SWITCHES",
                      "CHECK_REVOKED_ON_STEP_UP", "ENTITLEMENT_OFFLINE_GRACE_DAYS", "ENTITLEMENT_KID"):
             monkeypatch.delenv(name)
         importlib.reload(config)

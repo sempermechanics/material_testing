@@ -2,6 +2,8 @@ import logging
 import os
 import re
 
+from .apps import MATERIAL_TESTING
+
 
 def _env_int(name: str, default: str) -> int:
     """Parse an integer env var, failing with a clear message rather than a bare
@@ -263,8 +265,26 @@ class Settings:
     # Published by GET /v1/config. The server refuses nothing on them: the app
     # compares its own versionCode and blocks (below minimum) or nudges (below
     # recommended). 0 = no gate.
+    #
+    # Per app: Semper and Material Testing share this service, and each
+    # numbers its builds from its own release run counter, so one number for
+    # both would retire the other app's builds by accident. The unsuffixed
+    # pair is Semper's; `release_gate(app)` picks the caller's.
     MIN_SUPPORTED_VERSION_CODE = _env_int("MIN_SUPPORTED_VERSION_CODE", "0")
     RECOMMENDED_VERSION_CODE = _env_int("RECOMMENDED_VERSION_CODE", "0")
+    MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING = _env_int(
+        "MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING", "0")
+    RECOMMENDED_VERSION_CODE_MATERIAL_TESTING = _env_int(
+        "RECOMMENDED_VERSION_CODE_MATERIAL_TESTING", "0")
+
+    def release_gate(self, app: str) -> tuple[int, int]:
+        """(minSupportedVersionCode, recommendedVersionCode) for `app`
+        (`apps.SEMPER` / `apps.MATERIAL_TESTING`): only that app's builds are
+        compared with them."""
+        if app == MATERIAL_TESTING:
+            return (self.MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING,
+                    self.RECOMMENDED_VERSION_CODE_MATERIAL_TESTING)
+        return self.MIN_SUPPORTED_VERSION_CODE, self.RECOMMENDED_VERSION_CODE
     # Features the app must switch off, fleet-wide, without a release: any of
     # backup, share, restore, upload. Separated by whitespace, `;` or `,`
     # (prefer spaces: the deploy action splits env_vars on commas). An unknown

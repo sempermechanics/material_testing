@@ -160,10 +160,12 @@ def app_config(
     The caller's `X-App-Version` is logged with the request, not checked.
     """
     config = repo.resolve_user_config(user)
+    min_supported, recommended = settings.release_gate(app)
     body = {
         **config,
-        "minSupportedVersionCode": settings.MIN_SUPPORTED_VERSION_CODE,
-        "recommendedVersionCode": settings.RECOMMENDED_VERSION_CODE,
+        # The calling app's own pair: each app numbers its builds separately.
+        "minSupportedVersionCode": min_supported,
+        "recommendedVersionCode": recommended,
         "killSwitches": list(settings.KILL_SWITCHES),
     }
     token = _entitlement(user, config, app, x_device_id)
