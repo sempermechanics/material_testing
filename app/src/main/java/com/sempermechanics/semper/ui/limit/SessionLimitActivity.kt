@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.limit
 
 import android.os.Bundle
 import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
@@ -13,6 +14,8 @@ import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivitySessionLimitBinding
+import com.sempermechanics.semper.ui.account.ActivateLicenseActivity
+import com.sempermechanics.semper.ui.account.LicenseActivation
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.SupportMail
 import com.sempermechanics.semper.ui.common.auth.contextLines
@@ -31,6 +34,11 @@ class SessionLimitActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySessionLimitBinding
 
+    /** A licence activated from here lifts demo's limit, so check again at once. */
+    private val activateLicense = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == RESULT_OK) recheck()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivitySessionLimitBinding.inflate(layoutInflater)
@@ -43,6 +51,8 @@ class SessionLimitActivity : AppCompatActivity() {
         binding.btnEmailSupport.setOnClickListener { emailSupport() }
         binding.btnRecheckLimit.setOnClickListener { recheck() }
         binding.tvLimitBack.setOnClickListener { finish() }
+        binding.btnActivateLicense.isVisible = LicenseActivation.isOffered(this)
+        binding.btnActivateLicense.setOnClickListener { activateLicense.launch(ActivateLicenseActivity.intent(this)) }
     }
 
     private fun renderQuota() {
