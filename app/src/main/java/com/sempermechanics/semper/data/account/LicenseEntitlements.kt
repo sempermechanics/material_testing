@@ -61,11 +61,16 @@ object LicenseEntitlements {
      */
     fun serverSaysLicensed(context: Context): Boolean = AppRemoteConfig.mode(context) == MODE_LICENSED
 
-    fun cloudBackupEnabled(context: Context): Boolean =
-        isLicensed(context) &&
-            AppRemoteConfig.cloudBackupEnabled(context) &&
-            tokenBound(context).backup &&
-            AppPolicy.backupAllowed(context)
+    fun cloudBackupEnabled(context: Context): Boolean = backupLicensed(context) && AppPolicy.backupAllowed(context)
+
+    /**
+     * Whether the licence includes cloud backup, before device and fleet
+     * policy. Apart from [cloudBackupEnabled] because the screens tell the
+     * two apart: a feature the licence lacks is shown locked, one policy
+     * holds back is hidden or paused (`FeatureLocks`).
+     */
+    fun backupLicensed(context: Context): Boolean =
+        isLicensed(context) && AppRemoteConfig.cloudBackupEnabled(context) && tokenBound(context).backup
 
     /**
      * Whether a backup may be pulled down now (restore, Save to Files from
@@ -74,11 +79,11 @@ object LicenseEntitlements {
      */
     fun restoreEnabled(context: Context): Boolean = cloudBackupEnabled(context) && AppPolicy.restoreAllowed(context)
 
-    fun shareEnabled(context: Context): Boolean =
-        isLicensed(context) &&
-            AppRemoteConfig.shareEnabled(context) &&
-            tokenBound(context).share &&
-            AppPolicy.shareAllowed(context)
+    fun shareEnabled(context: Context): Boolean = shareLicensed(context) && AppPolicy.shareAllowed(context)
+
+    /** Whether the licence includes sharing exports, before the share kill switch ([backupLicensed]'s twin). */
+    fun shareLicensed(context: Context): Boolean =
+        isLicensed(context) && AppRemoteConfig.shareEnabled(context) && tokenBound(context).share
 
     /** The most the entitlement token allows; unbounded when tokens are not in use. */
     private fun tokenBound(context: Context): TokenBound =

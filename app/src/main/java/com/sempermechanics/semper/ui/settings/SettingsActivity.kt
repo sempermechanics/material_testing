@@ -23,6 +23,9 @@ import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.CloudSessionDto
+import com.sempermechanics.semper.data.policy.AppPolicy
+import com.sempermechanics.semper.data.policy.FeatureAccess
+import com.sempermechanics.semper.data.policy.FeatureLocks
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.databinding.ActivitySettingsBinding
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
@@ -112,20 +115,27 @@ class SettingsActivity : AppCompatActivity() {
         wireCollapsible(views.headerAnalysesData, R.string.analyses_data_management, views.bodyAnalysesData)
 
         SettingsAccountSection(this, views).wire()
-        // Backup and restore are the licensed half of cloud. A demo account
-        // records its analyses silently and cannot pull them back, so both
-        // sections are absent rather than shown disabled.
-        if (LicenseEntitlements.cloudBackupEnabled(this)) {
-            analyses.observeTransfers()
-            deleteFeedback = DeleteFeedback(this, binding.settingsRoot) { wireAnalysesDataSection() }
-            deleteFeedback.observe()
-            SettingsCloudSection(this, views).wire()
-            wireAnalysesDataSection()
-        } else {
-            listOf(views.headerCloud.root, views.bodyCloud, views.headerAnalysesData.root, views.bodyAnalysesData)
-                .forEach { it.isVisible = false }
+        // Backup and restore are the licensed half of cloud. An account whose
+        // licence lacks them sees both sections locked, not hidden; backup
+        // that policy keeps off (a kill switch, the EMM) hides them as before.
+        val locks = FeatureLocks.settings(LicenseEntitlements.backupLicensed(this), AppPolicy.backupAllowed(this))
+        when (locks.cloud) {
+            FeatureAccess.OPEN -> {
+                analyses.observeTransfers()
+                deleteFeedback = DeleteFeedback(this, binding.settingsRoot) { wireAnalysesDataSection() }
+                deleteFeedback.observe()
+                SettingsCloudSection(this, views).wire()
+                wireAnalysesDataSection()
+            }
+            FeatureAccess.LOCKED -> {
+                SettingsCloudSection(this, views).lock()
+                analyses.lock()
+            }
+            FeatureAccess.PAUSED, FeatureAccess.HIDDEN ->
+                listOf(views.headerCloud.root, views.bodyCloud, views.headerAnalysesData.root, views.bodyAnalysesData)
+                    .forEach { it.isVisible = false }
         }
-        SettingsStorageSection(this, views).wire()
+        SettingsStorageSection(this, views, locks.storageFreeUp).wire()
         yourDataSection.wire()
         SettingsPreferencesSection(this, views).wire()
         SettingsHelpSupportSection(this, views).wire()
