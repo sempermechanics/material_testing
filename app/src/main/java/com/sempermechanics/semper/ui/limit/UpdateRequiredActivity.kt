@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.databinding.ActivityUpdateRequiredBinding
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.ExternalLinks
+import timber.log.Timber
 
 /**
  * Gate shown when the backend no longer supports this build
@@ -40,12 +41,20 @@ class UpdateRequiredActivity : AppCompatActivity() {
         var shownThisProcess = false
             private set
 
-        /** This app's store listing, or its web page when no store app is installed. */
+        /**
+         * Where this build updates from ([UpdateSource.urls]): installed by
+         * Play, its store listing (or the listing's web page when no store
+         * app handles it); otherwise the release download page.
+         */
         fun openStore(host: Activity) {
-            val id = host.packageName
-            if (!ExternalLinks.openQuietly(host, "market://details?id=$id")) {
-                ExternalLinks.open(host, "https://play.google.com/store/apps/details?id=$id")
-            }
+            val urls = UpdateSource.urls(host.packageName, installingPackage(host))
+            if (urls.dropLast(1).none { ExternalLinks.openQuietly(host, it) }) ExternalLinks.open(host, urls.last())
         }
+
+        /** Who installed this build; null when the platform does not say. */
+        private fun installingPackage(host: Activity): String? =
+            runCatching { host.packageManager.getInstallSourceInfo(host.packageName).installingPackageName }
+                .onFailure { Timber.d(it, "No install source for %s", host.packageName) }
+                .getOrNull()
     }
 }
