@@ -138,9 +138,11 @@ data class AppConfigDto(
     val killSwitches: List<String>? = null,
 )
 
-@Serializable
-data class LicenseActivateRequest(val key: String)
-
+/**
+ * The answer of the floating-seat routes (`POST /v1/licenses/checkout`,
+ * `…/release`): the account's config, nested. The app no longer redeems keys,
+ * but the seat routes keep the activation route's shape, hence the name.
+ */
 @Serializable
 data class LicenseActivateResponse(val config: AppConfigDto)
 

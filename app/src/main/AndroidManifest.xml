@@ -141,11 +141,6 @@
         <activity android:name=".ui.home.HomeActivity" android:exported="false" />
         <activity android:name=".ui.admin.AdminActivity" android:exported="false" />
         <activity android:name=".ui.settings.SettingsActivity" android:exported="false" />
-        <!-- A text field: adjustResize, like the screens noted below. -->
-        <activity
-            android:name=".ui.account.ActivateLicenseActivity"
-            android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
