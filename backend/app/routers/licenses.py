@@ -6,9 +6,9 @@ from .. import apps, audit, errors, repo
 from .. import observability as obs
 from .. import rate_limit
 from ..errors import Refusal
-from ..licenses import key_hash
+from ..licenses import key_hash, key_prefix
 from ..deps import attested_or_mfa_user, current_user, rate_limited, request_app
-from ..models import LicenseActivate
+from ..models import LicenseActivate, LicenseClaim
 from ..validation import require_header_identifier
 from ._shared import named_app
 
@@ -17,20 +17,24 @@ router = APIRouter()
 
 
 def _licence_event(event: str, license_id: str | None, refusal: Refusal | None = None,
-                   *, uid: str) -> None:
+                   *, uid: str, via: str | None = None) -> None:
     """One structured line per redemption or checkout, for the log-based
     metrics that count them per licence and app (A7.3). `appId` and
     `appVersion` come from the request context; no email is logged.
 
     `uid` is passed by the handler, which holds the user (TD-245): the
     request's bound uid is set by `current_user` inside a threadpool
-    dependency, whose context this handler does not share."""
+    dependency, whose context this handler does not share.
+
+    `via` says where a code was redeemed (`POST /v1/me/claim`); the app's
+    own route leaves it out, so a line without it is the installed app."""
     obs.log_event(
         log, logging.INFO, event,
         uid=uid or None,
         licenseId=license_id or None,
         outcome="refused" if refusal else "ok",
         errorCode=refusal.code if refusal else None,
+        via=via,
     )
 
 
@@ -50,7 +54,15 @@ def activate_license(
     app=Depends(request_app),
 ):
     """Redeem a Professional (or re-entered) key locked to this email and device
-    (the device of the app that asks, ADR-010)."""
+    (the device of the app that asks, ADR-010).
+
+    Kept for installed builds only. There are no runtime licence keys any
+    more: the account is the anchor, and a code is redeemed on the web
+    account page (`POST /v1/me/claim`, below), which runs this same
+    `repo.activate_license`. Current app builds no longer call this route;
+    it stays, unchanged, so builds that still offer a key field keep
+    working. Remove it once those builds have aged out.
+    """
     rate_limit.enforce(rate_limit.license_activate_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
     try:
@@ -172,3 +184,73 @@ def unbind_device(
     return {"licenseId": license_id, "app": named, "deviceIdLock": "",
             "previousDeviceId": cleared.get(apps.field("previousDeviceId", named)) or "",
             "nextChangeAllowedAt": cleared.get("nextChangeAllowedAt") or ""}
+
+
+#: `via` on a claim's event and audit row, by how the caller stepped up
+#: (`deps.Caller.via`): a browser with a second factor is the web account
+#: page; a signed request is the app.
+_CLAIM_VIA = {"mfa": "web", "device": "app"}
+
+
+@router.post(
+    "/v1/me/claim",
+    dependencies=[rate_limited(rate_limit.license_activate_bucket)],
+)
+def claim_code(
+    body: LicenseClaim,
+    ctx=Depends(attested_or_mfa_user),
+    app=Depends(request_app),
+):
+    """Redeem a one-time claim code onto the signed-in account.
+
+    How a paid entitlement reaches an account now that there are no runtime
+    licence keys: staff mint a code, the holder types it on the web account
+    page, and the account carries the licence from then on (an individual
+    licence locked to their address, or a seat on an institution licence
+    their address's domain may join). The same `repo.activate_license` as
+    `POST /v1/licenses/activate`, so the same checks, refusal codes and
+    statuses (`errors.STATUS`), and the same answer, `{"config": …}`, after
+    which the page re-reads `/v1/me`.
+
+    The user step-up, as for unbind and the bundle: an attested device, or
+    a browser with a second factor on a recent sign-in. A code is worth a
+    licence, so a bare ID token is not enough to spend it. The address is
+    the whole claim to an email- or domain-locked licence, so an unverified
+    one is refused first (403 `email_not_verified`), as institution invites
+    and IT routes refuse it.
+
+    From a browser no device is named, so none is compared or bound: the
+    lock is settled by the phone's own next request (`revalidate_device_lock`).
+    A signed request is checked against its device for the asking app, as
+    the app route is (ADR-010).
+
+    Rate-limited on the activation bucket, shared with the app route, so
+    the two cannot be used together to guess codes twice as fast; in the
+    decorator, ahead of the signature check, so a 429 leaves a signed
+    request's nonce unspent. Each attempt logs `event="activation"` with
+    `via`, and writes a `LICENSE_CLAIM_CODE` audit row holding the code's
+    prefix and the outcome, never the code.
+    """
+    user = ctx.user
+    uid = user["uid"]
+    if not user.get("emailVerified"):
+        raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
+    device_id = ctx.device_id or ""
+    via = _CLAIM_VIA.get(ctx.via, ctx.via or "web")
+    detail = {"keyPrefix": key_prefix(body.code), "via": via}
+    try:
+        config = repo.activate_license(uid, user.get("email") or "", device_id, body.code, app)
+    except Refusal as refusal:
+        _licence_event("activation", _typed_licence_id(body.code, refusal), refusal,
+                       uid=uid, via=via)
+        audit.record(uid, device_id or None, action="LICENSE_CLAIM_CODE", outcome="DENIED",
+                     detail={**detail, "errorCode": refusal.code})
+        raise
+    license_id = key_hash(body.code)
+    _licence_event("activation", license_id, uid=uid, via=via)
+    audit.record(
+        uid, device_id or None, action="LICENSE_CLAIM_CODE", outcome="OK",
+        target={"type": "license", "id": license_id},
+        detail={**detail, "mode": (config or {}).get("mode")},
+    )
+    return {"config": config}
