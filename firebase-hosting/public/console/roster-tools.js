@@ -1,14 +1,18 @@
-/* The institution page's bulk tools: the seat-count tiles, the roster CSV
- * export and the bulk import. The roster table itself is ../roster.js,
- * shared with the operator desk; these are IT's page only.
+/* An institution roster's bulk tools: the seat-count tiles, the roster CSV
+ * export and the bulk import. The roster table itself is roster.js; like it,
+ * these serve both dashboards — the institution page on IT's routes
+ * (`/v1/institutions/licenses/{id}`) and the operator desk's roster card on
+ * the staff routes (`/v1/admin/licenses/{id}`). The backend serves both tiers
+ * from `routers/roster.py`, so only the path differs.
  *
  * Each `wire…` takes the page's elements and `base()`, the open licence's
- * path ("" when none is open), and reads it when it acts, so an answer that
- * arrives after another licence was opened still goes to the one asked on.
+ * path on the page's own tier ("" when none is open), and reads it when it
+ * acts, so an answer that arrives after another licence was opened still
+ * goes to the one asked on.
  */
-import { api, apiBlob, saveBlob, esc } from "../auth.js";
-import { explain } from "../messages.js";
-import { MAX_IMPORT_ROWS, importRowCount } from "../util.js";
+import { api, apiBlob, saveBlob, esc } from "./auth.js";
+import { explain } from "./messages.js";
+import { MAX_IMPORT_ROWS, importRowCount } from "./util.js";
 
 /** The tiles, in order: the count's key, its label, and whether a non-zero count wants attention. */
 const TILES = [
