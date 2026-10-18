@@ -106,6 +106,7 @@ EXPECTED = {
     ("POST", "/v1/admin/device-releases"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/users/{uid}/config"): ADMIN_STEPUP,
     ("GET", "/v1/admin/licenses"): ADMIN,
+    ("POST", "/v1/admin/licenses/search"): ADMIN,                   # the GET's search, in a body
     ("GET", "/v1/admin/licenses/{license_id}"): ADMIN,             # one row of the list
     ("POST", "/v1/admin/licenses"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
@@ -366,6 +367,7 @@ async def test_attested_user_cannot_complete_another_users_file(attacker, client
     ("POST", "/v1/admin/users/victim-uid/revoke"),
     ("PATCH", "/v1/admin/users/victim-uid/config"),
     ("GET", "/v1/admin/licenses"),
+    ("POST", "/v1/admin/licenses/search"),
     ("GET", "/v1/admin/licenses/abc"),
     ("POST", "/v1/admin/licenses"),
     ("POST", "/v1/admin/licenses/abc/revoke"),

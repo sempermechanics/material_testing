@@ -8,7 +8,7 @@ from pydantic import (
 )
 
 from .config import settings
-from .validation import DeviceId, DocumentId, SessionId
+from .validation import DeviceId, DocumentId, LicenceSearch, PageToken, SessionId
 
 # "bundle" = Session.zip, holding only what a restore needs to rebuild a working
 # session: ref/ (the reference; raw/Reference.png before metadata schema /4),
@@ -441,6 +441,23 @@ class AdminLicenseUpdate(BaseModel):
         if self.allowShorten and self.expiresAt is None:
             raise ValueError("allowShorten goes with an expiresAt")
         return self
+
+
+class AdminLicenseSearch(BaseModel):
+    """`POST /v1/admin/licenses/search`: the desk's search, in a body (TD-244).
+
+    The same fields and limits as `GET /v1/admin/licenses`'s query, so the
+    two answer alike; an address in a body stays out of every request log
+    that records the URL (uvicorn's, Cloud Run's, API Gateway's). `q` is
+    required here, and an empty one pages the listing as the GET does.
+    """
+    q: LicenceSearch
+    limit: int = 50
+    page_token: PageToken = ""
+    include_demo: bool = False
+    include_revoked: bool = True
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AdminLicenseConvert(BaseModel):
