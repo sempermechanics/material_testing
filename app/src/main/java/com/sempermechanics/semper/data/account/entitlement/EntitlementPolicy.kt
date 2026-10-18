@@ -3,15 +3,17 @@ package com.sempermechanics.semper.data.account.entitlement
 /** What the stored token means for the app right now. */
 sealed interface TokenStatus {
     /**
-     * No token in play: this build pins no keys, or the backend sends none.
-     * The unsigned `/v1/config` cache alone decides, exactly as before tokens.
+     * No token in play: this build pins no keys, the backend sends none, or
+     * the one it sent does not verify here (a `kid` this build does not pin,
+     * a signature, binding or claim that does not check out). The unsigned
+     * `/v1/config` cache alone decides, exactly as before tokens.
      */
     data object NotUsed : TokenStatus
 
     /** Verified, bound to this device, and inside its offline grace. */
     data class Valid(val claims: EntitlementClaims) : TokenStatus
 
-    /** Refused, tampered with, or past its grace: demo until the next check-in. */
+    /** Tampered with, or past its grace: demo until the next check-in. */
     data class Lapsed(val why: String) : TokenStatus
 }
 
@@ -108,8 +110,14 @@ object EntitlementPolicy {
                 }
                 status to clock
             }
-            is Verification.Rejected -> TokenStatus.Lapsed(verification.reason.name) to stored.record.clock
-            null -> TokenStatus.Lapsed(RejectReason.MALFORMED.name) to stored.record.clock
+            // A token that does not verify counts as no token, not as a lapsed
+            // one. It can only have come from the backend (the record is
+            // sealed), so refusing it gains nothing a stripped token would not
+            // give away, while lapsing it would drop every licensed user to
+            // demo, online too, the moment the signing key and this build's
+            // pins disagree (a mis-provisioned key, a rotation shipped before
+            // its pin) or the device key cannot be read.
+            is Verification.Rejected, null -> TokenStatus.NotUsed to stored.record.clock
         }
     }
 }

@@ -31,3 +31,15 @@ commits = [
   '''46e50fd23512e481f4d1a4c3697eb3d6aec6d68f''',
   '''b9e90658bda6fcb1f1a6a5daed5e109dc8c520c5''',
 ]
+# Matched secrets that are not secrets. A PR scan reads every commit's patch,
+# so a placeholder later replaced still fails it; these stay pinned to the
+# exact text rather than a path or a commit (a rebase changes commit ids).
+# - A compact JWS whose header names a `test-` kid: the entitlement test
+#   tokens (`{"alg":"ES256","kid":"test-…` base64url). Production kids are
+#   `ent-N`, so a real signed token still trips the jwt rule.
+# - `REGION=asia-south1`: generic-api-key reads the empty `API_SA=""` line
+#   above it in scripts/check_gcp_posture.sh as a key assignment.
+regexes = [
+  '''^eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qt''',
+  '''^REGION=asia-south1$''',
+]

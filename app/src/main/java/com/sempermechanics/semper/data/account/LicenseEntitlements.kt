@@ -18,11 +18,12 @@ import com.sempermechanics.semper.data.policy.AppPolicy
  *
  * - **The signed entitlement token** ([EntitlementStore]), when this build
  *   pins a signing key and the backend sends one. Offline, a licence then
- *   lasts until the token's `graceUntil`; past it, or on a clock rollback or
- *   a token that fails its checks, entitlements drop to demo. Nothing local
- *   is locked: analysis carries on within demo's limits, and every saved
- *   analysis stays open, viewable and exportable. Without pins or a token,
- *   this is exactly the behaviour before tokens.
+ *   lasts until the token's `graceUntil`; past it, on a clock rollback, or
+ *   when the stored record was altered, entitlements drop to demo. Nothing
+ *   local is locked: analysis carries on within demo's limits, and every
+ *   saved analysis stays open, viewable and exportable. Without pins or a
+ *   token, or with a token that does not verify here, this is exactly the
+ *   behaviour before tokens.
  * - **Device and fleet policy** ([AppPolicy]): the backend's kill switches
  *   and the EMM's managed configuration.
  */

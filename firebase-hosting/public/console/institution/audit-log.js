@@ -11,6 +11,17 @@ import { auditQuery } from "../util.js";
 const PAGE = 50;
 const EXPORT_PAGE = 5000;
 
+/** What an export that reached the backend's largest page says. */
+const CEILING = `Exported the newest ${EXPORT_PAGE.toLocaleString("en")} events — narrow the dates for the rest.`;
+
+/**
+ * The data rows in an audit CSV (`roster_io.audit_csv`): its lines less the
+ * header. No cell holds a line break (`detail` is JSON, which escapes them).
+ */
+export function csvRecords(text) {
+  return Math.max(0, String(text).split(/\r?\n/).filter((line) => line).length - 1);
+}
+
 const ERRORS = {
   invalid_audit_range: "Those dates are not a range: the start must come before the end.",
 };
@@ -86,17 +97,18 @@ export function wireAuditLog({ rows, since, until, show, more, csv, json, base, 
     try {
       if (format === "csv") {
         const query = auditQuery(range(), { format: "csv", page_size: EXPORT_PAGE });
-        saveBlob(await apiBlob(`${root}/audit${query}`), `audit-${name()}.csv`);
-        report("Audit log exported.");
+        const blob = await apiBlob(`${root}/audit${query}`);
+        saveBlob(blob, `audit-${name()}.csv`);
+        // The next page's token rides in a header the browser does not expose
+        // to this page, so a full page is what says the export stopped short.
+        report(csvRecords(await blob.text()) >= EXPORT_PAGE ? CEILING : "Audit log exported.");
       } else {
         const query = auditQuery(range(), { page_size: EXPORT_PAGE });
         const page = await api(`${root}/audit${query}`);
         const file = { licenseId: page.licenseId, ...range(), events: page.events || [] };
         saveBlob(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }),
           `audit-${name()}.json`);
-        report(page.page && page.page.hasMore
-          ? `Exported the newest ${EXPORT_PAGE.toLocaleString("en")} events — narrow the dates for the rest.`
-          : "Audit log exported.");
+        report(page.page && page.page.hasMore ? CEILING : "Audit log exported.");
       }
     } catch (e) {
       report(explain(e, ERRORS, (text) => `Could not export: ${text}`), true);

@@ -6,14 +6,18 @@
 #   2.4  every API key restricted to named APIs and to an app / site / server
 #   2.5  anonymous auth off (and which providers are on) on the Auth project
 #   2.6  a billing budget on each project; Cloud Run max-instances set (the cap)
-#   2.7  Firestore PITR, delete protection, a scheduled backup
+#   2.7  Firestore PITR, delete protection, and backups (2.7-backup): a daily
+#        managed backup schedule, or exports from the daily export workflow
+#        (.github/workflows/firestore-backup.yml) in --backup-bucket
 #   3.1  APP_CHECK_MODE=enforce on each Cloud Run service
 #   3.4  CHECK_REVOKED_ON_STEP_UP=true on each service; the API service
-#        account holds a Firebase Auth role on the Auth project (3.4-iam)
+#        account holds a role on the Auth project that can revoke and delete
+#        users (firebaseauth.users.update and .delete: roles/firebaseauth.admin,
+#        roles/firebase.admin, or a custom role with both) (3.4-iam)
 #   3.5  ENTITLEMENT_SIGNING_KEY reaches each service as a Secret Manager ref
 #   3.7  Data Access audit logs on for Firebase, rules, App Check, Firestore
 #
-# Only describe / list / get-iam-policy calls and one REST GET (Identity
+# Only describe / list / ls / get-iam-policy calls and REST GETs (Identity
 # Toolkit config) are made; a wrapper refuses any other gcloud verb. UNKNOWN
 # means the call failed (permission, API off) and says why.
 #
@@ -21,18 +25,20 @@
 #     --auth-project indicvision-dic-app-auth \
 #     --api-sa indic-api@indicvision-dic-app.iam.gserviceaccount.com
 #
-# Options: --region (default asia-south1), --services "semper-api semper-api-staging".
+# Options: --region (default asia-south1), --services "semper-api semper-api-staging",
+# --backup-bucket NAME (the FIRESTORE_BACKUP_BUCKET repo variable, no gs://).
 # Exit 1 when any line is FAIL, else 0.
 set -euo pipefail
 
 APP_PROJECT=""
 AUTH_PROJECT=""
 API_SA=""
+BACKUP_BUCKET=""
 REGION=asia-south1
 SERVICES="semper-api semper-api-staging"
 
 usage() {
-  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
@@ -43,6 +49,7 @@ while [ $# -gt 0 ]; do
     --api-sa) API_SA="${2:?--api-sa needs an email}"; shift 2 ;;
     --region) REGION="${2:?--region needs a region}"; shift 2 ;;
     --services) SERVICES="${2:?--services needs names}"; shift 2 ;;
+    --backup-bucket) BACKUP_BUCKET="${2:?--backup-bucket needs a bucket name}"; BACKUP_BUCKET="${BACKUP_BUCKET#gs://}"; shift 2 ;;
     -h|--help) usage 0 ;;
     *) echo "unknown argument: $1" >&2; usage 2 ;;
   esac
@@ -63,7 +70,7 @@ gc() {
   local verb=""
   for a in "$@"; do
     case "$a" in
-      describe|list|get-iam-policy|print-access-token) verb=$a ;;
+      describe|list|ls|get-iam-policy|print-access-token) verb=$a ;;
     esac
   done
   if [ -z "$verb" ]; then
@@ -266,26 +273,80 @@ print(("PASS|" if v=="DELETE_PROTECTION_ENABLED" else "FAIL|") + (v or "unset"))
 else
   report "2.7-pitr" UNKNOWN "$APP_PROJECT" "firestore databases describe failed: $(why)"
 fi
+# Backups: a daily managed schedule, or the daily export workflow's exports
+# (scripts/firestore-export.sh writes gs://BUCKET/firestore/PROJECT/STAMP/).
+# PITR is its own line above. What cannot be read is UNKNOWN, not FAIL.
+EXPORT_HINT=".github/workflows/firestore-backup.yml exports daily to FIRESTORE_BACKUP_BUCKET"
+sched="unread"
 if gc firestore backups schedules list --database='(default)' --project "$APP_PROJECT" --format=json >"$WORK/sched.json"; then
-  IFS='|' read -r st detail < <(py "$WORK/sched.json" '
+  sched=$(py "$WORK/sched.json" '
 daily=[s for s in d if "dailyRecurrence" in s]
 weekly=[s for s in d if "weeklyRecurrence" in s]
-if daily: print("PASS|daily schedule, retention %s" % daily[0].get("retention","?"))
-elif weekly: print("FAIL|weekly only (retention %s); want daily" % weekly[0].get("retention","?"))
-else: print("FAIL|no backup schedule (the firestore-backup.yml export is separate)")')
-  report "2.7-backup-schedule" "$st" "$APP_PROJECT" "$detail"
+print("daily schedule, retention %s" % daily[0].get("retention","?") if daily else
+      "weekly schedule only" if weekly else "no schedule")')
 else
-  report "2.7-backup-schedule" UNKNOWN "$APP_PROJECT" "backups schedules list failed: $(why)"
+  sched="schedules list failed: $(why)"
 fi
+case "$sched" in
+  daily*)
+    report "2.7-backup" PASS "$APP_PROJECT" "$sched" ;;
+  *)
+    if [ -z "$BACKUP_BUCKET" ]; then
+      report "2.7-backup" UNKNOWN "$APP_PROJECT" "managed backups: $sched; exports not checked (pass --backup-bucket; $EXPORT_HINT)"
+    elif gc storage ls "gs://$BACKUP_BUCKET/firestore/$APP_PROJECT/" >"$WORK/exports.txt"; then
+      latest=$(sed -n 's#.*/firestore/[^/]*/\([0-9]\{8\}T[0-9]\{6\}Z\)/\{0,1\}$#\1#p' "$WORK/exports.txt" | sort | tail -1)
+      if [ -n "$latest" ]; then
+        age_h=$(python3 -c 'import datetime as t,sys
+s=t.datetime.strptime(sys.argv[1],"%Y%m%dT%H%M%SZ").replace(tzinfo=t.timezone.utc)
+print(int((t.datetime.now(t.timezone.utc)-s).total_seconds()//3600))' "$latest")
+        if [ "$age_h" -le 48 ]; then
+          report "2.7-backup" PASS "$APP_PROJECT" "export gs://$BACKUP_BUCKET/firestore/$APP_PROJECT/$latest, ${age_h} h old; managed backups: $sched"
+        else
+          report "2.7-backup" FAIL "$APP_PROJECT" "latest export $latest is ${age_h} h old; want one a day ($EXPORT_HINT)"
+        fi
+      else
+        report "2.7-backup" FAIL "$APP_PROJECT" "no export under gs://$BACKUP_BUCKET/firestore/$APP_PROJECT/ and $sched ($EXPORT_HINT)"
+      fi
+    else
+      report "2.7-backup" UNKNOWN "$APP_PROJECT" "managed backups: $sched; export listing failed: $(why) ($EXPORT_HINT)"
+    fi ;;
+esac
 
 # --- 3.4 API service account on the Auth project ----------------------------
+# revoke_sessions and delete_auth_user (backend/app/google_auth.py) need
+# firebaseauth.users.update and .delete; a viewer role only reads users, which
+# the revocation check needs but revoke and delete do not get by on.
 if [ -s "$WORK/iam-$AUTH_PROJECT.json" ]; then
-  IFS='|' read -r st detail < <(py "$WORK/iam-$AUTH_PROJECT.json" '
+  roles=$(py "$WORK/iam-$AUTH_PROJECT.json" '
 m="serviceAccount:"+args[0]
-roles=[b["role"] for b in d.get("bindings",[]) if m in b.get("members",[])]
-ok=[r for r in roles if r in ("roles/firebaseauth.admin","roles/firebaseauth.viewer","roles/firebase.admin")]
-print(("PASS|%s (revocation lookups can read users)" % ", ".join(ok)) if ok else ("FAIL|no Firebase Auth role (has: %s)" % (", ".join(roles) or "nothing")))' "$API_SA")
-  report "3.4-iam" "$st" "$AUTH_PROJECT" "$detail"
+print(" ".join(sorted({b["role"] for b in d.get("bindings",[]) if m in b.get("members",[])})))' "$API_SA")
+  ok=""
+  unread=""
+  for r in $roles; do
+    case "$r" in
+      roles/firebaseauth.admin|roles/firebase.admin) ok="$ok $r" ;;
+      projects/*/roles/*|organizations/*/roles/*)
+        scope_flag="--project"
+        case "$r" in organizations/*) scope_flag="--organization" ;; esac
+        parent=$(echo "$r" | cut -d/ -f2)
+        if gc iam roles describe "${r##*/}" "$scope_flag" "$parent" --format=json >"$WORK/role.json"; then
+          if py "$WORK/role.json" '
+p=set(d.get("includedPermissions") or [])
+sys.exit(0 if {"firebaseauth.users.update","firebaseauth.users.delete"} <= p else 1)'; then
+            ok="$ok $r"
+          fi
+        else
+          unread="$unread $r"
+        fi ;;
+    esac
+  done
+  if [ -n "$ok" ]; then
+    report "3.4-iam" PASS "$AUTH_PROJECT" "${ok# } (can revoke and delete users)"
+  elif [ -n "$unread" ]; then
+    report "3.4-iam" UNKNOWN "$AUTH_PROJECT" "custom role(s)${unread} not readable: $(why)"
+  else
+    report "3.4-iam" FAIL "$AUTH_PROJECT" "no role with firebaseauth.users.update and .delete (has: ${roles:-nothing}); grant roles/firebaseauth.admin"
+  fi
 else
   report "3.4-iam" UNKNOWN "$AUTH_PROJECT" "no IAM policy read for the Auth project"
 fi

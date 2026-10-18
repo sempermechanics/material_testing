@@ -50,11 +50,24 @@ class EntitlementPolicyTest {
     }
 
     @Test
-    fun `a tampered store and a refused token both lapse`() {
-        assertEquals(TokenStatus.Lapsed("TAMPERED"), evaluate(StoredEntitlement.Tampered).first)
+    fun `a tampered store lapses to demo`() {
+        val (status, _) = evaluate(StoredEntitlement.Tampered)
+        assertEquals(TokenStatus.Lapsed("TAMPERED"), status)
+        assertEquals(TokenBound(false, false, false, DEMO), EntitlementPolicy.bound(status, DEMO))
+    }
+
+    @Test
+    fun `a token that does not verify here is no token, never demo`() {
+        // A signing key this build does not pin (mis-provisioned, or rotated
+        // before its pin shipped) must not demote a licensed fleet.
         val foreign = tokens.token(key = TestTokens.p256())
-        assertEquals(TokenStatus.Lapsed("BAD_SIGNATURE"), evaluate(sealed(foreign)).first)
-        assertEquals(TokenStatus.Lapsed("MALFORMED"), EntitlementPolicy.evaluate(sealed(), null, synced).first)
+        val (status, state) = evaluate(sealed(foreign))
+        assertEquals(TokenStatus.NotUsed, status)
+        assertEquals(clock, state)
+        assertEquals(EntitlementPolicy.UNBOUNDED, EntitlementPolicy.bound(status, DEMO))
+        assertEquals(TokenStatus.NotUsed, EntitlementPolicy.evaluate(sealed(), null, synced).first)
+        val keyUnreadable = Verification.Rejected(RejectReason.WRONG_DEVICE_KEY)
+        assertEquals(TokenStatus.NotUsed, EntitlementPolicy.evaluate(sealed(), keyUnreadable, synced).first)
     }
 
     @Test
