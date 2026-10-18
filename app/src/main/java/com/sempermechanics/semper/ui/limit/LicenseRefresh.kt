@@ -11,6 +11,8 @@ import com.sempermechanics.semper.data.net.CloudApi
 import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** What a "Refresh licence" tap found, and the one line the user is told. */
 enum class LicenseRefreshResult(@StringRes val messageRes: Int) {
@@ -63,12 +65,14 @@ object LicenseRefresh {
         context: Context,
         api: CloudApi = SemperApi.get(context),
         tokens: TokenSource = TokenProvider,
-    ): Outcome {
+    ): Outcome = withContext(Dispatchers.IO) {
+        // Off the main thread: storing the answer seals the entitlement record
+        // with commit() and reads the Keystore, as LicenseConfigWorker does.
         val before = state(context)
         val fetch = SeatLease.fetchConfig(context, api, tokens)
         if (queuesRetry(fetch)) LicenseConfigWorker.refreshNow(context)
         val after = state(context)
-        return Outcome(resultOf(fetch, after), changed = before != after)
+        Outcome(resultOf(fetch, after), changed = before != after)
     }
 
     /** What the screens read of the licence now. */
