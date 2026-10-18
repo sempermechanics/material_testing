@@ -385,3 +385,31 @@ export function retryRow(columns, message) {
   return `<tr><td colspan="${columns}" class="err">${esc(message)} ` +
     '<button class="secondary" data-retry>Retry</button></td></tr>';
 }
+
+/**
+ * A claim code as typed, tidied: letters upper-cased, and anything but
+ * letters, digits and dashes dropped (spaces, a pasted line break, a stray
+ * quote). Character by character, so tidying what lies before the caret
+ * says where the caret belongs afterwards. The server canonicalises again;
+ * this only keeps the field readable.
+ */
+export function normaliseClaimCode(text) {
+  return String(text ?? "").replace(/[^A-Za-z0-9-]/g, "").toUpperCase();
+}
+
+/** The longest claim code the page sends; anything longer is a paste gone wrong. */
+export const MAX_CLAIM_CODE = 64;
+
+/**
+ * Whether a tidied claim code is shaped like one: groups of letters and
+ * digits split by single dashes, at least eight of them in all, and no longer
+ * than `MAX_CLAIM_CODE`. A light check, to catch a half-pasted code before
+ * it costs an attempt against the rate limit; whether it is a real code is
+ * the server's to say.
+ */
+export function claimCodeShaped(code) {
+  const text = String(code ?? "");
+  return text.length <= MAX_CLAIM_CODE &&
+    /^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(text) &&
+    text.replace(/-/g, "").length >= 8;
+}
