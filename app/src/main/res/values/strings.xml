@@ -1415,4 +1415,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="activate_error_try_again">The licence couldn\'t be activated just now. Try again in a moment.</string>
     <string name="activate_error_network">Couldn\'t reach Semper. Check your connection and try again.</string>
     <string name="activate_error_unknown">The licence couldn\'t be activated. Try again, or email support@sempermechanics.com.</string>
+    <!-- One-off licence refresh (LicenseConfigWorker.refreshNow); shown only before Android 12 -->
+    <string name="license_refresh_title">Checking your licence</string>
 </resources>
