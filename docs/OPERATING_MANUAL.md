@@ -1193,6 +1193,10 @@ above, or by calling these routes directly (script, curl, or their own tooling):
 | Someone lost/replaced their device | `PATCH .../seats/{uid}` `{"clearDeviceLock": true}` — lets them re-bind without a support ticket |
 | Pause someone without losing their seat (e.g. leave of absence) | `PATCH .../seats/{uid}` `{"enabled": false}`, then later `{"enabled": true}` to restore — this does **not** free the seat slot |
 | Someone leaves the institution for good | `DELETE .../seats/{uid}` — drops them to Demo and **frees the slot** for someone else |
+| Add a whole class or department at once | `POST .../seats/import` `{"csv": "<file text>"}` — up to 500 rows, one `email` column (or the first column with no header); each row is added as the single add would and answered `{row, email, outcome, error}`. Importing the same file again is harmless: anyone already on the roster answers `exists` |
+| The roster as a spreadsheet | `GET .../seats/export` — a CSV download, `email` first, so it imports back as it is |
+| Seat counts: assigned, on hold, active in the last 7 days, invited, removed but the device not told yet, ending within 30 days | `GET .../summary` |
+| Who changed what on this licence, between two dates | `GET .../audit?since=YYYY-MM-DD&until=YYYY-MM-DD` — newest first, `page_size` up to 5000 and `page_token`; `&format=csv` for a download (next page's token in `X-Next-Page-Token`). Holds events from 2026-10-18 on |
 
 The listing is paged: `?page_size=` (up to 1000, default 500) and the answer's
 `page.nextPageToken` as `?page_token=` for the next page.
