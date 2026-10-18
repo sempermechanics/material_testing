@@ -134,7 +134,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   [CHANGELOG](docs/ops/CHANGELOG.md). Nothing is on `main` beyond it.
 - **Branch `claude/new-session-jhfhj9`** (not merged, not deployed): the readiness-framework
   cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-262, FI-17–FI-23). Built: signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
+  TD-214–TD-269, FI-17–FI-23). Built: signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
   **minSdk 30**, version gate and kill switches on `/v1/config`, EMM config, revocation on step-up,
   roster import/export/summary and per-licence audit export, rules tests, APK inspection, AAB,
   monitoring as code. Owed outside the repo: Auth IAM grant (TD-214), signing key and pinned

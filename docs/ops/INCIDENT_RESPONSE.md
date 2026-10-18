@@ -61,7 +61,7 @@ and a tabletop exercise are owed (TD-241).
 
 Background: [ADR-023](../adr/ADR-023-signed-offline-entitlement.md). A token only
 narrows what the cached `/v1/config` allows, never widens it
-(`app/src/main/java/com/sempermechanics/semper/data/account/entitlement/EntitlementPolicy.kt:18-21`),
+(`app/src/main/java/com/sempermechanics/semper/data/account/entitlement/EntitlementPolicy.kt:20-23`),
 and the next online `/v1/config` replaces any stored token. A forged token can
 therefore extend offline use on a device whose cached config was already licensed;
 it cannot license a device the backend never licensed.
@@ -72,24 +72,28 @@ it cannot license a device the backend never licensed.
    `ENTITLEMENT_SIGNING_SECRET` and redeploy (`deploy-backend.yml` mounts the key
    only when it is set, `.github/workflows/deploy-backend.yml:218-238`). `/v1/config`
    then carries no `entitlement`, and every app that receives that answer forgets
-   its token (`EntitlementPolicy.intake` answers CLEAR, `EntitlementPolicy.kt:85-90`)
+   its token (`EntitlementPolicy.intake` answers CLEAR, `EntitlementPolicy.kt:87-92`)
    and runs on the cached config as before tokens.
 2. **Disable the secret version** (`gcloud secrets versions disable <v>
    --secret=<name> --project indicvision-dic-app`) and find how it leaked
    (Secret Manager Data Access logs, TD-225).
 3. **New key, new `kid`** (`ent-2`), as in [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8.
-   Release a build whose `SEMPER_ENTITLEMENT_PUBKEYS` pins **only** `ent-2`, so it
-   refuses tokens signed with the old key.
-4. After adoption, raise `MIN_SUPPORTED_VERSION_CODE` to that build, so builds
-   pinning the old key stop running new analyses.
+   Release a build whose `SEMPER_ENTITLEMENT_PUBKEYS` pins **only** `ent-2`. It
+   ignores tokens signed with the old key: an unverifiable token counts as no
+   token and the cached config decides (`EntitlementPolicy.kt:113-120`), so a
+   forged `ent-1` token gains nothing on it.
+4. After adoption, raise `MIN_SUPPORTED_VERSION_CODE` (and the `_MATERIAL_TESTING`
+   pair for Material Testing) to that build, so builds pinning the old key stop
+   running new analyses.
 5. Re-enable signing: `ENTITLEMENT_SIGNING_SECRET` to the new secret,
    `ENTITLEMENT_KID=ent-2`, redeploy.
 
 **Planned rotation (no incident).** Ship a build pinning both `kid`s; wait for
 adoption; switch the secret and `ENTITLEMENT_KID`; a later build drops the old
-`kid`. Never switch the signing `kid` before builds pin it: a build that sees an
-unknown `kid` treats the token as refused and narrows to Demo until the next good
-token.
+`kid`. Switching the signing `kid` before builds pin it does not lock anyone out
+(a build that sees an unknown `kid` ignores the token and runs on its cached
+config, [ADR-023](../adr/ADR-023-signed-offline-entitlement.md) decision 7), but
+those builds lose the offline bound until they pin the new key, so pin first.
 
 ## Runbook: mass revocation
 

@@ -35,11 +35,13 @@ days (`ops/monitoring/slo/availability.json`); an internal objective, not an SLA
 ## Supported app versions
 
 - **Supported:** the current release and the two releases before it.
-- **Enforced** through `MIN_SUPPORTED_VERSION_CODE` on the backend
-  (`backend/app/config.py:266`): a build below it keeps the session list, the viewer
+- **Enforced** through `MIN_SUPPORTED_VERSION_CODE` on the backend for Semper, and
+  `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` for Material Testing, whose builds are
+  numbered separately (`settings.release_gate(app)`, `backend/app/config.py:273-287`;
+  each app receives only its own pair on `/v1/config`): a build below it keeps the session list, the viewer
   and exports, and cannot start a new analysis, upload or restore
   (`app/src/main/java/com/sempermechanics/semper/data/policy/FeatureGates.kt:34-40`).
-  `RECOMMENDED_VERSION_CODE` shows a nudge once per version pair. A local debug build with
+  `RECOMMENDED_VERSION_CODE` (or its `_MATERIAL_TESTING` twin) shows a nudge once per version pair. A local debug build with
   versionCode 1 is never gated
   (`app/src/main/java/com/sempermechanics/semper/data/policy/AppPolicy.kt:37`).
 - **Minimum Android version:** Android 11 (API 30) from the 2026-10-18 change.
