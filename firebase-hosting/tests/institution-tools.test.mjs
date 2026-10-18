@@ -11,8 +11,8 @@ import {
 
 await loadAuth();
 const { importRowCount, auditQuery, MAX_IMPORT_ROWS } = await import("../public/console/util.js");
-const { rowResult, importSummary, tilesHtml } = await import("../public/console/institution/roster-tools.js");
-const { auditRow, csvRecords } = await import("../public/console/institution/audit-log.js");
+const { rowResult, importSummary, tilesHtml } = await import("../public/console/roster-tools.js");
+const { auditRow, csvRecords } = await import("../public/console/audit-log.js");
 
 beforeEach(reset);
 afterEach(async () => {

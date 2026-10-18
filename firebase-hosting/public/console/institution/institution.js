@@ -2,8 +2,8 @@ import { requireSignIn, api, setStatus, esc, markFirstData, whileWaiting } from 
 import { day, licenceStatePill, placeholderRows, retryRow } from "../util.js";
 import { fetchRoster, wireRoster } from "../roster.js";
 import { mountSwitcher } from "../switcher.js";
-import { loadTiles, wireExport, wireImport } from "./roster-tools.js";
-import { wireAuditLog } from "./audit-log.js";
+import { loadTiles, wireExport, wireImport } from "../roster-tools.js";
+import { wireAuditLog } from "../audit-log.js";
 
 let licenseId = "";
 let shownId = null; // the licence the import results and audit log are for
