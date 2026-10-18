@@ -19,6 +19,14 @@ metricDescriptor:
     - key: stage
       valueType: STRING
       description: revoked or mismatch.
+    - key: appId
+      valueType: STRING
+      description: The calling app (X-App-Id, listed ids only).
+    - key: appVersion
+      valueType: STRING
+      description: The calling build's versionCode (X-App-Version; empty when absent).
 labelExtractors:
   licenseId: EXTRACT(jsonPayload.licenseId)
   stage: EXTRACT(jsonPayload.stage)
+  appId: EXTRACT(jsonPayload.appId)
+  appVersion: EXTRACT(jsonPayload.appVersion)

@@ -44,8 +44,10 @@ def _stub_path(tmp_path: Path) -> Path:
     return bin_dir
 
 
-def _run(tmp_path: Path, script: Path, scenario: str | Path, *args: str,
+def _run(tmp_path: Path, script: Path, scenario: str | Path, *args: str, state: str = "state",
          ) -> tuple[subprocess.CompletedProcess, list[str]]:
+    """Run [script] against the stub. Runs that share [state] share the stub's
+    dashboards, so a rerun sees what an earlier run created."""
     bin_dir = _stub_path(tmp_path)
     # One log per run, so a second run in the same test sees only its own calls.
     log = tmp_path / f"calls-{len(list(tmp_path.glob('calls-*.log')))}.log"
@@ -54,6 +56,7 @@ def _run(tmp_path: Path, script: Path, scenario: str | Path, *args: str,
         "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
         "STUB_FIXTURES": str(scenario if isinstance(scenario, Path) else _FIX / scenario),
         "STUB_LOG": str(log),
+        "STUB_STATE": str(tmp_path / state),
         "HOME": str(tmp_path),
     }
     proc = subprocess.run(["bash", str(script), *args], capture_output=True, text=True, env=env, timeout=120)
@@ -281,11 +284,13 @@ def test_monitoring_apply_creates_then_updates(tmp_path):
                         "--notification-channel", "123", "--apply", "--out", str(tmp_path / "a"))
     assert fresh.returncode == 0, fresh.stdout + fresh.stderr
     text = "\n".join(calls)
-    assert text.count("logging metrics create") == 6
+    assert text.count("logging metrics create") == len(_METRICS)
     assert "curl POST https://monitoring.googleapis.com/v3/projects/demo-app-prod/uptimeCheckConfigs" in text
     assert "services?serviceId=semper-api" in text
     assert "serviceLevelObjectives?serviceLevelObjectiveId=availability-995" in text
     assert text.count("policies create") == 8
+    assert text.count("monitoring dashboards create") == len(_DASHBOARDS)
+    assert "monitoring dashboards update" not in text
     uptime = json.loads((tmp_path / "a" / "policies" / "uptime-readyz.json").read_text(encoding="utf-8"))
     assert 'check_id="semper-api-readyz-abc123"' in uptime["conditions"][0]["conditionThreshold"]["filter"]
     burn = json.loads((tmp_path / "a" / "policies" / "slo-burn-fast.json").read_text(encoding="utf-8"))
@@ -295,12 +300,181 @@ def test_monitoring_apply_creates_then_updates(tmp_path):
     assert check["monitoredResource"]["labels"]["host"] == "semper-api-abc-el.a.run.app"
 
     again, calls = _run(tmp_path, _APPLY, "monitoring_existing", "--project", "demo-app-prod",
-                        "--notification-channel", "123", "--apply", "--out", str(tmp_path / "b"))
+                        "--notification-channel", "123", "--apply", "--out", str(tmp_path / "b"), state="state-b")
     assert again.returncode == 0, again.stdout + again.stderr
     text = "\n".join(calls)
-    assert "metrics create" not in text and text.count("logging metrics update") == 6
+    assert "metrics create" not in text and text.count("logging metrics update") == len(_METRICS)
     assert "policies create" not in text and text.count("policies update") == 8
     assert "curl PATCH" in text and "curl POST" not in text
+    assert "dashboards create" not in text and text.count("monitoring dashboards update") == len(_DASHBOARDS)
+    # Each existing dashboard was updated by its own name with the etag it was
+    # listed with; the look-alike "semper-slo (copy)" was left alone.
+    boards = {b["name"]: b for b in json.loads((tmp_path / "state-b" / "dashboards.json").read_text())}
+    assert boards["projects/111/dashboards/other"]["etag"] == "etag-1"
+    assert "tiles" in boards["projects/111/dashboards/other"]["mosaicLayout"]
+    assert not boards["projects/111/dashboards/other"]["mosaicLayout"]["tiles"]
+    for i in range(4):
+        board = boards[f"projects/111/dashboards/existing-{i}"]
+        assert board["etag"] == f"etag-{8 + i}", board["displayName"]
+        assert board["mosaicLayout"]["tiles"], board["displayName"]
+
+
+# --- dashboards -------------------------------------------------------------
+
+_METRICS = sorted(p.stem for p in (_MON / "metrics").glob("*.yaml"))
+_DASHBOARDS = sorted((_MON / "dashboards").glob("*.json"))
+_USER_METRIC = re.compile(r'logging\.googleapis\.com/user/([A-Za-z0-9_]+)')
+
+
+def _dry_render(tmp_path: Path, *extra: str) -> Path:
+    out = tmp_path / "out"
+    proc, calls = _run(tmp_path, _APPLY, "monitoring_fresh", "--project", "demo-app-prod",
+                       "--notification-channel", "123", "--out", str(out), *extra)
+    assert proc.returncode == 0, proc.stderr
+    assert calls == []
+    return out
+
+
+def _filters(node) -> list[dict]:
+    """Every timeSeriesFilter-shaped dict ({filter, aggregation}) under [node]."""
+    found = []
+    if isinstance(node, dict):
+        if isinstance(node.get("filter"), str):
+            found.append(node)
+        for value in node.values():
+            found += _filters(value)
+    elif isinstance(node, list):
+        for value in node:
+            found += _filters(value)
+    return found
+
+
+def _metric_labels() -> dict[str, set[str]]:
+    yaml = pytest.importorskip("yaml")
+    return {p.stem: {lab["key"] for lab in yaml.safe_load(p.read_text(encoding="utf-8"))
+                     ["metricDescriptor"].get("labels", [])}
+            for p in (_MON / "metrics").glob("*.yaml")}
+
+
+def test_every_referenced_log_metric_is_defined():
+    """A dashboard or policy naming a log-based metric that ops/monitoring does
+    not create would chart nothing, or alert on nothing, without an error."""
+    defined = set(_METRICS)
+    referenced = {}
+    for path in sorted((_MON / "policies").glob("*.json")) + _DASHBOARDS:
+        for name in _USER_METRIC.findall(path.read_text(encoding="utf-8")):
+            referenced.setdefault(name, []).append(path.name)
+    assert referenced, "no log-based metric referenced at all"
+    missing = {name: files for name, files in referenced.items() if name not in defined}
+    assert not missing, f"not in ops/monitoring/metrics/: {missing}"
+
+
+def test_log_metric_labels_used_exist():
+    """A group-by or filter on metric.label.X of a log-based metric needs X
+    among that metric's labels. Dashboards never split by licenseId: a label
+    per licence is the anomaly alert's business, not a chart's."""
+    labels = _metric_labels()
+    for path in sorted((_MON / "policies").glob("*.json")) + _DASHBOARDS:
+        for f in _filters(json.loads(path.read_text(encoding="utf-8"))):
+            m = _USER_METRIC.search(f["filter"])
+            if not m:
+                continue
+            used = set(re.findall(r"metric\.label\.(\w+)", f["filter"]))
+            # A chart's `aggregation`, or a policy condition's `aggregations`.
+            for agg in [f.get("aggregation") or {}, *f.get("aggregations", [])]:
+                used |= {g.split(".")[-1] for g in agg.get("groupByFields", []) if g.startswith("metric.label.")}
+            assert used <= labels[m.group(1)], f"{path.name}: {m.group(1)} has no {used - labels[m.group(1)]}"
+            if path.parent.name == "dashboards":
+                assert "licenseId" not in used, path.name
+
+
+def test_dashboards_are_well_formed(tmp_path):
+    out = _dry_render(tmp_path)
+    names = set()
+    for path in sorted((out / "dashboards").glob("*.json")):
+        board = json.loads(path.read_text(encoding="utf-8"))
+        names.add(board["displayName"])
+        assert set(board) <= {"displayName", "mosaicLayout", "labels"}, path.name
+        assert board["labels"] == {"app": "semper", "managed_by": "ops-monitoring"}
+        layout = board["mosaicLayout"]
+        columns = layout["columns"]
+        cells = set()
+        for tile in layout["tiles"]:
+            assert 0 <= tile["xPos"] and tile["xPos"] + tile["width"] <= columns, (path.name, tile)
+            mine = {(x, y) for x in range(tile["xPos"], tile["xPos"] + tile["width"])
+                    for y in range(tile.get("yPos", 0), tile.get("yPos", 0) + tile["height"])}
+            assert not mine & cells, f"{path.name}: tiles overlap at {tile.get('widget', {}).get('title')}"
+            cells |= mine
+            kinds = set(tile["widget"]) - {"title"}
+            assert len(kinds) == 1 and kinds <= {"xyChart", "scorecard", "text"}, (path.name, kinds)
+            if "text" not in kinds:
+                assert tile["widget"]["title"], path.name
+        for f in _filters(board):
+            assert f["filter"].startswith(("metric.type=", "select_slo_")), (path.name, f["filter"])
+    assert names == {"semper-service-health", "semper-licensing", "semper-security", "semper-slo"}
+
+
+def test_dashboards_cover_both_services_and_the_slo(tmp_path):
+    out = _dry_render(tmp_path)
+    health = (out / "dashboards" / "service-health.json").read_text(encoding="utf-8")
+    assert 'service_name=one_of(\\"semper-api\\", \\"semper-api-staging\\")' in health
+    for metric in ("request_count", "request_latencies", "container/instance_count",
+                   "container/cpu/utilizations", "container/memory/utilizations"):
+        assert f"run.googleapis.com/{metric}" in health, metric
+    assert "timeSeriesFilterRatio" in health and "REDUCE_PERCENTILE_99" in health
+    slo = (out / "dashboards" / "slo.json").read_text(encoding="utf-8")
+    name = "projects/<project-number>/services/semper-api/serviceLevelObjectives/availability-995"
+    for selector in ("select_slo_health", "select_slo_budget_fraction", "select_slo_burn_rate"):
+        assert f'{selector}(\\"{name}\\"' in slo, selector
+    security = json.loads((out / "dashboards" / "security.json").read_text(encoding="utf-8"))
+    thresholds = [t["value"] for tile in security["mosaicLayout"]["tiles"]
+                  for t in tile["widget"].get("xyChart", {}).get("thresholds", [])]
+    assert thresholds == [50], "the AUTH_DENIED threshold is the alert's, as a number"
+
+    (tmp_path / "other").mkdir()
+    out = _dry_render(tmp_path / "other", "--service", "api-b", "--staging-service", "api-b-stg")
+    health = (out / "dashboards" / "service-health.json").read_text(encoding="utf-8")
+    assert 'one_of(\\"api-b\\", \\"api-b-stg\\")' in health
+
+
+def test_dashboards_dry_run_names_each_one(tmp_path):
+    out = tmp_path / "out"
+    proc, _ = _run(tmp_path, _APPLY, "monitoring_fresh", "--project", "demo-app-prod",
+                   "--notification-channel", "123", "--out", str(out))
+    lines = [ln for ln in proc.stdout.splitlines() if "gcloud monitoring dashboards create|update" in ln]
+    assert len(lines) == len(_DASHBOARDS)
+    assert all("--project demo-app-prod --config-from-file=" in ln for ln in lines)
+
+
+def test_dashboards_apply_converges(tmp_path):
+    """Create on the first run; every later run updates the same four, by name
+    and current etag, and never creates a second copy."""
+    def apply(n):
+        proc, calls = _run(tmp_path, _APPLY, "monitoring_fresh", "--project", "demo-app-prod",
+                           "--notification-channel", "123", "--apply", "--out", str(tmp_path / f"o{n}"))
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        boards = json.loads((tmp_path / "state" / "dashboards.json").read_text(encoding="utf-8"))
+        return [c for c in calls if "monitoring dashboards" in c], boards
+
+    calls, first = apply(1)
+    assert sum("dashboards create" in c for c in calls) == len(_DASHBOARDS)
+    assert not any("dashboards update" in c for c in calls)
+    assert {b["etag"] for b in first} == {"etag-1"}
+
+    for n, etag in ((2, "etag-2"), (3, "etag-3")):
+        calls, boards = apply(n)
+        assert not any("dashboards create" in c for c in calls), calls
+        updates = [c for c in calls if "dashboards update" in c]
+        assert len(updates) == len(_DASHBOARDS)
+        assert sorted(b["name"] for b in boards) == sorted(b["name"] for b in first)
+        assert {b["etag"] for b in boards} == {etag}
+        # What was sent is the rendered dashboard plus the etag that was read.
+        for call in updates:
+            sent = Path(re.search(r"--config-from-file=(\S+)", call).group(1))
+            body = json.loads(sent.read_text(encoding="utf-8"))
+            rendered = json.loads((tmp_path / f"o{n}" / "dashboards" / sent.name).read_text(encoding="utf-8"))
+            assert body.pop("etag") == f"etag-{n - 1}"
+            assert body == rendered
 
 
 def test_monitoring_refuses_bad_input(tmp_path):

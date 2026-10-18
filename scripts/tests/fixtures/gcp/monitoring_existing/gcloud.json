@@ -50,5 +50,29 @@
       "update"
     ],
     "stdout": ""
+  },
+  {
+    "match": [
+      "monitoring",
+      "dashboards",
+      "list"
+    ],
+    "dashboards": "list"
+  },
+  {
+    "match": [
+      "monitoring",
+      "dashboards",
+      "create"
+    ],
+    "dashboards": "create"
+  },
+  {
+    "match": [
+      "monitoring",
+      "dashboards",
+      "update"
+    ],
+    "dashboards": "update"
   }
 ]

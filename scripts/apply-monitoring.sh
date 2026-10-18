@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Apply ops/monitoring/ to a GCP project: log-based metrics, the /readyz uptime
-# check, the 99.5% availability SLO and the alert policies (readiness A7.1-A7.3).
+# check, the 99.5% availability SLO, the alert policies (readiness A7.1-A7.3)
+# and the dashboards.
 #
 # Dry run by default: renders every file and prints the commands it would run,
 # calling nothing. --apply makes the changes; each step looks the object up
@@ -16,6 +17,8 @@
 #   --project ID                  GCP project (required)
 #   --notification-channel NAME   channel id or full resource name (required)
 #   --service NAME                Cloud Run service (default semper-api)
+#   --staging-service NAME        staging service the service-health dashboard
+#                                 shows beside --service (default semper-api-staging)
 #   --region REGION               Cloud Run region (default asia-south1)
 #   --run-host HOST               the service's run.app host (default: looked up
 #                                 with `gcloud run services describe` on --apply)
@@ -32,6 +35,7 @@ API=https://monitoring.googleapis.com/v3
 PROJECT=""
 CHANNEL=""
 SERVICE=semper-api
+STAGING_SERVICE=semper-api-staging
 REGION=asia-south1
 RUN_HOST=""
 ACTIVATIONS=25
@@ -41,7 +45,7 @@ DRY_RUN=1
 SLO_ID=availability-995
 
 usage() {
-  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
@@ -50,6 +54,7 @@ while [ $# -gt 0 ]; do
     --project) PROJECT="${2:?--project needs an id}"; shift 2 ;;
     --notification-channel) CHANNEL="${2:?--notification-channel needs a channel}"; shift 2 ;;
     --service) SERVICE="${2:?--service needs a name}"; shift 2 ;;
+    --staging-service) STAGING_SERVICE="${2:?--staging-service needs a name}"; shift 2 ;;
     --region) REGION="${2:?--region needs a region}"; shift 2 ;;
     --run-host) RUN_HOST="${2:?--run-host needs a host}"; shift 2 ;;
     --activations-per-licence-per-day) ACTIVATIONS="${2:?needs a number}"; shift 2 ;;
@@ -115,6 +120,7 @@ render() {
     -e "s|__AUTH_DENIED_PER_5MIN__|$AUTH_DENIED|g" \
     -e "s|__PROJECT_NUMBER__|$PROJECT_NUMBER|g" \
     -e "s|__PROJECT__|$PROJECT|g" \
+    -e "s|__STAGING_SERVICE__|$STAGING_SERVICE|g" \
     -e "s|__SERVICE__|$SERVICE|g" \
     -e "s|__REGION__|$REGION|g" \
     -e "s|__RUN_HOST__|$RUN_HOST|g" \
@@ -253,14 +259,58 @@ for src in "$SRC"/policies/*.json; do
   fi
 done
 
+step "Dashboards"
+# Found by displayName. An update sends back the etag the list returned, so a
+# dashboard edited in the console after that read is refused (ABORTED) rather
+# than overwritten unseen; rerun to take the new etag.
+for src in "$SRC"/dashboards/*.json; do
+  name=$(basename "$src" .json)
+  dest="$OUT/dashboards/$name.json"
+  render "$src" "$dest"
+  display=$(json_field "$dest" displayName)
+  if [ "$DRY_RUN" = 1 ]; then
+    say "would run: gcloud monitoring dashboards create|update ($display) --project $PROJECT --config-from-file=$dest"
+    continue
+  fi
+  gcloud monitoring dashboards list --project "$PROJECT" \
+    --filter="displayName=\"$display\"" --format=json > "$OUT/dashboards-list.json"
+  found=$(python3 - "$OUT/dashboards-list.json" "$display" <<'PY'
+import json, sys
+same = [d for d in json.load(open(sys.argv[1])) if d.get("displayName") == sys.argv[2]]
+if len(same) > 1:
+    print(f"more than one dashboard named {sys.argv[2]!r}; updating {same[0]['name']}", file=sys.stderr)
+print(f"{same[0]['name']} {same[0].get('etag', '')}" if same else "")
+PY
+)
+  if [ -n "$found" ]; then
+    read -r existing etag <<<"$found"
+    update="$OUT/dashboard-updates/$name.json"
+    mkdir -p "$(dirname "$update")"
+    python3 - "$dest" "$etag" "$update" <<'PY'
+import json, sys
+body = json.load(open(sys.argv[1]))
+if sys.argv[2]:
+    body["etag"] = sys.argv[2]
+json.dump(body, open(sys.argv[3], "w"), indent=2)
+PY
+    gcloud monitoring dashboards update "$existing" --project "$PROJECT" \
+      --config-from-file="$update" --quiet
+    say "updated: $display"
+  else
+    gcloud monitoring dashboards create --project "$PROJECT" --config-from-file="$dest" --quiet
+    say "created: $display"
+  fi
+done
+
 step "By hand, once"
 say "The uptime check calls the private service with an OIDC token minted for the"
 say "Monitoring service agent, which needs run.invoker on $SERVICE:"
 say "  gcloud run services add-iam-policy-binding $SERVICE --region $REGION --project $PROJECT \\"
 say "    --member=serviceAccount:service-$PROJECT_NUMBER@gcp-sa-monitoring-notification.iam.gserviceaccount.com \\"
 say "    --role=roles/run.invoker"
-say "The log-based alerts see nothing until a backend that writes their events is"
-say "deployed (activation, checkout, devlock_drop, audit_write_failed, AUTH_DENIED;"
+say "The log-based alerts and charts see nothing until a backend that writes their"
+say "events is deployed (activation, checkout, devlock_drop, audit_write_failed,"
+say "AUTH_DENIED, revocation_check_failed, auth_admin_rate_limited, app_check_*;"
 say "ops/monitoring/README.md)."
 if [ "$DRY_RUN" = 1 ]; then
   echo

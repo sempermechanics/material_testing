@@ -1,7 +1,7 @@
 # Monitoring as code (semper-api)
 
-Log-based metrics, the `/readyz` uptime check, the availability SLO and the alert
-policies for the production Cloud Run service, applied by
+Log-based metrics, the `/readyz` uptime check, the availability SLO, the alert
+policies and four dashboards for the production Cloud Run service, applied by
 [`scripts/apply-monitoring.sh`](../../scripts/apply-monitoring.sh). Readiness items
 A7.1–A7.3; the signals in [§17](../../docs/backend/CLOUD_ARCHITECTURE_GCP.md) of the
 architecture doc.
@@ -27,6 +27,7 @@ the run.
 |---|---|---|---|
 | `__PROJECT__`, `__PROJECT_NUMBER__` | `--project` | — | Project id; the number is looked up on `--apply` |
 | `__SERVICE__`, `__REGION__` | `--service`, `--region` | `semper-api`, `asia-south1` | Cloud Run service |
+| `__STAGING_SERVICE__` | `--staging-service` | `semper-api-staging` | Shown beside `__SERVICE__` on the service-health dashboard (same project) |
 | `__RUN_HOST__` | `--run-host` | looked up | The service's `*.run.app` host, for the uptime check |
 | `__NOTIFICATION_CHANNEL__` | `--notification-channel` | — | Id or full `projects/…/notificationChannels/…` name |
 | `__ACTIVATIONS_PER_LICENCE_PER_DAY__` | `--activations-per-licence-per-day` | 25 | **N** for the activation anomaly: successful key redemptions on one licence in 24 h. Set it above the largest class an institution onboards in a day; a personal licence never comes near it |
@@ -42,18 +43,30 @@ are `observability.log_event` lines (`jsonPayload.event`), one JSON object per l
 |---|---|---|
 | `semper_http_5xx` | `event="http_access"`, `status>=500` | `routeTemplate`, `status` |
 | `semper_audit_write_failed` | `event="audit_write_failed"` | `action`, `errorCode` |
-| `semper_activation` | `event="activation"` (licence key redemption) | `licenseId`, `outcome` (ok / refused), `errorCode`, `appId` |
-| `semper_checkout` | `event="checkout"` (floating seat) | `licenseId`, `outcome`, `errorCode`, `appId` |
-| `semper_devlock_drop` | `event="devlock_drop"` (licensed account resolved Demo at the device lock) | `licenseId`, `stage` (revoked / mismatch) |
+| `semper_activation` | `event="activation"` (licence key redemption) | `licenseId`, `outcome` (ok / refused), `errorCode`, `appId`, `appVersion` |
+| `semper_checkout` | `event="checkout"` (floating seat) | `licenseId`, `outcome`, `errorCode`, `appId`, `appVersion` |
+| `semper_devlock_drop` | `event="devlock_drop"` (licensed account resolved Demo at the device lock) | `licenseId`, `stage` (revoked / mismatch), `appId`, `appVersion` |
 | `semper_auth_denied` | `action="AUTH_DENIED"`, not an `audit_write_failed` line | `stage` |
+| `semper_revocation_check_failed` | `event="revocation_check_failed"` (step-up revocation check could not answer; refused, fail closed) | `errorCode` (exception class), `appId` |
+| `semper_auth_admin_rate_limited` | `event="auth_admin_rate_limited"` (a Firebase Auth admin call was throttled) | none |
+| `semper_app_check_failed` | `event` is `app_check_missing` or `app_check_invalid` (`APP_CHECK_MODE` monitor or enforce) | `verdict` (missing / invalid), `appId`, `appVersion` |
+
+`appId` and `appVersion` are the caller's `X-App-Id` / `X-App-Version` (versionCode),
+which `observability.event_payload` adds to every event line. `licenseId` stays a
+label only where the activation-anomaly alert needs it; no chart splits by it.
+The `appVersion` / `appId` labels on the three licensing metrics are additions to
+metrics that may already exist: a rerun updates them in place (`gcloud logging
+metrics update`), and the new labels count only from then on.
 
 A metric counts only from the moment it exists, and only lines a deployed backend
 writes: `activation`, `checkout` and `devlock_drop` come with the licensing
 observability change, `audit_write_failed` with the audit change, and
 `semper_auth_denied` with the change that makes `audit.record()` log an
 `audit_denied` line (with `action` and `stage`) for every DENIED row as well as
-writing it to Firestore (`backend/app/audit.py:64-69`). Until the backend that
-writes a line is deployed, its alert stays quiet, which is not the same as healthy.
+writing it to Firestore (`backend/app/audit.py:64-69`), and
+`semper_auth_admin_rate_limited` with the change that logs `auth_admin_rate_limited`
+from `backend/app/google_auth.py`. Until the backend that writes a line is deployed,
+its alert stays quiet and its chart flat, which is not the same as healthy.
 
 ## Alerts (`policies/`) and what to do
 
@@ -100,6 +113,47 @@ error budget ~3.4 h of full outage). **Fast burn** (14.4× over 1 h, 2 % of the 
 in an hour) pages: treat as an incident. **Slow burn** (6× over 6 h, 5 % of the
 budget) is a fix-today ticket. Both come from the SRE workbook's multi-window
 starting points; tune after a month of data.
+
+## Dashboards (`dashboards/`)
+
+Cloud Monitoring dashboards (`mosaicLayout`), found by `displayName`: a rerun lists
+the one with that name and updates it with the etag it read, so a dashboard edited
+in the console since is refused rather than overwritten unseen (rerun to take the
+new etag). Console edits are lost on the next apply; change the file instead.
+
+### semper-service-health
+Cloud Run's own metrics for `__SERVICE__` and `__STAGING_SERVICE__`, one series per
+service: requests/s by `response_code_class`; the 5xx ratio over 10 min (the
+http-5xx-ratio alert's 2 % drawn in); request latency p50 / p95 / p99 (the 2 s p95
+alert drawn in); instances by state (active / idle) against `--max-instances` 10;
+container CPU and memory utilisation, p50 and p99 across instances. Last, the 5xx the
+app itself answered, by route (`semper_http_5xx`, production only): the first place
+to look when the ratio moves.
+
+### semper-licensing
+Hourly counts on production: activations, seat checkouts and device-lock drops, each
+by outcome (or stage, for drops) and by app and build (`appId`, `appVersion`);
+activation and checkout refusals by `errorCode`. A new build whose refusals climb
+shows here before support hears of it. Per-licence counts are the activation-anomaly
+alert's, not a chart's.
+
+### semper-security
+Per 5 min on production: AUTH_DENIED by `stage` (the auth-denied-spike threshold
+drawn in, against the stacked total); audit write failures by `action`; revocation
+check failures by exception class, beside Firebase Auth admin rate limits (a burst of
+both is throttling, failures alone a lost `roles/firebaseauth.admin`); App Check
+failures by verdict and by app and build. App Check lines are written in `monitor`
+mode as well as `enforce`, and the line does not say which (its `enforcing` field is
+not on the logging allowlist): in enforce mode the same requests are also AUTH_DENIED
+with stage `app_check`. A passing App Check token is not logged, so there is no
+pass rate.
+
+### semper-slo
+The 99.5 % availability SLO (`slo/availability.json`): scorecards for the SLI (good /
+all) and the remaining error budget, the budget remaining over time
+(`select_slo_budget_fraction`), the burn rate over 1 h and 6 h
+(`select_slo_burn_rate`, with the fast-burn 14.4 and slow-burn 6 thresholds the alerts
+use) and the SLI over time (`select_slo_health`).
 
 ## Not covered here
 
