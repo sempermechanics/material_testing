@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from fastapi import Depends, Header, HTTPException, Request
+from firebase_admin import auth as fb_auth
 from starlette.concurrency import run_in_threadpool
 
 from . import apps, audit, errors, repo, rate_limit, statuses
@@ -516,5 +517,45 @@ async def step_up_check(
                      detail={"stage": "reauth", "ageSeconds": age})
         raise HTTPException(403, errors.REAUTH_REQUIRED)
 
+    if settings.CHECK_REVOKED_ON_STEP_UP:
+        await run_in_threadpool(_require_not_revoked, request, user["uid"])
+
     request.state.device_id = ""
     return Caller(user, via="mfa", second_factor=factor)
+
+
+def _require_not_revoked(request: Request, uid: str) -> None:
+    """Re-verify the browser caller's bearer with revocation checked, or 401.
+
+    Only the second-factor path asks (`CHECK_REVOKED_ON_STEP_UP`): a browser
+    session is what a revoked or disabled user can keep using until the token
+    expires, while a phone's signed path is held to its device record.
+
+    A revoked token or a disabled account is `invalid_token`, audited as stage
+    `revoked`. Any other failure of the check — the runtime account lost
+    `roles/firebaseauth.admin` on the Auth project, or the Auth API is down —
+    also refuses, 401 `invalid_token`, audited as stage `revocation_check` and
+    logged as `revocation_check_failed`. Fail closed, because whoever turned
+    the setting on asked for revoked users to be kept out, and a check that
+    cannot answer cannot say this one is not. Not 503: the console and app
+    already handle `invalid_token`, and a new wire code would reach neither.
+    """
+    bearer = _client_bearer(
+        request.headers.get("authorization", ""),
+        request.headers.get("x-forwarded-authorization", ""),
+    )
+    token = bearer[7:] if bearer.startswith("Bearer ") else ""
+    try:
+        verify_id_token(token, check_revoked=True)
+    except (fb_auth.RevokedIdTokenError, fb_auth.UserDisabledError) as e:
+        obs.log_event(log, logging.WARNING, "step_up_revoked", uid=uid,
+                      stage="revoked", errorCode=type(e).__name__)
+        audit.record(uid, action="AUTH_DENIED", outcome="DENIED", detail={"stage": "revoked"})
+        raise HTTPException(401, errors.INVALID_TOKEN) from e
+    except Exception as e:  # noqa: BLE001 - fail closed; see the docstring
+        obs.log_event(log, logging.ERROR, "revocation_check_failed", uid=uid,
+                      stage="revocation_check", errorCode=type(e).__name__,
+                      dependency="firebase_auth")
+        audit.record(uid, action="AUTH_DENIED", outcome="DENIED",
+                     detail={"stage": "revocation_check"})
+        raise HTTPException(401, errors.INVALID_TOKEN) from e

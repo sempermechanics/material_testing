@@ -207,6 +207,23 @@ class Settings:
     # out every older build, so it is deliberately not the default.
     APP_CHECK_MODE = os.environ.get("APP_CHECK_MODE", "off").strip().lower()
 
+    # --- revocation on the browser step-up (A3.4) ---------------------------
+    # On: a browser caller on the second-factor path (`deps.step_up_check`,
+    # via="mfa") has its ID token re-verified with check_revoked=True, so a
+    # user revoked or disabled in Firebase Auth stops changing anything at
+    # once rather than when the token expires (up to an hour). The device-
+    # signed path is not affected: a revoked device fails its own check.
+    #
+    # PREREQUISITE: the runtime service account must hold
+    # `roles/firebaseauth.admin` on the Auth project (FIREBASE_PROJECT_ID).
+    # The check reads the user record, and without that grant it fails, which
+    # this setting treats as a refusal (fail closed, 401 invalid_token, logged
+    # as `revocation_check_failed`). Hence off by default: grant the role,
+    # then turn this on.
+    CHECK_REVOKED_ON_STEP_UP = os.environ.get(
+        "CHECK_REVOKED_ON_STEP_UP", "false",
+    ).strip().lower() in ("1", "true", "yes")
+
     # Where "a new user is waiting for approval" mail goes. Same address the app
     # shows in Settings -> Help & support and on the pending-approval screen.
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@sempermechanics.com")
