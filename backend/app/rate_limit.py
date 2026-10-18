@@ -125,3 +125,12 @@ listing_bucket = TokenBucket(rate_per_sec=5.0, burst=20.0)
 # Campus IT self-service seat management. Trusted (adminEmails-gated) but not
 # device-attested, so kept tighter than the Semper-staff admin_bucket.
 institution_bucket = TokenBucket(rate_per_sec=1.0, burst=10.0)
+# A bulk roster import is up to 500 seat adds in one request, each a handful
+# of Firestore round trips and an audit write. Spent on top of the tier's own
+# bucket. A burst of 3 covers a re-import to finish rows an import ran out of
+# time for; after that, one a minute.
+roster_import_bucket = TokenBucket(rate_per_sec=1 / 60, burst=3.0)
+# Whole-roster reads (the CSV export and the seat summary, which also reads
+# every holder's account) and audit-log pages. Each is one request reading up
+# to a few thousand documents, so on top of the tier's bucket.
+roster_report_bucket = TokenBucket(rate_per_sec=0.5, burst=10.0)

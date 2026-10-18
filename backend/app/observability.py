@@ -25,7 +25,7 @@ _ALLOWED = frozenset({
     "dependency", "latencyMs", "method", "path", "status", "attempt",
     "maxAttempts", "httpStatus", "count", "stage",
     "opClass", "routeTemplate", "fileCount", "frameCount", "folderMs",
-    "appId", "appVersion", "licenseId",
+    "appId", "appVersion", "licenseId", "action",
 })
 
 #: The largest versionCode Android allows (`Integer.MAX_VALUE`).

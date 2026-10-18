@@ -689,6 +689,8 @@ deleted_licenses/{id}/deleted_seats/{uid}
 
 audit_logs/{autoId}               (append-only)
   ts (Timestamp), uid, deviceId, ip, ua
+  licenseId                       (licence, seat, invite and lease targets only;
+                                   written from 2026-10-18 — audit.licence_of)
   action: "LOGIN" | "DEVICE_REGISTER" | "DEVICE_REBIND" |
           "SESSION_CREATE" | "UPLOAD_COMPLETE" | "AUTH_DENIED" |
           "LICENSE_ACTIVATE" | "INSTITUTION_SEAT_PATCH" | "INSTITUTION_SEAT_REVOKE" | ...
@@ -1337,6 +1339,20 @@ institution licence: reads take an ordinary admin token, changes take the
 staff step-up (`admin_bucket`, `ADMIN_*`). The seats listing is paged
 (`page_size` 1..1000, default 500; `page_token`); invites come with the first
 page.
+
+Beside the one-at-a-time routes the same router serves bulk work (all four on
+both tiers): `POST …/seats/import` (`{"csv": …}`, ≤ 500 rows, each row through
+the single add, per-row `{row, email, outcome, error}`, a 40 s budget after
+which rows answer `unprocessed`, one `…_ROSTER_IMPORT` audit event with the
+counts; tier bucket + `roster_import_bucket`), `GET …/seats/export` (text/csv,
+audited `…_ROSTER_EXPORT`), `GET …/summary` (counts from the reconciliation
+read: `users.lastSeenAt` for active-in-7-days, the revoked-still-running bucket
+for revocation pending, the licence's `expiresAt` for expiring) and
+`GET …/audit` (`audit.page_license_audit`: `audit_logs` where `licenseId ==`,
+`ts` range, `ts` DESC, composite index in `firestore.indexes.json`; json or
+csv). `audit.record` stamps `licenseId` on `license`, `seat`, `invite` and
+`lease` targets from 2026-10-18; earlier events lack it and are not in that
+export. CSV parsing and rendering is `roster_io.py`.
 
 ### 20.1 Delivery, and activation as the fallback
 
