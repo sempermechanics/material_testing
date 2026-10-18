@@ -16,12 +16,18 @@ log = logging.getLogger("semper.license")
 router = APIRouter()
 
 
-def _licence_event(event: str, license_id: str | None, refusal: Refusal | None = None) -> None:
+def _licence_event(event: str, license_id: str | None, refusal: Refusal | None = None,
+                   *, uid: str) -> None:
     """One structured line per redemption or checkout, for the log-based
     metrics that count them per licence and app (A7.3). `appId` and
-    `appVersion` come from the request context; no email is logged."""
+    `appVersion` come from the request context; no email is logged.
+
+    `uid` is passed by the handler, which holds the user (TD-245): the
+    request's bound uid is set by `current_user` inside a threadpool
+    dependency, whose context this handler does not share."""
     obs.log_event(
         log, logging.INFO, event,
+        uid=uid or None,
         licenseId=license_id or None,
         outcome="refused" if refusal else "ok",
         errorCode=refusal.code if refusal else None,
@@ -52,9 +58,10 @@ def activate_license(
             user["uid"], user.get("email") or "", device_id, body.key, app,
         )
     except Refusal as refusal:
-        _licence_event("activation", _typed_licence_id(body.key, refusal), refusal)
+        _licence_event("activation", _typed_licence_id(body.key, refusal), refusal,
+                       uid=user["uid"])
         raise
-    _licence_event("activation", _typed_licence_id(body.key, None))
+    _licence_event("activation", _typed_licence_id(body.key, None), uid=user["uid"])
     audit.record(
         user["uid"], device_id, action="LICENSE_ACTIVATE",
         detail={"mode": (config or {}).get("mode")},
@@ -88,9 +95,9 @@ def checkout_lease(
     try:
         config = repo.checkout_lease(user, device_id)
     except Refusal as refusal:
-        _licence_event("checkout", user.get("licenseId"), refusal)
+        _licence_event("checkout", user.get("licenseId"), refusal, uid=user["uid"])
         raise
-    _licence_event("checkout", user.get("licenseId"))
+    _licence_event("checkout", user.get("licenseId"), uid=user["uid"])
     return {"config": config}
 
 
