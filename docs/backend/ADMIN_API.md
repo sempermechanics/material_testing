@@ -43,7 +43,12 @@ window, using the ID token of a signed-in session.
 | `admin-stepup-fresh` | staff | as `admin-stepup`, with a sign-in younger than `ADMIN_WEB_REVOKE_REAUTH_SECONDS` (default 120 s) | `reauth_required` |
 
 With `CHECK_REVOKED_ON_STEP_UP=true` (after TD-214), a step-up call by a revoked or
-disabled Firebase user is 401 `invalid_token`.
+disabled Firebase user is 401 `invalid_token`. The check spends a per-instance budget
+for Firebase Auth Admin calls (`AUTH_ADMIN_CALLS_PER_SECOND`, default 10, burst
+`AUTH_ADMIN_BURST` 20; `backend/app/rate_limit.py:138-147`). When it is spent the
+check is not made and the call answers **503 `auth_check_busy`** with `Retry-After`
+(`backend/app/deps.py:554-562`): the token is not judged, so retry after the delay.
+The consoles show the bare code for now (TD-272).
 
 ## Institution routes (customer IT)
 
@@ -59,9 +64,9 @@ Prefix `/v1/institutions/licenses/{license_id}`. Rate limits: `institution_bucke
 | `GET …/seats` | `institution-stepup` | `page_size` (≤ 1000, default 500), `page_token` | `{license, seats[], invites[], page}`; a seat is `uid`, `email`, device locks, `status` (`active` / `disabled` / `revoked`), lease fields, times (`roster.py:128-152`) | 404 `license_not_found` |
 | `POST …/seats` | `institution-stepup` | `{"email": "…"}` | `{licenseId, seat, invite}`: exactly one of the two is set (`:154-168`) | 400 `invalid_email`; 409 `member_already_licensed`, `license_seats_exhausted`, `license_seat_disabled`; 503 `claim_contended` (retry) |
 | `POST …/seats/import` | `institution-stepup` | `{"csv": "<file text>"}`: one column `email`, or the first column when there is no header; ≤ 500 rows, ≤ 512 000 characters (`backend/app/roster_io.py:22-25`) | `{licenseId, rows, counts, results[]}`; `counts` has `seated`, `invited`, `exists`, `duplicate`, `invalid`, `refused`, `unprocessed`; each result is `{row, email, outcome, error}` (`roster.py:170-241`) | 400 `roster_import_empty`, `roster_import_malformed`, `roster_import_no_email_column`; 413 `roster_import_too_many_rows`. Re-import the same file to finish `unprocessed` rows: rows already on the roster answer `exists` |
-| `GET …/seats/export` | `institution-stepup` | — | `text/csv`, every seat then every invite, `email` first, so the file imports back (`:243-258`); a cell starting with `=`, `+`, `-` or `@` is prefixed with `'` against spreadsheet formulas, and such an address does not yet import back (TD-267) | — |
-| `GET …/summary` | `institution-stepup` | — | `{licenseId, assigned, onHold, activeLast7Days, invited, revocationPending, revocationPendingNoCheckIn, removed, expiringWithin30Days, seating, maxSeats, …}` (`roster.py:260-272`; `roster_io.py:202-243`) | — |
-| `GET …/audit` | `institution-stepup` | `format` = `json` or `csv`; `since`, `until` (ISO date or instant, UTC; a bare `until` date includes that day); `page_size` (1–5000, default 100); `page_token` | JSON `{licenseId, events[], page}`, newest first; each event `{id, ts, uid, action, outcome, target, detail}`, no IP or device id. CSV: the same page, next token in the `X-Next-Page-Token` response header (`roster.py:274-313`; `backend/app/audit.py:169-208`). The CORS answer does not expose that header, so only a non-browser client (a script) can read it and page on; a browser gets one page. The console's CSV export therefore asks for 5,000 events and says so when it stopped at that ceiling (`firebase-hosting/public/console/institution/audit-log.js`); page CSV from a script, or narrow `since` / `until` | 400 `invalid_audit_range`. Events written before 2026-10-18 are absent (TD-246) |
+| `GET …/seats/export` | `institution-stepup` | — | `text/csv`, every seat then every invite, `email` first, so the file imports back (`:243-258`); a cell starting with `=`, `+`, `-` or `@` is prefixed with `'` against spreadsheet formulas, and the import drops that one `'` again (`roster_io.undefused`, `backend/app/roster_io.py:112-120`) | — |
+| `GET …/summary` | `institution-stepup` | — | `{licenseId, seating, maxSeats, seatsUsed, leasesActive (floating only), expiresAt, counts}`; `counts` holds `assigned`, `onHold`, `activeLast7Days`, `invited`, `revocationPending`, `revocationPendingNoCheckIn`, `removed`, `expiringWithin30Days` (`roster.py:260-272`; `backend/app/roster_io.py:202-247`) | — |
+| `GET …/audit` | `institution-stepup` | `format` = `json` or `csv`; `since`, `until` (ISO date or instant, UTC; a bare `until` date includes that day); `page_size` (1–5000, default 100); `page_token` | JSON `{licenseId, events[], page}`, newest first; each event `{id, ts, uid, action, outcome, target, detail}`, no IP or device id. CSV: the same page, next token in the `X-Next-Page-Token` response header (`roster.py:274-313`; `backend/app/audit.py:169-208`). The CORS answer does not expose that header, so only a non-browser client (a script) can read it and page on; a browser gets one page. The console's CSV export therefore asks for 5,000 events and says so when it stopped at that ceiling (`firebase-hosting/public/console/audit-log.js`, shared by the institution page and the operator desk); page CSV from a script, or narrow `since` / `until` | 400 `invalid_audit_range`. Events written before 2026-10-18 are absent (TD-246) |
 | `PATCH …/seats/{uid}` | `institution-stepup` | `{"clearDeviceLock": true}` and/or `{"enabled": false}` | `{licenseId, seat}` (`:334-366`) | 400 `empty_patch`; 404 `seat_not_found`; 409 `seat_revoked` |
 | `DELETE …/seats/{uid}` | `institution-stepup` | — | `{licenseId, uid, revoked: true}`: the holder drops to Demo, keeps their data, and the slot is freed (`:368-380`) | 404 `seat_not_found` |
 | `DELETE …/invites/{invite_key}` | `institution-stepup` | — | `{licenseId, inviteId, revoked: true}` (`:315-332`) | 404 `invite_not_found` |
@@ -73,10 +78,29 @@ signed entitlement's `graceUntil` passes (at most 14 days by default,
 
 ## Staff routes (Semper)
 
-The same roster routes are mounted for staff under
-`/v1/admin/licenses/{license_id}` for any institution licence: reads at `admin`,
-changes at `admin-stepup` (`backend/app/routers/admin.py:541-567`), with
-`admin_bucket` and `ADMIN_…` audit actions. Staff-only routes:
+### Institution rosters at the staff tier
+
+Every route in the table above is also mounted for staff under
+`/v1/admin/licenses/{license_id}` (in place of `/v1/institutions/licenses/{license_id}`),
+for any institution licence, whether or not the caller is in its `adminEmails`
+(`backend/app/routers/admin.py:535-567`). An individual licence answers 404
+`license_not_found`. The request and response bodies are the same.
+
+| Routes | Tier |
+|---|---|
+| `GET …/seats`, `GET …/seats/export`, `GET …/summary`, `GET …/audit` | `admin` (`staff_roster_reader`, `admin.py:552-553`) |
+| `POST …/seats`, `POST …/seats/import`, `PATCH …/seats/{uid}`, `DELETE …/seats/{uid}`, `DELETE …/invites/{invite_key}` | `admin-stepup` (`staff_roster_writer`, `:556-558`) |
+
+Rate limits: `admin_bucket` on every route, plus `roster_import_bucket` on the import
+and `roster_report_bucket` on export, summary and audit, as for IT. Changes write
+`ADMIN_…` audit actions (`ADMIN_SEAT_ADD`, `ADMIN_INVITE_ADD`, `ADMIN_ROSTER_EXPORT`, …)
+where IT's write `INSTITUTION_…`. The operator desk's roster card calls these routes
+with the shared `roster.js`, `roster-tools.js` and `audit-log.js`
+(`firebase-hosting/public/console/operator/roster-card.js`). An import from a sign-in
+older than `ADMIN_WEB_REAUTH_SECONDS` is sent to Google for re-authentication, and the
+pasted CSV does not survive the round trip: paste it and import again on return.
+
+### Staff-only routes
 
 | Method and path | Tier | Purpose |
 |---|---|---|
@@ -85,7 +109,8 @@ changes at `admin-stepup` (`backend/app/routers/admin.py:541-567`), with
 | `POST /v1/admin/users/{uid}/revoke` | `admin-stepup` | Suspend an account and revoke its refresh tokens (best-effort until TD-214; the audit row says `sessionsRevoked`) |
 | `PATCH /v1/admin/users/{uid}/config` | `admin-stepup` | Per-user limit overrides |
 | `POST /v1/admin/device-releases` | `admin-stepup` | `{"email"}`: free a Demo account's registered phone |
-| `GET /v1/admin/licenses` | `admin` | Licences, newest first; `q` searches exact address, domain or key prefix (TD-244: the address is in the URL) |
+| `GET /v1/admin/licenses` | `admin` | Licences, newest first, paged (`limit` ≤ 200, `page_token`, `include_demo`, `include_revoked`). `q` (exact address, domain or key prefix) is **deprecated**: it puts an address in the URL, which request logs keep. It still answers for one release and logs `deprecated_query_search` with the caller's uid, never the value (`backend/app/routers/admin.py:141-163`; removal TD-273) |
+| `POST /v1/admin/licenses/search` | `admin` | The search with its terms in the body: `{"q", "limit", "page_token", "include_demo", "include_revoked"}`, `q` required (at most 320 characters; empty pages the listing), any other field 422. On `admin_bucket`, no step-up; the answer has the GET's shape (`backend/app/routers/admin.py:166-174`; `AdminLicenseSearch`, `backend/app/models.py:446-460`). Declared at the gateway ahead of `/{licenseId}` (`backend/gateway/openapi.yaml:626-644`). The operator desk searches with it |
 | `GET /v1/admin/licenses/{license_id}` | `admin` | One licence |
 | `POST /v1/admin/licenses` | `admin-stepup` | Mint; the plaintext key is returned once |
 | `PATCH /v1/admin/licenses/{license_id}` | `admin-stepup` | Terms, renewal, `clearDeviceLock` |
@@ -117,5 +142,6 @@ curl -sS -H "Authorization: Bearer $TOKEN" -o audit.csv \
 ## Contract tests
 
 `backend/tests/test_roster_bulk.py` (import, export, summary, audit),
+`backend/tests/test_licence_search_post.py` (the POST search and the deprecated `q`),
 `backend/tests/test_route_authz_matrix.py` (tiers and cross-tenant refusals),
 `backend/tests/test_gateway_parity.py` (every route declared at the gateway).
