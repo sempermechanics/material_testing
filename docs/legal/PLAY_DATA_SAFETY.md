@@ -1,6 +1,6 @@
 # Google Play Data safety — draft answers (2026-10-18)
 
-Draft for readiness item 8.4 ([READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md)),
+Material Testing's listing (`com.sempermechanics.materialtesting`). Draft for readiness item 8.4 ([READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md)),
 derived from the SDK inventory in `app/build.gradle.kts` and from what the app sends
 to the backend. **Not submitted** (TD-232); the operator answers the form in the
 Play Console and owns the final text. This file is **not rendered** to Hosting

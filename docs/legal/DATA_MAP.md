@@ -44,7 +44,7 @@ no client can read or write any of them (`firestore.rules:7-9`).
 
 | Collection | Personal data | Purpose | Retention |
 |---|---|---|---|
-| `users/{uid}` | `email`, `emailVerified`, `displayName`, `signInProvider`, `role`, `access_status`, `claimedDeviceId`, per-app `activeDeviceId`, `linkedAuthUids`, licence mirror (`licenseId`, mode, terms), `termsAccepted` and `improvementConsent` records (each with a device id and source), `createdAt`, `lastSeenAt` (`backend/app/repo/users.py:200-217`; schema `docs/backend/CLOUD_ARCHITECTURE_GCP.md:544-579`) | Identity, access, licensing, consent records | Until erasure (`backend/app/repo/account.py:149-171`) |
+| `users/{uid}` | `email`, `emailVerified`, `displayName`, `signInProvider`, `role`, `access_status`, `claimedDeviceId`, per-app `activeDeviceId`, `linkedAuthUids`, licence mirror (`licenseId`, mode, terms), `termsAccepted` and `improvementConsent` records (each with a device id and source), `createdAt`, `lastSeenAt` (`backend/app/repo/users.py:200-217`; schema `docs/backend/CLOUD_ARCHITECTURE_GCP.md:552-587`) | Identity, access, licensing, consent records | Until erasure (`backend/app/repo/account.py:149-171`) |
 | `auth_links/{firebaseSub}` | the canonical uid a Firebase subject maps to (`backend/app/repo/users.py:93`) | Merging sign-in methods | **Not deleted on erasure** (TD-243) |
 | `devices/{deviceId}` | `uid`, `app`, `publicKeyPem`, `model`, `osVersion`, `appVersion`, `status`, registration and last-assertion times (`backend/app/repo/devices.py:80-92`) | Device binding, request signatures | Until erasure |
 | `challenges/{nonce}` | `uid`, `deviceId` | Replay protection | TTL on `expireAt` (`backend/firestore.indexes.json:103-121`); deleted on use |

@@ -166,8 +166,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   managed config, crash breadcrumbs only after diagnostics consent and cert pins from
   the environment. The backend, consoles, rules tests and monitoring are shared and
   deploy from semperdic-app. Owed: the same external actions (TD-214–TD-217, TD-226,
-  TD-229–TD-232), this repo's `SEMPER_ENTITLEMENT_PUBKEYS` variable and `SEMPER_API_CERT_PINS` secret for a
-  release, and a first CI run of the Android half here (TD-219).
+  TD-229–TD-232); for a release, this repo's `SEMPER_ENTITLEMENT_PUBKEYS` variable and
+  `SEMPER_API_CERT_PINS` secret; and a first CI run of the Android half here (TD-219).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
