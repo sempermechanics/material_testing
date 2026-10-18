@@ -122,6 +122,20 @@ class LicenseEntitlementsTest {
     }
 
     @Test
+    fun `the screens show the cap the gate enforces once the server has reported one`() {
+        // TD-263: the quota line and the limit screen read shownAnalysisCap.
+        // With a token lapsed it is demo's (EntitlementPolicyTest); with none,
+        // as here, it is the server's ceiling, exactly as analysisCap.
+        assertEquals("unknown until the server reports", 0, LicenseEntitlements.shownAnalysisCap(ctx))
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 0))
+        assertEquals(0, LicenseEntitlements.shownAnalysisCap(ctx))
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 40))
+        assertEquals(LicenseEntitlements.analysisCap(ctx), LicenseEntitlements.shownAnalysisCap(ctx))
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "demo", maxSessions = 25))
+        assertEquals(LicenseEntitlements.analysisCap(ctx), LicenseEntitlements.shownAnalysisCap(ctx))
+    }
+
+    @Test
     fun `demo analysis cap falls back to the constant before config is known`() {
         assertEquals(LicenseEntitlements.DEMO_MAX_ANALYSES, LicenseEntitlements.analysisCap(ctx))
     }

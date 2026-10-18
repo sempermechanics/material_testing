@@ -82,7 +82,12 @@ object AccountCache {
     /** True while an upload's quota refusal holds the stop ([setSessionLimitReached]). */
     fun isLimitForced(context: Context): Boolean = prefs(context)[Session.LIMIT_FORCED]
 
-    /** Session ceiling, owned by [AppRemoteConfig]; 0 until the backend reports it. */
+    /**
+     * The server's session ceiling, owned by [AppRemoteConfig]; 0 until the
+     * backend reports it. Not what a screen shows: that is the cap enforced,
+     * `LicenseEntitlements.shownAnalysisCap`, which a lapsed entitlement
+     * token holds to demo's.
+     */
     fun quotaMax(context: Context): Int = AppRemoteConfig.maxSessions(context)
 
     /** True when the backend has reported a positive quota ceiling. */
