@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import audit, drive, errors, repo, legal
+from .. import audit, drive, errors, google_auth, repo, legal
 from .. import rate_limit
 from ..deps import any_status_user, current_user, rate_limited, token_uid, verified_device
 from ..validation import require_header_identifier
@@ -249,10 +249,16 @@ def delete_account(ctx=Depends(verified_device)):
     anything orphaned by a failed sync), then every Firestore record: sessions,
     file pointers, device registrations and the user profile.
 
+    Last, the Firebase Auth user itself is deleted (best-effort: it needs
+    Firebase Auth admin on the Auth project, and the audit row says whether it
+    happened, `authUserDeleted`). Once it is gone the sign-in cannot mint
+    another token, and signing in again with the same address creates a new
+    Firebase user with a new uid, so nothing erased here is reattached to it.
+
     Only the append-only audit trail survives — it records that actions
     (including this erasure) happened, and holds no analysis content. The caller
-    must sign out afterwards: any further authenticated call would create a
-    fresh, empty profile.
+    must sign out afterwards: while the Auth user survives (the delete failed),
+    any further authenticated call would create a fresh, empty profile.
     """
     user = ctx.user
     uid = user["uid"]
@@ -288,6 +294,10 @@ def delete_account(ctx=Depends(verified_device)):
 
     # 3. Only once the blobs are gone: erase the metadata.
     counts = repo.delete_all_user_data(uid)
+    firestore_ms = int((time.monotonic() - started) * 1000) - drive_ms
+    # 4. Then the sign-in. After the data, so a failure here leaves an empty
+    #    account rather than data nobody can sign in to reach.
+    auth_user_deleted = google_auth.delete_auth_user(uid)
     total_ms = int((time.monotonic() - started) * 1000)
     # Timed per phase: erasure is the one call a user waits on with nothing to
     # look at, so when it feels slow the log should say which half was slow.
@@ -295,8 +305,9 @@ def delete_account(ctx=Depends(verified_device)):
         **counts,
         "driveFolders": folders_deleted,
         "userFolderFound": bool(user_folder),
+        "authUserDeleted": auth_user_deleted,
         "driveMs": drive_ms,
-        "firestoreMs": total_ms - drive_ms,
+        "firestoreMs": firestore_ms,
         "totalMs": total_ms,
     }
     audit.record(uid, ctx.device_id, action="ACCOUNT_DELETE",

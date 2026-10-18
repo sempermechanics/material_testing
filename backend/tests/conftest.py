@@ -62,6 +62,17 @@ def firestore_calls_carry_a_deadline():
 
 
 @pytest.fixture(autouse=True)
+def firebase_user_admin_is_offline(monkeypatch):
+    """The Admin-SDK user calls (`google_auth.revoke_sessions`,
+    `delete_auth_user`) never reach the network from a test: they succeed
+    as no-ops unless a test replaces them to fail."""
+    from app import google_auth
+
+    monkeypatch.setattr(google_auth.fb_auth, "revoke_refresh_tokens", lambda uid, app=None: None)
+    monkeypatch.setattr(google_auth.fb_auth, "delete_user", lambda uid, app=None: None)
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limits():
     """Token buckets are process-global singletons shared by every test.
 
