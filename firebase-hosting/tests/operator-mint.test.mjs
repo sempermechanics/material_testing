@@ -177,7 +177,7 @@ test("an address that already holds a licence: nothing issued, and that licence 
   await openDesk({ licenses: [UNI], routes: {
     [MINT]: () => json(409, { detail: `email_already_licensed: ${held.id}` }),
     [`GET /v1/admin/licenses/${held.id}`]: () => json(200, held),
-    "GET /v1/admin/licenses?limit=50&include_revoked=false&q=pat%40lab.org": () => json(200, { licenses: [held] }),
+    "POST /v1/admin/licenses/search": () => json(200, { licenses: [held] }),
   } });
   $("emailLock").value = "pat@lab.org";
   await mint();
@@ -186,8 +186,8 @@ test("an address that already holds a licence: nothing issued, and that licence 
     "To replace it, revoke it first, then issue again.", "muted err",
   ]);
   assert.equal($("filter").value, "pat@lab.org", "the filter is the address: it may be an institution seat");
-  assert.deepEqual(sent(/held|q=/), [
-    `GET /v1/admin/licenses/${held.id}`, "GET /v1/admin/licenses?limit=50&include_revoked=false&q=pat%40lab.org",
+  assert.deepEqual(sent(/held|search/), [
+    `GET /v1/admin/licenses/${held.id}`, "POST /v1/admin/licenses/search",
   ]);
   assert.deepEqual(labels(), ["SEMP-HELD"], "only the held licence matches the filter");
   assert.equal($("mintedBox").hidden, true);
