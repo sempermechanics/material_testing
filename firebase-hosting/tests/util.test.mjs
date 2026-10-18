@@ -138,11 +138,17 @@ test("the licence list asks the backend to leave Demo and revoked rows out", () 
   );
 });
 
-test("a licence search is a JSON body: the text, the page size and any page token", () => {
-  assert.deepEqual(JSON.parse(licenceSearchBody({ q: " a@b.com ", limit: 50 })), { q: "a@b.com", limit: 50 });
+test("a licence search is a JSON body: the text, the page size, any page token and the toggles", () => {
+  const hidden = { include_demo: false, include_revoked: false };
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: " a@b.com ", limit: 50 })),
+    { q: "a@b.com", limit: 50, ...hidden });
   assert.deepEqual(JSON.parse(licenceSearchBody({ q: "uni.edu", limit: 50, pageToken: "t2" })),
-    { q: "uni.edu", limit: 50, page_token: "t2" });
-  assert.deepEqual(JSON.parse(licenceSearchBody({ q: null })), { q: "" });
+    { q: "uni.edu", limit: 50, page_token: "t2", ...hidden });
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: null })), { q: "", ...hidden });
+  // The boxes the list's query sends, sent the same way: a ticked "Show Demo
+  // keys" has the backend include Demo keys in a search too.
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: "a@b.com", showDemo: true, showRevoked: true })),
+    { q: "a@b.com", include_demo: true, include_revoked: true });
 });
 
 test("only an address, a domain or a key prefix is sent as a search", () => {

@@ -132,6 +132,19 @@ test("a second reauth_required after the step-up is a refusal, not a loop", asyn
   assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 1);
 });
 
+test("auth_check_busy (503) is a refusal to retry later: no step-up, no sign-out, no second send", async () => {
+  // The backend's Auth Admin budget is spent (TD-239): the sign-in is fine.
+  signIn(readyUser());
+  net.reply(json(503, { detail: "auth_check_busy" }));
+  const e = await rejection(auth.api("/v1/admin/licenses/L1/revoke", { method: "POST" }));
+  assert.deepEqual([e.code, e.status], ["auth_check_busy", 503]);
+  assert.equal(net.requests.length, 1);
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0);
+  assert.equal(fake.callsTo("signOut").length, 0);
+  assert.equal(storage.getItem(REAUTH_STARTED), null);
+  assert.ok(fake.auth.currentUser, "still signed in");
+});
+
 test("allowStepUp:false surfaces reauth_required without re-authenticating", async () => {
   signIn(readyUser());
   net.reply(json(403, { detail: "reauth_required" }));

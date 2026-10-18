@@ -158,14 +158,19 @@ export function licenceListPath({ limit, showDemo = false, showRevoked = false, 
 
 /**
  * The JSON body of a licence search (`POST /v1/admin/licenses/search`):
- * `{q, limit?, page_token?}`. The text searched for is an address often
- * enough that it belongs in a body, which no access log records, rather
- * than in `?q=`, which every one does.
+ * `{q, limit?, page_token?, include_demo, include_revoked}`. The text
+ * searched for is an address often enough that it belongs in a body, which
+ * no access log records, rather than in `?q=`, which every one does. The two
+ * flags are the table's toggles, as `licenceListPath` sends them: the
+ * backend leaves Demo keys out of a search unless asked, so a search with
+ * "Show Demo keys" ticked has to ask.
  */
-export function licenceSearchBody({ q, limit, pageToken = "" }) {
+export function licenceSearchBody({ q, limit, pageToken = "", showDemo = false, showRevoked = false }) {
   const body = { q: String(q ?? "").trim() };
   if (Number.isInteger(limit)) body.limit = limit;
   if (pageToken) body.page_token = pageToken;
+  body.include_demo = Boolean(showDemo);
+  body.include_revoked = Boolean(showRevoked);
   return JSON.stringify(body);
 }
 

@@ -12,6 +12,10 @@ import { errorDetail } from "./util.js";
 /** Sentences any page may show for a code it has none of its own for. */
 export const COMMON = {
   rate_limited: "Too many requests just now — wait a moment and try again.",
+  // 503 from a step-up while this server instance's sign-in check is out of
+  // budget (TD-239). The sign-in itself is fine: nothing signs out or
+  // re-authenticates for it, and repeating the action shortly works.
+  auth_check_busy: "The server is busy checking sign-ins — wait a few seconds and try again.",
   claim_contended: "Busy just now — try again.",
   mfa_required: "Set up two-factor authentication first.",
   reauth_required: "Sign in again, then repeat that.",
