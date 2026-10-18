@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.data.cloud
 
+import androidx.work.ListenableWorker
 import com.sempermechanics.semper.data.cloud.UploadErrors.Kind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,6 +52,15 @@ class UploadErrorsTest {
         assertEquals(Kind.STALE_SESSION, UploadErrors.classify(404, body("session_not_found")))
         // A bare 404 is a route the gateway does not know, not a missing session.
         assertEquals(Kind.TRANSIENT, UploadErrors.classify(404, "Not Found"))
+    }
+
+    @Test
+    fun `a paused upload or backup waits and retries, never fails`() {
+        // POST /v1/sessions and :complete answer 503 feature_paused while the
+        // upload or backup kill switch is on.
+        assertEquals(Kind.PAUSED, UploadErrors.classify(503, body("feature_paused")))
+        assertEquals(ListenableWorker.Result.retry(), UploadWorkOutcomes.fromHttpCode(503, body("feature_paused")))
+        assertFalse(UploadWorkOutcomes.isQuotaExhausted(503, body("feature_paused")))
     }
 
     @Test

@@ -87,6 +87,12 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
                 UploadLog.retry("HTTP ${e.code} stale session — $detail", e.requestId)
             }
             UploadErrors.Kind.INTEGRITY -> integrityMismatch(e)
+            // The kill switch is on: a pause, not a failure. Keep the staged
+            // files and retry with WorkManager's backoff until it lifts.
+            UploadErrors.Kind.PAUSED -> {
+                Timber.i("Upload paused by the backend (%s); will retry", e.parsedDetail)
+                UploadLog.retry("HTTP ${e.code}: ${ApiErrors.FEATURE_PAUSED}", e.requestId)
+            }
             UploadErrors.Kind.TRANSIENT -> {
                 // Transient — keep the staged files so the retry resumes identically.
                 Timber.e("Upload HTTP %d — %s", e.code, e.parsedDetail)

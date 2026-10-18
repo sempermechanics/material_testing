@@ -101,6 +101,17 @@ object ApiErrors {
     const val FEATURE_NOT_LICENSED = "feature_not_licensed"
 
     /**
+     * A kill switch has the feature off for now (503, with `Retry-After`):
+     * upload or backup on `POST /v1/sessions` and `…/files/{id}/complete`,
+     * restore on `GET /v1/files/{id}/content` and `…/sessions/{sid}/bundle`.
+     *
+     * Not a fault and not a licence refusal: an upload waits and retries, a
+     * restore or download says the feature is paused. Never shown as
+     * [FEATURE_NOT_LICENSED].
+     */
+    const val FEATURE_PAUSED = "feature_paused"
+
+    /**
      * This device is not the one the licence is bound to (403). Usually means
      * restore was attempted before the lock moved, or on the wrong phone.
      */

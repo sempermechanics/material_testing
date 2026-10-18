@@ -42,13 +42,28 @@ internal object UploadErrors {
         /** Any other 409: refused for a reason retrying will not fix. Terminal. */
         REJECTED,
 
+        /**
+         * The upload or backup kill switch is on (503 `feature_paused`): a
+         * pause, not a failure. Keep staging and retry with WorkManager's
+         * backoff, however long it lasts; never marked failed.
+         */
+        PAUSED,
+
         /** 5xx, 429, a bare 404 (route not reachable), anything else: keep staging and retry. */
         TRANSIENT,
     }
 
-    /** Classify an upload-ending HTTP [code] by the `detail` code in [body]. */
+    /**
+     * Classify an upload-ending HTTP [code] by the `detail` code in [body]. A
+     * pause (`feature_paused`) is told apart first, whatever its status.
+     */
     fun classify(code: Int, body: String): Kind {
         val detail = ApiErrors.detailOf(body)
+        return if (ApiErrors.isCode(detail, ApiErrors.FEATURE_PAUSED)) Kind.PAUSED else refusal(code, detail)
+    }
+
+    /** [classify] for anything but a pause. */
+    private fun refusal(code: Int, detail: String): Kind {
         fun detailIs(vararg codes: String) = codes.any { ApiErrors.isCode(detail, it) }
         return when {
             code == HttpStatus.CONFLICT && detailIs(ApiErrors.SESSION_QUOTA_EXCEEDED) -> Kind.QUOTA
