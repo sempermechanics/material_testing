@@ -56,12 +56,13 @@ def activate_license(
     """Redeem a Professional (or re-entered) key locked to this email and device
     (the device of the app that asks, ADR-010).
 
-    Kept for installed builds only. There are no runtime licence keys any
-    more: the account is the anchor, and a code is redeemed on the web
-    account page (`POST /v1/me/claim`, below), which runs this same
-    `repo.activate_license`. Current app builds no longer call this route;
-    it stays, unchanged, so builds that still offer a key field keep
-    working. Remove it once those builds have aged out.
+    Kept, unchanged, for compatibility with any installed caller. There are
+    no runtime licence keys: the account is the anchor, and a code is
+    redeemed on the web account page (`POST /v1/me/claim`, below), which
+    runs this same `repo.activate_license`. No released build ever offered
+    a key field (v1.2-beta.4 carries an `activateLicense` client with no
+    caller), and current builds do not call this route. Retire it with
+    TD-278.
     """
     rate_limit.enforce(rate_limit.license_activate_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
