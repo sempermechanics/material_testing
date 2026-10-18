@@ -18,6 +18,7 @@ from ..observability import DependencyError
 
 from . import _base
 from ._base import (
+    SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
     db,
@@ -145,7 +146,8 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
         snap = _get(ref, tx)
         if not snap.exists or ((snap.to_dict() or {}).get(lock) or ""):
             return False
-        tx.update(ref, {lock: device_id})
+        # A seat or an individual licence; both are stamped (TD-254).
+        tx.update(ref, {lock: device_id, "schemaVersion": SCHEMA_VERSION})
         return True
 
     for round_ in range(_BIND_ROUNDS):

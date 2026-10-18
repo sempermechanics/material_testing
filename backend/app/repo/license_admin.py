@@ -20,6 +20,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    SCHEMA_VERSION,
     _apply_patch,
     _is_institution,
     _is_revoked,
@@ -148,6 +149,7 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
             "revokedAt": _base.firestore.SERVER_TIMESTAMP,
             **_lease_clear_patch(),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         }
         _update_refs([
             (s.reference, seat_patch) for s in seats
@@ -329,7 +331,8 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
 def _clear_seat_leases(ref) -> None:
     """Drop every lease on a licence that no longer uses them."""
     _update_refs([
-        (doc.reference, {**_lease_clear_patch(), "updatedAt": _base.firestore.SERVER_TIMESTAMP})
+        (doc.reference, {**_lease_clear_patch(), "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+                         "schemaVersion": SCHEMA_VERSION})
         for doc in _stream(ref.collection("seats"))
         if _seat_lease_counted(doc.to_dict() or {})
     ])
