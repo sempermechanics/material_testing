@@ -115,7 +115,21 @@ so none of the signing steps run if any of the above fails.
    build-tools print `V2 Signer: certificate SHA-256 digest:` (and similar);
    older ones used `Signer #1 certificate SHA-256 digest:`. The workflow accepts
    both.
-5. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
+5. **Inspects the APK's hardening** with
+   [`scripts/check_release_apk.py`](../../scripts/check_release_apk.py) (aapt2
+   from the newest build-tools, plus a scan of every `classes*.dex`). It fails
+   the release when the APK is debuggable or `testOnly`, ships a component or
+   class from the debug source set (`app/src/debug`, e.g.
+   `DebugViewerSeedActivity`), contains `DebugAppCheckProviderFactory` or a
+   firebase-appcheck-debug version file, allows cleartext (manifest or network
+   security config), has a `minSdkVersion` other than `minSdk` in
+   `app/build.gradle.kts`, or R8's `mapping.txt` is missing or empty. It
+   **warns** when no `sha256/…` pin is compiled in, i.e. the
+   `SEMPER_API_CERT_PINS` secret was empty. CI tier 5 runs the same check on
+   its own release build. Locally:
+   `python3 scripts/check_release_apk.py app-release.apk --mapping mapping.txt`.
+6. **Verifies the bundle's signature** (`jarsigner -verify` on the `.aab`).
+7. **Verifies `assetlinks.json` lists the release certificate.** It extracts the
    SHA-256 digest from the signed APK, reformats it to the colon-separated
    uppercase form Digital Asset Links uses, and greps
    `firebase-hosting/public/.well-known/assetlinks.json` for it. If the
@@ -127,8 +141,11 @@ so none of the signing steps run if any of the above fails.
    back to a browser disambiguation dialog — phishable, and indistinguishable from
    an app bug. Rotating the signing key or moving to Play App Signing means adding
    the new fingerprint here and redeploying Hosting.
-6. Uploads two artifacts: the APK, and **`release-mapping-<version>`**, the R8
-   mapping file (90-day retention, `if-no-files-found: error`).
+8. Uploads three artifacts: the APK, the **`release-aab`** Android App Bundle
+   (built in the same Gradle run as the APK, `:app:bundleRelease`, so both
+   share one R8 mapping; for a Play Console upload by hand: nothing here uploads
+   to Play), and **`release-mapping-<version>`**, the R8 mapping file (90-day
+   retention, `if-no-files-found: error`).
 
 **The R8 mapping is not attached to the GitHub Release, deliberately.** It is the
 deobfuscation key — publishing it would undo the obfuscation for everyone — but
@@ -140,8 +157,8 @@ artifact is only the fallback for a manual `retrace`. Local builds never upload.
 
 ### `publish`
 
-Creates the **GitHub Release** with the APK attached, gated on the `release`
-environment.
+Creates the **GitHub Release** with the APK and the AAB attached, gated on the
+`release` environment.
 
 ### Required secrets (repo or `release` environment)
 
@@ -151,12 +168,14 @@ environment.
 | `KEY_ALIAS` | Signing key alias |
 | `KEY_PASSWORD` | Key password |
 | `STORE_PASSWORD` | Keystore password |
+| `SEMPER_API_CERT_PINS` | Optional. Comma-separated `sha256/…=` CertificatePinner pins for the API host, passed to Gradle as env. Empty ships system trust only, and the APK inspection warns |
 
 ### Required variables (repo or `release` environment)
 
 | Variable | Description |
 |----------|-------------|
 | `SEMPER_API_BASE_URL` | HTTPS base URL of the API Gateway (preferred) or Cloud Run service |
+| `SEMPER_ENTITLEMENT_PUBKEYS` | Public key(s) the app verifies signed entitlements with, passed to Gradle as env. Public material, so a variable, not a secret |
 
 ### Backend staging / production
 

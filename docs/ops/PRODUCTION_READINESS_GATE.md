@@ -26,8 +26,15 @@ Strict binary PASS against all applicable external controls is **not** claimed.
       client SDK cannot read/write. Deployed to `indicvision-dic-app` 2026-09-24;
       anonymous REST reads of `users`, `licenses`, `sessions` and a create all
       answer `403 PERMISSION_DENIED` ("Missing or insufficient permissions").
-      The Auth project has no Firestore database.
+      The Auth project has no Firestore database. CI's `firestore-rules` job now proves
+      the denial on the emulator for every collection `backend/app` uses
+      (`firestore-rules-tests/`, [CI.md](CI.md)).
 - [ ] Confirm Firebase API key restrictions + App Check posture.
+      `scripts/check_gcp_posture.sh --app-project … --auth-project … --api-sa …`
+      (read-only) prints PASS / FAIL / UNKNOWN for these and for liens, the Prod tag,
+      owners, budgets, max-instances, PITR, delete protection, the backup schedule,
+      anonymous auth, `CHECK_REVOKED_ON_STEP_UP`, the entitlement key's Secret
+      Manager ref and Data Access audit logs. Not yet run against the real projects.
 - [ ] Confirm Auth abuse / enumeration protections in Firebase console.
 - [x] Deploy API Gateway with `openapi.yaml` quotas (`__CLOUD_RUN_URL__`
       substituted) — pilot gateway is live; re-confirm quotas in console.

@@ -154,6 +154,7 @@ jobs:
     outputs:
       app: ${{ steps.flags.outputs.app }}
       backend: ${{ steps.flags.outputs.backend }}
+      rules: ${{ steps.flags.outputs.rules }}
       emulator: ${{ steps.flags.outputs.emulator }}
       release_build: ${{ steps.flags.outputs.release_build }}
       benchmark_ci: ${{ steps.flags.outputs.benchmark_ci }}
@@ -225,6 +226,13 @@ jobs:
               - 'docs/legal/**'
               # Tier 4's ruff is the only lint the ops scripts get.
               - 'scripts/*.py'
+              # Fixtures the scripts' pytest modules read (check_release_apk,
+              # the stub gcloud), and the two GCP ops scripts and the
+              # monitoring files test_script_ops_gcp.py runs against it.
+              - 'scripts/tests/**'
+              - 'scripts/check_gcp_posture.sh'
+              - 'scripts/apply-monitoring.sh'
+              - 'ops/monitoring/**'
               # The client's copies of the three wire contracts. Without these,
               # a rename on an app-only PR skips the backend tier and the tests
               # holding each pair of lists together never run — which is the one
@@ -232,6 +240,13 @@ jobs:
               - 'app/src/main/java/com/sempermechanics/semper/data/net/ApiErrors.kt'
               - 'app/src/main/java/com/sempermechanics/semper/data/net/ArtifactRoles.kt'
               - 'app/src/main/java/com/sempermechanics/semper/data/cloud/UploadWorkOutcomes.kt'
+            # firestore.rules denies every client; the rules tests prove it for
+            # each collection backend/app uses, and fail when backend/app
+            # names one the list misses, so a backend change runs them too.
+            rules:
+              - 'firestore.rules'
+              - 'firestore-rules-tests/**'
+              - 'backend/app/**'
             ci_workflow:
               - '.github/workflows/ci.yml'
               # The composite actions the light tiers run (setup-android-build,
@@ -264,6 +279,7 @@ jobs:
           FILTER_NATIVE_JNI: ${{ steps.filter.outputs.native_jni }}
           FILTER_NATIVE_CI: ${{ steps.filter.outputs.native_ci }}
           FILTER_BACKEND: ${{ steps.filter.outputs.backend }}
+          FILTER_RULES: ${{ steps.filter.outputs.rules }}
           FILTER_CI_WORKFLOW: ${{ steps.filter.outputs.ci_workflow }}
           FILTER_ANDROID_TEST: ${{ steps.filter.outputs.android_test }}
           FILTER_PACKAGING: ${{ steps.filter.outputs.packaging }}
@@ -282,6 +298,7 @@ jobs:
           set -euo pipefail
           full=false
           app=false; backend=false
+          rules=false           # Firestore rules tests
           emulator=false        # Tier 3
           release_build=false   # Tier 5
           benchmark=false
@@ -304,11 +321,13 @@ jobs:
           fi
 
           if [ "$full" = "true" ]; then
-            app=true; backend=true; emulator=true; release_build=true
+            app=true; backend=true; rules=true; emulator=true; release_build=true
           elif [ "$EVENT_NAME" = "pull_request" ] && [[ "${HEAD_REF:-}" == dependabot/* ]]; then
             # Dependabot cheap path: never Tier 3/5; ecosystem picks one light tier.
             case "$HEAD_REF" in
               dependabot/pip/*) backend=true ;;
+              # firestore-rules-tests/package-lock.json (emulator + SDK pins).
+              dependabot/npm_and_yarn/*) rules=true ;;
               dependabot/gradle/*) app=true ;;
               # The backend image. Tier 4 runs on the runner's Python, not the
               # image, but it is the nearest proof and beats gates-only (TD-68).
@@ -325,12 +344,14 @@ jobs:
               app=true
             fi
             if [ "$FILTER_BACKEND" = "true" ]; then backend=true; fi
+            if [ "$FILTER_RULES" = "true" ]; then rules=true; fi
             # Editing ci.yml used to be gates-only because this filter was
             # collected and never read. Run the light app + backend tiers so a
             # workflow change cannot skip every real job.
             if [ "$FILTER_CI_WORKFLOW" = "true" ]; then
               app=true
               backend=true
+              rules=true
             fi
             # An engine bump or a JNI change is proven on the emulator and in
             # the arm64 release build before it merges. These flags were
@@ -356,17 +377,19 @@ jobs:
             if [ "$main_push" = "true" ]; then
               app=true
               backend=true
+              rules=true
             fi
           fi
 
           {
             echo "app=$app"
             echo "backend=$backend"
+            echo "rules=$rules"
             echo "emulator=$emulator"
             echo "release_build=$release_build"
             echo "benchmark_ci=$benchmark"
           } >> "$GITHUB_OUTPUT"
-          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend emulator=$emulator release_build=$release_build benchmark_ci=$benchmark"
+          echo "Resolved: event=$EVENT_NAME full=$full app=$app backend=$backend rules=$rules emulator=$emulator release_build=$release_build benchmark_ci=$benchmark"
 
   # ===================================================================
   # Tier 1 — Kotlin compile + JVM unit tests + quality gates (no NDK)
@@ -530,7 +553,15 @@ jobs:
 
       - name: Check ops shell scripts parse
         working-directory: .
-        run: bash -n scripts/firestore-export.sh scripts/firestore-restore-drill.sh
+        run: >
+          bash -n scripts/firestore-export.sh scripts/firestore-restore-drill.sh
+          scripts/check_gcp_posture.sh scripts/apply-monitoring.sh
+
+      # The two GCP ops scripts run against production with nobody watching
+      # their output closely; shellcheck (on the runner image) is their lint.
+      - name: Shellcheck the GCP ops scripts
+        working-directory: .
+        run: shellcheck scripts/check_gcp_posture.sh scripts/apply-monitoring.sh
 
       # The image installs from requirements.lock with --require-hashes. Prove it
       # resolves on the runtime's Python (3.12) and still covers every direct
@@ -608,6 +639,57 @@ jobs:
             'pytest tests/test_firestore_emulator_integration.py -v --cov=app --cov-append --cov-report=term --cov-fail-under=93'
 
   # ===================================================================
+  # Firestore rules — the deny-all rules against the emulator
+  # ===================================================================
+  # Firestore is reached only by the backend's Admin SDK, which bypasses
+  # rules, so firestore.rules denies every client. This proves it with
+  # @firebase/rules-unit-testing for each collection backend/app uses:
+  # signed out, as the owner, as another user and with admin-looking claims,
+  # every get, list, query, collectionGroup query and write fails. A guard
+  # test fails when backend/app names a collection the list misses.
+  firestore-rules:
+    name: Firestore rules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: changes
+    if: needs.changes.outputs.rules == 'true'
+    defaults:
+      run:
+        working-directory: firestore-rules-tests
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: firestore-rules-tests/package-lock.json
+
+      - name: Set up Java for the emulator
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          # firebase-tools 15 dropped emulator support for Java < 21 (v15.0.0 notes).
+          java-version: '21'
+
+      - name: Install the pinned emulator and SDK
+        run: npm ci --no-audit --no-fund
+
+      # A demo- project id: the emulator never reaches a real project.
+      - name: Rules tests on the Firestore emulator
+        run: >
+          npx firebase emulators:exec --only firestore --project demo-rules
+          --config firebase.json "node --test"
+
+      - name: Upload rules coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: firestore-rules-coverage
+          path: firestore-rules-tests/coverage/**
+          if-no-files-found: ignore
+
+  # ===================================================================
   # Tier 5 — Signed release build (arm64-v8a), with R8
   # Runs on an engine/JNI change, a packaging change (keep rules, the app's
   # build script, the version catalog), the labels and the weekly run; even
@@ -674,6 +756,18 @@ jobs:
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" \
             || { echo "APK is NOT validly signed"; exit 1; }
+
+      # The release hardening gate the Release workflow runs (signed or not:
+      # aapt2 reads an unsigned APK too). No pins are passed here, so the
+      # cert-pins line is a warning.
+      - name: Inspect release APK hardening
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          python3 scripts/check_release_apk.py "$APK" \
+            --aapt2 "$BUILD_TOOLS/aapt2" \
+            --mapping app/build/outputs/mapping/release/mapping.txt
 
       - name: Note unsigned build
         if: env.KEYSTORE_BASE64 == ''
@@ -879,6 +973,7 @@ jobs:
       - tier1-app-fast
       - tier3-emulator-e2e
       - tier4-backend
+      - firestore-rules
       - tier5-signed-release
       - tier-benchmark
     steps:
@@ -892,6 +987,7 @@ jobs:
             "${{ needs.tier1-app-fast.result }}" \
             "${{ needs.tier3-emulator-e2e.result }}" \
             "${{ needs.tier4-backend.result }}" \
+            "${{ needs.firestore-rules.result }}" \
             "${{ needs.tier5-signed-release.result }}" \
             "${{ needs.tier-benchmark.result }}"; do
             case "$result" in

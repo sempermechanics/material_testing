@@ -1,0 +1,10 @@
+N: android=http://schemas.android.com/apk/res/android
+  E: manifest (line=2)
+    A: android:versionCode(0x0101021b)=(type 0x10)0x1
+    A: package="com.sempermechanics.semper" (Raw: "com.sempermechanics.semper")
+    E: uses-sdk (line=7)
+      A: android:minSdkVersion(0x0101020c)=(type 0x10)0x1e
+      A: android:targetSdkVersion(0x01010270)=(type 0x10)0x24
+    E: application (line=16)
+      A: android:debuggable(0x0101000f)=(type 0x12)0x0
+      A: android:usesCleartextTraffic(0x010104ec)=(type 0x12)0xffffffff

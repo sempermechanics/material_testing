@@ -1,0 +1,18 @@
+N: android=http://schemas.android.com/apk/res/android (line=2)
+  E: manifest (line=2)
+    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=1
+    A: http://schemas.android.com/apk/res/android:versionName(0x0101021c)="1.0" (Raw: "1.0")
+    A: package="com.sempermechanics.semper" (Raw: "com.sempermechanics.semper")
+      E: uses-sdk (line=7)
+        A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=24
+        A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=36
+      E: application (line=16)
+        A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.sempermechanics.semper.SemperApp" (Raw: "com.sempermechanics.semper.SemperApp")
+        A: http://schemas.android.com/apk/res/android:debuggable(0x0101000f)=true
+        A: http://schemas.android.com/apk/res/android:testOnly(0x01010272)=true
+        A: http://schemas.android.com/apk/res/android:usesCleartextTraffic(0x010104ec)=true
+          E: activity (line=136)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.sempermechanics.semper.ui.home.HomeActivity" (Raw: "com.sempermechanics.semper.ui.home.HomeActivity")
+          E: activity (line=20)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.sempermechanics.semper.debug.DebugViewerSeedActivity" (Raw: "com.sempermechanics.semper.debug.DebugViewerSeedActivity")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true

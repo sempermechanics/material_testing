@@ -1234,6 +1234,12 @@ dedicated rotation exists.
 | Drive `429` / `notify_rejected` | Metric on dependency=drive/resend warnings | Sustained | Quota / Resend misconfig |
 | Uptime | Cloud Monitoring uptime check on `/readyz` (not only `/healthz`) | 2 failed regions | Page; run staging rollback drill if deploy-correlated |
 
+The metrics, the `/readyz` uptime check, a 99.5 % availability SLO with fast and
+slow burn-rate alerts, and the alert policies are now code in
+[`ops/monitoring/`](../../ops/monitoring/README.md), applied (dry run by default)
+with `scripts/apply-monitoring.sh --project … --notification-channel …`; that
+README is the runbook for each alert. Not yet applied to a project.
+
 Document the notification channel (email / PagerDuty / Chat) in the project’s
 ops runbook when the channel is created. Until external consoles are verified,
 treat alert wiring as **UNKNOWN** in the completion gate.

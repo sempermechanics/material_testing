@@ -1,0 +1,47 @@
+[
+  {
+    "method": "GET",
+    "url_contains": "/uptimeCheckConfigs",
+    "status": 200,
+    "body": {
+      "uptimeCheckConfigs": [
+        {
+          "name": "projects/demo-app-prod/uptimeCheckConfigs/semper-api-readyz-abc123",
+          "displayName": "semper-api /readyz"
+        }
+      ]
+    }
+  },
+  {
+    "method": "PATCH",
+    "url_contains": "/uptimeCheckConfigs/",
+    "status": 200,
+    "body": {
+      "name": "projects/demo-app-prod/uptimeCheckConfigs/semper-api-readyz-abc123"
+    }
+  },
+  {
+    "method": "GET",
+    "url_contains": "/serviceLevelObjectives/",
+    "status": 200,
+    "body": {}
+  },
+  {
+    "method": "PATCH",
+    "url_contains": "/serviceLevelObjectives/",
+    "status": 200,
+    "body": {}
+  },
+  {
+    "method": "GET",
+    "url_contains": "/services/semper-api",
+    "status": 200,
+    "body": {}
+  },
+  {
+    "method": "PATCH",
+    "url_contains": "/services/semper-api",
+    "status": 200,
+    "body": {}
+  }
+]
