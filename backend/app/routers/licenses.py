@@ -1,13 +1,39 @@
+import logging
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from .. import apps, audit, errors, repo
+from .. import observability as obs
 from .. import rate_limit
+from ..errors import Refusal
+from ..licenses import key_hash
 from ..deps import attested_or_mfa_user, current_user, rate_limited, request_app
 from ..models import LicenseActivate
 from ..validation import require_header_identifier
 from ._shared import named_app
 
+log = logging.getLogger("semper.license")
 router = APIRouter()
+
+
+def _licence_event(event: str, license_id: str | None, refusal: Refusal | None = None) -> None:
+    """One structured line per redemption or checkout, for the log-based
+    metrics that count them per licence and app (A7.3). `appId` and
+    `appVersion` come from the request context; no email is logged."""
+    obs.log_event(
+        log, logging.INFO, event,
+        licenseId=license_id or None,
+        outcome="refused" if refusal else "ok",
+        errorCode=refusal.code if refusal else None,
+    )
+
+
+def _typed_licence_id(key: str, refusal: Refusal | None) -> str | None:
+    """The licence a typed key names, for the log. None when no licence has
+    that key: the hash of a mistyped key identifies nothing worth counting."""
+    if refusal is not None and refusal.code == errors.LICENSE_NOT_FOUND:
+        return None
+    return key_hash(key)
 
 
 @router.post("/v1/licenses/activate")
@@ -21,9 +47,14 @@ def activate_license(
     (the device of the app that asks, ADR-010)."""
     rate_limit.enforce(rate_limit.license_activate_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
-    config = repo.activate_license(
-        user["uid"], user.get("email") or "", device_id, body.key, app,
-    )
+    try:
+        config = repo.activate_license(
+            user["uid"], user.get("email") or "", device_id, body.key, app,
+        )
+    except Refusal as refusal:
+        _licence_event("activation", _typed_licence_id(body.key, refusal), refusal)
+        raise
+    _licence_event("activation", _typed_licence_id(body.key, None))
     audit.record(
         user["uid"], device_id, action="LICENSE_ACTIVATE",
         detail={"mode": (config or {}).get("mode")},
@@ -54,7 +85,13 @@ def checkout_lease(
     """
     rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
     device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
-    return {"config": repo.checkout_lease(user, device_id)}
+    try:
+        config = repo.checkout_lease(user, device_id)
+    except Refusal as refusal:
+        _licence_event("checkout", user.get("licenseId"), refusal)
+        raise
+    _licence_event("checkout", user.get("licenseId"))
+    return {"config": config}
 
 
 @router.post("/v1/licenses/release")

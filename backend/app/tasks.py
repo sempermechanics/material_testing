@@ -129,7 +129,7 @@ def tasks_caller(authorization: str = Header(default="")) -> dict:
     # Any Google account can mint an ID token for a public audience, so the
     # audience check alone is not authentication — the identity must match.
     if not expected or email != expected:
-        log.warning("task token from unexpected principal %r", email)
+        log.warning("task token from unexpected principal sha=%s", obs.short_hash(email))
         raise HTTPException(403, errors.NOT_TASK_INVOKER)
     if not claims.get("email_verified", True):
         raise HTTPException(403, errors.NOT_TASK_INVOKER)
