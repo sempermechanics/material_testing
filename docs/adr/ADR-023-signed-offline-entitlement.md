@@ -12,7 +12,7 @@ answer and trusted it indefinitely while offline: an account that stopped
 reaching the backend kept whatever mode and features it last saw, with no
 bound in time and nothing to stop an edited cache. Revocation reached a device
 only at its next `/v1/config` (`LicenseConfigWorker`, every 4 hours,
-`app/src/main/java/com/sempermechanics/semper/data/LicenseConfigWorker.kt:36`),
+`app/src/main/java/com/sempermechanics/semper/data/LicenseConfigWorker.kt:84`),
 and a device that never came back online never learned of it.
 
 The readiness framework asks for a server-signed entitlement with a pinned
@@ -39,7 +39,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
      `iat`, `refreshAfter` = `iat` + 24 h, `graceUntil`, `exp` = `graceUntil`
      (`:210-242`);
    - `graceUntil` is `iat` + `ENTITLEMENT_OFFLINE_GRACE_DAYS` (default 14,
-     `backend/app/config.py:262`), capped for a licensed account at the
+     `backend/app/config.py:275`), capped for a licensed account at the
      licence's end plus its own grace (`licenseGraceEndsAt`) and, on a floating
      seat, at the lease's end (`leaseExpiresAt`) (`entitlement_token.py:193-207`);
    - `lic` is the licence id only while `mode` is `licensed`; a demo token
@@ -52,21 +52,30 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
    this account with a registered key (`entitlement_token.py:269-302`). Anything
    else omits the field and fails nothing (`routers/account.py:177-191`). After
    each floating-seat checkout or heartbeat the app fetches `/v1/config` again,
-   so the token follows the lease
-   (`app/src/main/java/com/sempermechanics/semper/data/account/SeatLease.kt:52-65`).
+   so the token follows the lease; when that fetch fails it queues the one-off
+   refresh, unique work `license-config-now`, expedited and retried with backoff
+   up to six attempts, about 15 minutes (`SeatLease.refreshConfigAfterCheckout`,
+   `app/src/main/java/com/sempermechanics/semper/data/account/SeatLease.kt:79-87`;
+   `LicenseConfigWorker.refreshNow`, `data/LicenseConfigWorker.kt:109-120`;
+   `EntitlementRefresh.MAX_ATTEMPTS`, `data/account/entitlement/EntitlementRefresh.kt:36`).
+   The same refresh is queued at launch and on each return to the foreground
+   when the stored token is past `refreshAfter` or has lapsed
+   (`LicenseConfigWorker.installForegroundCheck`, `:123-138`; `EntitlementRefresh.refreshDue`,
+   `:45-49`), so `refreshAfter` is a server-side lever; the 4-hour periodic
+   refresh stays (TD-264, TD-266, closed 2026-10-18).
 4. **The key.** A P-256 private key in Secret Manager, mounted as
    `ENTITLEMENT_SIGNING_KEY` only when the repo variable
    `ENTITLEMENT_SIGNING_SECRET` names a secret that exists
-   (`.github/workflows/deploy-backend.yml:218-238`), never a plain env value or
+   (`.github/workflows/deploy-backend.yml:258-278`), never a plain env value or
    the repository. Its `kid` is `ENTITLEMENT_KID` (default `ent-1`,
-   `config.py:258`). Setup: [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8.
+   `config.py:271`). Setup: [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8.
 5. **Pinning and rotation by `kid`.** Release builds pin public keys from
    `SEMPER_ENTITLEMENT_PUBKEYS`, `kid:base64SPKI` entries separated by commas
    (`app/build.gradle.kts:88-93`; parsed by `EntitlementPins.parse`,
    `data/account/entitlement/EntitlementPins.kt:32`). Rotation: ship a build
    pinning old and new `kid`, wait for adoption, switch `ENTITLEMENT_KID` and the
    secret, then drop the old `kid` from a later build. A build that pins no key
-   ignores tokens entirely (`EntitlementPolicy.intake`, `EntitlementPolicy.kt:87`); so does a
+   ignores tokens entirely (`EntitlementPolicy.intake`, `EntitlementPolicy.kt:151`); so does a
    build whose pins do not include the token's `kid` (decision 7).
 6. **Offline checks on the device.** `alg`, `typ`, the signature against the
    key pinned for its `kid`, then `iss`, `app`, `dev`, and `dkt` against this
@@ -79,16 +88,34 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
    - a wall clock more than 10 minutes behind the highest seen
      (`ROLLBACK_TOLERANCE_MS`, `:89`) ends grace until the next server time;
    - the token and clock state are stored together, sealed with an HMAC under a
-     Keystore key (`SealedEntitlement`, `EntitlementStore`); an altered or
-     half-deleted record reads as tampered (`EntitlementStore.kt:139-150`).
+     Keystore key (`SealedEntitlement`, `EntitlementStore`), and every write is
+     `commit()`, on disk before anything relies on it. The write order is
+     `SealedRecordStore`'s (`data/account/entitlement/SealedRecordStore.kt`): a
+     first seal marks itself, makes the key, then writes the record and clears
+     the mark in one commit; a clear deletes the key before the record. What
+     the pieces on disk mean is `EntitlementPolicy.reading`
+     (`EntitlementPolicy.kt:137-144`): a record whose MAC does not match, or a
+     key with neither record nor first-seal mark (a deleted record), reads as
+     **tampered**; a record with no key (a lost Keystore key, a clear cut
+     short) and a key with the mark but no record (a crash mid-seal) read as
+     **no token** and are tidied away, so neither drops a licensed user to Demo
+     (TD-265, closed 2026-10-18).
 7. **What narrows to Demo, and what is ignored.** Only four things drop the
    account to Demo entitlements (`TokenStatus.Lapsed`; `EntitlementPolicy.bound`,
-   `EntitlementPolicy.kt:63-77`): a sealed record that was altered or half deleted,
-   the end of `graceUntil`, a clock rollback, and `exp` passing. A token that
+   `EntitlementPolicy.kt:91-105`): a sealed record that was altered or deleted
+   while its key stayed (decision 6), the end of `graceUntil`, a clock rollback,
+   and `exp` passing. On a floating seat the last two mean the lease the token
+   was issued under ran out unrenewed, so starting work opens the seat screen,
+   which checks out a seat and fetches a fresh token, rather than applying
+   demo's limits (`EntitlementPolicy.seatRequired`, `EntitlementPolicy.kt:126-129`;
+   `LicenseEntitlements.isSeatRequiredToStart`, `data/account/LicenseEntitlements.kt:133-135`).
+   While a token is lapsed the quota card and the limit screen show the cap
+   enforced, not the server's `maxSessions` (`LicenseEntitlements.shownAnalysisCap`,
+   `:224`; TD-263, closed 2026-10-18). A token that
    fails verification on the device (a `kid` this build does not pin, a bad
    signature, the wrong `app` or `dev` or `dkt`, or a device key that cannot be
    read) is treated as **no token** (`TokenStatus.NotUsed`,
-   `EntitlementPolicy.kt:113-120`): the cached `/v1/config` decides, as before
+   `EntitlementPolicy.kt:177-184`): the cached `/v1/config` decides, as before
    tokens. The reason: the stored token can only have come from the backend
    (the record is sealed on this device), so refusing it protects nothing that
    stripping the token would not give away equally, while lapsing it would drop
@@ -132,10 +159,13 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
   instant for a device that does not come online. A floating seat cannot be
   reclaimed from an offline device before its lease ends; the cap at
   `leaseExpiresAt` bounds that.
-- The clock rules are not tamper-proof on a rooted device. Deleting both the
-  sealed record and its HMAC key reads as "no token" and falls back to the
-  cached config (TD-261, accepted). `exp` and revocation at the next check-in
-  are the server's controls.
+- The clock rules are not tamper-proof on a rooted device. Deleting the HMAC
+  key, with or without the sealed record, reads as "no token" and falls back to
+  the cached config (TD-261, accepted). Since decision 6 reads a lost key as no
+  token rather than tampering, deleting the key alone now does the same as
+  deleting both; that is the price of not dropping a licensed user to Demo when
+  the Keystore loses a key. `exp` and revocation at the next check-in are the
+  server's controls.
 - A token that does not verify is ignored rather than refused (decision 7), so
   an unverifiable token gives the same result as no token: the cached config,
   bounded by the server at the next online request.
@@ -148,13 +178,14 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
   `killSwitches`); tests `backend/tests/test_entitlement_token.py` and the shared
   vector `backend/tests/fixtures/entitlement_vector.json`, which the app's
   `EntitlementVectorTest` also verifies.
-- App: `data/account/entitlement/` (eight files); offline and tamper tests
+- App: `data/account/entitlement/` (ten files since 2026-10-18, with
+  `SealedRecordStore` and `EntitlementRefresh`); offline and tamper tests
   `EntitlementClockTest`, `EntitlementVerifierTest`, `EntitlementPolicyTest`,
-  `SealedEntitlementTest` under `app/src/test/java/com/sempermechanics/semper/data/account/entitlement/`.
+  `SealedEntitlementTest`, `SealedRecordStoreTest`, `EntitlementRefreshTest` under `app/src/test/java/com/sempermechanics/semper/data/account/entitlement/`.
 - minSdk 30: Android 7–10 phones can no longer install or update the app.
 - Release gate per app: `/v1/config` sends each app its own
   `minSupportedVersionCode` / `recommendedVersionCode`
-  (`settings.release_gate(app)`, `backend/app/config.py:280-287`), since Semper and
+  (`settings.release_gate(app)`, `backend/app/config.py:293-300`), since Semper and
   Material Testing number their builds separately.
 
 **Decision note (2026-10-18): account deletion and the shared Firebase user.**
@@ -162,20 +193,26 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
 (`backend/app/routers/account.py:350`). Semper and Material Testing sign in to the
 same Auth project, so this removes the sign-in for both apps. That matches the
 erase itself, which is account-wide: it removes the sessions, files and devices of
-both apps (`backend/app/repo/account.py:149-171`). Recorded as intended, not as
+both apps, and (since 2026-10-18, TD-243) the account's `auth_links` rows and the
+address on every seat it held (`backend/app/repo/account.py:206-244`). The app's
+delete confirmation says the sign-in goes for both apps
+(`delete_account_body`, `app/src/main/res/values/strings.xml:321`). Recorded as intended, not as
 debt.
 
 ## Action items
 
 - [x] Backend signing, tests and the shared vector (2026-10-18).
 - [x] App verification, grace, clock rollback and sealed state (2026-10-18).
-- [ ] First CI Tier 1 run on the branch compiles and passes the app side (TD-219).
+- [x] First CI Tier 1 run on the branch compiles and passes the app side: CI run
+      39158239853 on `ae4c24a` (Tier 1, 3, 4, 5 and rules). The follow-up branch's
+      first run is still owed (TD-219).
 - [ ] Provision the key and the pinned public key (TD-215).
 - [ ] Later work: key attestation verified server-side, a Play Integrity verdict
       at activation and check-in, device recall (TD-234); anti-tamper detection
       with graded responses (TD-235); KMS signing (TD-236); device
       acknowledgement of revocation (TD-238).
-- [ ] Residuals left by the 2026-10-18 review: quota screens while a token is
+- [x] Residuals left by the 2026-10-18 review, closed the same day on
+      `claude/readiness-followups-jhfhj9`: quota screens while a token is
       lapsed (TD-263), `refreshAfter` unread (TD-264), a lost key or unflushed
       write reading as tampered (TD-265), floating-seat refresh after a
-      heartbeat (TD-266).
+      heartbeat (TD-266). Their tests first run in that branch's Tier 1 (TD-219).

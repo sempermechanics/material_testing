@@ -131,7 +131,7 @@ twice.
   differ. The `catch (CancellationException) { remove }` in both is dead — the
   `finally` two lines below already removes the banner.
 - **The support-mail intent is built four times** (`SettingsHelpSupportSection`
-  ×2, `PendingApprovalActivity` ×1, `ui/limit/SessionLimitActivity.kt:83`),
+  ×2, `PendingApprovalActivity` ×1, `ui/limit/SessionLimitActivity.kt:96`),
   diagnostics body included.
 - **`.part`/`.full` sidecar names** have no constant anywhere: they are spelled
   inline in `DriveTransfer` (:263, :317), in `SemperApi.kt:213`, and hand-rebuilt
@@ -279,7 +279,7 @@ import file. There is no SCIM endpoint, and Identity Platform documents none.
 **Proposal.** `/scim/v2/Users` and `/scim/v2/Groups` per institution licence,
 authenticated by a machine token (FI-20), mapping a user's `active=false` to the
 seat revoke (`DELETE …/seats/{uid}`, `roster.py:368`) plus refresh-token revocation
-(`backend/app/google_auth.py:92`), and group membership to the seat.
+(`backend/app/google_auth.py:104`), and group membership to the seat.
 
 **Acceptance (framework 5.7 Verify).** "Doc review. API contract tests."
 
@@ -328,7 +328,7 @@ written to `audit_logs` with the token's id. A separate route tier in
 
 **Now.** Deprovisioning is manual. IT removes or holds a seat
 (`roster.py:334`, `:368`); staff suspend an account, which also revokes its
-refresh tokens (`backend/app/routers/admin.py:54-71`), best-effort until TD-214's
+refresh tokens (`backend/app/routers/admin.py:75-92`), best-effort until TD-214's
 IAM grant. A device that is offline keeps its signed entitlement until its
 `graceUntil` (`backend/app/entitlement_token.py:193-207`).
 
@@ -347,7 +347,7 @@ online; ≤ grace period offline')."
 **Now.** The release gate is per app but not per institution:
 `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` for Semper and the
 `_MATERIAL_TESTING` pair for Material Testing (`settings.release_gate(app)`,
-`backend/app/config.py:273-287`) go into every `/v1/config` answer for that app
+`backend/app/config.py:286-300`) go into every `/v1/config` answer for that app
 (`backend/app/routers/account.py:147-174`), and the app gates
 itself (`VersionGate.decide`,
 `app/src/main/java/com/sempermechanics/semper/data/policy/VersionGate.kt:33`).
@@ -368,7 +368,7 @@ gating UX", for one institution while another stays ungated.
 **Now.** Per user: `GET /v1/me/export` (`backend/app/routers/account.py:194`) and
 `DELETE /v1/me` (`:294`), which also deletes the Firebase Auth user when TD-214's
 grant is in place (`:350`). Per licence: delete into a 30-day hold
-(`backend/app/routers/admin.py:300`), which drops holders to Demo and leaves their
+(`backend/app/routers/admin.py:347`), which drops holders to Demo and leaves their
 data untouched by design. Nothing exports or erases every member's data for one
 institution in one operation.
 
