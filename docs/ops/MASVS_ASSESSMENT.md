@@ -18,21 +18,21 @@ repository root. Evidence is at the branch `claude/new-session-jhfhj9` as of
 
 | Control | Status | Evidence |
 |---|---|---|
-| STORAGE-1: sensitive data stored securely | Met | The device signing key is a non-exportable P-256 key in the Android Keystore (`data/account/DeviceKeys.kt:75-86`). The entitlement token and its clock state are sealed with an HMAC under a Keystore key (`data/account/entitlement/SealedEntitlement.kt:37-63`, `data/account/entitlement/EntitlementStore.kt:186-198`). Firebase Auth holds its own session. Analyses are app-private files (`SessionStore`, `SessionPaths`) |
-| STORAGE-2: no leakage of sensitive data | Met | Backup and device transfer exclude shared preferences (session, device id) and the session files (`app/src/main/res/xml/data_extraction_rules.xml`, `app/src/main/res/xml/backup_rules.xml`). Breadcrumbs and non-fatals reach Crashlytics only with diagnostics consent (`diagnostics/CrashReportingTree.kt:23-41`). Shared files go through a non-exported `FileProvider` with per-grant URIs (`app/src/main/AndroidManifest.xml:145-149`) |
+| STORAGE-1: sensitive data stored securely | Met | The device signing key is a non-exportable P-256 key in the Android Keystore (`data/account/DeviceKeys.kt:75-86`). The entitlement token and its clock state are sealed with an HMAC under a Keystore key (`data/account/entitlement/SealedEntitlement.kt:37-63`, `data/account/entitlement/EntitlementStore.kt:186-226`; write order in `SealedRecordStore.kt`). Firebase Auth holds its own session. Analyses are app-private files (`SessionStore`, `SessionPaths`) |
+| STORAGE-2: no leakage of sensitive data | Met | Backup and device transfer exclude shared preferences (session, device id) and the session files (`app/src/main/res/xml/data_extraction_rules.xml`, `app/src/main/res/xml/backup_rules.xml`). Breadcrumbs and non-fatals reach Crashlytics only with diagnostics consent (`diagnostics/CrashReportingTree.kt:23-41`). Shared files go through a non-exported `FileProvider` with per-grant URIs (`app/src/main/AndroidManifest.xml:150-154`) |
 
 ## MASVS-CRYPTO
 
 | Control | Status | Evidence |
 |---|---|---|
 | CRYPTO-1: current, strong cryptography | Met | ECDSA P-256 / SHA-256 for device request signatures (`backend/app/deps.py:304`, `verified_device`) and for the entitlement token (`backend/app/entitlement_token.py:115-124`; app `data/account/entitlement/EntitlementVerifier.kt:96-106`); HMAC-SHA256 for the sealed state. No custom primitive. Strict unpadded base64url and raw `r‖s` signatures on both sides (`entitlement_token.py:87-95`, `:161-166`) |
-| CRYPTO-2: key management per best practice | Partial | Device keys never leave the Keystore. The entitlement signing key is in Secret Manager and reaches the service only as a secret reference (`.github/workflows/deploy-backend.yml:218-238`); rotation by `kid` with several pinned keys ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)). The private key is in process memory, not in KMS (TD-236); the key is not yet provisioned (TD-215) |
+| CRYPTO-2: key management per best practice | Partial | Device keys never leave the Keystore. The entitlement signing key is in Secret Manager and reaches the service only as a secret reference (`.github/workflows/deploy-backend.yml:258-278`); rotation by `kid` with several pinned keys ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)). The private key is in process memory, not in KMS (TD-236); the key is not yet provisioned (TD-215) |
 
 ## MASVS-AUTH
 
 | Control | Status | Evidence |
 |---|---|---|
-| AUTH-1: secure authentication and authorization protocols | Met | Every route verifies a Firebase ID token server-side (`backend/app/google_auth.py:62`) and, for state changes from the phone, a device signature over a single-use nonce (`backend/app/deps.py:304-340`; replay refused, `backend/tests/test_device_auth.py:130`, `:172`). Each route's tier is asserted in `backend/tests/test_route_authz_matrix.py`. Firestore denies every client (`firestore.rules:7-9`; proven on the emulator, `firestore-rules-tests/rules.test.mjs`). Authorization is decided on the server; the entitlement token only narrows what the app shows offline |
+| AUTH-1: secure authentication and authorization protocols | Met | Every route verifies a Firebase ID token server-side (`backend/app/google_auth.py:64`) and, for state changes from the phone, a device signature over a single-use nonce (`backend/app/deps.py:304-340`; replay refused, `backend/tests/test_device_auth.py:130`, `:172`). Each route's tier is asserted in `backend/tests/test_route_authz_matrix.py`. Firestore denies every client (`firestore.rules:7-9`; proven on the emulator, `firestore-rules-tests/rules.test.mjs`). Authorization is decided on the server; the entitlement token only narrows what the app shows offline |
 | AUTH-2: secure local authentication | N-A | The app has no local (biometric or PIN) authentication; access is the Firebase session and the server's answer |
 | AUTH-3: additional authentication for sensitive operations | Partial | Console state changes need a completed TOTP second factor on a recent sign-in (`backend/app/deps.py:474`, `step_up_check`); whole-licence revoke and delete need a fresher one (`attested_or_mfa_admin_fresh`). The revocation check on step-up is built but off until the Auth IAM grant (TD-214) |
 
@@ -47,7 +47,7 @@ repository root. Evidence is at the branch `claude/new-session-jhfhj9` as of
 
 | Control | Status | Evidence |
 |---|---|---|
-| PLATFORM-1: IPC used securely | Met | Exported components are the launcher and the verified App Link handlers (`app/src/main/AndroidManifest.xml:54-92`); every other activity and the `FileProvider` are `exported="false"` (`:141-217`). Managed configuration is read through `RestrictionsManager`, never from intents (`data/policy/ManagedConfigReader.kt:48-70`) |
+| PLATFORM-1: IPC used securely | Met | Exported components are the launcher and the verified App Link handlers (`app/src/main/AndroidManifest.xml:54-92`); every other activity and the `FileProvider` are `exported="false"` (`:141-222`). Managed configuration is read through `RestrictionsManager`, never from intents (`data/policy/ManagedConfigReader.kt:48-70`) |
 | PLATFORM-2: WebViews used securely | N-A | The app has no WebView (no use in `app/src/main/java`) |
 | PLATFORM-3: user interface used securely | Partial | No sensitive values are shown beyond the account's own email and licence prefix. `FLAG_SECURE` is not set on any screen; analyses are not secret by product decision |
 
@@ -56,7 +56,7 @@ repository root. Evidence is at the branch `claude/new-session-jhfhj9` as of
 | Control | Status | Evidence |
 |---|---|---|
 | CODE-1: up-to-date platform version | Met | minSdk 30, targetSdk 36 (`app/build.gradle.kts:130-131`); the targetSdk bump is a deliberate PR (CLAUDE.md) |
-| CODE-2: mechanism to enforce updates | Met | `minSupportedVersionCode` / `recommendedVersionCode` on `/v1/config`, each app its own pair (`backend/app/routers/account.py:163-170`; `backend/app/config.py:280-287`); the app blocks new runs and cloud calls below the minimum and keeps the viewer and exports (`data/policy/FeatureGates.kt:34-40`, `ui/limit/UpdateRequiredActivity.kt:22`). Play in-app updates are TD-233 |
+| CODE-2: mechanism to enforce updates | Met | `minSupportedVersionCode` / `recommendedVersionCode` on `/v1/config`, each app its own pair (`backend/app/routers/account.py:163-170`; `backend/app/config.py:293-300`); the app blocks new runs and cloud calls below the minimum and keeps the viewer and exports (`data/policy/FeatureGates.kt:34-40`, `ui/limit/UpdateRequiredActivity.kt:23`). Play in-app updates are TD-233 |
 | CODE-3: no components with known vulnerabilities | Partial | `pip-audit --strict` on the backend lock in every backend gate (`.github/actions/backend-gate/action.yml:35-36`); Dependabot for pip, Gradle, Actions, Docker and npm (`.github/dependabot.yml`). No dependency-vulnerability scan of the Android dependency graph runs in CI |
 | CODE-4: untrusted input validated | Met | Request bodies are Pydantic models with `extra="forbid"` and bounded identifiers (`backend/app/models.py`, `backend/app/validation.py`); CSV import refuses whole files before touching a row (`backend/app/roster_io.py`). The token parser rejects padded base64url (`data/account/entitlement/Jws.kt:25`), any other `alg`, a `crit` header and an unknown `kid` (`EntitlementVerifier.kt:72-82`) |
 

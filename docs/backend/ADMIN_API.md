@@ -5,7 +5,7 @@ script against them (readiness item 5.7,
 [READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md)). The
 source of truth is the code: `backend/app/routers/roster.py`,
 `backend/app/routers/institutions.py`, `backend/app/routers/admin.py`; each
-route's auth tier is asserted in `backend/tests/test_route_authz_matrix.py:76-175`,
+route's auth tier is asserted in `backend/tests/test_route_authz_matrix.py:76-176`,
 and every path must also be declared in `backend/gateway/openapi.yaml` (the gateway
 404s anything else). Design background:
 [CLOUD_ARCHITECTURE_GCP.md §20](CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements).
@@ -24,7 +24,7 @@ window, using the ID token of a signed-in session.
   project. The gateway checks it and forwards it as `X-Forwarded-Authorization`;
   the backend verifies it again (`backend/app/deps.py:56-70`).
 - **Errors:** JSON `{"detail": "<code>"}`, sometimes `"<code>: <suffix>"`. The
-  code is stable; the status per code is `backend/app/errors.py:283-327`
+  code is stable; the status per code is `backend/app/errors.py:288-332`
   ([ADR-020](../adr/ADR-020-backend-refusal-model.md)). A 429 carries `Retry-After`.
 - **Paging:** `page_size` (or `limit`) and `page_token`; the answer's `page` block
   carries `nextPageToken` and `hasMore`.
@@ -60,8 +60,8 @@ Prefix `/v1/institutions/licenses/{license_id}`. Rate limits: `institution_bucke
 | `POST …/seats` | `institution-stepup` | `{"email": "…"}` | `{licenseId, seat, invite}`: exactly one of the two is set (`:154-168`) | 400 `invalid_email`; 409 `member_already_licensed`, `license_seats_exhausted`, `license_seat_disabled`; 503 `claim_contended` (retry) |
 | `POST …/seats/import` | `institution-stepup` | `{"csv": "<file text>"}`: one column `email`, or the first column when there is no header; ≤ 500 rows, ≤ 512 000 characters (`backend/app/roster_io.py:22-25`) | `{licenseId, rows, counts, results[]}`; `counts` has `seated`, `invited`, `exists`, `duplicate`, `invalid`, `refused`, `unprocessed`; each result is `{row, email, outcome, error}` (`roster.py:170-241`) | 400 `roster_import_empty`, `roster_import_malformed`, `roster_import_no_email_column`; 413 `roster_import_too_many_rows`. Re-import the same file to finish `unprocessed` rows: rows already on the roster answer `exists` |
 | `GET …/seats/export` | `institution-stepup` | — | `text/csv`, every seat then every invite, `email` first, so the file imports back (`:243-258`); a cell starting with `=`, `+`, `-` or `@` is prefixed with `'` against spreadsheet formulas, and such an address does not yet import back (TD-267) | — |
-| `GET …/summary` | `institution-stepup` | — | `{licenseId, assigned, onHold, activeLast7Days, invited, revocationPending, revocationPendingNoCheckIn, removed, expiringWithin30Days, seating, maxSeats, …}` (`roster.py:260-272`; `roster_io.py:189-230`) | — |
-| `GET …/audit` | `institution-stepup` | `format` = `json` or `csv`; `since`, `until` (ISO date or instant, UTC; a bare `until` date includes that day); `page_size` (1–5000, default 100); `page_token` | JSON `{licenseId, events[], page}`, newest first; each event `{id, ts, uid, action, outcome, target, detail}`, no IP or device id. CSV: the same page, next token in the `X-Next-Page-Token` response header (`roster.py:274-313`; `backend/app/audit.py:154-193`). The CORS answer does not expose that header, so only a non-browser client (a script) can read it and page on; a browser gets one page. The console's CSV export therefore asks for 5,000 events and says so when it stopped at that ceiling (`firebase-hosting/public/console/institution/audit-log.js`); page CSV from a script, or narrow `since` / `until` | 400 `invalid_audit_range`. Events written before 2026-10-18 are absent (TD-246) |
+| `GET …/summary` | `institution-stepup` | — | `{licenseId, assigned, onHold, activeLast7Days, invited, revocationPending, revocationPendingNoCheckIn, removed, expiringWithin30Days, seating, maxSeats, …}` (`roster.py:260-272`; `roster_io.py:202-243`) | — |
+| `GET …/audit` | `institution-stepup` | `format` = `json` or `csv`; `since`, `until` (ISO date or instant, UTC; a bare `until` date includes that day); `page_size` (1–5000, default 100); `page_token` | JSON `{licenseId, events[], page}`, newest first; each event `{id, ts, uid, action, outcome, target, detail}`, no IP or device id. CSV: the same page, next token in the `X-Next-Page-Token` response header (`roster.py:274-313`; `backend/app/audit.py:169-208`). The CORS answer does not expose that header, so only a non-browser client (a script) can read it and page on; a browser gets one page. The console's CSV export therefore asks for 5,000 events and says so when it stopped at that ceiling (`firebase-hosting/public/console/institution/audit-log.js`); page CSV from a script, or narrow `since` / `until` | 400 `invalid_audit_range`. Events written before 2026-10-18 are absent (TD-246) |
 | `PATCH …/seats/{uid}` | `institution-stepup` | `{"clearDeviceLock": true}` and/or `{"enabled": false}` | `{licenseId, seat}` (`:334-366`) | 400 `empty_patch`; 404 `seat_not_found`; 409 `seat_revoked` |
 | `DELETE …/seats/{uid}` | `institution-stepup` | — | `{licenseId, uid, revoked: true}`: the holder drops to Demo, keeps their data, and the slot is freed (`:368-380`) | 404 `seat_not_found` |
 | `DELETE …/invites/{invite_key}` | `institution-stepup` | — | `{licenseId, inviteId, revoked: true}` (`:315-332`) | 404 `invite_not_found` |
@@ -75,7 +75,7 @@ signed entitlement's `graceUntil` passes (at most 14 days by default,
 
 The same roster routes are mounted for staff under
 `/v1/admin/licenses/{license_id}` for any institution licence: reads at `admin`,
-changes at `admin-stepup` (`backend/app/routers/admin.py:494-520`), with
+changes at `admin-stepup` (`backend/app/routers/admin.py:541-567`), with
 `admin_bucket` and `ADMIN_…` audit actions. Staff-only routes:
 
 | Method and path | Tier | Purpose |
