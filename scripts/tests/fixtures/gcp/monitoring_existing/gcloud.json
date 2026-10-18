@@ -1,0 +1,54 @@
+[
+  {
+    "match": [
+      "projects",
+      "describe"
+    ],
+    "stdout": "111\n"
+  },
+  {
+    "match": [
+      "run",
+      "services",
+      "describe"
+    ],
+    "stdout": "https://semper-api-abc-el.a.run.app\n"
+  },
+  {
+    "match": [
+      "auth",
+      "print-access-token"
+    ],
+    "stdout": "ya29.stub-token\n"
+  },
+  {
+    "match": [
+      "logging",
+      "metrics",
+      "describe"
+    ],
+    "stdout": "name: x\n"
+  },
+  {
+    "match": [
+      "logging",
+      "metrics",
+      "update"
+    ],
+    "stdout": ""
+  },
+  {
+    "match": [
+      "policies",
+      "list"
+    ],
+    "stdout": "projects/demo-app-prod/alertPolicies/42\n"
+  },
+  {
+    "match": [
+      "policies",
+      "update"
+    ],
+    "stdout": ""
+  }
+]

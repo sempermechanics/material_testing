@@ -1,0 +1,40 @@
+[
+  {
+    "method": "GET",
+    "url_contains": "/uptimeCheckConfigs",
+    "status": 200,
+    "body": {}
+  },
+  {
+    "method": "POST",
+    "url_contains": "/uptimeCheckConfigs",
+    "status": 200,
+    "body": {
+      "name": "projects/demo-app-prod/uptimeCheckConfigs/semper-api-readyz-abc123"
+    }
+  },
+  {
+    "method": "GET",
+    "url_contains": "/services/semper-api/serviceLevelObjectives/",
+    "status": 404,
+    "body": {}
+  },
+  {
+    "method": "POST",
+    "url_contains": "/serviceLevelObjectives?",
+    "status": 200,
+    "body": {}
+  },
+  {
+    "method": "GET",
+    "url_contains": "/services/semper-api",
+    "status": 404,
+    "body": {}
+  },
+  {
+    "method": "POST",
+    "url_contains": "/services?serviceId=",
+    "status": 200,
+    "body": {}
+  }
+]

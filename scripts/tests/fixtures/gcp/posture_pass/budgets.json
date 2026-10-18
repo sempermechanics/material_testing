@@ -1,0 +1,25 @@
+[
+  {
+    "displayName": "Semper monthly",
+    "budgetFilter": {
+      "projects": [
+        "projects/111",
+        "projects/222"
+      ]
+    },
+    "amount": {
+      "specifiedAmount": {
+        "units": "500",
+        "currencyCode": "INR"
+      }
+    },
+    "thresholdRules": [
+      {
+        "thresholdPercent": 0.5
+      },
+      {
+        "thresholdPercent": 1.0
+      }
+    ]
+  }
+]

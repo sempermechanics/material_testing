@@ -1,0 +1,10 @@
+[
+  {
+    "displayName": "Other project",
+    "budgetFilter": {
+      "projects": [
+        "projects/999"
+      ]
+    }
+  }
+]
