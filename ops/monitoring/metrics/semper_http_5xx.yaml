@@ -1,0 +1,24 @@
+# Access-log lines (observability.log_event "http_access", backend/app/main.py)
+# that answered 5xx. The 5xx-ratio alert reads Cloud Run's own request_count;
+# this counts what the app itself answered, by route, for the dashboard.
+description: semper-api requests the app answered with a 5xx, by route template.
+filter: >-
+  resource.type="cloud_run_revision"
+  AND resource.labels.service_name="__SERVICE__"
+  AND jsonPayload.event="http_access"
+  AND jsonPayload.status>=500
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  displayName: semper-api 5xx responses
+  labels:
+    - key: routeTemplate
+      valueType: STRING
+      description: Declared route, parameters as {id}.
+    - key: status
+      valueType: STRING
+      description: HTTP status code.
+labelExtractors:
+  routeTemplate: EXTRACT(jsonPayload.routeTemplate)
+  status: EXTRACT(jsonPayload.status)

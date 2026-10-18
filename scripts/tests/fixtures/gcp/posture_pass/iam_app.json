@@ -1,0 +1,27 @@
+{
+  "bindings": [
+    {
+      "role": "roles/owner",
+      "members": [
+        "group:owners@example.test",
+        "group:breakglass@example.test"
+      ]
+    }
+  ],
+  "auditConfigs": [
+    {
+      "service": "allServices",
+      "auditLogConfigs": [
+        {
+          "logType": "ADMIN_READ"
+        },
+        {
+          "logType": "DATA_READ"
+        },
+        {
+          "logType": "DATA_WRITE"
+        }
+      ]
+    }
+  ]
+}

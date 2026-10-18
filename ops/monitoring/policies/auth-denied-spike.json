@@ -1,0 +1,43 @@
+{
+  "displayName": "semper: __SERVICE__ AUTH_DENIED spike",
+  "documentation": {
+    "content": "More than __AUTH_DENIED_PER_5MIN__ AUTH_DENIED refusals on __SERVICE__ in 5 minutes. Look at the stage label (id_token, app_check, device) and the source IPs in the access log: many IPs and one stage is an attack or a broken client release; one uid is one confused device. Runbook: ops/monitoring/README.md#auth-denied-spike",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "AUTH_DENIED > __AUTH_DENIED_PER_5MIN__ / 5 min",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/semper_auth_denied\" AND resource.type=\"cloud_run_revision\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "groupByFields": [
+              "resource.label.service_name"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": "__AUTH_DENIED_PER_5MIN__",
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "WARNING",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

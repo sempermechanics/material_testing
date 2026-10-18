@@ -1,0 +1,12 @@
+# audit.record() is best-effort: a failed Firestore write must not fail the
+# request, so the only trace of a lost audit row is this log event.
+description: Audit rows the backend could not write to Firestore audit_logs.
+filter: >-
+  resource.type="cloud_run_revision"
+  AND resource.labels.service_name="__SERVICE__"
+  AND jsonPayload.event="audit_write_failed"
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  displayName: semper-api audit write failures

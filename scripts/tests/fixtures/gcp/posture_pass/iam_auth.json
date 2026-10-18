@@ -1,0 +1,33 @@
+{
+  "bindings": [
+    {
+      "role": "roles/owner",
+      "members": [
+        "group:owners@example.test",
+        "group:breakglass@example.test"
+      ]
+    },
+    {
+      "role": "roles/firebaseauth.admin",
+      "members": [
+        "serviceAccount:api@demo-app-prod.iam.gserviceaccount.com"
+      ]
+    }
+  ],
+  "auditConfigs": [
+    {
+      "service": "allServices",
+      "auditLogConfigs": [
+        {
+          "logType": "ADMIN_READ"
+        },
+        {
+          "logType": "DATA_READ"
+        },
+        {
+          "logType": "DATA_WRITE"
+        }
+      ]
+    }
+  ]
+}

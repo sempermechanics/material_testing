@@ -226,8 +226,13 @@ jobs:
               - 'docs/legal/**'
               # Tier 4's ruff is the only lint the ops scripts get.
               - 'scripts/*.py'
-              # Fixtures the scripts' pytest modules read (check_release_apk).
+              # Fixtures the scripts' pytest modules read (check_release_apk,
+              # the stub gcloud), and the two GCP ops scripts and the
+              # monitoring files test_script_ops_gcp.py runs against it.
               - 'scripts/tests/**'
+              - 'scripts/check_gcp_posture.sh'
+              - 'scripts/apply-monitoring.sh'
+              - 'ops/monitoring/**'
               # The client's copies of the three wire contracts. Without these,
               # a rename on an app-only PR skips the backend tier and the tests
               # holding each pair of lists together never run — which is the one
@@ -548,7 +553,15 @@ jobs:
 
       - name: Check ops shell scripts parse
         working-directory: .
-        run: bash -n scripts/firestore-export.sh scripts/firestore-restore-drill.sh
+        run: >
+          bash -n scripts/firestore-export.sh scripts/firestore-restore-drill.sh
+          scripts/check_gcp_posture.sh scripts/apply-monitoring.sh
+
+      # The two GCP ops scripts run against production with nobody watching
+      # their output closely; shellcheck (on the runner image) is their lint.
+      - name: Shellcheck the GCP ops scripts
+        working-directory: .
+        run: shellcheck scripts/check_gcp_posture.sh scripts/apply-monitoring.sh
 
       # The image installs from requirements.lock with --require-hashes. Prove it
       # resolves on the runtime's Python (3.12) and still covers every direct

@@ -1,0 +1,8 @@
+[
+  {
+    "name": "liens/p1",
+    "restrictions": [
+      "resourcemanager.projects.delete"
+    ]
+  }
+]

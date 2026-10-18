@@ -1,0 +1,31 @@
+# One per licence key redemption (routers/licenses.py _licence_event), ok or
+# refused; no uid or email is logged. Labelled by licence so the anomaly
+# alert can count activations per licence per day (readiness A7.3).
+description: Licence activations, by licence id.
+filter: >-
+  resource.type="cloud_run_revision"
+  AND resource.labels.service_name="__SERVICE__"
+  AND jsonPayload.event="activation"
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  displayName: semper-api licence activations
+  labels:
+    - key: licenseId
+      valueType: STRING
+      description: Licence the key names (empty when no licence has that key).
+    - key: outcome
+      valueType: STRING
+      description: ok or refused.
+    - key: errorCode
+      valueType: STRING
+      description: The refusal code (empty when ok).
+    - key: appId
+      valueType: STRING
+      description: The calling app (X-App-Id, listed ids only).
+labelExtractors:
+  licenseId: EXTRACT(jsonPayload.licenseId)
+  outcome: EXTRACT(jsonPayload.outcome)
+  errorCode: EXTRACT(jsonPayload.errorCode)
+  appId: EXTRACT(jsonPayload.appId)

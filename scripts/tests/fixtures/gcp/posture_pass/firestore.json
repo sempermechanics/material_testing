@@ -1,0 +1,5 @@
+{
+  "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_ENABLED",
+  "deleteProtectionState": "DELETE_PROTECTION_ENABLED",
+  "versionRetentionPeriod": "604800s"
+}

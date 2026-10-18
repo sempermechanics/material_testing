@@ -1,0 +1,17 @@
+{
+  "displayName": "__SERVICE__ availability 99.5% (28-day rolling)",
+  "goal": 0.995,
+  "rollingPeriod": "2419200s",
+  "serviceLevelIndicator": {
+    "requestBased": {
+      "goodTotalRatio": {
+        "badServiceFilter": "metric.type=\"run.googleapis.com/request_count\" resource.type=\"cloud_run_revision\" resource.label.\"service_name\"=\"__SERVICE__\" metric.label.\"response_code_class\"=\"5xx\"",
+        "totalServiceFilter": "metric.type=\"run.googleapis.com/request_count\" resource.type=\"cloud_run_revision\" resource.label.\"service_name\"=\"__SERVICE__\""
+      }
+    }
+  },
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

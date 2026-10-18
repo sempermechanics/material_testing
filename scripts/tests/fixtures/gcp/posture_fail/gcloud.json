@@ -1,0 +1,115 @@
+[
+  {
+    "match": [
+      "billing",
+      "projects",
+      "describe"
+    ],
+    "stdout_file": "billing.json"
+  },
+  {
+    "match": [
+      "billing",
+      "budgets",
+      "list"
+    ],
+    "stdout_file": "budgets.json"
+  },
+  {
+    "match": [
+      "projects",
+      "describe",
+      "demo-app-prod"
+    ],
+    "stdout_file": "proj_app.json"
+  },
+  {
+    "match": [
+      "projects",
+      "describe",
+      "demo-auth-prod"
+    ],
+    "stdout_file": "proj_auth.json"
+  },
+  {
+    "match": [
+      "liens",
+      "list"
+    ],
+    "stdout_file": "liens.json"
+  },
+  {
+    "match": [
+      "tags",
+      "bindings",
+      "list"
+    ],
+    "stdout_file": "tags.json"
+  },
+  {
+    "match": [
+      "projects",
+      "get-iam-policy",
+      "demo-app-prod"
+    ],
+    "stdout_file": "iam_app.json"
+  },
+  {
+    "match": [
+      "projects",
+      "get-iam-policy",
+      "demo-auth-prod"
+    ],
+    "stdout_file": "iam_auth.json"
+  },
+  {
+    "match": [
+      "api-keys",
+      "list"
+    ],
+    "stdout_file": "keys.json"
+  },
+  {
+    "match": [
+      "auth",
+      "print-access-token"
+    ],
+    "stdout": "ya29.stub-token\n"
+  },
+  {
+    "match": [
+      "run",
+      "services",
+      "describe",
+      "semper-api"
+    ],
+    "stdout_file": "run.json"
+  },
+  {
+    "match": [
+      "firestore",
+      "databases",
+      "describe"
+    ],
+    "stdout_file": "firestore.json"
+  },
+  {
+    "match": [
+      "run",
+      "services",
+      "describe",
+      "semper-api-staging"
+    ],
+    "stderr": "ERROR: (gcloud.run.services.describe) PERMISSION_DENIED\n",
+    "exit": 1
+  },
+  {
+    "match": [
+      "firestore",
+      "backups",
+      "schedules",
+      "list"
+    ],
+    "stdout_file": "schedules.json"
+  }
+]

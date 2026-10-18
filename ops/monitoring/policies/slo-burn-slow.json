@@ -1,0 +1,33 @@
+{
+  "displayName": "semper: __SERVICE__ SLO slow burn (6x over 6 h)",
+  "documentation": {
+    "content": "The 99.5% availability SLO is burning error budget at more than 6x over the last 6 hours: 5% of the 28-day budget gone in 6 hours. Not a page on its own; fix within the working day. Runbook: ops/monitoring/README.md#slo-burn",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "burn rate (360m) > 6",
+      "conditionThreshold": {
+        "filter": "select_slo_burn_rate(\"projects/__PROJECT_NUMBER__/services/__SLO_SERVICE_ID__/serviceLevelObjectives/__SLO_ID__\", \"360m\")",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 6,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "WARNING",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

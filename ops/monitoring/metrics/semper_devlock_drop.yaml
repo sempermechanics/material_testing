@@ -1,0 +1,24 @@
+# A licensed account resolved Demo at the device lock (repo/devlock.py
+# _devlock_drop): stage `revoked` (the licence or seat ended) or `mismatch`
+# (this device is not the locked one). A spike of mismatches on one licence
+# means a key is being shared across devices.
+description: Device-lock drops, by licence id.
+filter: >-
+  resource.type="cloud_run_revision"
+  AND resource.labels.service_name="__SERVICE__"
+  AND jsonPayload.event="devlock_drop"
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  displayName: semper-api device-lock drops
+  labels:
+    - key: licenseId
+      valueType: STRING
+      description: Licence whose device lock dropped.
+    - key: stage
+      valueType: STRING
+      description: revoked or mismatch.
+labelExtractors:
+  licenseId: EXTRACT(jsonPayload.licenseId)
+  stage: EXTRACT(jsonPayload.stage)
