@@ -100,6 +100,12 @@ jobs:
       - name: Docs reference files that exist
         run: python scripts/check_doc_paths.py
 
+      # Every item of the readiness framework has a row in the gate's
+      # cross-check, and every open row an owner that exists in TECH_DEBT or
+      # FUTURE_IMPROVEMENTS. Docs-only edits reach no tier, so it runs here.
+      - name: Readiness framework fully mapped
+        run: python scripts/check_framework_coverage.py
+
   console-pages:
     name: Console pages
     runs-on: ubuntu-24.04
