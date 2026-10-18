@@ -1,11 +1,14 @@
 # Authentication refusals: the AUTH_DENIED audit action (backend/app/deps.py),
-# once audit.record() also writes it to Cloud Logging. Firestore audit_logs
-# stays the compliance record; this is the operational counter.
+# counted from any log line that carries `action`, once audit.record() writes
+# one per row (today it writes only Firestore audit_logs, so this stays at
+# zero). An audit_write_failed line also carries `action`; it is a lost row,
+# not a refusal, so it is excluded here and counted by its own metric.
 description: AUTH_DENIED refusals (bad or missing token, App Check, device), by stage.
 filter: >-
   resource.type="cloud_run_revision"
   AND resource.labels.service_name="__SERVICE__"
   AND jsonPayload.action="AUTH_DENIED"
+  AND jsonPayload.event!="audit_write_failed"
 metricDescriptor:
   metricKind: DELTA
   valueType: INT64

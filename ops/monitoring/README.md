@@ -41,17 +41,18 @@ are `observability.log_event` lines (`jsonPayload.event`), one JSON object per l
 | Metric | Filter | Labels |
 |---|---|---|
 | `semper_http_5xx` | `event="http_access"`, `status>=500` | `routeTemplate`, `status` |
-| `semper_audit_write_failed` | `event="audit_write_failed"` | — |
+| `semper_audit_write_failed` | `event="audit_write_failed"` | `action`, `errorCode` |
 | `semper_activation` | `event="activation"` (licence key redemption) | `licenseId`, `outcome` (ok / refused), `errorCode`, `appId` |
 | `semper_checkout` | `event="checkout"` (floating seat) | `licenseId`, `outcome`, `errorCode`, `appId` |
 | `semper_devlock_drop` | `event="devlock_drop"` (licensed account resolved Demo at the device lock) | `licenseId`, `stage` (revoked / mismatch) |
-| `semper_auth_denied` | `action="AUTH_DENIED"` | `stage` |
+| `semper_auth_denied` | `action="AUTH_DENIED"`, not an `audit_write_failed` line | `stage` |
 
 A metric counts only from the moment it exists, and only lines a deployed backend
 writes: `activation`, `checkout` and `devlock_drop` come with the licensing
 observability change, `audit_write_failed` with the audit change, and
-`semper_auth_denied` needs `audit.record()` to also log the action
-(`jsonPayload.action`), not only write Firestore `audit_logs`. Until then those
+`semper_auth_denied` needs `audit.record()` to also log each row with its
+`action` (and `detail.stage` as `stage`); today it writes only Firestore
+`audit_logs`, so that metric reads zero. Until then those
 alerts stay quiet, which is not the same as healthy.
 
 ## Alerts (`policies/`) and what to do
