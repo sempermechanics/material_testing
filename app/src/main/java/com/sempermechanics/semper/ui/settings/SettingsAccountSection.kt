@@ -1,17 +1,23 @@
 package com.sempermechanics.semper.ui.settings
 
 import android.content.Intent
+import android.view.View
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.ui.admin.AdminActivity
+import com.sempermechanics.semper.ui.common.dialog.Feedback
+import com.sempermechanics.semper.ui.common.setBusy
+import com.sempermechanics.semper.ui.limit.LicenseRefresh
+import kotlinx.coroutines.launch
 
 /**
- * Account identity row: email, device id, licence prefix, and the admin
- * entry point.
+ * Account identity row: email, device id, licence prefix, Refresh licence,
+ * and the admin entry point.
  */
 class SettingsAccountSection(
     private val activity: SettingsActivity,
@@ -33,9 +39,30 @@ class SettingsAccountSection(
             text = activity.getString(R.string.account_license_prefix_fmt, prefix)
         }
 
+        views.btnRefreshLicense.setOnClickListener { refreshLicense() }
+
         views.btnAdmin.apply {
             isVisible = AccountCache.isAdmin(activity)
             setOnClickListener { activity.startActivity(Intent(activity, AdminActivity::class.java)) }
         }
+    }
+
+    /**
+     * Asks `/v1/config` for the account's licence now ([LicenseRefresh]) and
+     * says what it found. A change rebuilds Settings: the licence decides
+     * which cloud and storage rows are open or locked.
+     */
+    private fun refreshLicense() {
+        setRefreshing(true)
+        activity.lifecycleScope.launch {
+            val outcome = LicenseRefresh.run(activity)
+            setRefreshing(false)
+            Feedback.toast(activity, outcome.result.messageRes, long = true)
+            if (outcome.changed) activity.recreate()
+        }
+    }
+
+    private fun setRefreshing(busy: Boolean) {
+        views.progressRefreshLicense.setBusy(busy, views.btnRefreshLicense, idleVisibility = View.GONE)
     }
 }

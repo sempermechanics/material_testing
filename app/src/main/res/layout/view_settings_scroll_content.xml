@@ -51,6 +51,25 @@
                         android:textSize="12sp"
                         android:visibility="gone" />
 
+                    <!-- Refresh licence: asks /v1/config now (LicenseRefresh). -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRefreshLicense"
+                        style="@style/Widget.Semper.Button.Outlined"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="@string/license_refresh_action" />
+
+                    <ProgressBar
+                        android:id="@+id/progressRefreshLicense"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginTop="6dp"
+                        android:contentDescription="@string/license_refresh_title"
+                        android:indeterminateTint="@color/sky_primary"
+                        android:visibility="gone" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnAdmin"
                         style="@style/Widget.Semper.Button.Outlined"
