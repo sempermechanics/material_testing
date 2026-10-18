@@ -290,6 +290,8 @@ data**.
 | [ ] 4.2a | Expand **Account** on a licensed account | "Licensed as SEMP-…" is shown below the device ID — the key prefix support asks for, never the key. Absent whenever the account runs as Demo, a held key that is not active included |
 | [ ] 4.3 | Expand **Account** as a non-admin | No "Pending access requests" button |
 | [ ] 4.4 | Expand **Account** as an admin | The button appears and opens the admin list |
+| [ ] 4.4a | Tap **Refresh licence** under **Account** | A spinner on the button, then one line: "Licensed (institution seat)", "Licensed (Semper licence)", "Still on the demo", or, offline, "Couldn't reach Semper — will retry". If the licence changed, Settings rebuilds with the sections it now opens or locks. No field to type a key in, and no price or purchase anywhere ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)) |
+| [ ] 4.4b | On a demo account, expand **Cloud backup**, **Analyses data management** and **Storage** | Each is shown, its controls disabled, with the note "Included with an institution seat or a Semper licence. Ask your institution's IT, or contact Semper support."; a tap anywhere in it says the same. With backup switched off by a kill switch or the EMM, they are hidden instead |
 | [ ] 4.5 | Turn **Save to cloud** on with local-only analyses present | A dialog offers to back up N of them |
 | [ ] 4.6 | Accept that offer | Uploads are queued; the cloud icons on Home move to "Upload pending" |
 | [ ] 4.7 | Turn **Save to cloud** off | No new uploads are queued. Neither switch has a sub-line; with TalkBack each says what it does ("Save to cloud: new analyses upload when a network is available…", "Wi‑Fi only: wait for unmetered Wi‑Fi before uploading") |
@@ -935,6 +937,7 @@ a centre double-tap brings the bars back when they have faded.
 
 | # | Action | Expected |
 |---|---|---|
+| [ ] 8.5.0 | On a demo account, look at and tap **Share** | Greyed, never hidden; a tap says the licence note (4.4b). On a licensed account with the `share` kill switch on: greyed, and a tap says "Sharing is temporarily unavailable." |
 | [ ] 8.5.1 | Tap Share | Sheet headed **Share**, with the frame on screen at the header's end ("frame 2 of 5"; "combination 2 of 5" on a sweep). Six flat one-line rows split by hairlines, no cards: icon, title, file type at the end — **This field** PNG, **All fields** 5 PNG, **Animations** 5 GIF, **Report** PDF, **Data** CSV, **Everything** ZIP |
 | [ ] 8.5.1a | Same, with TalkBack on | Each row reads what it shares: "Share this field (U of frame.jpg) as PNG", "Share all 5 fields of frame.jpg as PNG", "Share the report of all 5 frames as PDF", … |
 | [ ] 8.5.2 | **This field** | One annotated PNG of the field and frame on screen, drawn as the viewer draws it: on that frame's own photo, the map and MAX / MIN markers where the points moved to; on the reference, map at the reference positions, when the frame's photo is not on the phone (8.1.1b) |
@@ -995,8 +998,10 @@ and the lattice's **Save graph** (§7.3.4, straight to the system chooser).
 
 ## 9. Session limit
 
-The quota gate. Not a paywall — there is no billing anywhere in the app; the
-route past it is an email to support.
+The quota gate. Not a paywall — there is no billing, price or purchase anywhere
+in the app ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)). The way
+past it is to delete an analysis, or, when a seat or licence has just been added
+to the account, **Refresh licence**.
 
 **Entry:** Home cold start, the Home FAB, the quota chip, a pre-run check, a
 sweep hitting the cap, or a background upload rejected with a quota error.
@@ -1006,7 +1011,8 @@ sweep hitting the cap, or a background upload rejected with a quota error.
 |---|---|---|
 | [ ] 9.1 | Reach the cap and tap **+** on Home | This screen instead of the source chooser |
 | [ ] 9.2 | Read the chip | "Using N of M analyses" once the backend has reported numbers |
-| [ ] 9.3 | Tap **Email support** | Mail app prefilled with account, quota, device ID and build |
+| [ ] 9.3 | Tap **Email support** | Mail app on a neutral message, with account, quota, device ID and build underneath; it asks for no higher limit |
+| [ ] 9.3a | Tap **Refresh licence** | One line as in 4.4a; if the licence changed, the limit is checked again and the screen closes once there is room |
 | [ ] 9.4 | Tap **Re-check** while still at the cap | "Still at the limit" |
 | [ ] 9.5 | Delete an analysis elsewhere, then tap **Re-check** | The screen closes and you can start a new analysis |
 | [ ] 9.6 | Tap **Back to my analyses** | Home |
@@ -1041,21 +1047,25 @@ A re-run over an existing row is not checked at its start and updates that row;
 if the row was deleted meanwhile, its save is a new row with no admission, the
 rule applies, and a refusal ends the run as `RunStop.SessionLimit` (`afterSave`).
 The backend counts account-wide (every app and phone) and refuses only at
-`POST /v1/sessions`, the upload.
+`POST /v1/sessions`, the upload. For a demo account it also counts every
+account's analyses stored from this phone, and refuses at the cap with the same
+`409 session_quota_exceeded` (`count_device_sessions`,
+`backend/app/repo/sessions.py:415-439`); both counts are of analyses stored now,
+so a delete frees a place.
 
 **Where the cap (`M`) comes from.** `LicenseEntitlements.analysisCap()` reads
 `AppRemoteConfig`, which is populated from the backend's `GET /v1/config` (see
 [CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)):
 
-- **Demo** (the default for every account until activated): capped at 25
-  saved analyses, this screen included. Demo analyses are still **recorded** —
-  each finished analysis uploads silently (`CloudSync.uploadsEnabled` ignores
-  the Save-to-cloud toggle, which demo is not shown) — but demo has no
-  backup/restore *feature*: Home shows no cloud state icon or row progress (3.4,
-  3.7, 3.8 do not apply), Settings has no **Cloud backup**, **Analyses data
-  management**, **Free up** or auto-free controls (4.5–4.18g do not
-  apply), and a stored copy is never pulled back. The upload is what the cap
-  counts.
+- **Demo** (the default for every account until the server attaches a paid
+  entitlement): capped at 25 saved analyses, this screen included. Demo analyses
+  are still **recorded** — each finished analysis uploads silently
+  (`CloudSync.uploadsEnabled` ignores the Save-to-cloud toggle, which demo sees
+  locked) — but demo has no backup/restore *feature*: Home shows no cloud state
+  icon or row progress (3.4, 3.7, 3.8 do not apply), Settings shows **Cloud
+  backup**, **Analyses data management**, **Free up** and auto-free locked (4.4b;
+  4.5–4.18g do not apply), and a stored copy is never pulled back. The upload is
+  what the cap counts.
 - **Professional — individual key**: capped at the backend's licensed
   `maxSessions` (999 by default, never below demo's 25) once `/v1/config` has
   reported it, and uncapped before; Semper staff mint and hand over the key.
@@ -1066,11 +1076,13 @@ The backend counts account-wide (every app and phone) and refuses only at
   §20.4 of the doc above), not Semper staff, and not through this app.
 
 **Status at this revision.** There is no screen to type a key into, and there
-is not meant to be one. A licence is minted against the customer's email
-address and attaches at their next sign-in — an individual licence directly, an
-institution seat through the roster — so nothing is read off a phone, dictated,
-or typed. `POST /v1/licenses/activate` and `SemperApi.activateLicense()` remain
-for support recovery and have no caller in `app/src/`. What the app shows of a
+is not meant to be one ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)).
+A licence is minted against the customer's email address and attaches at their
+next sign-in — an individual licence directly, an institution seat through the
+roster — or the person redeems a one-time claim code on the web account page.
+Nothing is read off a phone, dictated, or typed into the app, and
+`SemperApi.activateLicense()` is gone; `POST /v1/licenses/activate` stays on the
+backend for installed builds only. What the app shows of a
 licence is its prefix, in Settings → Account (4.2a); the key itself never
 reaches the device. This screen's behaviour for a Professional account is
 unaffected either way: once `GET /v1/config` reports `mode=licensed`, the cap
@@ -1089,8 +1101,12 @@ email to support: seats free themselves as colleagues finish.
 **9.3 License expiry notice (Home).** Separate from this screen, and not a
 gate. A licensed account whose key expires within 14 days — or which is past
 expiry but still inside its grace window — shows a small chip under the Home
-title: "License expires in N days", or "License expired — still working, email
-support to renew". Nothing is withdrawn while it shows; during grace the
+title: "Licence expires in N days", or "Licence expired — still working until
+15 Mar 2027" (the day grace ends, from `licenseGraceEndsAt`; "still working for
+now" when the backend sent none). Past the day with no grace the cache can
+confirm, it reads "Licence expired — ask your institution's IT or Semper support"
+(`HomeLicenseNotice.of`, `app/src/main/java/com/sempermechanics/semper/ui/home/HomeLicenseNotice.kt:41-47`).
+No renew, buy or email action. Nothing is withdrawn while it shows; during grace the
 account keeps cloud backup, share and the uncapped analysis count, and the only
 thing that ever changes entitlement is the backend flipping `mode` to `demo`
 once grace ends (at which point 9.1 applies exactly as it does for any Demo

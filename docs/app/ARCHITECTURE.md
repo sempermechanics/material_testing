@@ -43,7 +43,7 @@ on 2026-10-03.
 | Package | Files | Role |
 |---|---|---|
 | `ui/auth/` | 11 | Splash, sign-in (`AuthActivity` with `AuthTotpController` and `AuthPasswordReset`), pending approval, terms, `AccessRouter`, `GoogleSignInHelper`, `PasswordPolicy` |
-| `ui/home/` | 15 | `HomeActivity` and its parts: session list and selection (cards under the day headers `SessionDays` inserts, painted by `SessionRowText`, `SessionStateIcon` and `SessionThumbs`, the last caching the last frame's U heatmap as `SessionPaths.resultThumb`), `HomeQuotaCard`, `CloudBackupsCard`, `FirstRunPrompts`, `HomeFabLayout`, `HomeTransferWatch` (backup and restore jobs), `BackupBadgeActions` |
+| `ui/home/` | 17 | `HomeActivity` and its parts: session list and selection (cards under the day headers `SessionDays` inserts, painted by `SessionRowText`, `SessionStateIcon` and `SessionThumbs`, the last caching the last frame's U heatmap as `SessionPaths.resultThumb`), `HomeQuotaCard`, `HomeLicenseNotice` (the expiry chip, naming the day grace ends; no call to action), `CloudBackupsCard`, `FirstRunPrompts`, `HomeFabLayout`, `HomeTransferWatch` (backup and restore jobs), `BackupBadgeActions` |
 | `ui/analysis/` | 3 | The three analysis Activities only: `StaticAnalysisActivity` (the wizard), `RoiDrawActivity`, `VsgLatticeActivity` |
 | `ui/analysis/wizard/` | 22 | `AnalysisViewModel` with `RunChannels` (launch batch and sweep) and `SweepAnalysis`; `WizardStep`, `AnalysisWizardChrome.applyStep`, `AnalysisWizardHost`; `WizardState` / `WizardDraftBinding` (process death, [ADR-005](../adr/ADR-005-wizard-process-death.md)); slots, coach, nav, ready / cancel / leave gates; parameter fields and sliders; settings sheet |
 | `ui/analysis/run/` | 19 | `BatchAnalysis.kt` (`runBatchAnalysisBody`, the one JNI loop, and `afterSave`) + `DicFieldIo`; `RunRecordSave` (`saveRunRecord`); `BatchRunController`, `WizardRunLauncher`, `WizardRunOutcomes`, `RunStatusLine`, `RunChrome`; the run overlay `ComputeOverlayController` (a header row of what is running and its percent, time left, then a batch run's convergence bins, a sweep's live lattice, or an import's progress bar) with its wording (`RunOverlayText`) and convergence bins (`ConvergenceBinsView`, one bin a frame, merged keeping the lowest over 100 frames; `ConvergenceTrace`, which warns one strike before `ConvergenceGate` stops a run); `RunSpec` ([ADR-004](../adr/ADR-004-runspec.md)) and `BatchRun`, whose `RunInputs` (reference, frames) are frozen on Main at launch so the run reads its images from no wizard field; `EngineFailure`, `ConvergenceGate`, `UnsavedRerun`, `SemperEngine` |
@@ -57,9 +57,9 @@ on 2026-10-03.
 | `ui/viewer/inspect/` | 5 | Tap-to-probe: `InspectOverlayView`, `PointSpatialIndex`, `TouchImageView`, field histogram view |
 | `ui/settings/` | 15 | `SettingsActivity` (restore, download, delete) and its sections: account, cloud, analyses, storage, preferences, your data, help, footer; `AccountDeletionRun`, `BusyTransfers`; scroll body via `SettingsScrollContentView` |
 | `ui/admin/` | 1 | Admin screen — approve/revoke users via `/v1/admin/*` |
-| `ui/limit/` | 2 | Session-quota and seat-required screens |
+| `ui/limit/` | 5 | Session-quota, seat-required and update-required screens (`UpdateSource` picks Play or the release page), and `LicenseRefresh`, the "Refresh licence" fetch shared with Settings ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md); 2026-10-18) |
 | `ui/common/` | 18 | Cross-screen basics: `LauncherIcon` (enables the light or the jet-black launcher alias of `SplashActivity` to match the system theme, at start and on a configuration change), insets, motion (`Motion.reduced` for animations off), `CollapsibleSection` (the wizard's closed **Advanced** sections), keyboard (`Keyboard`, `ImeReveal`), toggle groups, `dp`, `SerialJob`, `ConflatedRefresh`, `Busy` (`setBusy`), `InlineBusy` (a slot's busy state for a wait past 300 ms: the reference slot, the speckle chip, the video read, the viewer's opening pill), `ViewportMath`, `ByteSize`, `EtaEstimator` (time left for runs, exports and transfers), `ProgressText` (their "34.6%", "4.2 of 12.0 MB · 1.1 MB/s" wording), coach marks, the settings section header |
-| `ui/common/dialog/` | 8 | `Feedback.toast`, `CrispToast`, `Dialogs` (info, confirm, i-buttons), `Sheet` (`inflateSheet`), `WarnChip`, `FaqRedirect`, delete-choice and progress dialogs |
+| `ui/common/dialog/` | 9 | `Feedback.toast`, `CrispToast`, `Dialogs` (info, confirm, i-buttons), `Sheet` (`inflateSheet`), `WarnChip`, `FaqRedirect`, delete-choice and progress dialogs, `LicenseLock` (a licence-locked control and its note) |
 | `ui/common/auth/` | 6 | `AuthRoute` (re-authentication), sign-out confirm and run, `ExternalLinks`, `SupportMail` |
 | `ui/common/media/` | 7 | `MediaPickerSheet` (Home **+** and the wizard dropzones), `MediaStoreBrowser`, `MediaSourceChooser`, `ThumbnailLoader`, `DisplayNames` (a picked image's or video's file name) |
 | `ui/common/transfer/` | 4 | `TransferBannerController`, `TransferWorkObserver` (one reading of WorkManager jobs for Home and Settings), `DeleteFeedback`, `RestoreFailureNotice` |
@@ -205,8 +205,13 @@ At launch the status check and the cloud reconcile both ask for config, a few
 milliseconds apart; `SemperApi.getConfig` shares one in-flight request between
 them (`data/net/SingleFlight.kt`, [perf/request-volume.md](../perf/request-volume.md) Pass 2).
 
-`SemperApi.activateLicense()` calls `POST /v1/licenses/activate` (bearer +
-`X-Device-Id`, not device-signed) to redeem a key — see
+The app redeems nothing: paid entitlements are attached to the account by the
+server (roster seat, individual licence, or a claim code redeemed on the web
+account page), and the app is consumption-only ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)). It
+asks for the current answer with **Refresh licence** (`ui/limit/LicenseRefresh`,
+Settings → Account and the limit screen) and, on a first sign-in, again once the
+device is registered (`EntitlementRefresh.afterSignIn`). What the licence lacks is
+shown locked (`data/policy/FeatureLocks`, `ui/common/dialog/LicenseLock`). See
 [CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements)
 for the backend's individual-vs-institution split. **On the Android side there is
 no distinction** between an individual key and a institution seat — both resolve
@@ -218,7 +223,8 @@ gating input anywhere in `LicenseEntitlements`.
 |---|---|
 | Plan resolution / gating | `data/account/LicenseEntitlements.kt` |
 | Cached config, wire → prefs | `data/net/AppRemoteConfig.kt` (`AppConfigDto` in `ApiDtos.kt`) |
-| Redeem a key | `SemperApi.activateLicense()` |
+| Fetch the licence now | `LicenseRefresh.run` (`ui/limit/LicenseRefresh.kt`) |
+| Locked, paused or hidden | `FeatureLocks` (`data/policy/FeatureLocks.kt`), `LicenseLock` (`ui/common/dialog/LicenseLock.kt`) |
 | Expiry notice | `LicenseEntitlements.expiryNoticeDays()` — advisory only; suppressed on a cache older than a week. `mode` stays the only gate. See [WORKFLOWS.md §9.3](WORKFLOWS.md#9-session-limit) |
 | Local analysis cap | `SessionQuota.blocked()` (`data/session/SessionQuota.kt`) — the one rule every start check and a new row's save ask: no cap with no backend or for licensed before its config; blocked once an upload's 409 forced the stop; otherwise blocked when max(server count, the phone's rows) reaches `LicenseEntitlements.analysisCap()` (the backend's `maxSessions` once known; before that demo 25, licensed uncapped). A run admitted at its start saves even if the cap fills meanwhile; see [WORKFLOWS.md §9](WORKFLOWS.md#9-session-limit) |
 

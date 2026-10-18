@@ -48,7 +48,16 @@ for Firebase Auth Admin calls (`AUTH_ADMIN_CALLS_PER_SECOND`, default 10, burst
 `AUTH_ADMIN_BURST` 20; `backend/app/rate_limit.py:138-147`). When it is spent the
 check is not made and the call answers **503 `auth_check_busy`** with `Retry-After`
 (`backend/app/deps.py:598-606`): the token is not judged, so retry after the delay.
-The consoles show the bare code for now (TD-272).
+The consoles say "The server is busy checking sign-ins — wait a few seconds and try again." (`firebase-hosting/public/console/messages.js:18`) and do not retry by themselves.
+
+**A paused feature.** While an operator has a kill switch on (`KILL_SWITCHES`,
+[ENVIRONMENTS.md](../ops/ENVIRONMENTS.md)), the routes it guards answer **503
+`feature_paused`** with `Retry-After: 300`, before any work and after the token
+check (`deps.unless_paused`, `backend/app/deps.py:293-331`): `upload` or `backup`
+refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses
+`GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`, the bundle being
+the one a script can call. Nothing is wrong with the request; send it again after
+the delay. No institution or staff route is guarded.
 
 ## Institution routes (customer IT)
 
@@ -122,6 +131,13 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 | `GET /v1/admin/licenses/{license_id}/reconcile` | `admin` | Per-seat check of what a licence actually entitles; `revokedStillRunning` |
 | `GET /v1/admin/licenses/{license_id}/device-history` | `admin` | Recent device moves |
 
+### Account routes a script may meet
+
+| Method and path | Tier | Purpose |
+|---|---|---|
+| `POST /v1/me/claim` | the user step-up: a browser with a TOTP second factor on a sign-in younger than `ADMIN_WEB_REAUTH_SECONDS`, or a signed device request (`attested_or_mfa_user`) | Redeem a one-time claim code onto the caller's own account ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)). Body `{"code": "…"}`, 8–64 characters, case, spaces and dashes ignored, any other field 422 (`LicenseClaim`, `backend/app/models.py:182-191`). Answers `{"config": …}` as `GET /v1/config` would. Refusals: 403 `email_not_verified` first (`backend/app/routers/licenses.py:236-237`), then the activation codes, with the statuses in `errors.STATUS`: 404 `license_not_found`; 403 `license_revoked`, `license_expired`, `license_email_mismatch`, `license_device_mismatch`; 409 `already_licensed`, `license_already_redeemed`, `license_seats_exhausted`, `license_seat_disabled`; 503 `claim_contended`, `device_lock_contended` (retry). Rate limit `license_activate_bucket` (0.2/s, burst 3; `backend/app/rate_limit.py:123`), shared with the route below. A browser claim names no device, so no device lock is compared or bound (`backend/app/repo/activation.py:62-68`). Each attempt writes a `LICENSE_CLAIM_CODE` audit row with the code's prefix only and logs `event="activation"` with `via` (`licenses.py:239-255`). Declared at the gateway (`backend/gateway/openapi.yaml:207-226`) |
+| `POST /v1/licenses/activate` | `user` with `X-Device-Id` | **Legacy.** The same redemption for installed builds; no current app build calls it, and the app has no screen to type a key. Kept until TD-278 retires it with its contract fixture (`licenses.py:49-81`) |
+
 ## Examples
 
 ```bash
@@ -143,5 +159,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" -o audit.csv \
 
 `backend/tests/test_roster_bulk.py` (import, export, summary, audit),
 `backend/tests/test_licence_search_post.py` (the POST search and the deprecated `q`),
+`backend/tests/test_claim_code.py` (the claim route), `backend/tests/test_kill_switches.py`
+(`feature_paused`),
 `backend/tests/test_route_authz_matrix.py` (tiers and cross-tenant refusals),
 `backend/tests/test_gateway_parity.py` (every route declared at the gateway).
