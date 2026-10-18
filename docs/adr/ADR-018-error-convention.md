@@ -95,7 +95,7 @@ and the tests pin them (`HttpFailureTest`, `AuthedTest`, `AfterSaveTest`,
 - A cancelled run reads "Cancelled", and an unknown engine code is shown with
   its number (#330, #331).
 - Not every caller is converted: `RetryOnTransient` keeps its own 503 rule
-  (idempotent calls only) rather than `HttpFailure.SERVER`, which would change
+  (idempotent calls only; a 503 whose body carries `feature_paused` is not retried, `data/net/RetryOnTransient.kt`) rather than `HttpFailure.SERVER`, which would change
   which calls retry.
 - detekt does not check cancellation handling: `SuspendFunSwallowedCancellation`
   needs type resolution, which `:app:detekt` does not run, and detekt 1.23.8's
