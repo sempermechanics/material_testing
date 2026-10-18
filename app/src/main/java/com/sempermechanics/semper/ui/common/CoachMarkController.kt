@@ -9,7 +9,6 @@ import android.app.Activity
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -142,9 +141,7 @@ class CoachMarkController(
             scaleType = ImageView.ScaleType.FIT_CENTER
             visibility = View.GONE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                isForceDarkAllowed = false
-            }
+            isForceDarkAllowed = false
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
