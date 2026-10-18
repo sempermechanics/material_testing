@@ -13,6 +13,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
     db,
@@ -211,6 +212,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
         _update_doc(ref, {
             **{apps.field("deviceIdLock", a): "" for a in apps.ALL},
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         })
         released = _settle_holder(license_id, lic, ref, scope, uid, previous)
         return {**detail, **apps.spread("previousDeviceId", previous),
@@ -240,6 +242,7 @@ def clear_device_lock(license_id: str, uid: str = "", *,
             lock_field: "",
             changed_field: now,
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         })
         return {
             **detail,
@@ -291,6 +294,7 @@ def set_seat_enabled(license_id: str, uid: str, enabled: bool) -> None:
         patch = {
             "status": "active" if enabled else "disabled",
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         }
         release = not enabled and _seat_lease_counted(seat)
         if release:
@@ -352,6 +356,7 @@ def revoke_institution_seat(license_id: str, uid: str) -> bool:
             "revokedAt": _base.firestore.SERVER_TIMESTAMP,
             **_lease_clear_patch(),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         })
         counters = {}
         if seats_used > 0:

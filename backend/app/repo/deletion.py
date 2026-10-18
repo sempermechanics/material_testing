@@ -32,6 +32,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
     _BATCH_LIMIT,
@@ -199,7 +200,8 @@ def restore_license(license_id: str, admin_uid: str) -> dict:
                         back.append(uid)
                 else:
                     seat.update({"status": STATUS_REVOKED, "revokedAt": _now()})
-            seat_writes.append((ref.collection("seats").document(doc.id), seat))
+            seat_writes.append((ref.collection("seats").document(doc.id),
+                                {**seat, "schemaVersion": SCHEMA_VERSION}))
         lic["seatsUsed"] = on_roster
         lic["leasesActive"] = 0
     elif live:
