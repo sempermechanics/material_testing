@@ -61,6 +61,12 @@ def record(uid=None, device_id=None, action="", outcome="OK", target=None, detai
     license_id = licence_of(target)
     if license_id:
         row["licenseId"] = license_id
+    if outcome == "DENIED":
+        # Refusals also go to Cloud Logging, so the `semper_auth_denied`
+        # log-based metric (ops/monitoring) can count them by stage; the
+        # Firestore row alone is invisible to alerting.
+        obs.log_event(log, logging.WARNING, "audit_denied", action=action,
+                      stage=str((detail or {}).get("stage") or ""))
     try:
         _add_doc(db().collection("audit_logs"), row)
     except Exception as e:  # noqa: BLE001 - auditing must not fail the request
