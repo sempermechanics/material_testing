@@ -5,6 +5,16 @@
 **Deciders:** app owner
 **Framework items:** 4.1, 4.3, 3.5, 6.4; Part B ([READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md))
 
+> **ADR-024 (2026-10-18).** [ADR-024](ADR-024-account-anchored-entitlements.md)
+> anchors paid entitlements to the account and removes the in-app key entry.
+> It supersedes nothing in this record: the token never depended on a key being
+> redeemed, only on `/v1/config` (decision 3). ADR-024 adds two fetches to
+> decision 3's triggers: a first sign-in asks `/v1/config` again once the device
+> is registered, before Home opens (`EntitlementRefresh.afterSignIn`,
+> `app/src/main/java/com/sempermechanics/semper/data/account/entitlement/EntitlementRefresh.kt:81`),
+> and "Refresh licence" asks on demand. Share, which has no backend route, is
+> the one paid feature the token alone decides (TD-274).
+
 ## Context
 
 Analysis is offline; licensing was not. The app cached the last `/v1/config`
@@ -57,7 +67,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
    up to six attempts, about 15 minutes (`SeatLease.refreshConfigAfterCheckout`,
    `app/src/main/java/com/sempermechanics/semper/data/account/SeatLease.kt:79-87`;
    `LicenseConfigWorker.refreshNow`, `data/LicenseConfigWorker.kt:109-120`;
-   `EntitlementRefresh.MAX_ATTEMPTS`, `data/account/entitlement/EntitlementRefresh.kt:36`).
+   `EntitlementRefresh.MAX_ATTEMPTS`, `data/account/entitlement/EntitlementRefresh.kt:48`).
    The same refresh is queued at launch and on each return to the foreground
    when the stored token is past `refreshAfter` or has lapsed
    (`LicenseConfigWorker.installForegroundCheck`, `:123-138`; `EntitlementRefresh.refreshDue`,
@@ -108,7 +118,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
    was issued under ran out unrenewed, so starting work opens the seat screen,
    which checks out a seat and fetches a fresh token, rather than applying
    demo's limits (`EntitlementPolicy.seatRequired`, `EntitlementPolicy.kt:126-129`;
-   `LicenseEntitlements.isSeatRequiredToStart`, `data/account/LicenseEntitlements.kt:133-135`).
+   `LicenseEntitlements.isSeatRequiredToStart`, `data/account/LicenseEntitlements.kt:138-140`).
    While a token is lapsed the quota card and the limit screen show the cap
    enforced, not the server's `maxSessions` (`LicenseEntitlements.shownAnalysisCap`,
    `:224`; TD-263, closed 2026-10-18). A token that

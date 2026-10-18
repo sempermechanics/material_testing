@@ -164,7 +164,7 @@ metadata only. Where an action needs to name an address it records
 `backend/app/audit.py:35-47`): `emailLockHash` on an individual mint, and
 `adminEmailHashes` with `adminEmailCount` on an institution mint, a convert and an
 `adminEmails` edit (`backend/app/routers/admin.py:27-40`). A reader who already
-knows an address can match it. The hash is unkeyed (`backend/app/observability.py:189-196`),
+knows an address can match it. The hash is unkeyed (`backend/app/observability.py:192-199`),
 so it keeps the address out of clear text; it does not stop someone with a list of
 candidate addresses from confirming one. One exception
 remains: `ADMIN_LICENSE_EXTEND` records a licence's free-text `note` as typed,

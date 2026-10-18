@@ -51,7 +51,7 @@ no client can read or write any of them (`firestore.rules:7-9`).
 | `auth_links/{firebaseSub}` | the canonical uid a Firebase subject maps to (`backend/app/repo/users.py:93`) | Merging sign-in methods | Until erasure: every row whose `uid` is the account is deleted (`backend/app/repo/account.py:237-239`). Rows left by erasures before that change stay until a sweep (TD-271) |
 | `devices/{deviceId}` | `uid`, `app`, `publicKeyPem`, `model`, `osVersion`, `appVersion`, `status`, registration and last-assertion times (`backend/app/repo/devices.py:80-92`) | Device binding, request signatures | Until erasure |
 | `challenges/{nonce}` | `uid`, `deviceId` | Replay protection | TTL on `expireAt` (`backend/firestore.indexes.json:104-122`); deleted on use |
-| `sessions/{sid}` | `uid`, `deviceId`, `app`, `specimen` (the reference image's file name), `name` (the analysis name), small run metrics, Drive folder id (`backend/app/repo/sessions.py:450-475`) | Cloud backup index | Until the session or account is erased |
+| `sessions/{sid}` | `uid`, `deviceId`, `app`, `specimen` (the reference image's file name), `name` (the analysis name), small run metrics, Drive folder id (`backend/app/repo/sessions.py:477-502`) | Cloud backup index | Until the session or account is erased |
 | `files/{fileId}` | `uid`, `sessionId`, file `name`, size, `sha256`, Drive ids | Upload tracking | Until the session or account is erased |
 | `licenses/{id}` | `emailLock` and `redeemedByUid` (individual); `adminEmails`, `domainLock` (institution); per-app `deviceIdLock`; `createdByUid` | Licensing | Until deleted; then 30 days in `deleted_licenses` |
 | `licenses/{id}/seats/{uid}` | `uid`, `email`, per-app `deviceIdLock`, lease fields (`backend/app/repo/claims.py:246-254`) | Institution roster | A revoked seat keeps `email` until its holder's account is erased, which blanks it on every seat the account held, live seats revoked first (`_blank_seat_addresses`, `backend/app/repo/account.py:186-203`). Seats on other licences are found by a collection-group query whose index must be deployed first (TD-271) |
@@ -71,7 +71,7 @@ account (`DELETE /v1/me` removes the user folder first,
 
 - Structured lines from `backend/app/observability.py`: `requestId`, `uid`,
   `deviceId`, `appId`, `appVersion`, route, status, latency, error code, and on
-  licensing events `licenseId` (allowed fields, `observability.py:24-30`). An email
+  licensing events `licenseId` (allowed fields, `observability.py:24-33`). An email
   that must be logged is a 12-hex hash (`short_hash`, `:189-196`).
 - uvicorn's access line and the Cloud Run / API Gateway request logs carry the full
   URL. The staff licence search sends its address in a POST body

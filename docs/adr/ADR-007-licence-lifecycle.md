@@ -1,8 +1,16 @@
 # ADR-007: Licence lifecycle — one per person, replace by revoke, delete into a hold
 
-**Status:** Accepted
+**Status:** Accepted; superseded in part by [ADR-024](ADR-024-account-anchored-entitlements.md) (2026-10-18)
 **Date:** 2026-09-25
 **Deciders:** product owner, backend owner
+
+> **Superseded in part by ADR-024.** No key is typed in the app any more.
+> Where this record names "a typed key" as a grant point, read a one-time
+> claim code redeemed on the web account page (`POST /v1/me/claim`), which
+> runs the same `repo.activate_license` and so the same one-licence check
+> (`409 already_licensed`); `POST /v1/licenses/activate` stays for installed
+> builds only. One licence per person, replace by revoke, and delete into a
+> 30-day hold are unchanged.
 
 ## Context
 

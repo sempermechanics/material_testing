@@ -66,7 +66,7 @@ Pick the home by how long the work must live and who must see its outcome.
   ([ADR-015](ADR-015-package-layout.md)).
 
 **The wizard is the exception, on purpose.** `StaticAnalysisActivity`
-absorbs every configuration change (`app/src/main/AndroidManifest.xml:159-163`),
+absorbs every configuration change (`app/src/main/AndroidManifest.xml:154-158`),
 so rotation never recreates it. Its batch and sweep runs sit on
 `viewModelScope` (`ui/analysis/wizard/RunChannels.kt:112`, `:171`), but
 `onDestroy` raises the run's cancel flag on every destroy
