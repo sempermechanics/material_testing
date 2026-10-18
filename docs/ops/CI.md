@@ -152,7 +152,7 @@ When `github.head_ref` starts with `dependabot/`:
 | Ecosystem (from branch name) | Tiers |
 |------------------------------|-------|
 | `dependabot/pip/…` | gates + Tier 4 |
-| `dependabot/npm_and_yarn/…` | gates + Firestore rules (no npm entry in `dependabot.yml` yet; bump `firestore-rules-tests/package.json` by hand and regenerate the lock with `npm install`) |
+| `dependabot/npm_and_yarn/…` | gates + Firestore rules (monthly, major-only npm entry for `/firestore-rules-tests` in `dependabot.yml`) |
 | `dependabot/gradle/…` | gates + Tier 1 |
 | `dependabot/github_actions/…` | gates only — deploy workflows are **not** exercised; read WIF / Cloud Run action inputs by hand before landing |
 | `dependabot/docker/…` | gates + Tier 4. Tier 4 runs on the runner's Python 3.12, not the image, so read the base-image change by hand too. `dependabot.yml` ignores Python minor/major bumps: only digest and patch updates arrive while the lock is compiled on 3.12 (TD-68) |

@@ -1,7 +1,6 @@
 # Authentication refusals: the AUTH_DENIED audit action (backend/app/deps.py),
-# counted from any log line that carries `action`, once audit.record() writes
-# one per row (today it writes only Firestore audit_logs, so this stays at
-# zero). An audit_write_failed line also carries `action`; it is a lost row,
+# counted from the `audit_denied` line audit.record() logs for every DENIED
+# row. An audit_write_failed line also carries `action`; it is a lost row,
 # not a refusal, so it is excluded here and counted by its own metric.
 description: AUTH_DENIED refusals (bad or missing token, App Check, device), by stage.
 filter: >-

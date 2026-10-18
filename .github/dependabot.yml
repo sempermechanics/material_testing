@@ -91,3 +91,21 @@ updates:
   # Deliberately no gitsubmodule entry: moving the `engine` submodule pin changes
   # the bit-exact .dat / GIF oracles, so it is a reviewed step under
   # docs/engine/ENGINE_APP_CONTRACT.md, not a monthly bot bump.
+
+  # Firestore rules tests (emulator + @firebase/rules-unit-testing), pinned in
+  # firestore-rules-tests/package-lock.json. Same major-only rule as above.
+  - package-ecosystem: npm
+    directory: /firestore-rules-tests
+    target-branch: main
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      rules-test-deps:
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch

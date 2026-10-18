@@ -540,3 +540,14 @@ def test_audit_range_reads_dates_and_instants():
     with pytest.raises(roster_io.RosterRefused) as refused:
         roster_io.audit_range("2026-10-02", "2026-10-01T12:00:00Z")
     assert refused.value.code == errors.INVALID_AUDIT_RANGE
+
+
+def test_a_refusal_is_also_one_structured_log_line(monkeypatch, caplog):
+    monkeypatch.setattr(audit, "_add_doc", lambda col, data: None)
+    monkeypatch.setattr(audit, "db", lambda: type("Db", (), {"collection": lambda s, n: n})())
+    with caplog.at_level(logging.WARNING, logger="audit"):
+        audit.record(action="AUTH_DENIED", outcome="DENIED", detail={"stage": "id_token"})
+        audit.record("u", action="INSTITUTION_SEAT_ADD", target={"type": "seat", "id": "L1/u"})
+    (rec,) = [r for r in caplog.records if r.name == "audit"]
+    line = json.loads(rec.getMessage())
+    assert (line["event"], line["action"], line["stage"]) == ("audit_denied", "AUTH_DENIED", "id_token")
