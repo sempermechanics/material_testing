@@ -155,6 +155,7 @@ from .sessions import (  # noqa: F401
     list_session_artifacts,
     iter_user_sessions,
     count_user_sessions,
+    count_device_sessions,
     find_incomplete_session,
     create_session,
     set_session_folder,
