@@ -145,17 +145,21 @@ function onFilterInput() {
  * (TD-244): sent as a `q` query parameter, the address searched for was
  * written into every request log between here and Cloud Run. A search
  * answers in the list's shape; a further page is asked for with its token
- * in the body too, up to `SEARCH_PAGES` pages. Demo and revoked hits are
- * dropped by the table itself unless their box is ticked.
+ * in the body too, up to `SEARCH_PAGES` pages. The Demo and revoked boxes
+ * go in the body as the list's query sends them, so a ticked box finds those
+ * licences too; the table still drops any it is not showing.
  */
 export async function searchLicences() {
   const q = $("filter").value.trim();
+  const showDemo = $("showDemo").checked;
+  const showRevoked = $("showRevoked").checked;
   try {
     let hits = [];
     let pageToken = "";
     for (let pages = 0; pages < SEARCH_PAGES; pages += 1) {
       const data = await api("/v1/admin/licenses/search", {
-        method: "POST", body: licenceSearchBody({ q, limit: LICENCE_PAGE, pageToken }),
+        method: "POST",
+        body: licenceSearchBody({ q, limit: LICENCE_PAGE, pageToken, showDemo, showRevoked }),
       });
       hits = hits.concat(data.licenses || []);
       const next = (data.page && data.page.nextPageToken) || "";

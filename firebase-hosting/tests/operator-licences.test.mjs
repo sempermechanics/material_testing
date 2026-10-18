@@ -154,13 +154,37 @@ test("a search with more pages asks for each with its token in the body, and sto
     mock.timers.tick(300);
     await settle();
     const bodies = net.requests.filter((r) => r.method === "POST").map((r) => JSON.parse(r.body));
+    const hidden = { include_demo: false, include_revoked: false };
     assert.deepEqual(bodies, [
-      { q: "far.edu", limit: 50 },
-      { q: "far.edu", limit: 50, page_token: "t2" },
-      { q: "far.edu", limit: 50, page_token: "t3" },
+      { q: "far.edu", limit: 50, ...hidden },
+      { q: "far.edu", limit: 50, page_token: "t2", ...hidden },
+      { q: "far.edu", limit: 50, page_token: "t3", ...hidden },
     ]);
     assert.deepEqual(labels(), ["SEMP-HIT1", "SEMP-HIT2", "SEMP-HIT3"]);
     assert.deepEqual(sent(/far/), [], "nothing searched for is in a URL");
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("with Show Demo keys ticked a search asks for Demo keys, and finds one", async () => {
+  const demoHit = { ...DEMO, id: "lic-demo-far", keyPrefix: "SEMP-DFAR", emailLock: "far@else.org" };
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    await openDesk({ routes: {
+      "GET /v1/admin/licenses?limit=50&include_demo=true&include_revoked=false": () => json(200, { licenses: [] }),
+      [SEARCH]: (req) => json(200, { licenses: JSON.parse(req.body).include_demo ? [demoHit] : [] }),
+    } });
+    $("showDemo").checked = true;
+    $("showDemo").dispatch("change");
+    await settle();
+    $("filter").value = "far@else.org";
+    $("filter").dispatch("input");
+    mock.timers.tick(300);
+    await settle();
+    const [body] = net.requests.filter((r) => r.method === "POST").map((r) => JSON.parse(r.body));
+    assert.deepEqual(body, { q: "far@else.org", limit: 50, include_demo: true, include_revoked: false });
+    assert.deepEqual(labels(), ["SEMP-DFAR"]);
   } finally {
     mock.timers.reset();
   }

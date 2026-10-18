@@ -205,7 +205,11 @@ object EntitlementStore {
             .getOrDefault(KeyPresence.UNREADABLE)
 
         override fun markSealing() {
-            check(prefs.edit().put(PrefFiles.Entitlement.SEALING, true).commit()) { "First-seal mark not written" }
+            val written = prefs.edit()
+                .remove(PrefFiles.Entitlement.SEALED)
+                .put(PrefFiles.Entitlement.SEALING, true)
+                .commit()
+            check(written) { "First-seal mark not written" }
         }
 
         override fun createKey() {

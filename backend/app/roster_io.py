@@ -97,6 +97,11 @@ def parse_import(text: str) -> list[ImportRow]:
 #: opened in Excel by someone else, and `=HYPERLINK(...)@x.edu` is a valid
 #: local part.
 _FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
+#: What `_cell` puts a guard `'` in front of: a formula lead, and a `'` of the
+#: value's own (a valid local-part character), so that `undefused` can tell
+#: the guard from the value. Without the second, an address `'-a@x.edu` was
+#: written as is and read back as `-a@x.edu`, a different address.
+_GUARDED_LEAD = (*_FORMULA_LEAD, "'")
 
 
 def _cell(value) -> str:
@@ -106,16 +111,17 @@ def _cell(value) -> str:
     if isinstance(value, datetime):
         value = iso(value)
     text = str(value)
-    return f"'{text}" if text.startswith(_FORMULA_LEAD) else text
+    return f"'{text}" if text.startswith(_GUARDED_LEAD) else text
 
 
 def undefused(cell: str) -> str:
     """One imported address cell, trimmed, with the export's formula guard
     undone: exactly one leading `'` is dropped when what follows it is a
-    formula lead (`_FORMULA_LEAD`), which is the only case `_cell` adds one.
-    A `'` before anything else is the address's own and is kept."""
+    formula lead or another `'` (`_GUARDED_LEAD`), which are the only cases
+    `_cell` adds one. A `'` before anything else is the address's own and is
+    kept."""
     text = cell.strip()
-    if text.startswith("'") and text[1:2] and text[1] in _FORMULA_LEAD:
+    if text.startswith("'") and text[1:2] and text[1] in _GUARDED_LEAD:
         text = text[1:]
     return text.strip()
 

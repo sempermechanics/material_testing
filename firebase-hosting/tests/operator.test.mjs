@@ -334,7 +334,8 @@ test("an address is also searched on the backend, after a pause in typing", asyn
     await settle();
     assert.deepEqual(labels(), ["SEMP-FAR1"], "a licence on no loaded page is found");
     // TD-244: the address goes in the body, never in a URL a log records.
-    assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "POST").body), { q: "far@else.org", limit: 50 });
+    assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "POST").body),
+      { q: "far@else.org", limit: 50, include_demo: false, include_revoked: false });
     assert.deepEqual(net.requests.filter((r) => r.url.includes("else.org")), []);
   } finally {
     mock.timers.reset();
@@ -406,6 +407,19 @@ test("a refused revoke reports the backend's code", async () => {
   await settle();
   assert.deepEqual(status(), ["Could not revoke: license_revoked", "muted err"]);
   assert.deepEqual(labels(), ["SEMP-IND1", "SEMP-UNI1"]);
+});
+
+test("a revoke the backend could not check the sign-in for says try again, and stays signed in", async () => {
+  await open({ routes: { [REVOKE_IND]: () => json(503, { detail: "auth_check_busy" }) } });
+  confirms.answer(true);
+  prompts.answer("SEMP-IND1");
+  rowButton("revoke", IND.id).click();
+  await settle();
+  assert.deepEqual(status(),
+    ["The server is busy checking sign-ins — wait a few seconds and try again.", "muted err"]);
+  assert.equal(fake.callsTo("signOut").length, 0);
+  assert.equal(fake.callsTo("reauthenticateWithRedirect").length, 0);
+  assert.equal(sent(/[/]revoke$/).length, 1, "sent once, not retried");
 });
 
 /* ------------------------------------------------- revoke, return leg */
