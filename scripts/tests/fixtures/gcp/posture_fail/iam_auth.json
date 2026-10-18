@@ -7,7 +7,7 @@
       ]
     },
     {
-      "role": "roles/viewer",
+      "role": "roles/firebaseauth.viewer",
       "members": [
         "serviceAccount:api@demo-app-prod.iam.gserviceaccount.com"
       ]

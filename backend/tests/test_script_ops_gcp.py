@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -43,20 +44,42 @@ def _stub_path(tmp_path: Path) -> Path:
     return bin_dir
 
 
-def _run(tmp_path: Path, script: Path, scenario: str, *args: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+def _run(tmp_path: Path, script: Path, scenario: str | Path, *args: str,
+         ) -> tuple[subprocess.CompletedProcess, list[str]]:
     bin_dir = _stub_path(tmp_path)
     # One log per run, so a second run in the same test sees only its own calls.
     log = tmp_path / f"calls-{len(list(tmp_path.glob('calls-*.log')))}.log"
     log.touch()
     env = {
         "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
-        "STUB_FIXTURES": str(_FIX / scenario),
+        "STUB_FIXTURES": str(scenario if isinstance(scenario, Path) else _FIX / scenario),
         "STUB_LOG": str(log),
         "HOME": str(tmp_path),
     }
     proc = subprocess.run(["bash", str(script), *args], capture_output=True, text=True, env=env, timeout=120)
     calls = log.read_text(encoding="utf-8").splitlines()
     return proc, calls
+
+
+def _variant(tmp_path: Path, files: dict[str, object], rules: list[dict] | None = None) -> Path:
+    """posture_pass, copied, with `files` replaced (JSON-encoded) and `rules`
+    put ahead of its gcloud.json rules (the first match wins)."""
+    root = tmp_path / "scenario"
+    shutil.copytree(_FIX / "posture_pass", root)
+    for name, value in files.items():
+        (root / name).write_text(json.dumps(value), encoding="utf-8")
+    if rules:
+        existing = json.loads((root / "gcloud.json").read_text(encoding="utf-8"))
+        (root / "gcloud.json").write_text(json.dumps(rules + existing), encoding="utf-8")
+    return root
+
+
+def _auth_iam(role: str) -> dict:
+    return {"bindings": [
+        {"role": "roles/owner", "members": ["group:owners@example.test", "group:breakglass@example.test"]},
+        {"role": role, "members": ["serviceAccount:api@demo-app-prod.iam.gserviceaccount.com"]},
+    ], "auditConfigs": [{"service": "allServices", "auditLogConfigs": [
+        {"logType": "DATA_READ"}, {"logType": "DATA_WRITE"}]}]}
 
 
 def _lines(stdout: str) -> dict[tuple[str, str], tuple[str, str]]:
@@ -80,23 +103,30 @@ def test_posture_all_pass(tmp_path):
     items = {item for item, _ in lines}
     for want in ("2.1-lien", "2.1-tag", "2.1-owners", "2.1-groups", "2.4-api-keys", "2.5-auth-providers",
                  "2.6-budget", "2.6-max-instances", "2.7-pitr", "2.7-delete-protection",
-                 "2.7-backup-schedule", "3.1-app-check", "3.4-check-revoked", "3.4-iam",
+                 "2.7-backup", "3.1-app-check", "3.4-check-revoked", "3.4-iam",
                  "3.5-entitlement-key", "3.7-audit-logs"):
         assert want in items, f"{want} missing from:\n{proc.stdout}"
+    assert lines[("2.7-backup", "demo-app-prod")][1].startswith("daily schedule")
+    assert "roles/firebaseauth.admin" in lines[("3.4-iam", "demo-auth-prod")][1]
     assert lines[("3.5-entitlement-key", "semper-api")][1].startswith("secret entitlement-signing-key")
     assert "FAIL: 0  UNKNOWN: 0" in proc.stdout
     assert calls, "the stub was never called"
 
 
 def test_posture_reports_each_failure(tmp_path):
-    proc, _ = _run(tmp_path, _POSTURE, "posture_fail", *_ARGS)
+    proc, _ = _run(tmp_path, _POSTURE, "posture_fail", *_ARGS, "--backup-bucket", "gs://demo-backups")
     assert proc.returncode == 1
     lines = _lines(proc.stdout)
     fail = {item for (item, _), (status, _) in lines.items() if status == "FAIL"}
     assert fail >= {"2.1-lien", "2.1-tag", "2.1-owners", "2.1-groups", "2.4-api-keys", "2.5-auth-providers",
                     "2.6-budget", "2.6-max-instances", "2.7-pitr", "2.7-delete-protection",
-                    "2.7-backup-schedule", "3.1-app-check", "3.4-check-revoked", "3.4-iam",
+                    "2.7-backup", "3.1-app-check", "3.4-check-revoked", "3.4-iam",
                     "3.5-entitlement-key", "3.7-audit-logs"}, proc.stdout
+    # The newest export is from 2024: stale, not missing.
+    assert "latest export 20240102T000000Z" in lines[("2.7-backup", "demo-app-prod")][1]
+    # Reading users is not enough: revoke and delete need update and delete.
+    status, detail = lines[("3.4-iam", "demo-auth-prod")]
+    assert status == "FAIL" and "roles/firebaseauth.viewer" in detail and "firebaseauth.admin" in detail
     assert "anonymous sign-in is enabled" in lines[("2.5-auth-providers", "demo-auth-prod")][1]
     assert "Browser key" in lines[("2.4-api-keys", "demo-app-prod")][1]
     assert "plain env value" in lines[("3.5-entitlement-key", "semper-api")][1]
@@ -109,7 +139,7 @@ def test_posture_only_reads(tmp_path):
     """Every gcloud call is a describe / list / get-iam-policy / token print,
     and curl is only ever a GET."""
     _, calls = _run(tmp_path, _POSTURE, "posture_pass", *_ARGS)
-    read_verbs = {"describe", "list", "get-iam-policy", "print-access-token"}
+    read_verbs = {"describe", "list", "ls", "get-iam-policy", "print-access-token"}
     for call in calls:
         words = call.split()
         if words[0] == "gcloud":
@@ -118,6 +148,55 @@ def test_posture_only_reads(tmp_path):
                         "remove-iam-policy-binding", "patch"} & set(words), call
         else:
             assert words[:2] == ["curl", "GET"], call
+
+
+def test_posture_backups_pass_on_a_recent_export_without_a_schedule(tmp_path):
+    """Semper's backups are the daily export workflow, not a managed schedule."""
+    stamp = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y%m%dT%H%M%SZ")
+    scenario = _variant(tmp_path, {"schedules.json": []}, [{
+        "match": ["storage", "ls", "gs://demo-backups/firestore/demo-app-prod/"],
+        "stdout": f"gs://demo-backups/firestore/demo-app-prod/20240101T000000Z/\n"
+                  f"gs://demo-backups/firestore/demo-app-prod/{stamp}/\n",
+    }])
+    proc, calls = _run(tmp_path, _POSTURE, scenario, *_ARGS, "--backup-bucket", "demo-backups")
+    status, detail = _lines(proc.stdout)[("2.7-backup", "demo-app-prod")]
+    assert status == "PASS" and stamp in detail and "3 h old" in detail, proc.stdout
+    assert proc.returncode == 0
+    assert any(c.startswith("gcloud storage ls") for c in calls)
+
+
+def test_posture_backups_unread_are_unknown_not_fail(tmp_path):
+    scenario = _variant(tmp_path, {"schedules.json": []})
+    # No bucket named: the export cannot be looked at.
+    proc, calls = _run(tmp_path, _POSTURE, scenario, *_ARGS)
+    status, detail = _lines(proc.stdout)[("2.7-backup", "demo-app-prod")]
+    assert status == "UNKNOWN" and "firestore-backup.yml" in detail and "--backup-bucket" in detail
+    assert proc.returncode == 0
+    assert not any("storage" in c for c in calls)
+    # A bucket that cannot be listed (the stub has no answer for it).
+    proc, _ = _run(tmp_path, _POSTURE, scenario, *_ARGS, "--backup-bucket", "demo-backups")
+    status, detail = _lines(proc.stdout)[("2.7-backup", "demo-app-prod")]
+    assert status == "UNKNOWN" and "export listing failed" in detail and "firestore-backup.yml" in detail
+
+
+@pytest.mark.parametrize(("permissions", "status"), [
+    (["firebaseauth.users.get", "firebaseauth.users.update", "firebaseauth.users.delete"], "PASS"),
+    (["firebaseauth.users.get", "firebaseauth.users.update"], "FAIL"),
+    (None, "UNKNOWN"),
+])
+def test_posture_iam_reads_a_custom_role(tmp_path, permissions, status):
+    role = "projects/demo-auth-prod/roles/semperAuthUsers"
+    rule = {"match": ["iam", "roles", "describe", "semperAuthUsers", "--project", "demo-auth-prod"]}
+    if permissions is None:
+        rule.update(stderr="ERROR: PERMISSION_DENIED\n", exit=1)
+    else:
+        rule["stdout"] = json.dumps({"name": role, "includedPermissions": permissions})
+    scenario = _variant(tmp_path, {"iam_auth.json": _auth_iam(role)}, [rule])
+    proc, _ = _run(tmp_path, _POSTURE, scenario, *_ARGS)
+    got, detail = _lines(proc.stdout)[("3.4-iam", "demo-auth-prod")]
+    assert got == status, proc.stdout
+    if status == "UNKNOWN":
+        assert "PERMISSION_DENIED" in detail
 
 
 def test_posture_wrapper_refuses_a_write(tmp_path):
