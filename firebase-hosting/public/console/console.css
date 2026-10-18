@@ -176,6 +176,15 @@ h3 {
   letter-spacing: -.01em; margin: 0 0 .5rem;
 }
 
+/* The account's licence, field by field (account.js): term on the left. */
+dl.facts {
+  display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem;
+  margin: .75rem 0; font-size: .9rem;
+}
+dl.facts:empty { display: none; }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; }
+
 /* Placeholders while something loads (util.js placeholderRows, and the
    account's licence card): the shape of what is coming, in grey. They pulse
    only for those who have not asked for less motion. */

@@ -30,3 +30,42 @@ export function explain(error, sentences = {}, fallback = (text) => text) {
   const code = error?.code ?? errorDetail(text).code;
   return sentences[code] ?? COMMON[code] ?? fallback(text);
 }
+
+/**
+ * The account page's own words (account/account.js) that are not refusals:
+ * the licence, field by field, from `/v1/me`'s `license` block; what a phone
+ * does offline; and what deleting the account takes with it. Keys are
+ * camelCase: a snake_case key reads as a backend code to check_console.py.
+ */
+export const ACCOUNT = {
+  // The licence card's facts, in the order shown.
+  labels: {
+    mode: "Mode",
+    licence: "Licence",
+    seating: "Seats",
+    ends: "Ends",
+    graceEnds: "Grace period ends",
+    lease: "Shared seat",
+  },
+  modes: { licensed: "Licensed", demo: "Demo" },
+  kinds: { individual: "Individual", institution: "Institution" },
+  seating: { assigned: "One seat each", floating: "Shared across the institution" },
+  noLicence: "None — this account is on the demo",
+  noEnd: "No end date",
+  leaseHeld: (until) => `Held until ${until}`,
+  leaseNone: "Not held right now",
+  // Shown whenever a licence is attached: a phone checks its licence with
+  // the server, but does not need to on every launch.
+  offline:
+    "On a phone, licensed features keep working offline until the offline " +
+    "grace period ends; then the app falls back to the demo limits until it " +
+    "reconnects. Analyses you already have stay available either way.",
+  // Deleting needs the phone's device signature, so it is done in the app.
+  // One account signs in to both apps, so the sign-in goes for both.
+  deleteAccount:
+    "Delete your account from the app on your phone — in Semper, Settings → " +
+    "Your data → Delete account. It erases every analysis and cloud backup, " +
+    "and removes the sign-in itself for both apps, Semper and Material " +
+    "Testing, since they share one account. It cannot be undone: signing " +
+    "in again with the same address starts a new, empty account.",
+};

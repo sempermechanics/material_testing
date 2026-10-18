@@ -180,6 +180,83 @@ test("a failed account read survives the analyses answering second", async () =>
   assert.deepEqual(status(), ["Could not read your account: boom", "muted err"]);
 });
 
+/* -------------------------------------------- licence facts and delete */
+
+const facts = () => {
+  const terms = $("facts").querySelectorAll("dt").map((el) => el.textContent);
+  const values = $("facts").querySelectorAll("dd").map((el) => el.textContent);
+  return terms.map((term, i) => [term, values[i]]);
+};
+const OFFLINE = "On a phone, licensed features keep working offline until the offline grace period " +
+  "ends; then the app falls back to the demo limits until it reconnects. Analyses you already have " +
+  "stay available either way.";
+
+test("an institution licence is set out field by field: mode, licence, seats, end, grace, lease", async () => {
+  const expiresAt = iso(-2 * DAY);
+  const graceEndsAt = iso(12 * DAY);
+  const leaseExpiresAt = iso(20 * 60e3);
+  await open({ license: {
+    mode: "licensed", held: true, kind: "institution", prefix: "SEMP-UNI1", seating: "floating",
+    duration: "timed", expiresAt, graceEndsAt, inGrace: true, leaseExpiresAt,
+  } });
+  assert.deepEqual(facts(), [
+    ["Mode", "Licensed"],
+    ["Licence", "Institution · SEMP-UNI1"],
+    ["Seats", "Shared across the institution"],
+    ["Ends", day(expiresAt)],
+    ["Grace period ends", day(graceEndsAt)],
+    ["Shared seat", `Held until ${when(leaseExpiresAt)}`],
+  ]);
+  assert.equal($("offline").hidden, false);
+  assert.equal($("offline").textContent, OFFLINE);
+});
+
+test("an individual licence with no end has no seat lines; an institution seat not held says so", async () => {
+  await open({ license: {
+    mode: "licensed", held: true, kind: "individual", prefix: "SEMP-4K2P", duration: "perpetual",
+    seating: "assigned",
+  } });
+  assert.deepEqual(facts(), [["Mode", "Licensed"], ["Licence", "Individual · SEMP-4K2P"], ["Ends", "No end date"]]);
+  reset();
+  await open({ license: { mode: "demo", held: true, kind: "institution", seating: "floating" } });
+  assert.deepEqual(facts(), [
+    ["Mode", "Demo"], ["Licence", "Institution"], ["Seats", "Shared across the institution"],
+    ["Ends", "No end date"], ["Shared seat", "Not held right now"],
+  ]);
+  assert.equal($("offline").hidden, false, "an attached licence, even one not active now");
+});
+
+test("without a licence the facts say so and the offline line is not shown", async () => {
+  await open({ license: { mode: "demo", held: false, kind: "individual", prefix: "SEMP-DEMO" } });
+  assert.deepEqual(facts(), [["Mode", "Demo"], ["Licence", "None — this account is on the demo"]]);
+  assert.equal($("offline").hidden, true);
+});
+
+test("values the page has no word for are shown as they came", async () => {
+  await open({ license: { mode: "suspended", held: true, kind: "site", seating: "pooled" } });
+  assert.deepEqual(facts().slice(0, 2), [["Mode", "suspended"], ["Licence", "site"]]);
+  reset();
+  await open({ license: { held: true, kind: "institution", seating: "pooled" } });
+  assert.deepEqual(facts().slice(0, 3), [["Mode", "Demo"], ["Licence", "Institution"], ["Seats", "pooled"]]);
+  reset();
+  await open({ license: { mode: "licensed", held: true } });
+  assert.deepEqual(facts()[1], ["Licence", "—"]);
+});
+
+test("a failed /v1/me leaves no facts and no offline line", async () => {
+  await open({ routes: { "GET /v1/me": () => json(503, { detail: "unavailable" }) } });
+  assert.equal($("facts").innerHTML, "");
+  assert.equal($("offline").hidden, true);
+});
+
+test("the delete card says it is done in the app and removes the sign-in for both apps", async () => {
+  await open({ license: { mode: "demo", held: false } });
+  const said = $("deleteAccount").textContent;
+  assert.match(said, /Settings → Your data → Delete account/);
+  assert.match(said, /removes the sign-in itself for both apps, Semper and Material Testing/);
+  assert.match(said, /cannot be undone/);
+});
+
 /* --------------------------------------------------------------- quota */
 
 test("the quota reads 'N of M'", async () => {

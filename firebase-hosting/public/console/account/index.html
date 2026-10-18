@@ -56,6 +56,11 @@
         <!-- Placeholders until /v1/me answers; renderLicence replaces them. -->
         <div id="pills" aria-hidden="true"><span class="skeleton pill"></span> <span class="skeleton pill"></span></div>
         <p class="muted" id="explain"><span class="skeleton line"></span></p>
+        <!-- The licence field by field from /v1/me (mode, licence, seats,
+             end, grace end, shared-seat lease), and what a phone does
+             offline; account.js fills both from messages.js. -->
+        <dl class="facts" id="facts"></dl>
+        <p class="muted" id="offline" hidden></p>
         <p class="muted" id="quota"></p>
         <div class="row">
           <button id="release" class="secondary" hidden>Give up my seat</button>
@@ -86,6 +91,15 @@
         <div class="row">
           <button id="more" class="secondary" hidden>Show more</button>
         </div>
+      </section>
+
+      <!-- ----------------------------------------------- delete account -->
+      <!-- DELETE /v1/me needs the phone's device signature, so a browser
+           cannot send it; the card says where it is done and what it
+           removes (account.js, from messages.js). -->
+      <section class="card">
+        <h2>Delete your account</h2>
+        <p class="muted" id="deleteAccount"></p>
       </section>
     </div>
 
