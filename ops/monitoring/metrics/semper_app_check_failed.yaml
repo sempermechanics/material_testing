@@ -1,0 +1,31 @@
+# App Check verdicts the backend logs (backend/app/deps.py _require_app_check):
+# `app_check_missing` (no X-Firebase-AppCheck header) and `app_check_invalid`
+# (the token failed verification), for callers that send X-Device-Id, in
+# APP_CHECK_MODE monitor and enforce; nothing is logged in `off`, and a
+# passing token is not logged. The line's `enforcing` flag is not in
+# observability._ALLOWED, so it is dropped: a refusal in enforce mode is also
+# counted by semper_auth_denied with stage `app_check`.
+description: App Check failures (missing or invalid token), by verdict and app build.
+filter: >-
+  resource.type="cloud_run_revision"
+  AND resource.labels.service_name="__SERVICE__"
+  AND jsonPayload.event=("app_check_missing" OR "app_check_invalid")
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  displayName: semper-api App Check failures
+  labels:
+    - key: verdict
+      valueType: STRING
+      description: missing or invalid.
+    - key: appId
+      valueType: STRING
+      description: The calling app (X-App-Id, listed ids only).
+    - key: appVersion
+      valueType: STRING
+      description: The calling build's versionCode (X-App-Version; empty when absent).
+labelExtractors:
+  verdict: REGEXP_EXTRACT(jsonPayload.event, "^app_check_(missing|invalid)$")
+  appId: EXTRACT(jsonPayload.appId)
+  appVersion: EXTRACT(jsonPayload.appVersion)
