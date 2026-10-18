@@ -95,6 +95,25 @@ async def test_other_devices_do_not_count(demo, client):
     assert r.status_code == 200, r.text
 
 
+async def test_a_retry_of_an_in_flight_session_is_answered_at_the_device_cap(demo, client):
+    """The idempotent retry runs before either half of the cap: the session it
+    joins is already one of the device's stored analyses, so refusing it would
+    strand an upload that the cap had already let in."""
+    _stored(demo, CAP - 1, uid="other-account")
+    demo._data["sessions"]["in-flight"] = {
+        "uid": DEV_UID, "deviceId": DEV_DEVICE, "localSessionId": "L1",
+        "status": "UPLOADING", "fileCount": 1, "completedCount": 0,
+    }
+
+    fresh = await client.post("/v1/sessions", json={**_BODY, "localSessionId": "L2"})
+    retry = await client.post("/v1/sessions", json={**_BODY, "localSessionId": "L1"})
+
+    assert fresh.status_code == 409, fresh.text
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["sessionId"] == "in-flight"
+    assert len(demo._data["sessions"]) == CAP
+
+
 async def test_a_licensed_account_is_held_to_its_own_cap_only(demo, client, monkeypatch):
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "mode": "licensed",
                                             "plan": "professional"})
