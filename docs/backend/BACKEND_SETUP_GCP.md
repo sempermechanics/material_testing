@@ -309,7 +309,7 @@ deletion are attempted and reported as not done in the audit row, and the
 revocation check on step-up stays off. Design: [ADR-023](../adr/ADR-023-signed-offline-entitlement.md).
 
 **1. Firebase Auth admin for the runtime SA, on the Auth project.** `revoke_sessions`
-and `delete_auth_user` (`backend/app/google_auth.py:92`, `:106`) and the revocation
+and `delete_auth_user` (`backend/app/google_auth.py:104`, `:121`) and the revocation
 check behind `CHECK_REVOKED_ON_STEP_UP` call the Auth project, not `$PROJECT`:
 
 ```bash
@@ -320,7 +320,7 @@ gcloud projects add-iam-policy-binding $AUTH_PROJECT \
 
 Then set the repository variable `CHECK_REVOKED_ON_STEP_UP=true` and redeploy. Not
 before: with the setting on and no grant, every console step-up call fails closed
-with 401 `invalid_token` (`backend/app/deps.py:527-561`). The posture check passes 3.4-iam only on
+with 401 `invalid_token` (`backend/app/deps.py:527-576`). The posture check passes 3.4-iam only on
 `roles/firebaseauth.admin`, `roles/firebase.admin`, or a custom role holding
 `firebaseauth.users.update` and `firebaseauth.users.delete`
 (`scripts/check_gcp_posture.sh:315-353`).
@@ -361,7 +361,7 @@ gh variable set SEMPER_ENTITLEMENT_PUBKEYS --body "$KID:$PUB"
 - `deploy-backend.yml` mounts the key as `ENTITLEMENT_SIGNING_KEY=<secret>:latest`
   only when `ENTITLEMENT_SIGNING_SECRET` names a secret the deploy SA can see; a
   missing secret deploys without it, with a warning
-  (`.github/workflows/deploy-backend.yml:218-238`). Never pass the key with
+  (`.github/workflows/deploy-backend.yml:258-278`). Never pass the key with
   `--set-env-vars`.
 - **Order matters.** The deploy SA only checks that the secret exists. If it
   exists but the runtime SA cannot read it, the candidate revision fails to start,
@@ -430,7 +430,7 @@ Everything above is required (or near enough). These are the rest of what
 | `ENTITLEMENT_KID` | `ent-1` | The key's id in the token header; the app pins keys by it |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | `14` | How long a token lets the app keep its entitlement offline, capped at a timed licence's end plus grace and a floating lease's end |
 | `MIN_SUPPORTED_VERSION_CODE` · `RECOMMENDED_VERSION_CODE` | `0` · `0` | Semper's release gate, published on `/v1/config` to Semper builds only; the app blocks new runs and cloud calls below the minimum and nudges below the recommended. The server refuses nothing on them. `0` = no gate |
-| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` · `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | `0` · `0` | The same pair for Material Testing builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:280-287`) |
+| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` · `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | `0` · `0` | The same pair for Material Testing builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:293-300`) |
 | `KILL_SWITCHES` | empty | Features every build switches off: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:18-34`) |
 | `CONSOLE_ORIGINS` | `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, **space-separated** (the deploy action splits its `env_vars` on commas, so a comma-separated value is truncated), no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
 
@@ -448,7 +448,7 @@ Everything above is required (or near enough). These are the rest of what
 > `CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
 > `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, their `_MATERIAL_TESTING` pair and `KILL_SWITCHES` from repository
 > variables of the same name, with the defaults above when a variable is unset
-> (`.github/workflows/deploy-backend.yml:263-289`), and mounts `ENTITLEMENT_SIGNING_KEY`
+> (`.github/workflows/deploy-backend.yml:308-334`), and mounts `ENTITLEMENT_SIGNING_KEY`
 > from the secret `ENTITLEMENT_SIGNING_SECRET` names (A8).
 > `deploy-cloudrun` *merges* env into the live revision, so a retired variable
 > stays on the service until removed by hand; the workflow's "Describe live
