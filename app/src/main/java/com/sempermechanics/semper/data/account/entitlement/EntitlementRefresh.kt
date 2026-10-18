@@ -21,6 +21,18 @@ enum class RefreshVerdict {
     RETRY,
 }
 
+/** What a sign-in does about `/v1/config` once `/v1/me` approved it ([EntitlementRefresh.afterSignIn]). */
+enum class SignInRefresh {
+    /** The answer already read is the one to keep. */
+    NONE,
+
+    /** Ask `/v1/config` again now, before Home opens; queue the retrying one-off if that fails too. */
+    FETCH_AGAIN,
+
+    /** Leave it to the retrying one-off. */
+    QUEUE,
+}
+
 /**
  * When the app asks `/v1/config` for a fresh token outside the periodic
  * refresh, and how long it keeps trying. The glue is `LicenseConfigWorker`
@@ -55,6 +67,22 @@ object EntitlementRefresh {
      * token ends with the lease it was issued under.
      */
     fun retryAfterCheckout(fetch: ConfigFetch): Boolean = fetch == ConfigFetch.FAILED
+
+    /**
+     * After a sign-in's status check, whose `/v1/config` read went
+     * [firstFetch], with [deviceJustRegistered] when this device was
+     * registered by the same check. The backend issues the entitlement token
+     * only to a registered device with a key, and the check reads `/v1/config`
+     * beside `/v1/me`, before it registers the device: a first sign-in on a
+     * phone has to ask again to get its token before Home opens. Otherwise a
+     * read that failed is left to the retrying one-off, so the token does not
+     * wait for the four-hour refresh.
+     */
+    fun afterSignIn(firstFetch: ConfigFetch, deviceJustRegistered: Boolean): SignInRefresh = when {
+        deviceJustRegistered && firstFetch != ConfigFetch.NOT_MADE -> SignInRefresh.FETCH_AGAIN
+        firstFetch == ConfigFetch.FAILED -> SignInRefresh.QUEUE
+        else -> SignInRefresh.NONE
+    }
 
     /** After attempt number [runAttemptCount] (WorkManager's, from 0) went [fetch]. */
     fun afterAttempt(fetch: ConfigFetch, runAttemptCount: Int): RefreshVerdict {

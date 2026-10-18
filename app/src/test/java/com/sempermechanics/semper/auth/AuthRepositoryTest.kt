@@ -67,6 +67,10 @@ class AuthRepositoryTest {
     private fun licenceRefresh(): List<WorkInfo> =
         WorkManager.getInstance(context).getWorkInfosForUniqueWork("license-config-refresh").get()
 
+    /** The retrying one-off `/v1/config` refresh (`LicenseConfigWorker.refreshNow`). */
+    private fun retryQueued(): List<WorkInfo> =
+        WorkManager.getInstance(context).getWorkInfosForUniqueWork("license-config-now").get()
+
     private fun approved(terms: TermsDto? = null, consent: Boolean? = null) =
         MeResponse(uid = "u1", role = "admin", accessStatus = "APPROVED", terms = terms, improvementConsent = consent)
 
@@ -127,6 +131,7 @@ class AuthRepositoryTest {
 
     @Test
     fun `a config read before the invite claim landed is asked again`() = runBlocking {
+        AccountCache.setDeviceRegistered(context, true)
         serverUp(approved().copy(license = MeLicenseDto(mode = "licensed")))
         val answers = ArrayDeque(
             listOf(
@@ -143,11 +148,76 @@ class AuthRepositoryTest {
 
     @Test
     fun `a config that agrees with me is fetched once`() = runBlocking {
+        AccountCache.setDeviceRegistered(context, true)
         serverUp(approved().copy(license = MeLicenseDto(mode = "demo")))
         api.onGetConfig = { AppConfigDto(maxSessions = 25, mode = "demo") }
 
         assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
         assertEquals(1, api.calls.count { it == "getConfig" })
+        assertEquals(emptyList<WorkInfo>(), retryQueued())
+    }
+
+    // ------------------------------------------------- config on sign-in
+
+    @Test
+    fun `a first sign-in on this phone stores the config read after the device is registered`() = runBlocking {
+        // The backend issues the entitlement token only to a registered
+        // device, so the read beside /v1/me carries none on a new phone.
+        serverUp()
+        val answers = ArrayDeque(
+            listOf(
+                AppConfigDto(maxSessions = 25, mode = "demo"),
+                AppConfigDto(maxSessions = 500, mode = "licensed", cloudBackupEnabled = true),
+            ),
+        )
+        api.onGetConfig = { answers.removeFirst() }
+
+        assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
+
+        val order = api.calls.filter { it == "getConfig" || it == "registerDevice" }
+        assertEquals(listOf("getConfig", "registerDevice", "getConfig"), order)
+        assertEquals("the second answer is the one stored", 500, AppRemoteConfig.maxSessions(context))
+        assertEquals(WorkInfo.State.ENQUEUED, licenceRefresh().single().state)
+        assertEquals(emptyList<WorkInfo>(), retryQueued())
+    }
+
+    @Test
+    fun `a first sign-in whose second config read fails queues the retrying refresh`() = runBlocking {
+        serverUp()
+        val answers = ArrayDeque<() -> AppConfigDto>(
+            listOf({ AppConfigDto(maxSessions = 25, mode = "demo") }, { throw IOException("dropped") }),
+        )
+        api.onGetConfig = { answers.removeFirst()() }
+
+        assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
+
+        assertEquals(2, api.calls.count { it == "getConfig" })
+        assertEquals(25, AppRemoteConfig.maxSessions(context))
+        assertEquals(WorkInfo.State.ENQUEUED, retryQueued().single().state)
+    }
+
+    @Test
+    fun `a later status check on a registered phone asks config once`() = runBlocking {
+        AccountCache.setDeviceRegistered(context, true)
+        serverUp()
+        api.onGetConfig = { AppConfigDto(maxSessions = 25, mode = "demo") }
+
+        assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
+
+        assertEquals(1, api.calls.count { it == "getConfig" })
+        assertFalse("registerDevice" in api.calls)
+        assertEquals(emptyList<WorkInfo>(), retryQueued())
+    }
+
+    @Test
+    fun `a failed config read on a registered phone queues the retrying refresh`() = runBlocking {
+        AccountCache.setDeviceRegistered(context, true)
+        serverUp()
+
+        assertEquals(AccessStatus.APPROVED, repo.refreshStatus().getOrThrow())
+
+        assertEquals(1, api.calls.count { it == "getConfig" })
+        assertEquals(WorkInfo.State.ENQUEUED, retryQueued().single().state)
     }
 
     @Test

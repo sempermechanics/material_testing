@@ -3,6 +3,9 @@ package com.sempermechanics.semper.data.account
 import android.content.Context
 import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.account.AuthRepository.AccessLostException
+import com.sempermechanics.semper.data.account.entitlement.ConfigFetch
+import com.sempermechanics.semper.data.account.entitlement.EntitlementRefresh
+import com.sempermechanics.semper.data.account.entitlement.SignInRefresh
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.AppConfigDto
@@ -55,9 +58,25 @@ internal class AccessStatusResolver(
         syncPendingTermsAcceptance(token)
         // The periodic refresh starts once there is a config to keep fresh,
         // on sign-in and on every launch's status check alike. KEEP makes a
-        // repeat free; a failed read leaves it to the next reconcile's fetch.
-        if (AppRemoteConfig.record(appContext, config)) LicenseConfigWorker.enqueue(appContext)
-        ensureDeviceRegistered(token)
+        // repeat free.
+        val answered = AppRemoteConfig.record(appContext, config)
+        if (answered) LicenseConfigWorker.enqueue(appContext)
+        val registeredNow = ensureDeviceRegistered(token)
+        // `/v1/config`, and the entitlement token only it carries, is stored
+        // before this returns and Home opens (EntitlementRefresh.afterSignIn):
+        // asked again after this device was first registered, otherwise left
+        // to the retrying one-off when the read failed.
+        val firstFetch = if (answered) ConfigFetch.ANSWERED else ConfigFetch.FAILED
+        when (EntitlementRefresh.afterSignIn(firstFetch, registeredNow)) {
+            SignInRefresh.NONE -> Unit
+            SignInRefresh.QUEUE -> LicenseConfigWorker.refreshNow(appContext)
+            SignInRefresh.FETCH_AGAIN ->
+                if (AppRemoteConfig.record(appContext, suspendRunCatching { api.getConfig(token) })) {
+                    LicenseConfigWorker.enqueue(appContext)
+                } else {
+                    LicenseConfigWorker.refreshNow(appContext)
+                }
+        }
         return Result.success(AccessStatus.APPROVED)
     }
 
@@ -153,11 +172,13 @@ internal class AccessStatusResolver(
             .onFailure { Timber.d(it, "Terms acceptance still not synced") }
     }
 
-    private suspend fun ensureDeviceRegistered(idToken: String) {
-        if (AccountCache.isDeviceRegistered(appContext)) return
+    /** Registers this device once; true when it was registered just now. */
+    private suspend fun ensureDeviceRegistered(idToken: String): Boolean {
+        if (AccountCache.isDeviceRegistered(appContext)) return false
         api.registerDevice(idToken) // throws DeviceConflictException on 409
         AccountCache.setDeviceRegistered(appContext, true)
         Timber.d("Device registered with backend")
+        return true
     }
 
     private companion object {
