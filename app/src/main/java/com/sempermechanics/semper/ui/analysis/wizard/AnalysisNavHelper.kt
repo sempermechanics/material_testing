@@ -47,7 +47,8 @@ object AnalysisNavHelper {
         viewModel: AnalysisViewModel,
         sweep: Boolean,
     ): Boolean = (!viewModel.wouldCreateNewSession(sweep) || ensureUpToDate(host)) &&
-        ensureSeat(host, viewModel, sweep) && ensureSessionQuota(host, viewModel, sweep)
+        ensureSeat(host, viewModel, sweep) &&
+        ensureSessionQuota(host, viewModel, sweep)
 
     /**
      * Hard stop while the backend requires a newer build
