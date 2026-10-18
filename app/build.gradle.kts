@@ -99,7 +99,7 @@ android {
 
     defaultConfig {
         applicationId = "com.sempermechanics.semper"
-        minSdk = 24
+        minSdk = 30
         targetSdk = 36
         // Overridable from the release workflow: -PversionCode / -PversionName.
         // Every build handed to anyone must bump versionCode (see docs/ops/RELEASING.md).

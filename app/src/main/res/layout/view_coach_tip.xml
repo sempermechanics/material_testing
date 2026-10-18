@@ -21,8 +21,7 @@
         android:forceDarkAllowed="false"
         android:importantForAccessibility="no"
         android:scaleType="fitCenter"
-        android:visibility="gone"
-        tools:targetApi="q" />
+        android:visibility="gone" />
 
     <!-- Polite live region: TalkBack reads each tip as it appears. -->
     <TextView

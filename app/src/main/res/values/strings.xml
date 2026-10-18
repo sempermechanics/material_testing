@@ -156,7 +156,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="summary_cancel_desc">Cancel summary</string>
     <string name="summary_failed">Could not build the animation.</string>
     <string name="summary_no_data">No correlated data to animate.</string>
-    <string name="summary_needs_android_9">Showing the first frame — animation needs Android 9 or newer.</string>
     <string name="frame_number_hint">#</string>
     <string name="frame_total_fmt">" / %1$d"</string>
     <string name="video">Video</string>

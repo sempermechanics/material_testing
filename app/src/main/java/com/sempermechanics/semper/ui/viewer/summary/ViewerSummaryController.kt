@@ -5,17 +5,14 @@
 
 package com.sempermechanics.semper.ui.viewer.summary
 
-import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.toDrawable
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.progressindicator.LinearProgressIndicator
@@ -239,19 +236,13 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
 
     /**
      * The GIF as something the slot can show, decoded off the main thread: an
-     * animated drawable from API 28, else its first frame. Null when it does not
-     * decode.
+     * animated drawable (minSdk 30 always has AnimatedImageDrawable). Null when
+     * it does not decode.
      */
     private suspend fun decodeForDisplay(file: File): Drawable? = withContext(Dispatchers.IO) {
-        // AnimatedImageDrawable arrived in API 28; below that the same GIF still
-        // builds and shares, it just does not move on screen.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            runCatching { ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) }
-                .onFailure { Timber.w(it, "Could not decode the summary animation") }
-                .getOrNull()
-        } else {
-            runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull()?.toDrawable(host.resources)
-        }
+        runCatching { ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) }
+            .onFailure { Timber.w(it, "Could not decode the summary animation") }
+            .getOrNull()
     }
 
     private fun display(drawable: Drawable?) {
@@ -260,12 +251,8 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
             return
         }
         image.setImageDrawable(drawable)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            hideStatus()
-            (drawable as? Animatable)?.start()
-        } else {
-            showMessage(R.string.summary_needs_android_9)
-        }
+        hideStatus()
+        (drawable as? Animatable)?.start()
     }
 
     private fun startPlayback() {

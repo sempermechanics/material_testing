@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
 import android.util.Size
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -64,26 +62,7 @@ class MediaGridAdapter(
     }
 
     private fun platformThumbnail(item: MediaStoreBrowser.Item): Bitmap? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            resolver.loadThumbnail(item.uri, Size(THUMB_EDGE, THUMB_EDGE), null)
-        } else {
-            @Suppress("DEPRECATION")
-            if (item.isVideo) {
-                MediaStore.Video.Thumbnails.getThumbnail(
-                    resolver,
-                    item.id,
-                    MediaStore.Video.Thumbnails.MINI_KIND,
-                    null,
-                )
-            } else {
-                MediaStore.Images.Thumbnails.getThumbnail(
-                    resolver,
-                    item.id,
-                    MediaStore.Images.Thumbnails.MINI_KIND,
-                    null,
-                )
-            }
-        }
+        resolver.loadThumbnail(item.uri, Size(THUMB_EDGE, THUMB_EDGE), null)
 
     class Holder(row: ItemMediaTileBinding) : RecyclerView.ViewHolder(row.root) {
         val thumb = row.imgMediaThumb
