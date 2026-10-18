@@ -54,7 +54,8 @@ days (`ops/monitoring/slo/availability.json`); an internal objective, not an SLA
 
 Notice before raising the minimum version or removing a customer-visible backend
 behaviour: **TBD** (period, channel). The Terms state none today (TD-258). The
-in-app nudge (`RECOMMENDED_VERSION_CODE`) is the earliest technical notice; raise it
+in-app nudge (`RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` for this app,
+`RECOMMENDED_VERSION_CODE` for Semper) is the earliest technical notice; raise it
 one release before the minimum.
 
 ## Release notes

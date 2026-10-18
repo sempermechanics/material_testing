@@ -83,7 +83,8 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
 every customer-visible backend change it depends on. The first release built
 after 2026-10-18 must say that **Android 11 (API 30) is now the minimum**: phones
 on Android 7–10 cannot install or update it, and keep the version they have,
-which the backend may later gate (`MIN_SUPPORTED_VERSION_CODE`, or the `_MATERIAL_TESTING` pair for Material Testing).
+which the backend may later gate (for this app, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING`;
+`MIN_SUPPORTED_VERSION_CODE` is Semper's).
 
 ## Staged rollout on Google Play
 
@@ -130,7 +131,7 @@ Play cannot recall a build. In order of speed:
 | Lever | Effect | How |
 |---|---|---|
 | `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` in every build that reads it, without a release | Repo variable, space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)) |
-| `MIN_SUPPORTED_VERSION_CODE` | Semper builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE` only nudges. Material Testing has its own pair, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`, because its versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:280-287`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
+| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` | Material Testing builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` only nudges. Semper has its own pair, `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE`, because each app's versionCodes come from its own release counter (`settings.release_gate(app)`, `backend/app/config.py:280-287`) | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Repo variable, redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
 | `APP_CHECK_MODE` | `enforce` back to `monitor` or `off` | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) |
 | Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1`; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |

@@ -286,7 +286,8 @@ Required secrets / vars (repo-level on Free private orgs is fine — Environment
 `SUPPORT_EMAIL`, `NOTIFY_FROM`, async provisioning `TASKS_QUEUE`,
 `TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`; optional
 `CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
-`MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, `KILL_SWITCHES`
+`MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE` (Semper's release gate),
+their `_MATERIAL_TESTING` pair (this app's), `KILL_SWITCHES`
 (space-separated) and `ENTITLEMENT_SIGNING_SECRET` (a Secret Manager secret name,
 mounted as `ENTITLEMENT_SIGNING_KEY` only when it exists), all in
 [ENVIRONMENTS.md](ENVIRONMENTS.md).
