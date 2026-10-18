@@ -52,6 +52,7 @@ class SealedRecordStoreTest {
 
         override fun markSealing() {
             step("mark")
+            stored = null
             mark = true
         }
 
@@ -138,6 +139,22 @@ class SealedRecordStoreTest {
 
         assertEquals(StoredEntitlement.Nothing, SealedRecordStore.load(disk))
         assertNull(disk.stored)
+        assertEquals(TokenStatus.NotUsed, statusOf(disk))
+    }
+
+    @Test
+    fun `a record left by a lost key and a crash in the next first seal reads as no token`() {
+        // The key went (Keystore loss, or a restore that brought the
+        // preferences back without it) and the record was not tidied away;
+        // the next seal makes a new key, and the process dies before writing.
+        val disk = saved()
+        disk.key = null
+        disk.crashAt = "commit"
+        assertThrows(Crash::class.java) { SealedRecordStore.save(disk, record) }
+        disk.crashAt = null
+
+        assertNull("the old record went with the mark, not after the new key", disk.stored)
+        assertEquals(StoredEntitlement.Nothing, SealedRecordStore.load(disk))
         assertEquals(TokenStatus.NotUsed, statusOf(disk))
     }
 

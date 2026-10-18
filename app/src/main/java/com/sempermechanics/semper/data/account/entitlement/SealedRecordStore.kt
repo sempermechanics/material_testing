@@ -19,7 +19,12 @@ interface EntitlementDisk {
 
     fun key(): KeyPresence
 
-    /** Note, durably, that a first seal is starting, before its key exists. */
+    /**
+     * Note, durably, that a first seal is starting, before its key exists,
+     * and remove any record left from a key that is gone, in one write: that
+     * record's MAC cannot match the new key, so a crash before the new record
+     * is written must not leave the two side by side.
+     */
     fun markSealing()
 
     fun createKey()
@@ -38,9 +43,10 @@ interface EntitlementDisk {
  * process that dies at any step leaves something [EntitlementPolicy.reading]
  * reads as "no token" rather than as tampering:
  *
- * - a first seal marks itself, then makes the key, then writes the record and
- *   clears the mark in one commit: a crash after the key leaves key + mark,
- *   which reads as no token and drops the key;
+ * - a first seal marks itself (dropping any record a lost key left behind),
+ *   then makes the key, then writes the record and clears the mark in one
+ *   commit: a crash after the key leaves key + mark, which reads as no token
+ *   and drops the key, never an old record beside a new key;
  * - a clear deletes the key before the record: a crash between leaves a
  *   record with no key, which reads as no token and drops the record;
  * - a lost Keystore key leaves the same, and reads the same.
