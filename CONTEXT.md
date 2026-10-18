@@ -154,7 +154,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ADR and TD numbers are shared: ADR-008, 009, 011, 012 and 022 and TD-133–135,
   TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-270 (TD-214–TD-269 are the readiness rows); check
+  free in both registers is TD-274 (TD-214–TD-273 are the readiness rows); check
   both before taking one.
 - **Branch `claude/new-session-jhfhj9`** (not merged, not deployed; ported from
   semperdic-app's branch of that name): the readiness-framework cross-check
@@ -169,6 +169,12 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   deploy from semperdic-app. Owed: the same external actions (TD-214–TD-217, TD-226,
   TD-229–TD-232); for a release, this repo's `SEMPER_ENTITLEMENT_PUBKEYS` variable and
   `SEMPER_API_CERT_PINS` secret; and a first CI run of the Android half here (TD-219).
+- **Branch `claude/readiness-followups-jhfhj9`** on it (not merged, not deployed; ported
+  from semperdic-app's branch of that name): the shared backend's Auth Admin budget, hashed
+  audit addresses, wider erasure, `POST …/licenses/search` and release-train labels; the
+  consoles' roster tools for staff; dashboards as code. TD-270–TD-273. The backend,
+  consoles, indexes and monitoring deploy only from semperdic-app, in its order (indexes,
+  backend, gateway, Hosting, monitoring); never deploy Hosting from this repo.
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
