@@ -144,15 +144,29 @@ export function errorDetail(detail) {
 /**
  * The staff desk's licence-list URL. Demo keys and revoked licences are
  * left out by the backend unless asked for, so a page holds the licences
- * anyone sold instead of one Demo key per account.
+ * anyone sold instead of one Demo key per account. A search is not a list:
+ * it is `licenceSearchBody`, sent as a POST, so the address searched for is
+ * never in a URL (TD-244).
  */
-export function licenceListPath({ limit, showDemo = false, showRevoked = false, pageToken = "", q = "" }) {
+export function licenceListPath({ limit, showDemo = false, showRevoked = false, pageToken = "" }) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (showDemo) params.set("include_demo", "true");
   if (!showRevoked) params.set("include_revoked", "false");
-  if (q) params.set("q", q);
-  else if (pageToken) params.set("page_token", pageToken);
+  if (pageToken) params.set("page_token", pageToken);
   return `/v1/admin/licenses?${params}`;
+}
+
+/**
+ * The JSON body of a licence search (`POST /v1/admin/licenses/search`):
+ * `{q, limit?, page_token?}`. The text searched for is an address often
+ * enough that it belongs in a body, which no access log records, rather
+ * than in `?q=`, which every one does.
+ */
+export function licenceSearchBody({ q, limit, pageToken = "" }) {
+  const body = { q: String(q ?? "").trim() };
+  if (Number.isInteger(limit)) body.limit = limit;
+  if (pageToken) body.page_token = pageToken;
+  return JSON.stringify(body);
 }
 
 /**

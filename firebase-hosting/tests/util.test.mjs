@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   esc, when, day, licenceState, licenceStatePill, holdsLicence, leaseHeld, seatCells, seatDevices, inviteCells,
-  errorDetail, licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
+  errorDetail, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence, alreadyLicensedId,
   isoDay, emailList, licenceEditPatch, daysLeft, reauthMethods, unfinishedStepUpText,
 } from "../public/console/util.js";
 
@@ -131,11 +131,18 @@ test("the licence list asks the backend to leave Demo and revoked rows out", () 
     licenceListPath({ limit: 50, showDemo: true, showRevoked: true, pageToken: "abc" }),
     "/v1/admin/licenses?limit=50&include_demo=true&page_token=abc",
   );
-  // A search is not a page: the token is dropped.
+  // A search is never a query parameter (TD-244): it is licenceSearchBody.
   assert.equal(
-    licenceListPath({ limit: 50, showRevoked: true, pageToken: "abc", q: "a@b.com" }),
-    "/v1/admin/licenses?limit=50&q=a%40b.com",
+    licenceListPath({ limit: 50, showRevoked: true, q: "a@b.com" }),
+    "/v1/admin/licenses?limit=50",
   );
+});
+
+test("a licence search is a JSON body: the text, the page size and any page token", () => {
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: " a@b.com ", limit: 50 })), { q: "a@b.com", limit: 50 });
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: "uni.edu", limit: 50, pageToken: "t2" })),
+    { q: "uni.edu", limit: 50, page_token: "t2" });
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: null })), { q: "" });
 });
 
 test("only an address, a domain or a key prefix is sent as a search", () => {

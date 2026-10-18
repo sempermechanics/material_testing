@@ -83,12 +83,12 @@ test("a delete the network lost keeps the row and says why", async () => {
 
 test("a deleted licence found by a search leaves the search results too", async () => {
   await openDesk({ routes: {
-    "GET /v1/admin/licenses?limit=50&include_revoked=false&q=pat%40lab.org": () => json(200, { licenses: [IND] }),
+    "POST /v1/admin/licenses/search": () => json(200, { licenses: [IND] }),
     [DELETE(IND)]: () => json(200, { purgeAt: at(30) }),
   } });
   $("filter").value = "pat@lab.org";
   await click($("reload")); // a reload with a searchable filter searches again
-  assert.deepEqual(sent(/q=/), ["GET /v1/admin/licenses?limit=50&include_revoked=false&q=pat%40lab.org"]);
+  assert.deepEqual(sent(/search/), ["POST /v1/admin/licenses/search"]);
   assert.deepEqual(labels(), ["SEMP-IND1"]);
   confirms.answer(true);
   prompts.answer("SEMP-IND1");

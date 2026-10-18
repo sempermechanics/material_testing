@@ -314,7 +314,7 @@ test("the filter narrows loaded rows at once, by key, domain, address or note", 
   type("nothing here");
   assert.equal($("licenceRows").textContent.trim(),
     "No licences match. Clear the filter, or tick Show revoked or Show Demo keys.");
-  assert.deepEqual(sent(/q=/), [], "free text is not a backend search");
+  assert.deepEqual(sent(/search/), [], "free text is not a backend search");
 });
 
 test("an address is also searched on the backend, after a pause in typing", async () => {
@@ -322,18 +322,20 @@ test("an address is also searched on the backend, after a pause in typing", asyn
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
     await open({ routes: {
-      "GET /v1/admin/licenses?limit=50&include_revoked=false&q=far%40else.org":
-        () => json(200, { licenses: [other] }),
+      "POST /v1/admin/licenses/search": () => json(200, { licenses: [other] }),
     } });
     $("filter").value = "far@else.org";
     $("filter").dispatch("input");
     assert.equal($("licenceRows").textContent.trim(), "Searching…");
     mock.timers.tick(299);
     await settle();
-    assert.deepEqual(sent(/q=/), []);
+    assert.deepEqual(sent(/search/), []);
     mock.timers.tick(1);
     await settle();
     assert.deepEqual(labels(), ["SEMP-FAR1"], "a licence on no loaded page is found");
+    // TD-244: the address goes in the body, never in a URL a log records.
+    assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "POST").body), { q: "far@else.org", limit: 50 });
+    assert.deepEqual(net.requests.filter((r) => r.url.includes("else.org")), []);
   } finally {
     mock.timers.reset();
   }
