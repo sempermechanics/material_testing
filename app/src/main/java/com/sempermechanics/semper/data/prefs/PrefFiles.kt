@@ -119,6 +119,9 @@ object PrefFiles {
         val LICENSE_DURATION = PrefKey.string("license_duration", "perpetual")
         val LICENSE_EXPIRES_AT = PrefKey.long("license_expires_at", 0L)
         val IN_GRACE = PrefKey.boolean("license_in_grace")
+
+        /** `licenseGraceEndsAt`, epoch millis; 0 = none on file. */
+        val GRACE_ENDS_AT = PrefKey.long("license_grace_ends_at", 0L)
         val SEATING = PrefKey.string("license_seating", "assigned")
         val HEARTBEAT_MINUTES = PrefKey.int("lease_heartbeat_minutes")
         val FETCHED_AT = PrefKey.long("fetched_at")

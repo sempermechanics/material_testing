@@ -32,7 +32,7 @@ internal class HomeQuotaCard(
 
     /**
      * At the account's analysis limit ([SessionQuota.blocked]), opens the
-     * persistent limit screen (email support) and says so; Home's every quota
+     * persistent limit screen and says so; Home's every quota
      * gate goes through here. [localCount] is the phone's rows when the caller
      * has just counted them; a tap on the main thread uses the count the
      * index's last write stored ([SessionQuota.blockedNow]).
@@ -106,6 +106,9 @@ internal class HomeQuotaCard(
      * `mode`; this notice is suppressed entirely when the cached config is too
      * old to trust, so a renewal that landed while the device was offline
      * cannot show up here as a false alarm.
+     *
+     * Informational only ([HomeLicenseNotice]): what the licence does and
+     * until when, never a call to renew or buy.
      */
     private fun updateLicenseNotice() {
         val days = LicenseEntitlements.expiryNoticeDays(activity)
@@ -113,18 +116,22 @@ internal class HomeQuotaCard(
             licenseView.isVisible = false
             return
         }
-        val support = activity.getString(R.string.support_email)
         licenseView.isVisible = true
-        licenseView.text = when {
-            LicenseEntitlements.isInGrace(activity) -> activity.getString(R.string.license_grace_fmt, support)
-            // Past its day on a config fetched before it ended: the cache
-            // cannot say whether grace applies, only that the day has gone.
-            days < 0L -> activity.getString(R.string.license_expired_fmt, support)
-            days == 0L -> activity.getString(R.string.license_expiring_today_fmt, support)
-            else -> activity.resources.getQuantityString(
+        val notice = HomeLicenseNotice.of(
+            inGrace = LicenseEntitlements.isInGrace(activity),
+            days = days,
+            graceEndsAtMs = AppRemoteConfig.licenseGraceEndsAtMs(activity),
+        )
+        licenseView.text = when (notice) {
+            is HomeLicenseNotice.Notice.GraceUntil ->
+                activity.getString(R.string.license_grace_until_fmt, HomeLicenseNotice.formatDay(notice.endsAtMs))
+            HomeLicenseNotice.Notice.Grace -> activity.getString(R.string.license_grace)
+            HomeLicenseNotice.Notice.Expired -> activity.getString(R.string.license_expired)
+            HomeLicenseNotice.Notice.ExpiresToday -> activity.getString(R.string.license_expiring_today)
+            is HomeLicenseNotice.Notice.ExpiresIn -> activity.resources.getQuantityString(
                 R.plurals.license_expiring_fmt,
-                days.toInt(),
-                days.toInt(),
+                notice.days,
+                notice.days,
             )
         }
         licenseView.setTextColor(

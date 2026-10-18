@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.ui.common
 
 import androidx.annotation.StringRes
+import androidx.core.view.isVisible
 import com.sempermechanics.semper.databinding.ViewSettingsSectionHeaderBinding
 
 /**
@@ -25,5 +26,14 @@ object SettingsSectionHeader {
         val text = header.root.context.getText(title)
         header.tvSectionTitle.text = text
         header.imgSectionChevron.contentDescription = text
+    }
+
+    /**
+     * Shows [header]'s lock while the account's licence does not include its
+     * section ([com.sempermechanics.semper.data.policy.FeatureAccess.LOCKED]).
+     * The section still opens: it shows its controls disabled, with the note.
+     */
+    fun setLocked(header: ViewSettingsSectionHeaderBinding, locked: Boolean) {
+        header.imgSectionLock.isVisible = locked
     }
 }

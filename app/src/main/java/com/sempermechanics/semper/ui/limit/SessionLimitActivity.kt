@@ -2,7 +2,6 @@ package com.sempermechanics.semper.ui.limit
 
 import android.os.Bundle
 import android.view.View
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.MainThread
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
@@ -15,8 +14,6 @@ import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivitySessionLimitBinding
-import com.sempermechanics.semper.ui.account.ActivateLicenseActivity
-import com.sempermechanics.semper.ui.account.LicenseActivation
 import com.sempermechanics.semper.ui.common.Insets
 import com.sempermechanics.semper.ui.common.auth.SupportMail
 import com.sempermechanics.semper.ui.common.auth.contextLines
@@ -26,19 +23,16 @@ import kotlinx.coroutines.launch
 
 /**
  * Persistent gate shown when the account's cloud analysis quota is full. Unlike
- * a transient warning, this screen stays until the limit is resolved: it directs
- * the user to email support@sempermechanics.com to raise their limit, and lets them
- * re-check or go back to manage (delete) existing analyses.
+ * a transient warning, this screen stays until the limit is resolved. The cap
+ * counts stored analyses, so the way on is to delete one and re-check; an
+ * account that expects a seat or a licence taps Refresh licence. Support can
+ * be mailed, neutrally: the app only consumes the licence the account holds,
+ * so nothing here asks for a higher limit, a price or a purchase.
  */
 @MainThread
 class SessionLimitActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySessionLimitBinding
-
-    /** A licence activated from here lifts demo's limit, so check again at once. */
-    private val activateLicense = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == RESULT_OK) recheck()
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,14 +40,13 @@ class SessionLimitActivity : AppCompatActivity() {
         setContentView(binding.root)
         Insets.padVertical(binding.limitRoot)
 
-        binding.tvLimitBody.text = getString(R.string.limit_body_fmt, getString(R.string.support_email))
+        binding.tvLimitBody.setText(R.string.limit_body)
         renderQuota()
 
         binding.btnEmailSupport.setOnClickListener { emailSupport() }
         binding.btnRecheckLimit.setOnClickListener { recheck() }
+        binding.btnRefreshLicense.setOnClickListener { refreshLicense() }
         binding.tvLimitBack.setOnClickListener { finish() }
-        binding.btnActivateLicense.isVisible = LicenseActivation.isOffered(this)
-        binding.btnActivateLicense.setOnClickListener { activateLicense.launch(ActivateLicenseActivity.intent(this)) }
     }
 
     private fun renderQuota() {
@@ -68,18 +61,36 @@ class SessionLimitActivity : AppCompatActivity() {
         }
     }
 
-    /** Opens the mail app pre-filled to support with account + device context. */
+    /**
+     * Opens the mail app on a neutral message to support, with the account,
+     * its quota and the device underneath: the blank lines leave the cursor
+     * above them, as Settings' support mail does. It asks for nothing.
+     */
     private fun emailSupport() {
         val email = AccountCache.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
         val quota = "Quota: ${AccountCache.quotaUsed(this)}/${LicenseEntitlements.shownAnalysisCap(this)}"
         val context = SupportMail.contextLines(email, DeviceKeys.deviceId(this), extra = listOf(quota))
-        val body = "I've reached my Semper analysis limit and would like it raised.\n\n$context"
         SupportMail.open(
             this,
             subject = getString(R.string.limit_subject) + " — " + email,
-            body = body,
-            purpose = "the limit request",
+            body = "\n\n---\n$context",
+            purpose = "support from the limit screen",
         )
+    }
+
+    /**
+     * For an account that expects a seat or a licence: ask `/v1/config` now
+     * ([LicenseRefresh]), say what it found, and when the licence changed run
+     * the limit check again, which closes this screen once there is room.
+     */
+    private fun refreshLicense() {
+        setLoading(true)
+        lifecycleScope.launch {
+            val outcome = LicenseRefresh.run(this@SessionLimitActivity)
+            setLoading(false)
+            Feedback.toast(this@SessionLimitActivity, outcome.result.messageRes, long = true)
+            if (outcome.changed) recheck() else renderQuota()
+        }
     }
 
     /** Re-query the backend; if the account is under the limit again, dismiss. */
@@ -119,6 +130,7 @@ class SessionLimitActivity : AppCompatActivity() {
         binding.progressLimit.setBusy(
             loading,
             binding.btnRecheckLimit,
+            binding.btnRefreshLicense,
             binding.btnEmailSupport,
             idleVisibility = View.INVISIBLE,
         )

@@ -101,43 +101,21 @@ object ApiErrors {
     const val FEATURE_NOT_LICENSED = "feature_not_licensed"
 
     /**
+     * A kill switch has the feature off for now (503, with `Retry-After`):
+     * upload or backup on `POST /v1/sessions` and `…/files/{id}/complete`,
+     * restore on `GET /v1/files/{id}/content` and `…/sessions/{sid}/bundle`.
+     *
+     * Not a fault and not a licence refusal: an upload waits and retries, a
+     * restore or download says the feature is paused. Never shown as
+     * [FEATURE_NOT_LICENSED].
+     */
+    const val FEATURE_PAUSED = "feature_paused"
+
+    /**
      * This device is not the one the licence is bound to (403). Usually means
      * restore was attempted before the lock moved, or on the wrong phone.
      */
     const val LICENSE_DEVICE_MISMATCH = "license_device_mismatch"
-
-    // The refusals of `POST /v1/licenses/activate` (`backend/app/repo/activation.py`),
-    // shown by the activation screen (`ui/account/ActivationError`).
-
-    /** No licence has the typed key (404). */
-    const val LICENSE_NOT_FOUND = "license_not_found"
-
-    /** The licence was revoked (403). */
-    const val LICENSE_REVOKED = "license_revoked"
-
-    /** The licence is past its expiry and grace (403). */
-    const val LICENSE_EXPIRED = "license_expired"
-
-    /** The key is locked to another email address, or another institution's domain (403). */
-    const val LICENSE_EMAIL_MISMATCH = "license_email_mismatch"
-
-    /** Another account already redeemed this individual key (409). */
-    const val LICENSE_ALREADY_REDEEMED = "license_already_redeemed"
-
-    /** The institution licence has no seat left (409). */
-    const val LICENSE_SEATS_EXHAUSTED = "license_seats_exhausted"
-
-    /** The caller's seat on the institution licence is on hold (409). */
-    const val LICENSE_SEAT_DISABLED = "license_seat_disabled"
-
-    /** The account already holds, or is promised, a different live licence (409). */
-    const val ALREADY_LICENSED = "already_licensed"
-
-    /** The claim lost every attempt to concurrent requests; nothing was granted, retry (503). */
-    const val CLAIM_CONTENDED = "claim_contended"
-
-    /** Binding the empty device lock lost every attempt; nobody holds it, retry (503). */
-    const val DEVICE_LOCK_CONTENDED = "device_lock_contended"
 
     /**
      * The `detail` of an error [body], or the trimmed body when it is not the

@@ -176,25 +176,6 @@ class SemperApi @VisibleForTesting internal constructor(
     }
 
     /**
-     * POST /v1/licenses/activate — redeem a license key (individual or
-     * institution; the backend tells them apart by the key itself).
-     * Bearer + `X-Device-Id` like [registerDevice], **not** device-signed: the
-     * backend route is `current_user` + a plain `X-Device-Id` header, no
-     * challenge/nonce/signature. Every subsequent signed/bearer call still
-     * re-validates the resulting lock (see [AppRemoteConfig] /
-     * `revalidate_device_lock` in the backend) — this call only kicks it off.
-     *
-     * Throws [ApiException] with the backend's error code as `detail` for a
-     * mismatch/revoked/exhausted key (`license_email_mismatch`,
-     * `license_device_mismatch`, `license_revoked`, `license_seat_disabled`,
-     * `license_seats_exhausted`, `license_already_redeemed`, `license_not_found`).
-     */
-    override suspend fun activateLicense(idToken: String, key: String): AppConfigDto = calls.bearer(
-        idToken,
-        route = { url(endpoint("/v1/licenses/activate")).post(jsonBody(LicenseActivateRequest(key = key))) },
-    ) { decode<LicenseActivateResponse>(it).config }
-
-    /**
      * POST /v1/licenses/checkout — take or renew a floating seat.
      *
      * Calling it again IS the heartbeat: renewing does not consume a second

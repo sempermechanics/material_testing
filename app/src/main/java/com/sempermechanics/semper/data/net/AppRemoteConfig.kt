@@ -101,6 +101,7 @@ object AppRemoteConfig {
             put(RemoteConfig.LICENSE_DURATION, resolveDuration(config))
             put(RemoteConfig.LICENSE_EXPIRES_AT, parseInstant(config.licenseExpiresAt))
             put(RemoteConfig.IN_GRACE, config.inGrace)
+            put(RemoteConfig.GRACE_ENDS_AT, parseInstant(config.licenseGraceEndsAt))
             put(RemoteConfig.SEATING, resolveSeating(config))
             put(RemoteConfig.HEARTBEAT_MINUTES, config.leaseHeartbeatMinutes.coerceAtLeast(0))
             put(RemoteConfig.FETCHED_AT, now)
@@ -293,6 +294,9 @@ object AppRemoteConfig {
 
     /** Past expiry but still fully entitled — warn, do not gate. */
     fun isInGrace(context: Context): Boolean = prefs(context)[RemoteConfig.IN_GRACE]
+
+    /** Epoch millis entitlement ends (expiry plus grace), or [NO_INSTANT] when none is on file. */
+    fun licenseGraceEndsAtMs(context: Context): Long = prefs(context)[RemoteConfig.GRACE_ENDS_AT]
 
     /** `assigned` or `floating`; assigned until a response says otherwise. */
     fun licenseSeating(context: Context): String =

@@ -72,6 +72,7 @@ class AppRemoteConfigPolicyTest {
 
         assertTrue(LicenseEntitlements.isLicensed(context))
         assertFalse(LicenseEntitlements.shareEnabled(context))
+        assertTrue("still in the licence: paused, not locked", LicenseEntitlements.shareLicensed(context))
         assertTrue(LicenseEntitlements.cloudBackupEnabled(context))
         assertTrue(LicenseEntitlements.restoreEnabled(context))
     }
@@ -81,6 +82,7 @@ class AppRemoteConfigPolicyTest {
         AppRemoteConfig.record(context, Result.success(licensed.copy(killSwitches = listOf("backup"))))
 
         assertFalse(LicenseEntitlements.cloudBackupEnabled(context))
+        assertTrue("still in the licence: hidden by policy, not locked", LicenseEntitlements.backupLicensed(context))
         assertFalse(LicenseEntitlements.restoreEnabled(context))
         assertTrue(LicenseEntitlements.shareEnabled(context))
         assertFalse(AppPolicy.uploadAllowed(context))

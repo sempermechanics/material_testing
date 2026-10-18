@@ -32,7 +32,6 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
     var onGetConfig: suspend (String) -> AppConfigDto = { unscripted("getConfig") }
     var onExportAccount: suspend (String, File) -> Unit = { _, _ -> unscripted("exportAccount") }
     var onRegisterDevice: suspend (String) -> Unit = { unscripted("registerDevice") }
-    var onActivateLicense: suspend (String, String) -> AppConfigDto = { _, _ -> unscripted("activateLicense") }
     var onCheckoutLease: suspend (String) -> AppConfigDto = { unscripted("checkoutLease") }
     var onReleaseLease: suspend (String) -> AppConfigDto = { unscripted("releaseLease") }
     var onAcceptTerms: suspend (String, String) -> Unit = { _, _ -> unscripted("acceptTerms") }
@@ -59,9 +58,6 @@ class FakeCloudApi(override var enabled: Boolean = true) : CloudApi {
         record("exportAccount") { onExportAccount(idToken, dest) }
 
     override suspend fun registerDevice(idToken: String) = record("registerDevice") { onRegisterDevice(idToken) }
-
-    override suspend fun activateLicense(idToken: String, key: String) =
-        record("activateLicense") { onActivateLicense(idToken, key) }
 
     override suspend fun checkoutLease(idToken: String) = record("checkoutLease") { onCheckoutLease(idToken) }
 
