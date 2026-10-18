@@ -156,6 +156,28 @@ class RetryOnTransientTest {
         assertEquals(2, server.requestCount)
     }
 
+    @Test
+    fun `a kill switch's pause is answered at once, body intact, not waited out`() {
+        val paused = """{"detail":"feature_paused"}"""
+        server.enqueue(
+            MockResponse(
+                code = HttpStatus.SERVICE_UNAVAILABLE,
+                headers = Headers.headersOf("Retry-After", "300"),
+                body = paused,
+            ),
+        )
+        server.enqueue(ok())
+
+        // A restore's GET: retried, it would sit out two capped backoffs for
+        // an answer that lasts minutes, then say paused anyway.
+        get("/v1/files/f1/content").use {
+            assertEquals(HttpStatus.SERVICE_UNAVAILABLE, it.code)
+            assertEquals("the worker still reads the code", paused, it.body.string())
+        }
+
+        assertEquals(1, server.requestCount)
+    }
+
     // ------------------------------------------------------ everything else
 
     @Test
