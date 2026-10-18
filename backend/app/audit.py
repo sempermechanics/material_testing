@@ -32,6 +32,21 @@ DEVICE_HISTORY_ACTIONS = frozenset(
 )
 
 
+def address_tag(address: str | None) -> str:
+    """An email address as an audit row may hold it: `obs.short_hash`.
+
+    Audit rows survive account erasure by design, so they must not hold
+    addresses ([FIRESTORE_DATA_PROTECTION.md], "Account-erasure audit
+    policy"; TD-242). The tag still lets a reader who already knows an
+    address match it, which is what an investigation needs."""
+    return obs.short_hash(address)
+
+
+def address_tags(addresses) -> list[str]:
+    """`address_tag` for each of a list, in order."""
+    return [address_tag(a) for a in addresses or []]
+
+
 def licence_of(target: dict | None) -> str:
     """The licence an event's target belongs to, or "" when it is not one.
 
