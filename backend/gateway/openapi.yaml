@@ -204,6 +204,26 @@ paths:
       description: Grant or withdraw the optional product-improvement consent (PENDING accounts allowed).
       responses:
         '200': { description: OK }
+  /v1/me/claim:
+    post:
+      operationId: claimCode
+      description: >
+        Redeem a one-time claim code onto the signed-in account, from the web
+        account page. Body {"code": "<code>"}, 8 to 64 characters, case,
+        spaces and dashes ignored. The same checks and refusal codes as
+        /v1/licenses/activate, and the same answer, {"config": ...}. Requires
+        the user step-up (an attested device, or a second factor on a recent
+        sign-in) and a verified email address. Shares the activation rate
+        limit. Preflighted from the browser like every console call; CORS is
+        answered by the backend (allowCors above).
+      responses:
+        '200': { description: OK }
+        '403': { description: "email_not_verified, mfa_required, reauth_required, license_email_mismatch, license_device_mismatch, license_revoked, or license_expired" }
+        '404': { description: "license_not_found (no licence has that code)" }
+        '409': { description: "already_licensed, license_already_redeemed, license_seats_exhausted, or license_seat_disabled" }
+        '422': { description: Malformed body }
+        '429': { description: Rate limited }
+        '503': { description: "claim_contended or device_lock_contended; retry" }
   /v1/devices/register:
     post:
       operationId: registerDevice
@@ -274,10 +294,11 @@ paths:
           session-create-requests: 1
       responses:
         '200': { description: OK }
-        '409': { description: session_quota_exceeded }
+        '409': { description: "session_quota_exceeded (the account's stored analyses; for a demo account also the device's)" }
         '413': { description: too_many_files }
         '429': { description: Rate limited }
         '401': { description: Missing or invalid device attestation }
+        '503': { description: "feature_paused: the upload or backup kill switch is on; Retry-After" }
   /v1/sessions/{sid}:
     delete:
       operationId: deleteSession
@@ -397,6 +418,7 @@ paths:
         '409': { description: "file_not_uploaded — nothing in this analysis finished uploading" }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
+        '503': { description: "feature_paused: the restore kill switch is on; Retry-After" }
   /v1/files/{fileId}/complete:
     post:
       operationId: completeFile
@@ -413,6 +435,7 @@ paths:
         '200': { description: OK }
         '403': { description: file_not_in_session }
         '422': { description: size or checksum mismatch }
+        '503': { description: "feature_paused: the upload or backup kill switch is on; Retry-After" }
   /v1/files/{fileId}/content:
     get:
       operationId: downloadFile
@@ -451,6 +474,7 @@ paths:
         '416': { description: range_not_satisfiable }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
+        '503': { description: "feature_paused: the restore kill switch is on; Retry-After" }
   /v1/admin/users:
     get:
       operationId: adminListUsers

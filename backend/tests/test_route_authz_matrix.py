@@ -149,6 +149,11 @@ EXPECTED = {
     # is exactly what a stolen one is, and this decides which device the
     # licence follows.
     ("POST", "/v1/licenses/unbind"): USER_STEPUP,
+    # A claim code redeemed on the web account page. USER_STEPUP: a code is
+    # worth a licence, and a stolen bare token must not be able to spend one
+    # onto the account (or burn it). The app's own key route above stays USER
+    # for installed builds.
+    ("POST", "/v1/me/claim"): USER_STEPUP,
     # "Which licences do I administer" — USER, not INSTITUTION_ADMIN, because
     # it is the question that finds the licence id every other route here
     # already requires. It cannot be scoped to a licence the caller has not

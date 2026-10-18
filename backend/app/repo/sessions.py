@@ -412,6 +412,33 @@ def count_user_sessions(uid: str) -> int:
     return max(0, total - int(failed[0][0].value))
 
 
+def count_device_sessions(device_id: str) -> int:
+    """How many analyses are stored from this device, whichever account
+    stored them: the second half of the demo cap (`routers/sessions.py`
+    `create_session`), so signing in with a fresh account on the same phone
+    does not buy another `DEMO_MAX_ANALYSES`.
+
+    Counted as `count_user_sessions` counts, stored at once rather than ever
+    created: PROVISION_FAILED stores nothing and is left out, and deleting an
+    analysis frees its place. `deviceId` is the registered device that
+    created the session, written by `create_session` below from the signed
+    request. A session without one (an old document, or one written by a
+    path that had no device) matches no device and so counts toward no
+    device's total; it still counts toward its account's. That gap is
+    accepted: such sessions are old, and the per-account cap still holds
+    them.
+
+    Two equality counts, like `count_user_sessions`; the automatic
+    single-field indexes serve them, so no composite index is needed.
+    """
+    if not device_id:
+        return 0
+    sessions = db().collection("sessions").where("deviceId", "==", device_id)
+    total = int(_count(sessions.count())[0][0].value)
+    failed = _count(sessions.where("status", "==", statuses.SESSION_PROVISION_FAILED).count())
+    return max(0, total - int(failed[0][0].value))
+
+
 def find_incomplete_session(uid: str, local_session_id: str):
     """An in-flight session for (uid, localSessionId), if any.
 

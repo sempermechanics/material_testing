@@ -136,6 +136,11 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("sessions", ("uid", "==")),
         _q("sessions", ("uid", "=="), ("status", "=="), note="equality only: merged"),
     ],
+    # The demo cap's per-device half: any account's sessions from one device.
+    "app/repo/sessions.py::count_device_sessions": [
+        _q("sessions", ("deviceId", "==")),
+        _q("sessions", ("deviceId", "=="), ("status", "=="), note="equality only: merged"),
+    ],
     "app/repo/sessions.py::find_incomplete_session": [
         _q("sessions", ("uid", "=="), ("localSessionId", "=="), ("status", "in")),
     ],

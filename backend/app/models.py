@@ -179,6 +179,18 @@ class LicenseActivate(BaseModel):
     key: str = Field(min_length=8, max_length=64)
 
 
+class LicenseClaim(BaseModel):
+    """A claim code typed on the web account page (`POST /v1/me/claim`).
+
+    The same code a key is, under the name the page gives it, so the same
+    bounds; canonicalised server-side (`licenses.canonicalize`) before it is
+    hashed, so case, spaces and dashes do not matter. Any other field is 422.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=8, max_length=64)
+
+
 def _admin_email_list(value: List[str]) -> List[str]:
     """IT contacts for an institution licence, normalised as they are stored."""
     out = []

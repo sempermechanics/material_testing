@@ -17,7 +17,7 @@ from firebase_admin import auth as fb_auth
 from starlette.concurrency import run_in_threadpool
 
 from . import apps, audit, errors, repo, rate_limit, statuses
-from .config import settings
+from .config import KILL_SWITCH_NAMES, settings
 from .google_auth import verify_app_check_token, verify_id_token
 from .validation import require_header_identifier
 from . import observability as obs
@@ -283,6 +283,50 @@ def rate_limited(bucket: rate_limit.TokenBucket):
     """
     def check(user: dict = Depends(current_user)) -> None:
         rate_limit.enforce(bucket, user["uid"])
+
+    return Depends(check)
+
+
+#: How long a paused feature tells the caller to wait before asking again.
+#: Long enough that a fleet of upload workers does not hammer a switched-off
+#: route, short enough that work resumes soon after the switch is cleared.
+FEATURE_PAUSED_RETRY_AFTER_SECONDS = 300
+
+
+def unless_paused(*switches: str):
+    """Route dependency: 503 `feature_paused` while any of `switches` is in
+    `settings.KILL_SWITCHES`, else nothing.
+
+    Declare it in the route decorator's `dependencies=[...]`, after
+    `rate_limited(...)`: it then runs after the ID token is verified and the
+    account is approved (`current_user`, which it shares with the rate limit),
+    and before the endpoint's own parameters, so a paused request reads no
+    file, session or device record and touches no Drive object. On a
+    device-signed route it also runs before `verified_device`, so the nonce
+    stays unclaimed and the app's later retry of the same signed request is
+    not a replay, as for a 429 (`rate_limited`).
+
+    The refusal carries `Retry-After` and logs `event="feature_paused"` with
+    the switch and the route template, so a dashboard can show what the
+    switch is holding back.
+    """
+    unknown = set(switches).difference(KILL_SWITCH_NAMES)
+    if not switches or unknown:
+        raise ValueError(f"not kill switches: {sorted(unknown) or 'none named'}")
+
+    async def check(request: Request, user: dict = Depends(current_user)) -> None:
+        on = [name for name in switches if name in settings.KILL_SWITCHES]
+        if not on:
+            return
+        route = request.scope.get("route")
+        template = getattr(route, "path", "") or obs.route_template(request.url.path)
+        obs.log_event(log, logging.WARNING, "feature_paused", uid=user.get("uid"),
+                      switch=",".join(on), routeTemplate=template,
+                      outcome="refused", errorCode=errors.FEATURE_PAUSED)
+        raise HTTPException(
+            503, errors.FEATURE_PAUSED,
+            headers={"Retry-After": str(FEATURE_PAUSED_RETRY_AFTER_SECONDS)},
+        )
 
     return Depends(check)
 
