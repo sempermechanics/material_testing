@@ -109,6 +109,7 @@ export const ACCOUNT = {
       busy: "The server was busy and the claim code was not used. Try again in a moment.",
       rateLimited: "Too many attempts. Wait a few minutes and try again.",
       notApproved: "Your account isn't approved yet. Try again once it is.",
+      emailNotVerified: "Verify your email address with your sign-in provider first, then try again.",
     },
   },
 };
