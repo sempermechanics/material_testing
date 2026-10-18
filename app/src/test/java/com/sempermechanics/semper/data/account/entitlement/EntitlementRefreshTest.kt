@@ -66,6 +66,26 @@ class EntitlementRefreshTest {
         assertEquals(RefreshVerdict.DONE, EntitlementRefresh.afterAttempt(ConfigFetch.NOT_MADE, 0))
     }
 
+    @Test
+    fun `a first sign-in on a phone asks config again once the device is registered`() {
+        // The read beside /v1/me ran before the device had a key on the
+        // server, so it could carry no token, answered or not.
+        assertEquals(SignInRefresh.FETCH_AGAIN, EntitlementRefresh.afterSignIn(ConfigFetch.ANSWERED, true))
+        assertEquals(SignInRefresh.FETCH_AGAIN, EntitlementRefresh.afterSignIn(ConfigFetch.FAILED, true))
+    }
+
+    @Test
+    fun `a registered phone keeps an answer and queues the retry for a failed read`() {
+        assertEquals(SignInRefresh.NONE, EntitlementRefresh.afterSignIn(ConfigFetch.ANSWERED, false))
+        assertEquals(SignInRefresh.QUEUE, EntitlementRefresh.afterSignIn(ConfigFetch.FAILED, false))
+    }
+
+    @Test
+    fun `no read made asks nothing more`() {
+        assertEquals(SignInRefresh.NONE, EntitlementRefresh.afterSignIn(ConfigFetch.NOT_MADE, false))
+        assertEquals(SignInRefresh.NONE, EntitlementRefresh.afterSignIn(ConfigFetch.NOT_MADE, true))
+    }
+
     private companion object {
         const val DAY_MS = 86_400_000L
     }
