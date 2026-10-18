@@ -23,9 +23,11 @@ import kotlinx.coroutines.launch
 
 /**
  * Persistent gate shown when the account's cloud analysis quota is full. Unlike
- * a transient warning, this screen stays until the limit is resolved: it directs
- * the user to email support@sempermechanics.com to raise their limit, and lets them
- * re-check or go back to manage (delete) existing analyses.
+ * a transient warning, this screen stays until the limit is resolved. The cap
+ * counts stored analyses, so the way on is to delete one and re-check; an
+ * account that expects a seat or a licence taps Refresh licence. Support can
+ * be mailed, neutrally: the app only consumes the licence the account holds,
+ * so nothing here asks for a higher limit, a price or a purchase.
  */
 @MainThread
 class SessionLimitActivity : AppCompatActivity() {
@@ -38,7 +40,7 @@ class SessionLimitActivity : AppCompatActivity() {
         setContentView(binding.root)
         Insets.padVertical(binding.limitRoot)
 
-        binding.tvLimitBody.text = getString(R.string.limit_body_fmt, getString(R.string.support_email))
+        binding.tvLimitBody.setText(R.string.limit_body)
         renderQuota()
 
         binding.btnEmailSupport.setOnClickListener { emailSupport() }
@@ -59,17 +61,20 @@ class SessionLimitActivity : AppCompatActivity() {
         }
     }
 
-    /** Opens the mail app pre-filled to support with account + device context. */
+    /**
+     * Opens the mail app on a neutral message to support, with the account,
+     * its quota and the device underneath: the blank lines leave the cursor
+     * above them, as Settings' support mail does. It asks for nothing.
+     */
     private fun emailSupport() {
         val email = AccountCache.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
         val quota = "Quota: ${AccountCache.quotaUsed(this)}/${LicenseEntitlements.shownAnalysisCap(this)}"
         val context = SupportMail.contextLines(email, DeviceKeys.deviceId(this), extra = listOf(quota))
-        val body = "I've reached my Semper analysis limit and would like it raised.\n\n$context"
         SupportMail.open(
             this,
             subject = getString(R.string.limit_subject) + " — " + email,
-            body = body,
-            purpose = "the limit request",
+            body = "\n\n---\n$context",
+            purpose = "support from the limit screen",
         )
     }
 
