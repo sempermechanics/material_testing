@@ -28,8 +28,16 @@ Shared beside them:
   to 5,000 events each.
 - `messages.js` — `explain(error, sentences, fallback)`: a page's own sentence
   for a refusal code, else a common one, else the raw text; and `ACCOUNT`, the
-  account page's words that are not refusals. Its keys are camelCase: a
-  snake_case key reads as a backend code to `check_console.py`.
+  account page's words, the claim card's refusal sentences among them. Its
+  keys are camelCase: a snake_case key reads as a backend code to
+  `check_console.py`, so the page maps codes onto them where it matches.
+
+A claim code is redeemed on the web only: the app takes no licence key and
+shows no purchase. `account/claim.js` offers its card while `/v1/me` says no
+licence is attached, tidies what is typed (upper case; letters, digits and
+dashes), sends it once in the body of `POST /v1/me/claim`, never a URL, and
+re-reads `/v1/me` on success, then points at the app's Refresh licence. The
+box is emptied once the code is used, and nothing else on the page shows it.
 
 Like `roster.js`, the two tool modules take `base()`, the open licence's path
 on the page's own tier, and serve both rosters: the institution page on IT's
@@ -61,7 +69,7 @@ not declare.
 | Path | Who | What it can do |
 |---|---|---|
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs. |
-| `/account` (`/console/account`) | Anyone with an account | See the licence field by field (mode, kind and key, seats, end, grace end, a shared seat's lease, all from `/v1/me`), what a phone does offline, and the saved analyses; give a floating seat back, move the licence to a new device, download an analysis. The last two need **2FA**. Deleting the account is the app's (device-signed `DELETE /v1/me`); the page says where, and that it removes the sign-in for both apps. |
+| `/account` (`/console/account`) | Anyone with an account | See the licence field by field (mode, kind and key, seats, end, grace end, a shared seat's lease, all from `/v1/me`), what a phone does offline, and the saved analyses; give a floating seat back, move the licence to a new device, download an analysis, and, while no licence is attached, redeem a one-time claim code (`account/claim.js`, `POST /v1/me/claim`). The last three need **2FA**. Deleting the account is the app's (device-signed `DELETE /v1/me`); the page says where, and that it removes the sign-in for both apps. |
 | `/console/institution` | IT staff named in a licence's `adminEmails` | Add and remove roster members (one at a time or up to 500 from a CSV), withdraw an unclaimed invitation, see who holds a seat, put a member on hold, clear a device lock; seat counts, roster CSV export, and the licence's audit log with CSV / JSON export. |
 | `/console/operator` | Semper staff (`ADMIN_EMAILS` / `role=admin`) **with 2FA** | Issue individual and institution licences, edit or upgrade one, revoke or delete a key (30-day restore), drive any institution roster with IT's tools (seat counts, CSV import and export, the audit log with CSV / JSON export), approve accounts. |
 
@@ -132,8 +140,8 @@ Enrolment is TOTP **only** — the project enrols no SMS factor, so `auth.js`
 challenges TOTP and reports anything else rather than half-handling a factor it
 cannot complete. Every dashboard — operator, institution, and account — enrols
 and challenges that factor before it loads. Consequential account actions
-(moving a licence, downloading an analysis) and institution roster changes
-also require a fresh second factor on the API side.
+(moving a licence, downloading an analysis, redeeming a claim code) and
+institution roster changes also require a fresh second factor on the API side.
 
 Enrolment shows a QR code drawn **in the page** (`qr.js`, over a vendored
 copy of qrcode-generator under `vendor/`) from the `otpauth://` URI the SDK
