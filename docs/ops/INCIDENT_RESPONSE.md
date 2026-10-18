@@ -144,7 +144,10 @@ drill passed with an import RTO of 111 s
    (`scripts/firestore-restore-drill.sh`, which refuses the production project),
    verify with `scripts/firestore_verify.py`, then decide what to copy back.
 3. **Stop writers** while copying back: set `KILL_SWITCHES="backup restore upload"`
-   and redeploy, so phones queue instead of writing.
+   and redeploy, so phones queue instead of writing. The backend refuses new
+   backups, their completion, restores and downloads with 503 `feature_paused`
+   for every build (`backend/app/deps.py:296-331`); deletes
+   (`DELETE /v1/sessions/{sid}`), metadata updates and sign-ins still write.
 4. Record the RTO, recovery point and verification in the gate.
 
 ## Runbook: App Check enforcement rollback

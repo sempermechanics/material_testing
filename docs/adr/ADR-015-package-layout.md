@@ -78,6 +78,14 @@ File counts are main sources only; the first move's table is in this file's hist
 | `ui/home/`, `ui/settings/`, `ui/auth/`, `ui/admin/`, `ui/limit/` | 14, 15, 11, 1, 2 | One screen each, plus the parts each Activity was split into (`Home*`, `Settings*Section`, `Auth*`) |
 | `util/` | 12 | `AtomicFiles`, `Streams`, `Zips`, `Digests`, `Mime`, `CallerCancellation`, `SuspendRunCatching`, … |
 
+**Since then (2026-10-18, [ADR-024](ADR-024-account-anchored-entitlements.md)).**
+`ui/account/` (the licence key screen, added and removed on
+`claude/readiness-followups-jhfhj9`) is gone. One file each joined `ui/limit/`
+(`LicenseRefresh`; 5 files with `UpdateRequiredActivity` and `UpdateSource`),
+`ui/home/` (`HomeLicenseNotice`; 17), `ui/common/dialog/` (`LicenseLock`; 9) and
+`data/policy/` (`FeatureLocks`; 7). `ui/home/` is over the guide by two; the
+counts in the table above are left as they were on 2026-10-03.
+
 Eight packages are still over the ~15-file guide: `data/net/` (23),
 `report/` (22), `ui/analysis/wizard/` (22), `ui/viewer/` (19),
 `data/cloud/` (23), `data/session/` (17), `ui/analysis/sweep/` (17) and

@@ -5,7 +5,7 @@ script against them (readiness item 5.7,
 [READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md)). The
 source of truth is the code: `backend/app/routers/roster.py`,
 `backend/app/routers/institutions.py`, `backend/app/routers/admin.py`; each
-route's auth tier is asserted in `backend/tests/test_route_authz_matrix.py:76-176`,
+route's auth tier is asserted in `backend/tests/test_route_authz_matrix.py:76-181`,
 and every path must also be declared in `backend/gateway/openapi.yaml` (the gateway
 404s anything else). Design background:
 [CLOUD_ARCHITECTURE_GCP.md §20](CLOUD_ARCHITECTURE_GCP.md#20-licensing--entitlements).
@@ -24,7 +24,7 @@ window, using the ID token of a signed-in session.
   project. The gateway checks it and forwards it as `X-Forwarded-Authorization`;
   the backend verifies it again (`backend/app/deps.py:56-70`).
 - **Errors:** JSON `{"detail": "<code>"}`, sometimes `"<code>: <suffix>"`. The
-  code is stable; the status per code is `backend/app/errors.py:288-332`
+  code is stable; the status per code is `backend/app/errors.py:296-340`
   ([ADR-020](../adr/ADR-020-backend-refusal-model.md)). A 429 carries `Retry-After`.
 - **Paging:** `page_size` (or `limit`) and `page_token`; the answer's `page` block
   carries `nextPageToken` and `hasMore`.
@@ -38,7 +38,7 @@ window, using the ID token of a signed-in session.
 |---|---|---|---|
 | `user` | any approved account | ID token | 401 `invalid_token`, 403 `not_approved` |
 | `institution-stepup` | an address in this licence's `adminEmails`, verified | ID token + TOTP second factor on a sign-in younger than `ADMIN_WEB_REAUTH_SECONDS` (`backend/app/routers/institutions.py:58-74`) | 403 `email_not_verified`; 404 `license_not_found` for a licence that does not name the caller, exactly as for one that does not exist; then 403 `mfa_required` / `reauth_required` |
-| `admin` | Semper staff (`role: admin` or `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:290-301`) | 403 `not_admin` |
+| `admin` | Semper staff (`role: admin` or `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:334-345`) | 403 `not_admin` |
 | `admin-stepup` | staff | a signed request from the staff phone, or the browser step-up as above | as above |
 | `admin-stepup-fresh` | staff | as `admin-stepup`, with a sign-in younger than `ADMIN_WEB_REVOKE_REAUTH_SECONDS` (default 120 s) | `reauth_required` |
 
@@ -47,8 +47,17 @@ disabled Firebase user is 401 `invalid_token`. The check spends a per-instance b
 for Firebase Auth Admin calls (`AUTH_ADMIN_CALLS_PER_SECOND`, default 10, burst
 `AUTH_ADMIN_BURST` 20; `backend/app/rate_limit.py:138-147`). When it is spent the
 check is not made and the call answers **503 `auth_check_busy`** with `Retry-After`
-(`backend/app/deps.py:554-562`): the token is not judged, so retry after the delay.
-The consoles show the bare code for now (TD-272).
+(`backend/app/deps.py:598-606`): the token is not judged, so retry after the delay.
+The consoles say "The server is busy checking sign-ins — wait a few seconds and try again." (`firebase-hosting/public/console/messages.js:18`) and do not retry by themselves.
+
+**A paused feature.** While an operator has a kill switch on (`KILL_SWITCHES`,
+[ENVIRONMENTS.md](../ops/ENVIRONMENTS.md)), the routes it guards answer **503
+`feature_paused`** with `Retry-After: 300`, before any work and after the token
+check (`deps.unless_paused`, `backend/app/deps.py:293-331`): `upload` or `backup`
+refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses
+`GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`, the bundle being
+the one a script can call. Nothing is wrong with the request; send it again after
+the delay. No institution or staff route is guarded.
 
 ## Institution routes (customer IT)
 
@@ -110,7 +119,7 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 | `PATCH /v1/admin/users/{uid}/config` | `admin-stepup` | Per-user limit overrides |
 | `POST /v1/admin/device-releases` | `admin-stepup` | `{"email"}`: free a Demo account's registered phone |
 | `GET /v1/admin/licenses` | `admin` | Licences, newest first, paged (`limit` ≤ 200, `page_token`, `include_demo`, `include_revoked`). `q` (exact address, domain or key prefix) is **deprecated**: it puts an address in the URL, which request logs keep. It still answers for one release and logs `deprecated_query_search` with the caller's uid, never the value (`backend/app/routers/admin.py:141-163`; removal TD-273) |
-| `POST /v1/admin/licenses/search` | `admin` | The search with its terms in the body: `{"q", "limit", "page_token", "include_demo", "include_revoked"}`, `q` required (at most 320 characters; empty pages the listing), any other field 422. On `admin_bucket`, no step-up; the answer has the GET's shape (`backend/app/routers/admin.py:166-174`; `AdminLicenseSearch`, `backend/app/models.py:446-460`). Declared at the gateway ahead of `/{licenseId}` (`backend/gateway/openapi.yaml:626-644`). The operator desk searches with it |
+| `POST /v1/admin/licenses/search` | `admin` | The search with its terms in the body: `{"q", "limit", "page_token", "include_demo", "include_revoked"}`, `q` required (at most 320 characters; empty pages the listing), any other field 422. On `admin_bucket`, no step-up; the answer has the GET's shape (`backend/app/routers/admin.py:166-174`; `AdminLicenseSearch`, `backend/app/models.py:458-472`). Declared at the gateway ahead of `/{licenseId}` (`backend/gateway/openapi.yaml:650-668`). The operator desk searches with it |
 | `GET /v1/admin/licenses/{license_id}` | `admin` | One licence |
 | `POST /v1/admin/licenses` | `admin-stepup` | Mint; the plaintext key is returned once |
 | `PATCH /v1/admin/licenses/{license_id}` | `admin-stepup` | Terms, renewal, `clearDeviceLock` |
@@ -121,6 +130,13 @@ pasted CSV does not survive the round trip: paste it and import again on return.
 | `PATCH /v1/admin/licenses/{license_id}/seats/{uid}/device` | `admin-stepup` | Clear one seat's device lock |
 | `GET /v1/admin/licenses/{license_id}/reconcile` | `admin` | Per-seat check of what a licence actually entitles; `revokedStillRunning` |
 | `GET /v1/admin/licenses/{license_id}/device-history` | `admin` | Recent device moves |
+
+### Account routes a script may meet
+
+| Method and path | Tier | Purpose |
+|---|---|---|
+| `POST /v1/me/claim` | the user step-up: a browser with a TOTP second factor on a sign-in younger than `ADMIN_WEB_REAUTH_SECONDS`, or a signed device request (`attested_or_mfa_user`) | Redeem a one-time claim code onto the caller's own account ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)). Body `{"code": "…"}`, 8–64 characters, case, spaces and dashes ignored, any other field 422 (`LicenseClaim`, `backend/app/models.py:182-191`). Answers `{"config": …}` as `GET /v1/config` would. Refusals: 403 `email_not_verified` first (`backend/app/routers/licenses.py:236-237`), then the activation codes, with the statuses in `errors.STATUS`: 404 `license_not_found`; 403 `license_revoked`, `license_expired`, `license_email_mismatch`, `license_device_mismatch`; 409 `already_licensed`, `license_already_redeemed`, `license_seats_exhausted`, `license_seat_disabled`; 503 `claim_contended`, `device_lock_contended` (retry). Rate limit `license_activate_bucket` (0.2/s, burst 3; `backend/app/rate_limit.py:123`), shared with the route below. A browser claim names no device, so no device lock is compared or bound (`backend/app/repo/activation.py:62-68`). Each attempt writes a `LICENSE_CLAIM_CODE` audit row with the code's prefix only and logs `event="activation"` with `via` (`licenses.py:239-255`). Declared at the gateway (`backend/gateway/openapi.yaml:207-226`) |
+| `POST /v1/licenses/activate` | `user` with `X-Device-Id` | **Legacy.** The same redemption for installed builds; no current app build calls it, and the app has no screen to type a key. Kept until TD-278 retires it with its contract fixture (`licenses.py:49-81`) |
 
 ## Examples
 
@@ -143,5 +159,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" -o audit.csv \
 
 `backend/tests/test_roster_bulk.py` (import, export, summary, audit),
 `backend/tests/test_licence_search_post.py` (the POST search and the deprecated `q`),
+`backend/tests/test_claim_code.py` (the claim route), `backend/tests/test_kill_switches.py`
+(`feature_paused`),
 `backend/tests/test_route_authz_matrix.py` (tiers and cross-tenant refusals),
 `backend/tests/test_gateway_parity.py` (every route declared at the gateway).
