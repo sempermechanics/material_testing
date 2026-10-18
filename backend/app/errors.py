@@ -241,6 +241,11 @@ READYZ_FAILED = "readyz_failed"
 # lock is still empty. Nobody holds the licence, so the caller retries; it is
 # never reported as `license_device_mismatch`.
 DEVICE_LOCK_CONTENDED = "device_lock_contended"
+# 503 from the browser step-up when this instance has spent its Firebase Auth
+# Admin budget (`rate_limit.auth_admin_bucket`, TD-239) and cannot ask whether
+# the token was revoked. Nothing is wrong with the caller's token, so it is
+# never `invalid_token`; it carries Retry-After and the caller tries again.
+AUTH_CHECK_BUSY = "auth_check_busy"
 
 #: Codes the Android client branches on or surfaces by name. Changing
 #: one of these needs the matching edit in ApiErrors.kt in the same commit --
