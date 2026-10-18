@@ -51,6 +51,8 @@ async function open({ licenses = [IND, UNI], page = {}, routes = {}, user, resum
       "GET /v1/admin/users?status=PENDING&limit=50": () => json(200, { users: [] }),
       [LIST]: () => json(200, { licenses, page, demoMaxAnalyses: 25 }),
       "GET /v1/institutions/licenses": () => json(200, { licenses: [] }),
+      // The seat counts an opened roster card reads after the roster.
+      [`GET /v1/admin/licenses/${UNI.id}/summary`]: () => json(200, { counts: {} }),
       ...routes,
     },
   });
@@ -312,7 +314,7 @@ test("the filter narrows loaded rows at once, by key, domain, address or note", 
   type("nothing here");
   assert.equal($("licenceRows").textContent.trim(),
     "No licences match. Clear the filter, or tick Show revoked or Show Demo keys.");
-  assert.deepEqual(sent(/q=/), [], "free text is not a backend search");
+  assert.deepEqual(sent(/search/), [], "free text is not a backend search");
 });
 
 test("an address is also searched on the backend, after a pause in typing", async () => {
@@ -320,18 +322,20 @@ test("an address is also searched on the backend, after a pause in typing", asyn
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
     await open({ routes: {
-      "GET /v1/admin/licenses?limit=50&include_revoked=false&q=far%40else.org":
-        () => json(200, { licenses: [other] }),
+      "POST /v1/admin/licenses/search": () => json(200, { licenses: [other] }),
     } });
     $("filter").value = "far@else.org";
     $("filter").dispatch("input");
     assert.equal($("licenceRows").textContent.trim(), "Searching…");
     mock.timers.tick(299);
     await settle();
-    assert.deepEqual(sent(/q=/), []);
+    assert.deepEqual(sent(/search/), []);
     mock.timers.tick(1);
     await settle();
     assert.deepEqual(labels(), ["SEMP-FAR1"], "a licence on no loaded page is found");
+    // TD-244: the address goes in the body, never in a URL a log records.
+    assert.deepEqual(JSON.parse(net.requests.find((r) => r.method === "POST").body), { q: "far@else.org", limit: 50 });
+    assert.deepEqual(net.requests.filter((r) => r.url.includes("else.org")), []);
   } finally {
     mock.timers.reset();
   }
@@ -752,8 +756,10 @@ test("the roster is read and changed through the staff routes, whoever IT lists"
   confirms.answer(true);
   $("rosterRows").querySelector('button[data-act="remove"]').click();
   await settle();
+  const counts = `GET /v1/admin/licenses/${UNI.id}/summary`;
   assert.deepEqual(sent(/licenses\/lic-uni-1/), [
-    `GET ${STAFF_SEATS}`, `DELETE ${STAFF_SEATS}/u1`, `GET ${STAFF_SEATS}`, `GET /v1/admin/licenses/${UNI.id}`,
+    `GET ${STAFF_SEATS}`, counts, `DELETE ${STAFF_SEATS}/u1`, `GET ${STAFF_SEATS}`, counts,
+    `GET /v1/admin/licenses/${UNI.id}`,
   ]);
 });
 

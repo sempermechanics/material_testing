@@ -10,11 +10,15 @@ import {
   whileWaiting,
 } from "../auth.js";
 import { errorDetail, holdsLicence, placeholderRows, retryRow } from "../util.js";
-import { explain as refusalText } from "../messages.js";
+import { explain as refusalText, ACCOUNT } from "../messages.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";
 
 const $ = (id) => document.getElementById(id);
+
+// Said whatever the licence: deleting is done in the app, and takes the
+// sign-in to both apps with it.
+$("deleteAccount").textContent = ACCOUNT.deleteAccount;
 
 let licence = {};        // the `license` block of /v1/me
 let sessions = [];       // every page loaded so far
@@ -65,6 +69,8 @@ async function loadAccount() {
     setStatus(accountError, true);
     // The placeholders would otherwise read as still loading.
     $("pills").innerHTML = "";
+    $("facts").innerHTML = "";
+    $("offline").hidden = true;
     $("explain").textContent = "The licence could not be read. Reload the page to try again.";
   }
 }
@@ -97,6 +103,11 @@ function renderLicence() {
   }
   $("pills").innerHTML = `<p>${pills.join(" ")}</p>`;
   $("explain").textContent = explain(licensed, floating, holdsSeat, held, lapsed);
+  $("facts").innerHTML = facts(held, floating, holdsSeat)
+    .map(([term, value]) => `<dt>${esc(term)}</dt><dd>${esc(value)}</dd>`).join("");
+  // Only a licence has anything to keep working offline.
+  $("offline").textContent = ACCOUNT.offline;
+  $("offline").hidden = !held;
 
   // A seat can only be given back by whoever holds it, so the button
   // appears only when there is something to give back.
@@ -107,6 +118,30 @@ function renderLicence() {
   // Each app holds its own device (ADR-010), so each moves on its own.
   $("unbindMt").hidden = !held;
   renderQuota();
+}
+
+/**
+ * The licence field by field, as [label, value] pairs: everything `/v1/me`
+ * says about it, so nobody has to read it out of the pills and the sentence.
+ * Mode always; without a licence attached, only that there is none.
+ */
+function facts(held, floating, holdsSeat) {
+  const { labels, modes, kinds, seating } = ACCOUNT;
+  const rows = [[labels.mode, modes[licence.mode] || licence.mode || modes.demo]];
+  if (!held) return rows.concat([[labels.licence, ACCOUNT.noLicence]]);
+  rows.push([labels.licence,
+    [kinds[licence.kind] || licence.kind, licence.prefix].filter(Boolean).join(" · ") || "—"]);
+  // An individual licence has one seat by definition; only an institution's
+  // says how its seats are given out.
+  if (licence.kind === "institution" && licence.seating) {
+    rows.push([labels.seating, seating[licence.seating] || licence.seating]);
+  }
+  rows.push([labels.ends, licence.expiresAt ? day(licence.expiresAt) : ACCOUNT.noEnd]);
+  if (licence.graceEndsAt) rows.push([labels.graceEnds, day(licence.graceEndsAt)]);
+  if (floating) {
+    rows.push([labels.lease, holdsSeat ? ACCOUNT.leaseHeld(when(licence.leaseExpiresAt)) : ACCOUNT.leaseNone]);
+  }
+  return rows;
 }
 
 /**
