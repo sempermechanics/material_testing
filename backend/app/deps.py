@@ -539,12 +539,27 @@ def _require_not_revoked(request: Request, uid: str) -> None:
     the setting on asked for revoked users to be kept out, and a check that
     cannot answer cannot say this one is not. Not 503: the console and app
     already handle `invalid_token`, and a new wire code would reach neither.
+
+    The one exception is this instance's own Auth Admin budget
+    (`rate_limit.auth_admin_bucket`, TD-239). Spent, the check is not asked
+    and the answer is 503 `auth_check_busy` with Retry-After, logged as
+    `auth_admin_rate_limited`: the token may well be fine, and telling the
+    caller it is invalid would sign a working console out.
     """
     bearer = _client_bearer(
         request.headers.get("authorization", ""),
         request.headers.get("x-forwarded-authorization", ""),
     )
     token = bearer[7:] if bearer.startswith("Bearer ") else ""
+    if not rate_limit.auth_admin_allowed():
+        obs.log_event(log, logging.WARNING, "auth_admin_rate_limited", uid=uid,
+                      stage="revocation_check", outcome="refused",
+                      errorCode=errors.AUTH_CHECK_BUSY, dependency="firebase_auth")
+        raise HTTPException(
+            503, errors.AUTH_CHECK_BUSY,
+            headers={"Retry-After": str(rate_limit.auth_admin_bucket.retry_after(
+                rate_limit.AUTH_ADMIN_KEY))},
+        )
     try:
         verify_id_token(token, check_revoked=True)
     except (fb_auth.RevokedIdTokenError, fb_auth.UserDisabledError) as e:
