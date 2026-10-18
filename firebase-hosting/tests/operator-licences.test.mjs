@@ -206,7 +206,9 @@ test("a roster change that finishes after the card closed reads nothing more", a
   await click($("rosterClose"));
   answer.resolve(json(200, {}));
   await settle();
-  assert.deepEqual(sent(/lic-uni-1/), [`GET ${seatsOf(UNI)}`, `PATCH ${seatsOf(UNI)}/u1`],
+  assert.deepEqual(sent(/lic-uni-1/), [
+    `GET ${seatsOf(UNI)}`, `GET /v1/admin/licenses/${UNI.id}/summary`, `PATCH ${seatsOf(UNI)}/u1`,
+  ],
     "no roster or licence re-read for a closed card");
 });
 

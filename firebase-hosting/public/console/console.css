@@ -153,8 +153,8 @@ td.mono { white-space: nowrap; }
 .err { color: var(--danger); }
 textarea { display: block; width: 100%; min-height: 7rem; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
-/* The institution page's seat counts (institution/roster-tools.js): one
-   number per tile, its label under it. */
+/* A roster's seat counts (roster-tools.js, on the institution page and the
+   desk's roster card): one number per tile, its label under it. */
 .tiles {
   display: grid; gap: .75rem; margin-top: .75rem;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
@@ -167,6 +167,14 @@ textarea { display: block; width: 100%; min-height: 7rem; resize: vertical; font
 .tile strong { display: block; font-size: 1.4rem; line-height: 1.2; }
 .tile span { font-size: .8rem; color: var(--muted); }
 .tile.warn strong { color: var(--warn); }
+
+/* A part of a card with a heading of its own: the desk's roster card holds
+   the import and the audit log under the roster. */
+.part { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+h3 {
+  font-family: var(--font-display); font-size: .95rem; font-weight: 700;
+  letter-spacing: -.01em; margin: 0 0 .5rem;
+}
 
 /* Placeholders while something loads (util.js placeholderRows, and the
    account's licence card): the shape of what is coming, in grey. They pulse
