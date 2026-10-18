@@ -50,10 +50,10 @@ are `observability.log_event` lines (`jsonPayload.event`), one JSON object per l
 A metric counts only from the moment it exists, and only lines a deployed backend
 writes: `activation`, `checkout` and `devlock_drop` come with the licensing
 observability change, `audit_write_failed` with the audit change, and
-`semper_auth_denied` needs `audit.record()` to also log each row with its
-`action` (and `detail.stage` as `stage`); today it writes only Firestore
-`audit_logs`, so that metric reads zero. Until then those
-alerts stay quiet, which is not the same as healthy.
+`semper_auth_denied` with the change that makes `audit.record()` log an
+`audit_denied` line (with `action` and `stage`) for every DENIED row as well as
+writing it to Firestore (`backend/app/audit.py:64-69`). Until the backend that
+writes a line is deployed, its alert stays quiet, which is not the same as healthy.
 
 ## Alerts (`policies/`) and what to do
 
