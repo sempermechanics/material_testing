@@ -12,7 +12,7 @@ Status: **Met** (the control is in the code, with evidence), **Partial**,
 **Gap** (owned by the TD id named), **N-A** (with the reason). App paths are
 from `app/src/main/java/com/sempermechanics/semper/` unless they start at the
 repository root. Evidence is at the branch `claude/new-session-jhfhj9` as of
-2026-10-18; the Android half was not compiled where it was written (TD-219).
+2026-10-18 (AUTH-1 and RESILIENCE-2 at `claude/readiness-followups-jhfhj9` @ `2371bec`, after ADR-024); the Android half was not compiled where it was written (TD-219).
 
 ## MASVS-STORAGE
 
@@ -32,7 +32,7 @@ repository root. Evidence is at the branch `claude/new-session-jhfhj9` as of
 
 | Control | Status | Evidence |
 |---|---|---|
-| AUTH-1: secure authentication and authorization protocols | Met | Every route verifies a Firebase ID token server-side (`backend/app/google_auth.py:64`) and, for state changes from the phone, a device signature over a single-use nonce (`backend/app/deps.py:348-384`; replay refused, `backend/tests/test_device_auth.py:130`, `:172`). Each route's tier is asserted in `backend/tests/test_route_authz_matrix.py`. Firestore denies every client (`firestore.rules:7-9`; proven on the emulator, `firestore-rules-tests/rules.test.mjs`). Authorization is decided on the server; the entitlement token only narrows what the app shows offline |
+| AUTH-1: secure authentication and authorization protocols | Met | Every route verifies a Firebase ID token server-side (`backend/app/google_auth.py:64`) and, for state changes from the phone, a device signature over a single-use nonce (`backend/app/deps.py:348-384`; replay refused, `backend/tests/test_device_auth.py:130`, `:172`). Each route's tier is asserted in `backend/tests/test_route_authz_matrix.py`. Firestore denies every client (`firestore.rules:7-9`; proven on the emulator, `firestore-rules-tests/rules.test.mjs`). Authorization is decided on the server; the entitlement token only narrows what the app shows offline. Paid entitlements are attached to the account by the server, never entered in the app; every cloud route re-checks them per request, kill switches included ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)). The exception is share, a device-only feature with no route: the app's licence check and the token decide it (`ui/viewer/share/ShareCenter.kt:208-209`), so a modified build can share without a licence (TD-274, accepted) |
 | AUTH-2: secure local authentication | N-A | The app has no local (biometric or PIN) authentication; access is the Firebase session and the server's answer |
 | AUTH-3: additional authentication for sensitive operations | Partial | Console state changes need a completed TOTP second factor on a recent sign-in (`backend/app/deps.py:518`, `step_up_check`); whole-licence revoke and delete need a fresher one (`attested_or_mfa_admin_fresh`). The revocation check on step-up is built but off until the Auth IAM grant (TD-214) |
 
@@ -65,7 +65,7 @@ repository root. Evidence is at the branch `claude/new-session-jhfhj9` as of
 | Control | Status | Evidence |
 |---|---|---|
 | RESILIENCE-1: platform integrity | Partial | App Check with the Play Integrity provider (`app/build.gradle.kts:371`), enforced for device callers only when `APP_CHECK_MODE=enforce`, which is off (TD-226). No root detection and no server-side Integrity verdict (TD-234) |
-| RESILIENCE-2: anti-tampering | Partial | Release APK inspected for debuggable, test-only, debug classes and the debug App Check provider (`scripts/check_release_apk.py`); the token is bound to the device key (`dkt`) and its stored state is HMAC-sealed. No signature or installer check at runtime (TD-235). Deleting both sealed state and HMAC key on a rooted phone falls back to the cached config (TD-261, accepted) |
+| RESILIENCE-2: anti-tampering | Partial | Release APK inspected for debuggable, test-only, debug classes and the debug App Check provider (`scripts/check_release_apk.py`); the token is bound to the device key (`dkt`) and its stored state is HMAC-sealed. No signature or installer check at runtime (TD-235). Deleting both sealed state and HMAC key on a rooted phone falls back to the cached config (TD-261, accepted). A repackaged build that skips the licence check can use share, which has no server route (TD-274, accepted); it gains no cloud access |
 | RESILIENCE-3: anti-static analysis | Partial | R8 minification and obfuscation on release (`app/build.gradle.kts:236`); the mapping is not published ([RELEASING.md](RELEASING.md)). Native engine built `-O3` with LTO. No string encryption |
 | RESILIENCE-4: anti-dynamic analysis | Gap | No debugger, hook or Frida detection (TD-235) |
 
