@@ -204,6 +204,26 @@ paths:
       description: Grant or withdraw the optional product-improvement consent (PENDING accounts allowed).
       responses:
         '200': { description: OK }
+  /v1/me/claim:
+    post:
+      operationId: claimCode
+      description: >
+        Redeem a one-time claim code onto the signed-in account, from the web
+        account page. Body {"code": "<code>"}, 8 to 64 characters, case,
+        spaces and dashes ignored. The same checks and refusal codes as
+        /v1/licenses/activate, and the same answer, {"config": ...}. Requires
+        the user step-up (an attested device, or a second factor on a recent
+        sign-in) and a verified email address. Shares the activation rate
+        limit. Preflighted from the browser like every console call; CORS is
+        answered by the backend (allowCors above).
+      responses:
+        '200': { description: OK }
+        '403': { description: "email_not_verified, mfa_required, reauth_required, license_email_mismatch, license_device_mismatch, license_revoked, or license_expired" }
+        '404': { description: "license_not_found (no licence has that code)" }
+        '409': { description: "already_licensed, license_already_redeemed, license_seats_exhausted, or license_seat_disabled" }
+        '422': { description: Malformed body }
+        '429': { description: Rate limited }
+        '503': { description: "claim_contended or device_lock_contended; retry" }
   /v1/devices/register:
     post:
       operationId: registerDevice
