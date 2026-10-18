@@ -4,7 +4,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.slider.Slider
 import com.sempermechanics.semper.R
-import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.policy.FeatureAccess
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.SessionStore
@@ -12,6 +12,7 @@ import com.sempermechanics.semper.data.session.StorageBudget
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.ui.common.ByteSize
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
+import com.sempermechanics.semper.ui.common.dialog.LicenseLock
 import com.sempermechanics.semper.ui.common.dialog.bindInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,29 +21,28 @@ import kotlinx.coroutines.withContext
 /**
  * On-device storage: sizes, auto-free budget, free-up, and cache clear.
  * Session restore / download / delete stay on [SettingsActivity].
+ *
+ * [freeUp] is how Free-up and Auto-free show (`FeatureLocks.settings`).
  */
 class SettingsStorageSection(
     private val activity: SettingsActivity,
     private val views: ViewSettingsScrollContentBinding,
+    private val freeUp: FeatureAccess,
 ) {
     fun wire() {
         views.btnStorageClearCache.setOnClickListener { clearTemporaryFiles() }
+        views.btnAutoFreeInfo.bindInfo(activity, R.string.storage_auto_free, R.string.storage_auto_free_info)
         // Free-up and the auto-free budget evict local copies the cloud can
-        // give back — the licensed half of cloud. A demo account has no
-        // restore, so neither control exists for it (StorageBudget itself
-        // also refuses, so a stale budget pref cannot drop anything).
-        if (!LicenseEntitlements.cloudBackupEnabled(activity)) {
-            listOf(
-                views.btnStorageFreeUp,
-                views.rowAutoFreeHeader,
-                views.tvAutoFreeValue,
-                views.sliderAutoFree,
-            ).forEach { it.isVisible = false }
+        // give back — the licensed half of cloud. Without restore neither
+        // control works (StorageBudget itself also refuses, so a stale budget
+        // pref cannot drop anything): locked when the licence lacks backup,
+        // hidden when policy keeps backup off.
+        if (freeUp != FeatureAccess.OPEN) {
+            if (freeUp == FeatureAccess.LOCKED) lockFreeUp() else hideFreeUp()
             refreshStorageTotals()
             return
         }
         views.btnStorageFreeUp.setOnClickListener { confirmFreeUpSpace() }
-        views.btnAutoFreeInfo.bindInfo(activity, R.string.storage_auto_free, R.string.storage_auto_free_info)
 
         val valueLabel = views.tvAutoFreeValue
         views.sliderAutoFree.apply {
@@ -66,6 +66,27 @@ class SettingsStorageSection(
         }
 
         refreshStorageTotals()
+    }
+
+    /** Locked, not hidden: both shown disabled, at Off, under the licence note; the ⓘ still explains. */
+    private fun lockFreeUp() {
+        views.btnStorageFreeUp.isVisible = true
+        views.btnStorageFreeUp.setText(R.string.storage_free_up_confirm)
+        views.tvAutoFreeValue.text = autoFreeText(AppSettings.AUTO_FREE_OFF)
+        LicenseLock.lock(
+            views.groupStorageFreeUp,
+            views.tvStorageLockNote,
+            listOf(views.btnStorageFreeUp, views.sliderAutoFree),
+        )
+    }
+
+    private fun hideFreeUp() {
+        listOf(
+            views.btnStorageFreeUp,
+            views.rowAutoFreeHeader,
+            views.tvAutoFreeValue,
+            views.sliderAutoFree,
+        ).forEach { it.isVisible = false }
     }
 
     /** The slider's short value, "Off" or "Over 8 GB"; the ⓘ explains what it does. */
@@ -96,9 +117,12 @@ class SettingsStorageSection(
             views.btnStorageClearCache.isEnabled = cache > 0
 
             // "Free up N MB" only while a backed-up analysis holds local data,
-            // and never without cloud restore (wire() hides it for a demo).
-            views.btnStorageFreeUp.isVisible = LicenseEntitlements.cloudBackupEnabled(activity) && reclaimable > 0
-            views.btnStorageFreeUp.text = activity.getString(R.string.storage_free_up_fmt, ByteSize.format(reclaimable))
+            // and never without cloud restore (wire() locks or hides it then).
+            if (freeUp == FeatureAccess.OPEN) {
+                views.btnStorageFreeUp.isVisible = reclaimable > 0
+                views.btnStorageFreeUp.text =
+                    activity.getString(R.string.storage_free_up_fmt, ByteSize.format(reclaimable))
+            }
         }
     }
 

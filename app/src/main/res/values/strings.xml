@@ -415,7 +415,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_not_licensed">Restore isn\'t available in demo mode.</string>
     <string name="restore_paused">Restoring from the cloud is paused right now. Your analyses on this phone aren\'t affected.</string>
     <string name="download_not_licensed">Downloading from the cloud isn\'t available in demo mode.</string>
-    <string name="share_licensed_only">Sharing exports needs an active licence.</string>
+    <!-- Share in the viewer while the share kill switch is on: not a licence lock. -->
+    <string name="share_paused">Sharing is temporarily unavailable. Your analyses on this phone aren\'t affected.</string>
+    <!-- Locked, not hidden (FeatureLocks): the one note beside, and on a tap of, anything
+         the account's licence does not include. Never a price, a purchase or a link. -->
+    <string name="license_lock_note">Included with an institution seat or a Semper licence. Ask your institution\'s IT, or contact Semper support.</string>
+    <string name="license_locked">Locked</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
     <string name="home_empty_start">Start analysis</string>
     <string name="settings_max_frames">Max frames</string>

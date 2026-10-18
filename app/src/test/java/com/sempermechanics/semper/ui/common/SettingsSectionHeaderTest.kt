@@ -66,7 +66,8 @@ class SettingsSectionHeaderTest {
         header as LinearLayout
         val lp = header.layoutParams as ViewGroup.MarginLayoutParams
         val title = header.getChildAt(0) as TextView
-        val chevron = header.getChildAt(1) as ImageView
+        // By id: the lock (gone unless locked) sits between the title and the chevron.
+        val chevron = header.findViewById<ImageView>(R.id.imgSectionChevron)
         return Look(
             width = lp.width,
             height = lp.height,

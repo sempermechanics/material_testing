@@ -22,7 +22,9 @@ import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
 import com.sempermechanics.semper.ui.common.ByteSize
 import com.sempermechanics.semper.ui.common.ConflatedRefresh
 import com.sempermechanics.semper.ui.common.ProgressText
+import com.sempermechanics.semper.ui.common.SettingsSectionHeader
 import com.sempermechanics.semper.ui.common.dialog.Feedback
+import com.sempermechanics.semper.ui.common.dialog.LicenseLock
 import com.sempermechanics.semper.ui.common.transfer.RestoreFailureNotice
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.common.transfer.TransferWorkObserver
@@ -67,7 +69,7 @@ internal class SettingsAnalysesSection(
         ConflatedRefresh<Unit>(activity.lifecycleScope, merge = { _, _ -> }) { loadAnalysesData() }
     }
 
-    /** Attaches the (empty) list; demo accounts get it too, hidden with the section. */
+    /** Attaches the (empty) list; demo accounts get it too, never loaded. */
     fun attachList() {
         views.analysesDataList.apply {
             layoutManager = LinearLayoutManager(activity)
@@ -76,9 +78,21 @@ internal class SettingsAnalysesSection(
     }
 
     fun refresh() {
-        // Storage cleanup re-enters here; the section does not exist on demo.
+        // Storage cleanup re-enters here; on demo the section is locked, never loaded.
         if (!LicenseEntitlements.cloudBackupEnabled(activity)) return
         analysesRefresh.request(Unit)
+    }
+
+    /**
+     * Locked, not hidden: no list is loaded (it would list backups the
+     * account cannot restore); the licence note stands in its place, and a
+     * tap on it says the note.
+     */
+    fun lock() {
+        SettingsSectionHeader.setLocked(views.headerAnalysesData, true)
+        listOf(views.progressAnalysesData, views.tvAnalysesDataState, views.tvAnalysesDataCount, views.analysesDataList)
+            .forEach { it.isVisible = false }
+        LicenseLock.lock(views.bodyAnalysesData, views.tvAnalysesDataLockNote, emptyList())
     }
 
     /** Takes [row] out of the list at once, ahead of its queued delete. */
