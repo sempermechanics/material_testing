@@ -1,11 +1,11 @@
 package com.sempermechanics.semper.data.account.entitlement
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.SystemClock
 import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import androidx.core.content.edit
 import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.account.DeviceKeys
 import com.sempermechanics.semper.data.prefs.PrefFiles
@@ -22,20 +22,23 @@ import javax.crypto.SecretKey
 /**
  * The phone side of entitlement tokens: where the token and its clock state
  * live, and the Keystore, clock and device readings the pure code needs.
- * Every rule is in [EntitlementPolicy], [EntitlementVerifier] and
- * [EntitlementClock]; this only reads and writes.
+ * Every rule is in [EntitlementPolicy], [EntitlementVerifier],
+ * [EntitlementClock] and [SealedRecordStore]; this only reads and writes.
  *
  * A build with no pinned keys (`SEMPER_ENTITLEMENT_PUBKEYS` empty, every
  * debug and CI build) returns [TokenStatus.NotUsed] before touching the
  * Keystore or the disk, so it behaves exactly as builds before tokens did.
  *
  * Storage: one string in [PrefFiles.Entitlement], sealed with HMAC-SHA256
- * under a non-exportable Keystore key ([HMAC_ALIAS]). The key doubles as a
- * marker: it exists only while a token is stored, so a deleted record with the
- * key still present reads as tampered, not as "never had a token". The
- * verification and the clock live in memory after the first read in a
- * process, and the clock is written back at most once a minute, so a gate
- * check costs no ECDSA and no disk.
+ * under a non-exportable Keystore key ([HMAC_ALIAS]), written with
+ * `commit()` so it is on disk before anything relies on it. The key doubles
+ * as a marker: it exists only while a token is stored, so a deleted record
+ * with the key still present reads as tampered, unless the first-seal mark
+ * ([PrefFiles.Entitlement.SEALING]) says the process died before the record
+ * was written; a record whose key is gone reads as no token
+ * ([SealedRecordStore]). The verification and the clock live in memory
+ * after the first read in a process, and the clock is written back at most
+ * once a minute, so a gate check costs no ECDSA and no disk.
  */
 object EntitlementStore {
 
@@ -69,31 +72,39 @@ object EntitlementStore {
     /** `elapsedRealtime` of the last write; starts a full interval back so the first one is due. */
     private var lastPersistElapsed = -PERSIST_EVERY_MS
 
-    private val tagger = Tagger { data ->
-        Mac.getInstance(HMAC).run {
-            init(hmacKey())
-            doFinal(data)
-        }
-    }
+    /** The token's status, and the device's best estimate of the server's clock, at one reading. */
+    private class Reading(val status: TokenStatus, val effectiveNowMs: Long)
 
     /** The stored token's status now. */
     fun status(context: Context): TokenStatus {
         if (pins.isEmpty) return TokenStatus.NotUsed
-        val appContext = context.applicationContext
-        return synchronized(lock) {
-            val now = deviceTime(appContext)
-            val stored = memory ?: load(appContext).also { memory = it }
-            val verification = (stored as? StoredEntitlement.Sealed)?.let { verify(appContext, it.record.token) }
-            val (status, clock) = EntitlementPolicy.evaluate(stored, verification, now)
-            if (stored is StoredEntitlement.Sealed && clock != null && clock != stored.record.clock) {
-                val next = StoredEntitlement.Sealed(stored.record.copy(clock = clock))
-                memory = next
-                val urgent = clock.rolledBack != stored.record.clock.rolledBack
-                if (urgent || now.elapsedMs - lastPersistElapsed >= PERSIST_EVERY_MS) save(appContext, next.record, now)
-            }
-            if (status is TokenStatus.Lapsed) Timber.d("Entitlement token lapsed: %s", status.why)
-            status
+        return read(context.applicationContext).status
+    }
+
+    /**
+     * Whether the stored token asks for a fresh one now: its `refreshAfter`
+     * has passed on the device's estimate of the server's clock, or it has
+     * lapsed ([EntitlementRefresh.refreshDue]). False with no token in play.
+     */
+    fun refreshDue(context: Context): Boolean {
+        if (pins.isEmpty) return false
+        val reading = read(context.applicationContext)
+        return EntitlementRefresh.refreshDue(reading.status, reading.effectiveNowMs)
+    }
+
+    private fun read(appContext: Context): Reading = synchronized(lock) {
+        val now = deviceTime(appContext)
+        val stored = memory ?: load(appContext).also { memory = it }
+        val verification = (stored as? StoredEntitlement.Sealed)?.let { verify(appContext, it.record.token) }
+        val (status, clock) = EntitlementPolicy.evaluate(stored, verification, now)
+        if (stored is StoredEntitlement.Sealed && clock != null && clock != stored.record.clock) {
+            val next = StoredEntitlement.Sealed(stored.record.copy(clock = clock))
+            memory = next
+            val urgent = clock.rolledBack != stored.record.clock.rolledBack
+            if (urgent || now.elapsedMs - lastPersistElapsed >= PERSIST_EVERY_MS) save(appContext, next.record, now)
         }
+        if (status is TokenStatus.Lapsed) Timber.d("Entitlement token lapsed: %s", status.why)
+        Reading(status, clock?.let { EntitlementClock.effectiveNowMs(it, now) } ?: now.wallMs)
     }
 
     /**
@@ -115,9 +126,8 @@ object EntitlementStore {
     fun clear(context: Context) {
         if (pins.isEmpty) return
         synchronized(lock) {
-            privatePrefs(context, PrefFiles.Entitlement.NAME).edit { remove(PrefFiles.Entitlement.SEALED) }
-            runCatching { keyStore.deleteEntry(HMAC_ALIAS) }
-                .onFailure { Timber.w(it, "Could not drop the entitlement key") }
+            runCatching { SealedRecordStore.clear(PhoneDisk(context)) }
+                .onFailure { Timber.w(it, "Could not drop the entitlement record") }
             memory = StoredEntitlement.Nothing
             verified = null
         }
@@ -136,25 +146,15 @@ object EntitlementStore {
         save(context, record, now)
     }
 
-    private fun load(context: Context): StoredEntitlement {
-        val sealed = privatePrefs(context, PrefFiles.Entitlement.NAME)[PrefFiles.Entitlement.SEALED]
-        return when {
-            sealed == null && hasHmacKey() -> StoredEntitlement.Tampered.also { Timber.w("Entitlement record missing") }
-            sealed == null -> StoredEntitlement.Nothing
-            else -> when (val unsealed = SealedEntitlement.unseal(sealed, tagger)) {
-                is SealedEntitlement.Unsealed.Ok -> StoredEntitlement.Sealed(unsealed.record)
-                SealedEntitlement.Unsealed.Tampered -> StoredEntitlement.Tampered.also {
-                    Timber.w("Entitlement record failed its integrity check")
-                }
-            }
+    private fun load(context: Context): StoredEntitlement =
+        SealedRecordStore.load(PhoneDisk(context)).also {
+            if (it == StoredEntitlement.Tampered) Timber.w("Entitlement record failed its integrity check")
         }
-    }
 
     private fun save(context: Context, record: SealedEntitlement.Record, now: DeviceTime) {
-        runCatching { SealedEntitlement.seal(record, tagger) }
-            .onSuccess { sealed ->
-                privatePrefs(context, PrefFiles.Entitlement.NAME).edit { put(PrefFiles.Entitlement.SEALED, sealed) }
-                lastPersistElapsed = now.elapsedMs
+        runCatching { SealedRecordStore.save(PhoneDisk(context), record) }
+            .onSuccess { written ->
+                if (written) lastPersistElapsed = now.elapsedMs else Timber.w("Entitlement record not written")
             }
             .onFailure { Timber.w(it, "Could not seal the entitlement record") }
     }
@@ -183,13 +183,45 @@ object EntitlementStore {
         return DeviceTime(System.currentTimeMillis(), SystemClock.elapsedRealtime(), boot)
     }
 
-    private fun hasHmacKey(): Boolean = runCatching { keyStore.containsAlias(HMAC_ALIAS) }.getOrDefault(false)
+    /** The record and its first-seal mark in one preference file, committed; the key in the Keystore. */
+    private class PhoneDisk(context: Context) : EntitlementDisk {
 
-    private fun hmacKey(): SecretKey {
-        (keyStore.getKey(HMAC_ALIAS, null) as? SecretKey)?.let { return it }
-        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_HMAC_SHA256, KEYSTORE).run {
-            init(KeyGenParameterSpec.Builder(HMAC_ALIAS, KeyProperties.PURPOSE_SIGN).build())
-            generateKey()
+        private val prefs: SharedPreferences = privatePrefs(context, PrefFiles.Entitlement.NAME)
+
+        override val tagger = Tagger { data ->
+            Mac.getInstance(HMAC).run {
+                init(checkNotNull(keyStore.getKey(HMAC_ALIAS, null) as? SecretKey) { "No entitlement key" })
+                doFinal(data)
+            }
         }
+
+        override fun record(): String? = prefs[PrefFiles.Entitlement.SEALED]
+
+        override fun sealing(): Boolean = prefs[PrefFiles.Entitlement.SEALING]
+
+        override fun key(): KeyPresence = runCatching { keyStore.containsAlias(HMAC_ALIAS) }
+            .onFailure { Timber.w(it, "Could not read the Keystore for the entitlement key") }
+            .map { if (it) KeyPresence.PRESENT else KeyPresence.ABSENT }
+            .getOrDefault(KeyPresence.UNREADABLE)
+
+        override fun markSealing() {
+            check(prefs.edit().put(PrefFiles.Entitlement.SEALING, true).commit()) { "First-seal mark not written" }
+        }
+
+        override fun createKey() {
+            KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_HMAC_SHA256, KEYSTORE).run {
+                init(KeyGenParameterSpec.Builder(HMAC_ALIAS, KeyProperties.PURPOSE_SIGN).build())
+                generateKey()
+            }
+        }
+
+        override fun deleteKey() {
+            keyStore.deleteEntry(HMAC_ALIAS)
+        }
+
+        override fun commit(record: String?): Boolean = prefs.edit()
+            .put(PrefFiles.Entitlement.SEALED, record)
+            .remove(PrefFiles.Entitlement.SEALING)
+            .commit()
     }
 }
