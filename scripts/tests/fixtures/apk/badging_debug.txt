@@ -1,0 +1,9 @@
+package: name='com.sempermechanics.semper' versionCode='1' versionName='1.0' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'
+sdkVersion:'24'
+targetSdkVersion:'36'
+application-label:'Semper'
+application: label='Semper' icon='res/mipmap-anydpi-v26/ic_launcher.xml'
+testOnly='-1'
+application-debuggable
+launchable-activity: name='com.sempermechanics.semper.ui.splash.SplashActivity'  label='' icon=''
+native-code: 'arm64-v8a' 'x86_64'
