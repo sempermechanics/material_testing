@@ -51,6 +51,8 @@ async function open({ licenses = [IND, UNI], page = {}, routes = {}, user, resum
       "GET /v1/admin/users?status=PENDING&limit=50": () => json(200, { users: [] }),
       [LIST]: () => json(200, { licenses, page, demoMaxAnalyses: 25 }),
       "GET /v1/institutions/licenses": () => json(200, { licenses: [] }),
+      // The seat counts an opened roster card reads after the roster.
+      [`GET /v1/admin/licenses/${UNI.id}/summary`]: () => json(200, { counts: {} }),
       ...routes,
     },
   });
@@ -752,8 +754,10 @@ test("the roster is read and changed through the staff routes, whoever IT lists"
   confirms.answer(true);
   $("rosterRows").querySelector('button[data-act="remove"]').click();
   await settle();
+  const counts = `GET /v1/admin/licenses/${UNI.id}/summary`;
   assert.deepEqual(sent(/licenses\/lic-uni-1/), [
-    `GET ${STAFF_SEATS}`, `DELETE ${STAFF_SEATS}/u1`, `GET ${STAFF_SEATS}`, `GET /v1/admin/licenses/${UNI.id}`,
+    `GET ${STAFF_SEATS}`, counts, `DELETE ${STAFF_SEATS}/u1`, `GET ${STAFF_SEATS}`, counts,
+    `GET /v1/admin/licenses/${UNI.id}`,
   ]);
 });
 

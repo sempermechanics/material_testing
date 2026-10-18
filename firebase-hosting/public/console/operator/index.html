@@ -29,6 +29,8 @@
   <link rel="modulepreload" href="../switcher.js" />
   <link rel="modulepreload" href="../roles.js" />
   <link rel="modulepreload" href="../roster.js" />
+  <link rel="modulepreload" href="../roster-tools.js" />
+  <link rel="modulepreload" href="../audit-log.js" />
   <link rel="modulepreload" href="state.js" />
   <link rel="modulepreload" href="licences.js" />
   <link rel="modulepreload" href="mint.js" />
@@ -314,10 +316,15 @@
           <span class="spacer"></span>
           <button id="rosterClose" class="secondary">Close</button>
         </div>
+        <!-- Seat counts from GET …/summary (../roster-tools.js, shared with
+             the institution page): read after every roster load. -->
+        <div class="tiles" id="rosterTiles" aria-live="polite"></div>
         <div class="row">
           <input id="memberEmail" type="email" placeholder="person@university.edu" size="28" />
           <button id="addMember">Add to roster</button>
           <span id="rosterHint" class="muted"></span>
+          <span class="spacer"></span>
+          <button id="rosterExport" class="secondary">Export roster CSV</button>
         </div>
         <div class="wrap">
           <table>
@@ -326,6 +333,65 @@
             </thead>
             <tbody id="rosterRows"></tbody>
           </table>
+        </div>
+
+        <!-- Bulk import on the staff route (POST …/seats/import, a fresh
+             sign-in like every staff change): up to 500 addresses, each added
+             as Add to roster would; every row is answered. -->
+        <div class="part" id="rosterImport">
+          <h3>Import members</h3>
+          <p class="muted">
+            Paste addresses, one a line, or choose a CSV file with an
+            <span class="mono">email</span> column — an exported roster works
+            as it is. Up to 500 rows at a time. Anyone already on the roster
+            is left as they are, so importing a file twice is harmless.
+          </p>
+          <textarea id="rosterImportText" rows="5" spellcheck="false" autocomplete="off"
+                    placeholder="email&#10;ana@institution.edu&#10;ben@institution.edu"></textarea>
+          <div class="row">
+            <input id="rosterImportFile" type="file" accept=".csv,text/csv,text/plain" />
+            <span class="muted" id="rosterImportPreview"></span>
+            <span class="spacer"></span>
+            <button id="rosterImportSubmit" disabled>Import</button>
+          </div>
+          <p class="muted" id="rosterImportSummary"></p>
+          <div class="wrap" id="rosterImportResults" hidden>
+            <table>
+              <thead>
+                <tr><th>Row</th><th>Address</th><th>Result</th></tr>
+              </thead>
+              <tbody id="rosterImportRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- The licence's audit log (../audit-log.js), read on demand. -->
+        <div class="part" id="rosterAudit">
+          <h3>Audit log</h3>
+          <p class="muted">
+            Who changed what on this licence — its members, invitations and
+            devices — newest first. Exports hold up to 5,000 events; narrow the
+            dates for more.
+          </p>
+          <div class="row">
+            <label>From <input id="rosterAuditSince" type="date" /></label>
+            <label>To <input id="rosterAuditUntil" type="date" /></label>
+            <button id="rosterAuditLoad" class="secondary">Show</button>
+            <span class="spacer"></span>
+            <button id="rosterAuditCsv" class="secondary">Export CSV</button>
+            <button id="rosterAuditJson" class="secondary">Export JSON</button>
+          </div>
+          <div class="wrap">
+            <table>
+              <thead>
+                <tr><th>When</th><th>Action</th><th>By</th><th>Target</th><th>Detail</th></tr>
+              </thead>
+              <tbody id="rosterAuditRows"></tbody>
+            </table>
+          </div>
+          <div class="row">
+            <button id="rosterAuditMore" class="secondary" hidden>Older events</button>
+          </div>
         </div>
       </section>
 
