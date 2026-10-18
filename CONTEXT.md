@@ -132,27 +132,27 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   engine `23034fe`, 0.4.2). It is the first release under the new app id, so it installs
   beside the old app, not over it. Contents and install steps: the GitHub Release and
   [CHANGELOG](docs/ops/CHANGELOG.md). Nothing is on `main` beyond it.
-- **Branch `claude/new-session-jhfhj9`** (not merged, not deployed): the readiness-framework
-  cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-269, FI-17–FI-23). Built: signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
-  **minSdk 30**, version gate and kill switches on `/v1/config`, EMM config, revocation on step-up,
-  roster import/export/summary and per-licence audit export, rules tests, APK inspection, AAB,
-  monitoring as code. Owed outside the repo: Auth IAM grant (TD-214), signing key and pinned
-  public key (TD-215), index then backend then gateway deploy (TD-216), `apply-monitoring.sh`
-  and the posture check (TD-217), App Check enforce (TD-226), Play items (TD-229–TD-232);
-  first CI run of the Android half (TD-219).
+- **Branch `claude/new-session-jhfhj9`** (#448; CI green on `ae4c24a`, run 39158239853) and
+  **`claude/readiness-followups-jhfhj9`** on it (`75bac5f`, no CI run yet); neither merged nor
+  deployed. The readiness-framework cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
+  TD-214–TD-273, FI-17–FI-23): signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
+  **minSdk 30**, version gate and kill switches, EMM config, roster tools and audit export for IT
+  and staff, rules tests, APK inspection, AAB, monitoring and dashboards as code; the follow-up
+  adds the Auth Admin budget, hashed audit addresses, wider erasure, `POST …/licenses/search`
+  and release-train labels. Owed, in order at deploy: indexes (TD-216, TD-271), backend, gateway,
+  Hosting, monitoring (TD-217); also the Auth IAM grant (TD-214), signing key (TD-215), App Check
+  (TD-226), Play (TD-229–TD-232), the follow-up's CI run (TD-219). Licence keys are giving way
+  to account-anchored entitlements (TD-259).
 - **material_testing** merges this `main` (last `8ba7081`, material_testing#133,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
-- **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5).
-  At the 0.4.2 pin: the on-device characterization (TD-212). Pixel 6 runs for #435
-  (`HotPathMicroBenchmark`, `ViewerScrubBenchmark`). Optional: a Hosting deploy for #429.
-  The public release (website / Play) with each PR's emulator and Pixel checks, ADR-015's
-  queued-work upgrade check and the material_testing ports #298–#302; a licensed-account
-  smoke of share, PDF and Delete; transfer notifications and AVI import on a device
-  ([WORKFLOWS.md](docs/app/WORKFLOWS.md) §5.1a); Material Testing beside Semper on one
-  phone; the privacy-policy values (TD-36); unchecked rows in the gate.
+- **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5); the
+  on-device characterization at the 0.4.2 pin (TD-212); Pixel 6 benchmark runs for #435. The public
+  release (website / Play) with each PR's emulator and Pixel checks, ADR-015's queued-work upgrade
+  check and the material_testing ports #298–#302; a licensed-account smoke of share, PDF and
+  Delete; transfer notifications and AVI import on a device ([WORKFLOWS.md](docs/app/WORKFLOWS.md)
+  §5.1a); Material Testing beside Semper on one phone; the privacy-policy values (TD-36).
 - **Look it up; this list rots.** `gh pr list --state open`, [CHANGELOG.md](docs/ops/CHANGELOG.md), [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 
 ## Traps
