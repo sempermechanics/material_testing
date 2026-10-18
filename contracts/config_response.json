@@ -15,5 +15,9 @@
   "maxFilesPerSession": 600,
   "maxFrames": 500,
   "datCodecEncodingEnabled": false,
-  "licensePrefix": "SEMP-AB12"
+  "licensePrefix": "SEMP-AB12",
+  "minSupportedVersionCode": 30,
+  "recommendedVersionCode": 35,
+  "killSwitches": ["share"],
+  "entitlement": "aGVhZGVy.cGF5bG9hZA.c2lnbmF0dXJl"
 }

@@ -6,9 +6,18 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import audit, drive, errors, google_auth, repo, legal
+from .. import audit, drive, entitlement_token, errors, google_auth, repo, legal
+from .. import observability as obs
 from .. import rate_limit
-from ..deps import any_status_user, current_user, rate_limited, token_uid, verified_device
+from ..config import settings
+from ..deps import (
+    any_status_user,
+    current_user,
+    rate_limited,
+    request_app,
+    token_uid,
+    verified_device,
+)
 from ..validation import require_header_identifier
 from ._shared import json_dumps
 
@@ -136,9 +145,48 @@ def set_consents(
 
 
 @router.get("/v1/config")
-def app_config(user=Depends(current_user)):
-    """Resolved plan, entitlements, and product limits for the caller."""
-    return repo.resolve_user_config(user)
+def app_config(
+    user=Depends(current_user),
+    app=Depends(request_app),
+    x_device_id: str = Header(default=""),
+):
+    """Resolved plan, entitlements, and product limits for the caller.
+
+    Plus the fleet's release gate and kill switches (A6.1 / A6.4), which the
+    app applies itself — nothing here refuses an old build — and, when this
+    service holds a signing key and the caller is a registered device,
+    `entitlement`: the same mode and features as a signed token the app can
+    rely on offline (`entitlement_token`). Absent, never an error, otherwise.
+    The caller's `X-App-Version` is logged with the request, not checked.
+    """
+    config = repo.resolve_user_config(user)
+    body = {
+        **config,
+        "minSupportedVersionCode": settings.MIN_SUPPORTED_VERSION_CODE,
+        "recommendedVersionCode": settings.RECOMMENDED_VERSION_CODE,
+        "killSwitches": list(settings.KILL_SWITCHES),
+    }
+    token = _entitlement(user, config, app, x_device_id)
+    if token:
+        body["entitlement"] = token
+    return body
+
+
+def _entitlement(user: dict, config: dict, app: str, x_device_id: str) -> str | None:
+    """The signed entitlement for this caller, or None. Best-effort: the
+    token is an addition to /v1/config, so a malformed device id, a device
+    lookup or a signing failure omits it and is logged, never refused."""
+    if entitlement_token.signing_key() is None or not x_device_id:
+        return None
+    try:
+        device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
+        return entitlement_token.issue(
+            user, config, app=app, device_id=device_id, device=repo.get_device(device_id),
+        )
+    except Exception as e:  # noqa: BLE001 - an optional field must not fail the call
+        obs.log_event(log, logging.WARNING, "entitlement_not_issued",
+                      errorCode=type(e).__name__)
+        return None
 
 
 @router.get("/v1/me/export", dependencies=[rate_limited(rate_limit.export_bucket)])

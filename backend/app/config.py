@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 
@@ -10,6 +11,25 @@ def _env_int(name: str, default: str) -> int:
         return int(raw)
     except ValueError as e:
         raise RuntimeError(f"Environment variable {name}={raw!r} is not an integer") from e
+
+
+#: Features `KILL_SWITCHES` may name. The app ignores any other value.
+KILL_SWITCH_NAMES = ("backup", "share", "restore", "upload")
+
+
+def parse_kill_switches(raw: str) -> list[str]:
+    """The known kill switches in `raw`, in canonical order, de-duplicated.
+
+    An unknown name is logged and dropped: a typo must not stop the service
+    starting, and the app could not act on it anyway."""
+    named = {v for v in re.split(r"[\s,;]+", raw.strip().lower()) if v}
+    unknown = sorted(named.difference(KILL_SWITCH_NAMES))
+    if unknown:
+        logging.getLogger("semper").warning(
+            "KILL_SWITCHES: ignoring unknown value(s) %s; allowed: %s",
+            unknown, ", ".join(KILL_SWITCH_NAMES),
+        )
+    return [n for n in KILL_SWITCH_NAMES if n in named]
 
 
 class Settings:
@@ -223,6 +243,33 @@ class Settings:
     CHECK_REVOKED_ON_STEP_UP = os.environ.get(
         "CHECK_REVOKED_ON_STEP_UP", "false",
     ).strip().lower() in ("1", "true", "yes")
+
+    # --- signed entitlement (A4.1 / A4.3) -----------------------------------
+    # PEM of an EC P-256 private key. When set, GET /v1/config adds
+    # `entitlement`: a compact JWS (ES256) the app verifies offline against
+    # its pinned public keys (backend/app/entitlement_token.py). Read from
+    # Secret Manager at deploy (--set-secrets), never --set-env-vars and never
+    # the repo. Empty = no token is issued and nothing fails.
+    ENTITLEMENT_SIGNING_KEY = os.environ.get("ENTITLEMENT_SIGNING_KEY", "")
+    # Names the key in the token header, so the app can pin the next key
+    # beside the current one and a rotation needs no flag day.
+    ENTITLEMENT_KID = os.environ.get("ENTITLEMENT_KID", "ent-1")
+    # How long a token lets the app run its entitlement offline. A timed
+    # licence caps it at its end plus its own grace; a floating seat at the
+    # lease's end.
+    ENTITLEMENT_OFFLINE_GRACE_DAYS = _env_int("ENTITLEMENT_OFFLINE_GRACE_DAYS", "14")
+
+    # --- release gate and kill switches (A6.1 / A6.4) -----------------------
+    # Published by GET /v1/config. The server refuses nothing on them: the app
+    # compares its own versionCode and blocks (below minimum) or nudges (below
+    # recommended). 0 = no gate.
+    MIN_SUPPORTED_VERSION_CODE = _env_int("MIN_SUPPORTED_VERSION_CODE", "0")
+    RECOMMENDED_VERSION_CODE = _env_int("RECOMMENDED_VERSION_CODE", "0")
+    # Features the app must switch off, fleet-wide, without a release: any of
+    # backup, share, restore, upload. Separated by whitespace, `;` or `,`
+    # (prefer spaces: the deploy action splits env_vars on commas). An unknown
+    # name is dropped with a warning rather than failing the start.
+    KILL_SWITCHES = parse_kill_switches(os.environ.get("KILL_SWITCHES", ""))
 
     # Where "a new user is waiting for approval" mail goes. Same address the app
     # shows in Settings -> Help & support and on the pending-approval screen.
