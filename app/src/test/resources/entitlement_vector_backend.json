@@ -1,0 +1,35 @@
+{
+  "_comment": "TEST ONLY. Entitlement token test vector shared by the backend (tests/test_entitlement_token.py) and the Android verifier. The keys are derived from the public seeds below (tests/key_helpers.seeded_p256_key: sha256(seed) mod (n-1) + 1 on P-256) and must never sign anything real.",
+  "signerKeySeed": "semper-entitlement-vector-v1/signer TEST ONLY",
+  "deviceKeySeed": "semper-entitlement-vector-v1/device TEST ONLY",
+  "kid": "test-ent-1",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgBInCHubA9Ukvnzhg8fC9Cl2nuv4\nl0unAHCXU2/iaHrzsIBt8llHfmgDI0hR/hm6QFTD6bt15hF1Dvoq7uQkcA==\n-----END PUBLIC KEY-----\n",
+  "devicePublicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEhxIUKDMf6hpfiybdC1zUs7Q40ade\n7D8x1vuzOu5dpVtK3DvkrVftavW9kltVJfHs7d9ouQkkZsTXCXiZEVYKoA==\n-----END PUBLIC KEY-----\n",
+  "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3QtZW50LTEiLCJ0eXAiOiJzZW1wZXItZW50K2p3cyJ9.eyJhcHAiOiJzZW1wZXIiLCJkZXYiOiJhbmQtN2YzZTlhMWMyYjRkNmU4ZiIsImRrdCI6IlBlZjNyanlTQWw3Q2NOWV9mOUh4elhLMTZKQmxaRExiblEwdVJ2Yk96UDgiLCJleHAiOjE3OTI3MTM2MDAsImZlYXR1cmVzIjp7ImJhY2t1cCI6dHJ1ZSwibWF4QW5hbHlzZXMiOjk5OSwic2hhcmUiOnRydWV9LCJncmFjZVVudGlsIjoxNzkyNzEzNjAwLCJpYXQiOjE3OTIyODE2MDAsImlzcyI6InNlbXBlci1hcGkiLCJsaWMiOiJjZTJkMWNjMzBmOGY5MjRhMGIwZTYyMTU1NjkwZGVhY2FmMjUwNTE0NThkY2JhNGI3ZDcwY2MyZmM2NWRmMjM0IiwibW9kZSI6ImxpY2Vuc2VkIiwicmVmcmVzaEFmdGVyIjoxNzkyMzY4MDAwLCJzdWIiOiJ1aWQtdGVzdC0wMDAxIn0.mJiYd1V8KQuxtwLSrVWQNP-tV55tnYA0q6tWdw0b0socdq9YLopY8H26OrBzdFljThN9E8jJoo32CfZeT51wvA",
+  "header": {
+    "alg": "ES256",
+    "kid": "test-ent-1",
+    "typ": "semper-ent+jws"
+  },
+  "payload": {
+    "iss": "semper-api",
+    "sub": "uid-test-0001",
+    "app": "semper",
+    "dev": "and-7f3e9a1c2b4d6e8f",
+    "dkt": "Pef3rjySAl7CcNY_f9HxzXK16JBlZDLbnQ0uRvbOzP8",
+    "mode": "licensed",
+    "features": {
+      "share": true,
+      "backup": true,
+      "maxAnalyses": 999
+    },
+    "lic": "ce2d1cc30f8f924a0b0e62155690deacaf25051458dcba4b7d70cc2fc65df234",
+    "iat": 1792281600,
+    "refreshAfter": 1792368000,
+    "graceUntil": 1792713600,
+    "exp": 1792713600
+  },
+  "verifyAt": 1792281600,
+  "expiredAt": 1792713600,
+  "tamperedToken": "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3QtZW50LTEiLCJ0eXAiOiJzZW1wZXItZW50K2p3cyJ9.eyJhcHAiOiJzZW1wZXIiLCJkZXYiOiJhbmQtN2YzZTlhMWMyYjRkNmU4ZiIsImRrdCI6IlBlZjNyanlTQWw3Q2NOWV9mOUh4elhLMTZKQmxaRExiblEwdVJ2Yk96UDgiLCJleHAiOjE3OTI3MTM2MDAsImZlYXR1cmVzIjp7ImJhY2t1cCI6dHJ1ZSwibWF4QW5hbHlzZXMiOjEwMDAwMCwic2hhcmUiOnRydWV9LCJncmFjZVVudGlsIjoxNzkyNzEzNjAwLCJpYXQiOjE3OTIyODE2MDAsImlzcyI6InNlbXBlci1hcGkiLCJsaWMiOiJjZTJkMWNjMzBmOGY5MjRhMGIwZTYyMTU1NjkwZGVhY2FmMjUwNTE0NThkY2JhNGI3ZDcwY2MyZmM2NWRmMjM0IiwibW9kZSI6ImxpY2Vuc2VkIiwicmVmcmVzaEFmdGVyIjoxNzkyMzY4MDAwLCJzdWIiOiJ1aWQtdGVzdC0wMDAxIn0.mJiYd1V8KQuxtwLSrVWQNP-tV55tnYA0q6tWdw0b0socdq9YLopY8H26OrBzdFljThN9E8jJoo32CfZeT51wvA"
+}
