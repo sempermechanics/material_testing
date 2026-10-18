@@ -39,6 +39,8 @@ const REFUSALS = {
   device_lock_contended: SAID.busy,
   rate_limited: SAID.rateLimited,
   not_approved: SAID.notApproved,
+  // Checked before activation: a claim binds a licence to the address.
+  email_not_verified: SAID.emailNotVerified,
 };
 
 $("claimHelp").textContent = CLAIM.intro;

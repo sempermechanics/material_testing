@@ -234,6 +234,7 @@ const REFUSALS = [
   [503, "device_lock_contended", CLAIM.refusals.busy],
   [429, "rate_limited", CLAIM.refusals.rateLimited],
   [403, "not_approved", CLAIM.refusals.notApproved],
+  [403, "email_not_verified", CLAIM.refusals.emailNotVerified],
   [403, "mfa_required", COMMON.mfa_required],
   [503, "auth_check_busy", COMMON.auth_check_busy],
 ];
