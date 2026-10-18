@@ -1197,4 +1197,12 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- One-off licence refresh (LicenseConfigWorker.refreshNow); shown only before Android 12 -->
     <string name="license_refresh_title">Checking your licence</string>
+    <!-- Refresh licence (ui/limit/LicenseRefresh): Settings' account section and the
+         analysis-limit screen. The app only consumes the licence the account holds:
+         no price, no purchase and no link to one here. -->
+    <string name="license_refresh_action">Refresh licence</string>
+    <string name="license_refresh_institution">Licensed (institution seat)</string>
+    <string name="license_refresh_individual">Licensed (Semper licence)</string>
+    <string name="license_refresh_demo">Still on the demo</string>
+    <string name="license_refresh_unreachable">Couldn\'t reach Semper — will retry</string>
 </resources>

@@ -66,6 +66,16 @@
         android:text="@string/limit_recheck"
         android:textColor="@color/sky_primary" />
 
+    <!-- For an account that expects a seat or a licence (LicenseRefresh). -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnRefreshLicense"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/license_refresh_action"
+        android:textColor="@color/sky_primary" />
+
     <ProgressBar
         android:id="@+id/progressLimit"
         android:layout_width="22dp"

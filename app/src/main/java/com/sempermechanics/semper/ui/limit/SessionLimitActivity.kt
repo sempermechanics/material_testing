@@ -43,6 +43,7 @@ class SessionLimitActivity : AppCompatActivity() {
 
         binding.btnEmailSupport.setOnClickListener { emailSupport() }
         binding.btnRecheckLimit.setOnClickListener { recheck() }
+        binding.btnRefreshLicense.setOnClickListener { refreshLicense() }
         binding.tvLimitBack.setOnClickListener { finish() }
     }
 
@@ -70,6 +71,21 @@ class SessionLimitActivity : AppCompatActivity() {
             body = body,
             purpose = "the limit request",
         )
+    }
+
+    /**
+     * For an account that expects a seat or a licence: ask `/v1/config` now
+     * ([LicenseRefresh]), say what it found, and when the licence changed run
+     * the limit check again, which closes this screen once there is room.
+     */
+    private fun refreshLicense() {
+        setLoading(true)
+        lifecycleScope.launch {
+            val outcome = LicenseRefresh.run(this@SessionLimitActivity)
+            setLoading(false)
+            Feedback.toast(this@SessionLimitActivity, outcome.result.messageRes, long = true)
+            if (outcome.changed) recheck() else renderQuota()
+        }
     }
 
     /** Re-query the backend; if the account is under the limit again, dismiss. */
@@ -109,6 +125,7 @@ class SessionLimitActivity : AppCompatActivity() {
         binding.progressLimit.setBusy(
             loading,
             binding.btnRecheckLimit,
+            binding.btnRefreshLicense,
             binding.btnEmailSupport,
             idleVisibility = View.INVISIBLE,
         )
