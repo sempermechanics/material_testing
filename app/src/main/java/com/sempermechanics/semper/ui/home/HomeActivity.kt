@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.snackbar.Snackbar
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudBackupListing
@@ -18,6 +19,8 @@ import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
 import com.sempermechanics.semper.data.net.AccountCache
+import com.sempermechanics.semper.data.policy.AppPolicy
+import com.sempermechanics.semper.data.policy.VersionVerdict
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.isRestorable
@@ -38,6 +41,7 @@ import com.sempermechanics.semper.ui.common.dialog.Feedback
 import com.sempermechanics.semper.ui.common.media.MediaPickerSheet
 import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
 import com.sempermechanics.semper.ui.common.transfer.DeleteFeedback
+import com.sempermechanics.semper.ui.limit.UpdateRequiredActivity
 import com.sempermechanics.semper.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -177,6 +181,7 @@ class HomeActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, backCallback)
 
         openLimitScreenIfFull()
+        if (savedInstanceState == null) nudgeIfUpdateRecommended()
         HomeTransferWatch(this, adapter, quotaCard, ::showsCloudState) { refresh() }.observe()
         deleteFeedback.observe()
     }
@@ -222,12 +227,14 @@ class HomeActivity : AppCompatActivity() {
      * blocked behind the persistent limit screen (email support) instead of
      * failing on upload.
      */
-    private fun mayStartNewAnalysis(): Boolean {
-        if (LicenseEntitlements.isSeatRequiredToStart(this)) {
+    private fun mayStartNewAnalysis(): Boolean = when {
+        // A build the backend no longer supports: its gate screen is opened.
+        !AnalysisNavHelper.ensureUpToDate(this) -> false
+        LicenseEntitlements.isSeatRequiredToStart(this) -> {
             AnalysisNavHelper.openSeatRequired(this)
-            return false
+            false
         }
-        return !quotaCard.openLimitScreenIfReached()
+        else -> !quotaCard.openLimitScreenIfReached()
     }
 
     /**
@@ -318,7 +325,7 @@ class HomeActivity : AppCompatActivity() {
         backCallback = backCallback,
         onRefresh = { refresh() },
         onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
-        restoreEnabled = { showsCloudState() },
+        restoreEnabled = { LicenseEntitlements.restoreEnabled(this) },
         onRestore = { records -> startRestore(records) },
         onRerun = { record -> startRerun(record) },
         onDeleteQueued = { workId, items ->
@@ -349,6 +356,28 @@ class HomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refresh()
+        openUpdateGateOnce()
+    }
+
+    /**
+     * A6.1, on entry: a build the backend no longer supports opens its gate
+     * once a process (the minimum can arrive with the background status
+     * check, after Home is up, so every resume asks). Back on Home, the list,
+     * the viewer and exports all still work.
+     */
+    private fun openUpdateGateOnce() {
+        if (UpdateRequiredActivity.shownThisProcess || AppPolicy.newAnalysisAllowed(this)) return
+        AnalysisNavHelper.openUpdateRequired(this)
+    }
+
+    /** Below the recommended version: one snackbar per installed version and recommendation. */
+    private fun nudgeIfUpdateRecommended() {
+        val verdict = AppPolicy.version(this) as? VersionVerdict.Recommended ?: return
+        if (!verdict.nudge) return
+        AppPolicy.markNudged(this, verdict)
+        Snackbar.make(binding.homeRoot, R.string.update_recommended, Snackbar.LENGTH_LONG)
+            .setAction(R.string.update_action) { UpdateRequiredActivity.openStore(this) }
+            .show()
     }
 
     /**
@@ -453,7 +482,7 @@ class HomeActivity : AppCompatActivity() {
             hasLocal -> startActivity(SessionOpenHelper.intentFor(this, record))
             // A demo account cannot pull its recorded copy back, so a row with
             // no local data is simply unopenable — no download offer.
-            record.isRestorable(hasLocal) && showsCloudState() -> Dialogs.confirm(
+            record.isRestorable(hasLocal) && LicenseEntitlements.restoreEnabled(this) -> Dialogs.confirm(
                 this,
                 getString(R.string.restore_analysis_title_fmt, record.name),
                 getText(R.string.restore_analysis_body),
@@ -471,6 +500,10 @@ class HomeActivity : AppCompatActivity() {
      */
     private fun startRestore(records: List<SessionRecord>) {
         if (records.isEmpty()) return
+        if (!LicenseEntitlements.restoreEnabled(this)) {
+            Feedback.toast(this, R.string.restore_paused, long = true)
+            return
+        }
         selection.clearSelection()
         queueRestores {
             records.map { record ->

@@ -90,9 +90,15 @@ class DeviceKeys(private val context: Context) {
     /** This device's id; see [deviceId]. */
     fun getDeviceId(): String = deviceId(context)
 
+    /**
+     * The public key's X.509 SubjectPublicKeyInfo DER: what [getPublicKeyPem]
+     * wraps, and what an entitlement token's `dkt` claim is the SHA-256 of.
+     */
+    fun publicKeyDer(): ByteArray = keyStore.getCertificate(KEY_ALIAS).publicKey.encoded
+
     /** SubjectPublicKeyInfo as a standard PEM block (parsed by the backend). */
     fun getPublicKeyPem(): String {
-        val der = keyStore.getCertificate(KEY_ALIAS).publicKey.encoded
+        val der = publicKeyDer()
         val b64 = Base64.encodeToString(der, Base64.NO_WRAP)
         val wrapped = b64.chunked(PEM_LINE_LENGTH).joinToString("\n")
         return "-----BEGIN PUBLIC KEY-----\n$wrapped\n-----END PUBLIC KEY-----\n"

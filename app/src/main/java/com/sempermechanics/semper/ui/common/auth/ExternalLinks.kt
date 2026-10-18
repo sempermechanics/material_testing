@@ -25,4 +25,13 @@ object ExternalLinks {
         Feedback.toast(context, url, long = true)
         false
     }
+
+    /** Opens [url]; false when nothing can handle it, with no toast: for a caller that has a fallback. */
+    fun openQuietly(context: Context, url: String): Boolean = try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+        true
+    } catch (e: ActivityNotFoundException) {
+        Timber.d(e, "Nothing handles %s", url)
+        false
+    }
 }

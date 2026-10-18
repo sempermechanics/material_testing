@@ -15,5 +15,11 @@
   "maxFilesPerSession": 600,
   "maxFrames": 500,
   "datCodecEncodingEnabled": false,
-  "licensePrefix": "SEMP-AB12"
+  "licensePrefix": "SEMP-AB12",
+  "entitlement": "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3QtZW50LTEiLCJ0eXAiOiJzZW1wZXItZW50K2p3cyJ9.eyJhcHAiOiJzZW1wZXIiLCJkZXYiOiJhbmQtN2YzZTlhMWMyYjRkNmU4ZiIsImRrdCI6IlBlZjNyanlTQWw3Q2NOWV9mOUh4elhLMTZKQmxaRExiblEwdVJ2Yk96UDgiLCJleHAiOjE3OTI3MTM2MDAsImZlYXR1cmVzIjp7ImJhY2t1cCI6dHJ1ZSwibWF4QW5hbHlzZXMiOjk5OSwic2hhcmUiOnRydWV9LCJncmFjZVVudGlsIjoxNzkyNzEzNjAwLCJpYXQiOjE3OTIyODE2MDAsImlzcyI6InNlbXBlci1hcGkiLCJsaWMiOiJjZTJkMWNjMzBmOGY5MjRhMGIwZTYyMTU1NjkwZGVhY2FmMjUwNTE0NThkY2JhNGI3ZDcwY2MyZmM2NWRmMjM0IiwibW9kZSI6ImxpY2Vuc2VkIiwicmVmcmVzaEFmdGVyIjoxNzkyMzY4MDAwLCJzdWIiOiJ1aWQtdGVzdC0wMDAxIn0.mJiYd1V8KQuxtwLSrVWQNP-tV55tnYA0q6tWdw0b0socdq9YLopY8H26OrBzdFljThN9E8jJoo32CfZeT51wvA",
+  "minSupportedVersionCode": 30,
+  "recommendedVersionCode": 36,
+  "killSwitches": [
+    "restore"
+  ]
 }
