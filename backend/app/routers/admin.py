@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import apps, audit, errors, repo, statuses
+from .. import apps, audit, errors, google_auth, repo, statuses
 from .. import rate_limit
 from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
@@ -53,10 +53,21 @@ def admin_approve_user(uid: Uid, ctx=Depends(attested_or_mfa_admin)):
 
 @router.post("/v1/admin/users/{uid}/revoke", dependencies=[rate_limited(rate_limit.admin_bucket)])
 def admin_revoke_user(uid: Uid, ctx=Depends(attested_or_mfa_admin)):
+    """Suspend an account, then revoke its Firebase refresh tokens.
+
+    The suspension is the control: every route behind `current_user` refuses
+    a SUSPENDED account from the next request. Revoking the refresh tokens
+    (A5.5) only stops new ID tokens being minted from existing sign-ins, and
+    is best-effort until the runtime account holds Firebase Auth admin on the
+    Auth project, so the audit row says whether it happened
+    (`sessionsRevoked`) and the request never fails on it.
+    """
     admin = ctx.user
     if not repo.set_user_status(uid, statuses.ACCESS_SUSPENDED):
         raise HTTPException(404, errors.USER_NOT_FOUND)
-    audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid})
+    revoked = google_auth.revoke_sessions(uid)
+    audit.record(admin["uid"], action="ADMIN_REVOKE", target={"type": "user", "id": uid},
+                 detail={"sessionsRevoked": revoked})
     return {"uid": uid, "access_status": statuses.ACCESS_SUSPENDED}
 
 

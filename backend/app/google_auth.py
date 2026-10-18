@@ -7,6 +7,7 @@ credentials come from the metadata server (ADC); the Drive scope is layered on
 by having the runtime SA impersonate *itself* via the IAM Credentials API.
 """
 import functools
+import logging
 
 import firebase_admin
 import google.auth
@@ -16,6 +17,7 @@ from google.auth.transport.requests import Request as GRequest
 
 from .config import settings
 
+log = logging.getLogger("semper.auth")
 _request = GRequest()
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 
@@ -57,7 +59,7 @@ def drive_access_token() -> str:
     return _drive_creds.token
 
 
-def verify_id_token(token: str) -> dict:
+def verify_id_token(token: str, *, check_revoked: bool = False) -> dict:
     """Verify a **Firebase** ID token; raises on failure.
 
     firebase-admin checks the signature (against Google's rotating public certs),
@@ -67,8 +69,52 @@ def verify_id_token(token: str) -> dict:
     ``firebase.sign_in_provider``. Domain gating and the email-verified rule are
     applied later, in get_or_create_user, so unverified users can still sign in
     and land PENDING.
+
+    `check_revoked=True` also asks the Auth project whether the user's refresh
+    tokens were revoked after this token was minted, or the account disabled
+    (`fb_auth.RevokedIdTokenError` / `fb_auth.UserDisabledError`). That is a
+    network call and needs the runtime account to hold Firebase Auth admin on
+    the Auth project, so only `deps.step_up_check` asks it, and only when
+    `CHECK_REVOKED_ON_STEP_UP` is on.
     """
-    return fb_auth.verify_id_token(token)
+    return fb_auth.verify_id_token(token, check_revoked=check_revoked)
+
+
+# --- Admin-SDK user management (best-effort) --------------------------------
+# Both calls need `roles/firebaseauth.admin` (or a role with
+# firebaseauth.users.update / .delete) for the runtime service account on the
+# *Auth* project (FIREBASE_PROJECT_ID), which it does not hold yet. Neither may
+# fail the request it rides on: the state change in Firestore is the control,
+# and these only shorten how long an already-minted token keeps working. Each
+# logs and answers False, and the caller records that answer in its audit row.
+
+
+def revoke_sessions(uid: str) -> bool:
+    """Revoke every refresh token `uid` holds, so no new ID token can be
+    minted from an existing sign-in. Tokens already minted stay valid until
+    they expire (an hour at most) unless a route checks revocation. True when
+    the Auth project accepted it."""
+    try:
+        fb_auth.revoke_refresh_tokens(uid)
+    except Exception as e:  # noqa: BLE001 - best-effort; see the block comment
+        log.warning("revoke_refresh_tokens failed uid=%s: %s: %s",
+                    uid, type(e).__name__, str(e)[:200])
+        return False
+    return True
+
+
+def delete_auth_user(uid: str) -> bool:
+    """Delete the Firebase Auth user `uid`. A user that is already gone counts
+    as deleted. True when the Auth project no longer holds the user."""
+    try:
+        fb_auth.delete_user(uid)
+    except fb_auth.UserNotFoundError:
+        return True
+    except Exception as e:  # noqa: BLE001 - best-effort; see the block comment
+        log.warning("delete_user failed uid=%s: %s: %s",
+                    uid, type(e).__name__, str(e)[:200])
+        return False
+    return True
 
 
 def verify_app_check_token(token: str) -> dict:
