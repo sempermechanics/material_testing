@@ -20,6 +20,10 @@ description = "Public/client identifiers and deleted historical noise (not Admin
 # commits 9a3623a (its only hit is google-services.json) and 46dbc60 (no hit).
 paths = [
   '''(^|/)google-services\.json$''',
+  # Entitlement-token test vectors (the jwt rule): signed with keys derived
+  # from public seeds or generated per run, verified by tests on both sides,
+  # never accepted by a real build (its pins hold only production kids).
+  '''(^|/)entitlement_vector[A-Za-z_]*\.json$''',
 ]
 commits = [
   '''46e50fd23512e481f4d1a4c3697eb3d6aec6d68f''',
