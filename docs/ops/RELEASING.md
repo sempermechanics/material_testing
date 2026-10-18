@@ -10,9 +10,10 @@ Private alpha uses the same **`beta`** Release channel — there is no separate
 `alpha` input on [`release.yml`](../../.github/workflows/release.yml).
 
 1. Tag and run Release on **`main`** with channel **`beta`**
-   (e.g. `v1.0-beta.1`) → private GitHub Release + signed APK.
-2. Sideload onto tester devices (Pixel OK). Testers need access to this private
-   repo’s Releases (or you pass the APK out-of-band).
+   (e.g. `v1.0-beta.1`) → GitHub pre-release + signed APK.
+2. Sideload onto tester devices (Pixel OK). The repository reports **public**
+   (GitHub REST API, checked 2026-10-18), so anyone with the link can download
+   from its Releases; treat a release as published, not private.
 3. Smoke sign-in, one analysis, backup/sync, and open results. Do not publish to
    Play or the public website for this ring.
 
@@ -59,16 +60,29 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    (beta/stable); the version drives `versionName`/`versionCode` automatically
    (see Versioning). Jobs refuse to run on other refs. The workflow uses the
    `release` environment (and repo-level secrets/vars on Free orgs).
+   When the release ships with a backend deploy, dispatch `deploy-backend.yml`
+   with `release_train` set to the release tag (`v1.2-beta.5`), so the service and
+   the revision carry the label `release-train=v1-2-beta-5` (lowercased, dots to
+   dashes). Left empty, the deploy takes the newest `v*` tag reachable from the
+   deployed commit. Name the backend commit and revision in the release notes
+   ([CI.md](CI.md), Backend deploy).
 5. **Smoke the release build on a device** — clean install, sign in,
    run one analysis, confirm the session syncs and each share target works.
-6. **Distribute publicly (manual)** — this workflow only builds a signed APK and
-   a **private** GitHub Release. Customer distribution is separate:
+6. **Distribute publicly (manual)** — this workflow builds a signed APK and a
+   GitHub Release in this repository, a pre-release on the `beta` channel. The
+   repository is public, so that Release is downloadable by anyone, and it is
+   where a sideloaded build's **Update** button goes: below the minimum version,
+   a build not installed by Play opens
+   `https://github.com/sempermechanics/semperdic-app/releases` (the list, since
+   `/latest` skips pre-releases; `ui/limit/UpdateSource.kt:19`), and a Play
+   install opens its Play listing. Attach the APK to every release. Customer
+   distribution is separate:
    - Upload the APK (GitHub Release on
      [sempermechanics/website](https://github.com/sempermechanics/website) preferred) + update
      `downloads/manifest.json`, push so GitHub Pages redeploys — see that repo’s
      `RELEASING.md` — and/or publish on Play Store.
    - Announce on https://sempermechanics.com/ / Discussions on
-     `sempermechanics/website` (not this private repo).
+     `sempermechanics/website`, not this repository.
    - For Play, upload the **`release-aab`** artifact (or the `.aab` attached to the
      GitHub Release), not the APK; see "Staged rollout on Google Play" below.
 
