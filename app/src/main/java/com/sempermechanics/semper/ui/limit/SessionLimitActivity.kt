@@ -8,6 +8,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.DeviceKeys
+import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.net.AccountCache
 import com.sempermechanics.semper.data.session.SessionQuota
@@ -47,7 +48,9 @@ class SessionLimitActivity : AppCompatActivity() {
 
     private fun renderQuota() {
         val used = AccountCache.quotaUsed(this)
-        val max = AccountCache.quotaMax(this)
+        // The cap the gate enforces, not the server's maxSessions: with the
+        // entitlement token lapsed that is demo's (TD-263).
+        val max = LicenseEntitlements.shownAnalysisCap(this)
         // Only show the counter when the backend actually reported numbers.
         binding.tvLimitQuota.isVisible = max > 0
         if (max > 0) {
@@ -58,7 +61,7 @@ class SessionLimitActivity : AppCompatActivity() {
     /** Opens the mail app pre-filled to support with account + device context. */
     private fun emailSupport() {
         val email = AccountCache.cachedEmail(this) ?: getString(R.string.pending_unknown_account)
-        val quota = "Quota: ${AccountCache.quotaUsed(this)}/${AccountCache.quotaMax(this)}"
+        val quota = "Quota: ${AccountCache.quotaUsed(this)}/${LicenseEntitlements.shownAnalysisCap(this)}"
         val context = SupportMail.contextLines(email, DeviceKeys.deviceId(this), extra = listOf(quota))
         val body = "I've reached my Semper analysis limit and would like it raised.\n\n$context"
         SupportMail.open(
