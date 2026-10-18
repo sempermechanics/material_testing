@@ -47,6 +47,12 @@ object ClientNonce {
         return "t1.$seconds.${base64Url(bytes)}"
     }
 
+    /**
+     * The server's clock now, as the last `Date` header taught it, or null
+     * before any. What an entitlement token's clock anchors to beside its `iat`.
+     */
+    fun serverNowMs(nowMs: Long = System.currentTimeMillis()): Long? = offsetMs?.let { nowMs + it }
+
     fun observeServerTime(serverMs: Long, nowMs: Long = System.currentTimeMillis()) {
         offsetMs = serverMs - nowMs
     }
@@ -65,7 +71,7 @@ object ClientNonce {
         refused = false
     }
 
-    /** android.util.Base64 is not on the JVM test classpath; java.util.Base64 needs API 26. */
+    /** android.util.Base64 is not on the JVM test classpath; written before minSdk 30 allowed java.util.Base64. */
     internal fun base64Url(bytes: ByteArray): String {
         val out = StringBuilder()
         var buffer = 0

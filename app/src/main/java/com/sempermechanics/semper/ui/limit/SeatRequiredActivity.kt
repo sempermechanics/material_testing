@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.LicenseConfigWorker
+import com.sempermechanics.semper.data.account.SeatLease
 import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.AppRemoteConfig
@@ -70,6 +71,8 @@ class SeatRequiredActivity : AppCompatActivity() {
             outcome
                 .onSuccess { config ->
                     AppRemoteConfig.apply(this@SeatRequiredActivity, config)
+                    // The checkout answer has no entitlement token; /v1/config does.
+                    SeatLease.refreshConfigBestEffort(this@SeatRequiredActivity)
                     LicenseConfigWorker.enqueue(this@SeatRequiredActivity)
                     Feedback.toast(this@SeatRequiredActivity, R.string.seat_taken)
                     finish()

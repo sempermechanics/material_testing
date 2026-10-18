@@ -123,6 +123,19 @@ data class AppConfigDto(
     /** Past expiry but still fully entitled. Nothing is withdrawn — this only
      * says a renewal is overdue. */
     val inGrace: Boolean = false,
+    /** The signed entitlement token (compact JWS, `semper-ent+jws`), or null
+     * from a backend that predates tokens or could not issue one. Only
+     * `/v1/config` sends it. See
+     * [EntitlementStore][com.sempermechanics.semper.data.account.entitlement.EntitlementStore]. */
+    val entitlement: String? = null,
+    /** Builds below this versionCode must update before starting new work;
+     * null or 0 = no minimum. */
+    val minSupportedVersionCode: Int? = null,
+    /** Builds below this versionCode are nudged once to update; null or 0 = none. */
+    val recommendedVersionCode: Int? = null,
+    /** Features switched off fleet-wide: `backup`, `share`, `restore`, `upload`.
+     * Null or empty = none. */
+    val killSwitches: List<String>? = null,
 )
 
 @Serializable

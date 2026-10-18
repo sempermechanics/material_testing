@@ -19,9 +19,9 @@
         <item name="colorError">@color/semantic_danger</item>
 
         <!-- Dark mode: the system inverts this light palette at render time
-             (API 29+; older devices stay light). Views showing measurement
+             (API 29+, so every supported device). Views showing measurement
              colors opt out per-view with forceDarkAllowed="false". -->
-        <item name="android:forceDarkAllowed" tools:targetApi="q">true</item>
+        <item name="android:forceDarkAllowed">true</item>
 
         <!-- System bars: force dark never touches these, so the night
              variants come from values-night resource aliases -->

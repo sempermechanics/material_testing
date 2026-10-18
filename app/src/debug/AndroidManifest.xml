@@ -5,12 +5,12 @@
 
     <!-- HotPathMicroBenchmark runs in :app's androidTest, so the app under test is this
          one, and BenchmarkRule grants it WRITE_EXTERNAL_STORAGE on every API level. The
-         main manifest requests it only up to API 32, so on the API 34 CI emulator the
-         grant threw a SecurityException before any benchmark ran. Debug builds only. -->
+         main manifest no longer requests it (minSdk 30: scoped storage gives it no
+         access), and without a declaration the grant throws a SecurityException before
+         any benchmark runs. Debug builds only. -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage"
-        tools:remove="android:maxSdkVersion" />
+        tools:ignore="ScopedStorage" />
 
     <application>
         <activity

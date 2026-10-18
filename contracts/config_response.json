@@ -16,8 +16,10 @@
   "maxFrames": 500,
   "datCodecEncodingEnabled": false,
   "licensePrefix": "SEMP-AB12",
+  "entitlement": "header.payload.signature",
   "minSupportedVersionCode": 30,
-  "recommendedVersionCode": 35,
-  "killSwitches": ["share"],
-  "entitlement": "aGVhZGVy.cGF5bG9hZA.c2lnbmF0dXJl"
+  "recommendedVersionCode": 36,
+  "killSwitches": [
+    "restore"
+  ]
 }

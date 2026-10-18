@@ -73,8 +73,36 @@ if (requireCloudApi && !semperApiBaseUrl.startsWith("https://")) {
 }
 
 // Optional comma-separated CertificatePinner pins for the API host
-// (e.g. sha256/AAAA...=). Empty = system trust store only.
-val semperApiCertPins = semperProperty("SEMPER_API_CERT_PINS") ?: ""
+// (e.g. sha256/AAAA...=). Empty = system trust store only. The environment
+// wins over local.properties, as for SEMPER_API_BASE_URL, so the release
+// workflow can supply them from a secret or variable.
+val semperApiCertPins =
+    semperEnv("SEMPER_API_CERT_PINS")
+        ?: semperProperty("SEMPER_API_CERT_PINS")
+        ?: ""
+
+// The backend's entitlement-token signing keys this build trusts:
+// `kid:base64SPKI,kid2:base64SPKI` (EC P-256 SubjectPublicKeyInfo DER, standard
+// base64). Several kids = a key rotation in progress. Empty = tokens are
+// ignored and the unsigned /v1/config cache alone decides, as before tokens
+// (EntitlementStore). Environment, then -PSEMPER_ENTITLEMENT_PUBKEYS, then
+// local.properties.
+val semperEntitlementPubkeys =
+    semperEnv("SEMPER_ENTITLEMENT_PUBKEYS")
+        ?: (project.findProperty("SEMPER_ENTITLEMENT_PUBKEYS") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: semperProperty("SEMPER_ENTITLEMENT_PUBKEYS")
+        ?: ""
+
+// Both land in a Java string literal: refuse anything but the base64, colon,
+// comma and slash alphabet rather than generate broken (or injected) source.
+listOf(
+    "SEMPER_API_CERT_PINS" to semperApiCertPins,
+    "SEMPER_ENTITLEMENT_PUBKEYS" to semperEntitlementPubkeys,
+).forEach { (name, value) ->
+    if (!Regex("^[A-Za-z0-9+/=:,._ -]*$").matches(value)) {
+        throw GradleException("$name holds characters outside base64, ':', ',' and '/'")
+    }
+}
 
 // Release signing. The keystore and passwords come from the environment
 // (SIGNING_* — set by .github/workflows/release.yml and the tier-5 CI job),
@@ -99,7 +127,7 @@ android {
 
     defaultConfig {
         applicationId = "com.sempermechanics.semper"
-        minSdk = 24
+        minSdk = 30
         targetSdk = 36
         // Overridable from the release workflow: -PversionCode / -PversionName.
         // Every build handed to anyone must bump versionCode (see docs/ops/RELEASING.md).
@@ -108,6 +136,7 @@ android {
 
         buildConfigField("String", "SEMPER_API_BASE_URL", "\"$semperApiBaseUrl\"")
         buildConfigField("String", "SEMPER_API_CERT_PINS", "\"$semperApiCertPins\"")
+        buildConfigField("String", "SEMPER_ENTITLEMENT_PUBKEYS", "\"$semperEntitlementPubkeys\"")
         // Overridden per build type below; the default keeps the flag defined
         // for any variant that doesn't set it (androidTest, lint models).
         buildConfigField("boolean", "DEV_AUTH_BYPASS", "false")

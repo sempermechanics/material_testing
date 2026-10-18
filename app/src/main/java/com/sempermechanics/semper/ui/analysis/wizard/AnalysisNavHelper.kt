@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.app.Activity
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.policy.AppPolicy
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SkippedNode
@@ -26,6 +27,10 @@ object AnalysisNavHelper {
         host.startActivity(AppIntents.seatRequired(host))
     }
 
+    fun openUpdateRequired(host: Activity) {
+        host.startActivity(AppIntents.updateRequired(host))
+    }
+
     /**
      * Every reason a new analysis may not start, in one call. Every run is a
      * new analysis: a saved one is never written over (owner decision,
@@ -35,7 +40,19 @@ object AnalysisNavHelper {
      * starting is checked: a run already under way is never stopped by
      * either gate.
      */
-    suspend fun ensureCanStart(host: Activity): Boolean = ensureSeat(host) && ensureSessionQuota(host)
+    suspend fun ensureCanStart(host: Activity): Boolean =
+        ensureUpToDate(host) && ensureSeat(host) && ensureSessionQuota(host)
+
+    /**
+     * Hard stop while the backend requires a newer build
+     * ([AppPolicy.newAnalysisAllowed]). Saved analyses stay readable; only
+     * starting new work waits for the update.
+     */
+    fun ensureUpToDate(host: Activity): Boolean {
+        if (AppPolicy.newAnalysisAllowed(host)) return true
+        openUpdateRequired(host)
+        return false
+    }
 
     /**
      * Hard stop when this account holds no floating seat.
