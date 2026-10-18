@@ -12,7 +12,7 @@ import {
 await loadAuth();
 const { importRowCount, auditQuery, MAX_IMPORT_ROWS } = await import("../public/console/util.js");
 const { rowResult, importSummary, tilesHtml } = await import("../public/console/institution/roster-tools.js");
-const { auditRow } = await import("../public/console/institution/audit-log.js");
+const { auditRow, csvRecords } = await import("../public/console/institution/audit-log.js");
 
 beforeEach(reset);
 afterEach(async () => {
@@ -393,6 +393,16 @@ test("a JSON export that hit the ceiling says so; a refused export is explained"
     await settle();
   });
   assert.deepEqual(status(), ["Exported the newest 5,000 events — narrow the dates for the rest.", "muted"]);
+  // A CSV page is as full as the export goes: its next-page header is not
+  // readable from the page, so the row count says it stopped short.
+  const full = "ts,action\r\n" + "2026-10-01T00:00:00Z,X\r\n".repeat(5000);
+  net.routes[`GET ${L1}/audit?format=csv&page_size=5000`] = () => new Response(full, { status: 200 });
+  await downloads(async () => {
+    $("auditCsv").click();
+    await settle();
+  });
+  assert.deepEqual(status(), ["Exported the newest 5,000 events — narrow the dates for the rest.", "muted"]);
+  net.routes[`GET ${L1}/audit?format=csv&page_size=5000`] = () => json(400, { detail: "invalid_audit_range" });
   $("auditCsv").click();
   await settle();
   assert.deepEqual(status(), ["Those dates are not a range: the start must come before the end.", "muted err"]);
@@ -401,6 +411,12 @@ test("a JSON export that hit the ceiling says so; a refused export is explained"
   await settle();
   assert.deepEqual(status(), ["Could not export: boom", "muted err"]);
   assert.equal($("auditCsv").disabled, false);
+});
+
+test("an audit CSV's data rows are its lines less the header", () => {
+  assert.equal(csvRecords(""), 0);
+  assert.equal(csvRecords("ts,action\r\n"), 0);
+  assert.equal(csvRecords("ts,action\r\na,b\r\nc,d"), 2);
 });
 
 test("an event row without a target or an actor still renders", () => {
