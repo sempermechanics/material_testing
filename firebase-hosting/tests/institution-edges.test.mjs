@@ -25,6 +25,7 @@ async function open({ roster, search = "", licenses = [{ id: "L1", keyPrefix: "S
     routes: {
       "GET /v1/institutions/licenses": () => json(200, { licenses }),
       "GET /v1/me": () => json(200, { role: "user" }),
+      "GET /v1/institutions/licenses/L1/summary": () => json(200, {}),
       ...(roster ? { [`GET ${SEATS}`]: () => json(200, roster) } : {}),
     },
   });
