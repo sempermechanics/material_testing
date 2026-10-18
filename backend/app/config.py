@@ -278,9 +278,9 @@ class Settings:
     ENTITLEMENT_OFFLINE_GRACE_DAYS = _env_int("ENTITLEMENT_OFFLINE_GRACE_DAYS", "14")
 
     # --- release gate and kill switches (A6.1 / A6.4) -----------------------
-    # Published by GET /v1/config. The server refuses nothing on them: the app
-    # compares its own versionCode and blocks (below minimum) or nudges (below
-    # recommended). 0 = no gate.
+    # The release gate is published by GET /v1/config and the server refuses
+    # nothing on it: the app compares its own versionCode and blocks (below
+    # minimum) or nudges (below recommended). 0 = no gate.
     #
     # Per app: Semper and Material Testing share this service, and each
     # numbers its builds from its own release run counter, so one number for
@@ -301,10 +301,19 @@ class Settings:
             return (self.MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING,
                     self.RECOMMENDED_VERSION_CODE_MATERIAL_TESTING)
         return self.MIN_SUPPORTED_VERSION_CODE, self.RECOMMENDED_VERSION_CODE
-    # Features the app must switch off, fleet-wide, without a release: any of
-    # backup, share, restore, upload. Separated by whitespace, `;` or `,`
-    # (prefer spaces: the deploy action splits env_vars on commas). An unknown
-    # name is dropped with a warning rather than failing the start.
+    # Features switched off, fleet-wide, without a release: any of backup,
+    # share, restore, upload. Separated by whitespace, `;` or `,` (prefer
+    # spaces: the deploy action splits env_vars on commas). An unknown name is
+    # dropped with a warning rather than failing the start.
+    #
+    # Published by GET /v1/config so the app hides the feature, AND enforced
+    # here, so a build that ignores the list (or predates it) is refused too:
+    # `upload` or `backup` refuses POST /v1/sessions and
+    # POST /v1/files/{id}/complete; `restore` refuses
+    # GET /v1/files/{id}/content and GET /v1/sessions/{sid}/bundle. The
+    # refusal is 503 `feature_paused` with Retry-After (`deps.unless_paused`).
+    # `share` has no backend route: it is the app's own export, so it is
+    # published only. Changing the list is a new revision (an env change).
     KILL_SWITCHES = parse_kill_switches(os.environ.get("KILL_SWITCHES", ""))
 
     # Where "a new user is waiting for approval" mail goes. Same address the app

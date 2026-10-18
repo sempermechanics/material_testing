@@ -26,6 +26,9 @@ _ALLOWED = frozenset({
     "maxAttempts", "httpStatus", "count", "stage",
     "opClass", "routeTemplate", "fileCount", "frameCount", "folderMs",
     "appId", "appVersion", "licenseId", "action",
+    # `feature_paused`: which kill switch refused. `activation`: how a code
+    # was redeemed (`web` from the account page; absent from the app's route).
+    "switch", "via",
 })
 
 #: The largest versionCode Android allows (`Integer.MAX_VALUE`).

@@ -278,6 +278,7 @@ paths:
         '413': { description: too_many_files }
         '429': { description: Rate limited }
         '401': { description: Missing or invalid device attestation }
+        '503': { description: "feature_paused: the upload or backup kill switch is on; Retry-After" }
   /v1/sessions/{sid}:
     delete:
       operationId: deleteSession
@@ -397,6 +398,7 @@ paths:
         '409': { description: "file_not_uploaded — nothing in this analysis finished uploading" }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
+        '503': { description: "feature_paused: the restore kill switch is on; Retry-After" }
   /v1/files/{fileId}/complete:
     post:
       operationId: completeFile
@@ -413,6 +415,7 @@ paths:
         '200': { description: OK }
         '403': { description: file_not_in_session }
         '422': { description: size or checksum mismatch }
+        '503': { description: "feature_paused: the upload or backup kill switch is on; Retry-After" }
   /v1/files/{fileId}/content:
     get:
       operationId: downloadFile
@@ -451,6 +454,7 @@ paths:
         '416': { description: range_not_satisfiable }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
+        '503': { description: "feature_paused: the restore kill switch is on; Retry-After" }
   /v1/admin/users:
     get:
       operationId: adminListUsers

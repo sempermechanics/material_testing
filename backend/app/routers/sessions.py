@@ -21,6 +21,7 @@ from ..deps import (
     current_user,
     rate_limited,
     request_app,
+    unless_paused,
     verified_device,
 )
 from ..models import SessionCreate
@@ -350,7 +351,9 @@ def _zip_time(value) -> tuple:
     return _ZIP_EPOCH
 
 
-@router.get("/v1/sessions/{sid}/bundle", dependencies=[rate_limited(rate_limit.download_bucket)])
+@router.get("/v1/sessions/{sid}/bundle", dependencies=[
+    rate_limited(rate_limit.download_bucket), unless_paused("restore"),
+])
 def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     """One analysis as a single zip — how the data leaves through a browser.
 
@@ -466,7 +469,9 @@ _QUOTA_REMEDY = {
 }
 
 
-@router.post("/v1/sessions", dependencies=[rate_limited(rate_limit.session_bucket)])
+@router.post("/v1/sessions", dependencies=[
+    rate_limited(rate_limit.session_bucket), unless_paused("upload", "backup"),
+])
 def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device),
                    app=Depends(request_app)):
     """Record an analysis: create the session and hand back its upload slots.

@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from .. import audit, drive, errors, repo, statuses
 from .. import rate_limit
-from ..deps import rate_limited, verified_device
+from ..deps import rate_limited, unless_paused, verified_device
 from ..models import FileComplete
 from ..validation import DocumentId
 from ._shared import drive_failure
@@ -35,7 +35,9 @@ def _is_first_byte_request(byte_range: str | None) -> bool:
     return bool(match) and match.group(1) == "0"
 
 
-@router.get("/v1/files/{file_id}/content", dependencies=[rate_limited(rate_limit.download_bucket)])
+@router.get("/v1/files/{file_id}/content", dependencies=[
+    rate_limited(rate_limit.download_bucket), unless_paused("restore"),
+])
 def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_device)):
     """Stream one file back from Drive (restore).
 
@@ -103,7 +105,7 @@ def download_file(file_id: DocumentId, request: Request, ctx=Depends(verified_de
 
 @router.post(
     "/v1/files/{file_id}/complete",
-    dependencies=[rate_limited(rate_limit.file_complete_bucket)],
+    dependencies=[rate_limited(rate_limit.file_complete_bucket), unless_paused("upload", "backup")],
 )
 def complete_file(file_id: DocumentId, body: FileComplete, ctx=Depends(verified_device)):
     user = ctx.user
