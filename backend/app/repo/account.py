@@ -25,9 +25,6 @@ from ._base import (
     _delete_doc,
     _seat_ref,
 )
-from .deletion import (
-    DELETED_SEATS,
-)
 from .invites import (
     _write_invite,
 )
@@ -169,8 +166,13 @@ def _seats_of(uid: str, license_id: str) -> tuple[list, bool]:
     found = {}
     complete = True
     try:
-        for group in ("seats", DELETED_SEATS):
-            for snap in _stream(db().collection_group(group).where("uid", "==", uid)):
+        # Each group named by a literal at its own call: the rules-test guard
+        # (firestore-rules-tests/scan.mjs) and the index-shape test
+        # (tests/test_firestore_query_indexes.py) read collection names from
+        # the source. "deleted_seats" is `deletion.DELETED_SEATS`.
+        groups = (db().collection_group("seats"), db().collection_group("deleted_seats"))
+        for group in groups:
+            for snap in _stream(group.where("uid", "==", uid)):
                 found[snap.reference.path] = snap
     except Exception as e:  # noqa: BLE001 - best effort; the erasure goes on
         complete = False
