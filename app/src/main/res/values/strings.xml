@@ -1195,4 +1195,32 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">Extract %1$d frames</item>
     </plurals>
     <string name="wizard_draft_lost">Your images were cleared while Semper was in the background. Please add them again.</string>
+
+    <!-- Licence activation (ui/account/ActivateLicenseActivity, TD-259) -->
+    <string name="activate_title">Activate a licence</string>
+    <string name="activate_body">Enter the licence key you were sent. It starts with SEMP- and has four groups of four letters and digits.</string>
+    <string name="activate_key_hint">Licence key</string>
+    <string name="activate_key_placeholder" translatable="false">SEMP-XXXX-XXXX-XXXX-XXXX</string>
+    <string name="activate_submit">Activate</string>
+    <string name="activate_back">Not now</string>
+    <string name="activate_success">Licence activated.</string>
+    <string name="activate_invalid_empty">Enter your licence key.</string>
+    <string name="activate_invalid_prefix">Licence keys start with SEMP-.</string>
+    <string name="activate_invalid_length">A licence key is SEMP- and four groups of four letters and digits.</string>
+    <string name="activate_error_invalid_key">No licence has this key. Check each character and try again.</string>
+    <string name="activate_error_already_redeemed">This key is already in use on another account. If it was issued to you, email support@sempermechanics.com.</string>
+    <string name="activate_error_already_licensed">Your account already has a licence. To change it, email support@sempermechanics.com.</string>
+    <string name="activate_error_revoked">This licence has been revoked. Ask whoever issued it, or email support@sempermechanics.com.</string>
+    <string name="activate_error_expired">This licence has expired. Email support@sempermechanics.com to renew it.</string>
+    <string name="activate_error_wrong_account">This key was issued to a different email address or institution. Sign in with that account, then try again.</string>
+    <string name="activate_error_other_device">This licence is in use on another phone. Move it to this phone from your Semper account page, or email support@sempermechanics.com.</string>
+    <string name="activate_error_device_in_use">This phone is registered to another Semper account. Sign in with that account, or email support@sempermechanics.com to release the phone.</string>
+    <string name="activate_error_seats_full">Every seat on this institution licence is taken. Ask your institution\'s IT to free or add one.</string>
+    <string name="activate_error_seat_disabled">Your institution has put your seat on hold. Ask your institution\'s IT to resume it.</string>
+    <string name="activate_error_not_approved">Your account isn\'t approved yet. Try again once it is.</string>
+    <string name="activate_error_sign_in_again">Your sign-in has expired. Sign in again, then activate the licence.</string>
+    <string name="activate_error_rate_limited">Too many attempts. Wait a few minutes and try again.</string>
+    <string name="activate_error_try_again">The licence couldn\'t be activated just now. Try again in a moment.</string>
+    <string name="activate_error_network">Couldn\'t reach Semper. Check your connection and try again.</string>
+    <string name="activate_error_unknown">The licence couldn\'t be activated. Try again, or email support@sempermechanics.com.</string>
 </resources>

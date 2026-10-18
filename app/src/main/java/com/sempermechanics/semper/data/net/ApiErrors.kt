@@ -106,6 +106,39 @@ object ApiErrors {
      */
     const val LICENSE_DEVICE_MISMATCH = "license_device_mismatch"
 
+    // The refusals of `POST /v1/licenses/activate` (`backend/app/repo/activation.py`),
+    // shown by the activation screen (`ui/account/ActivationError`).
+
+    /** No licence has the typed key (404). */
+    const val LICENSE_NOT_FOUND = "license_not_found"
+
+    /** The licence was revoked (403). */
+    const val LICENSE_REVOKED = "license_revoked"
+
+    /** The licence is past its expiry and grace (403). */
+    const val LICENSE_EXPIRED = "license_expired"
+
+    /** The key is locked to another email address, or another institution's domain (403). */
+    const val LICENSE_EMAIL_MISMATCH = "license_email_mismatch"
+
+    /** Another account already redeemed this individual key (409). */
+    const val LICENSE_ALREADY_REDEEMED = "license_already_redeemed"
+
+    /** The institution licence has no seat left (409). */
+    const val LICENSE_SEATS_EXHAUSTED = "license_seats_exhausted"
+
+    /** The caller's seat on the institution licence is on hold (409). */
+    const val LICENSE_SEAT_DISABLED = "license_seat_disabled"
+
+    /** The account already holds, or is promised, a different live licence (409). */
+    const val ALREADY_LICENSED = "already_licensed"
+
+    /** The claim lost every attempt to concurrent requests; nothing was granted, retry (503). */
+    const val CLAIM_CONTENDED = "claim_contended"
+
+    /** Binding the empty device lock lost every attempt; nobody holds it, retry (503). */
+    const val DEVICE_LOCK_CONTENDED = "device_lock_contended"
+
     /**
      * The `detail` of an error [body], or the trimmed body when it is not the
      * usual JSON envelope — API Gateway and Cloud Run kills answer with plain
