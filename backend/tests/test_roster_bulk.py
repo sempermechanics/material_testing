@@ -547,8 +547,16 @@ def test_an_imported_cell_drops_the_guard_the_export_added(lead):
     assert roster_io.undefused(roster_io._cell(f"{lead}x@y.edu")) == f"{lead}x@y.edu".strip()
 
 
-def test_only_one_guard_quote_is_dropped_and_only_before_a_formula_lead():
-    assert roster_io.undefused("''-a@x.edu") == "''-a@x.edu"
+@pytest.mark.parametrize("address", ["'-a@x.edu", "'=a@x.edu", "'a@x.edu", "''a@x.edu", "o'neil@x.edu"])
+def test_an_address_with_its_own_leading_quote_survives_export_then_import(address):
+    # A `'` is a valid local-part character; the guard must not be mistaken
+    # for it, nor it for the guard.
+    assert roster_io.undefused(roster_io._cell(address)) == address
+
+
+def test_only_one_guard_quote_is_dropped_and_only_before_a_guarded_lead():
+    assert roster_io.undefused("''-a@x.edu") == "'-a@x.edu"
+    assert roster_io.undefused("'''-a@x.edu") == "''-a@x.edu"
     assert roster_io.undefused("'a@x.edu") == "'a@x.edu"
     assert roster_io.undefused("'") == "'"
     assert roster_io.undefused("  '=a@x.edu ") == "=a@x.edu"
@@ -559,7 +567,7 @@ def test_only_one_guard_quote_is_dropped_and_only_before_a_formula_lead():
 def test_csv_cells_are_written_for_a_spreadsheet():
     assert roster_io._cell(None) == ""
     assert roster_io._cell(datetime(2026, 1, 2, tzinfo=timezone.utc)) == "2026-01-02T00:00:00Z"
-    for lead in ("=", "+", "-", "@", "\t"):
+    for lead in ("=", "+", "-", "@", "\t", "'"):
         assert roster_io._cell(f"{lead}x") == f"'{lead}x"
     assert roster_io._cell(3) == "3"
     assert roster_io.iso(None) == ""
