@@ -154,7 +154,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ADR and TD numbers are shared: ADR-008, 009, 011, 012 and 022 and TD-133–135,
   TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-274 (TD-214–TD-273 are the readiness rows); check
+  free in both registers is TD-280 (TD-214–TD-279 are the readiness rows); check
   both before taking one.
 - **Branch `claude/new-session-jhfhj9`** (not merged, not deployed; ported from
   semperdic-app's branch of that name): the readiness-framework cross-check
@@ -170,11 +170,19 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   TD-229–TD-232); for a release, this repo's `SEMPER_ENTITLEMENT_PUBKEYS` variable and
   `SEMPER_API_CERT_PINS` secret; and a first CI run of the Android half here (TD-219).
 - **Branch `claude/readiness-followups-jhfhj9`** on it (not merged, not deployed; ported
-  from semperdic-app's branch of that name): the shared backend's Auth Admin budget, hashed
-  audit addresses, wider erasure, `POST …/licenses/search` and release-train labels; the
-  consoles' roster tools for staff; dashboards as code. TD-270–TD-273. The backend,
-  consoles, indexes and monitoring deploy only from semperdic-app, in its order (indexes,
-  backend, gateway, Hosting, monitoring); never deploy Hosting from this repo.
+  from semperdic-app's branch of that name; TD-270–TD-279, FI-24). Account-anchored
+  entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)): nothing is
+  typed or sold in this app (no licence key screen, no EMM `enrollmentInvite`); **Refresh
+  licence** in Settings and on the limit screen; locked, not hidden, for what the licence
+  lacks; a 503 `feature_paused` waits or says paused; the shown cap, a refresh at
+  `refreshAfter` and the sealed record's write order (TD-263–TD-266). **Update** opens this
+  repo's releases page for a sideloaded build. The shared backend gains the Auth Admin
+  budget, hashed audit addresses, wider erasure, `POST …/licenses/search`, kill switches
+  refused server-side, a per-device demo cap and `POST /v1/me/claim`; the consoles gain
+  staff roster tools and the account page's licence facts and claim-code card. Those, the
+  indexes and the dashboards deploy only from semperdic-app, in its order (indexes,
+  backend, gateway, Hosting, monitoring); the console files here are for parity, so never
+  deploy Hosting from this repo. Owed as well: counsel on the Terms' fees (TD-277).
 - **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
   extensometer's ΔL / L₀ since ADR-012), E from the
   longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
@@ -263,7 +271,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - Test phones are shared between sessions: before `adb install -r`, check `ps -A | grep instrument` and the app's `lastUpdateTime` — an install kills a running `am instrument`, and another session's install can replace the build under test. Never the connected task on a phone — [TESTING.md](docs/app/TESTING.md).
 - Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
-- Demo uploads silently; only retrieval is gated. Gating `POST /v1/sessions` would loop old builds on 403 — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- Demo uploads silently; only retrieval is licence-gated. Gating `POST /v1/sessions` on the licence would loop old builds on 403; a kill switch refuses it with 503 `feature_paused`, which every build retries — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md), [§20.14](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- Share has no backend route: the licence check and the signed token are its only gate, so a modified APK can share (accepted, TD-274). Anything that touches the cloud is checked by the server — [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md).
 - Console CSP is `script-src 'self'` with no `'unsafe-inline'`: inline scripts never run — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `check_console.py` requires `__API_BASE_URL__` / `__API_ORIGIN__` to stay placeholders; deploy through `scripts/deploy-console.sh` — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `SCHEMA_VERSION` is 2 and every `campus` / `plan` skew fallback is temporary; retire in the stated order — [§20.5](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
