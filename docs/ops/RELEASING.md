@@ -76,6 +76,67 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
      `RELEASING.md` — and/or publish on Play Store.
    - Announce on https://sempermechanics.com/ / Discussions on
      `sempermechanics/website` (not this private repo).
+   - For Play, upload the **`release-aab`** artifact (or the `.aab` attached to the
+     GitHub Release), not the APK; see "Staged rollout on Google Play" below.
+
+**Release notes rule.** Every release's notes name what changed for the user and
+every customer-visible backend change it depends on. The first release built
+after 2026-10-18 must say that **Android 11 (API 30) is now the minimum**: phones
+on Android 7–10 cannot install or update it, and keep the version they have,
+which the backend may later gate (`MIN_SUPPORTED_VERSION_CODE`).
+
+## Staged rollout on Google Play
+
+Readiness items 1.1, 6.3 and Part D5
+([READINESS_FRAMEWORK_2026-10.md](READINESS_FRAMEWORK_2026-10.md)). Nothing here
+has been rehearsed: there is no Play listing or closed track yet (TD-229, TD-231).
+Play does not allow a staged rollout for an app's first production release, and a
+staged percentage never rises by itself.
+
+| Stage | Users | Minimum soak before the next stage |
+|---|---|---|
+| Internal / closed track | testers | until every halt signal below has data |
+| 1 | 5 % | 24 h, and at least 7 days of the closed track behind it for a release that changes licensing |
+| 2 | 20 % | 24 h |
+| 3 | 50 % | 48 h |
+| 4 | 100 % | — |
+
+**Halt criteria.** Halt the rollout (Play Console → Release → Halt) when any of
+these holds for the new version. The numbers are starting values, to be tuned
+after the first rollouts:
+
+- **Crash-free users** below **99.5 %** (Crashlytics, the release's version) once at
+  least 200 users run it, or a new crash cluster in licensing, upload or restore.
+- **User-perceived ANR rate** above **0.47 %**, Play's bad-behaviour threshold
+  (Android vitals).
+- **Activation errors:** the share of `semper_activation` lines with
+  `outcome="refused"` on the new `appVersion` more than 5 points above the previous
+  version's 7-day share, with at least 20 attempts (`ops/monitoring/metrics/semper_activation.yaml`).
+  The same for `semper_checkout`, leaving out `no_floating_seat`, which is a full pool.
+- **Device-lock drops:** `semper_devlock_drop` with `stage="mismatch"` rising on the
+  new version.
+- **Refusals:** the `auth-denied-spike` alert, or any `AUTH_DENIED` with
+  `stage="app_check"` from the new version.
+- **Backend:** the `http-5xx-ratio` or `slo-burn-fast` alert while the rollout is
+  under way.
+
+Halting stops new installs only; users who already updated stay on the new build.
+That is why the levers below, not Play, are the rollback.
+
+## Rollback levers
+
+Play cannot recall a build. In order of speed:
+
+| Lever | Effect | How |
+|---|---|---|
+| `KILL_SWITCHES` | Switches off `backup`, `share`, `restore` or `upload` in every build that reads it, without a release | Repo variable, space-separated, then `deploy-backend.yml` ([ENVIRONMENTS.md](ENVIRONMENTS.md)) |
+| `MIN_SUPPORTED_VERSION_CODE` | Builds below it keep their analyses, viewer and exports, and cannot start an analysis, upload or restore until updated. `RECOMMENDED_VERSION_CODE` only nudges | Repo variable, redeploy. Raise the recommended one a release ahead. A local debug build at versionCode 1 is never gated |
+| `ENTITLEMENT_OFFLINE_GRACE_DAYS` | How long newly issued entitlement tokens hold offline; the fail-open / fail-closed lever for licensing. Tokens already issued keep theirs | Repo variable, redeploy ([ADR-023](../adr/ADR-023-signed-offline-entitlement.md)) |
+| `APP_CHECK_MODE` | `enforce` back to `monitor` or `off` | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) |
+| Backend revision | Traffic back to the previous revision | `gcloud run services update-traffic semper-api --to-revisions=<previous>=100 --region asia-south1`; the image is kept as `rollback-prev` ([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A7). Firestore is never rolled back by a deploy |
+| Hotfix | A new build with a higher `versionCode` | The release workflow's run number makes every release higher than the last (Versioning above); roll it out with the same stages, faster soak if the fix is narrow |
+
+None of these levers has been drilled on a running service yet (TD-220).
 
 ## CI-based release (workflow_dispatch)
 
