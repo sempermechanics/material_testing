@@ -15,6 +15,8 @@ from firebase_admin import app_check as fb_app_check, auth as fb_auth
 from google.auth import impersonated_credentials
 from google.auth.transport.requests import Request as GRequest
 
+from . import observability as obs
+from . import rate_limit
 from .config import settings
 
 log = logging.getLogger("semper.auth")
@@ -87,13 +89,26 @@ def verify_id_token(token: str, *, check_revoked: bool = False) -> dict:
 # fail the request it rides on: the state change in Firestore is the control,
 # and these only shorten how long an already-minted token keeps working. Each
 # logs and answers False, and the caller records that answer in its audit row.
+# Both spend `rate_limit.auth_admin_bucket` first (TD-239): over it, the call
+# is not made, `auth_admin_rate_limited` is logged, and the answer is False.
+
+
+def _within_budget(uid: str, action: str) -> bool:
+    if rate_limit.auth_admin_allowed():
+        return True
+    obs.log_event(log, logging.WARNING, "auth_admin_rate_limited", uid=uid,
+                  action=action, outcome="skipped", dependency="firebase_auth")
+    return False
 
 
 def revoke_sessions(uid: str) -> bool:
     """Revoke every refresh token `uid` holds, so no new ID token can be
     minted from an existing sign-in. Tokens already minted stay valid until
     they expire (an hour at most) unless a route checks revocation. True when
-    the Auth project accepted it."""
+    the Auth project accepted it; False when it refused, or when this
+    instance's Auth Admin budget is spent and the call was not made."""
+    if not _within_budget(uid, "revoke_sessions"):
+        return False
     try:
         fb_auth.revoke_refresh_tokens(uid)
     except Exception as e:  # noqa: BLE001 - best-effort; see the block comment
@@ -105,7 +120,10 @@ def revoke_sessions(uid: str) -> bool:
 
 def delete_auth_user(uid: str) -> bool:
     """Delete the Firebase Auth user `uid`. A user that is already gone counts
-    as deleted. True when the Auth project no longer holds the user."""
+    as deleted. True when the Auth project no longer holds the user; False
+    when the delete failed or the Auth Admin budget is spent."""
+    if not _within_budget(uid, "delete_auth_user"):
+        return False
     try:
         fb_auth.delete_user(uid)
     except fb_auth.UserNotFoundError:

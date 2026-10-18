@@ -13,6 +13,7 @@ import time
 from fastapi import HTTPException
 
 from . import errors
+from .config import settings
 
 
 class TokenBucket:
@@ -130,6 +131,22 @@ institution_bucket = TokenBucket(rate_per_sec=1.0, burst=10.0)
 # bucket. A burst of 3 covers a re-import to finish rows an import ran out of
 # time for; after that, one a minute.
 roster_import_bucket = TokenBucket(rate_per_sec=1 / 60, burst=3.0)
+# Firebase Auth Admin calls (TD-239): the step-up revocation check,
+# `google_auth.revoke_sessions` and `google_auth.delete_auth_user`. One shared
+# key, because what it protects is the Auth project's quota, not a caller's
+# fair share; see `settings.AUTH_ADMIN_CALLS_PER_SECOND`.
+auth_admin_bucket = TokenBucket(
+    rate_per_sec=float(settings.AUTH_ADMIN_CALLS_PER_SECOND),
+    burst=float(settings.AUTH_ADMIN_BURST),
+)
+AUTH_ADMIN_KEY = "firebase_auth"
+
+
+def auth_admin_allowed() -> bool:
+    """Spend one Firebase Auth Admin call from this instance's budget."""
+    return auth_admin_bucket.allow(AUTH_ADMIN_KEY)
+
+
 # Whole-roster reads (the CSV export and the seat summary, which also reads
 # every holder's account) and audit-log pages. Each is one request reading up
 # to a few thousand documents, so on top of the tier's bucket.

@@ -14,6 +14,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    SCHEMA_VERSION,
     _is_revoked,
     db,
     get_license,
@@ -95,6 +96,7 @@ def _reclaim_expired_lease(lic_ref, seat_ref, now) -> bool:
         tx.update(seat_ref, {
             **_lease_clear_patch(),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         })
         active = int((lic_snap.to_dict() or {}).get("leasesActive") or 0) if lic_snap.exists else 0
         if active > 0:
@@ -167,6 +169,7 @@ def checkout_lease(user: dict, device_id: str) -> dict:
             "leaseDeviceId": device_id,
             "lastHeartbeatAt": now,
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         })
         if not renewing:
             tx.update(lic_ref, {"leasesActive": _base.firestore.Increment(1)})
@@ -210,6 +213,7 @@ def release_lease(user: dict) -> dict:
         tx.update(seat_ref, {
             **_lease_clear_patch(),
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+            "schemaVersion": SCHEMA_VERSION,
         })
         if held:
             # Only decrement for a lease that is still counted. A second

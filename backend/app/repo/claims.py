@@ -15,6 +15,7 @@ from ..licenses import (
 
 from . import _base
 from ._base import (
+    SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
     _CONTENDED,
@@ -219,7 +220,8 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
             locked_device = seat.get(lock_field) or ""
             if device_id and locked_device and locked_device != device_id:
                 return "license_device_mismatch"
-            seat_patch = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
+            seat_patch = {"updatedAt": _base.firestore.SERVER_TIMESTAMP,
+                          "schemaVersion": SCHEMA_VERSION}
             if device_id:
                 # Only when a device actually redeemed. IT adding a member
                 # passes no device, and must not wipe the lock of someone who
@@ -248,6 +250,7 @@ def claim_seat(license_id: str, uid: str, email: str, device_id: str, user_patch
                 "status": "active",
                 "createdAt": _base.firestore.SERVER_TIMESTAMP,
                 "updatedAt": _base.firestore.SERVER_TIMESTAMP,
+                "schemaVersion": SCHEMA_VERSION,
             })
             tx.update(lic_ref, {"seatsUsed": _base.firestore.Increment(1)})
         tx.update(user_ref, _claim_terms(user_patch, lic))

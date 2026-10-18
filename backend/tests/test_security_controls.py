@@ -100,22 +100,32 @@ def test_firestore_indexes_declare_ttl_policies():
         (field["collectionGroup"], field["fieldPath"]): field
         for field in spec["fieldOverrides"]
     }
-    assert set(overrides) == {
+    ttl = {key: field for key, field in overrides.items() if field.get("ttl")}
+    assert set(ttl) == {
         ("challenges", "expireAt"),
         ("deleted_licenses", "purgeAt"),
         ("deleted_seats", "purgeAt"),
     }
-    for field in overrides.values():
-        assert field["ttl"] is True
-        modes = sorted(
-            (index.get("order") or index.get("arrayConfig"), index["queryScope"])
-            for index in field["indexes"]
-        )
-        assert modes == [
-            ("ASCENDING", "COLLECTION"),
-            ("CONTAINS", "COLLECTION"),
-            ("DESCENDING", "COLLECTION"),
-        ]
+    defaults = [
+        ("ASCENDING", "COLLECTION"),
+        ("CONTAINS", "COLLECTION"),
+        ("DESCENDING", "COLLECTION"),
+    ]
+    for field in ttl.values():
+        assert _modes(field) == defaults
+    # The other overrides enable a collection-group index (TD-243's seat search,
+    # tests/test_firestore_query_indexes.py) and restate the same defaults.
+    others = {key: field for key, field in overrides.items() if key not in ttl}
+    assert set(others) == {("seats", "uid"), ("deleted_seats", "uid")}
+    for field in others.values():
+        assert _modes(field) == sorted([*defaults, ("ASCENDING", "COLLECTION_GROUP")])
+
+
+def _modes(field: dict) -> list[tuple[str, str]]:
+    return sorted(
+        (index.get("order") or index.get("arrayConfig"), index["queryScope"])
+        for index in field["indexes"]
+    )
 
 
 def test_registry_cleanup_policy_keeps_serving_and_rollback_images():
