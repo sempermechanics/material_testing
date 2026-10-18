@@ -27,6 +27,7 @@ build it. This page routes you to the rest.
 | Sync material_testing, or port a fix from it | [ops/FORK_SYNC.md](ops/FORK_SYNC.md) |
 | Map GitHub Environments / secrets / main hygiene | [ops/ENVIRONMENTS.md](ops/ENVIRONMENTS.md) |
 | Production launch checklist | [ops/PRODUCTION_READINESS_GATE.md](ops/PRODUCTION_READINESS_GATE.md) |
+| Read the external readiness framework the gate is cross-checked against (2026-10-18) | [ops/READINESS_FRAMEWORK_2026-10.md](ops/READINESS_FRAMEWORK_2026-10.md) · mapping: [the gate's "Framework cross-check"](ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18) |
 | Tech-debt status / deferred gates | [ops/TECH_DEBT.md](ops/TECH_DEBT.md) |
 | Know why a structural choice was made | [adr/](adr/README.md) — architecture decision records |
 | See what changed and when (history moved out of CONTEXT.md) | [ops/CHANGELOG.md](ops/CHANGELOG.md) |
