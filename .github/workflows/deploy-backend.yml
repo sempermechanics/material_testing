@@ -36,6 +36,15 @@ on:
         description: Cloud Run service name (empty = semper-api / semper-api-staging)
         required: false
         default: ""
+      release_train:
+        description: >
+          App release train this backend ships with, set as the Cloud Run
+          label release-train on the service and the new revision (TD-262).
+          Empty = the newest v* tag reachable from the deployed commit, or
+          "untagged". Lowercased; dots and other characters become dashes;
+          cut to 63 characters.
+        required: false
+        default: ""
       gateway_mode:
         description: >
           dry-run renders the gateway spec and prints its diff against the
@@ -78,7 +87,10 @@ jobs:
     outputs:
       service: ${{ steps.meta.outputs.service }}
     steps:
+      # Full history and tags: the release-train step runs git describe.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - id: meta
         name: Resolve service name
@@ -114,6 +126,34 @@ jobs:
           # still reach /readyz. Without it the smoke 403s and the candidate is
           # never promoted.
           echo "ingress=--no-allow-unauthenticated" >> "$GITHUB_OUTPUT"
+
+      # TD-262: the app release train this revision ships with, as the Cloud
+      # Run label release-train, so a release can name the backend revision it
+      # was tested against (`gcloud run revisions list
+      # --filter=metadata.labels.release-train=v1-2-0`). The operator may name
+      # it; otherwise the newest v* tag reachable from the deployed commit.
+      # Label values allow only [a-z0-9_-], at most 63 characters.
+      - id: release
+        name: Resolve release train
+        env:
+          TRAIN_INPUT: ${{ github.event.inputs.release_train }}
+        run: |
+          set -euo pipefail
+          raw="$TRAIN_INPUT"
+          from="the release_train input"
+          if [ -z "$raw" ]; then
+            raw=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || echo untagged)
+            from="git describe on $(git rev-parse --short HEAD)"
+          fi
+          train=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr '.' '-' \
+            | tr -c 'a-z0-9_-' '-' | cut -c1-63)
+          train=${train:-untagged}
+          echo "train=$train" >> "$GITHUB_OUTPUT"
+          echo "Release train: $train (from $from)"
+          {
+            echo "### Release train"
+            echo "Label \`release-train=$train\` on the service and the new revision, from $from."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - id: auth
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
@@ -254,6 +294,11 @@ jobs:
           source: backend
           no_traffic: ${{ steps.previous.outputs.no_traffic }}
           tag: cand-${{ github.run_id }}-${{ github.run_attempt }}
+          # Merged with the action's own managed-by / commit-sha labels and
+          # passed to `gcloud run deploy --update-labels`, which keeps every
+          # other label on the service and copies them onto the new revision.
+          labels: |-
+            release-train=${{ steps.release.outputs.train }}
           # The licensing settings carry expression defaults: an unset repo
           # variable must resolve to the safe value (demo cap 25, MFA on, App
           # Check off — `enforce` would 403 every installed pre-App-Check build),
@@ -375,18 +420,26 @@ jobs:
             --project "$PROJECT" --region "$REGION"
 
       # Deliberately AFTER the smoke + promote gate.
+      # A missing release-train label only warns: this runs after the promote,
+      # and a failure here would roll back a healthy revision.
       - name: Record immutable image digest
         env:
           PROJECT: ${{ github.event.inputs.project }}
           REGION: ${{ github.event.inputs.region }}
           SERVICE: ${{ steps.meta.outputs.service }}
           REV: ${{ steps.meta.outputs.service }}-${{ github.run_id }}-${{ github.run_attempt }}
+          TRAIN: ${{ steps.release.outputs.train }}
         run: |
           set -euo pipefail
-          IMG=$(gcloud run revisions describe "$REV" \
-            --project "$PROJECT" --region "$REGION" \
-            --format='value(status.imageDigest)')
-          echo "Deployed revision=${REV} imageDigest=${IMG}"
+          DESC=$(gcloud run revisions describe "$REV" \
+            --project "$PROJECT" --region "$REGION" --format=json)
+          IMG=$(jq -r '.status.imageDigest // empty' <<<"$DESC")
+          LABEL=$(jq -r '.metadata.labels["release-train"] // empty' <<<"$DESC")
+          echo "Deployed revision=${REV} imageDigest=${IMG} release-train=${LABEL:-<none>}"
+          if [ "$LABEL" != "$TRAIN" ]; then
+            echo "::warning::Revision ${REV} carries release-train='${LABEL}', expected '${TRAIN}'. Set it by hand: gcloud run services update ${SERVICE} --project ${PROJECT} --region ${REGION} --update-labels release-train=${TRAIN}"
+          fi
+          echo "Revision \`${REV}\` serving; release train \`${LABEL:-none}\`; image \`${IMG}\`." >> "$GITHUB_STEP_SUMMARY"
 
       # Pin the images by digest for the registry cleanup policy
       # (backend/deploy/ar-cleanup-policy.json). A source deploy tags every image
