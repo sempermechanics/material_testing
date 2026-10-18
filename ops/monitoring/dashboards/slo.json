@@ -1,0 +1,243 @@
+{
+  "displayName": "semper-slo",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 48,
+        "height": 5,
+        "widget": {
+          "text": {
+            "content": "**__SERVICE__** availability SLO: 99.5 % of requests not 5xx over a rolling 28 days (`ops/monitoring/slo/availability.json`, SLO `__SLO_ID__`; budget about 3.4 h of full outage). Burn rate 1 = spending the budget exactly over 28 days. The fast-burn alert pages above 14.4 over 1 h, the slow-burn alert tickets above 6 over 6 h. Runbook: `ops/monitoring/README.md#slo-burn`.",
+            "format": "MARKDOWN"
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 5,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "SLI: good request ratio",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "select_slo_health(\"projects/__PROJECT_NUMBER__/services/__SLO_SERVICE_ID__/serviceLevelObjectives/__SLO_ID__\")",
+                "aggregation": {
+                  "alignmentPeriod": "3600s",
+                  "perSeriesAligner": "ALIGN_MEAN"
+                }
+              }
+            },
+            "sparkChartView": {
+              "sparkChartType": "SPARK_LINE"
+            },
+            "thresholds": [
+              {
+                "value": 0.995,
+                "color": "RED",
+                "direction": "BELOW"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 5,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Error budget remaining",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesFilter": {
+                "filter": "select_slo_budget_fraction(\"projects/__PROJECT_NUMBER__/services/__SLO_SERVICE_ID__/serviceLevelObjectives/__SLO_ID__\")",
+                "aggregation": {
+                  "alignmentPeriod": "3600s",
+                  "perSeriesAligner": "ALIGN_MEAN"
+                }
+              }
+            },
+            "sparkChartView": {
+              "sparkChartType": "SPARK_LINE"
+            },
+            "thresholds": [
+              {
+                "value": 0.5,
+                "color": "YELLOW",
+                "direction": "BELOW"
+              },
+              {
+                "value": 0.1,
+                "color": "RED",
+                "direction": "BELOW"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 21,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Error budget remaining (fraction of 28-day budget)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "select_slo_budget_fraction(\"projects/__PROJECT_NUMBER__/services/__SLO_SERVICE_ID__/serviceLevelObjectives/__SLO_ID__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "budget remaining"
+              }
+            ],
+            "yAxis": {
+              "label": "fraction",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "thresholds": [
+              {
+                "value": 0,
+                "label": "exhausted",
+                "color": "RED",
+                "direction": "BELOW",
+                "targetAxis": "Y1"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 21,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Error budget burn rate (1 h and 6 h windows)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "select_slo_burn_rate(\"projects/__PROJECT_NUMBER__/services/__SLO_SERVICE_ID__/serviceLevelObjectives/__SLO_ID__\", \"60m\")",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "burn rate, 1 h"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "select_slo_burn_rate(\"projects/__PROJECT_NUMBER__/services/__SLO_SERVICE_ID__/serviceLevelObjectives/__SLO_ID__\", \"360m\")",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "burn rate, 6 h"
+              }
+            ],
+            "yAxis": {
+              "label": "x budget rate",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "thresholds": [
+              {
+                "value": 14.4,
+                "label": "fast burn: page",
+                "color": "RED",
+                "direction": "ABOVE",
+                "targetAxis": "Y1"
+              },
+              {
+                "value": 6,
+                "label": "slow burn: ticket",
+                "color": "YELLOW",
+                "direction": "ABOVE",
+                "targetAxis": "Y1"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 37,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "SLI: good request ratio",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "select_slo_health(\"projects/__PROJECT_NUMBER__/services/__SLO_SERVICE_ID__/serviceLevelObjectives/__SLO_ID__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "good / all"
+              }
+            ],
+            "yAxis": {
+              "label": "ratio",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "thresholds": [
+              {
+                "value": 0.995,
+                "label": "goal 99.5 %",
+                "color": "RED",
+                "direction": "BELOW",
+                "targetAxis": "Y1"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "labels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

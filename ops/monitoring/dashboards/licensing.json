@@ -1,0 +1,339 @@
+{
+  "displayName": "semper-licensing",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 48,
+        "height": 5,
+        "widget": {
+          "text": {
+            "content": "Licence key redemptions, floating-seat checkouts and device-lock drops on **__SERVICE__**, hourly, from the log-based metrics in `ops/monitoring/metrics/`. Split by outcome, refusal code, and the calling app and build (`X-App-Id`, `X-App-Version`). Never by licence: per-licence counts are the activation-anomaly alert's job. Runbook: `ops/monitoring/README.md#activation-anomaly`.",
+            "format": "MARKDOWN"
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 5,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Activations by outcome",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_activation\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.outcome"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.outcome}"
+              }
+            ],
+            "yAxis": {
+              "label": "per hour",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 5,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Activations by app and build",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_activation\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.appId",
+                        "metric.label.appVersion"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.appId} v${metric.labels.appVersion}"
+              }
+            ],
+            "yAxis": {
+              "label": "per hour",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 21,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Activation refusals by code",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_activation\" AND resource.type=\"cloud_run_revision\" AND metric.label.outcome=\"refused\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.errorCode"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.errorCode}"
+              }
+            ],
+            "yAxis": {
+              "label": "per hour",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 21,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Seat checkouts by outcome",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_checkout\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.outcome"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.outcome}"
+              }
+            ],
+            "yAxis": {
+              "label": "per hour",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 37,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Seat checkouts by app and build",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_checkout\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.appId",
+                        "metric.label.appVersion"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.appId} v${metric.labels.appVersion}"
+              }
+            ],
+            "yAxis": {
+              "label": "per hour",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 37,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Seat checkout refusals by code",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_checkout\" AND resource.type=\"cloud_run_revision\" AND metric.label.outcome=\"refused\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.errorCode"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.errorCode}"
+              }
+            ],
+            "yAxis": {
+              "label": "per hour",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 53,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Device-lock drops by stage",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_devlock_drop\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.stage"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.stage}"
+              }
+            ],
+            "yAxis": {
+              "label": "per hour",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 53,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Device-lock drops by app and build",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_devlock_drop\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "3600s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.appId",
+                        "metric.label.appVersion"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "3600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.appId} v${metric.labels.appVersion}"
+              }
+            ],
+            "yAxis": {
+              "label": "per hour",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "labels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}
