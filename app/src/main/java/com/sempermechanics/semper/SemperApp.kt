@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.res.Configuration
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.data.account.SeatHeartbeat
 import com.sempermechanics.semper.data.policy.ManagedConfigReader
@@ -56,6 +57,9 @@ class SemperApp : Application() {
         // config refresh is scheduled after a successful sign-in — WorkManager
         // is not always ready during Application.onCreate in unit tests.
         SeatHeartbeat.start(appScope, this)
+        // An entitlement token past its refreshAfter asks /v1/config for a
+        // fresh one at launch and on each return to the foreground (TD-264).
+        LicenseConfigWorker.installForegroundCheck(this, appScope)
         // An account deletion the last process did not live to finish (TD-165).
         AccountDeletionRun.resumeInterrupted(this)
         LauncherIcon.sync(this)

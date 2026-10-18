@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import timber.log.Timber
@@ -118,6 +119,25 @@ class SeatLeaseTest {
         assertTrue(ok)
         assertEquals(listOf("checkout", "apply"), steps)
         assertEquals(listOf("checkoutLease"), api.calls)
+    }
+
+    @Test
+    fun `the config fetch after a checkout tells a failed call from one never made`() = runBlocking {
+        // TD-266: only a call that was made and failed queues the retrying
+        // refresh (EntitlementRefresh.retryAfterCheckout); no backend or no
+        // sign-in has nothing to retry.
+        api.enabled = false
+        assertNull(SeatLease.configCall(api, tokens))
+        api.enabled = true
+        tokens.token = null
+        assertNull(SeatLease.configCall(api, tokens))
+
+        tokens.token = "tok"
+        api.onGetConfig = { error("offline") }
+        assertTrue(SeatLease.configCall(api, tokens)!!.isFailure)
+        api.onGetConfig = { config() }
+        assertEquals(config(), SeatLease.configCall(api, tokens)!!.getOrNull())
+        assertEquals(listOf("getConfig", "getConfig"), api.calls)
     }
 
     @Test

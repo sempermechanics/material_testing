@@ -71,8 +71,9 @@ class SeatRequiredActivity : AppCompatActivity() {
             outcome
                 .onSuccess { config ->
                     AppRemoteConfig.apply(this@SeatRequiredActivity, config)
-                    // The checkout answer has no entitlement token; /v1/config does.
-                    SeatLease.refreshConfigBestEffort(this@SeatRequiredActivity)
+                    // The checkout answer has no entitlement token; /v1/config
+                    // does, and a failed fetch is retried in the background.
+                    SeatLease.refreshConfigAfterCheckout(this@SeatRequiredActivity)
                     LicenseConfigWorker.enqueue(this@SeatRequiredActivity)
                     Feedback.toast(this@SeatRequiredActivity, R.string.seat_taken)
                     finish()

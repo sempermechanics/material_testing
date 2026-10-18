@@ -65,6 +65,12 @@ object WorkTags {
     const val LICENSE_CONFIG_NAME = "license-config-refresh"
 
     /**
+     * The one-off `/v1/config` refresh (a token past `refreshAfter`, or a
+     * failed fetch after a seat checkout); it carries [LICENSE_CONFIG] too.
+     */
+    const val LICENSE_CONFIG_NOW_NAME = "license-config-now"
+
+    /**
      * The id in a job's `<tag>-<id>` tag ([restoreTag], [bundleDownloadTag]),
      * or null when [tags] has none: how the screens tell which analysis a
      * restore or download in a tag-wide list belongs to.
