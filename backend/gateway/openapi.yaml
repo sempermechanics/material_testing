@@ -822,6 +822,100 @@ paths:
         '403': { description: "not_admin, or the console's step-up is missing or stale" }
         '404': { description: license_not_found or invite_not_found }
         '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/seats/import:
+    post:
+      operationId: adminImportSeats
+      description: >
+        Semper staff, the bulk form of POST .../seats on any institution
+        licence: body {"csv": "<file text>"}, up to 500 rows, each added as
+        the single add would and answered {row, email, outcome, error}.
+        Staff step-up, as for the single add.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: "OK, with one result per row" }
+        '400': { description: "roster_import_empty, roster_import_malformed or roster_import_no_email_column" }
+        '403': { description: "not_admin, or the console's step-up is missing or stale" }
+        '404': { description: license_not_found }
+        '413': { description: roster_import_too_many_rows }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/seats/export:
+    get:
+      operationId: adminExportSeats
+      description: >
+        Semper staff, any institution licence: the roster as a CSV download.
+      produces:
+        - text/csv
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: "text/csv attachment" }
+        '403': { description: not_admin }
+        '404': { description: license_not_found }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/summary:
+    get:
+      operationId: adminSeatSummary
+      description: >
+        Semper staff, any institution licence: the seat counts institution IT
+        sees on their console tiles.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: not_admin }
+        '404': { description: license_not_found }
+        '429': { description: Rate limited }
+  /v1/admin/licenses/{licenseId}/audit:
+    get:
+      operationId: adminLicenseAudit
+      description: >
+        Semper staff, any institution licence: the audit log institution IT
+        sees for it, as JSON pages or a CSV download.
+      produces:
+        - application/json
+        - text/csv
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: format
+          in: query
+          required: false
+          type: string
+          enum: [json, csv]
+        - name: since
+          in: query
+          required: false
+          type: string
+        - name: until
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: invalid_audit_range }
+        '403': { description: not_admin }
+        '404': { description: license_not_found }
+        '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}/device-history:
     get:
       operationId: adminLicenseDeviceHistory
@@ -1085,4 +1179,110 @@ paths:
         '200': { description: OK }
         '403': { description: email_not_verified }
         '404': { description: license_not_found or seat_not_found }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/seats/import:
+    post:
+      operationId: institutionImportSeats
+      description: >
+        Bulk roster import: body {"csv": "<file text>"}. One column is read,
+        email (or the first column when there is no header row), up to 500
+        rows. Each row goes through the single add (POST .../seats) and is
+        answered {row, email, outcome, error}; outcome is seated, invited,
+        exists, duplicate, invalid, refused or unprocessed. Rows that can be
+        added are added whatever happens to the others. Re-importing a file
+        is harmless: an address already on the roster answers exists. Same
+        membership check and step-up as the single add.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: "OK, with one result per row" }
+        '400': { description: "roster_import_empty, roster_import_malformed or roster_import_no_email_column" }
+        '403': { description: email_not_verified }
+        '404': { description: "license_not_found (unknown, not an institution license, or not administered by caller)" }
+        '413': { description: roster_import_too_many_rows }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/seats/export:
+    get:
+      operationId: institutionExportSeats
+      description: >
+        The roster as a CSV download (Content-Disposition attachment): every
+        seat, then every invite. email is the first column, so the file is
+        also a valid import. Audited.
+      produces:
+        - text/csv
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: "text/csv attachment" }
+        '403': { description: email_not_verified }
+        '404': { description: "license_not_found (unknown, not an institution license, or not administered by caller)" }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/summary:
+    get:
+      operationId: institutionSeatSummary
+      description: >
+        Seat counts: assigned, on hold, active in the last 7 days (the
+        holder's account made a request), invited, revocation pending (removed
+        but the device has not been back since), removed, and seats expiring
+        within 30 days on a timed licence. One read per seat.
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '403': { description: email_not_verified }
+        '404': { description: "license_not_found (unknown, not an institution license, or not administered by caller)" }
+        '429': { description: Rate limited }
+  /v1/institutions/licenses/{licenseId}/audit:
+    get:
+      operationId: institutionLicenseAudit
+      description: >
+        This licence's audit log, newest first: who did what to the licence,
+        its seats, invites and leases. since / until are ISO dates or
+        instants (until as a date includes that day). Paged by page_size
+        (1..5000) and page_token. format=csv returns the same page as a
+        download, the next page's token in X-Next-Page-Token. Never holds
+        another licence's events.
+      produces:
+        - application/json
+        - text/csv
+      parameters:
+        - name: licenseId
+          in: path
+          required: true
+          type: string
+        - name: format
+          in: query
+          required: false
+          type: string
+          enum: [json, csv]
+        - name: since
+          in: query
+          required: false
+          type: string
+        - name: until
+          in: query
+          required: false
+          type: string
+        - name: page_size
+          in: query
+          required: false
+          type: integer
+        - name: page_token
+          in: query
+          required: false
+          type: string
+      responses:
+        '200': { description: OK }
+        '400': { description: invalid_audit_range }
+        '403': { description: email_not_verified }
+        '404': { description: "license_not_found (unknown, not an institution license, or not administered by caller)" }
         '429': { description: Rate limited }

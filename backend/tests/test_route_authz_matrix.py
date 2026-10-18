@@ -129,6 +129,12 @@ EXPECTED = {
     ("PATCH", "/v1/admin/licenses/{license_id}/seats/{uid}"): ADMIN_STEPUP,
     ("DELETE", "/v1/admin/licenses/{license_id}/seats/{uid}"): ADMIN_STEPUP,
     ("DELETE", "/v1/admin/licenses/{license_id}/invites/{invite_key}"): ADMIN_STEPUP,
+    # The bulk import is a write like the single add it runs per row; the
+    # export, summary and audit log are reads, like the listing.
+    ("POST", "/v1/admin/licenses/{license_id}/seats/import"): ADMIN_STEPUP,
+    ("GET", "/v1/admin/licenses/{license_id}/seats/export"): ADMIN,
+    ("GET", "/v1/admin/licenses/{license_id}/summary"): ADMIN,
+    ("GET", "/v1/admin/licenses/{license_id}/audit"): ADMIN,
     # Read-only device-move history for support. ADMIN (token) not step-up —
     # same tier as listing licences.
     ("GET", "/v1/admin/licenses/{license_id}/device-history"): ADMIN,
@@ -157,6 +163,13 @@ EXPECTED = {
     # adminEmails check — the handler additionally refuses an invite whose
     # licenseId is not this one, so a guessed id reaches nothing.
     ("DELETE", "/v1/institutions/licenses/{license_id}/invites/{invite_key}"): INSTITUTION_STEPUP,
+    # Bulk import, export, seat summary and the licence's audit log: the same
+    # membership check and step-up as the roster itself, so a licence that
+    # does not name the caller 404s before anything is read.
+    ("POST", "/v1/institutions/licenses/{license_id}/seats/import"): INSTITUTION_STEPUP,
+    ("GET", "/v1/institutions/licenses/{license_id}/seats/export"): INSTITUTION_STEPUP,
+    ("GET", "/v1/institutions/licenses/{license_id}/summary"): INSTITUTION_STEPUP,
+    ("GET", "/v1/institutions/licenses/{license_id}/audit"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
 }
 
