@@ -74,6 +74,13 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("audit_logs", ("target.id", "==")),
         _q("audit_logs", ("target.id", ">="), ("target.id", "<")),
     ],
+    # One licence's audit log, newest first, optionally within dates.
+    "app/audit.py::page_license_audit": [
+        _q("audit_logs", ("licenseId", "=="), order=(("ts", DESC),), note="no range"),
+        _q("audit_logs", ("licenseId", "=="), ("ts", ">="), order=(("ts", DESC),)),
+        _q("audit_logs", ("licenseId", "=="), ("ts", "<"), order=(("ts", DESC),)),
+        _q("audit_logs", ("licenseId", "=="), ("ts", ">="), ("ts", "<"), order=(("ts", DESC),)),
+    ],
     "app/repo/account.py::list_user_devices": [_q("devices", ("uid", "=="))],
     "app/repo/account.py::delete_all_user_data": [
         _q("files", ("uid", "==")),

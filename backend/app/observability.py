@@ -17,7 +17,7 @@ _ALLOWED = frozenset({
     "dependency", "latencyMs", "method", "path", "status", "attempt",
     "maxAttempts", "httpStatus", "count", "stage",
     "opClass", "routeTemplate", "fileCount", "frameCount", "folderMs",
-    "appId",
+    "appId", "action",
 })
 
 # Opaque path segments (session / file / user ids) collapse to {id} so log
