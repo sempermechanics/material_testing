@@ -4,6 +4,7 @@
   "//ttl-deleted": "Deleted licences are held 30 days: `deleted_licenses.purgeAt` and `deleted_seats.purgeAt` (the seats under each) are TTL fields, declared in fieldOverrides (docs/backend/BACKEND_SETUP_CONSOLE.md step 3a). Without the policies a deleted licence is never purged; restore still refuses one past purgeAt.",
   "//licenses": "The staff desk lists licences newest first (createdAt DESC), filtered by mode unless Demo keys are shown and by status (an `in` filter) when revoked ones are hidden: repo/license_admin.list_licenses. One index per filter combination.",
   "//files": "The account export streams the caller's files ordered by session (where uid ==, order by sessionId) and merges them with the sessions: repo/sessions.iter_sessions_with_files.",
+  "//audit_logs": "Institution IT read their own licence's audit log newest first, optionally within dates (where licenseId ==, ts range, order by ts DESC): audit.page_license_audit. `audit.record` stamps licenseId on licence, seat, invite and lease events from 2026-10-18; older events are not in that export.",
   "indexes": [
     {
       "collectionGroup": "sessions",
@@ -79,6 +80,20 @@
         },
         {
           "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "licenseId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
           "order": "DESCENDING"
         }
       ]
