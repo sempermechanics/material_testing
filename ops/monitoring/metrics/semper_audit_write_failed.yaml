@@ -10,3 +10,13 @@ metricDescriptor:
   valueType: INT64
   unit: "1"
   displayName: semper-api audit write failures
+  labels:
+    - key: action
+      valueType: STRING
+      description: The audit action that went unrecorded.
+    - key: errorCode
+      valueType: STRING
+      description: The exception class.
+labelExtractors:
+  action: EXTRACT(jsonPayload.action)
+  errorCode: EXTRACT(jsonPayload.errorCode)
