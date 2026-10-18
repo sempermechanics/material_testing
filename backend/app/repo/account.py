@@ -3,12 +3,14 @@
 import logging
 
 from .. import apps
+from .. import observability as obs
 from ..licenses import (
     MODE_DEMO,
 )
 
 from . import _base
 from ._base import (
+    SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
     db,
@@ -19,7 +21,12 @@ from ._base import (
     _get,
     _stream,
     _update_doc,
+    _update_refs,
     _delete_doc,
+    _seat_ref,
+)
+from .deletion import (
+    DELETED_SEATS,
 )
 from .invites import (
     _write_invite,
@@ -146,13 +153,69 @@ def _give_back_license(uid: str) -> None:
                         license_id, err)
 
 
+def _seats_of(uid: str, license_id: str) -> tuple[list, bool]:
+    """Every seat document held under `uid`, live or in a deleted licence's
+    hold, and whether the search reached them all.
+
+    A seat is keyed by its holder's uid under its licence
+    (`licenses/{id}/seats/{uid}`, `deleted_licenses/{id}/deleted_seats/{uid}`),
+    and an account may have held seats on licences it has since left, so it is
+    found by a collection-group query on `uid`. That query needs the
+    collection-group single-field index `firestore.indexes.json` declares; a
+    database without it refuses the query (FAILED_PRECONDITION), which is
+    logged and answered with the current licence's seat alone, so an erasure
+    never fails half way for it.
+    """
+    found = {}
+    complete = True
+    try:
+        for group in ("seats", DELETED_SEATS):
+            for snap in _stream(db().collection_group(group).where("uid", "==", uid)):
+                found[snap.reference.path] = snap
+    except Exception as e:  # noqa: BLE001 - best effort; the erasure goes on
+        complete = False
+        obs.log_event(log, logging.ERROR, "erasure_seat_scan_failed", uid=uid,
+                      outcome="error", errorCode=type(e).__name__, dependency="firestore")
+    if license_id:
+        snap = _get(_seat_ref(license_id, uid))
+        if snap.exists:
+            found.setdefault(snap.reference.path, snap)
+    return list(found.values()), complete
+
+
+def _blank_seat_addresses(uid: str, license_id: str) -> tuple[int, bool]:
+    """Blank the address on every seat `uid` held, keeping the seat (TD-243).
+
+    The seat stays: it is what `seatsUsed`, reconciliation and the licence's
+    audit export count, and its uid is opaque. A live seat still on the
+    roster is revoked the usual way first, which frees its slot and lease, so
+    the counts read the same as after any other revoke. `_give_back_license`
+    has already done that for the current licence; this finds the rest.
+    Returns (seats blanked, whether every seat was searched).
+    """
+    seats, complete = _seats_of(uid, license_id)
+    for snap in seats:
+        coll = snap.reference.parent
+        if coll.id == "seats" and not _is_revoked(snap.to_dict() or {}):
+            revoke_institution_seat(coll.parent.id, uid)
+    addressed = [snap.reference for snap in seats if (snap.to_dict() or {}).get("email")]
+    _update_refs([(ref, {"email": "", "schemaVersion": SCHEMA_VERSION}) for ref in addressed])
+    return len(addressed), complete
+
+
 def delete_all_user_data(uid: str) -> dict:
     """Erase every Firestore record belonging to a user (GDPR account deletion).
 
-    Sessions + their file docs, the device registrations, and the user profile
-    itself. Audit records are intentionally kept: they hold no analysis content,
-    only the fact that actions (including this erasure) occurred. A licence
-    seat or key the account held is given back first — see `_give_back_license`.
+    Sessions + their file docs, the device registrations, the sign-in links
+    (`auth_links`, one per Firebase sub that resolves to this account) and the
+    user profile itself. Audit records are intentionally kept: they hold no
+    analysis content and no address, only the fact that actions (including
+    this erasure) occurred. A licence seat or key the account held is given
+    back first — see `_give_back_license` — and every seat it held keeps its
+    place in the counts but loses its address (`_blank_seat_addresses`).
+
+    `seatScanComplete` is False when the collection-group search for seats
+    failed (its index missing); the current licence's seat was still blanked.
     """
     # File docs carry the uid, so the whole account is one query rather than one
     # per session. Deleting session by session meant a query and a batch commit
@@ -166,6 +229,15 @@ def delete_all_user_data(uid: str) -> dict:
     devices = _delete_query_until_empty(
         db().collection("devices").where("uid", "==", uid)
     )
+    snap = _get(db().collection("users").document(uid))
+    license_id = ((snap.to_dict() or {}).get("licenseId") or "") if snap.exists else ""
     _give_back_license(uid)
+    seats, seat_scan_complete = _blank_seat_addresses(uid, license_id)
+    # Every sub linked to this account points at it, its own sub included.
+    auth_links = _delete_query_until_empty(
+        db().collection("auth_links").where("uid", "==", uid)
+    )
     _delete_doc(db().collection("users").document(uid))
-    return {"sessions": sessions, "files": files, "devices": devices}
+    return {"sessions": sessions, "files": files, "devices": devices,
+            "authLinks": auth_links, "seatsBlanked": seats,
+            "seatScanComplete": seat_scan_complete}
