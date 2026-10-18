@@ -14,6 +14,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import java.io.IOException
 
 /**
@@ -24,7 +26,12 @@ import java.io.IOException
  * happened and a repeat is free. 503 carries no such promise, so it is retried
  * only where a duplicate is harmless. Getting that wrong duplicates a
  * server-side effect nobody would see.
+ *
+ * Robolectric because the kill-switch case reads the body's code through
+ * [com.sempermechanics.semper.data.net.ApiErrors], which parses it with
+ * `org.json`, a stub on the plain JVM classpath.
  */
+@RunWith(RobolectricTestRunner::class)
 class RetryOnTransientTest {
 
     @get:Rule
