@@ -28,6 +28,11 @@ build it. This page routes you to the rest.
 | Map GitHub Environments / secrets / main hygiene | [ops/ENVIRONMENTS.md](ops/ENVIRONMENTS.md) |
 | Production launch checklist | [ops/PRODUCTION_READINESS_GATE.md](ops/PRODUCTION_READINESS_GATE.md) |
 | Read the external readiness framework the gate is cross-checked against (2026-10-18) | [ops/READINESS_FRAMEWORK_2026-10.md](ops/READINESS_FRAMEWORK_2026-10.md) · mapping: [the gate's "Framework cross-check"](ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18) |
+| Respond to an incident (severity, DPDP breach playbook, key compromise, mass revocation, restore, App Check rollback) | [ops/INCIDENT_RESPONSE.md](ops/INCIDENT_RESPONSE.md) |
+| See the MASVS v2 self-assessment, or brief a penetration tester | [ops/MASVS_ASSESSMENT.md](ops/MASVS_ASSESSMENT.md) · [ops/PENTEST_SCOPE.md](ops/PENTEST_SCOPE.md) |
+| Know the support policy (severities, supported versions, deprecation) | [ops/SUPPORT_POLICY.md](ops/SUPPORT_POLICY.md) (draft; values TBD) |
+| Script against the institution and staff routes | [backend/ADMIN_API.md](backend/ADMIN_API.md) |
+| Know what personal data is held, where and for how long | [legal/DATA_MAP.md](legal/DATA_MAP.md) · Play Data safety draft [legal/PLAY_DATA_SAFETY.md](legal/PLAY_DATA_SAFETY.md) (neither is rendered to Hosting) |
 | Tech-debt status / deferred gates | [ops/TECH_DEBT.md](ops/TECH_DEBT.md) |
 | Know why a structural choice was made | [adr/](adr/README.md) — architecture decision records |
 | See what changed and when (history moved out of CONTEXT.md) | [ops/CHANGELOG.md](ops/CHANGELOG.md) |
@@ -54,7 +59,7 @@ docs/
   app/       Android UI layer — Activity flow, packages, session layout
   engine/    the app-facing engine contract, plus stubs into the submodule's own docs
   backend/   the optional GCP cloud side — architecture, setup, sign-in
-  legal/     privacy policy and terms — the source the hosted pages are generated from
+  legal/     privacy policy and terms (the source the hosted pages are generated from), plus the data map and Data safety draft
   ops/       running the project — CI, releases, environments, tech debt, readiness gate, changelog
   adr/       architecture decision records
   perf/      measured before/after reports backing performance changes
