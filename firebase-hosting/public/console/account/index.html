@@ -30,6 +30,7 @@
   <link rel="modulepreload" href="../messages.js" />
   <link rel="modulepreload" href="../switcher.js" />
   <link rel="modulepreload" href="../roles.js" />
+  <link rel="modulepreload" href="claim.js" />
 </head>
 <body data-auth="pending">
   <header>
@@ -66,6 +67,21 @@
           <button id="release" class="secondary" hidden>Give up my seat</button>
           <button id="unbind" class="secondary" hidden>Use Semper on a different device</button>
           <button id="unbindMt" class="secondary" hidden>Use Material Testing on a different device</button>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------- claim code -->
+      <!-- Offered only while /v1/me says no licence is attached (claim.js).
+           The code goes in a POST body to /v1/me/claim, never a URL, and the
+           box is emptied once it is used; autocomplete is off so the browser
+           keeps no history of it. -->
+      <section class="card" id="claimCard" hidden>
+        <h2>Redeem a claim code</h2>
+        <p class="muted" id="claimHelp"></p>
+        <div class="row">
+          <input id="claimCode" size="32" placeholder="Claim code" aria-label="Claim code"
+                 autocomplete="off" autocapitalize="characters" spellcheck="false" />
+          <button id="claimRedeem" disabled>Redeem</button>
         </div>
       </section>
 

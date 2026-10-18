@@ -7,6 +7,7 @@ import {
   esc, when, day, licenceState, licenceStatePill, holdsLicence, leaseHeld, seatCells, seatDevices, inviteCells,
   errorDetail, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence, alreadyLicensedId,
   isoDay, emailList, licenceEditPatch, daysLeft, reauthMethods, unfinishedStepUpText,
+  normaliseClaimCode, claimCodeShaped, MAX_CLAIM_CODE,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -276,4 +277,24 @@ test("a past end is refused before the typed key is asked for", () => {
   assert.deepEqual(
     licenceEditPatch(expired, form({ expiry: "2026-09-01", note: "renewal due" }), NOW).patch,
     { note: "renewal due" });
+});
+
+test("a claim code is tidied character by character: upper case, letters, digits and dashes", () => {
+  assert.equal(normaliseClaimCode(" semp-ab2c de3f\t'gh4j'\n-km5n "), "SEMP-AB2CDE3FGH4J-KM5N");
+  assert.equal(normaliseClaimCode("ünï-cødé"), "N-CD", "nothing outside ASCII letters and digits");
+  assert.equal(normaliseClaimCode(null), "");
+  assert.equal(normaliseClaimCode(undefined), "");
+  // Tidying the part before a caret gives where the caret goes.
+  const raw = "ab cd ef";
+  assert.equal(normaliseClaimCode(raw.slice(0, 5)).length, 4);
+});
+
+test("a claim code is shaped as dash-split groups, eight to sixty-four long", () => {
+  for (const ok of ["SEMP-AB2C-DE3F-GH4J-KM5N", "ABCD2345", "A-B-C-D-E-F-G-H", "A".repeat(MAX_CLAIM_CODE)]) {
+    assert.equal(claimCodeShaped(ok), true, ok);
+  }
+  for (const bad of ["", "ABC-1234", "SEMP--ABCD-EFGH", "-ABCDEFGH", "ABCDEFGH-", "abcdefgh",
+    "ABCD EFGH", "A".repeat(MAX_CLAIM_CODE + 1), null, undefined]) {
+    assert.equal(claimCodeShaped(bad), false, String(bad));
+  }
 });
