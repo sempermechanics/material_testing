@@ -320,10 +320,12 @@ gcloud projects add-iam-policy-binding $AUTH_PROJECT \
 
 Then set the repository variable `CHECK_REVOKED_ON_STEP_UP=true` and redeploy. Not
 before: with the setting on and no grant, every console step-up call fails closed
-with 401 `invalid_token` (`backend/app/deps.py:527-561`). `roles/firebaseauth.viewer`
-is enough for the check alone, not for revoke or delete.
+with 401 `invalid_token` (`backend/app/deps.py:527-561`). The posture check passes 3.4-iam only on
+`roles/firebaseauth.admin`, `roles/firebase.admin`, or a custom role holding
+`firebaseauth.users.update` and `firebaseauth.users.delete`
+(`scripts/check_gcp_posture.sh:315-353`).
 
-**Check:** `scripts/check_gcp_posture.sh … --api-sa $API_SA` item `3.4-iam` is PASS;
+**Check:** `scripts/check_gcp_posture.sh --app-project $PROJECT --auth-project $AUTH_PROJECT --api-sa $API_SA --backup-bucket <FIRESTORE_BACKUP_BUCKET>` item `3.4-iam` is PASS;
 suspending a test account from the staff console writes an `ADMIN_REVOKE` audit row
 with `sessionsRevoked: true`.
 
@@ -339,7 +341,9 @@ openssl ecparam -name prime256v1 -genkey -noout -out $KID.pem
 gcloud secrets create $SECRET --replication-policy=automatic \
   --data-file=$KID.pem --project $PROJECT
 
-# The runtime reads it; the deploy only checks that it exists.
+# Grant the runtime first, before the repo variable names the secret: a
+# deploy mounts any secret it can see, and a revision whose runtime SA cannot
+# read its secret fails to start (TD-269). The deploy only checks existence.
 gcloud secrets add-iam-policy-binding $SECRET --project $PROJECT \
   --member="serviceAccount:$API_SA" --role="roles/secretmanager.secretAccessor"
 gcloud secrets add-iam-policy-binding $SECRET --project $PROJECT \
@@ -359,6 +363,11 @@ gh variable set SEMPER_ENTITLEMENT_PUBKEYS --body "$KID:$PUB"
   missing secret deploys without it, with a warning
   (`.github/workflows/deploy-backend.yml:218-238`). Never pass the key with
   `--set-env-vars`.
+- **Order matters.** The deploy SA only checks that the secret exists. If it
+  exists but the runtime SA cannot read it, the candidate revision fails to start,
+  the deploy stops and traffic stays on the previous revision (TD-269). So: create
+  the secret, grant `secretAccessor` to the runtime SA, grant `secretmanager.viewer`
+  to the deploy SA, and only then set `ENTITLEMENT_SIGNING_SECRET`.
 - `SEMPER_ENTITLEMENT_PUBKEYS` is `kid:base64SPKI`, several separated by commas
   during a rotation; `release.yml` passes it to Gradle
   ([RELEASING.md](../ops/RELEASING.md) variables). A build without it ignores tokens.
@@ -416,12 +425,13 @@ Everything above is required (or near enough). These are the rest of what
 | `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
 | `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | `30` | Wait between self-service device changes on one licence. `0` disables the wait. Staff-initiated changes ignore it |
 | `DEVICE_RELEASE_HOLD_HOURS` | `24` | How long the phone a device-lock clear released is refused at `POST /v1/devices/register`, so its upload worker cannot take the account back before the new phone signs in. Registering any other device ends it; `0` disables it. Not pinned by `deploy-backend.yml` |
-| `CHECK_REVOKED_ON_STEP_UP` | `false` | `true` re-verifies a browser step-up caller's ID token with revocation checked, so a revoked or disabled user stops at once rather than when the token expires. Needs A8 step 1 first; without the grant it fails closed (`backend/app/config.py:230-245`) |
+| `CHECK_REVOKED_ON_STEP_UP` | `false` | `true` re-verifies a browser step-up caller's ID token with revocation checked, so a revoked or disabled user stops at once rather than when the token expires. Needs A8 step 1 first; without the grant it fails closed (`backend/app/config.py:232-247`) |
 | `ENTITLEMENT_SIGNING_KEY` | empty | PEM of the EC P-256 key that signs `/v1/config`'s `entitlement`. From Secret Manager only (A8 step 2). Empty issues no token and fails nothing |
 | `ENTITLEMENT_KID` | `ent-1` | The key's id in the token header; the app pins keys by it |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | `14` | How long a token lets the app keep its entitlement offline, capped at a timed licence's end plus grace and a floating lease's end |
-| `MIN_SUPPORTED_VERSION_CODE` · `RECOMMENDED_VERSION_CODE` | `0` · `0` | Published on `/v1/config`; the app blocks new runs and cloud calls below the minimum and nudges below the recommended. The server refuses nothing on them. `0` = no gate |
-| `KILL_SWITCHES` | empty | Features every build switches off: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:16-32`) |
+| `MIN_SUPPORTED_VERSION_CODE` · `RECOMMENDED_VERSION_CODE` | `0` · `0` | Semper's release gate, published on `/v1/config` to Semper builds only; the app blocks new runs and cloud calls below the minimum and nudges below the recommended. The server refuses nothing on them. `0` = no gate |
+| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` · `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | `0` · `0` | The same pair for Material Testing builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:280-287`) |
+| `KILL_SWITCHES` | empty | Features every build switches off: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:18-34`) |
 | `CONSOLE_ORIGINS` | `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, **space-separated** (the deploy action splits its `env_vars` on commas, so a comma-separated value is truncated), no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
 
 > **`MAX_SESSIONS_PER_USER` and `PRO_MAX_SESSIONS_PER_USER` are no longer
@@ -436,9 +446,9 @@ Everything above is required (or near enough). These are the rest of what
 > `DEMO_MAX_ANALYSES`, `LICENSED_MAX_SESSIONS_PER_USER`, `ADMIN_WEB_MFA_ENABLED`,
 > `APP_CHECK_MODE`, `SELF_DEVICE_CHANGE_COOLDOWN_DAYS`, `CONSOLE_ORIGINS`,
 > `CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
-> `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE` and `KILL_SWITCHES` from repository
+> `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, their `_MATERIAL_TESTING` pair and `KILL_SWITCHES` from repository
 > variables of the same name, with the defaults above when a variable is unset
-> (`.github/workflows/deploy-backend.yml:263-287`), and mounts `ENTITLEMENT_SIGNING_KEY`
+> (`.github/workflows/deploy-backend.yml:263-289`), and mounts `ENTITLEMENT_SIGNING_KEY`
 > from the secret `ENTITLEMENT_SIGNING_SECRET` names (A8).
 > `deploy-cloudrun` *merges* env into the live revision, so a retired variable
 > stays on the service until removed by hand; the workflow's "Describe live

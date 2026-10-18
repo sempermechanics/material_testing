@@ -154,15 +154,16 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ADR and TD numbers are shared: ADR-008, 009, 011, 012 and 022 and TD-133–135,
   TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
   TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-263 (TD-214–TD-262 are the readiness rows); check
+  free in both registers is TD-270 (TD-214–TD-269 are the readiness rows); check
   both before taking one.
 - **Branch `claude/new-session-jhfhj9`** (not merged, not deployed; ported from
   semperdic-app's branch of that name): the readiness-framework cross-check
   ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-262, FI-17–FI-23). This app goes to **minSdk 30** (Android 11; phones on
+  TD-214–TD-269, FI-17–FI-23). This app goes to **minSdk 30** (Android 11; phones on
   Android 7–10 can no longer install or update it) and gains the signed offline
   entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); its tokens
-  name `materialtesting`), the version gate and kill switches from `/v1/config`, EMM
+  name `materialtesting`), the version gate (its own pair, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` /
+  `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`) and kill switches from `/v1/config`, EMM
   managed config, crash breadcrumbs only after diagnostics consent and cert pins from
   the environment. The backend, consoles, rules tests and monitoring are shared and
   deploy from semperdic-app. Owed: the same external actions (TD-214–TD-217, TD-226,

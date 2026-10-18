@@ -344,9 +344,11 @@ online; ≤ grace period offline')."
 
 **Framework** 6.1; Part C "Update control for IT".
 
-**Now.** The release gate is fleet-wide: `MIN_SUPPORTED_VERSION_CODE` and
-`RECOMMENDED_VERSION_CODE` (`backend/app/config.py:266-267`) are added to every
-`/v1/config` answer (`backend/app/routers/account.py:147-172`), and the app gates
+**Now.** The release gate is per app but not per institution:
+`MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` for Semper and the
+`_MATERIAL_TESTING` pair for Material Testing (`settings.release_gate(app)`,
+`backend/app/config.py:273-287`) go into every `/v1/config` answer for that app
+(`backend/app/routers/account.py:147-174`), and the app gates
 itself (`VersionGate.decide`,
 `app/src/main/java/com/sempermechanics/semper/data/policy/VersionGate.kt:33`).
 
@@ -363,9 +365,9 @@ gating UX", for one institution while another stays ungated.
 
 **Framework** 8.5 ("per tenant").
 
-**Now.** Per user: `GET /v1/me/export` (`backend/app/routers/account.py:192`) and
-`DELETE /v1/me` (`:292`), which also deletes the Firebase Auth user when TD-214's
-grant is in place (`:348`). Per licence: delete into a 30-day hold
+**Now.** Per user: `GET /v1/me/export` (`backend/app/routers/account.py:194`) and
+`DELETE /v1/me` (`:294`), which also deletes the Firebase Auth user when TD-214's
+grant is in place (`:350`). Per licence: delete into a 30-day hold
 (`backend/app/routers/admin.py:300`), which drops holders to Demo and leaves their
 data untouched by design. Nothing exports or erases every member's data for one
 institution in one operation.
