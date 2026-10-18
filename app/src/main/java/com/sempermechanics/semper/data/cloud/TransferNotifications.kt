@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.content.res.Resources
-import android.os.Build
 import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
 import androidx.work.ForegroundInfo
@@ -115,15 +114,9 @@ object TransferNotifications {
     // same type onto WorkManager's SystemForegroundService — both halves are
     // required; the type declared here must be a subset of the manifest's.
     private fun typed(id: Int, notification: Notification): ForegroundInfo =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            ForegroundInfo(id, notification)
-        }
+        ForegroundInfo(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
 
-    @Suppress("ReturnCount") // SDK / missing service / already-created early outs
     internal fun ensureChannel(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = context.getSystemService(NotificationManager::class.java) ?: return
         if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
         mgr.createNotificationChannel(

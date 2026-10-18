@@ -8,6 +8,7 @@ import androidx.credentials.GetCredentialRequest
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.policy.ManagedConfigReader
 
 /**
  * Native "Sign in with Google" via AndroidX Credential Manager.
@@ -53,7 +54,12 @@ object GoogleSignInHelper {
     suspend fun requestIdToken(activity: Activity): String {
         val webClientId = webClientId(activity) ?: throw NotConfiguredException()
 
-        val option = GetSignInWithGoogleOption.Builder(webClientId).build()
+        val option = GetSignInWithGoogleOption.Builder(webClientId)
+            .apply {
+                // An EMM-managed phone offers only its organisation's accounts.
+                ManagedConfigReader.current(activity).accountEmailDomain?.let { setHostedDomainFilter(it) }
+            }
+            .build()
         val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
 
         val response = CredentialManager.create(activity).getCredential(activity, request)

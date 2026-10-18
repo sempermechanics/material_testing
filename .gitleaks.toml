@@ -18,12 +18,14 @@ description = "Public/client identifiers and deleted historical noise (not Admin
 # accidental commit of it (signing and API settings) gets scanned. Removed as
 # redundant: the SupabaseManager.kt path (its later commits add nothing), and
 # commits 9a3623a (its only hit is google-services.json) and 46dbc60 (no hit).
-# The entitlement test vector holds a signed test token (the default `jwt`
-# rule matches any compact JWS) made with keys derived from seeds printed in
-# the same file: TEST ONLY by construction, and the Android tests copy it.
+# The entitlement test vectors hold signed test tokens (the default `jwt`
+# rule matches any compact JWS), made with keys derived from seeds printed in
+# the backend file or generated per run for the Android one: TEST ONLY by
+# construction, and never accepted by a real build (its pins hold only
+# production kids).
 paths = [
   '''(^|/)google-services\.json$''',
-  '''^backend/tests/fixtures/entitlement_vector\.json$''',
+  '''(^|/)entitlement_vector[A-Za-z_]*\.json$''',
 ]
 commits = [
   '''46e50fd23512e481f4d1a4c3697eb3d6aec6d68f''',

@@ -62,12 +62,7 @@ object MediaStoreBrowser {
         return out
     }
 
-    private fun collectionUri(): Uri =
-        if (Build.VERSION.SDK_INT >= SDK_RELATIVE_PATH) {
-            MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        } else {
-            MediaStore.Files.getContentUri("external")
-        }
+    private fun collectionUri(): Uri = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
 
     private fun filter(includeVideo: Boolean): Pair<String, Array<String>> {
         val typeClause = if (includeVideo) {
@@ -119,5 +114,4 @@ object MediaStoreBrowser {
     )
     private const val MAX_ITEMS = 400
     private const val SDK_READ_MEDIA = 33
-    private const val SDK_RELATIVE_PATH = 29
 }

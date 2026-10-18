@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Details sheet: max/min (+ mean on a frame), then the frame histogram, then settings used. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_viewer_peek_sheet"
@@ -9,8 +8,7 @@
     android:orientation="vertical"
     android:paddingHorizontal="22dp"
     android:paddingTop="10dp"
-    android:paddingBottom="28dp"
-    tools:targetApi="29">
+    android:paddingBottom="28dp">
 
     <View
         android:layout_width="36dp"
