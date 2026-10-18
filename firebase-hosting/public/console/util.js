@@ -240,6 +240,36 @@ export function isoDay(iso) {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
+/** The most rows one roster import may hold (`roster_io.MAX_IMPORT_ROWS`). */
+export const MAX_IMPORT_ROWS = 500;
+
+/**
+ * How many rows a roster import holds, for the preview before it is sent:
+ * the non-blank lines, less a header (a first line with no `@` in it), as
+ * `roster_io.parse_import` counts them. A quoted address spanning lines
+ * would count twice here; the backend's answer is the real count.
+ */
+export function importRowCount(text) {
+  const lines = String(text ?? "").split(/\r?\n/).filter((line) => line.trim());
+  if (!lines.length) return 0;
+  return lines[0].includes("@") ? lines.length : lines.length - 1;
+}
+
+/**
+ * The query string of an audit-log request: the date range when one is set,
+ * plus `extra` (`format`, `page_size`, `page_token`). Starts with "?".
+ */
+export function auditQuery({ since = "", until = "" } = {}, extra = {}) {
+  const params = new URLSearchParams();
+  if (since) params.set("since", since);
+  if (until) params.set("until", until);
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== "" && value != null) params.set(key, String(value));
+  }
+  const text = params.toString();
+  return text ? `?${text}` : "";
+}
+
 /** An address list typed as "a@x, b@x", normalised as the backend stores it. */
 export function emailList(text) {
   return [...new Set(String(text ?? "").split(",")

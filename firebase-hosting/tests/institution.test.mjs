@@ -31,6 +31,11 @@ const assigned = {
   invites: [{ id: "i1", email: "dee@uni.edu" }, { id: "i2", email: "eve@uni.edu" }],
 };
 
+/** The seat counts every opened roster reads after it (roster-tools.js), for each licence a test opens. */
+const SUMMARIES = Object.fromEntries(["L1", "L%201", "L2"].map((id) => [
+  `GET /v1/institutions/licenses/${id}/summary`, () => json(200, { counts: { assigned: 3 } }),
+]));
+
 /** The roster page for licence L1 (deep-linked unless `search` says otherwise). */
 async function open({ roster = assigned, routes = {}, search = "?license=L1", user } = {}) {
   await openPage("institution", {
@@ -40,6 +45,7 @@ async function open({ roster = assigned, routes = {}, search = "?license=L1", us
       "GET /v1/institutions/licenses": () => json(200, { licenses: [{ id: "L1" }] }),
       [`GET ${SEATS}`]: () => json(200, roster),
       "GET /v1/me": () => json(200, { role: "user" }),
+      ...SUMMARIES,
       ...routes,
     },
   });

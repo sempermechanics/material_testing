@@ -1,0 +1,121 @@
+/* The institution page's audit-log panel: this licence's events, newest
+ * first, a page at a time, filtered by date, and exported as CSV or JSON
+ * (`GET …/audit`). Read on demand rather than with the roster: it is a
+ * query over everything that ever happened to the licence.
+ */
+import { api, apiBlob, saveBlob, esc, when } from "../auth.js";
+import { explain } from "../messages.js";
+import { auditQuery } from "../util.js";
+
+/** A page in the panel; an export is one request of the backend's largest page. */
+const PAGE = 50;
+const EXPORT_PAGE = 5000;
+
+const ERRORS = {
+  invalid_audit_range: "Those dates are not a range: the start must come before the end.",
+};
+
+const EMPTY = '<tr><td colspan="5" class="muted">Choose dates, or none for everything, and press Show.</td></tr>';
+
+/**
+ * One event's row. `who(uid)` names an account (the roster's address for a
+ * member, else the uid); a seat target `{licence}/{uid}` is named the same way.
+ */
+export function auditRow(event, who = (uid) => uid) {
+  const target = event.target || {};
+  const [, member] = String(target.id || "").split("/");
+  const detail = Object.entries(event.detail || {})
+    .filter(([, value]) => value !== "" && value != null)
+    .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : value}`)
+    .join(", ");
+  return `
+    <tr>
+      <td>${esc(when(event.ts))}</td>
+      <td class="mono">${esc(event.action)}</td>
+      <td>${esc(who(event.uid) || "—")}</td>
+      <td>${esc(target.type || "")}${member ? ` ${esc(who(member))}` : ""}</td>
+      <td class="muted">${esc(detail)}</td>
+    </tr>`;
+}
+
+/**
+ * Wire the panel. `base()` is the open licence's path ("" when none is),
+ * `name()` the file name's licence part, `who(uid)` as for `auditRow`.
+ * Returns `reset()`, for when another licence is opened.
+ */
+export function wireAuditLog({ rows, since, until, show, more, csv, json, base, name, who, report }) {
+  let next = null;
+  let ticket = 0; // the latest page asked for; an older answer is dropped
+
+  const range = () => ({ since: since.value, until: until.value });
+
+  async function load(append) {
+    const root = base();
+    if (!root) return;
+    const mine = ++ticket;
+    show.disabled = true;
+    more.disabled = true;
+    report("Loading the audit log…");
+    try {
+      const query = auditQuery(range(), { page_size: PAGE, page_token: append ? next : "" });
+      const page = await api(`${root}/audit${query}`);
+      if (mine !== ticket) return;
+      const events = page.events || [];
+      const html = events.map((e) => auditRow(e, who)).join("");
+      rows.innerHTML = append ? rows.innerHTML + html
+        : html || '<tr><td colspan="5" class="muted">Nothing recorded in that range.</td></tr>';
+      next = (page.page && page.page.nextPageToken) || null;
+      more.hidden = !next;
+      report("");
+    } catch (e) {
+      if (mine !== ticket) return;
+      report(explain(e, ERRORS, (text) => `Could not load the audit log: ${text}`), true);
+    } finally {
+      if (mine === ticket) {
+        show.disabled = false;
+        more.disabled = false;
+      }
+    }
+  }
+
+  async function exportAs(format, button) {
+    const root = base();
+    if (!root) return;
+    button.disabled = true;
+    report("Exporting the audit log…");
+    try {
+      if (format === "csv") {
+        const query = auditQuery(range(), { format: "csv", page_size: EXPORT_PAGE });
+        saveBlob(await apiBlob(`${root}/audit${query}`), `audit-${name()}.csv`);
+        report("Audit log exported.");
+      } else {
+        const query = auditQuery(range(), { page_size: EXPORT_PAGE });
+        const page = await api(`${root}/audit${query}`);
+        const file = { licenseId: page.licenseId, ...range(), events: page.events || [] };
+        saveBlob(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }),
+          `audit-${name()}.json`);
+        report(page.page && page.page.hasMore
+          ? `Exported the newest ${EXPORT_PAGE.toLocaleString("en")} events — narrow the dates for the rest.`
+          : "Audit log exported.");
+      }
+    } catch (e) {
+      report(explain(e, ERRORS, (text) => `Could not export: ${text}`), true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  show.addEventListener("click", () => load(false));
+  more.addEventListener("click", () => load(true));
+  csv.addEventListener("click", () => exportAs("csv", csv));
+  json.addEventListener("click", () => exportAs("json", json));
+
+  return function reset() {
+    ticket += 1;
+    next = null;
+    rows.innerHTML = EMPTY;
+    more.hidden = true;
+    show.disabled = false;
+    more.disabled = false;
+  };
+}
