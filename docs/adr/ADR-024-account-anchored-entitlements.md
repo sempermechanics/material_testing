@@ -139,7 +139,7 @@ licence or seat device lock and drops to Demo on a mismatch or revocation
 | `DELETE /v1/sessions/{sid}` | signed device | rate limit only: a delete frees a place (`sessions.py:142-143`) |
 | `POST /v1/licenses/checkout` | user + `X-Device-Id` | floating pool; 409 `no_floating_seat` when full (`licenses.py:84-113`) |
 | `POST /v1/me/claim` | browser with a second factor, or signed device | activation rate limit; verified address; `activate_license`'s checks |
-| Share (PNG, GIF, PDF, CSV, ZIP) | — | **No route.** The app checks the licence and the token (`LicenseEntitlements.shareLicensed`, `data/account/LicenseEntitlements.kt:85-86`; `ShareCenter.access`, `ui/viewer/share/ShareCenter.kt:208-209`) |
+| Share (PNG, GIF, PDF, CSV, ZIP) | — | **No route.** The app checks the licence and the token (`LicenseEntitlements.shareLicensed`, `data/account/LicenseEntitlements.kt:85-86`; `ShareCenter.access`, `ui/viewer/share/ShareCenter.kt:250-251`) |
 
 **Kill switches are enforced, not only published.** `deps.unless_paused`
 (`backend/app/deps.py:296-331`) runs after the ID token and approval and before

@@ -80,7 +80,7 @@ Check the R8 mapping reached Crashlytics (the release build uploads it); the wor
    repository is public, so that Release is downloadable by anyone, and it is
    where a sideloaded build's **Update** button goes: below the minimum version,
    a build not installed by Play opens
-   `https://github.com/sempermechanics/semperdic-app/releases` (the list, since
+   `https://github.com/sempermechanics/material_testing/releases` (the list, since
    `/latest` skips pre-releases; `ui/limit/UpdateSource.kt:19`), and a Play
    install opens its Play listing. Attach the APK to every release. Customer
    distribution is separate:

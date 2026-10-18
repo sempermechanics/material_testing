@@ -16,7 +16,7 @@ object UpdateSource {
      * release so far is a pre-release, so this is the list, not `/latest`
      * (which skips pre-releases).
      */
-    const val RELEASES_URL = "https://github.com/sempermechanics/semperdic-app/releases"
+    const val RELEASES_URL = "https://github.com/sempermechanics/material_testing/releases"
 
     /**
      * The pages to try, in order, for [packageName] installed by

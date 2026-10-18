@@ -172,7 +172,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Branch `claude/readiness-followups-jhfhj9`** on it (not merged, not deployed; ported
   from semperdic-app's branch of that name; TD-270–TD-279, FI-24). Account-anchored
   entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)): nothing is
-  typed or sold in this app (no licence key screen, no EMM `enrollmentInvite`); **Refresh
+  typed or sold in this app (no licence key screen, no EMM enrolment-invite key); **Refresh
   licence** in Settings and on the limit screen; locked, not hidden, for what the licence
   lacks; a 503 `feature_paused` waits or says paused; the shown cap, a refresh at
   `refreshAfter` and the sealed record's write order (TD-263–TD-266). **Update** opens this
