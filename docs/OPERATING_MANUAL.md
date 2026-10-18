@@ -618,9 +618,6 @@ frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in tha
 field. The field button stays available while it plays. A parameter sweep opens from
 the lattice onto one combination instead; there is no overview slot.
 
-(Playback needs Android 9 or newer. Below that you get the first frame
-and a note; single-setting field GIFs still export.)
-
 **Frames.** Prev / Next step through. The title at the top names what is on
 screen — *Summary*, the frame's file name without its extension, or a video
 frame's time in its clip (`0:01.25`) — and the
@@ -819,7 +816,6 @@ Write above that block; leave it in place.
 | Run vanished | The app was killed. No resume — run it again in the foreground |
 | Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
 | Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
-| Summary shows one frame, not a loop | Android 8 or older. Single-setting field GIFs still export |
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Cloud icon stuck on Upload pending | Offline, Wi-Fi-only, or backup off |
 | Cloud icon crossed out in red | The backup failed. Tap the icon — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |

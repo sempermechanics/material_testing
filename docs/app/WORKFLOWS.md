@@ -879,7 +879,6 @@ heatmap loop. The field animations are still built for Share → Animations.
 | [ ] 8.2a.7 | Set a custom scale for one field | Only that field's animation rebuilds |
 | [ ] 8.2a.8 | Tap **Next** on the summary, then **Prev** on frame 1 | Leaves to frame 1 and comes back |
 | [ ] 8.2a.9 | Step into the frames while it is still building | The viewer stays responsive throughout |
-| [ ] 8.2a.11 | Run on Android 8 | The first frame with a note that animation needs Android 9; sharing still works |
 
 ### 8.3 Tap to probe
 

@@ -34,7 +34,7 @@ class ForegroundServiceTypeTest {
 
     private val workManagerService = "androidx.work.impl.foreground.SystemForegroundService"
 
-    @Suppress("DEPRECATION") // the ComponentInfoFlags overload is API 33+; minSdk is 24
+    @Suppress("DEPRECATION") // the ComponentInfoFlags overload is API 33+; minSdk is 30
     private fun serviceInfo(className: String): ServiceInfo {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         return context.packageManager.getServiceInfo(

@@ -12,8 +12,7 @@
     android:background="@color/viewer_canvas"
     android:forceDarkAllowed="false"
     android:orientation="vertical"
-    tools:ignore="Overdraw"
-    tools:targetApi="29">
+    tools:ignore="Overdraw">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
