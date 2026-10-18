@@ -18,6 +18,8 @@ import com.sempermechanics.semper.data.net.SemperApi
 import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.net.TokenSource
 import com.sempermechanics.semper.data.net.authed
+import com.sempermechanics.semper.data.policy.AppPolicy
+import com.sempermechanics.semper.data.policy.ManagedConfigReader
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.prefs.PrefFiles
 import com.sempermechanics.semper.data.prefs.get
@@ -334,10 +336,13 @@ object CloudSync {
      *
      * A build with no backend (a lab build, or the emulator sign-in bypass)
      * records nothing: its analyses are saved as not backed up, rather than as
-     * waiting for an upload that can never run.
+     * waiting for an upload that can never run. Neither does a phone whose
+     * device management turned cloud backup off ([AppPolicy.recordsToCloud]).
      */
     fun uploadsEnabled(context: Context, api: CloudApi = SemperApi.get(context)): Boolean =
-        api.enabled && (!LicenseEntitlements.cloudBackupEnabled(context) || AppSettings.saveToCloudEnabled(context))
+        api.enabled &&
+            AppPolicy.recordsToCloud(context) &&
+            (!LicenseEntitlements.cloudBackupEnabled(context) || AppSettings.saveToCloudEnabled(context))
 
     /**
      * This build has no backend, so a row waiting to upload never will. It goes
@@ -379,9 +384,17 @@ object CloudSync {
             Timber.i("Upload deferred for %s — cloud quota not yet known", localSessionId)
             return
         }
-        // One policy for post-analysis and repair: Wi‑Fi-only when opted in;
-        // otherwise any connected network.
-        val network = if (AppSettings.wifiOnlyUploadEnabled(context)) {
+        // A kill switch, device policy or a required update holds uploads the
+        // same way: the row stays PENDING and the next reconcile queues it again.
+        if (!AppPolicy.uploadAllowed(context)) {
+            Timber.i("Upload deferred for %s — held by policy", localSessionId)
+            return
+        }
+        // One policy for post-analysis and repair: Wi‑Fi-only when opted in
+        // or required by device management; otherwise any connected network.
+        val unmeteredOnly = AppSettings.wifiOnlyUploadEnabled(context) ||
+            ManagedConfigReader.current(context).backupOnUnmeteredOnly
+        val network = if (unmeteredOnly) {
             NetworkType.UNMETERED
         } else {
             NetworkType.CONNECTED

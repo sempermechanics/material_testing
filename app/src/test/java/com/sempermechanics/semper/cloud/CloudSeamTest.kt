@@ -60,7 +60,8 @@ class CloudSeamTest {
 
         SeatLease.refreshConfigAndSeatBestEffort(context, api, tokens)
 
-        assertEquals(listOf("getConfig", "checkoutLease"), api.calls)
+        // The checkout answer has no entitlement token: a fresh config follows it.
+        assertEquals(listOf("getConfig", "checkoutLease", "getConfig"), api.calls)
     }
 
     @Test

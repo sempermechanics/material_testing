@@ -59,12 +59,17 @@ class ApiDtosContractTest {
     private fun contract(name: String): String = File(contractsDir, "$name.json").readText()
 
     /** Decodes contracts/[name].json; asserts the DTO's every field is in it. */
-    private inline fun <reified T> response(name: String): T = response(name, serializer())
+    private inline fun <reified T> response(name: String, absentOk: Set<String> = emptySet()): T =
+        response(name, serializer(), absentOk)
 
-    private fun <T> response(name: String, serializer: KSerializer<T>): T {
+    /**
+     * [absentOk]: key paths (`$.config.entitlement`) the backend leaves out of
+     * this answer on purpose, so they decode to their null default.
+     */
+    private fun <T> response(name: String, serializer: KSerializer<T>, absentOk: Set<String> = emptySet()): T {
         val body = contract(name)
         val decoded = json.decodeFromString(serializer, body)
-        val missing = keysNotIn(json.parseToJsonElement(body), json.encodeToJsonElement(serializer, decoded))
+        val missing = keysNotIn(json.parseToJsonElement(body), json.encodeToJsonElement(serializer, decoded)) - absentOk
         assertTrue("$name.json lacks fields the DTO reads (they decode to a default): $missing", missing.isEmpty())
         return decoded
     }
@@ -165,11 +170,22 @@ class ApiDtosContractTest {
         assertEquals("2027-03-01T00:30:00+00:00", cfg.leaseExpiresAt)
         assertEquals(30, cfg.leaseHeartbeatMinutes)
         assertEquals(999, cfg.maxSessions)
+        assertTrue(cfg.entitlement!!.count { it == '.' } == 2)
+        assertEquals(30, cfg.minSupportedVersionCode)
+        assertEquals(36, cfg.recommendedVersionCode)
+        assertEquals(listOf("restore"), cfg.killSwitches)
     }
 
     @Test
     fun `license activate response decodes the nested config`() {
-        val resp = response<LicenseActivateResponse>("license_activate_response")
+        // Only GET /v1/config carries the token and the version and kill-switch
+        // fields; activation leaves them out (key absent).
+        val resp = response<LicenseActivateResponse>(
+            "license_activate_response",
+            absentOk = setOf("entitlement", "minSupportedVersionCode", "recommendedVersionCode", "killSwitches")
+                .mapTo(HashSet()) { "$.config.$it" },
+        )
+        assertNull(resp.config.entitlement)
         assertEquals("licensed", resp.config.mode)
         assertEquals("individual", resp.config.licenseKind)
         assertEquals("perpetual", resp.config.licenseDuration)

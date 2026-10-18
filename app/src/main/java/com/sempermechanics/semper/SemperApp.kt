@@ -6,6 +6,7 @@ import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.data.account.SeatHeartbeat
+import com.sempermechanics.semper.data.policy.ManagedConfigReader
 import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.data.session.StorageBudget
@@ -37,6 +38,8 @@ class SemperApp : Application() {
             Timber.plant(CrashReportingTree(this))
         }
         installAppCheck()
+        // Managed configuration: re-read whenever a screen comes to the front.
+        ManagedConfigReader.install(this)
         AppSettings.migrate(this)
         // Manifest disables Crashlytics/Analytics collection, so a fresh install
         // sends nothing until the user opts in. This re-applies their choice on

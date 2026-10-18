@@ -17,7 +17,9 @@ internal fun HomeActivity.wireButtons() {
     val fab = binding.fabNewAnalysis
     HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab, binding.sessionList)
     fab.setOnClickListener {
-        // Two independent reasons new work cannot start. The seat check is
+        // A build the backend no longer supports: its gate screen is opened.
+        if (!AnalysisNavHelper.ensureUpToDate(this)) return@setOnClickListener
+        // Two more, independent reasons new work cannot start. The seat check is
         // first because an institution member is licensed, so the quota
         // check below is false for them by definition and would wave them
         // through. btnEmptyRestore delegates here via performClick(), so
