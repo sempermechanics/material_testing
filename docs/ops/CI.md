@@ -243,23 +243,30 @@ Environments. A **production** deploy runs only when dispatched from `main`
    the same check Release and CI tier 4 run. It installs the hashed lock
    the image uses, runs `pip-audit`, ruff over `app/ tests/ scripts/ ../scripts/`,
    and pytest at the 93 % coverage floor.
-2. Deploys from `backend/` tagging the new revision
-   `cand-<run_id>-<run_attempt>`.
+2. Resolves the release train (TD-262): the `release_train` input, or, when it
+   is empty, the newest `v*` tag reachable from the deployed commit (`git
+   describe`; the job checks out full history, `fetch-depth: 0`), else
+   `untagged`; lowercased, other characters turned into `-`, at most 63. Deploys
+   from `backend/` tagging the new revision `cand-<run_id>-<run_attempt>` and
+   labelling the service and the revision `release-train=<train>`.
    - **Existing service:** `no_traffic: true` — the previous revision keeps
      serving while the candidate is smoked.
    - **First create:** Cloud Run rejects `--no-traffic` on create, so the
      workflow sets `no_traffic: false` for that one deploy. The candidate is
      still smoked before you treat it as proven; prefer creating staging once,
      then always updating.
-3. Records the revision image digest.
-4. Smokes `GET /readyz` on the **tagged candidate URL**, authenticated with an ID
+3. Smokes `GET /readyz` on the **tagged candidate URL**, authenticated with an ID
    token whose audience is the service URL — both environments run
    `--no-allow-unauthenticated` (staging too: the opposite flag binds
    `allUsers`), so an unauthenticated probe would only prove the
    gateway rejects it. The deploy SA needs `run.invoker` on each service.
-5. Promotes the candidate to 100% traffic once the smoke passes (when
+4. Promotes the candidate to 100% traffic once the smoke passes (when
    `no_traffic` was used), with `--to-latest` after checking the latest ready
    revision is the candidate, and removes every `cand-*` tag in the same call.
+5. Records the serving revision's image digest and its `release-train` label in
+   the job summary. A label that does not match is a warning carrying the
+   `gcloud run services update … --update-labels` command that sets it, not a
+   rollback: this step runs after the promote.
 6. Tags images by digest for the registry cleanup policy: `serving` on the
    promoted revision's image, `rollback-prev` on the image of the revision it
    replaced. A failure here is an error annotation, not a rollback; re-pin by
