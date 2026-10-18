@@ -132,17 +132,17 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   engine `23034fe`, 0.4.2). It is the first release under the new app id, so it installs
   beside the old app, not over it. Contents and install steps: the GitHub Release and
   [CHANGELOG](docs/ops/CHANGELOG.md). Nothing is on `main` beyond it.
-- **Branch `claude/new-session-jhfhj9`** (#448; CI green on `ae4c24a`, run 39158239853) and
-  **`claude/readiness-followups-jhfhj9`** on it (`75bac5f`, no CI run yet); neither merged nor
-  deployed. The readiness-framework cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-273, FI-17–FI-23): signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
-  **minSdk 30**, version gate and kill switches, EMM config, roster tools and audit export for IT
-  and staff, rules tests, APK inspection, AAB, monitoring and dashboards as code; the follow-up
-  adds the Auth Admin budget, hashed audit addresses, wider erasure, `POST …/licenses/search`
-  and release-train labels. Owed, in order at deploy: indexes (TD-216, TD-271), backend, gateway,
-  Hosting, monitoring (TD-217); also the Auth IAM grant (TD-214), signing key (TD-215), App Check
-  (TD-226), Play (TD-229–TD-232), the follow-up's CI run (TD-219). Licence keys are giving way
-  to account-anchored entitlements (TD-259).
+- **Branch `claude/new-session-jhfhj9`** (#448; CI green on `ae4c24a`) and
+  **`claude/readiness-followups-jhfhj9`** on it (`2371bec`, no CI run yet); neither merged nor
+  deployed. The readiness cross-check ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
+  TD-214–TD-278, FI-17–FI-24): signed offline entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md)),
+  **minSdk 30**, version gate, EMM config, IT roster tools and audit export, rules tests, APK
+  inspection, AAB, monitoring as code; the follow-up adds the Auth Admin budget, hashed audit
+  addresses, wider erasure and account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md):
+  nothing entered or sold in the app, Refresh licence, locked-not-hidden features, claim codes on
+  the web account page, kill switches refused server-side, a per-device demo cap). Owed at
+  deploy, in order: indexes (TD-216, TD-271), backend, gateway, Hosting, monitoring (TD-217); also
+  TD-214, TD-215, TD-219, TD-226, TD-229–TD-232, and counsel on the Terms' fees (TD-277).
 - **material_testing** merges this `main` (last `8ba7081`, material_testing#133,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); it released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
@@ -164,7 +164,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - `GET /v1/sessions` lists the asking app's sessions (`X-App-Id`; an untagged session is Semper's), and `/files` answers only that app; a browser or export that needs the whole account asks `?app=all` or uses `iter_all_user_sessions` — [ADR-014](docs/adr/ADR-014-session-app-tag.md).
 - Restore on a new device has an order: sign in, let one authed request bind the lock, then restore — [§20.10](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - Licence terms are mirrored onto users, so editing a licence reaches nobody without `update_license`'s fan-out — [§20.6](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
-- Demo uploads silently; only retrieval is gated. Gating `POST /v1/sessions` would loop old builds on 403 — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- Demo uploads silently; only retrieval is licence-gated. Gating `POST /v1/sessions` on the licence would loop old builds on 403; a kill switch refuses it with 503 `feature_paused`, which every build retries — [§20.3](docs/backend/CLOUD_ARCHITECTURE_GCP.md), [§20.14](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
+- Share has no backend route: the licence check and the signed token are its only gate, so a modified APK can share (accepted, TD-274). Anything that touches the cloud is checked by the server — [ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md).
 - Console CSP is `script-src 'self'` with no `'unsafe-inline'`: inline scripts never run — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `check_console.py` requires `__API_BASE_URL__` / `__API_ORIGIN__` to stay placeholders; deploy through `scripts/deploy-console.sh` — [§20.8](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
 - `SCHEMA_VERSION` is 2 and every `campus` / `plan` skew fallback is temporary; retire in the stated order — [§20.5](docs/backend/CLOUD_ARCHITECTURE_GCP.md).
