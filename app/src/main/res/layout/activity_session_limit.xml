@@ -50,21 +50,13 @@
         android:paddingHorizontal="12dp"
         android:paddingVertical="6dp" />
 
+    <!-- The way on: free room, then re-check (the cap counts stored analyses). -->
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnEmailSupport"
+        android:id="@+id/btnRecheckLimit"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
-        android:text="@string/limit_email_support" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnRecheckLimit"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/limit_recheck"
-        android:textColor="@color/sky_primary" />
+        android:text="@string/limit_recheck" />
 
     <!-- For an account that expects a seat or a licence (LicenseRefresh). -->
     <com.google.android.material.button.MaterialButton
@@ -74,6 +66,17 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:text="@string/license_refresh_action"
+        android:textColor="@color/sky_primary" />
+
+    <!-- A neutral way to reach support; it asks for nothing. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnEmailSupport"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/limit_email_support"
+        android:textAllCaps="false"
         android:textColor="@color/sky_primary" />
 
     <ProgressBar

@@ -26,8 +26,8 @@ import timber.log.Timber
  * Gate shown when every seat on a floating institution license is in use.
  *
  * Deliberately not shaped like [SessionLimitActivity], which it otherwise
- * resembles. Being at the analysis limit needs a human — an email to support to
- * raise the cap. Having no seat needs nobody: seats free themselves as
+ * resembles. Being at the analysis limit needs the user to free room (or a
+ * licence refresh). Having no seat needs nobody: seats free themselves as
  * colleagues finish, so the whole screen is one button that tries again.
  *
  * The user is **not blocked from the app**. They are eligible, in demo mode,

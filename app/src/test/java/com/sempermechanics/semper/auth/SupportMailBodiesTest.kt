@@ -23,9 +23,9 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 
 /**
- * The support mails Pending ("request access") and Session limit ("raise my
- * limit") send, byte for byte: support triages by these lines, so moving the
- * shared block into `SupportMail.contextLines` must not change one of them.
+ * The support mails Pending ("request access") and Session limit (neutral:
+ * room to write, then the account, quota and device) send, byte for byte:
+ * support triages by these lines.
  */
 @RunWith(RobolectricTestRunner::class)
 class SupportMailBodiesTest {
@@ -51,22 +51,19 @@ class SupportMailBodiesTest {
     }
 
     @Test
-    fun `session limit mail names the account, its quota, then the device`() {
+    fun `session limit mail asks for nothing and leaves room above the account, quota and device`() {
         val mail = mailFrom(SessionLimitActivity::class.java, R.id.btnEmailSupport)
 
         val quota = "${AccountCache.quotaUsed(context)}/${AccountCache.quotaMax(context)}"
         assertEquals(
-            "I've reached my Semper analysis limit and would like it raised.\n\n" +
+            "\n\n---\n" +
                 "Account: $unknown\n" +
                 "Quota: $quota\n" +
                 "Device ID: $deviceId\n" +
                 SupportMail.deviceLines(),
             mail.getStringExtra(Intent.EXTRA_TEXT),
         )
-        assertEquals(
-            context.getString(R.string.limit_subject) + " — " + unknown,
-            mail.getStringExtra(Intent.EXTRA_SUBJECT),
-        )
+        assertEquals("Semper support — $unknown", mail.getStringExtra(Intent.EXTRA_SUBJECT))
     }
 
     @Test

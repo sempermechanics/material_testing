@@ -943,13 +943,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Session/analysis quota limit screen -->
     <string name="limit_title">Analysis limit reached</string>
-    <string name="limit_body_fmt">You\'ve reached the maximum number of saved analyses on your account. New cloud analyses are blocked until the limit is raised.\n\nPlease email %1$s to request a higher limit. You can also delete an existing analysis, then tap Re-check limit.</string>
+    <!-- The cap counts stored analyses. Consumption only: no request to raise it, no
+         price; an account that expects a seat or a licence taps Refresh licence. -->
+    <string name="limit_body">You\'ve reached the maximum number of saved analyses on your account, so new analyses can\'t be saved.\n\nDelete an analysis you no longer need, then tap Re-check limit. If your institution has given you a seat or your licence was just added, tap Refresh licence.</string>
     
     <string name="limit_email_support">Email support@sempermechanics.com</string>
     <string name="limit_recheck">Re-check limit</string>
     <string name="limit_back">Back to my analyses</string>
-    <string name="limit_subject">Semper — request higher analysis limit</string>
-    <string name="limit_still_full">Still at the limit. Delete an analysis or email support@sempermechanics.com.</string>
+    <string name="limit_subject">Semper support</string>
+    <string name="limit_still_full">Still at the limit. Delete an analysis, then re-check.</string>
     <string name="limit_cleared">You\'re under the limit again.</string>
 
     <!-- Floating-seat gate. Not a paywall and not a block on the app: the
@@ -982,11 +984,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
          except installing the real thing, so say only that. -->
     <string name="error_app_check_required">This copy of Semper could not be verified. Reinstall it from the Play Store.</string>
 
-    <!-- License expiry notice on Home. Advisory only — nothing is withdrawn
-         while the renewal is outstanding. -->
-    <string name="license_expiring_today_fmt">License expires today — email %1$s to renew</string>
-    <string name="license_expired_fmt">License expired — email %1$s to renew</string>
-    <string name="license_grace_fmt">License expired — still working, email %1$s to renew</string>
+    <!-- Licence expiry notice on Home (HomeLicenseNotice). Advisory only — nothing is
+         withdrawn during grace. Informational: the app only consumes the licence, so
+         no renew, buy or price call to action, and no link to one. -->
+    <string name="license_expiring_today">Licence expires today</string>
+    <string name="license_expired">Licence expired — ask your institution\'s IT or Semper support</string>
+    <!-- %1$s: the date grace ends, e.g. 15 Mar 2027 -->
+    <string name="license_grace_until_fmt">Licence expired — still working until %1$s</string>
+    <string name="license_grace">Licence expired — still working for now</string>
     <string name="request_access_none_fmt">No email app found. Please email %1$s to request access.</string>
     <string name="dot_separator">" · "</string>
     <string name="error_email_invalid">That does not look like an email address</string>
@@ -1111,8 +1116,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="other">%1$d deleted · %2$d still in the cloud</item>
     </plurals>
     <plurals name="license_expiring_fmt">
-        <item quantity="one">License expires tomorrow</item>
-        <item quantity="other">License expires in %1$d days</item>
+        <item quantity="one">Licence expires tomorrow</item>
+        <item quantity="other">Licence expires in %1$d days</item>
     </plurals>
 
     <plurals name="home_quota_fmt">
