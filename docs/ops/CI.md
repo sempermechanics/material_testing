@@ -282,7 +282,12 @@ Required secrets / vars (repo-level on Free private orgs is fine — Environment
 `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`; vars `FIREBASE_PROJECT_ID`,
 `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL`, `AUTO_APPROVE_HD`, `ADMIN_EMAILS`,
 `SUPPORT_EMAIL`, `NOTIFY_FROM`, async provisioning `TASKS_QUEUE`,
-`TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`.
+`TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`; optional
+`CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
+`MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, `KILL_SWITCHES`
+(space-separated) and `ENTITLEMENT_SIGNING_SECRET` (a Secret Manager secret name,
+mounted as `ENTITLEMENT_SIGNING_KEY` only when it exists), all in
+[ENVIRONMENTS.md](ENVIRONMENTS.md).
 
 `REQUIRE_ATTESTED_UPLOADS` is no longer passed (retired 2026-09-26, TD-45):
 `/uploads` is always device-attested. The "Describe live env" step warns while
