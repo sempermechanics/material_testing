@@ -77,6 +77,7 @@ from .license_admin import (  # noqa: F401
     analysis_cap_error,
     license_edit_error,
     update_license,
+    finish_license_fanout,
 )
 from .upgrade import (  # noqa: F401
     convert_to_institution,

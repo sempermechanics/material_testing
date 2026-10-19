@@ -937,3 +937,44 @@ def test_projected_listings_page_and_reconcile_against_the_real_store(emulator_r
     assert err == ""
     [row] = [r for r in report["seats"] if r["uid"] == bare]
     assert row["reason"] == "moved_on"
+
+
+def test_a_revoke_killed_part_way_is_finished_against_the_real_store(emulator_repo, monkeypatch):
+    """TD-294 / ADR-026 with Firestore's own ArrayUnion, DELETE_FIELD and
+    transaction: the marker is written with the revoke, survives the crash,
+    merges a later edit's op, and the task's finish clears it."""
+    from app.repo import license_admin
+
+    license_id = _emu_institution(emulator_repo, max_seats=3, seating="assigned")
+    tag = uuid.uuid4().hex[:8]
+    member = _emu_user(emulator_repo, f"emu-{tag}", f"f-{tag}@university.edu")
+    assert emulator_repo.claim_seat(
+        license_id, member["uid"], member["email"], "",
+        {"licenseId": license_id, "mode": "licensed"},
+    ) == ""
+
+    def crash(*a, **k):
+        raise RuntimeError("instance killed")
+
+    with monkeypatch.context() as m:
+        m.setattr(license_admin, "_drop_users_to_demo_if_licensed", crash)
+        with pytest.raises(RuntimeError):
+            emulator_repo.revoke_license(license_id, "emu-admin")
+        m.setattr(license_admin, "_refresh_license_mirrors", crash)
+        with pytest.raises(RuntimeError):
+            emulator_repo.update_license(license_id, {"maxAnalyses": 40}, "emu-admin")
+
+    lic_ref = emulator_repo.db().collection("licenses").document(license_id)
+    users = emulator_repo.db().collection("users")
+    lic = lic_ref.get().to_dict()
+    assert lic["status"] == "revoked" and sorted(lic["fanoutOps"]) == ["revoke", "terms"]
+    assert users.document(member["uid"]).get().to_dict()["mode"] == "licensed"
+
+    assert emulator_repo.finish_license_fanout(license_id) == ["revoke", "terms"]
+
+    lic = lic_ref.get().to_dict()
+    assert not {"fanoutId", "fanoutOps", "fanoutAt"} & set(lic)
+    # The terms reach no one: every seat is revoked by then.
+    assert users.document(member["uid"]).get().to_dict()["mode"] == "demo"
+    assert lic["maxAnalyses"] == 40
+    assert emulator_repo.finish_license_fanout(license_id) == []

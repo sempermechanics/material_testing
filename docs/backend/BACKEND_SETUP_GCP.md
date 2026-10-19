@@ -223,6 +223,11 @@ the deploy workflow — Free private orgs often use repo-level — or
 part of the public API and is absent from `gateway/openapi.yaml`. It is also the
 OIDC audience, so it must match exactly.
 
+The same queue carries the licence fan-out tasks (`POST /v1/tasks/license-fanout`,
+[ADR-026](../adr/ADR-026-licence-fanout-marker.md)): one per staff revoke or
+terms edit, due six minutes later, which finishes the holder writes if the call
+died part-way and otherwise does nothing.
+
 Manifests of up to `INLINE_PROVISION_MAX_FILES` (default 8 — a bundle upload is
 three) are still provisioned inside the request: the task hop plus the
 client's first poll cost more than the work.

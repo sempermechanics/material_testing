@@ -14,6 +14,7 @@ from __future__ import annotations
 import functools
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Header, HTTPException
 
@@ -24,6 +25,12 @@ from .config import settings
 log = logging.getLogger("semper.tasks")
 
 PROVISION_PATH = "/v1/tasks/provision-session"
+#: The callback that finishes a licence's pending fan-out (ADR-026).
+LICENSE_FANOUT_PATH = "/v1/tasks/license-fanout"
+#: How long after a licence action its fan-out task is due: past the Cloud Run
+#: request timeout (300 s), so the action's own call has finished, or died,
+#: before the task looks.
+FANOUT_TASK_DELAY_S = 360
 
 _client = None
 
@@ -87,6 +94,50 @@ def enqueue_provision(sid: str) -> bool:
                       errorCode="tasks_enqueue_failed", dependency="cloud_tasks",
                       errorType=type(e).__name__)
         log.error("Cloud Tasks enqueue failed for %s (%s) — provisioning inline", sid, e)
+        return False
+
+
+def enqueue_license_fanout(license_id: str, fanout_id: str) -> bool:
+    """Schedule the task that finishes a licence's pending fan-out, due
+    `FANOUT_TASK_DELAY_S` from now. False when the queue is not configured or
+    the enqueue failed; the action then relies on its own inline run.
+
+    The name carries the fan-out's id, so a retried action schedules a task
+    of its own, and Cloud Tasks drops a duplicate create of the same one."""
+    if not settings.tasks_enabled:
+        return False
+    try:
+        from google.cloud import tasks_v2
+
+        client = _tasks_client()
+        parent = client.queue_path(
+            settings.GCP_PROJECT, settings.TASKS_LOCATION, settings.TASKS_QUEUE,
+        )
+        base = settings.TASKS_TARGET_BASE_URL.rstrip("/")
+        client.create_task(
+            parent=parent,
+            task={
+                "name": f"{parent}/tasks/license-fanout-{fanout_id}",
+                "schedule_time": datetime.now(timezone.utc) + timedelta(seconds=FANOUT_TASK_DELAY_S),
+                "http_request": {
+                    "http_method": tasks_v2.HttpMethod.POST,
+                    "url": base + LICENSE_FANOUT_PATH,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps({"licenseId": license_id}).encode(),
+                    "oidc_token": {
+                        "service_account_email": settings.TASKS_INVOKER_SA,
+                        "audience": base,
+                    },
+                },
+            },
+        )
+        return True
+    except Exception as e:  # noqa: BLE001
+        if type(e).__name__ == "AlreadyExists":
+            return True
+        obs.log_event(log, logging.ERROR, "license_fanout_enqueue_failed", outcome="error",
+                      errorCode="tasks_enqueue_failed", dependency="cloud_tasks",
+                      errorType=type(e).__name__)
         return False
 
 

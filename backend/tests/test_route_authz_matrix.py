@@ -179,6 +179,7 @@ EXPECTED = {
     ("GET", "/v1/institutions/licenses/{license_id}/summary"): INSTITUTION_STEPUP,
     ("GET", "/v1/institutions/licenses/{license_id}/audit"): INSTITUTION_STEPUP,
     ("POST", "/v1/tasks/provision-session"): TASK,
+    ("POST", "/v1/tasks/license-fanout"): TASK,
 }
 
 

@@ -38,6 +38,13 @@ ASCENDING = "ASCENDING"
 DESCENDING = "DESCENDING"
 
 
+class ArrayUnion:
+    """Server-side array union: the stored list plus each value not in it."""
+
+    def __init__(self, values):
+        self.values = list(values)
+
+
 class Increment:
     """Server-side atomic increment, as used by bump_session_progress."""
 
@@ -165,6 +172,9 @@ class _DocRef:
                 cur[k] = datetime.now(timezone.utc)
             elif isinstance(v, Increment):
                 cur[k] = int(cur.get(k, 0)) + v.value
+            elif isinstance(v, ArrayUnion):
+                stored = list(cur.get(k) or [])
+                cur[k] = stored + [x for x in v.values if x not in stored]
             else:
                 cur[k] = v
 
@@ -449,6 +459,7 @@ def install(monkeypatch):
         SERVER_TIMESTAMP = SERVER_TIMESTAMP
         DELETE_FIELD = DELETE_FIELD
         Increment = Increment
+        ArrayUnion = ArrayUnion
         transactional = staticmethod(transactional)
 
         class Query:

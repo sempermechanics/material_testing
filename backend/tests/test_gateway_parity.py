@@ -40,6 +40,9 @@ _NOT_PUBLISHED = {
     # publishing it there would expose a route that no user-facing caller may
     # reach. See app/tasks.py.
     ("POST", "/v1/tasks/provision-session"),
+    # The other Cloud Tasks callback, for the same reason: it finishes a
+    # licence's pending fan-out (ADR-026).
+    ("POST", "/v1/tasks/license-fanout"),
     # Readiness. It runs a Firestore read and a Drive call per hit, needs no
     # token, and its 503 names the failing dependency — published at the
     # gateway it was a free way to drive Drive quota and to learn which

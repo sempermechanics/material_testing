@@ -1,8 +1,11 @@
 """Licence administration by Semper staff: listing, renewal fan-out, whole-key revoke.
 """
+import logging
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from .. import errors
+from .. import errors, tasks
+from .. import observability as obs
 from ..errors import Refusal
 from ..config import settings
 from ..licenses import (
@@ -27,6 +30,7 @@ from ._base import (
     _is_institution,
     _is_revoked,
     _cursor_page,
+    _run_tx,
     db,
     _get_all,
     _lease_clear_patch,
@@ -49,6 +53,8 @@ from .mint import (
     _license_public,
 )
 
+
+log = logging.getLogger("semper.licences")
 
 #: Most licences a search answers with. A search is an exact match on an
 #: address, a domain or a key prefix, so more than this is not a search.
@@ -127,23 +133,36 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
     its `leaseExpiresAt`, the licence kept its `leasesActive`, and the console
     showed a revoked pool with seats in use until every lease ran out.
 
-    Safe to run again, and running it again is the repair for one that failed
-    part-way: the holders are re-checked, but a seat or licence already
-    revoked keeps the `revokedAt` it had. Re-stamping it moved IT's earlier
-    seat revokes to now, and reconciliation dates a revoke from that field.
-    Holders are read in one call and written in batches, not one round trip
-    each."""
+    The licence is written `revoked` together with a pending fan-out
+    (ADR-026), and a Cloud Task scheduled just before that write finishes the
+    fan-out if this call dies part-way. Running it again is still a repair:
+    the holders are re-checked, but a seat or licence already revoked keeps
+    the `revokedAt` it had. Re-stamping it moved IT's earlier seat revokes to
+    now, and reconciliation dates a revoke from that field. Holders are read
+    in one call and written in batches, not one round trip each."""
     ref = db().collection("licenses").document(license_id)
     snap = _get(ref)
     if not snap.exists:
         return None
     lic = snap.to_dict() or {}
-    if not _is_revoked(lic):
-        _update_doc(ref, {
-            "status": STATUS_REVOKED,
-            "revokedAt": _base.firestore.SERVER_TIMESTAMP,
-            "revokedByUid": admin_uid,
-        })
+    patch = {} if _is_revoked(lic) else {
+        "status": STATUS_REVOKED,
+        "revokedAt": _base.firestore.SERVER_TIMESTAMP,
+        "revokedByUid": admin_uid,
+    }
+    _write_with_fanout(ref, license_id, patch, {FANOUT_REVOKE})
+    _finish_fanout(ref, license_id)
+    if _is_institution(lic):
+        # Answer with the counts just written. The desk merges this reply
+        # into its row, and the pre-revoke snapshot showed a revoked licence
+        # with every seat still taken until the list reloaded.
+        lic = {**lic, "seatsUsed": 0, "leasesActive": 0}
+    return _license_public(license_id, {**lic, "status": STATUS_REVOKED})
+
+
+def _revoke_fanout(ref, license_id: str, lic: dict) -> None:
+    """Everything a whole-licence revoke writes besides the licence's status.
+    Idempotent: a seat already revoked is left as it is."""
     if _is_institution(lic):
         seats = _stream(ref.collection("seats"))
         # Every seat's holder, revoked seats included: a seat revoke whose
@@ -163,17 +182,118 @@ def revoke_license(license_id: str, admin_uid: str) -> dict | None:
             if (s.to_dict() or {}).get("status") != STATUS_REVOKED
         ])
         _update_doc(ref, {"seatsUsed": 0, "leasesActive": 0})
-        # Answer with the counts just written. The desk merges this reply
-        # into its row, and the pre-revoke snapshot showed a revoked licence
-        # with every seat still taken until the list reloaded.
-        lic = {**lic, "seatsUsed": 0, "leasesActive": 0}
         _delete_license_invites(license_id)
     else:
         redeemer = lic.get("redeemedByUid")
         if redeemer and _license_mode(lic) == MODE_LICENSED:
             _drop_user_to_demo_if_licensed(redeemer, license_id)
         _delete_license_invites(license_id, lic.get("emailLock") or "")
-    return _license_public(license_id, {**lic, "status": STATUS_REVOKED})
+
+
+# ---------------- pending fan-outs (ADR-026, TD-294) ----------------
+
+#: The licence fields that record a fan-out still to run: an id per action,
+#: what is left to do, and when it was recorded.
+FANOUT_ID, FANOUT_OPS, FANOUT_AT = "fanoutId", "fanoutOps", "fanoutAt"
+#: Drop every holder to Demo and revoke every seat (`_revoke_fanout`).
+FANOUT_REVOKE = "revoke"
+#: Re-stamp every holder's copy of the terms (`_license_mirror_patch`).
+FANOUT_TERMS = "terms"
+#: Clear every lease, on the seats and the holders, while not floating.
+FANOUT_LEASES = "leases"
+#: How many times a fan-out overtaken by a newer action runs again.
+FANOUT_PASSES = 3
+
+
+def _write_with_fanout(ref, license_id: str, patch: dict, ops: set[str]) -> None:
+    """Write `patch` to the licence with `ops` recorded as pending, in one
+    write, after scheduling the task that finishes them.
+
+    The task goes first: a crash after it and before the write leaves a task
+    that finds nothing to do, while the reverse order could leave a marker no
+    task will ever read. `ArrayUnion` keeps the ops an earlier action left
+    pending, merged by Firestore in the same write."""
+    fanout_id = uuid.uuid4().hex
+    # False is logged by the enqueue. The fan-out still runs inline after
+    # this; only a crash in this same call would then leave it to a repeat.
+    tasks.enqueue_license_fanout(license_id, fanout_id)
+    _update_doc(ref, {
+        **patch,
+        FANOUT_ID: fanout_id,
+        FANOUT_OPS: _base.firestore.ArrayUnion(sorted(ops)),
+        FANOUT_AT: _base.firestore.SERVER_TIMESTAMP,
+    })
+
+
+def _clear_fanout(ref, fanout_id: str | None) -> bool:
+    """Clear the pending marker if it is still `fanout_id`. False when another
+    action has written a newer one (or finished and cleared it) since."""
+    @_base.firestore.transactional
+    def _clear(tx) -> bool:
+        snap = _get(ref, tx)
+        if not snap.exists:
+            return True
+        if (snap.to_dict() or {}).get(FANOUT_ID) != fanout_id:
+            return False
+        if fanout_id is not None:
+            tx.update(ref, {
+                FANOUT_ID: _base.firestore.DELETE_FIELD,
+                FANOUT_OPS: _base.firestore.DELETE_FIELD,
+                FANOUT_AT: _base.firestore.DELETE_FIELD,
+            })
+        return True
+
+    return _run_tx(_clear, on_contended=lambda: False)
+
+
+def _run_ops(ref, license_id: str, lic: dict, ops) -> None:
+    if FANOUT_REVOKE in ops:
+        _revoke_fanout(ref, license_id, lic)
+    clear_leases = (FANOUT_LEASES in ops and _is_institution(lic)
+                    and normalize_seating(lic.get("seating")) != SEATING_FLOATING)
+    if clear_leases:
+        _clear_seat_leases(ref)
+    if FANOUT_TERMS in ops or clear_leases:
+        extra = {"leaseExpiresAt": _base.firestore.DELETE_FIELD} if clear_leases else {}
+        _refresh_license_mirrors(_license_holder_uids(ref, lic), license_id,
+                                 {**_license_mirror_patch(lic), **extra})
+
+
+def _finish_fanout(ref, license_id: str) -> None:
+    """Run whatever fan-out the licence has pending, from the licence as it now
+    stands, and clear the marker.
+
+    A marker that changed while this ran means another action wrote the
+    licence meanwhile, and the copies written here may be older than it: run
+    again, the ops just run included, up to `FANOUT_PASSES` times. A marker
+    still there after that belongs to the newer action, whose own run (or
+    task) clears it."""
+    ran: set[str] = set()
+    for _ in range(FANOUT_PASSES):
+        snap = _get(ref)
+        if not snap.exists:
+            return
+        lic = snap.to_dict() or {}
+        ops = set(lic.get(FANOUT_OPS) or ()) | ran
+        _run_ops(ref, license_id, lic, ops)
+        ran |= ops
+        if _clear_fanout(ref, lic.get(FANOUT_ID)):
+            return
+
+
+def finish_license_fanout(license_id: str) -> list[str]:
+    """The Cloud Task's half (`POST /v1/tasks/license-fanout`): finish a fan-out
+    the action that recorded it did not. Returns the ops that were pending,
+    [] when there were none (the ordinary case: the call finished its own)."""
+    ref = db().collection("licenses").document(license_id)
+    snap = _get(ref)
+    pending = sorted((snap.to_dict() or {}).get(FANOUT_OPS) or ()) if snap.exists else []
+    if not pending:
+        return []
+    obs.log_event(log, logging.WARNING, "license_fanout_finished_late",
+                  outcome="repaired", ops=",".join(pending))
+    _finish_fanout(ref, license_id)
+    return pending
 
 
 def expiry_change_error(lic: dict, expires_at, *, allow_shorten: bool = False) -> str:
@@ -316,22 +436,25 @@ def update_license(license_id: str, patch: dict, admin_uid: str) -> dict | None:
         update["graceDays"] = max(0, int(update["graceDays"]))
     update["updatedAt"] = _base.firestore.SERVER_TIMESTAMP
     update["updatedByUid"] = admin_uid
-    _update_doc(ref, update)
 
     # The sentinels are for Firestore; the mirror and the response read the
     # licence as it now stands.
     merged = _apply_patch(lic, update)
-    left_floating = old_seating == SEATING_FLOATING and "seating" in update
-    if left_floating:
-        _clear_seat_leases(ref)
-    mirror = _license_mirror_patch(merged)
+    ops = set()
+    if old_seating == SEATING_FLOATING and "seating" in update:
+        ops.add(FANOUT_LEASES)
     # Only the terms mirrored onto holders need to reach them. A note, a
     # support date or a seat cap changes nothing on any user document, and
     # used to rewrite every one of them anyway.
-    if mirror != _license_mirror_patch(lic):
-        extra = {"leaseExpiresAt": _base.firestore.DELETE_FIELD} if left_floating else {}
-        _refresh_license_mirrors(_license_holder_uids(ref, merged), license_id,
-                                 {**mirror, **extra})
+    if _license_mirror_patch(merged) != _license_mirror_patch(lic):
+        ops.add(FANOUT_TERMS)
+    if not ops:
+        _update_doc(ref, update)
+        return _license_public(license_id, merged)
+    # Recorded with the terms, finished here, and by the task if this dies
+    # part-way (ADR-026).
+    _write_with_fanout(ref, license_id, update, ops)
+    _finish_fanout(ref, license_id)
     return _license_public(license_id, merged)
 
 

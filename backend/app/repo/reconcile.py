@@ -186,6 +186,9 @@ def reconcile_institution_seats(license_id: str) -> dict:
         "entitled": entitled,
         "counts": counts,
         "seats": seats,
+        # A revoke or terms edit whose holder writes have not all landed
+        # (ADR-026): its Cloud Task, or a repeat of the action, finishes it.
+        "fanoutPending": sorted(lic.get("fanoutOps") or []),
     }
 
 

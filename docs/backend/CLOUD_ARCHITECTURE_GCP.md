@@ -1734,6 +1734,17 @@ every non-revoked institution seat.
   licence already revoked keeps its `revokedAt` (reconciliation dates a seat
   revoke from it), and every seat's holder is re-checked, so running revoke
   again repairs a seat revoke whose demotion never landed.
+- **A fan-out that dies part-way is finished by a Cloud Task** ([ADR-026](../adr/ADR-026-licence-fanout-marker.md)).
+  Revoke and a terms edit write the licence together with `fanoutId`,
+  `fanoutOps` (`revoke`, `terms`, `leases`) and `fanoutAt`, after enqueueing
+  a task due 360 s later on `TASKS_QUEUE` (`POST /v1/tasks/license-fanout`,
+  OIDC like the provisioning callback, absent from the gateway). The call
+  runs the fan-out from the licence as it then stands and clears the marker
+  only if it is still its own; overtaken by a newer action, it runs again (up
+  to three passes). The task finds nothing in the ordinary case; when it
+  finds work it logs `license_fanout_finished_late`. Reconciliation reports
+  `fanoutPending`. Without a queue there is no task and the inline run is the
+  only one, as before.
 - **A claim writes the terms it read in its own transaction.** `claim_seat`
   and `claim_individual_license` rebuild the mirror in the caller's patch from
   the licence snapshot the transaction read (`_claim_terms`). The callers read
