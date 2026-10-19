@@ -7,6 +7,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
 import com.sempermechanics.semper.cloud.FakeCloudApi
 import com.sempermechanics.semper.cloud.FakeTokens
+import com.sempermechanics.semper.data.cloud.RebuildBudget
 import com.sempermechanics.semper.data.cloud.SessionUploadBundlerTest
 import com.sempermechanics.semper.data.cloud.UploadErrors
 import com.sempermechanics.semper.data.net.AccountCache
@@ -336,7 +337,7 @@ class DicUploadWorkerTest {
 
         // Each mismatch deletes the session and the staged files so the next run
         // starts over from fresh bytes, instead of completing the same object forever.
-        repeat(UploadErrors.MAX_INTEGRITY_REBUILDS) {
+        repeat(RebuildBudget.INTEGRITY.max) {
             seed(cloudSessionId = "cs$it")
             assertEquals(ListenableWorker.Result.retry(), run())
             assertEquals("cs$it", api.deleted.last())
@@ -348,7 +349,7 @@ class DicUploadWorkerTest {
         val last = run()
         assertTrue(last is ListenableWorker.Result.Failure)
         assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
-        assertFalse(File(sessionDir, UploadErrors.INTEGRITY_REBUILDS_MARKER).exists())
+        assertFalse(File(sessionDir, RebuildBudget.INTEGRITY.marker).exists())
     }
 
     @Test
@@ -413,7 +414,7 @@ class DicUploadWorkerTest {
         // restaging under it would resume the old session with new bytes.
         assertEquals("cs1", row().cloudSessionId)
         assertTrue(File(staging, "Session.zip").isFile)
-        assertFalse(File(sessionDir, UploadErrors.INTEGRITY_REBUILDS_MARKER).exists())
+        assertFalse(File(sessionDir, RebuildBudget.INTEGRITY.marker).exists())
     }
 
     @Test
@@ -435,21 +436,17 @@ class DicUploadWorkerTest {
     @Test
     fun `a terminal failure or a completed session resets the integrity count`() {
         seed(cloudSessionId = "cs1")
-        val marker = File(sessionDir, UploadErrors.INTEGRITY_REBUILDS_MARKER).apply { writeText("2") }
-        val linkMarker = File(sessionDir, UploadErrors.LINK_EXPIRED_REBUILDS_MARKER).apply { writeText("2") }
+        val markers = RebuildBudget.entries.map { File(sessionDir, it.marker).apply { writeText("2") } }
         api.onSessionUploads = { uploading(it) }
         api.onComplete = { _, _ -> throw apiError(413, "too_many_files") }
         assertTrue(run() is ListenableWorker.Result.Failure)
-        assertFalse(marker.exists())
-        assertFalse(linkMarker.exists())
+        markers.forEach { assertFalse(it.name, it.exists()) }
 
         seed(cloudSessionId = "cs2")
-        marker.writeText("2")
-        linkMarker.writeText("2")
+        markers.forEach { it.writeText("2") }
         api.onSessionUploads = { SessionUploadsResponse(sessionId = it, status = "COMPLETED") }
         assertEquals(ListenableWorker.Result.success(), run())
-        assertFalse(marker.exists())
-        assertFalse(linkMarker.exists())
+        markers.forEach { assertFalse(it.name, it.exists()) }
     }
 
     @Test
@@ -737,7 +734,7 @@ class DicUploadWorkerTest {
         assertTrue(File(staging, "Session.zip").isFile)
         assertFalse(
             "a recreate that never happened is not counted",
-            File(sessionDir, UploadErrors.LINK_EXPIRED_REBUILDS_MARKER).exists(),
+            File(sessionDir, RebuildBudget.LINK_EXPIRED.marker).exists(),
         )
     }
 
@@ -746,7 +743,7 @@ class DicUploadWorkerTest {
         api.onSessionUploads = { uploading(it) }
         api.onUpload = { throw UploadLinkExpiredException(410) }
 
-        repeat(UploadErrors.MAX_LINK_EXPIRED_REBUILDS) {
+        repeat(RebuildBudget.LINK_EXPIRED.max) {
             seed(cloudSessionId = "cs$it")
             assertEquals(ListenableWorker.Result.retry(), run())
             assertEquals("cs$it", api.deleted.last())
@@ -761,7 +758,115 @@ class DicUploadWorkerTest {
         assertEquals("csLast", api.deleted.last())
         assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
         assertFalse(staging.exists())
-        assertFalse(File(sessionDir, UploadErrors.LINK_EXPIRED_REBUILDS_MARKER).exists())
+        assertFalse(File(sessionDir, RebuildBudget.LINK_EXPIRED.marker).exists())
+    }
+
+    @Test
+    fun `a session that keeps going stale fails the backup after a bounded number of recreates`() {
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw apiError(409, "size_or_state_mismatch") }
+
+        // Each recreate uploads every byte again, so it may not go on for ever.
+        repeat(RebuildBudget.STALE_SESSION.max) {
+            seed(cloudSessionId = "cs$it")
+            assertEquals(ListenableWorker.Result.retry(), run())
+            assertEquals("cs$it", api.deleted.last())
+            assertEquals("", row().cloudSessionId)
+            assertTrue("each recreate reuses the staging", File(staging, "Session.zip").isFile)
+        }
+
+        seed(cloudSessionId = "csLast")
+        val last = run()
+
+        val generic = string(com.sempermechanics.semper.R.string.cloud_backup_failed_generic)
+        assertTrue(failReason(last)!!.startsWith(generic))
+        assertEquals("csLast", api.deleted.last())
+        assertEquals(SessionRecord.SyncState.FAILED, row().syncState)
+        assertFalse(staging.exists())
+        assertFalse(File(sessionDir, RebuildBudget.STALE_SESSION.marker).exists())
+    }
+
+    @Test
+    fun `a stale session whose delete fails keeps its pointer and is not counted`() {
+        seed(cloudSessionId = "cs1")
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw apiError(409, "size_or_state_mismatch") }
+        api.base.onDeleteSession = { _, _ -> throw apiError(503, "firestore_unreachable") }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertEquals("cs1", row().cloudSessionId)
+        assertFalse(File(sessionDir, RebuildBudget.STALE_SESSION.marker).exists())
+    }
+
+    // ── a staging that is not the one the cloud session declared ────────────
+
+    @Test
+    fun `a restage under a live session deletes that session first and never completes into it`() {
+        seed(cloudSessionId = "cs1")
+        dropArchive("Session.zip")
+        dropArchive("Extras.zip")
+        api.onSessionUploads = { uploading(it) }
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs2", status = "UPLOADING") }
+        val uploaded = CopyOnWriteArrayList<String>()
+        api.onUpload = { file ->
+            if (file.name == "Session.zip") uploaded += Digests.sha256Hex(file)
+            file.name to Digests.md5Hex(file)
+        }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        // The rebuilt zips have new timestamps: the same size as before, other
+        // bytes. Resumed, cs1 would keep the old sha256 and every restore fail.
+        assertEquals(listOf("cs1"), api.deleted)
+        assertEquals(setOf("cs2"), api.completed.map { it.sessionId }.toSet())
+        assertEquals(api.created!!.files.single { it.name == "Session.zip" }.sha256, uploaded.single())
+        assertEquals("cs2", row().cloudSessionId)
+        assertEquals(SessionRecord.SyncState.SYNCED, row().syncState)
+    }
+
+    @Test
+    fun `a restage whose session delete fails builds nothing and keeps the pointer`() {
+        seed(cloudSessionId = "cs1")
+        dropArchive("Session.zip")
+        dropArchive("Extras.zip")
+        api.onSessionUploads = { uploading(it) }
+        api.base.onDeleteSession = { _, _ -> throw apiError(503, "firestore_unreachable") }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertEquals("cs1", row().cloudSessionId)
+        // Built now, the next run would find the staging whole and resume cs1 with it.
+        assertFalse(File(staging, "Session.zip").exists())
+        assertTrue(api.calls.none { it == "createSession" || it == "uploadResumable" || it == "completeFile" })
+    }
+
+    @Test
+    fun `a restage the backend cannot answer for keeps the session and builds nothing`() {
+        seed(cloudSessionId = "cs1")
+        dropArchive("Session.zip")
+        dropArchive("Extras.zip")
+        api.onSessionUploads = { throw apiError(503, "firestore_unreachable") }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        assertTrue(api.deleted.isEmpty())
+        assertEquals("cs1", row().cloudSessionId)
+        assertFalse(File(staging, "Session.zip").exists())
+    }
+
+    @Test
+    fun `a lost staging under a session already complete records the sync and keeps the backup`() {
+        seed(cloudSessionId = "cs1")
+        dropArchive("Session.zip")
+        dropArchive("Extras.zip")
+        api.onSessionUploads = { SessionUploadsResponse(sessionId = it, status = "COMPLETED") }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        assertTrue("a finished backup is never deleted to restage it", api.deleted.isEmpty())
+        assertEquals("cs1", row().cloudSessionId)
+        assertEquals(SessionRecord.SyncState.SYNCED, row().syncState)
     }
 
     // ── archives built on one run, reused on the next ───────────────────────
@@ -788,8 +893,8 @@ class DicUploadWorkerTest {
         api.onCreateSession = { SessionCreateResponse(sessionId = "cs9", status = "UPLOADING") }
         api.onComplete = { _, _ -> throw apiError(503, "firestore_unreachable") }
 
-        // Run 1 builds both archives from the staged files, then finds its old
-        // session gone and drops the pointer.
+        // Run 1 finds its old session gone and drops the pointer, builds both
+        // archives from the staged files, and declares them in a new session.
         assertEquals(ListenableWorker.Result.retry(), run())
         assertEquals(listOf("gone"), api.deleted)
         val names = listOf("Session.zip", "Extras.zip")
@@ -804,7 +909,7 @@ class DicUploadWorkerTest {
             assertTrue("$role in $extras", extras.any { it.startsWith(role) })
         }
 
-        // Run 2 declares the archives run 1 built; run 3 resumes the same session.
+        // Runs 2 and 3 resume that session with the archives run 1 built.
         assertEquals(ListenableWorker.Result.retry(), run())
         val declared = api.created!!.files.associateBy { it.name }
         for (name in names) {
@@ -824,9 +929,13 @@ class DicUploadWorkerTest {
         dropArchive("Session.zip")
         val seeded = staged("Extras.zip")
         api.onSessionUploads = { uploading(it) }
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs2", status = "UPLOADING") }
         api.onComplete = { _, _ -> throw apiError(503, "firestore_unreachable") }
 
         assertEquals(ListenableWorker.Result.retry(), run())
+        // cs1 declared the archives that are gone; the rebuilt ones go into a new session.
+        assertEquals(listOf("cs1"), api.deleted)
+        assertEquals("cs2", row().cloudSessionId)
 
         // Not reusable without Session.zip, so Extras.zip is packed again from
         // what is staged, with a sidecar that matches it.

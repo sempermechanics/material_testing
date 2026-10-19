@@ -1,6 +1,6 @@
 package com.sempermechanics.semper.data.session
 
-import com.sempermechanics.semper.data.cloud.UploadErrors
+import com.sempermechanics.semper.data.cloud.RebuildBudget
 import com.sempermechanics.semper.data.cloud.UploadWorkOutcomes
 import com.sempermechanics.semper.data.cloud.restore.RestoreUnpacker
 import com.sempermechanics.semper.report.FieldRangesStore
@@ -39,7 +39,7 @@ class SessionLayoutTest {
         assertEquals(SessionPaths.frameDat(sessionDir, 7), layout.frameDat(7))
         assertEquals(File(sessionDir, "frame_0007.dat"), layout.frameDat(7))
         assertEquals(File(sessionDir, FieldRangesStore.FILE_NAME), layout.fieldRanges)
-        assertEquals(File(sessionDir, UploadErrors.INTEGRITY_REBUILDS_MARKER), layout.integrityRebuildsMarker)
+        assertEquals(File(sessionDir, RebuildBudget.INTEGRITY.marker), layout.integrityRebuildsMarker)
     }
 
     @Test

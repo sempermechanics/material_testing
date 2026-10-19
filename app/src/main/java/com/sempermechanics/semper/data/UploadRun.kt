@@ -71,6 +71,13 @@ internal class UploadRun(
     fun currentCloudId(): String =
         SessionStore.get(context, localId)?.cloudSessionId.orEmpty().ifBlank { record.cloudSessionId }
 
+    /**
+     * This run with no cloud session to resume, once
+     * [UploadSessionPlanner.releaseForRestage] has freed the old one: the
+     * staging is built again, so the next step declares it in a new session.
+     */
+    fun withoutCloudSession(): UploadRun = UploadRun(context, api, tokens, idToken, record.copy(cloudSessionId = ""))
+
     /** Terminal failure carrying a reason the UI can show; [requestId] joins it to the backend's access line. */
     fun failure(reason: String, requestId: String? = null): ListenableWorker.Result = ListenableWorker.Result.failure(
         workDataOf(
