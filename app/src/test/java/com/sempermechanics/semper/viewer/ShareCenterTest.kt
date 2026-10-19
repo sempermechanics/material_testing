@@ -240,17 +240,22 @@ class ShareCenterTest {
             Intent().setData(Uri.fromFile(dest)),
         )
 
-        // Rotated before the frames were listed: the rebuilt viewer, which
-        // reads them, starts the export the old one was waiting to.
+        // Rotated before the frames were listed. The listing runs on in the
+        // view model, which lists once: the rebuilt viewer waits on it rather
+        // than reading the batch again, then starts the export the old one
+        // was waiting to.
         val rebuilt = controller.recreate().get()
+        shadowOf(rebuilt.mainLooper).idle()
+        assertEquals("one listing, kept across the rotation", 1, held.size)
+        assertTrue("nothing saved before the frames are listed", !dest.exists())
+        held.toList().forEach { it.run() }
         idleUntil("the save toast") { ShadowToast.getLatestToast() != null || pillText(rebuilt) != null }
         assertEquals(rebuilt.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
         assertEquals((1..FRAMES).associate { "Frame_$it" to GRID * GRID }, rowsByImage(dest))
 
-        // The save was handed out once: neither a later rotation nor the old
-        // viewer's frame listing finishing starts a second export.
+        // The save was handed out once: a later rotation, whose viewer finds
+        // the frames listed already, does not start a second export.
         dest.delete()
-        held.toList().forEach { it.run() }
         val again = controller.recreate().get()
         repeat(5) { shadowOf(again.mainLooper).idle() }
         assertEquals(1, ShadowToast.shownToastCount())
