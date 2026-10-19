@@ -1,6 +1,10 @@
 """Append-only audit trail. Best-effort: never break a request on a log failure.
 
-The row is built here; it is written and read in `repo/audit_log.py`."""
+The row is built here; it is written and read in `repo/audit_log.py`, and
+mirrored to Cloud Logging as one `audit_row` line (TD-237): a log sink routes
+those to a bucket whose retention policy is locked, the copy that no project
+role can edit or delete. Firestore's copy is the one the consoles read."""
+import json
 import logging
 from . import observability as obs
 # The module, not its names: `repo.devlock` imports this module while the
@@ -8,6 +12,11 @@ from . import observability as obs
 from .repo import audit_log
 
 log = logging.getLogger("audit")
+
+#: The logger the mirror is written to. The sink's filter is
+#: `jsonPayload.event="audit_row"` (docs/backend/FIRESTORE_DATA_PROTECTION.md).
+TRAIL_LOGGER = "semper.audit_trail"
+_trail = logging.getLogger(TRAIL_LOGGER)
 
 #: Target types whose id is a licence, or starts `{licenseId}/` (a seat, an
 #: invite, a lease). Their events are stamped with `licenseId`, which is what
@@ -44,6 +53,21 @@ def licence_of(target: dict | None) -> str:
     return str(target.get("id") or "").split("/", 1)[0]
 
 
+def _mirror(row: dict) -> None:
+    """The row as one Cloud Logging line, under `auditRow`.
+
+    Nested, not spread: the log-based metrics count lines by top-level fields
+    (`semper_auth_denied` by `jsonPayload.action`), and a spread row would be
+    counted again. A value JSON cannot hold (a datetime in `detail`) is
+    written as its text, as Firestore's copy is read back by the consoles."""
+    payload = {**obs.event_payload("audit_row"), "auditRow": row}
+    try:
+        _trail.info(json.dumps(payload, default=str, separators=(",", ":")))
+    except Exception as e:  # noqa: BLE001 - auditing must not fail the request
+        obs.log_event(log, logging.ERROR, "audit_mirror_failed",
+                      action=row.get("action"), outcome="error", errorCode=type(e).__name__)
+
+
 def record(uid=None, device_id=None, action="", outcome="OK", target=None, detail=None, ip=None):
     row = {
         "uid": uid,
@@ -63,6 +87,8 @@ def record(uid=None, device_id=None, action="", outcome="OK", target=None, detai
         # Firestore row alone is invisible to alerting.
         obs.log_event(log, logging.WARNING, "audit_denied", action=action,
                       stage=str((detail or {}).get("stage") or ""))
+    # The mirror first: a row Firestore loses below still leaves this copy.
+    _mirror({**row, "schemaVersion": audit_log.SCHEMA_VERSION})
     try:
         audit_log.add_audit_row(row)
     except Exception as e:  # noqa: BLE001 - auditing must not fail the request

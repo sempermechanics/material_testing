@@ -172,3 +172,45 @@ recorded by `ADMIN_LICENSE_EXTEND` only as changed and its length
 Legal/privacy owners must set and document the retention period and configure a
 Firestore TTL field before production launch; backups inherit the same approved
 retention/legal-hold policy.
+
+### The audit trail is append-only
+
+What the code holds (TD-237):
+
+- Only `add_audit_row` writes `audit_logs`, and it only adds a document
+  (`backend/app/repo/audit_log.py`). No other module names the collection, and
+  the audit repo calls no update, set or delete; `backend/tests/test_audit_append_only.py`
+  fails if either changes.
+- A migration that walks `audit_logs` must say why, in a module-level
+  `rewrites_append_only` (`backend/scripts/migrations/__init__.py`, `APPEND_ONLY`);
+  the loader refuses one that does not. `001_stamp_schema_version` is the one
+  that did, before the guard.
+- Clients cannot read or write it: `firestore.rules` denies everything, and
+  `firestore-rules-tests/rules.test.mjs` tries an update, a merge, an
+  overwrite and a delete of an audit row as each caller, an Org Owner's claims
+  included.
+- Every row is also logged, before the Firestore write, as one Cloud Logging
+  line: `jsonPayload.event="audit_row"`, the row under `jsonPayload.auditRow`
+  (logger `semper.audit_trail`, `backend/app/audit.py`). A row Firestore loses
+  (`audit_write_failed`) still has that line.
+
+What it does not hold: anyone with Firestore IAM on the project can still
+edit or delete a row through the Admin API. The immutable copy is the log
+line, once a sink routes it to a bucket whose retention is locked. The
+retention period is the legal/privacy owners' decision above; with it:
+
+```bash
+gcloud logging buckets create audit-trail --location=$REGION \
+  --retention-days=<RETENTION_DAYS> --project=$PROJECT
+gcloud logging sinks create audit-trail \
+  logging.googleapis.com/projects/$PROJECT/locations/$REGION/buckets/audit-trail \
+  --log-filter='resource.type="cloud_run_revision" AND jsonPayload.event="audit_row"' \
+  --project=$PROJECT
+# Irreversible: a locked bucket's retention can only be raised, and no one
+# can delete a log entry or the bucket before it expires.
+gcloud logging buckets update audit-trail --location=$REGION --locked --project=$PROJECT
+```
+
+Check: an audited action (a staff licence edit) appears in the bucket, and
+`gcloud logging buckets update audit-trail --location=$REGION --retention-days=1`
+is refused.

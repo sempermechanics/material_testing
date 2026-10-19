@@ -26,6 +26,11 @@ from types import ModuleType
 
 _NAME_RE = re.compile(r"^(\d{3})_[a-z0-9_]+$")
 
+#: Collections no migration rewrites unless it says why, in a module-level
+#: `rewrites_append_only = "<the decision>"` (TD-237). `audit_logs` is the
+#: audit trail: the backend only ever adds to it (`repo/audit_log.py`).
+APPEND_ONLY = frozenset({"audit_logs"})
+
 
 @dataclass(frozen=True)
 class Migration:
@@ -54,6 +59,12 @@ def _load(module: ModuleType, name: str) -> Migration:
         )
     if not module.collections:
         raise ValueError(f"migration {name} declares no collections")
+    append_only = sorted(APPEND_ONLY.intersection(module.collections))
+    if append_only and not str(getattr(module, "rewrites_append_only", "") or "").strip():
+        raise ValueError(
+            f"migration {name} rewrites {', '.join(append_only)}, which is append-only; "
+            "set rewrites_append_only to the decision that allows it, or leave it out"
+        )
     return Migration(
         name=name,
         from_version=module.from_version,

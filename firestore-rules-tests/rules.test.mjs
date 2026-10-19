@@ -185,6 +185,36 @@ for (const spec of COLLECTIONS) {
   });
 }
 
+// TD-237 (framework 5.3 Verify: "Attempt to edit or delete audit entries as
+// Org Owner and expect failure"). The deny-all above already covers it; this
+// names the acceptance, with an institution owner's claims and a merge write.
+describe('audit_logs is append-only for every client', () => {
+  const ORG_OWNER = () => env.authenticatedContext(ALICE, {
+    email: ALICE_EMAIL, email_verified: true, role: 'owner', orgOwner: true,
+    institutionAdmin: true, licenseId: PARENT,
+  }).firestore();
+  const callers = { ...Object.fromEntries(
+    Object.entries(CALLERS).map(([name, make]) => [name, () => make().db])), 'Org Owner': ORG_OWNER };
+  for (const [caller, make] of Object.entries(callers)) {
+    test(`${caller}: an audit row cannot be edited, merged over or deleted`, async () => {
+      const db = make();
+      const row = doc(db, 'audit_logs/audit_logs-own');
+      await assertFails(updateDoc(row, { outcome: 'OK', action: 'NOTHING_HAPPENED' }));
+      await assertFails(setDoc(row, { detail: {} }, { merge: true }));
+      await assertFails(setDoc(row, { uid: ALICE }));
+      await assertFails(deleteDoc(row));
+    });
+  }
+
+  test('the row is still there, unchanged, after every attempt', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const snap = await getDoc(doc(ctx.firestore(), 'audit_logs/audit_logs-own'));
+      assert.ok(snap.exists());
+      assert.equal(snap.data().action, 'AUTH_DENIED');
+    });
+  });
+});
+
 describe('catch-all', () => {
   test('a collection nobody uses yet is denied too', async () => {
     const db = env.authenticatedContext(ALICE, { email: ALICE_EMAIL }).firestore();
