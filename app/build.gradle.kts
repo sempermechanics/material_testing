@@ -321,7 +321,11 @@ android {
                 // leaves what ended it: a heap dump on an OutOfMemoryError, the
                 // JVM's error file on a crash. Both only on failure; CI uploads
                 // the folder with the test reports.
-                val crashDir = project.layout.buildDirectory.dir("test-crash").get().asFile
+                val crashDir =
+                    project.layout.buildDirectory
+                        .dir("test-crash")
+                        .get()
+                        .asFile
                 test.jvmArgs(
                     "-XX:+HeapDumpOnOutOfMemoryError",
                     "-XX:HeapDumpPath=$crashDir",
