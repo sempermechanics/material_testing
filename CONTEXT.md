@@ -135,40 +135,40 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
   **Which test?** offers 2D DIC (Semper's analysis: no load card, no test type recorded),
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
+  semperdic-app proposes making this a product flavour of its repo ([ADR-025](docs/adr/ADR-025-test-type-extension-points.md), mirrored).
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `17d7bc8`,
-  2026-10-19, not deployed: its #454 (TD-269, TD-270, TD-276), #436–#447 (tip cards, the viewer's summary
-  pill, Cancel keeps nothing, the run overlay, frame-jump focus, engine CI) and **Re-run
-  as a copy** (its [ADR-022](docs/adr/ADR-022-rerun-as-copy.md)), which does not carry a
-  lab test's type or loads yet (TD-280). Before: `8ba7081` (#133), `85650da` (#122:
-  ADR-015 package move, ADR-019 app id, `engine/`). Metadata schema `/7` here (ours past
-  `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical`
-  (ADR-004), `ViewerArgs` (ADR-003), `WizardDraft` (ADR-005). ADR and TD numbers are
-  shared; the next TD free in both is TD-281.
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `17d7bc8` by #139
+  (`71649bd6`), 2026-10-19, not deployed: its #454, #436–#447 and **Re-run as a copy**
+  (its [ADR-022](docs/adr/ADR-022-rerun-as-copy.md)), which does not carry a lab test's
+  type or loads yet (TD-280). Metadata schema `/7` here (ours past `/3` are not the
+  parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004),
+  `ViewerArgs` (ADR-003), `WizardDraft` (ADR-005). ADR and TD numbers are shared; the
+  next TD free in both is TD-306.
+- **Open: #140** (`ccr-603fe346-1bw2fa`, the 2026-10-19 review; `main` merged in): load
+  logs in kgf/tf, decimal commas after a long preamble and logged time units; whole-second
+  photo times matched within 1 s; E refitted over 10–40 % of Rp0.2; bending strain from
+  the thickness gradient (none without taps); planned frame numbers, Rp0.2 and peak in the
+  CSV trailer; one `LabWizardState`, `LabSession`, `TensileResults` and Results panel; and
+  semperdic-app #457's upload, download and ui-4 commits. Left: TD-300–TD-305.
 - **Readiness port, merged 2026-10-19, not deployed** (#137, #138: semperdic-app's
-  #448/#449; TD-214–TD-279, FI-17–FI-24). **minSdk 30**; the signed offline entitlement
-  ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); tokens name
-  `materialtesting`); its own version-gate pair `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING`
-  / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`; kill switches; EMM config;
-  account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md):
-  nothing typed or sold in the app, **Refresh licence**, locked not hidden, 503
-  `feature_paused`). **Update** opens this repo's releases page for a sideloaded build.
-  The backend, consoles, indexes and dashboards deploy only from semperdic-app, in its
-  order; never deploy Hosting from here. Owed: TD-214–TD-217, TD-219, TD-226,
-  TD-229–TD-232, counsel on the Terms (TD-277); for a release, this repo's
-  `SEMPER_ENTITLEMENT_PUBKEYS` variable and `SEMPER_API_CERT_PINS` secret.
+  #448/#449; TD-214–TD-279, FI-17–FI-24): **minSdk 30**, the signed offline entitlement
+  ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); tokens name `materialtesting`),
+  its own `*_MATERIAL_TESTING` version gate, kill switches, EMM config, account-anchored
+  entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)). The backend,
+  consoles, indexes and dashboards deploy only from semperdic-app; never deploy Hosting from
+  here. Owed: TD-214–TD-217, TD-219, TD-226, TD-229–TD-232, TD-277; for a release, this
+  repo's `SEMPER_ENTITLEMENT_PUBKEYS` variable and `SEMPER_API_CERT_PINS` secret.
 - **Lab outputs.** Tensile: stress–strain (ΔL / L₀, ADR-012), E, Rp0.2, **Adjust curve**,
-  a lab report. Bending: beam-edge taps, δ and E = WL³/(48δI), loads in kg, a deflection
+  a lab report. Bending: beam-edge taps, δ, E = WL³/(48δI), loads in kg, a deflection
   correction (ADR-013), a lab report. Checked against published steel and PMMA data
-  ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)); owed again on engine 0.4.2.
+  ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)); re-run owed (TD-300).
 - **Releases.** `com.sempermechanics.materialtesting` (ADR-009, ADR-019) beside Semper, on
   its backend; last `v1.4-beta.2` (`d08aae07`, 2026-10-17, versionCode 1006), not yet
   smoked on a phone. Never hand out `main`'s CI APK (TD-148). App Check waits for Play.
-- **Owed by hand** ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): ROI zoom and pan on a phone
-  (§6.21–6.25); §5.1a on Semper's sampling sheet with a load log, a phone MP4 and a UTM
-  clip; Material Testing beside Semper (§3b) and ADR-022's screenshots; the synced tip
-  cards, summary pill and Re-run (3.11a–3.11m); Pixel 6 benchmark references (TD-135).
-  Owner decision: Terms §1.2 and §1.3 against a student audience.
+- **Owed by hand** ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): ROI zoom and pan (§6.21–6.25);
+  §5.1a with a load log, a phone MP4 and a UTM clip; Material Testing beside Semper (§3b),
+  ADR-022's screenshots; the synced tip cards, summary pill and Re-run (3.11a–3.11m); Pixel 6
+  references (TD-135). Owner decision: Terms §1.2 and §1.3 against a student audience.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

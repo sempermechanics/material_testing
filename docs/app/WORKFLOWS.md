@@ -937,7 +937,7 @@ a centre double-tap brings the bars back when they have faded.
 | [ ] 8.4.7 | Look for **Go to Home** in the sheet | It is not there any more — Home is a chrome icon in the top bar (§8.6.1) |
 | [ ] 8.4.8 | Tap a histogram bar | Caption under the plot names that bin's count and value range, in px or millistrain |
 | [ ] 8.4.9 | Compare the histogram with the colour bar | The histogram includes the outliers the colour bar has clamped; its ends are the true min and max |
-| [ ] 8.4.10 | Open it on a tensile / compression run with a load log | Rows **Cross-section**, **Machine load** (this frame, signed as logged) and **Stress** (MPa) after Test type; a **Results** section with a caption "Reading strain n / N…" that fills every frame, then the curve (mean Exx or Eyy along the chosen axis vs stress) with this frame highlighted and a caption "Frame n · load N · stress MPa · strain mε" |
+| [ ] 8.4.10 | Open it on a tensile / compression run with a load log | Rows **Cross-section**, **Machine load** (this frame, signed as logged) and **Stress** (MPa) after Test type; a **Results** section with a caption "Reading strain n / N…" that fills every frame, then the curve (engineering strain ΔL / L₀ along the chosen axis from the virtual extensometer between the end bands of the analysed region, ADR-012, vs stress) with this frame highlighted and a caption "Frame n · load N · stress MPa · strain mε" |
 | [ ] 8.4.11 | Close and reopen the sheet | The curve is there at once (cached in the ViewModel); rotating keeps it |
 | [ ] 8.4.12 | Run logged negative | The curve sits in the third quadrant; nothing is made positive |
 | [ ] 8.4.13 | Scrub to a frame with no accepted points | Caption says that frame is not on the curve; the rows still show its load |
