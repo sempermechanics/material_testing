@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
+import androidx.work.WorkInfo
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
@@ -14,6 +15,7 @@ import com.sempermechanics.semper.data.DicRestoreWorker
 import com.sempermechanics.semper.data.account.LicenseErrors
 import com.sempermechanics.semper.data.cloud.CorruptTransferException
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
+import com.sempermechanics.semper.data.keepsDestinationOnStop
 import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.session.SessionPaths
@@ -24,6 +26,7 @@ import com.sempermechanics.semper.navigation.IntentKeys
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -291,6 +294,26 @@ class RestoreWorkersTest {
         val result = runDownload({ _, _, _, _ -> throw IOException("connection reset") })
 
         assertEquals(ListenableWorker.Result.retry(), result)
+    }
+
+    @Test
+    fun `a bundle download stopped for its network keeps the document and grant for the rerun`() {
+        // WorkManager runs these again into the same document: deleting it
+        // made the rerun's write fail.
+        listOf(
+            WorkInfo.STOP_REASON_CONSTRAINT_CONNECTIVITY,
+            WorkInfo.STOP_REASON_QUOTA,
+            WorkInfo.STOP_REASON_PREEMPT,
+            // Below API 31 every system stop reads unknown.
+            WorkInfo.STOP_REASON_UNKNOWN,
+        ).forEach { reason -> assertTrue("stop reason $reason", keepsDestinationOnStop(reason)) }
+    }
+
+    @Test
+    fun `a bundle download the app cancels removes the document and its grant`() {
+        assertFalse(keepsDestinationOnStop(WorkInfo.STOP_REASON_CANCELLED_BY_APP))
+        // Cancelled without a stop: nothing runs it again either.
+        assertFalse(keepsDestinationOnStop(WorkInfo.STOP_REASON_NOT_STOPPED))
     }
 
     // -------------------------------------------------------------- helpers
