@@ -146,9 +146,9 @@ object LabReport {
                 addAll(tensileGraphs(curve, results))
                 add(Block.Heading(LabReportText.RESULTS))
                 add(Block.Field(t.RESULT_E, modulus?.let { modulusSummary(it) } ?: t.NO_FIT))
-                if (modulus != null && modulus.modulusGPa > 0f) {
+                modulus?.takeIf { it.modulusGPa > 0f }?.let {
                     val point = results.yieldPoint
-                    add(Block.Field(t.RESULT_YIELD, point?.let { "${num(it.stressMPa, 2)} MPa" } ?: t.NO_YIELD))
+                    add(Block.Field(t.RESULT_YIELD, point?.let { p -> "${num(p.stressMPa, 2)} MPa" } ?: t.NO_YIELD))
                 }
                 results.peak?.let { add(Block.Field(t.RESULT_PEAK, t.peakValue(num(it.stressMPa, 2), it))) }
                 add(Block.Paragraph(LabReportText.APPROXIMATE_NOTE))

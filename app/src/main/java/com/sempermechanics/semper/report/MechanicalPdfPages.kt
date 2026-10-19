@@ -24,6 +24,13 @@ internal object MechanicalPdfPages {
     private val NO_STRAIN_TABLE_WEIGHTS = listOf(0.34f, 0.33f, 0.33f)
     private val DEFLECTION_TABLE_WEIGHTS = listOf(0.24f, 0.19f, 0.19f, 0.19f, 0.19f)
 
+    /** Column weights for the per-frame table: with δ, with strain, or neither (bending without taps). */
+    private fun tableWeights(model: StressStrain.Model): List<Float> = when {
+        model.plotsLoadDeflection -> DEFLECTION_TABLE_WEIGHTS
+        model.measuresStrain -> STRESS_STRAIN_TABLE_WEIGHTS
+        else -> NO_STRAIN_TABLE_WEIGHTS
+    }
+
     /** The cover's "Mechanical Test" block, only on a typed session. */
     fun drawCoverBlock(layout: PdfLayoutEngine, m: MechanicalCover) {
         layout.drawSectionHeader("Mechanical Test")
@@ -94,11 +101,7 @@ internal object MechanicalPdfPages {
             "Strain (mε)".takeIf { strain },
             "Deflection (mm)".takeIf { deflection },
         )
-        val weights = when {
-            deflection -> DEFLECTION_TABLE_WEIGHTS
-            strain -> STRESS_STRAIN_TABLE_WEIGHTS
-            else -> NO_STRAIN_TABLE_WEIGHTS
-        }
+        val weights = tableWeights(curve.model)
         val first = rows.take(STRESS_STRAIN_ROWS_FIRST_PAGE)
         layout.drawSectionHeader("Per-frame values")
         layout.drawTable(headers, first, weights)

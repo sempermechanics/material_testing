@@ -43,16 +43,20 @@ internal class LabExport(
         val axisLabels = ViewerStressStrainHelper.axisLabels(context, curve.model)
         val results = ViewerStressStrainHelper.resultsOf(curve)
         // Bending without its edge taps has no strain to plot: the page keeps its table.
-        val plot = if (!curve.model.measuresStrain) null else withContext(Dispatchers.Main) {
-            val print = ViewerStressStrainHelper.printContext(context)
-            SweepPlotView(print).run {
-                setData(
-                    ViewerStressStrainHelper.plotSeries(print, curve, results),
-                    axisLabels.first,
-                    axisLabels.second,
-                    marks = ViewerStressStrainHelper.plotMarks(print, curve, results),
-                )
-                renderToBitmap(STRESS_STRAIN_PLOT_W, STRESS_STRAIN_PLOT_H)
+        val plot = if (!curve.model.measuresStrain) {
+            null
+        } else {
+            withContext(Dispatchers.Main) {
+                val print = ViewerStressStrainHelper.printContext(context)
+                SweepPlotView(print).run {
+                    setData(
+                        ViewerStressStrainHelper.plotSeries(print, curve, results),
+                        axisLabels.first,
+                        axisLabels.second,
+                        marks = ViewerStressStrainHelper.plotMarks(print, curve, results),
+                    )
+                    renderToBitmap(STRESS_STRAIN_PLOT_W, STRESS_STRAIN_PLOT_H)
+                }
             }
         }
         return PdfReportGenerator.StressStrainPage(curve, plot, results?.modulus)

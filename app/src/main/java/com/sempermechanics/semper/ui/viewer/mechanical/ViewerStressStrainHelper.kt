@@ -35,7 +35,7 @@ import java.util.WeakHashMap
 /**
  * The stress–strain curve in the viewer: the Results on the summary page and
  * in the Details sheet (its per-frame rows are [ViewerFrameRows]). The
- * curve needs the mean strain of every frame, so it is a full decode pass over
+ * curve needs every frame's strain (and δ for bending), so it is a full decode pass over
  * the batch — started only when a Results surface is shown, and cached in the
  * ViewModel so the other surface, a reopen, or the share sheet reuses it.
  */
@@ -171,13 +171,7 @@ class ViewerStressStrainHelper(
             if (bending) ViewerDeflectionCorrection.show(host) else ViewerCurveCorrection.show(host)
         }
         if (curve.isEmpty || !curve.model.measuresStrain) {
-            // Bending without its edge taps has stresses but no strain or δ to
-            // plot them against: no plot, a caption that says why, the peak.
-            plot.isVisible = false
-            (views.range.parent as View).isVisible = false
-            views.caption.setText(if (curve.isEmpty) R.string.stress_strain_empty else R.string.stress_strain_no_strain)
-            result.isVisible = !curve.isEmpty
-            if (!curve.isEmpty) result.text = resultsText(host, curve, null)
+            drawWithoutPlot(views, curve)
             return
         }
         plot.isVisible = true
@@ -204,6 +198,19 @@ class ViewerStressStrainHelper(
         views.caption.text = caption(curve, current, modulus?.takeIf { zoomed != null })
         result.isVisible = true
         result.text = resultsText(host, curve, results)
+    }
+
+    /**
+     * No curve to draw: an empty one, or bending without its edge taps, which
+     * has stresses but no strain or δ to plot them against. A caption says
+     * which; the latter keeps its Results text (the peak stress).
+     */
+    private fun drawWithoutPlot(views: Views, curve: StressStrain.Curve) {
+        views.plot.isVisible = false
+        (views.range.parent as View).isVisible = false
+        views.caption.setText(if (curve.isEmpty) R.string.stress_strain_empty else R.string.stress_strain_no_strain)
+        views.result.isVisible = !curve.isEmpty
+        if (!curve.isEmpty) views.result.text = resultsText(host, curve, null)
     }
 
     /**

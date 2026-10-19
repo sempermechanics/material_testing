@@ -162,7 +162,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
     val defCount: Int get() = deformedFrames.size
 
     // ── Lab test: what the load card records, one value (LabWizardState) ──
-    /** The lab test's inputs; the eleven properties below each read and write one of its fields. */
+    // The eleven properties below each read and write one of its fields.
     var lab: LabWizardState = LabWizardState()
     var testType: TestType by LabField({ it.testType }) { s, v -> s.copy(testType = v) }
     var crossSectionMm2: Float by LabField({ it.crossSectionMm2 }) { s, v -> s.copy(crossSectionMm2 = v) }
