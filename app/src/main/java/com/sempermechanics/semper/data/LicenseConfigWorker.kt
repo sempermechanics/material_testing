@@ -1,10 +1,8 @@
 package com.sempermechanics.semper.data
 
-import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.pm.ServiceInfo
-import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -40,7 +38,7 @@ import java.util.concurrent.TimeUnit
  * alone, expedited, retried with backoff a bounded number of times
  * ([EntitlementRefresh.afterAttempt]). It is queued when the entitlement
  * token's `refreshAfter` has passed on start or return to the foreground
- * ([installForegroundCheck], TD-264), and when the fetch after a seat
+ * ([foregroundCheck], TD-264), and when the fetch after a seat
  * checkout fails (TD-266).
  *
  * Not a substitute for the in-process heartbeat ([SeatHeartbeat]): WorkManager
@@ -128,14 +126,17 @@ class LicenseConfigWorker(
         }
 
         /**
-         * From [Application.onCreate]: each time the app comes to the
-         * foreground (its first screen starting, at launch or on return),
-         * [refreshNowIfDue] on [scope], off the main thread, since the first
-         * read of the token touches the Keystore and the disk.
+         * For [AppForeground.install], from [Application.onCreate]: each time
+         * the app comes to the foreground (its first screen starting, at launch
+         * or on return), [refreshNowIfDue] on [scope], off the main thread,
+         * since the first read of the token touches the Keystore and the disk.
          */
-        fun installForegroundCheck(app: Application, scope: CoroutineScope) {
-            app.registerActivityLifecycleCallbacks(ForegroundCheck(app, scope))
-        }
+        fun foregroundCheck(app: Application, scope: CoroutineScope): AppForeground.Listener =
+            object : AppForeground.Listener {
+                override fun onForeground() {
+                    scope.launch { refreshNowIfDue(app) }
+                }
+            }
 
         fun cancel(context: Context) {
             runCatching {
@@ -144,32 +145,5 @@ class LicenseConfigWorker(
                 workManager.cancelUniqueWork(WorkTags.LICENSE_CONFIG_NOW_NAME)
             }
         }
-    }
-
-    /** Runs [refreshNowIfDue] when the first started screen of the app starts. */
-    private class ForegroundCheck(
-        private val app: Application,
-        private val scope: CoroutineScope,
-    ) : Application.ActivityLifecycleCallbacks {
-        private var started = 0
-
-        override fun onActivityStarted(activity: Activity) {
-            if (started++ > 0) return
-            scope.launch { LicenseConfigWorker.refreshNowIfDue(app) }
-        }
-
-        override fun onActivityStopped(activity: Activity) {
-            started = (started - 1).coerceAtLeast(0)
-        }
-
-        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
-
-        override fun onActivityResumed(activity: Activity) = Unit
-
-        override fun onActivityPaused(activity: Activity) = Unit
-
-        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-
-        override fun onActivityDestroyed(activity: Activity) = Unit
     }
 }

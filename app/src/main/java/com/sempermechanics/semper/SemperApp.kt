@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.res.Configuration
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.sempermechanics.semper.data.AppForeground
 import com.sempermechanics.semper.data.LicenseConfigWorker
 import com.sempermechanics.semper.data.account.DevAuth
 import com.sempermechanics.semper.data.account.SeatHeartbeat
@@ -39,8 +40,15 @@ class SemperApp : Application() {
             Timber.plant(CrashReportingTree(this))
         }
         installAppCheck()
-        // Managed configuration: re-read whenever a screen comes to the front.
-        ManagedConfigReader.install(this)
+        // One count of started screens: an upload may open the limit screen
+        // only while one is up; the managed configuration is re-read whenever
+        // the app comes to the front, and an entitlement token past its
+        // refreshAfter asks /v1/config for a fresh one then (TD-264).
+        AppForeground.install(
+            this,
+            ManagedConfigReader.foregroundListener(this),
+            LicenseConfigWorker.foregroundCheck(this, appScope),
+        )
         AppSettings.migrate(this)
         // Manifest disables Crashlytics/Analytics collection, so a fresh install
         // sends nothing until the user opts in. This re-applies their choice on
@@ -57,9 +65,6 @@ class SemperApp : Application() {
         // config refresh is scheduled after a successful sign-in — WorkManager
         // is not always ready during Application.onCreate in unit tests.
         SeatHeartbeat.start(appScope, this)
-        // An entitlement token past its refreshAfter asks /v1/config for a
-        // fresh one at launch and on each return to the foreground (TD-264).
-        LicenseConfigWorker.installForegroundCheck(this, appScope)
         // An account deletion the last process did not live to finish (TD-165).
         AccountDeletionRun.resumeInterrupted(this)
         LauncherIcon.sync(this)

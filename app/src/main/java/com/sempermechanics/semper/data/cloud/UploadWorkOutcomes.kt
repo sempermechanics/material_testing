@@ -14,9 +14,9 @@ import java.util.zip.ZipException
 import java.util.zip.ZipFile
 
 /**
- * Pure decision helpers for [DicUploadWorker] HTTP / resume outcomes.
- * Kept free of Android Context so unit tests can pin quota / fail / retry seams
- * without spinning WorkManager.
+ * Pure decision helpers for [DicUploadWorker] HTTP outcomes and staging reuse
+ * (a resumed session's are `Resume.of`). Kept free of Android Context so unit
+ * tests can pin quota / fail / retry seams without spinning WorkManager.
  */
 internal object UploadWorkOutcomes {
 
@@ -54,32 +54,6 @@ internal object UploadWorkOutcomes {
     const val STATUS_PROVISIONING = "PROVISIONING"
     const val STATUS_PROVISION_FAILED = "PROVISION_FAILED"
     const val STATUS_COMPLETED = "COMPLETED"
-
-    /**
-     * Resume planner outcome when comparing pending uploads to local artifacts.
-     * Mirrors [com.sempermechanics.semper.data.UploadSessionPlanner]'s resume without the network call.
-     *
-     * [ResumeKind.WAIT] exists because the backend now opens Drive resumable
-     * sessions in a Cloud Task rather than inside POST /v1/sessions: an empty
-     * upload list means "not ready yet", not "nothing to do". Treating it as
-     * REBUILD would spin, creating a fresh session on every poll.
-     */
-    enum class ResumeKind { CONTINUE, DONE, REBUILD, WAIT, PROVISION_FAILED }
-
-    fun classifyResume(
-        sessionStatus: String,
-        pendingCount: Int,
-        allPendingMatchArtifacts: Boolean,
-    ): ResumeKind = when {
-        sessionStatus == STATUS_COMPLETED -> ResumeKind.DONE
-        // Drive/Cloud Tasks failed to open upload targets — do not spin create/delete.
-        sessionStatus == STATUS_PROVISION_FAILED -> ResumeKind.PROVISION_FAILED
-        // Still being provisioned: poll, do not rebuild.
-        sessionStatus == STATUS_PROVISIONING -> ResumeKind.WAIT
-        !allPendingMatchArtifacts -> ResumeKind.REBUILD
-        pendingCount == 0 -> ResumeKind.REBUILD
-        else -> ResumeKind.CONTINUE
-    }
 
     /**
      * CSV + at least one PDF report + at least one processed heatmap/GIF.

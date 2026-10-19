@@ -1,6 +1,8 @@
 package com.sempermechanics.semper.cloud
 
 import androidx.work.ListenableWorker
+import com.sempermechanics.semper.data.Resume
+import com.sempermechanics.semper.data.UploadJob
 import com.sempermechanics.semper.data.cloud.UploadWorkOutcomes
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.util.Digests
@@ -47,32 +49,23 @@ class DicUploadWorkerOutcomesTest {
         assertEquals(ListenableWorker.Result.retry(), UploadWorkOutcomes.fromHttpCode(429))
     }
 
+    /** A pending upload matched to a staged file, as `matchPending` pairs them. */
+    private val job = UploadJob("f_meta", "u_meta", chunkSize = 1, name = "metadata.json", file = File("metadata.json"))
+
     @Test
     fun `resume classifier — completed is done`() {
-        assertEquals(
-            UploadWorkOutcomes.ResumeKind.DONE,
-            UploadWorkOutcomes.classifyResume("COMPLETED", pendingCount = 0, allPendingMatchArtifacts = true),
-        )
+        assertEquals(Resume.Done, Resume.of("COMPLETED", work = emptyList()))
     }
 
     @Test
     fun `resume classifier — mismatch or empty pending rebuilds`() {
-        assertEquals(
-            UploadWorkOutcomes.ResumeKind.REBUILD,
-            UploadWorkOutcomes.classifyResume("UPLOADING", pendingCount = 2, allPendingMatchArtifacts = false),
-        )
-        assertEquals(
-            UploadWorkOutcomes.ResumeKind.REBUILD,
-            UploadWorkOutcomes.classifyResume("UPLOADING", pendingCount = 0, allPendingMatchArtifacts = true),
-        )
+        assertEquals(Resume.Rebuild, Resume.of("UPLOADING", work = null))
+        assertEquals(Resume.Rebuild, Resume.of("UPLOADING", work = emptyList()))
     }
 
     @Test
-    fun `resume classifier — matching pending continues`() {
-        assertEquals(
-            UploadWorkOutcomes.ResumeKind.CONTINUE,
-            UploadWorkOutcomes.classifyResume("UPLOADING", pendingCount = 2, allPendingMatchArtifacts = true),
-        )
+    fun `resume classifier — matching pending continues with that work`() {
+        assertEquals(Resume.Continue(listOf(job, job)), Resume.of("UPLOADING", work = listOf(job, job)))
     }
 
     @Test
@@ -80,53 +73,27 @@ class DicUploadWorkerOutcomesTest {
         // The backend opens Drive upload targets in a Cloud Task, so a fresh
         // session legitimately reports zero pending uploads for a moment.
         // Rebuilding here would spin: every poll would mint another session.
-        assertEquals(
-            UploadWorkOutcomes.ResumeKind.WAIT,
-            UploadWorkOutcomes.classifyResume(
-                "PROVISIONING",
-                pendingCount = 0,
-                allPendingMatchArtifacts = true,
-            ),
-        )
+        assertEquals(Resume.Wait, Resume.of("PROVISIONING", work = emptyList()))
     }
 
     @Test
     fun `resume classifier — provisioning wins over an apparent mismatch`() {
         // Nothing is provisioned yet, so "the pending set does not match our
         // artifacts" is not evidence of anything. Waiting must take precedence.
-        assertEquals(
-            UploadWorkOutcomes.ResumeKind.WAIT,
-            UploadWorkOutcomes.classifyResume(
-                "PROVISIONING",
-                pendingCount = 0,
-                allPendingMatchArtifacts = false,
-            ),
-        )
+        assertEquals(Resume.Wait, Resume.of("PROVISIONING", work = null))
     }
 
     @Test
     fun `resume classifier — failed provisioning is terminal kind`() {
-        // Must not collapse into REBUILD: that spun create→fail→delete→retry.
-        assertEquals(
-            UploadWorkOutcomes.ResumeKind.PROVISION_FAILED,
-            UploadWorkOutcomes.classifyResume(
-                "PROVISION_FAILED",
-                pendingCount = 0,
-                allPendingMatchArtifacts = true,
-            ),
-        )
+        // Must not collapse into Rebuild: that spun create→fail→delete→retry.
+        assertEquals(Resume.ProvisionFailed, Resume.of("PROVISION_FAILED", work = emptyList()))
+        assertEquals(Resume.ProvisionFailed, Resume.of("PROVISION_FAILED", work = listOf(job)))
     }
 
     @Test
-    fun `resume classifier — completed still wins over provisioning`() {
-        assertEquals(
-            UploadWorkOutcomes.ResumeKind.DONE,
-            UploadWorkOutcomes.classifyResume(
-                "COMPLETED",
-                pendingCount = 0,
-                allPendingMatchArtifacts = true,
-            ),
-        )
+    fun `resume classifier — completed still wins over provisioning or a mismatch`() {
+        assertEquals(Resume.Done, Resume.of("COMPLETED", work = null))
+        assertEquals(Resume.Done, Resume.of("COMPLETED", work = listOf(job)))
     }
 
     @Test

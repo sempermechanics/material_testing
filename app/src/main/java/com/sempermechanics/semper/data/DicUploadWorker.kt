@@ -1,6 +1,5 @@
 package com.sempermechanics.semper.data
 
-import android.app.ActivityManager
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import androidx.work.CoroutineWorker
@@ -40,19 +39,9 @@ import timber.log.Timber
 import java.io.File
 
 /**
- * Whether one of this app's activities is on screen. Only then may a worker
- * start an activity: Android 10+ blocks background activity starts. Read from
- * the process's own importance — `lifecycle-process` is not on the compile
- * classpath. A foreground service alone (this worker) ranks below FOREGROUND.
- */
-private fun isAppInForeground(): Boolean {
-    val info = ActivityManager.RunningAppProcessInfo()
-    ActivityManager.getMyMemoryState(info)
-    return info.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
-}
-
-/**
- * How [DicUploadWorker] reaches the backend and a token. WorkManager builds the
+ * How [DicUploadWorker] reaches the backend and a token, and whether a screen
+ * of the app is up ([AppForeground]: only then may a worker start an activity,
+ * as Android 10+ blocks background activity starts). WorkManager builds the
  * worker, so these cannot be constructor parameters (ADR-002); tests swap them
  * for `FakeCloudApi` / `FakeTokens` and put them back.
  */
@@ -60,7 +49,7 @@ private fun isAppInForeground(): Boolean {
 internal object DicUploadSeams {
     var api: (Context) -> CloudApi = { SemperApi.get(it) }
     var tokens: TokenSource = TokenProvider
-    var inForeground: () -> Boolean = ::isAppInForeground
+    var inForeground: () -> Boolean = { AppForeground.isForeground }
 }
 
 /**

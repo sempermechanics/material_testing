@@ -46,6 +46,54 @@ internal sealed interface SessionStep {
     data class Fail(val reason: String) : SessionStep
 }
 
+/** What resuming an existing session concluded ([UploadSessionPlanner]). */
+internal sealed interface Resume {
+    /** Continue this session — [work] is the still-pending files (never empty). */
+    data class Continue(val work: List<UploadJob>) : Resume
+
+    /** Already fully uploaded in the cloud. */
+    data object Done : Resume
+
+    /** Unusable (gone, or its files don't match ours): delete it and start fresh. */
+    data object Rebuild : Resume
+
+    /**
+     * The backend is still opening upload targets — poll again shortly. It
+     * opens Drive's resumable sessions in a Cloud Task rather than inside
+     * POST /v1/sessions, so an empty upload list means "not ready yet", not
+     * "nothing to do". Read as [Rebuild] it would spin, creating a fresh
+     * session on every poll.
+     */
+    data object Wait : Resume
+
+    /** Cloud Tasks / Drive failed to open targets — terminal for this session (never [Rebuild]: that spun). */
+    data object ProvisionFailed : Resume
+
+    /**
+     * The backend could not say (5xx, 429, a bare 404): keep the session and
+     * its pointer, and ask again later. Not evidence the session is gone.
+     */
+    data class Unreachable(val requestId: String?) : Resume
+
+    companion object {
+        /**
+         * What a session in [sessionStatus] comes to, given [work]: each of its
+         * pending uploads matched to a staged artifact, or null when one has
+         * none. The session's state wins over the match: nothing provisioned yet
+         * says nothing about a mismatch. A pending set that is empty or does not
+         * match ours can't be finished, so it is rebuilt rather than marked
+         * synced half-uploaded.
+         */
+        fun of(sessionStatus: String, work: List<UploadJob>?): Resume = when {
+            sessionStatus == UploadWorkOutcomes.STATUS_COMPLETED -> Done
+            sessionStatus == UploadWorkOutcomes.STATUS_PROVISION_FAILED -> ProvisionFailed
+            sessionStatus == UploadWorkOutcomes.STATUS_PROVISIONING -> Wait
+            work.isNullOrEmpty() -> Rebuild
+            else -> Continue(work)
+        }
+    }
+}
+
 /**
  * Delete cloud session [cloudSessionId], then forget it locally. If the delete
  * fails the pointer stays, so a later run deletes it rather than orphaning it
@@ -83,30 +131,6 @@ internal class UploadSessionPlanner(
     private val idToken: String,
     private val localId: String,
 ) {
-
-    /** What resuming an existing session concluded. */
-    private sealed interface Resume {
-        /** Continue this session — [work] is the still-pending files (never empty). */
-        data class Continue(val work: List<UploadJob>) : Resume
-
-        /** Already fully uploaded in the cloud. */
-        data object Done : Resume
-
-        /** Unusable (gone, or its files don't match ours): delete it and start fresh. */
-        data object Rebuild : Resume
-
-        /** The backend is still opening upload targets — poll again shortly. */
-        data object Wait : Resume
-
-        /** Cloud Tasks / Drive failed to open targets — terminal for this session. */
-        data object ProvisionFailed : Resume
-
-        /**
-         * The backend could not say (5xx, 429, a bare 404): keep the session and
-         * its pointer, and ask again later. Not evidence the session is gone.
-         */
-        data class Unreachable(val requestId: String?) : Resume
-    }
 
     /**
      * Continue the session a prior run created, tracked by [record]'s stored
@@ -323,35 +347,16 @@ internal class UploadSessionPlanner(
     }
 
     private fun resumeFrom(state: SessionUploadsResponse, artifacts: List<UploadArtifact>): Resume {
-        val work = matchPending(state.uploads, artifacts)
-        val kind = UploadWorkOutcomes.classifyResume(
-            sessionStatus = state.status.orEmpty(),
-            pendingCount = work?.size ?: state.uploads.size,
-            allPendingMatchArtifacts = work != null,
-        )
-        if (kind == UploadWorkOutcomes.ResumeKind.CONTINUE && work != null) {
-            UploadLog.phase("resume_continue", count = work.size)
-            return Resume.Continue(work)
+        val resumed = Resume.of(state.status.orEmpty(), matchPending(state.uploads, artifacts))
+        when (resumed) {
+            is Resume.Continue -> UploadLog.phase("resume_continue", count = resumed.work.size)
+            Resume.Done -> UploadLog.phase("resume_done")
+            Resume.Rebuild -> UploadLog.phase("resume_rebuild")
+            Resume.Wait -> UploadLog.phase("resume_wait")
+            Resume.ProvisionFailed -> UploadLog.phase("provision_failed")
+            is Resume.Unreachable -> Unit
         }
-        return when (kind) {
-            UploadWorkOutcomes.ResumeKind.DONE -> {
-                UploadLog.phase("resume_done")
-                Resume.Done
-            }
-            // CONTINUE needs every pending file matched, so it is handled above.
-            UploadWorkOutcomes.ResumeKind.REBUILD, UploadWorkOutcomes.ResumeKind.CONTINUE -> {
-                UploadLog.phase("resume_rebuild")
-                Resume.Rebuild
-            }
-            UploadWorkOutcomes.ResumeKind.WAIT -> {
-                UploadLog.phase("resume_wait")
-                Resume.Wait
-            }
-            UploadWorkOutcomes.ResumeKind.PROVISION_FAILED -> {
-                UploadLog.phase("provision_failed")
-                Resume.ProvisionFailed
-            }
-        }
+        return resumed
     }
 
     /**
