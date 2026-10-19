@@ -131,7 +131,7 @@ object StressStrain {
             val thicknessMm: Float,
             val axisX: Boolean,
             val probe: BeamDeflection.Probe? = null,
-        ) : Model("flexural", "Flexural stress", flexuralStrainName(axisX, probe != null)) {
+        ) : Model("flexural", "Flexural stress", flexuralStrainName(probe)) {
             override val isComplete: Boolean get() = spanMm > 0f && widthMm > 0f && thicknessMm > 0f
             override fun stressMPa(loadN: Float): Float =
                 if (isComplete) THREE * loadN * spanMm / (2f * widthMm * thicknessMm * thicknessMm) else Float.NaN
@@ -141,7 +141,7 @@ object StressStrain {
             override fun strainMilli(data: FloatArray, gauge: Extensometer.Gauge?): Float? = when {
                 axisStrainMilli(data, axisX) == null -> null
                 probe == null -> Float.NaN
-                else -> probe.outerFibreStrainMilli(data, axisX) ?: Float.NaN
+                else -> probe.outerFibreStrainMilli(data) ?: Float.NaN
             }
             override val measuresStrain: Boolean get() = probe != null
             override val strainBasis: String
@@ -351,10 +351,12 @@ object StressStrain {
     private fun axisStrainMilli(data: FloatArray, axisX: Boolean): Float? =
         DicResult.fieldStats(data, if (axisX) DicResult.IDX_EXX else DicResult.IDX_EYY)?.get(MEAN)
 
-    private fun flexuralStrainName(axisX: Boolean, tapped: Boolean): String = when {
-        !tapped -> "no strain"
-        axisX -> "outer-fibre Exx"
-        else -> "outer-fibre Eyy"
+    /** The component the taps read ([BeamDeflection.Probe.strainAlongBeam]); a tilted beam reads neither. */
+    private fun flexuralStrainName(probe: BeamDeflection.Probe?): String = when {
+        probe == null -> "no strain"
+        probe.downX == 0f -> "outer-fibre Exx"
+        probe.downY == 0f -> "outer-fibre Eyy"
+        else -> "outer-fibre strain along the beam"
     }
 
     private const val MEAN = 2

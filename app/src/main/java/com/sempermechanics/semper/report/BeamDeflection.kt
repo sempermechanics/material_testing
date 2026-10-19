@@ -76,10 +76,31 @@ object BeamDeflection {
         val radiusPx: Float = max(taps.thicknessPx / 2f, MIN_PROBE_RADIUS_PX)
 
         /**
+         * The beam's axis in the image, square to the taps, as the cos and sin
+         * of its angle to x: ([downY], −[downX]). Its sign does not matter; the
+         * strain along it takes only c², s² and c·s.
+         */
+        private val axisC: Float get() = downY
+        private val axisS: Float get() = -downX
+
+        /**
+         * The normal strain along the beam's axis, from the image-frame tensor
+         * (Exy the tensor shear, as the engine writes it):
+         * ε = Exx·c² + 2·Exy·c·s + Eyy·s². Taps along an image axis read Exx
+         * or Eyy exactly as they are, and not the other components at all.
+         */
+        fun strainAlongBeam(exx: Float, eyy: Float, exy: Float): Float = when {
+            downX == 0f -> exx
+            downY == 0f -> eyy
+            else -> exx * axisC * axisC + 2f * exy * axisC * axisS + eyy * axisS * axisS
+        }
+
+        /**
          * The bending strain at the outer fibre under the load point, in
          * millistrain. Filmed from the side face, the strain along the beam
-         * (Exx, or Eyy when [axisX] is false) is linear through the thickness
-         * and zero on the neutral axis. So a line is fitted to it against each
+         * ([strainAlongBeam]: Exx for taps one above the other, Eyy for taps side
+         * by side, the rotated tensor for a beam tilted in the photo) is linear
+         * through the thickness and zero on the neutral axis. So a line is fitted to it against each
          * point's distance from the taps' midpoint along the tap line, and its
          * slope times half the tapped thickness is the strain at the face the
          * second tap marks. The points are the accepted ones with a strain in
@@ -91,11 +112,10 @@ object BeamDeflection {
          * the tension face. Null with fewer than [MIN_SECTION_POINTS] points or
          * none spread across the section.
          */
-        fun outerFibreStrainMilli(data: FloatArray, axisX: Boolean): Float? {
+        fun outerFibreStrainMilli(data: FloatArray): Float? {
             val cx = taps.midX
             val cy = taps.midY
             val half = taps.thicknessPx / 2f
-            val strainIndex = if (axisX) DicResult.IDX_EXX else DicResult.IDX_EYY
             val across = ArrayList<Double>()
             val strain = ArrayList<Double>()
             var i = 0
@@ -104,7 +124,11 @@ object BeamDeflection {
                 val dy = data[i + DicResult.IDX_Y] - cy
                 val s = dx * downX + dy * downY
                 val along = dy * downX - dx * downY
-                val value = data[i + strainIndex]
+                val value = strainAlongBeam(
+                    data[i + DicResult.IDX_EXX],
+                    data[i + DicResult.IDX_EYY],
+                    data[i + DicResult.IDX_EXY],
+                )
                 val inSection = abs(s) <= half && abs(along) <= radiusPx
                 if (inSection && value.isFinite() && DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
                     across += s.toDouble()

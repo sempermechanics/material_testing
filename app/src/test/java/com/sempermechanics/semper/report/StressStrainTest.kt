@@ -232,6 +232,71 @@ class StressStrainTest {
         assertEquals(0f, DicResult.fieldStats(data, DicResult.IDX_EXX)!![2], 1e-6f)
     }
 
+    /**
+     * A pure-bending side face whose beam runs at [degrees] to the image's x
+     * axis (y down): along the beam ε = [k] η, across it −ν k η with ν = 0.3, no
+     * shear in the beam's frame, η the distance from the neutral axis through
+     * (200, 150). Image components by the tensor rotation, Exy tensor shear as
+     * the engine writes it. Taps 100 px apart across the beam, through that
+     * point, top first.
+     */
+    private fun tiltedBend(degrees: Double, k: Double = 2e-5): Pair<FloatArray, BeamEdgeTaps> {
+        val t = Math.toRadians(degrees)
+        val c = Math.cos(t)
+        val s = Math.sin(t)
+        val nu = 0.3
+        val data = FloatArray(81 * 81 * DicResult.STRIDE)
+        var i = 0
+        for (row in 0..80) {
+            for (col in 0..80) {
+                val x = col * 5.0
+                val y = row * 5.0
+                val eta = -(x - 200.0) * s + (y - 150.0) * c
+                val along = k * eta
+                val across = -nu * k * eta
+                data[i + DicResult.IDX_X] = x.toFloat()
+                data[i + DicResult.IDX_Y] = y.toFloat()
+                data[i + DicResult.IDX_EXX] = (along * c * c + across * s * s).toFloat()
+                data[i + DicResult.IDX_EYY] = (along * s * s + across * c * c).toFloat()
+                data[i + DicResult.IDX_EXY] = ((along - across) * c * s).toFloat()
+                data[i + DicResult.IDX_ZNSSD] = 0.05f
+                i += DicResult.STRIDE
+            }
+        }
+        val taps = BeamEdgeTaps(
+            (200.0 + 50.0 * s).toFloat(),
+            (150.0 - 50.0 * c).toFloat(),
+            (200.0 - 50.0 * s).toFloat(),
+            (150.0 + 50.0 * c).toFloat(),
+        )
+        return data to taps
+    }
+
+    @Test
+    fun `a beam tilted in the photo reads the strain along the beam, not Exx`() {
+        // k = 2×10⁻⁵ per px over ±50 px: 1 mε at the faces whatever the tilt
+        // (numpy, the same lattice and section). Exx as it is read 0.9608 mε
+        // at 10° (−3.9 %) and 0.675 at 30° (−32.5 %): Poisson's ratio in Eyy
+        // and the shear leak into it as the beam turns.
+        listOf(0.0, 10.0, -10.0, 30.0).forEach { degrees ->
+            val (data, taps) = tiltedBend(degrees)
+
+            val strain = bending(taps).strainMilli(data, gauge = null)!!
+
+            assertEquals("tilt $degrees°", 1.0f, strain, 0.02f)
+        }
+    }
+
+    @Test
+    fun `a beam upright in the photo reads Eyy from its side-by-side taps`() {
+        val (data, taps) = tiltedBend(90.0)
+
+        assertEquals(1.0f, bending(taps).strainMilli(data, gauge = null)!!, 0.02f)
+        assertEquals("outer-fibre Eyy", bending(taps).strainName)
+        assertEquals("outer-fibre Exx", bending(BeamEdgeTaps(50f, 0f, 50f, 100f)).strainName)
+        assertEquals("outer-fibre strain along the beam", bending(tiltedBend(10.0).second).strainName)
+    }
+
     @Test
     fun `the bending strain is the tension face's whichever edge was tapped first`() {
         // Loads push the beam down the photo (+v), so the bottom face is in tension.
