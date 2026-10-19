@@ -2217,8 +2217,11 @@ the auth continue-URLs — keeps the strict `default-src 'self'`, with
 `script-src 'self'` and no `'unsafe-inline'` since 2026-10-08 (check 11 of
 `scripts/check_console.py` keeps every policy, and every page, that way). `connect-src` is
 widened for the API and Firebase Auth's token endpoints. `script-src` is
-widened to exactly two origins and never to `'unsafe-inline'`:
-`https://www.gstatic.com` for the SDK modules and `https://apis.google.com`
+widened to exactly two sources and never to `'unsafe-inline'`:
+`https://www.gstatic.com/firebasejs/12.4.0/` for the SDK modules (the SDK's
+path, not the whole host, which serves scripts for every Google product;
+check 12 of `scripts/check_console.py` holds it to the version `auth.js`
+imports, so an SDK bump changes both together) and `https://apis.google.com`
 for the gapi loader the auth iframe pulls in. Both SDK modules come from
 gstatic rather than Hosting's `/__/firebase/` copies — Hosting's
 `firebase-auth.js` imports `@firebase/app` from gstatic anyway, and mixing the

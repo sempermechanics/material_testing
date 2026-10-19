@@ -46,6 +46,11 @@ runtime, and a person only discovers in production:
    `'unsafe-eval'` in any `script-src`. Every other page under `public/`
    (the legal pages, anything added later) has no inline script or handler,
    so the strict default policy cannot break it.
+12. The console `script-src` names www.gstatic.com only as the Firebase SDK
+   path of the version the console imports
+   (`https://www.gstatic.com/firebasejs/<version>/`), never the whole host,
+   which serves scripts for every Google product; and every SDK version a
+   console module imports is allowed there, or the pages load no Firebase.
 
 Checks 2, 3, 7 and 8 read every module a page runs: its `<script src>` and,
 transitively, what those import by relative path, including on demand.
@@ -253,6 +258,49 @@ def check_script_policy() -> None:
             fail(page, "inline script, handler or javascript: URL — the global "
                        "CSP is script-src 'self', so it never runs; move it to "
                        "a file beside the page")
+
+
+# ---------------- 12: the Firebase SDK is pinned in script-src -----------
+
+_GSTATIC = "https://www.gstatic.com"
+_SDK_IMPORT = re.compile(r"^https://www\.gstatic\.com/firebasejs/([^/]+)/[^/]+\.js$")
+
+
+def check_sdk_pin(policies: dict[str, str]) -> None:
+    """Each console CSP allows gstatic scripts from the SDK versions the
+    console imports and from nowhere else on that host."""
+    imported = {}
+    for page in PAGES:
+        for module in page_modules(page):
+            for url in _REMOTE_IMPORT.findall(read(module)):
+                match = _SDK_IMPORT.match(url)
+                if match:
+                    imported.setdefault(match.group(1), module)
+    wanted = {f"{_GSTATIC}/firebasejs/{version}/" for version in imported}
+
+    path = os.path.join(HOSTING, "firebase.json")
+    for source, policy in policies.items():
+        directive = re.search(r"script-src\s+([^;]+)", policy)
+        sources = directive.group(1).split() if directive else []
+        gstatic = [s for s in sources if s.rstrip("/").startswith(_GSTATIC)]
+        for allowed in gstatic:
+            if allowed.rstrip("/") == _GSTATIC:
+                fail(path, f"the {source} CSP's script-src allows the whole "
+                           "www.gstatic.com host, which serves scripts for every "
+                           "Google product; allow the SDK path the console "
+                           "imports instead, " + (", ".join(sorted(wanted)) or
+                           f"{_GSTATIC}/firebasejs/<version>/"))
+            elif allowed not in wanted:
+                fail(path, f"the {source} CSP's script-src allows {allowed}, "
+                           "which no console module imports; pin the version "
+                           "auth.js imports and drop the old one")
+        for version, module in sorted(imported.items()):
+            pin = f"{_GSTATIC}/firebasejs/{version}/"
+            if pin not in gstatic and _GSTATIC not in [s.rstrip("/") for s in gstatic]:
+                fail(path, f"the {source} CSP's script-src does not allow {pin}: "
+                           f"{os.path.relpath(module, HOSTING)} imports Firebase "
+                           f"{version}, which the browser is then not allowed to "
+                           "load, and no console page signs in")
 
 
 # ---------------- 9: each page preloads exactly what it runs --------------
@@ -540,7 +588,9 @@ def run(root: str = REPO_ROOT) -> list[str]:
     failures.clear()
     check_scripts()
     check_element_ids()
-    check_placeholders(check_hosting())
+    policies = check_hosting()
+    check_placeholders(policies)
+    check_sdk_pin(policies)
     check_gateway()
     check_codes()
     check_preloads()

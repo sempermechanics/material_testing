@@ -335,8 +335,10 @@ addresses that rewrite into it. Every other page — the legal pages, the auth
 continue-URLs — keeps the strict
 `default-src 'self'` policy. `connect-src` is widened for the API and
 Firebase Auth's token endpoints. `script-src` is `'self'` plus two Google
-origins: the SDK modules come from `https://www.gstatic.com/firebasejs/<ver>/`
-and the auth iframe loads gapi from `https://apis.google.com` — without both
+sources: the SDK modules come from `https://www.gstatic.com/firebasejs/<ver>/`,
+which is also the whole of gstatic the policy allows (pinned to the version
+`auth.js` imports; an SDK bump edits both, and `check_console.py` fails until
+it does), and the auth iframe loads gapi from `https://apis.google.com` — without both
 the page renders and *Sign in* does nothing (the first production deploy
 proved it). `auth.js` imports **both** `firebase-app.js` and `firebase-auth.js`
 from gstatic, never Hosting's `/__/firebase/<ver>/` copies: Hosting's
