@@ -2707,3 +2707,31 @@ its work and retries (`UploadErrors.Kind.PAUSED`); a restore or download ends
 saying restoring is paused, counted as no failure (`DownloadFailure.Paused`); an
 older build treats the 503 as transient and retries. `share` has no route
 and is published only. Tests `backend/tests/test_kill_switches.py`.
+
+### 20.15 Staff test accounts (QC and CI)
+
+Decided in [ADR-027](../adr/ADR-027-test-accounts.md). A test account is an
+ordinary account carrying `users/{uid}.testAccount`
+(`{purpose, createdByUid, createdAt, expiresAt, maxDevices, note}`), made by staff
+through `POST /v1/admin/test-accounts` ([ADMIN_API.md](ADMIN_API.md)) on an address
+in `TEST_ACCOUNT_DOMAINS`, with an individual licence flagged `testAccount: true`.
+Every branch that treats it differently asks `repo.test_account_of(user)`; a real
+account takes the path it always took.
+
+| Where | A test account |
+|---|---|
+| `repo.register_device` | up to `maxDevices` ACTIVE devices per app, counted in the registration's transaction; `activeDeviceId` is the latest |
+| `deps.verified_device` | any ACTIVE device of the account for the asking app signs |
+| `repo.devlock` | the licence binds no `deviceIdLock`: a registered device is licensed, an unregistered one while there is room, else Demo for that request |
+| `routers/devices.py` | no release hold, no new-device mail; audit detail `testAccount: true` |
+| `repo.create_session` | the device is stored as `testDeviceId`, so the demo device count (§7) skips it; `testAccount: true` |
+| `drive.ensure_session_folders` | `Research Storage/_test/{uid}/session/{sid}/` instead of `user/` |
+| `GET /v1/config` | `testAccount: {purpose, expiresAt}` (null for a real account) |
+| `GET /v1/admin/licenses` | its licence is left out unless `include_test=true` |
+
+It ends at `expiresAt`: the licence lapses then (timed, no grace), and the daily
+Cloud Scheduler call `POST /v1/tasks/test-account-expiry` (OIDC as the task
+invoker, absent from the gateway) suspends it, revokes its tokens and licence and
+erases it with the holder erasure's own steps, audited `test_account_expired`.
+Staff end one sooner with `DELETE /v1/admin/test-accounts/{uid}`
+(`test_account_ended`). Tests `backend/tests/test_test_accounts.py`.
