@@ -126,7 +126,7 @@ and edited rosters with no second factor ever asked for.
    (`firebase.sign_in_second_factor`; `routers/devices.py`,
    `repo.register_device`). Stamped on every registration, a heal included:
    a registration replaces the key, so it is judged afresh.
-2. **Staff and IT need it.** `deps.step_up_check` takes
+2. **Staff and IT need it.** `step_up.step_up_check` takes
    `device_needs_second_factor`: the admin tiers (`attested_or_mfa_admin`,
    `_fresh`) and IT (`institution_admin_stepup`) refuse a device without the
    stamp, `403 mfa_required`. The holder tier (`attested_or_mfa_user`: device

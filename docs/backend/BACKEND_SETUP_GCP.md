@@ -333,7 +333,7 @@ gcloud projects add-iam-policy-binding $AUTH_PROJECT \
 
 Then set the repository variable `CHECK_REVOKED_ON_STEP_UP=true` and redeploy. Not
 before: with the setting on and no grant, every console step-up call fails closed
-with 401 `invalid_token` (`backend/app/deps.py:633-682`). The posture check passes 3.4-iam only on
+with 401 `invalid_token` (`backend/app/step_up.py:180-229`). The posture check passes 3.4-iam only on
 `roles/firebaseauth.admin`, `roles/firebase.admin`, or a custom role holding
 `firebaseauth.users.update` and `firebaseauth.users.delete`
 (`scripts/check_gcp_posture.sh:315-353`).

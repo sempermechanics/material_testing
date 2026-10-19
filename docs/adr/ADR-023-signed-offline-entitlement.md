@@ -200,7 +200,7 @@ Android 11 (minSdk 30, `app/build.gradle.kts:130`).
 
 **Decision note (2026-10-18): account deletion and the shared Firebase user.**
 `DELETE /v1/me` now also deletes the Firebase Auth user
-(`backend/app/routers/account.py:350`). Semper and Material Testing sign in to the
+(`backend/app/services/account.py:124`). Semper and Material Testing sign in to the
 same Auth project, so this removes the sign-in for both apps. That matches the
 erase itself, which is account-wide: it removes the sessions, files and devices of
 both apps, and (since 2026-10-18, TD-243) the account's `auth_links` rows and the

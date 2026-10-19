@@ -124,7 +124,7 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     (ADR-010, device trust). Stamped on every registration, a heal included,
     because a registration replaces the key: only a device registered from a
     second-factor sign-in may step up for staff or institution IT
-    (`deps.step_up_check`).
+    (`step_up.step_up_check`).
     """
     dev = {
         "uid": uid,

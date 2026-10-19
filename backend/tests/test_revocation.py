@@ -11,7 +11,7 @@ from firebase_admin import auth as fb_auth
 
 import fake_firestore
 import repo_view as repo
-from app import config, deps, drive, google_auth, rate_limit
+from app import config, deps, drive, google_auth, rate_limit, step_up
 from app.config import settings
 
 
@@ -90,6 +90,7 @@ def stepping_admin(monkeypatch, audited):
                 "firebase": {"sign_in_second_factor": "phone"}, "auth_time": time.time() - 60}
 
     monkeypatch.setattr(deps, "verify_id_token", verify)
+    monkeypatch.setattr(step_up, "verify_id_token", verify)
     repo.patch(monkeypatch, "get_or_create_user", lambda c, device_id=None: {
         "uid": "admin-1", "email": "admin@sempermechanics.com",
         "role": "admin", "access_status": "APPROVED",

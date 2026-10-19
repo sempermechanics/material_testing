@@ -7,7 +7,8 @@ from .. import observability as obs
 from .. import rate_limit
 from ..errors import Refusal
 from ..licenses import key_hash, key_prefix
-from ..deps import attested_or_mfa_user, current_user, rate_limited, request_app
+from ..deps import current_user, rate_limited, request_app
+from ..step_up import attested_or_mfa_user
 from ..models import LicenseActivate, LicenseClaim
 from ..validation import require_header_identifier
 from ._shared import named_app

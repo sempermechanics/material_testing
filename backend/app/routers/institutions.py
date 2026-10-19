@@ -24,7 +24,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from .. import errors, repo
 from .. import rate_limit
 from ..config import settings
-from ..deps import current_user, step_up_check
+from ..deps import current_user
+from ..step_up import step_up_check
 from ..licenses import KIND_INSTITUTION, normalize_kind
 from ..validation import DocumentId
 from .roster import RosterAdmin, Tier, roster_router

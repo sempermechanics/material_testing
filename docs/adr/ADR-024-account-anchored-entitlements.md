@@ -76,7 +76,7 @@ revocation, grace and the 30-day hold apply unchanged.
 
 **The claim route.** `POST /v1/me/claim`, body `{"code"}` of 8–64 characters,
 any other field 422 (`LicenseClaim`, `backend/app/models.py:182-191`). Auth is
-`attested_or_mfa_user` (`backend/app/deps.py:563`): a browser with a second
+`attested_or_mfa_user` (`backend/app/step_up.py:110`): a browser with a second
 factor on a recent sign-in, or a signed device request. An unverified address is
 refused first, 403 `email_not_verified` (`licenses.py:236-237`). It runs the same
 `repo.activate_license` as the legacy route, so refusal codes and statuses are
@@ -132,8 +132,8 @@ licence or seat device lock and drops to Demo on a mismatch or revocation
 
 | Route | Caller | Gates, in order |
 |---|---|---|
-| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-279; `backend/app/routers/sessions.py:504-549`) |
-| `POST /v1/files/{id}/complete` | signed device | rate limit; kill switch `upload` or `backup` → 503 (`backend/app/routers/files.py:106-110`) |
+| `POST /v1/sessions` (record an analysis) | signed device | rate limit; kill switch `upload` or `backup` → 503 `feature_paused`; files per session → 413; account cap: stored analyses (less `PROVISION_FAILED`) ≥ `maxSessions` → 409 `session_quota_exceeded`; **demo only**, device cap: every account's stored analyses from this device ≥ `maxSessions` → 409 `device_quota_exceeded` (TD-279; `backend/app/routers/sessions.py:335-366`, `backend/app/services/sessions.py:125-139`) |
+| `POST /v1/files/{id}/complete` | signed device | rate limit; kill switch `upload` or `backup` → 503 (`backend/app/routers/files.py:139-143`) |
 | `GET /v1/files/{id}/content` (restore) | signed device | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`files.py:38-58`) |
 | `GET /v1/sessions/{sid}/bundle` (download) | signed device, or browser with a second factor | rate limit; kill switch `restore` → 503; demo → 403 `feature_not_licensed` (`sessions.py:355-387`) |
 | `GET /v1/sessions` | user | lists; `quota.used` is the **account's** count (`sessions.py:131`) |
@@ -162,9 +162,9 @@ route template; `feature_paused` is in `CLIENT_BRANCHED`
 (`backend/app/repo/sessions.py:415-439`) counts sessions whose `deviceId` is
 this device, across accounts, less `PROVISION_FAILED`, with two single-field
 counts (no composite index). `_device_cap_reached`
-(`backend/app/routers/sessions.py:473-486`) applies it to demo accounts only; a
+(`backend/app/services/sessions.py:81-94`) applies it to demo accounts only; a
 licensed account is held to its own cap. The refusal says neither the count nor
-whose analyses they are (`_device_quota_detail`, `:489-499`). Tests
+whose analyses they are (`_device_quota_detail`, `:97-109`). Tests
 `backend/tests/test_demo_device_cap.py`. A demo create costs 11 reads where it
 cost 9 ([request-volume.md](../perf/request-volume.md) Pass 4).
 

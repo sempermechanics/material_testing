@@ -76,7 +76,7 @@ def verify_id_token(token: str, *, check_revoked: bool = False) -> dict:
     tokens were revoked after this token was minted, or the account disabled
     (`fb_auth.RevokedIdTokenError` / `fb_auth.UserDisabledError`). That is a
     network call and needs the runtime account to hold Firebase Auth admin on
-    the Auth project, so only `deps.step_up_check` asks it, and only when
+    the Auth project, so only `step_up.step_up_check` asks it, and only when
     `CHECK_REVOKED_ON_STEP_UP` is on.
     """
     return fb_auth.verify_id_token(token, check_revoked=check_revoked)

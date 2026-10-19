@@ -230,7 +230,7 @@ class Settings:
     APP_CHECK_MODE = os.environ.get("APP_CHECK_MODE", "off").strip().lower()
 
     # --- revocation on the browser step-up (A3.4) ---------------------------
-    # On: a browser caller on the second-factor path (`deps.step_up_check`,
+    # On: a browser caller on the second-factor path (`step_up.step_up_check`,
     # via="mfa") has its ID token re-verified with check_revoked=True, so a
     # user revoked or disabled in Firebase Auth stops changing anything at
     # once rather than when the token expires (up to an hour). The device-

@@ -450,7 +450,8 @@ because Drive has no anonymous signed read.
 
 Handlers stay plain `def` (Firestore and Drive calls are blocking, so Starlette
 runs them in its threadpool). Every route is in `backend/app/routers/`; shared
-pieces are `deps.py` (auth), `repo/` (all Firestore access, one module per aggregate),
+pieces are `deps.py` (auth), `step_up.py` (the step-up tiers), `services/` (multi-step
+flows a route calls), `repo/` (all Firestore access, one module per aggregate),
 `drive.py` (all Drive access), `errors.py` (the `detail` codes),
 `validation.py`, `rate_limit.py`, `audit.py`, `observability.py`.
 

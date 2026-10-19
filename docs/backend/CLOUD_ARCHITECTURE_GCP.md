@@ -779,6 +779,8 @@ the way it does.
 | Institution IT self-service routes | [`backend/app/routers/institutions.py`](../../backend/app/routers/institutions.py) | Token + adminEmails auth; the surface behind `/console/institution`, and equally usable from a script (§20.4). The `/v1/campus/*` aliases were retired (§20.5) |
 | Session provision / purge | [`backend/app/session_provision.py`](../../backend/app/session_provision.py) | `provision_session` / `purge_session` |
 | Auth + device dependencies | [`backend/app/deps.py`](../../backend/app/deps.py) | Bearer verify, device-signature check (§4) |
+| Step-up tiers | [`backend/app/step_up.py`](../../backend/app/step_up.py) | `attested_or_mfa_admin`, `attested_or_mfa_admin_fresh`, `attested_or_mfa_user`, `step_up_check`: an attested device or a second factor on a recent sign-in; built on `deps`, never imported by it (TD-293) |
+| Multi-step flows | [`backend/app/services/`](../../backend/app/services/__init__.py), one module per aggregate | Account erasure and export, recording an analysis and its bundle, licence mint: what a route does in several steps across Drive, Firestore, Auth and the audit log; the router checks and answers (TD-293, `tests/test_layering.py`) |
 | ID-token verify, keyless Drive token | [`backend/app/google_auth.py`](../../backend/app/google_auth.py) | Self-impersonation to add the Drive scope (§2) |
 | Drive folders, resumable init, blob probe | [`backend/app/drive.py`](../../backend/app/drive.py) | Returns the opaque upload URI, and `ALIVE`/`MISSING`/`UNKNOWN` (§4) |
 | Async provisioning | [`backend/app/tasks.py`](../../backend/app/tasks.py) | Cloud Tasks enqueue + OIDC callback auth (§4.1) |
@@ -815,7 +817,7 @@ analyses stored at once, less `PROVISION_FAILED`, so a delete frees a place
 (`backend/app/repo/sessions.py:394-412`); for a demo account `create_session`
 also refuses when the device's stored analyses, every account's, reach the cap
 (`count_device_sessions`, `:415-439`; `_device_cap_reached`,
-`backend/app/routers/sessions.py:473-486`, applied at `:546-547`), with a
+`backend/app/services/sessions.py:81-94`, applied at `:138-139`), with a
 `409 device_quota_exceeded` that names neither the count nor the owners (its
 own code since TD-279, so the app does not lift it on the account's count). A
 session with no `deviceId` counts toward no device. `GET /v1/sessions`

@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from .. import apps, audit, errors, repo
 from .. import rate_limit
-from ..deps import current_user, request_app, second_factor
+from ..deps import current_user, request_app
+from ..step_up import second_factor
 from ..models import DeviceReg
 from ..validation import require_header_identifier
 

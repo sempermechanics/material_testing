@@ -1,34 +1,26 @@
 import hashlib
-import io
 import json
 import logging
-import re
-import uuid
-import zipfile
-from datetime import datetime
 
 import requests
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from .. import audit, drive, errors, repo, statuses
-from .. import observability as obs
 from .. import rate_limit
-from .. import session_provision, tasks
-from ..config import settings
+from .. import session_provision
 from ..deps import (
-    attested_or_mfa_user,
     current_user,
     rate_limited,
     request_app,
     unless_paused,
     verified_device,
 )
-from ..licenses import MODE_DEMO
 from ..models import SessionCreate
-from ..session_provision import provision_session
+from ..services import sessions as session_service
+from ..step_up import attested_or_mfa_user
 from ..validation import PageToken, SessionId
-from ._shared import clamp_page_size, drive_failure, json_dumps, named_app, page_block
+from ._shared import clamp_page_size, drive_failure, named_app, page_block
 
 log = logging.getLogger("semper")
 router = APIRouter()
@@ -96,40 +88,9 @@ def list_sessions(
         user["uid"], limit=page_size, page_token=page_token or None, app=listed_app,
     )
 
-    purged = 0
-    indeterminate = 0
+    purged = indeterminate = 0
     if verify and sessions:
-        token = drive.access_token()
-        folders = [s.get("driveFolderId") for s in sessions if s.get("driveFolderId")]
-        probe = drive.probe_files(token, folders)
-        alive = []
-        for s in sessions:
-            folder = s.get("driveFolderId")
-            state = probe.get(folder, drive.UNKNOWN) if folder else drive.ALIVE
-            # Purge ONLY on a confirmed miss. An unreachable Drive (5xx, timeout,
-            # token failure) reports UNKNOWN, and deleting the user's session
-            # metadata on that would turn a transient outage into data loss —
-            # the Drive bytes would survive with nothing left pointing at them.
-            if state == drive.MISSING:
-                repo.delete_session(s["sessionId"])
-                audit.record(user["uid"], action="SESSION_ORPHAN_PURGED",
-                             target={"type": "session", "id": s["sessionId"]})
-                obs.log_event(
-                    log, logging.INFO, "session_orphan_purged",
-                    outcome="ok", errorCode="orphan_purged", dependency="drive",
-                )
-                purged += 1
-                continue
-            if state == drive.UNKNOWN:
-                indeterminate += 1
-            alive.append(s)
-        sessions = alive
-        if indeterminate:
-            obs.log_event(
-                log, logging.WARNING, "session_verify_indeterminate",
-                outcome="degraded", errorCode="drive_probe_unknown",
-                dependency="drive", count=indeterminate,
-            )
+        sessions, purged, indeterminate = session_service.verify_listed(user["uid"], sessions)
 
     used = repo.count_user_sessions(user["uid"])
     return {
@@ -310,60 +271,6 @@ def replace_session_metadata(sid: SessionId, payload: dict = Body(...), ctx=Depe
     return {"sessionId": sid, "sizeBytes": len(data)}
 
 
-#: Listed first in the archive so a reader has the inventory before the bytes,
-#: and can tell which entry is missing if the transfer died half way.
-_BUNDLE_MANIFEST = "manifest.json"
-
-#: Zip cannot represent a date before this.
-_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
-
-
-class _ZipSink(io.RawIOBase):
-    """A write-only file object that hands each write straight back out.
-
-    `zipfile` wants something it can call `write()` on; `StreamingResponse`
-    wants a generator it can pull from. This is the join between the two: the
-    zip writer writes, the generator drains. Nothing accumulates beyond the
-    chunk in flight, which is the entire point — at the 600-file ceiling an
-    analysis must not be assembled in memory first.
-    """
-
-    def __init__(self):
-        self._buf = bytearray()
-
-    def writable(self) -> bool:
-        return True
-
-    def write(self, data) -> int:
-        self._buf += data
-        return len(data)
-
-    def drain(self) -> bytes:
-        out = bytes(self._buf)
-        del self._buf[:]
-        return out
-
-
-def _entry_name(artifact: dict) -> str:
-    """`<role>/<name>`, matching the app's own `SessionZip.entryName`.
-
-    The name is attacker-supplied in the sense that it came from a client
-    upload, so it is reduced to a bare leaf here: no directory components, no
-    drive letters, nothing that starts with a dot. A zip that unpacks outside
-    the directory it was extracted into is the oldest bug in the format.
-    """
-    role = re.sub(r"[^A-Za-z0-9_-]", "_", str(artifact.get("role") or "extras"))
-    leaf = str(artifact.get("name") or "").replace("\\", "/").rsplit("/", 1)[-1]
-    leaf = re.sub(r'[\r\n:"|?*]', "_", leaf).lstrip(". ")
-    return f"{role}/{leaf or artifact['fileId']}"
-
-
-def _zip_time(value) -> tuple:
-    if isinstance(value, datetime) and value.year >= 1980:
-        return (value.year, value.month, value.day, value.hour, value.minute, value.second)
-    return _ZIP_EPOCH
-
-
 @router.get("/v1/sessions/{sid}/bundle", dependencies=[
     rate_limited(rate_limit.download_bucket), unless_paused("restore"),
 ])
@@ -408,109 +315,21 @@ def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
         log.exception("session_bundle_token_failed")
         raise HTTPException(502, errors.DRIVE_DOWNLOAD_FAILED) from None
 
-    manifest = json_dumps({
-        "sessionId": sid,
-        "specimen": session.get("specimen"),
-        "createdAt": session.get("createdAt"),
-        "fileCount": len(artifacts),
-        "files": [{
-            "entry": _entry_name(a), "fileId": a["fileId"], "role": a.get("role"),
-            "name": a.get("name"), "sizeBytes": a.get("sizeBytes", 0),
-            "sha256": a.get("sha256"),
-        } for a in artifacts],
-    }).encode()
-
+    manifest = session_service.bundle_manifest(sid, session, artifacts)
     audit.record(
         user["uid"], ctx.device_id,
         action="SESSION_BUNDLE_DOWNLOAD",
         target={"type": "session", "id": sid},
         detail={"fileCount": len(artifacts), "via": ctx.via},
     )
-
-    def stream():
-        sink = _ZipSink()
-        with zipfile.ZipFile(sink, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
-            zf.writestr(_BUNDLE_MANIFEST, manifest)
-            if (chunk := sink.drain()):
-                yield chunk
-            for artifact in artifacts:
-                info = zipfile.ZipInfo(_entry_name(artifact),
-                                       date_time=_zip_time(artifact.get("createdAt")))
-                # Declared up front so zipfile can decide on zip64 headers
-                # before it has seen the bytes; it cannot seek back to fix
-                # them on an unseekable sink.
-                info.file_size = int(artifact.get("sizeBytes") or 0)
-                try:
-                    dl = drive.open_download(token, artifact["driveFileId"])
-                    with zf.open(info, "w") as dst:
-                        for part in dl.iter_chunks():
-                            dst.write(part)
-                            if (chunk := sink.drain()):
-                                yield chunk
-                except requests.RequestException:
-                    obs.log_event(log, logging.ERROR, "session_bundle_failed",
-                                  outcome="error", errorCode=errors.DRIVE_DOWNLOAD_FAILED,
-                                  dependency="drive")
-                    raise
-                if (chunk := sink.drain()):
-                    yield chunk
-        yield sink.drain()
-
     return StreamingResponse(
-        stream(),
+        session_service.bundle_stream(token, manifest, artifacts),
         media_type="application/zip",
         headers={
             "Content-Disposition": f'attachment; filename="semper-analysis-{sid}.zip"',
             "Cache-Control": "no-store",
         },
     )
-
-
-#: The sentence after the counts in a quota refusal, by why the cap is what it
-#: is. A licence that has ended, or a shared seat not held, drops the cap to
-#: the demo's while keeping every analysis stored — "120/25" is then not
-#: something deleting one would fix, and saying so sent people to the wrong
-#: remedy. The code before the colon is what the app branches on, unchanged.
-_QUOTA_REMEDY = {
-    "": "Delete an older analysis to sync a new one.",
-    repo.INACTIVE_LICENCE_ENDED:
-        "Your licence has ended, so the demo limit applies. Renew it to sync "
-        "new analyses; nothing stored has been removed.",
-    repo.INACTIVE_NO_SEAT:
-        "No shared seat is free right now, so the demo limit applies. New "
-        "analyses sync once you hold a seat; nothing stored has been removed.",
-}
-
-
-def _device_cap_reached(cfg: dict, device_id: str | None) -> bool:
-    """Whether a demo account's analysis would go over the demo cap counted
-    per device: every account's stored analyses from this phone
-    (`repo.count_device_sessions`).
-
-    The demo cap is `max(account's stored, device's stored) >= maxSessions`;
-    the account half is checked first, in the caller. Without the device half
-    a new account on the same phone was a fresh 25. A licensed account is
-    held to its own cap only: its allowance is bought per person, and a lab
-    phone may well carry several licensed members' analyses.
-    """
-    if cfg["mode"] != MODE_DEMO or not device_id:
-        return False
-    return repo.count_device_sessions(device_id) >= cfg["maxSessions"]
-
-
-def _device_quota_detail(cap: int) -> str:
-    """The 409 when the device, not the account, is at the demo cap.
-
-    Says neither how many analyses the device holds nor whose they are: the
-    other analyses may belong to another account, and the caller must not
-    learn that one exists, let alone its count. Its own code, not the
-    account's (TD-279): the app's Re-check counts the account, finds room,
-    and would lift a stop the next upload refuses again. A build that
-    predates the code fails that one backup as refused (`Kind.REJECTED`).
-    """
-    return (f"{errors.DEVICE_QUOTA_EXCEEDED}: the demo allows {cap} analyses stored "
-            "from one device. Delete an older analysis from this device, or use a "
-            "licence, to sync a new one.")
 
 
 @router.post("/v1/sessions", dependencies=[
@@ -530,93 +349,18 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     would be the wrong shape.
 
     The cap counts analyses stored at once, per account; for a demo account
-    also per device, whichever account stored them (`_device_cap_reached`).
+    also per device, whichever account stored them
+    (`services.sessions._device_cap_reached`).
     """
     user = ctx.user
     cfg = repo.resolve_user_config(user)
-
     # Idempotent retry: same localSessionId + still in flight → return existing.
     existing = repo.find_incomplete_session(user["uid"], body.localSessionId)
     if existing:
-        sid = existing["sessionId"]
-        uploads, next_token = repo.list_pending_uploads(sid)
-        return {
-            "sessionId": sid,
-            "status": existing.get("status"),
-            "uploads": uploads,
-            "nextPageToken": next_token,
-        }
-
+        return session_service.resumed(existing)
     # Quotas: one session == one analysis.
-    if len(body.files) > cfg["maxFilesPerSession"]:
-        raise HTTPException(413, errors.TOO_MANY_FILES)
-    used = repo.count_user_sessions(user["uid"])
-    if used >= cfg["maxSessions"]:
-        raise HTTPException(
-            409,
-            f"{errors.SESSION_QUOTA_EXCEEDED}: {used}/{cfg['maxSessions']} analyses stored. "
-            + _QUOTA_REMEDY.get(repo.inactive_licence_reason(user), _QUOTA_REMEDY[""]),
-        )
-    if _device_cap_reached(cfg, ctx.device_id):
-        raise HTTPException(409, _device_quota_detail(cfg["maxSessions"]))
-
-    sid = uuid.uuid4().hex
-    # Reserve the session doc immediately after the quota check and BEFORE any
-    # Drive work, so a failure while staging folders/files can never leave file
-    # docs or a Drive subtree with no parent session (which would be invisible to
-    # the quota and never reclaimed). The count→reserve window is now two
-    # back-to-back Firestore ops with no Drive I/O between them; the residual
-    # concurrent-create race is on a *soft* quota, not a security boundary, and is
-    # accepted deliberately (a transactional cross-doc count is not modelled by
-    # the Firestore client uniformly and adds no security value here).
-    # Tagged with the asking app (ADR-014), so each app lists only its own.
-    session = repo.create_session(sid, user, ctx.device, body, app)
-
-    # Write the file docs (cheap, no Drive I/O) so the manifest is durable before
-    # any upload target exists. Provisioning then only has to fill in uploadUrl,
-    # which is what makes the task idempotent and resumable. Batched — a
-    # 3-object split-bundle session was 3 round trips here for no reason.
-    try:
-        repo.create_files_batch(sid, user["uid"], [(f"{sid}_{f.role}_{f.name}", f) for f in body.files])
-    except Exception:
-        repo.delete_session(sid)
-        raise
-
-    counts = obs.metrics_counts(body.metrics, file_count=len(body.files))
-    audit.record(
-        user["uid"],
-        ctx.device_id,
-        action="SESSION_CREATE",
-        target={"type": "session", "id": sid},
-        detail={**counts, "app": app},
-    )
+    session_service.require_room(user, cfg, body, ctx.device_id)
+    answer, counts = session_service.record_session(user, ctx.device, ctx.device_id, body, app)
     # Access-log middleware reads this after the response returns.
     request.state.usage_counts = counts
-
-    # Opening a Drive resumable session per file is ~2 round-trips each; at the
-    # 600-file ceiling that cannot fit in a 60s request. Hand it to Cloud Tasks
-    # and let the client poll /uploads, which it already does for resume.
-    # A small manifest (the common bundle upload) is quicker inline: the task
-    # hop and the client's first poll cost more than the work itself.
-    small = len(body.files) <= settings.INLINE_PROVISION_MAX_FILES
-    if not small and tasks.enqueue_provision(sid):
-        repo.set_session_status(sid, statuses.SESSION_PROVISIONING)
-        obs.log_event(log, logging.INFO, "session_provision_queued",
-                      outcome="ok", stage="queued", count=len(body.files))
-        return {"sessionId": sid, "status": statuses.SESSION_PROVISIONING, "uploads": []}
-
-    # Small manifest, or no queue configured / the enqueue failed: provision
-    # inline. Same outcome from the client's point of view. Because
-    # nothing will retry, a failure here rolls the whole session back rather
-    # than leaving a shell against the user's quota.
-    # The session and its files were written by this request, so the targets
-    # just opened are the whole pending manifest: answer from them rather than
-    # reading the session and every file doc back (docs/perf/request-volume.md).
-    provisioned = provision_session(sid, purge_on_failure=True, session=session)
-    return {
-        "sessionId": sid,
-        "status": provisioned["status"],
-        "uploads": provisioned["uploads"],
-        # Every target is in this one response, so there is no next page.
-        "nextPageToken": None,
-    }
+    return answer

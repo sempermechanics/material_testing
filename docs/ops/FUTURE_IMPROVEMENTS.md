@@ -225,7 +225,7 @@ shipped):
   if the settings open is measurably slow.
 - A session's file collection is paged twice on the **inline** provision path —
   once in `session_provision.py:51` and again by `list_pending_uploads` in
-  `routers/sessions.py:528` — not twice inside `session_provision` as previously
+  `services/sessions.py:116` — not twice inside `session_provision` as previously
   written. Each page also costs one extra document read to resolve its cursor
   (`backend/app/repo/_base.py:227-228`, `_cursor_page`).
 

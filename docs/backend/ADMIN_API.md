@@ -47,7 +47,7 @@ disabled Firebase user is 401 `invalid_token`. The check spends a per-instance b
 for Firebase Auth Admin calls (`AUTH_ADMIN_CALLS_PER_SECOND`, default 10, burst
 `AUTH_ADMIN_BURST` 20; `backend/app/rate_limit.py:138-147`). When it is spent the
 check is not made and the call answers **503 `auth_check_busy`** with `Retry-After`
-(`backend/app/deps.py:660-668`): the token is not judged, so retry after the delay.
+(`backend/app/step_up.py:207-215`): the token is not judged, so retry after the delay.
 The consoles say "The server is busy checking sign-ins — wait a few seconds and try again." (`firebase-hosting/public/console/messages.js:18`) and do not retry by themselves.
 
 **A paused feature.** While an operator has a kill switch on (`KILL_SWITCHES`,
