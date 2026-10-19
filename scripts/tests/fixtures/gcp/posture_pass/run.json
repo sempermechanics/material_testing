@@ -1,0 +1,36 @@
+{
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "autoscaling.knative.dev/maxScale": "4"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "APP_CHECK_MODE",
+                "value": "enforce"
+              },
+              {
+                "name": "CHECK_REVOKED_ON_STEP_UP",
+                "value": "true"
+              },
+              {
+                "name": "ENTITLEMENT_SIGNING_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "entitlement-signing-key",
+                    "key": "latest"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -66,7 +66,7 @@ object StorageBudget {
     }
 
     /** Whether a dropped local copy could be pulled back: the licensed half of cloud. */
-    private fun canRestore(context: Context): Boolean = LicenseEntitlements.cloudBackupEnabled(context)
+    private fun canRestore(context: Context): Boolean = LicenseEntitlements.restoreEnabled(context)
 
     private fun freeDownTo(context: Context, target: Long): Outcome {
         // A wizard draft (ADR-005) counts against the budget but is never dropped here.

@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.analysis.wizard
 
 import android.app.Activity
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.policy.AppPolicy
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SkippedNode
@@ -26,11 +27,16 @@ object AnalysisNavHelper {
         host.startActivity(AppIntents.seatRequired(host))
     }
 
+    fun openUpdateRequired(host: Activity) {
+        host.startActivity(AppIntents.updateRequired(host))
+    }
+
     /**
      * Every reason a new analysis may not start, in one call.
      *
-     * Returns false having already navigated to whichever gate applies. Both
-     * checks are guarded by [AnalysisViewModel.wouldCreateNewSession], so a
+     * Returns false having already navigated to whichever gate applies. All
+     * three checks (the version gate, the seat and the quota) are guarded by
+     * [AnalysisViewModel.wouldCreateNewSession], so a
      * **run already in flight, or a re-run of an existing session, always
      * passes** — losing a seat mid-analysis must never abort work. A run of
      * the other kind than the working session's ([sweep] says which this is)
@@ -40,7 +46,20 @@ object AnalysisNavHelper {
         host: Activity,
         viewModel: AnalysisViewModel,
         sweep: Boolean,
-    ): Boolean = ensureSeat(host, viewModel, sweep) && ensureSessionQuota(host, viewModel, sweep)
+    ): Boolean = (!viewModel.wouldCreateNewSession(sweep) || ensureUpToDate(host)) &&
+        ensureSeat(host, viewModel, sweep) &&
+        ensureSessionQuota(host, viewModel, sweep)
+
+    /**
+     * Hard stop while the backend requires a newer build
+     * ([AppPolicy.newAnalysisAllowed]). Saved analyses stay readable; only
+     * starting new work waits for the update.
+     */
+    fun ensureUpToDate(host: Activity): Boolean {
+        if (AppPolicy.newAnalysisAllowed(host)) return true
+        openUpdateRequired(host)
+        return false
+    }
 
     /**
      * Hard stop when this account holds no floating seat.

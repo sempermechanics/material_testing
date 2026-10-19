@@ -29,6 +29,8 @@
   <link rel="modulepreload" href="../switcher.js" />
   <link rel="modulepreload" href="../roles.js" />
   <link rel="modulepreload" href="../roster.js" />
+  <link rel="modulepreload" href="roster-tools.js" />
+  <link rel="modulepreload" href="audit-log.js" />
 </head>
 <body data-auth="pending">
   <header>
@@ -74,6 +76,9 @@
           <button id="load">Open</button>
         </div>
         <div id="summary"></div>
+        <!-- Seat counts from GET …/summary (roster-tools.js): read beside
+             the roster, and again after every change to it. -->
+        <div class="tiles" id="tiles" aria-live="polite"></div>
       </section>
 
       <section class="card" id="rosterCard" hidden>
@@ -83,6 +88,8 @@
           <input id="addEmail" size="32" type="email" placeholder="name@institution.edu"
                  autocomplete="off" />
           <button id="add">Add member</button>
+          <span class="spacer"></span>
+          <button id="exportRoster" class="secondary">Export roster CSV</button>
         </div>
         <div class="wrap">
           <table>
@@ -94,6 +101,65 @@
             </thead>
             <tbody id="rows"></tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- Bulk import (roster-tools.js): up to 500 addresses, each added as
+           Add member would; every row is answered. -->
+      <section class="card" id="importCard" hidden>
+        <h2>Import members</h2>
+        <p class="muted">
+          Paste addresses, one a line, or choose a CSV file with an
+          <span class="mono">email</span> column — an exported roster works
+          as it is. Up to 500 rows at a time. Anyone already on the roster
+          is left as they are, so importing a file twice is harmless.
+        </p>
+        <textarea id="importText" rows="6" spellcheck="false" autocomplete="off"
+                  placeholder="email&#10;ana@institution.edu&#10;ben@institution.edu"></textarea>
+        <div class="row">
+          <input id="importFile" type="file" accept=".csv,text/csv,text/plain" />
+          <span class="muted" id="importPreview"></span>
+          <span class="spacer"></span>
+          <button id="importSubmit" disabled>Import</button>
+        </div>
+        <p class="muted" id="importSummary"></p>
+        <div class="wrap" id="importResults" hidden>
+          <table>
+            <thead>
+              <tr><th>Row</th><th>Address</th><th>Result</th></tr>
+            </thead>
+            <tbody id="importRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- This licence's audit log (audit-log.js), read on demand: it is a
+           query over every event the licence has. -->
+      <section class="card" id="auditCard" hidden>
+        <h2>Audit log</h2>
+        <p class="muted">
+          Who changed what on this licence — its members, invitations and
+          devices — newest first. Exports hold up to 5,000 events; narrow the
+          dates for more.
+        </p>
+        <div class="row">
+          <label>From <input id="auditSince" type="date" /></label>
+          <label>To <input id="auditUntil" type="date" /></label>
+          <button id="auditLoad" class="secondary">Show</button>
+          <span class="spacer"></span>
+          <button id="auditCsv" class="secondary">Export CSV</button>
+          <button id="auditJson" class="secondary">Export JSON</button>
+        </div>
+        <div class="wrap">
+          <table>
+            <thead>
+              <tr><th>When</th><th>Action</th><th>By</th><th>Target</th><th>Detail</th></tr>
+            </thead>
+            <tbody id="auditRows"></tbody>
+          </table>
+        </div>
+        <div class="row">
+          <button id="auditMore" class="secondary" hidden>Older events</button>
         </div>
       </section>
     </div>

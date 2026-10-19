@@ -1,0 +1,26 @@
+{
+  "bindings": [
+    {
+      "role": "roles/owner",
+      "members": [
+        "user:solo@example.test"
+      ]
+    },
+    {
+      "role": "roles/firebaseauth.viewer",
+      "members": [
+        "serviceAccount:api@demo-app-prod.iam.gserviceaccount.com"
+      ]
+    }
+  ],
+  "auditConfigs": [
+    {
+      "service": "firestore.googleapis.com",
+      "auditLogConfigs": [
+        {
+          "logType": "DATA_WRITE"
+        }
+      ]
+    }
+  ]
+}

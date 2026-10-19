@@ -248,10 +248,10 @@
         <!-- Deliberately does NOT tint the navigation bar. 19e5209 could set it to
              viewer_peek_scrim because that scrim was always dark, so the system's
              white nav icons stayed legible. This scrim is now light in the light
-             theme, and the matching android:windowLightNavigationBar needs API 27
-             while minSdk is 24 — on 24-26 that would leave white icons on a white
-             bar. Inheriting the activity's own (already correct) system-bar
-             handling avoids the whole problem on every API level. -->
+             theme, and would need android:windowLightNavigationBar to match
+             (API 27; written when minSdk was 24, where 24-26 got white icons on a
+             white bar). Inheriting the activity's own (already correct) system-bar
+             handling avoids the whole problem. -->
     </style>
 
     <!-- Segmented chips on the dark ROI draw toolbar -->

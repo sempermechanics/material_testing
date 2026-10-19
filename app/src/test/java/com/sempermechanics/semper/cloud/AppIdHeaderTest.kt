@@ -45,10 +45,26 @@ class AppIdHeaderTest {
     }
 
     @Test
+    fun `a backend call names the version`() {
+        call(AppIdHeader("${server.hostName}:${server.port}", "com.sempermechanics.semper", versionCode = 42))
+        assertEquals("42", server.takeRequest().headers["X-App-Version"])
+    }
+
+    @Test
+    fun `the default version is this build's versionCode, even with no app id`() {
+        call(AppIdHeader("${server.hostName}:${server.port}", ""))
+        val request = server.takeRequest()
+        assertEquals(BuildConfig.VERSION_CODE.toString(), request.headers["X-App-Version"])
+        assertNull(request.headers["X-App-Id"])
+    }
+
+    @Test
     fun `a call to another host is left alone`() {
         // The fake server stands in for Drive: same client, another host.
         call(AppIdHeader("api.example.test", "com.sempermechanics.semper"))
-        assertNull(server.takeRequest().headers["X-App-Id"])
+        val request = server.takeRequest()
+        assertNull(request.headers["X-App-Id"])
+        assertNull(request.headers["X-App-Version"])
     }
 
     @Test

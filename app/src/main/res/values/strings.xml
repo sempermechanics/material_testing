@@ -162,7 +162,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="summary_scanning_fmt">Reading frames… %1$d of %2$d</string>
     <string name="summary_failed">Could not build the animation.</string>
     <string name="summary_no_data">No correlated data to animate.</string>
-    <string name="summary_needs_android_9">Showing the first frame — animation needs Android 9 or newer.</string>
     <string name="frame_number_hint">#</string>
     <string name="frame_total_fmt">" / %1$d"</string>
     <string name="video">Video</string>
@@ -414,6 +413,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="restore_backup_gone">This backup\'s files are no longer in cloud storage. Back the analysis up again from a phone that still has it.</string>
     <string name="restore_device_mismatch">This phone is not the one bound to the licence yet. Sign in, wait a moment for the device to bind, then try restore again — or move the licence from the Semper account page first.</string>
     <string name="restore_not_licensed">Restore isn\'t available in demo mode.</string>
+    <string name="restore_paused">Restoring from the cloud is paused right now. Your analyses on this phone aren\'t affected.</string>
     <string name="download_not_licensed">Downloading from the cloud isn\'t available in demo mode.</string>
     <string name="share_licensed_only">Sharing exports needs an active licence.</string>
     <string name="sync_status_up_to_date">Cloud backups up to date</string>
@@ -1148,6 +1148,19 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="seat_taken">You\'ve got a seat.</string>
     <string name="seat_still_full">Still no free seat. Try again shortly.</string>
     <string name="seat_error">Couldn\'t check for a seat. Check your connection and try again.</string>
+    <string name="update_required_title">Update to keep analysing</string>
+    <string name="update_required_body">This version of the app is no longer supported. Your saved analyses are still here to open, view and export.\n\nStarting a new analysis, and backing up to or restoring from the cloud, wait until you update.</string>
+    <string name="update_action">Update</string>
+    <string name="update_back">Open my analyses</string>
+    <string name="update_recommended">A newer version of the app is available.</string>
+    <string name="restrictions_email_domain_title">Account email domain</string>
+    <string name="restrictions_email_domain_description">Your organisation\'s email domain, such as example.edu. Google sign-in offers only accounts in this domain.</string>
+    <string name="restrictions_invite_title">Enrollment invite</string>
+    <string name="restrictions_invite_description">A short-lived invite code for enrolling this device. Never put a licence key here: every managed device can read this value.</string>
+    <string name="restrictions_cloud_backup_title">Allow cloud backup</string>
+    <string name="restrictions_cloud_backup_description">When off, analyses stay on this device only: no cloud backup, upload or restore.</string>
+    <string name="restrictions_unmetered_title">Back up on unmetered networks only</string>
+    <string name="restrictions_unmetered_description">When on, uploads wait for Wi-Fi or another unmetered network, whatever the user\'s own setting.</string>
     <string name="seat_offline">You\'re offline — connect to take a seat.</string>
 
     <!-- Shown only after the client has already retried: a limit that is still

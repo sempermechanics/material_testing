@@ -3,7 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="ScopedStorage,SelectedPhotoAccess">
 
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
         tools:ignore="SelectedPhotoAccess" />
@@ -45,6 +44,12 @@
         <meta-data
             android:name="asset_statements"
             android:resource="@string/asset_statements" />
+
+        <!-- Managed configuration for device management (EMM): the keys an
+             organisation can set for this app. Read by ManagedConfigReader. -->
+        <meta-data
+            android:name="android.content.APP_RESTRICTIONS"
+            android:resource="@xml/app_restrictions" />
 
         <activity
             android:name=".ui.auth.SplashActivity"
@@ -154,6 +159,10 @@
             android:launchMode="singleTop" />
         <activity
             android:name=".ui.limit.SeatRequiredActivity"
+            android:exported="false"
+            android:launchMode="singleTop" />
+        <activity
+            android:name=".ui.limit.UpdateRequiredActivity"
             android:exported="false"
             android:launchMode="singleTop" />
         <!-- Screens with text fields say adjustResize (here, the wizard and the ROI

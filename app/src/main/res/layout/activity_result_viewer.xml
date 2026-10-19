@@ -13,8 +13,7 @@
         android:id="@+id/zoomContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:forceDarkAllowed="false"
-        tools:targetApi="29">
+        android:forceDarkAllowed="false">
 
         <com.sempermechanics.semper.ui.viewer.inspect.TouchImageView
             android:id="@+id/imgBaseResult"
@@ -216,8 +215,7 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="8dp"
-            android:paddingVertical="10dp"
-            tools:targetApi="29">
+            android:paddingVertical="10dp">
 
             <ImageButton
                 android:id="@+id/btnViewerBack"
@@ -312,8 +310,7 @@
         android:forceDarkAllowed="false"
         android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:paddingVertical="6dp"
-        tools:targetApi="29">
+        android:paddingVertical="6dp">
 
         <TextView
             android:id="@+id/tvScaleMax"
@@ -334,8 +331,7 @@
             android:layout_height="0dp"
             android:layout_marginVertical="8dp"
             android:layout_weight="1"
-            android:forceDarkAllowed="false"
-            tools:targetApi="29" />
+            android:forceDarkAllowed="false" />
 
         <TextView
             android:id="@+id/tvScaleMin"
@@ -466,8 +462,7 @@
         android:paddingVertical="8dp"
         android:textColor="@color/viewer_probe_ink"
         android:textSize="12sp"
-        android:visibility="gone"
-        tools:targetApi="29" />
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/tvStatsCaption"

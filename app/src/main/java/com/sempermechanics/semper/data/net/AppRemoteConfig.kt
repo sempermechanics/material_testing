@@ -3,6 +3,8 @@ package com.sempermechanics.semper.data.net
 import android.content.Context
 import androidx.core.content.edit
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.account.entitlement.EntitlementStore
+import com.sempermechanics.semper.data.policy.KillSwitch
 import com.sempermechanics.semper.data.prefs.PrefFiles.RemoteConfig
 import com.sempermechanics.semper.data.prefs.get
 import com.sempermechanics.semper.data.prefs.privatePrefs
@@ -73,8 +75,19 @@ object AppRemoteConfig {
      * [now] is stored as the fetch time. Without it the cache has no age:
      * "the license expired" and "we have not asked in three weeks" look
      * identical, and only the first of those should ever produce a warning.
+     *
+     * [authoritative] is true for the `GET /v1/config` answer ([record]),
+     * the only route that carries the entitlement token, the version gate and
+     * the kill switches. The lease and activation answers share the shape
+     * without them, so from those a missing value leaves the stored one as it
+     * was instead of clearing it.
      */
-    fun apply(context: Context, config: AppConfigDto, now: Long = System.currentTimeMillis()) {
+    fun apply(
+        context: Context,
+        config: AppConfigDto,
+        now: Long = System.currentTimeMillis(),
+        authoritative: Boolean = false,
+    ) {
         prefs(context).edit {
             put(RemoteConfig.MAX_SESSIONS, config.maxSessions.coerceAtLeast(0))
             put(RemoteConfig.MAX_FILES_PER_SESSION, config.maxFilesPerSession.coerceAtLeast(0))
@@ -92,7 +105,17 @@ object AppRemoteConfig {
             put(RemoteConfig.HEARTBEAT_MINUTES, config.leaseHeartbeatMinutes.coerceAtLeast(0))
             put(RemoteConfig.FETCHED_AT, now)
             put(RemoteConfig.FAIL_STREAK, 0)
+            if (authoritative || config.minSupportedVersionCode != null) {
+                put(RemoteConfig.MIN_SUPPORTED_VERSION, config.minSupportedVersionCode?.coerceAtLeast(0) ?: 0)
+            }
+            if (authoritative || config.recommendedVersionCode != null) {
+                put(RemoteConfig.RECOMMENDED_VERSION, config.recommendedVersionCode?.coerceAtLeast(0) ?: 0)
+            }
+            if (authoritative || config.killSwitches != null) {
+                put(RemoteConfig.KILL_SWITCHES, KillSwitch.wireNames(KillSwitch.parse(config.killSwitches)))
+            }
         }
+        EntitlementStore.accept(context, config.entitlement, authoritative, ClientNonce.serverNowMs())
     }
 
     /**
@@ -100,9 +123,9 @@ object AppRemoteConfig {
      * unparseable. Unparseable is treated as absent rather than as an expiry
      * at the epoch, which would read as expired forever.
      *
-     * `SimpleDateFormat`, not `java.time`: minSdk is 24 and core library
-     * desugaring is off, so `Instant.parse` is an API 26 call the lint gate
-     * rejects. The rest of the app parses timestamps this way too.
+     * `SimpleDateFormat`, not `java.time`: written when minSdk was 24 (no
+     * `Instant.parse` without desugaring). minSdk is 30 now, so `java.time`
+     * would do; the rest of the app still parses timestamps this way.
      *
      * `XXX` accepts both spellings of a zero offset — the backend serialises
      * an aware datetime as `+00:00`, while `Instant.toString()` (what the
@@ -145,7 +168,7 @@ object AppRemoteConfig {
      */
     fun record(context: Context, fetched: Result<AppConfigDto>): Boolean {
         fetched
-            .onSuccess { apply(context, it) }
+            .onSuccess { apply(context, it, authoritative = true) }
             .onFailure {
                 recordFetchFailure(context)
                 Timber.d(it, "Could not fetch app remote config")
@@ -281,6 +304,18 @@ object AppRemoteConfig {
         return if (stored > 0) stored else DEFAULT_HEARTBEAT_MINUTES
     }
 
-    /** Drop cached limits (sign-out). */
-    fun clear(context: Context) = prefs(context).edit { clear() }
+    /** `minSupportedVersionCode` from the last `/v1/config`; 0 = no minimum. */
+    fun minSupportedVersionCode(context: Context): Int = prefs(context)[RemoteConfig.MIN_SUPPORTED_VERSION]
+
+    /** `recommendedVersionCode` from the last `/v1/config`; 0 = none. */
+    fun recommendedVersionCode(context: Context): Int = prefs(context)[RemoteConfig.RECOMMENDED_VERSION]
+
+    /** The features the backend has switched off fleet-wide. */
+    fun killSwitches(context: Context): Set<KillSwitch> = KillSwitch.parse(prefs(context)[RemoteConfig.KILL_SWITCHES])
+
+    /** Drop cached limits and the entitlement token (sign-out). */
+    fun clear(context: Context) {
+        prefs(context).edit { clear() }
+        EntitlementStore.clear(context)
+    }
 }

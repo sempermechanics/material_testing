@@ -247,7 +247,9 @@ them:
 13. Extension functions follow 8–10; on an Android type they mirror its naming
     (`Bundle.putRoi` / `getRoi`).
 14. Tests: JVM tests are backtick sentences. Instrumented tests are camelCase
-    sentences (minSdk 24's DEX rejects spaces in method names). Benchmarks keep
+    sentences: the rule dates from minSdk 24, whose DEX rejected spaces in method
+    names. Since minSdk 30 the runtime accepts them, but the existing names stay
+    and new ones follow them. Benchmarks keep
     their names: scripts and result history compare them by name. Test doubles
     are `Fake<Thing>`; a device-only test class ends in `DeviceTest`.
 

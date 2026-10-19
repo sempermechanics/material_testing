@@ -91,6 +91,9 @@ object PrefFiles {
         const val BETA_ACKED_PREFIX = "beta_notice_acked_"
         val BETA_ACKED_SIGNED_OUT = PrefKey.boolean("signed_out_beta_notice_acked")
 
+        /** The `VersionVerdict.Recommended.nudgeKey` last shown, so the update nudge shows once. */
+        val UPDATE_NUDGE = PrefKey.string("update_nudge")
+
         /** The beta-notice ack of account [uid], or the phone's own when signed out. */
         fun betaAcked(uid: String?): PrefKey<Boolean> =
             if (uid == null) BETA_ACKED_SIGNED_OUT else PrefKey.boolean(BETA_ACKED_PREFIX + uid)
@@ -120,8 +123,26 @@ object PrefFiles {
         val HEARTBEAT_MINUTES = PrefKey.int("lease_heartbeat_minutes")
         val FETCHED_AT = PrefKey.long("fetched_at")
 
+        /** `minSupportedVersionCode`; 0 = none. */
+        val MIN_SUPPORTED_VERSION = PrefKey.int("min_supported_version_code")
+
+        /** `recommendedVersionCode`; 0 = none. */
+        val RECOMMENDED_VERSION = PrefKey.int("recommended_version_code")
+
+        /** `killSwitches`, by wire name. */
+        val KILL_SWITCHES = PrefKey.stringSet("kill_switches")
+
         /** Written by builds before the plan → mode rename; read once on upgrade. */
         val LEGACY_PLAN = PrefKey.string("plan")
+    }
+
+    /**
+     * `EntitlementStore`: the signed entitlement token and its clock state,
+     * HMAC-sealed under a Keystore key. Cleared with the remote config.
+     */
+    object Entitlement {
+        const val NAME = "semper_entitlement"
+        val SEALED = PrefKey.string("sealed")
     }
 
     /** `DeviceKeys.deviceId`. */
@@ -204,5 +225,6 @@ object PrefFiles {
         EmailLink.NAME,
         SessionDeletesPrefs.NAME,
         AccountDeletion.NAME,
+        Entitlement.NAME,
     )
 }

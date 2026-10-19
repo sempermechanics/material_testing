@@ -1,0 +1,33 @@
+{
+  "displayName": "semper: __SERVICE__ SLO fast burn (14.4x over 1 h)",
+  "documentation": {
+    "content": "The 99.5% availability SLO is burning error budget at more than 14.4x over the last hour: at this rate 2% of the 28-day budget goes in an hour and all of it in under two days. Page. Runbook: ops/monitoring/README.md#slo-burn",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "burn rate (60m) > 14.4",
+      "conditionThreshold": {
+        "filter": "select_slo_burn_rate(\"projects/__PROJECT_NUMBER__/services/__SLO_SERVICE_ID__/serviceLevelObjectives/__SLO_ID__\", \"60m\")",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 14.4,
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "86400s"
+  },
+  "severity": "CRITICAL",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

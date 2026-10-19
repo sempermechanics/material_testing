@@ -1,0 +1,43 @@
+{
+  "displayName": "semper: licence activated more than __ACTIVATIONS_PER_LICENCE_PER_DAY__ times in a day",
+  "documentation": {
+    "content": "One licence was successfully activated (key redeemed) more than __ACTIVATIONS_PER_LICENCE_PER_DAY__ times in 24 hours (the licenseId label names it). An institution onboarding a class can do this legitimately; a personal licence cannot. Runbook: ops/monitoring/README.md#activation-anomaly",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "activations per licence per day > __ACTIVATIONS_PER_LICENCE_PER_DAY__",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/semper_activation\" AND resource.type=\"cloud_run_revision\" AND metric.label.outcome=\"ok\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "86400s",
+            "perSeriesAligner": "ALIGN_DELTA",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "groupByFields": [
+              "metric.label.licenseId"
+            ]
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": "__ACTIVATIONS_PER_LICENCE_PER_DAY__",
+        "duration": "0s",
+        "trigger": {
+          "count": 1
+        }
+      }
+    }
+  ],
+  "alertStrategy": {
+    "autoClose": "172800s"
+  },
+  "severity": "WARNING",
+  "notificationChannels": [
+    "__NOTIFICATION_CHANNEL__"
+  ],
+  "userLabels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

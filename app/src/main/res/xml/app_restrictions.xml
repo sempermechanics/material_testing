@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Managed configuration (Android "app restrictions") an EMM such as Intune or
+   the Android Management API can push to this app. Read by
+   data/policy/ManagedConfigReader into ManagedConfig; the keys must match
+   ManagedConfig.KEY_*. Every default is what an unmanaged phone gets.
+
+   Never a licence key: every device under the policy can read these values.
+-->
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <restriction
+        android:key="accountEmailDomain"
+        android:title="@string/restrictions_email_domain_title"
+        android:description="@string/restrictions_email_domain_description"
+        android:restrictionType="string" />
+
+    <restriction
+        android:key="enrollmentInvite"
+        android:title="@string/restrictions_invite_title"
+        android:description="@string/restrictions_invite_description"
+        android:restrictionType="string" />
+
+    <restriction
+        android:key="cloudBackupAllowed"
+        android:title="@string/restrictions_cloud_backup_title"
+        android:description="@string/restrictions_cloud_backup_description"
+        android:restrictionType="bool"
+        android:defaultValue="true" />
+
+    <restriction
+        android:key="backupOnUnmeteredOnly"
+        android:title="@string/restrictions_unmetered_title"
+        android:description="@string/restrictions_unmetered_description"
+        android:restrictionType="bool"
+        android:defaultValue="false" />
+</restrictions>

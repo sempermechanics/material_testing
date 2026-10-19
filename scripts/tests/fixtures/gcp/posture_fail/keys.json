@@ -1,0 +1,23 @@
+[
+  {
+    "displayName": "Android key",
+    "restrictions": {
+      "apiTargets": [
+        {
+          "service": "identitytoolkit.googleapis.com"
+        }
+      ],
+      "androidKeyRestrictions": {
+        "allowedApplications": [
+          {
+            "packageName": "com.example"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "displayName": "Browser key (auto created by Firebase)",
+    "restrictions": {}
+  }
+]

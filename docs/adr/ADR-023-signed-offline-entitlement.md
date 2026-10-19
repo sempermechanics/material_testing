@@ -1,0 +1,181 @@
+# ADR-023: A signed, time-limited entitlement the app verifies offline
+
+**Status:** Accepted, built (backend and app); not yet live: no signing key is provisioned (TD-215)
+**Date:** 2026-10-18
+**Deciders:** app owner
+**Framework items:** 4.1, 4.3, 3.5, 6.4; Part B ([READINESS_FRAMEWORK_2026-10.md](../ops/READINESS_FRAMEWORK_2026-10.md))
+
+## Context
+
+Analysis is offline; licensing was not. The app cached the last `/v1/config`
+answer and trusted it indefinitely while offline: an account that stopped
+reaching the backend kept whatever mode and features it last saw, with no
+bound in time and nothing to stop an edited cache. Revocation reached a device
+only at its next `/v1/config` (`LicenseConfigWorker`, every 4 hours,
+`app/src/main/java/com/sempermechanics/semper/data/LicenseConfigWorker.kt:36`),
+and a device that never came back online never learned of it.
+
+The readiness framework asks for a server-signed entitlement with a pinned
+public key, rotation by `kid`, a bounded offline grace and clock-rollback
+detection (items 4.1, 4.3; Part B). It names Ed25519 and Cloud Functions;
+Semper's backend is FastAPI on Cloud Run, Firestore is reached only through the
+Admin SDK behind deny-all rules (`firestore.rules:7-9`), and the app's floor is
+Android 11 (minSdk 30, `app/build.gradle.kts:130`).
+
+## Decision
+
+1. **ES256, not Ed25519.** The token is a compact JWS signed with ECDSA P-256 /
+   SHA-256. Android's JCA provides Ed25519 only from API 33, above the minSdk
+   of 30; ES256 verifies with the platform's own `Signature("SHA256withECDSA")`
+   on every supported version and needs no new dependency on either side (the
+   backend already pins `cryptography`).
+2. **The contract** (`backend/app/entitlement_token.py:8-43`, the app's
+   `data/account/entitlement/EntitlementVerifier.kt:53`):
+   - header `{"alg":"ES256","kid":"<kid>","typ":"semper-ent+jws"}`; signature
+     JOSE raw `r‖s`, 64 bytes, not DER (`entitlement_token.py:115-124`);
+   - claims `iss` = `semper-api`, `sub` (uid), `app`, `dev` (device id), `dkt`
+     (base64url SHA-256 of the device key's DER SubjectPublicKeyInfo,
+     `:102-111`), `mode`, `features` {`share`, `backup`, `maxAnalyses`}, `lic`,
+     `iat`, `refreshAfter` = `iat` + 24 h, `graceUntil`, `exp` = `graceUntil`
+     (`:210-242`);
+   - `graceUntil` is `iat` + `ENTITLEMENT_OFFLINE_GRACE_DAYS` (default 14,
+     `backend/app/config.py:262`), capped for a licensed account at the
+     licence's end plus its own grace (`licenseGraceEndsAt`) and, on a floating
+     seat, at the lease's end (`leaseExpiresAt`) (`entitlement_token.py:193-207`);
+   - `lic` is the licence id only while `mode` is `licensed`; a demo token
+     carries `lic: null` and an uncapped grace (`:237`);
+   - `mode` and `features` are read from the same resolved config the plain
+     `/v1/config` JSON returns, so the token never grants more than the answer it
+     rides in (`backend/app/routers/account.py:147-191`).
+3. **Delivery.** `GET /v1/config` adds `entitlement` when the service holds a
+   key, the caller sent `X-Device-Id`, and that device is an active device of
+   this account with a registered key (`entitlement_token.py:269-302`). Anything
+   else omits the field and fails nothing (`routers/account.py:177-191`). After
+   each floating-seat checkout or heartbeat the app fetches `/v1/config` again,
+   so the token follows the lease
+   (`app/src/main/java/com/sempermechanics/semper/data/account/SeatLease.kt:52-65`).
+4. **The key.** A P-256 private key in Secret Manager, mounted as
+   `ENTITLEMENT_SIGNING_KEY` only when the repo variable
+   `ENTITLEMENT_SIGNING_SECRET` names a secret that exists
+   (`.github/workflows/deploy-backend.yml:218-238`), never a plain env value or
+   the repository. Its `kid` is `ENTITLEMENT_KID` (default `ent-1`,
+   `config.py:258`). Setup: [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8.
+5. **Pinning and rotation by `kid`.** Release builds pin public keys from
+   `SEMPER_ENTITLEMENT_PUBKEYS`, `kid:base64SPKI` entries separated by commas
+   (`app/build.gradle.kts:88-93`; parsed by `EntitlementPins.parse`,
+   `data/account/entitlement/EntitlementPins.kt:32`). Rotation: ship a build
+   pinning old and new `kid`, wait for adoption, switch `ENTITLEMENT_KID` and the
+   secret, then drop the old `kid` from a later build. A build that pins no key
+   ignores tokens entirely (`EntitlementPolicy.intake`, `EntitlementPolicy.kt:87`); so does a
+   build whose pins do not include the token's `kid` (decision 7).
+6. **Offline checks on the device.** `alg`, `typ`, the signature against the
+   key pinned for its `kid`, then `iss`, `app`, `dev`, and `dkt` against this
+   install's Keystore key (`EntitlementVerifier.verify`, `EntitlementVerifier.kt:64-94`);
+   then time
+   (`EntitlementClock.evaluate`, `EntitlementClock.kt:140`):
+   - effective time is the later of "last server time + wall-clock movement" and
+     "last server time + accumulated `elapsedRealtime`", so neither a wrong clock
+     nor a reboot is rewarded;
+   - a wall clock more than 10 minutes behind the highest seen
+     (`ROLLBACK_TOLERANCE_MS`, `:89`) ends grace until the next server time;
+   - the token and clock state are stored together, sealed with an HMAC under a
+     Keystore key (`SealedEntitlement`, `EntitlementStore`); an altered or
+     half-deleted record reads as tampered (`EntitlementStore.kt:139-150`).
+7. **What narrows to Demo, and what is ignored.** Only four things drop the
+   account to Demo entitlements (`TokenStatus.Lapsed`; `EntitlementPolicy.bound`,
+   `EntitlementPolicy.kt:63-77`): a sealed record that was altered or half deleted,
+   the end of `graceUntil`, a clock rollback, and `exp` passing. A token that
+   fails verification on the device (a `kid` this build does not pin, a bad
+   signature, the wrong `app` or `dev` or `dkt`, or a device key that cannot be
+   read) is treated as **no token** (`TokenStatus.NotUsed`,
+   `EntitlementPolicy.kt:113-120`): the cached `/v1/config` decides, as before
+   tokens. The reason: the stored token can only have come from the backend
+   (the record is sealed on this device), so refusing it protects nothing that
+   stripping the token would not give away equally, while lapsing it would drop
+   every licensed user to Demo, online too, the moment the signing key and a
+   build's pins disagree (a mis-provisioned key, a rotation shipped before its
+   pin). Either way nothing is locked: local analyses stay readable and
+   exportable, and the token only ever narrows the cached config, never widens it.
+8. **Rollout-safe.** No key: no token, and every build behaves as before. A
+   build without pins: tokens ignored. The grace length is the server-side lever
+   for the fail-open / fail-closed policy the framework asks for in 6.4.
+
+## Options considered
+
+- **Ed25519 as the framework names.** Rejected for the API floor (decision 1).
+  The token format would otherwise be the same.
+- **A licensing vendor (Keygen, Cryptlex, LicenseSpring).** Rejected. Seats,
+  invites, floating leases, reconciliation and the institution console already
+  exist on Firestore ([CLOUD_ARCHITECTURE_GCP.md §20](../backend/CLOUD_ARCHITECTURE_GCP.md)),
+  and the framework's own comparison notes that none of them supplies a
+  tenant-scoped console for customer IT. A vendor would add a second source of
+  truth for seats and a third party on the licence path for what remains: one
+  signing function of about 300 lines.
+- **Identity Platform multi-tenancy, one tenant per customer.** Rejected for
+  now. Semper's tenant is the institution licence: its `adminEmails` and
+  `domainLock` scope every IT route (`backend/app/routers/institutions.py:35-55`),
+  and cross-institution access answers 404. Tenants would split one account
+  across pools and change every sign-in path for no gain until a customer needs
+  its own IdP; per-institution SSO is FI-17.
+- **App Check replay protection on an activation function**
+  (`consumeAppCheckToken`). Not applicable: it exists only for Cloud Functions
+  written in Node.js, and Semper has no Functions. Request replay is already
+  refused by single-use device-signed nonces (`consume_nonce`,
+  `backend/app/repo/devices.py:133`; `backend/tests/test_device_auth.py:130`, `:172`).
+- **Cloud KMS signing now.** Deferred (TD-236): it keeps the private key out of
+  the process but adds a KMS call per issued token; Secret Manager with one
+  accessor meets item 3.5's wording.
+
+## Trade-offs
+
+- An offline device keeps its entitlement until `graceUntil`: revocation is not
+  instant for a device that does not come online. A floating seat cannot be
+  reclaimed from an offline device before its lease ends; the cap at
+  `leaseExpiresAt` bounds that.
+- The clock rules are not tamper-proof on a rooted device. Deleting both the
+  sealed record and its HMAC key reads as "no token" and falls back to the
+  cached config (TD-261, accepted). `exp` and revocation at the next check-in
+  are the server's controls.
+- A token that does not verify is ignored rather than refused (decision 7), so
+  an unverifiable token gives the same result as no token: the cached config,
+  bounded by the server at the next online request.
+- The private key is in the service's memory (TD-236).
+
+## Consequences
+
+- Backend: `backend/app/entitlement_token.py`, `routers/account.py` (`/v1/config`
+  carries `entitlement`, `minSupportedVersionCode`, `recommendedVersionCode`,
+  `killSwitches`); tests `backend/tests/test_entitlement_token.py` and the shared
+  vector `backend/tests/fixtures/entitlement_vector.json`, which the app's
+  `EntitlementVectorTest` also verifies.
+- App: `data/account/entitlement/` (eight files); offline and tamper tests
+  `EntitlementClockTest`, `EntitlementVerifierTest`, `EntitlementPolicyTest`,
+  `SealedEntitlementTest` under `app/src/test/java/com/sempermechanics/semper/data/account/entitlement/`.
+- minSdk 30: Android 7–10 phones can no longer install or update the app.
+- Release gate per app: `/v1/config` sends each app its own
+  `minSupportedVersionCode` / `recommendedVersionCode`
+  (`settings.release_gate(app)`, `backend/app/config.py:280-287`), since Semper and
+  Material Testing number their builds separately.
+
+**Decision note (2026-10-18): account deletion and the shared Firebase user.**
+`DELETE /v1/me` now also deletes the Firebase Auth user
+(`backend/app/routers/account.py:350`). Semper and Material Testing sign in to the
+same Auth project, so this removes the sign-in for both apps. That matches the
+erase itself, which is account-wide: it removes the sessions, files and devices of
+both apps (`backend/app/repo/account.py:149-171`). Recorded as intended, not as
+debt.
+
+## Action items
+
+- [x] Backend signing, tests and the shared vector (2026-10-18).
+- [x] App verification, grace, clock rollback and sealed state (2026-10-18).
+- [ ] First CI Tier 1 run on the branch compiles and passes the app side (TD-219).
+- [ ] Provision the key and the pinned public key (TD-215).
+- [ ] Later work: key attestation verified server-side, a Play Integrity verdict
+      at activation and check-in, device recall (TD-234); anti-tamper detection
+      with graded responses (TD-235); KMS signing (TD-236); device
+      acknowledgement of revocation (TD-238).
+- [ ] Residuals left by the 2026-10-18 review: quota screens while a token is
+      lapsed (TD-263), `refreshAfter` unread (TD-264), a lost key or unflushed
+      write reading as tampered (TD-265), floating-seat refresh after a
+      heartbeat (TD-266).

@@ -147,6 +147,11 @@ class EdgeMiddleware:
         state = scope.setdefault("state", {})
         state.update(uid=None, device_id=None, request_id=request_id)
         ctx_token = obs.bind_request(request_id)
+        request_headers = Headers(scope=scope)
+        obs.bind_client(
+            apps.logged_application_id(request_headers.get("x-app-id")),
+            obs.parse_app_version(request_headers.get("x-app-version")),
+        )
         added = {**_SECURITY_HEADERS, "X-Request-Id": request_id}
         forwarded_proto = Headers(scope=scope).get("x-forwarded-proto", "").split(",", 1)[0].strip()
         if settings.ON_CLOUD_RUN and forwarded_proto == "https":

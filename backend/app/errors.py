@@ -186,6 +186,21 @@ HOLDER_ALREADY_LICENSED = "holder_already_licensed"
 INVITE_NOT_FOUND = "invite_not_found"
 INVALID_EMAIL = "invalid_email"
 
+# --- roster import and audit export (routers/roster.py) ----------------------
+# Refusals of a whole bulk import, before any row is touched: nothing to
+# import, more rows than one request may hold, a file the CSV reader cannot
+# parse, or a header row with no `email` column.
+ROSTER_IMPORT_EMPTY = "roster_import_empty"
+ROSTER_IMPORT_TOO_MANY_ROWS = "roster_import_too_many_rows"
+ROSTER_IMPORT_MALFORMED = "roster_import_malformed"
+ROSTER_IMPORT_NO_EMAIL_COLUMN = "roster_import_no_email_column"
+#: Not a refusal: one import row's `error` when it was not reached (the import
+#: ran out of time) or a backend fault stopped it. Importing the same file
+#: again finishes it, since rows already on the roster report `exists`.
+ROSTER_ROW_UNPROCESSED = "roster_row_unprocessed"
+#: `since` / `until` on the audit export is not a date, or ends before it starts.
+INVALID_AUDIT_RANGE = "invalid_audit_range"
+
 # --- admin second factor ---------------------------------------------------
 # The console is a browser, which cannot produce a device attestation, so the
 # staff web path proves itself with a second factor and a recent sign-in

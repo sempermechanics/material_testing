@@ -28,7 +28,7 @@ object SeatLease {
      * returned to the pool on sign-out or renewed while the app is open.
      */
     fun holdsFloatingSeat(context: Context): Boolean =
-        LicenseEntitlements.needsSeat(context) && LicenseEntitlements.isLicensed(context)
+        LicenseEntitlements.needsSeat(context) && LicenseEntitlements.serverSaysLicensed(context)
 
     /**
      * Best-effort release before tokens are cleared. Never throws; a quiet
@@ -48,15 +48,34 @@ object SeatLease {
     /**
      * Renew a held floating seat. Same best-effort contract as release — a
      * failure just means the next cycle (or a lapsed TTL) will demote.
+     *
+     * A renewal is followed by a `/v1/config` fetch: the checkout answer
+     * carries no entitlement token, and a floating seat's token ends with the
+     * lease it was issued under, so without a fresh one the token would lapse
+     * while the seat itself was renewed.
      */
     suspend fun heartbeatBestEffort(
         context: Context,
         api: CloudApi = SemperApi.get(context),
         tokens: TokenSource = TokenProvider,
     ) {
-        seatCall(holdsFloatingSeat(context), api, tokens, "heartbeat") {
+        val renewed = seatCall(holdsFloatingSeat(context), api, tokens, "heartbeat") {
             AppRemoteConfig.apply(context, checkoutLease(it))
         }
+        if (renewed) refreshConfigBestEffort(context, api, tokens)
+    }
+
+    /**
+     * Fetch `/v1/config` and record it ([AppRemoteConfig.record]), the one
+     * answer that carries the entitlement token. True when it answered.
+     */
+    suspend fun refreshConfigBestEffort(
+        context: Context,
+        api: CloudApi = SemperApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ): Boolean {
+        val fetched = bestEffort(api, tokens) { getConfig(it) }.toResult() ?: return false
+        return AppRemoteConfig.record(context, fetched)
     }
 
     /**
@@ -69,8 +88,7 @@ object SeatLease {
         api: CloudApi = SemperApi.get(context),
         tokens: TokenSource = TokenProvider,
     ) {
-        val fetched = bestEffort(api, tokens) { getConfig(it) }.toResult() ?: return
-        if (AppRemoteConfig.record(context, fetched) && holdsFloatingSeat(context)) {
+        if (refreshConfigBestEffort(context, api, tokens) && holdsFloatingSeat(context)) {
             heartbeatBestEffort(context, api, tokens)
         }
     }

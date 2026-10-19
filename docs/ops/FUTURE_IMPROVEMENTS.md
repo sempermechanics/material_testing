@@ -227,3 +227,153 @@ shipped):
   `routers/sessions.py:469` — not twice inside `session_provision` as previously
   written. Each page also costs one extra document read to resolve its cursor
   (`backend/app/repo/_base.py:227-228`, `_cursor_page`).
+
+---
+
+## Readiness framework (2026-10-18)
+
+New product capability the readiness framework
+([READINESS_FRAMEWORK_2026-10.md](READINESS_FRAMEWORK_2026-10.md)) asks for and
+Semper does not have. Deferred controls and external actions from the same
+cross-check are rows in [TECH_DEBT.md](TECH_DEBT.md) (TD-214 onward); the item-by-item
+mapping is the "Framework cross-check (2026-10-18)" section of
+[PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md). Each entry names the
+framework item and takes the framework's **Verify** text as its acceptance test.
+Paths are from the repository root.
+
+The tenant in Semper is the **institution licence**: a `licenses/{id}` document
+with `kind: institution`, whose `adminEmails` name its IT contacts and whose
+`domainLock` decides who may join (`backend/app/routers/institutions.py:35-55`).
+Every entry below is scoped to that, not to an Identity Platform tenant
+([ADR-023](../adr/ADR-023-signed-offline-entitlement.md) records why).
+
+### FI-17 SAML / OIDC single sign-on per institution
+
+**Framework** 5.4; Part C "Tenancy".
+
+**Now.** Sign-in is Firebase Authentication on the Auth project
+(`indicvision-dic-app-auth`) with password, email link and Google; Identity
+Platform is enabled for TOTP only ([PRODUCTION_READINESS_GATE.md](PRODUCTION_READINESS_GATE.md)
+"Consoles: Identity Platform + TOTP enabled"). An institution cannot require its
+own IdP, and nothing stops a member signing in with a password instead.
+
+**Proposal.** One SAML or OIDC provider per institution on the existing Auth
+project (or one Identity Platform tenant per institution, if per-tenant user
+pools become necessary), named on the licence (`ssoProviderId`). The backend
+refuses a member of an SSO-only licence whose token's `firebase.sign_in_provider`
+is not that provider. JIT provisioning on first SSO sign-in reuses the invite
+path (`backend/app/repo/invites.py`), gated by `maxSeats`. The managed-configuration
+key for the provider id belongs with FI-17, not with the EMM work already built.
+
+**Acceptance (framework 5.4 Verify).** "Test against Entra ID, Okta and Google
+Workspace IdPs."
+
+### FI-18 SCIM 2.0 provisioning
+
+**Framework** 5.7; Part C "Provisioning" (phase 2).
+
+**Now.** Phase 1 of Part C is built: bulk CSV import of up to 500 rows
+(`backend/app/routers/roster.py:170`) and CSV export (`:243`), the export a valid
+import file. There is no SCIM endpoint, and Identity Platform documents none.
+
+**Proposal.** `/scim/v2/Users` and `/scim/v2/Groups` per institution licence,
+authenticated by a machine token (FI-20), mapping a user's `active=false` to the
+seat revoke (`DELETE …/seats/{uid}`, `roster.py:368`) plus refresh-token revocation
+(`backend/app/google_auth.py:92`), and group membership to the seat.
+
+**Acceptance (framework 5.7 Verify).** "Doc review. API contract tests."
+
+### FI-19 Four-role RBAC for institution administrators
+
+**Framework** 5.2; Part C "Console essentials" (role management).
+
+**Now.** Two roles, each all-or-nothing. Semper staff are `role: admin` or listed
+in `ADMIN_EMAILS` (`backend/app/deps.py:290-301`). Institution IT is any verified
+address in the licence's `adminEmails` (`backend/app/routers/institutions.py:53`),
+and every such address may read, add, hold, remove, import and export
+(`backend/app/routers/roster.py:104-382`, mounted for IT at
+`backend/app/routers/institutions.py:100-106`). There is no read-only auditor and no split between licence and user administration.
+
+**Proposal.** Org Owner, License Admin, User Admin and Read-only Auditor as a map
+on the licence (`adminRoles: {email: role}`), checked in `institution_admin_context`
+per route; the `Tier.reader` / `Tier.writer` split in `roster.py:50-60` is where
+the check lands. Because `firestore.rules` denies every client
+(`firestore.rules:7-9`), the per-role tests are route-tier tests, extending
+`backend/tests/test_route_authz_matrix.py`.
+
+**Acceptance (framework 5.2 Verify).** "Rules tests per role." Semper's
+equivalent: a route-authorisation test per role and route.
+
+### FI-20 Machine API tokens for IT automation
+
+**Framework** 5.7; Part C "Console essentials" (an API token page).
+
+**Now.** Every institution route takes the browser step-up: a verified member of
+`adminEmails` with a completed second factor on a recent sign-in
+(`backend/app/routers/institutions.py:58-74`, `ADMIN_WEB_REAUTH_SECONDS`). A script
+can call the routes only with a token minted by an interactive sign-in, which
+expires within the step-up window. The routes are documented as an automation
+contract in [../backend/ADMIN_API.md](../backend/ADMIN_API.md).
+
+**Proposal.** Per-licence API tokens (hashed at rest like licence keys), scoped
+to read or write, listed and revoked from the institution console, every use
+written to `audit_logs` with the token's id. A separate route tier in
+`test_route_authz_matrix.py`. Gateway quota per token.
+
+**Acceptance (framework 5.7 Verify).** "Doc review. API contract tests."
+
+### FI-21 Deprovisioning driven by the customer's IdP
+
+**Framework** 5.5; Part C "Provisioning" (IdP deactivation).
+
+**Now.** Deprovisioning is manual. IT removes or holds a seat
+(`roster.py:334`, `:368`); staff suspend an account, which also revokes its
+refresh tokens (`backend/app/routers/admin.py:54-71`), best-effort until TD-214's
+IAM grant. A device that is offline keeps its signed entitlement until its
+`graceUntil` (`backend/app/entitlement_token.py:193-207`).
+
+**Proposal.** SCIM `active=false` (FI-18) or an IdP event webhook triggers the
+same seat revoke plus `revoke_sessions`. The documented SLA is the framework's:
+online within the next request (ID token at most 1 h without
+`CHECK_REVOKED_ON_STEP_UP`), offline within the entitlement grace.
+
+**Acceptance (framework 5.5 Verify).** "Timed test, documented SLA (e.g., '≤ 1 h
+online; ≤ grace period offline')."
+
+### FI-22 Per-institution minimum version and "defer non-critical updates"
+
+**Framework** 6.1; Part C "Update control for IT".
+
+**Now.** The release gate is per app but not per institution:
+`MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` for Semper and the
+`_MATERIAL_TESTING` pair for Material Testing (`settings.release_gate(app)`,
+`backend/app/config.py:273-287`) go into every `/v1/config` answer for that app
+(`backend/app/routers/account.py:147-174`), and the app gates
+itself (`VersionGate.decide`,
+`app/src/main/java/com/sempermechanics/semper/data/policy/VersionGate.kt:33`).
+
+**Proposal.** Optional `minSupportedVersionCode`, `recommendedVersionCode` and
+`deferNonCriticalUpdates` on the institution licence, mirrored to members like the
+other licence terms (`update_license` fan-out), and resolved in `/v1/config` as
+the higher minimum of fleet and licence. "Defer" suppresses the recommended-version
+nudge, never the minimum.
+
+**Acceptance (framework 6.1 Verify).** "Test: raise the minimum, confirm the
+gating UX", for one institution while another stays ungated.
+
+### FI-23 Institution-wide data export and deletion
+
+**Framework** 8.5 ("per tenant").
+
+**Now.** Per user: `GET /v1/me/export` (`backend/app/routers/account.py:194`) and
+`DELETE /v1/me` (`:294`), which also deletes the Firebase Auth user when TD-214's
+grant is in place (`:350`). Per licence: delete into a 30-day hold
+(`backend/app/routers/admin.py:300`), which drops holders to Demo and leaves their
+data untouched by design. Nothing exports or erases every member's data for one
+institution in one operation.
+
+**Proposal.** A staff-only, fresh-step-up job (Cloud Tasks, like provisioning)
+that runs the per-user export or erasure for every seat holder of one licence,
+with a manifest of what was produced or erased and one audit row per member.
+
+**Acceptance (framework 8.5 Verify).** "Scripted test."

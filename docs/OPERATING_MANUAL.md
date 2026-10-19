@@ -618,9 +618,6 @@ frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in tha
 field. The field button stays available while it plays. A parameter sweep opens from
 the lattice onto one combination instead; there is no overview slot.
 
-(Playback needs Android 9 or newer. Below that you get the first frame
-and a note; single-setting field GIFs still export.)
-
 **Frames.** Prev / Next step through. The title at the top names what is on
 screen — *Summary*, the frame's file name without its extension, or a video
 frame's time in its clip (`0:01.25`) — and the
@@ -819,7 +816,6 @@ Write above that block; leave it in place.
 | Run vanished | The app was killed. No resume — run it again in the foreground |
 | Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
 | Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
-| Summary shows one frame, not a loop | Android 8 or older. Single-setting field GIFs still export |
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Cloud icon stuck on Upload pending | Offline, Wi-Fi-only, or backup off |
 | Cloud icon crossed out in red | The backup failed. Tap the icon — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |
@@ -1214,6 +1210,10 @@ above, or by calling these routes directly (script, curl, or their own tooling):
 | Someone lost/replaced their device | `PATCH .../seats/{uid}` `{"clearDeviceLock": true}` — lets them re-bind without a support ticket |
 | Pause someone without losing their seat (e.g. leave of absence) | `PATCH .../seats/{uid}` `{"enabled": false}`, then later `{"enabled": true}` to restore — this does **not** free the seat slot |
 | Someone leaves the institution for good | `DELETE .../seats/{uid}` — drops them to Demo and **frees the slot** for someone else |
+| Add a whole class or department at once | `POST .../seats/import` `{"csv": "<file text>"}` — up to 500 rows, one `email` column (or the first column with no header); each row is added as the single add would and answered `{row, email, outcome, error}`. Importing the same file again is harmless: anyone already on the roster answers `exists` |
+| The roster as a spreadsheet | `GET .../seats/export` — a CSV download, `email` first, so it imports back as it is |
+| Seat counts: assigned, on hold, active in the last 7 days, invited, removed but the device not told yet, ending within 30 days | `GET .../summary` |
+| Who changed what on this licence, between two dates | `GET .../audit?since=YYYY-MM-DD&until=YYYY-MM-DD` — newest first, `page_size` up to 5000 and `page_token`; `&format=csv` for a download (next page's token in `X-Next-Page-Token`). Holds events from 2026-10-18 on |
 
 The listing is paged: `?page_size=` (up to 1000, default 500) and the answer's
 `page.nextPageToken` as `?page_token=` for the next page.

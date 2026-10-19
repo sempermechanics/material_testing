@@ -22,7 +22,8 @@ internal sealed interface SessionRow {
 /**
  * Home's day headers: a newest-first list split by the day each analysis was
  * created, in the device's timezone and locale. `SimpleDateFormat` and
- * `Calendar`, not `java.time`: minSdk is 24 without core library desugaring.
+ * `Calendar`, not `java.time`: written when minSdk was 24, without core
+ * library desugaring.
  */
 internal object SessionDays {
 

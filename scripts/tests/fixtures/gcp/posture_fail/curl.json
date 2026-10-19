@@ -1,0 +1,30 @@
+[
+  {
+    "method": "GET",
+    "url_contains": "/projects/demo-auth-prod/config",
+    "status": 200,
+    "body": {
+      "signIn": {
+        "email": {
+          "enabled": true
+        },
+        "anonymous": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "url_contains": "defaultSupportedIdpConfigs",
+    "status": 200,
+    "body": {
+      "defaultSupportedIdpConfigs": [
+        {
+          "name": "projects/demo-auth-prod/defaultSupportedIdpConfigs/google.com",
+          "enabled": true
+        }
+      ]
+    }
+  }
+]

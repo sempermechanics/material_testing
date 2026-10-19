@@ -34,7 +34,10 @@ from pydantic import BaseModel
 import fake_firestore
 import repo_view as repo
 from app import audit, deps, drive, models, tasks
+from app.config import settings
 from app.routers import account
+from cryptography.hazmat.primitives import serialization
+from key_helpers import seeded_p256_key
 
 _CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
 
@@ -62,6 +65,13 @@ RESPONSES = (
     "sessions_response",  # GET /v1/sessions
     "session_files_response",  # GET /v1/sessions/{id}/files
 )
+
+
+def _test_signing_pem() -> str:
+    return seeded_p256_key("wire-contract signer TEST ONLY").private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
 
 
 def _fixture(name: str):
@@ -232,7 +242,11 @@ async def live(client, monkeypatch, scenario_user):
                json={"key": minted["key"]}, headers=device)
     await call("me_response", "GET", "/v1/me")
     await call("erasure_response", "GET", "/v1/me/erasure", headers=device)
-    await call("config_response", "GET", "/v1/config")
+    # With a signing key and the registered device, so `entitlement` is sent
+    # (the fixture's value is a stand-in; tests/fixtures/entitlement_vector.json
+    # holds a real token).
+    monkeypatch.setattr(settings, "ENTITLEMENT_SIGNING_KEY", _test_signing_pem())
+    await call("config_response", "GET", "/v1/config", headers=device)
     await call("consent_update", "PUT", "/v1/me/consents", json=_fixture("consent_update_request"))
     await call("challenge_response", "POST", "/v1/challenge", headers=device)
 

@@ -2,16 +2,35 @@ import { requireSignIn, api, setStatus, esc, markFirstData, whileWaiting } from 
 import { day, licenceStatePill, placeholderRows, retryRow } from "../util.js";
 import { fetchRoster, wireRoster } from "../roster.js";
 import { mountSwitcher } from "../switcher.js";
+import { loadTiles, wireExport, wireImport } from "./roster-tools.js";
+import { wireAuditLog } from "./audit-log.js";
 
 let licenseId = "";
+let shownId = null; // the licence the import results and audit log are for
+let keyPrefix = ""; // the open licence's, for file names
+let members = new Map(); // uid → address, from the last roster read
 
 const $ = (id) => document.getElementById(id);
 
 /** The open licence's roster routes, IT's tier; "" when none is open. */
 const base = () => (licenseId ? `/v1/institutions/licenses/${encodeURIComponent(licenseId)}` : "");
+/** A download's licence part: the key prefix people recognise, else the id. */
+const fileName = () => (keyPrefix || licenseId).replace(/[^\w.-]+/g, "_");
 
 const renderRows = wireRoster({
   rows: $("rows"), email: $("addEmail"), add: $("add"), base, report: setStatus, reload: load,
+});
+
+wireExport({ button: $("exportRoster"), base, name: fileName, report: setStatus });
+const clearImport = wireImport({
+  text: $("importText"), file: $("importFile"), preview: $("importPreview"),
+  submit: $("importSubmit"), summary: $("importSummary"), results: $("importResults"),
+  rows: $("importRows"), base, report: setStatus, reload: load,
+});
+const resetAudit = wireAuditLog({
+  rows: $("auditRows"), since: $("auditSince"), until: $("auditUntil"), show: $("auditLoad"),
+  more: $("auditMore"), csv: $("auditCsv"), json: $("auditJson"), base, name: fileName,
+  who: (uid) => members.get(uid) || uid, report: setStatus,
 });
 
 requireSignIn(async (user) => {
@@ -91,6 +110,15 @@ async function load(started) {
   licenseId = $("licenseId").value.trim();
   if (!licenseId) return;
   const ticket = ++rosterLoad;
+  if (licenseId !== shownId) {
+    // Another licence: nothing of the last one's may stay on screen under it.
+    shownId = licenseId;
+    keyPrefix = "";
+    members = new Map();
+    $("tiles").innerHTML = "";
+    clearImport();
+    resetAudit();
+  }
   // The card shows its shape at once, and never the last licence's members
   // under this one's id.
   $("summary").innerHTML = '<p><span class="skeleton pill"></span> <span class="skeleton pill"></span></p>' +
@@ -105,6 +133,8 @@ async function load(started) {
     render(data);
     markFirstData();
     setStatus("");
+    // The counts come after the roster, and again after every change to it.
+    loadTiles($("tiles"), base(), () => ticket === rosterLoad);
   } catch (e) {
     if (ticket !== rosterLoad) return;
     $("summary").innerHTML = "";
@@ -112,6 +142,9 @@ async function load(started) {
       $("rows").innerHTML = retryRow(5, `Could not load: ${e.message}`);
     } else {
       $("rosterCard").hidden = true;
+      $("importCard").hidden = true;
+      $("auditCard").hidden = true;
+      $("tiles").innerHTML = "";
     }
     // The backend answers 404 identically for a licence that does not
     // exist and one you do not administer, so that probing ids tells you
@@ -170,4 +203,9 @@ function render(data) {
   // holds a uid and counts against the cap.
   renderRows(data.seats, data.invites);
   $("rosterCard").hidden = false;
+  keyPrefix = lic.keyPrefix || "";
+  // The audit log names members by address, as the roster does.
+  members = new Map(data.seats.filter((s) => s.email).map((s) => [s.uid, s.email]));
+  $("importCard").hidden = false;
+  $("auditCard").hidden = false;
 }

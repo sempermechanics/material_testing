@@ -13,6 +13,7 @@ from ..licenses import (
     MODE_DEMO,
     MODE_LICENSED,
 )
+from .. import observability as obs
 from ..observability import DependencyError
 
 from . import _base
@@ -269,7 +270,9 @@ def revalidate_device_lock(user: dict, device_id: str | None,
     if verdict == _Lock.MISMATCH:
         log.info("device lock mismatch uid=%s license=%s app=%s: demo for this request",
                  user.get("uid"), user.get("licenseId"), app)
+        _devlock_drop(user, "mismatch")
         return {**user, **_mode_patch(MODE_DEMO)}
+    _devlock_drop(user, "revoked")
     uid = user.get("uid")
     if uid:
         _update_doc(db().collection("users").document(uid), {
@@ -277,3 +280,12 @@ def revalidate_device_lock(user: dict, device_id: str | None,
             "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         })
     return {**user, **_mode_patch(MODE_DEMO)}
+
+
+def _devlock_drop(user: dict, stage: str) -> None:
+    """The structured line a log-based metric counts (A7.3): a licensed
+    account resolved Demo at the device lock. `stage` is `revoked` (the
+    licence or seat ended, stored) or `mismatch` (this device is not the
+    locked one, this request only)."""
+    obs.log_event(log, logging.INFO, "devlock_drop",
+                  licenseId=user.get("licenseId"), stage=stage, outcome="demo")

@@ -1,0 +1,20 @@
+{
+  "bindings": [
+    {
+      "role": "roles/owner",
+      "members": [
+        "user:solo@example.test"
+      ]
+    }
+  ],
+  "auditConfigs": [
+    {
+      "service": "firestore.googleapis.com",
+      "auditLogConfigs": [
+        {
+          "logType": "DATA_WRITE"
+        }
+      ]
+    }
+  ]
+}

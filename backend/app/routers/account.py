@@ -6,9 +6,18 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from .. import audit, drive, errors, repo, legal
+from .. import audit, drive, entitlement_token, errors, google_auth, repo, legal
+from .. import observability as obs
 from .. import rate_limit
-from ..deps import any_status_user, current_user, rate_limited, token_uid, verified_device
+from ..config import settings
+from ..deps import (
+    any_status_user,
+    current_user,
+    rate_limited,
+    request_app,
+    token_uid,
+    verified_device,
+)
 from ..validation import require_header_identifier
 from ._shared import json_dumps
 
@@ -136,9 +145,50 @@ def set_consents(
 
 
 @router.get("/v1/config")
-def app_config(user=Depends(current_user)):
-    """Resolved plan, entitlements, and product limits for the caller."""
-    return repo.resolve_user_config(user)
+def app_config(
+    user=Depends(current_user),
+    app=Depends(request_app),
+    x_device_id: str = Header(default=""),
+):
+    """Resolved plan, entitlements, and product limits for the caller.
+
+    Plus the fleet's release gate and kill switches (A6.1 / A6.4), which the
+    app applies itself — nothing here refuses an old build — and, when this
+    service holds a signing key and the caller is a registered device,
+    `entitlement`: the same mode and features as a signed token the app can
+    rely on offline (`entitlement_token`). Absent, never an error, otherwise.
+    The caller's `X-App-Version` is logged with the request, not checked.
+    """
+    config = repo.resolve_user_config(user)
+    min_supported, recommended = settings.release_gate(app)
+    body = {
+        **config,
+        # The calling app's own pair: each app numbers its builds separately.
+        "minSupportedVersionCode": min_supported,
+        "recommendedVersionCode": recommended,
+        "killSwitches": list(settings.KILL_SWITCHES),
+    }
+    token = _entitlement(user, config, app, x_device_id)
+    if token:
+        body["entitlement"] = token
+    return body
+
+
+def _entitlement(user: dict, config: dict, app: str, x_device_id: str) -> str | None:
+    """The signed entitlement for this caller, or None. Best-effort: the
+    token is an addition to /v1/config, so a malformed device id, a device
+    lookup or a signing failure omits it and is logged, never refused."""
+    if entitlement_token.signing_key() is None or not x_device_id:
+        return None
+    try:
+        device_id = require_header_identifier(x_device_id, name="device_id", maximum=128)
+        return entitlement_token.issue(
+            user, config, app=app, device_id=device_id, device=repo.get_device(device_id),
+        )
+    except Exception as e:  # noqa: BLE001 - an optional field must not fail the call
+        obs.log_event(log, logging.WARNING, "entitlement_not_issued",
+                      errorCode=type(e).__name__)
+        return None
 
 
 @router.get("/v1/me/export", dependencies=[rate_limited(rate_limit.export_bucket)])
@@ -249,10 +299,16 @@ def delete_account(ctx=Depends(verified_device)):
     anything orphaned by a failed sync), then every Firestore record: sessions,
     file pointers, device registrations and the user profile.
 
+    Last, the Firebase Auth user itself is deleted (best-effort: it needs
+    Firebase Auth admin on the Auth project, and the audit row says whether it
+    happened, `authUserDeleted`). Once it is gone the sign-in cannot mint
+    another token, and signing in again with the same address creates a new
+    Firebase user with a new uid, so nothing erased here is reattached to it.
+
     Only the append-only audit trail survives — it records that actions
     (including this erasure) happened, and holds no analysis content. The caller
-    must sign out afterwards: any further authenticated call would create a
-    fresh, empty profile.
+    must sign out afterwards: while the Auth user survives (the delete failed),
+    any further authenticated call would create a fresh, empty profile.
     """
     user = ctx.user
     uid = user["uid"]
@@ -288,6 +344,10 @@ def delete_account(ctx=Depends(verified_device)):
 
     # 3. Only once the blobs are gone: erase the metadata.
     counts = repo.delete_all_user_data(uid)
+    firestore_ms = int((time.monotonic() - started) * 1000) - drive_ms
+    # 4. Then the sign-in. After the data, so a failure here leaves an empty
+    #    account rather than data nobody can sign in to reach.
+    auth_user_deleted = google_auth.delete_auth_user(uid)
     total_ms = int((time.monotonic() - started) * 1000)
     # Timed per phase: erasure is the one call a user waits on with nothing to
     # look at, so when it feels slow the log should say which half was slow.
@@ -295,8 +355,9 @@ def delete_account(ctx=Depends(verified_device)):
         **counts,
         "driveFolders": folders_deleted,
         "userFolderFound": bool(user_folder),
+        "authUserDeleted": auth_user_deleted,
         "driveMs": drive_ms,
-        "firestoreMs": total_ms - drive_ms,
+        "firestoreMs": firestore_ms,
         "totalMs": total_ms,
     }
     audit.record(uid, ctx.device_id, action="ACCOUNT_DELETE",
