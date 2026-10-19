@@ -212,7 +212,7 @@ class StaticAnalysisActivity :
             // A field still holding focus has not committed its typed value yet.
             commitParamFields()
             if (!viewModel.inputs.value.sweepMode) {
-                runs.startBatch(params.dicParams(), params.isKeysInterpolatorSelected())
+                runs.startBatch(params.dicParams(), params.isKeysInterpolatorSelected(), params.refUpdateInterval)
             }
         }
     }
@@ -292,7 +292,10 @@ class StaticAnalysisActivity :
      */
     private fun onImagesChanged(newReference: Boolean, newFrames: Boolean) {
         if (newReference) wizardSlots.refreshRefSlot(refPreviewBmp)
-        if (newFrames) wizardSlots.refreshDefSlot()
+        if (newFrames) {
+            wizardSlots.refreshDefSlot()
+            params.reference.onFramesChanged()
+        }
         // A different-size reference resets the ROI (applyNewReference).
         if (newReference) wizardSlots.updateRoiThumbnail()
         // Frames may have been loaded before this reference.
@@ -405,7 +408,7 @@ class StaticAnalysisActivity :
     private suspend fun showRerun(inputs: RerunInputs) {
         refPreviewBmp = viewModel.inputs.value.refBytes?.let { decodeRefPreview(it) }
         val run = inputs.params
-        params.applyRerun(run.subset, run.step, run.strainWindow, run.use6x6)
+        params.applyRerun(run.subset, run.step, run.strainWindow, run.use6x6, run.refUpdateInterval)
         sweepController.showRerun()
         onImagesChanged(newReference = true, newFrames = true)
         goToStep(viewModel.inputs.value.step, animate = false)
@@ -436,6 +439,7 @@ class StaticAnalysisActivity :
             viewModel.inputs.value.refBytes?.let { refPreviewBmp = decodeRefPreview(it) }
             wizardSlots.refreshRefSlot(refPreviewBmp)
             wizardSlots.refreshDefSlot()
+            params.reference.onFramesChanged()
             when (restore) {
                 // Re-enter the page so it re-measures what it shows.
                 DraftRestore.RESTORED -> goToStep(viewModel.inputs.value.step, animate = false)

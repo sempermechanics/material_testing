@@ -15,8 +15,11 @@ import com.sempermechanics.semper.ui.common.CollapsibleSection
  * The settings page's parameter sliders: the value fields are editable, so
  * dragging writes into them and typing writes back into the slider. Values
  * are still read via `slider.value` everywhere. Also the correlation
- * section's Reset and Paste, and its Advanced section (overlap and
- * interpolation), closed until opened or until a Paste changes what it shows.
+ * section's Reset and Paste, and its Advanced section (overlap,
+ * interpolation and reference), closed until opened or until a Paste or a
+ * Re-run changes what it shows. The reference's choices follow the frames:
+ * seconds of the clip for a video, frame counts for picked images
+ * ([ReferenceIntervals]).
  */
 class WizardParamFields(
     private val activity: AppCompatActivity,
@@ -47,7 +50,7 @@ class WizardParamFields(
         onGeometryChanged,
     )
 
-    /** Overlap and interpolation; opens itself when a Paste changes either. */
+    /** Overlap, interpolation and reference; opens itself when a Paste or a Re-run changes them. */
     private val advanced = CollapsibleSection(
         header = settings.advancedHeader.root,
         chevron = settings.advancedHeader.imgAdvancedChevron,
@@ -58,13 +61,17 @@ class WizardParamFields(
     private val bicubic get() = activity.getString(R.string.label_4_4_bicubic)
     private val keys get() = activity.getString(R.string.label_6_6_keys)
 
-    /** Wires the sliders, their fields, the interpolation dropdown and the section's buttons. */
+    /** The reference: seconds of the clip for a video, frame counts for picked images. */
+    val reference = ReferenceDropdown(activity, settings.ddReference) { viewModel.defFrameTimesMs }
+
+    /** Wires the sliders, their fields, the two dropdowns and the section's buttons. */
     fun bind() {
         sheet.bind()
         val dropdown = settings.ddInterpolator
         dropdown.setSimpleItems(arrayOf(bicubic, keys))
         if (dropdown.text.isNullOrEmpty()) dropdown.setText(bicubic, false)
         dropdown.setOnItemClickListener { _, _, _, _ -> host.clearRunStatus() }
+        reference.bind(onPicked = host::clearRunStatus)
     }
 
     /** The subset size the slider holds, after landing a recommendation still gliding there. */
@@ -82,6 +89,9 @@ class WizardParamFields(
     fun dicParams(): DicParams = DicParams(subsetSize(), stepSize, strainWindow)
 
     fun isKeysInterpolatorSelected(): Boolean = settings.ddInterpolator.text.toString() == keys
+
+    /** How often the reference moves, in frames ([RunSpec.refUpdateInterval]); 0, the fixed reference, by default. */
+    val refUpdateInterval: Int get() = reference.interval
 
     /** Flushes any in-progress typing into the sliders (focus loss commits). */
     fun commit() {
@@ -102,6 +112,7 @@ class WizardParamFields(
         settings.sliderStepSize.value = DicParams.DEFAULT_STEP.toFloat()
         settings.sliderStrainWindow.value = SweepStudy.DEFAULT_WINDOW_POINTS.toFloat()
         settings.ddInterpolator.setText(bicubic, false)
+        reference.interval = 0
         sheet.syncFromStep()
         subsets.showSpeckleFeedback()
         host.resetSweepInputs()
@@ -132,13 +143,18 @@ class WizardParamFields(
 
     /**
      * A Re-run's settings, as the user's own: [subset], [step] and the strain
-     * window [vsg] (px) on the sliders, and the Keys interpolator when
-     * [use6x6]. The overlap follows the step, as it always does.
+     * window [vsg] (px) on the sliders, the Keys interpolator when [use6x6],
+     * and the run's reference [refUpdateInterval] (frames), on the choices
+     * its frames, already loaded, offer. The overlap follows the step, as it
+     * always does.
      */
-    internal fun applyRerun(subset: Int, step: Int, vsg: Int, use6x6: Boolean) {
+    internal fun applyRerun(subset: Int, step: Int, vsg: Int, use6x6: Boolean, refUpdateInterval: Int = 0) {
         host.commitParamFields()
         viewModel.edit { it.copy(subsetUserModified = true) }
         settings.ddInterpolator.setText(if (use6x6) keys else bicubic, false)
+        reference.onFramesChanged()
+        reference.interval = refUpdateInterval
+        if (refUpdateInterval > 0) advanced.expand()
         setSliders(subset, step, vsg)
     }
 
