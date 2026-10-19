@@ -814,7 +814,7 @@ rather than hardcoding its own.
 **The demo cap is counted per account and per device.** Both halves count
 analyses stored at once, less `PROVISION_FAILED`, so a delete frees a place
 (the product owner's choice, TD-275). The account half is `count_user_sessions`
-(`backend/app/repo/sessions.py:433-451`); for a demo account `create_session`
+(`backend/app/repo/sessions.py:445-463`); for a demo account `create_session`
 also refuses when the device's stored analyses, every account's, reach the cap
 (`count_device_sessions`, `:454-478`; `_device_cap_reached`,
 `backend/app/services/sessions.py:81-94`, applied at `:138-139`), with a

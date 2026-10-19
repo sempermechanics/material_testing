@@ -161,10 +161,10 @@ contain uploaded content, filenames, specimen names, email addresses, tokens,
 keys, or resumable URLs. They may retain the opaque uid/device id and event
 metadata only. Where an action needs to name an address it records
 `audit.address_tag` (`observability.short_hash`, a 12-hex hash;
-`backend/app/audit.py:18-30`): `emailLockHash` on an individual mint, and
+`backend/app/audit.py:27-38`): `emailLockHash` on an individual mint, and
 `adminEmailHashes` with `adminEmailCount` on an institution mint, a convert and an
 `adminEmails` edit (`backend/app/services/licenses.py:10-14`, `backend/app/routers/admin.py:29-40`). A reader who already
-knows an address can match it. The hash is unkeyed (`backend/app/observability.py:192-199`),
+knows an address can match it. The hash is unkeyed (`backend/app/observability.py:225-232`),
 so it keeps the address out of clear text; it does not stop someone with a list of
 candidate addresses from confirming one. A licence's free-text `note` is
 recorded by `ADMIN_LICENSE_EXTEND` only as changed and its length

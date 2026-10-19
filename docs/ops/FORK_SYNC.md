@@ -304,6 +304,9 @@ fixed by hand:
 | The viewer Activity's frame-set copies, `afterFrameSet`, `whenFrameSetLoaded`, `summaryBatchFiles`, `detailStatsText` | `ResultViewerViewModel.state: StateFlow<ViewerState>`; `batchFiles` and the like are getters over the set it opened |
 | Home's restore on `lifecycleScope`; the **+** chooser and Re-run in `HomeActivity` | `HomeViewModel`; `HomeNewAnalysis` (where the fork's **Which test?** hand-off now goes) |
 | `UploadWorkOutcomes.ResumeKind`, `classifyResume`; three foreground checks | `Resume.of` (`data/UploadSessionPlanner.kt`); `data/AppForeground.kt` |
+| `AnalysisViewModel`'s 36 per-field `var`s (`viewModel.refBytes`, `viewModel.step`, …), `lateinit sweepController` | Gone (TD-308): read `viewModel.inputs.value`, write one `viewModel.edit { it.copy(…) }` per change (`ui/analysis/wizard/AnalysisViewModel.kt`); only `cancelRequested` is left. A lab field set through such a property (the fork's `LabRerun.applyTo`, for one) becomes a `WizardInputs` / `LabWizardState` field changed in that edit. `sweepController` is `by lazy` |
+| `SessionMetadataDoc`'s nested field serializers | Top-level `internal object`s of the same names in `data/cloud/SessionMetadataSerializers.kt` (TD-292), a pure move: a sync conflict there is a move, not a change |
+| `VideoFrameExtractor.getFrame` returning a `Bitmap`; retriever frames timed as asked | `RetrievedFrame(bitmap, isSyncFrame)`; times from `RetrieverFrameClock` (TD-207) |
 
 ## Porting back
 

@@ -100,7 +100,10 @@ and the tests pin them (`HttpFailureTest`, `AuthedTest`, `AfterSaveTest`,
 - detekt does not check cancellation handling: `SuspendFunSwallowedCancellation`
   needs type resolution, which `:app:detekt` does not run, and detekt 1.23.8's
   Kotlin 2.0 compiler cannot read the Kotlin 2.4 dependencies it would resolve
-  against (TD-171).
+  against. A source check does it instead (TD-171, 2026-10-19):
+  `scripts/check_swallowed_cancellation.py` fails a broad catch or a `runCatching`
+  around a suspend call that neither rethrows `CancellationException` first nor
+  runs under `NonCancellable`; its allowlist is empty.
 
 ## Action items
 
@@ -108,5 +111,7 @@ and the tests pin them (`HttpFailureTest`, `AuthedTest`, `AfterSaveTest`,
    (#323, #326, #327).
 2. [x] `RunStop` (#318) and its adoption (#325, #330); `UpsertOutcome` (#326,
    #330, #331); `DownloadFailure` (#326); `UploadFailures` (#327).
-3. [ ] TD-171: run detekt with type resolution and enable
-   `SuspendFunSwallowedCancellation`.
+3. [x] TD-171: checked in CI by `scripts/check_swallowed_cancellation.py` (step "No
+   swallowed coroutine cancellation (ADR-018)", 2026-10-19, `3e75188`) instead of
+   detekt's `SuspendFunSwallowedCancellation`, which stays an option with detekt 2.x
+   (TD-69).

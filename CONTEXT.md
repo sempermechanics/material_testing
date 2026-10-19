@@ -122,8 +122,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   ([ADR-007](docs/adr/ADR-007-licence-lifecycle.md)), device binding per app
   ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md)) and sessions tagged by app
   ([ADR-014](docs/adr/ADR-014-session-app-tag.md)) are live; consoles on
-  `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)). What went out
-  when: [CHANGELOG](docs/ops/CHANGELOG.md). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
+  `app.sempermechanics.com` ([§20](docs/backend/CLOUD_ARCHITECTURE_GCP.md)). Project IDs keep `indic-*` ([ENVIRONMENTS.md](docs/ops/ENVIRONMENTS.md)).
 - **App id `com.sempermechanics.semper`** ([ADR-019](docs/adr/ADR-019-sempermechanics-app-id.md)).
   **Release `v1.2-beta.4`** (versionCode 1036, `33dce87d`, 2026-10-17; engine `23034fe`,
   0.4.2), the first under this id, so it installs beside the old app. `main` has moved past it.
@@ -132,25 +131,29 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   TD-214–TD-278, FI-17–FI-24), [ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md),
   **minSdk 30**, version gate, EMM config, IT roster tools, audit export, AAB, monitoring as
   code and account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)).
-  No release built from it. Owed at deploy, in order ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)):
-  indexes (TD-216, TD-271), backend, gateway, Hosting, monitoring (TD-217); also TD-214,
-  TD-215, a device smoke (TD-219), TD-226, TD-229–TD-232, counsel on the Terms (TD-277).
-- **Open: #457** (`ccr-603fe346-1bw2fa`: the 2026-10-19 whole-repo review, then its tech-debt
-  batch, which closed TD-281–TD-297 but for TD-294's licence fan-out). Backend: device trust
-  levels and one-transaction registration (ADR-010 amendment), one verified address, no delete
-  of a provisioning session, step-up tiers in `step_up.py` and route flows in `services/`, a
-  new-device mail. Console: `auth.js` split, CSP pinned. App: uploads resume only on the
-  declared sha256 and a bound staging, a failed batch run undone, `WizardInputs`, viewer hosts,
-  screen work in ViewModels; CI checks ADR-015's file size and ADR-016 rule 1; [ADR-025](docs/adr/ADR-025-test-type-extension-points.md)
-  proposed. At deploy: staff and IT phones re-register once with TOTP (checklist §6); C1/C2
-  with Hosting; `NOTIFY_SECURITY_FROM` (§0, TD-309). Left: TD-294, TD-298, TD-299, TD-306–TD-309.
+  No release built from it. Owed at deploy, in [checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)
+  order: indexes, backend, gateway, Hosting, monitoring; also TD-214, TD-215, TD-219, TD-226,
+  TD-229–TD-232, counsel on the Terms (TD-277).
+- **Open: #457** (`ccr-603fe346-1bw2fa` @ `9aa8cd1`: the 2026-10-19 review and two tech-debt
+  rounds; closed TD-171, 198, 207, 281–293, 295–297, 306–308). Backend: device trust levels
+  (ADR-010 amendment), `step_up.py` and `services/`, a new-device mail, projected listings, a
+  licence fan-out finished by a Cloud Task ([ADR-026](docs/adr/ADR-026-licence-fanout-marker.md)),
+  `audit_logs` append-only in code and mirrored to Cloud Logging. App: uploads resume only on
+  the declared sha256, a failed batch undone, `WizardInputs` edited whole, viewer hosts, screen
+  work in ViewModels, retriever frames timed as decoded; CI checks file size, ADR-016 rule 1 and
+  swallowed cancellation; [ADR-025](docs/adr/ADR-025-test-type-extension-points.md) proposed.
+  At deploy ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)): TOTP re-registration, C1/C2,
+  `NOTIFY_SECURITY_FROM` (TD-309), `TASKS_QUEUE` (TD-294), the audit bucket lock (TD-237).
+  Left: TD-237, TD-246, TD-294, TD-298, TD-299, TD-309.
+- **Engine: semper-dic-engine#9 open** (0.5.0, the review's engine fixes). The pin stays
+  `23034fe` (0.4.2) until it is released; the bump, with re-captured oracles, is TD-299.
 - **material_testing** merges this `main` (last `17d7bc8`, material_testing#139,
   [FORK_SYNC.md](docs/ops/FORK_SYNC.md)); its #140 carries the lab fixes and four of #457's
-  commits (upload, download, detekt split, ui-4); the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
+  commits; the rest come with the next sync. It released `v1.4-beta.2` (`d08aae07`) 2026-10-17.
 - **CI.** Tiers follow the diff, coverage floors rise with every test PR
   ([TESTING.md](docs/app/TESTING.md#coverage-floors)), and `main` requires `CI OK`.
 - **Owed.** A device smoke of `v1.2-beta.4` ([RELEASING.md](docs/ops/RELEASING.md) step 5); the
-  on-device characterization at the 0.4.2 pin (TD-212); the engine pin bump (TD-299); Pixel 6
+  on-device characterization at the 0.4.2 pin (TD-212); Pixel 6
   benchmark runs for #435. The public release with each PR's emulator and Pixel checks,
   ADR-015's queued-work upgrade check; a licensed-account smoke of share, PDF and Delete;
   transfer notifications and AVI import on a device ([WORKFLOWS.md](docs/app/WORKFLOWS.md)

@@ -159,7 +159,7 @@ route template; `feature_paused` is in `CLIENT_BRANCHED`
 `else -> Kind.TRANSIENT`). Tests `backend/tests/test_kill_switches.py`.
 
 **The demo device cap.** `repo.count_device_sessions`
-(`backend/app/repo/sessions.py:454-478`) counts sessions whose `deviceId` is
+(`backend/app/repo/sessions.py:466-490`) counts sessions whose `deviceId` is
 this device, across accounts, less `PROVISION_FAILED`, with two single-field
 counts (no composite index). `_device_cap_reached`
 (`backend/app/services/sessions.py:81-94`) applies it to demo accounts only; a
