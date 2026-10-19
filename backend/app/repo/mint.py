@@ -95,6 +95,8 @@ def _license_public(license_id: str, data: dict) -> dict:
         # Set when an individual licence was converted to an institution one
         # (repo/upgrade.py): the id of the licence that replaced it.
         "supersededBy": data.get("supersededBy") or "",
+        # A staff test account's licence (ADR-027); false on every other.
+        "testAccount": data.get("testAccount") is True,
     }
 
 
@@ -116,8 +118,10 @@ def _write_license(
     support_until=None,
     max_analyses: int | None = None,
     note: str = "",
+    test_account: bool = False,
 ) -> tuple[str, str, dict]:
-    """Mint a key, persist the hash, return (plaintext, license_id, stored)."""
+    """Mint a key, persist the hash, return (plaintext, license_id, stored).
+    `test_account` tags a staff test account's licence (ADR-027)."""
     key = generate_key()
     license_id = key_hash(key)
     stored = {
@@ -164,6 +168,8 @@ def _write_license(
         stored["supportUntil"] = support_until
     if max_analyses is not None:
         stored["maxAnalyses"] = int(max_analyses)
+    if test_account:
+        stored["testAccount"] = True
     if redeemed_by_uid:
         stored["redeemedByUid"] = redeemed_by_uid
         stored["redeemedAt"] = _base.firestore.SERVER_TIMESTAMP
@@ -249,9 +255,11 @@ def create_individual_license(
     support_until=None,
     max_analyses: int | None = None,
     note: str = "",
+    test_account: bool = False,
 ) -> dict:
     """Ops mint of an individual licensed key. Returns the plaintext key
-    once; only the hash is stored.
+    once; only the hash is stored. `test_account` tags the licence of a
+    staff test account (ADR-027): hidden from the licence desk by default.
 
     Also records a pending invite against `email_lock`, which is how the
     licence actually reaches the customer: they sign in with that address and
@@ -275,6 +283,7 @@ def create_individual_license(
         support_until=support_until,
         max_analyses=max_analyses,
         note=note,
+        test_account=test_account,
     )
     err, _ = _write_invite(license_id, email_lock, created_by_uid)
     if err:

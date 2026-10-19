@@ -93,7 +93,8 @@ def _purge_drive(token: str, user: dict) -> tuple[str | None, int]:
         token, [s.get("driveFolderId") for s in repo.iter_user_sessions(uid)],
     )
     # Then the scaffolding itself, and anything a failed sync orphaned.
-    user_folder = drive.find_user_folder(token, uid)
+    test = {"test": True} if repo.test_account_of(user) else {}
+    user_folder = drive.find_user_folder(token, uid, **test)
     if user_folder:
         drive.delete_file(token, user_folder)
     else:
@@ -104,6 +105,20 @@ def _purge_drive(token: str, user: dict) -> tuple[str | None, int]:
 def erase_account(user: dict, device_id: str | None) -> dict:
     """Erase the account: Drive, then Firestore, then the Firebase Auth users,
     then the audit row. Returns the row's detail, which is also the answer."""
+    uid = user["uid"]
+    detail = erase_data(user)
+    audit.record(uid, device_id, action="ACCOUNT_DELETE",
+                 target={"type": "user", "id": uid}, detail=detail)
+    log.info("Erased account %s: %s", uid, detail)
+    return detail
+
+
+def erase_data(user: dict) -> dict:
+    """The erasure's steps, without its audit row: Drive, then Firestore, then
+    the Firebase Auth users. Returns what was erased, timed per phase.
+
+    Shared by the holder's own erasure (`erase_account`) and staff ending a
+    test account (`services.testaccounts`), which audits it as its own."""
     uid = user["uid"]
     started = time.monotonic()
     token = drive.access_token()
@@ -136,7 +151,4 @@ def erase_account(user: dict, device_id: str | None) -> dict:
         "firestoreMs": firestore_ms,
         "totalMs": total_ms,
     }
-    audit.record(uid, device_id, action="ACCOUNT_DELETE",
-                 target={"type": "user", "id": uid}, detail=detail)
-    log.info("Erased account %s: %s", uid, detail)
     return detail

@@ -474,6 +474,7 @@ class AdminLicenseSearch(BaseModel):
     page_token: PageToken = ""
     include_demo: bool = False
     include_revoked: bool = True
+    include_test: bool = False
 
     model_config = ConfigDict(extra="forbid")
 
@@ -507,3 +508,47 @@ class AdminLicenseConvert(BaseModel):
         if self.seating == "floating" and self.maxSeats is None:
             raise ValueError("floating licenses require maxSeats")
         return self
+
+
+def _no_control_chars(value: str, name: str) -> str:
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+        raise ValueError(f"{name} must not contain control characters")
+    return value
+
+
+class AdminTestAccountCreate(BaseModel):
+    """`POST /v1/admin/test-accounts` (ADR-027): a QC or CI login staff hand
+    over. `days` is how long it lasts, 1..90: 30 when a QC account names
+    none, and no end at all when a CI account names none. `maxDevices` is how
+    many phones per app may be signed in at once. `note` says who or what it
+    is for, never a password; at most 200 characters."""
+    email: str = Field(min_length=3, max_length=254)
+    purpose: Literal["qc", "ci"]
+    days: Optional[int] = Field(default=None, ge=1, le=90)
+    maxDevices: int = Field(default=3, ge=1, le=10)
+    note: str = Field(default="", max_length=200)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        email = value.strip().lower()
+        if email.count("@") != 1 or email.startswith("@") or email.endswith("@"):
+            raise ValueError("email must be an email address")
+        if any(char.isspace() for char in email):
+            raise ValueError("email must not contain whitespace")
+        return _no_control_chars(email, "email")
+
+    @field_validator("note")
+    @classmethod
+    def _note(cls, value: str) -> str:
+        return _no_control_chars(value.strip(), "note")
+
+
+class AdminTestAccountExtend(BaseModel):
+    """`POST /v1/admin/test-accounts/{uid}/extend`: the account now ends
+    `days` from now, at most 90."""
+    days: int = Field(ge=1, le=90)
+
+    model_config = ConfigDict(extra="forbid")
