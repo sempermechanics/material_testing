@@ -32,23 +32,16 @@ object AnalysisNavHelper {
     }
 
     /**
-     * Every reason a new analysis may not start, in one call.
+     * Every reason a new analysis may not start, in one call. Every run is a
+     * new analysis: a saved one is never written over (owner decision,
+     * 2026-10-15), so whatever a run saves is a new Home row.
      *
-     * Returns false having already navigated to whichever gate applies. All
-     * three checks (the version gate, the seat and the quota) are guarded by
-     * [AnalysisViewModel.wouldCreateNewSession], so a
-     * **run already in flight, or a re-run of an existing session, always
-     * passes** — losing a seat mid-analysis must never abort work. A run of
-     * the other kind than the working session's ([sweep] says which this is)
-     * is a new session, and is checked like one.
+     * Returns false having already navigated to whichever gate applies. Only
+     * starting is checked: a run already under way is never stopped by
+     * either gate.
      */
-    suspend fun ensureCanStart(
-        host: Activity,
-        viewModel: AnalysisViewModel,
-        sweep: Boolean,
-    ): Boolean = (!viewModel.wouldCreateNewSession(sweep) || ensureUpToDate(host)) &&
-        ensureSeat(host, viewModel, sweep) &&
-        ensureSessionQuota(host, viewModel, sweep)
+    suspend fun ensureCanStart(host: Activity): Boolean =
+        ensureUpToDate(host) && ensureSeat(host) && ensureSessionQuota(host)
 
     /**
      * Hard stop while the backend requires a newer build
@@ -73,33 +66,20 @@ object AnalysisNavHelper {
      * individual licenses and demo accounts all return true and fall through
      * to the quota gate, which is what actually limits them.
      */
-    @Suppress("ReturnCount") // early-outs for re-run / not-floating / blocked
-    suspend fun ensureSeat(
-        host: Activity,
-        viewModel: AnalysisViewModel,
-        sweep: Boolean,
-    ): Boolean {
-        if (!viewModel.wouldCreateNewSession(sweep)) return true
+    fun ensureSeat(host: Activity): Boolean {
         if (!LicenseEntitlements.isSeatRequiredToStart(host)) return true
         openSeatRequired(host)
         return false
     }
 
     /**
-     * Hard stop for a new session at the account's limit ([SessionQuota.blocked]).
-     * Returns false after navigating to the limit screen; re-runs of an existing
-     * session still pass, and a licensed account with no config yet does not
-     * block — analysis is on-device and only its upload is gated (see
-     * [com.sempermechanics.semper.data.cloud.CloudSync]). Counts the local
-     * session index's rows off the main thread.
+     * Hard stop for a new analysis at the account's limit ([SessionQuota.blocked]).
+     * Returns false after navigating to the limit screen; a licensed account
+     * with no config yet does not block — analysis is on-device and only its
+     * upload is gated (see [com.sempermechanics.semper.data.cloud.CloudSync]).
+     * Counts the local session index's rows off the main thread.
      */
-    @Suppress("ReturnCount") // early-outs for re-run / under-quota / blocked
-    suspend fun ensureSessionQuota(
-        host: Activity,
-        viewModel: AnalysisViewModel,
-        sweep: Boolean,
-    ): Boolean {
-        if (!viewModel.wouldCreateNewSession(sweep)) return true
+    suspend fun ensureSessionQuota(host: Activity): Boolean {
         val localCount = withContext(Dispatchers.IO) {
             SessionStore.list(host).size
         }
@@ -121,7 +101,8 @@ object AnalysisNavHelper {
      * The viewer arguments for the run that just finished (TD-61). Settings and
      * ROI come from the run itself ([RunResult]): the ones the
      * saved session recorded, so opening from here and reopening from Home show
-     * the same values. The session id is the local one Home opens with.
+     * the same values. The session id is the local one Home opens with: the
+     * one the run wrote ([RunResult.sessionId]).
      */
     fun resultArgs(viewModel: AnalysisViewModel, sweep: Boolean, frameNames: List<String>): ViewerArgs {
         val run = viewModel.runResult.value
@@ -138,8 +119,8 @@ object AnalysisNavHelper {
             frameNames = frameNames,
             stopCode = run.stop.wireCode,
             plannedFrames = run.plannedFrames,
-            sessionId = viewModel.workingLocalId,
-            sessionLocalId = viewModel.workingLocalId,
+            sessionId = run.sessionId,
+            sessionLocalId = run.sessionId,
             subsetSize = settings.subset,
             strainWindow = settings.strainWin,
             engineStats = run.engineStats?.toList(),

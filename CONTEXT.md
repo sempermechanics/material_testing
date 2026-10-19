@@ -130,135 +130,45 @@ no thresholds ([TESTING.md](docs/app/TESTING.md)); the phone-run gates (`benchma
 [PERF_BASELINE_bd44af0.md](docs/engine/PERF_BASELINE_bd44af0.md)) is a manual reference.
 Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 
-## Current state (2026-10-18)
+## Current state (2026-10-19)
 
 - **Semper's UI plus two test choices ([ADR-022](docs/adr/ADR-022-semper-ui-plus-lab-tests.md)).**
-  **Which test?** offers 2D DIC (Semper's analysis, first), Tensile and Bending; a fork
-  change to a shared screen runs only for a lab test. The 2026-10-14 sync put five back
-  to Semper's behaviour: the video sampling sheet, the sweep plots' scrub label, the
-  plain CSV (version 1), the strain window's ⓘ and the sheet's order and fallback.
-- **Synced with `semperdic-app`.** Forked at `bfe00e5` (2026-09-21); the parent's
-  `main` comes in with a plain `git merge` on a `sync/` branch (`git log --merges
-  --grep=semperdic-app`). Last: `8ba7081`, 2026-10-14, merged as #133 on 2026-10-15
-  (its #363–#435: exports on the deformed frame, the
-  backup's `ref/` entry, clip times and Keyframes on every rung, frozen run inputs,
-  unique names, device-key recovery, themed icons, the UI and copy passes). Its
-  metadata schema is `/7` here (ours past `/3` are not the parent's numbers). Before
-  that `3154ebc`, 2026-10-08, and `85650da`, 2026-10-07 (#122: package move ADR-015,
-  app id ADR-019, engine at `engine/`); rules in the parent's
-  `docs/ops/FORK_SYNC.md`). This app id's Firebase client is in
-  `google-services.json`; App Check for it waits for a Play listing. The parent deploys, and its TD rows jump to TD-122. General
-  fixes made here go back upstream; TD-78 and TD-81 are lab-only. The lab inputs ride
-  upstream's seams: `RunSpec.mechanical` (ADR-004), `ViewerArgs` with a
-  `SessionRecord` fallback (ADR-003) and `WizardState` / `WizardDraft` (ADR-005).
-  ADR and TD numbers are shared: ADR-008, 009, 011, 012 and 022 and TD-133–135,
-  TD-139–144 and TD-146–152 are ours (TD-145 and TD-153–156 are semperdic-app's; its
-  TD-139 is ours, ported with ADR-011 in its #302, and ADR-014 is its). The next row
-  free in both registers is TD-280 (TD-214–TD-279 are the readiness rows); check
-  both before taking one.
-- **Branch `claude/new-session-jhfhj9`** (not merged, not deployed; ported from
-  semperdic-app's branch of that name): the readiness-framework cross-check
-  ([gate](docs/ops/PRODUCTION_READINESS_GATE.md#framework-cross-check-2026-10-18),
-  TD-214–TD-269, FI-17–FI-23). This app goes to **minSdk 30** (Android 11; phones on
-  Android 7–10 can no longer install or update it) and gains the signed offline
-  entitlement ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); its tokens
-  name `materialtesting`), the version gate (its own pair, `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` /
-  `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`) and kill switches from `/v1/config`, EMM
-  managed config, crash breadcrumbs only after diagnostics consent and cert pins from
-  the environment. The backend, consoles, rules tests and monitoring are shared and
-  deploy from semperdic-app. Owed: the same external actions (TD-214–TD-217, TD-226,
-  TD-229–TD-232); for a release, this repo's `SEMPER_ENTITLEMENT_PUBKEYS` variable and
-  `SEMPER_API_CERT_PINS` secret; and a first CI run of the Android half here (TD-219).
-- **Branch `claude/readiness-followups-jhfhj9`** on it (not merged, not deployed; ported
-  from semperdic-app's branch of that name; TD-270–TD-279, FI-24). Account-anchored
-  entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md)): nothing is
-  typed or sold in this app (no licence key screen, no EMM enrolment-invite key); **Refresh
-  licence** in Settings and on the limit screen; locked, not hidden, for what the licence
-  lacks; a 503 `feature_paused` waits or says paused; the shown cap, a refresh at
-  `refreshAfter` and the sealed record's write order (TD-263–TD-266). **Update** opens this
-  repo's releases page for a sideloaded build. The shared backend gains the Auth Admin
-  budget, hashed audit addresses, wider erasure, `POST …/licenses/search`, kill switches
-  refused server-side, a per-device demo cap and `POST /v1/me/claim`; the consoles gain
-  staff roster tools and the account page's licence facts and claim-code card. Those, the
-  indexes and the dashboards deploy only from semperdic-app, in its order (indexes,
-  backend, gateway, Hosting, monitoring); the console files here are for parity, so never
-  deploy Hosting from this repo. Owed as well: counsel on the aligned Terms (TD-277).
-- **Lab outputs, all merged (#1–#21).** Tensile: stress–strain (strain is the virtual
-  extensometer's ΔL / L₀ since ADR-012), E from the
-  longest straight leading run, Rp0.2 by the 0.2% offset (#100), the elastic-region
-  view, a lab-report PDF. Results' **Adjust curve** takes a strain and stress scale
-  and bias to match the machine's own export (`CurveCorrection`, in `Model.Axial`;
-  per session; re-sent to a backed-up copy like the deflection correction, TD-152).
-  Bending: beam-edge taps, δ and E = WL³/(48δI), a bending lab report. Loads
-  from a machine CSV, matched by time within 100 ms for video; bending's are
-  typed per photo in kg (`TypedLoadsSheet`, × 9.80665, CSV optional; Pixel 6
-  2026-09-28), as totals or as increments per photo (stored as totals), and shown in kg;
-  the maths and CSV stay in N. A per-session deflection scale and bias is set from
-  Results (`ViewerDeflectionCorrection`, not the wizard), and re-sent to a backed-up
-  session's metadata.json (ADR-013, TD-150; route deployed 2026-10-01, the app side ships next release). Strain window in
-  points (tensile 5, bending 9). Engine `v0.2.3` (deterministic, TD-65). Checked against published
-  steel and PMMA data, on a Pixel 6 too (2026-09-26; steel re-run under ΔL / L₀
-  on 2026-09-29, TD-144); a concrete set fails as
-  expected ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)).
-  Both cases were re-run on `v0.2.3` on the emulator on 2026-10-01 and match
-  `v0.2.2` (steel E 148.853 GPa; PMMA slope 6800.26 N/mm at the same taps);
-  `RealPmmaBendingTest` now holds that run's deflections. The repeat solve is
-  bit-identical on a Pixel 6 (arm64); the real-data re-run there is still owed
-  (TD-65's row). #134 and #135 moved the pin to `23034fe` (0.4.2: anchor-lattice
-  seeding, seeded with rotation and scale), released in `v1.4-beta.2` without the steel
-  and PMMA re-run, which is still owed.
-  Fixed since: TD-91, #51 (TD-92), #55 (TD-93, TD-94), TD-147 (peak stress
-  counts frames off the curve).
-- **Wizard (#46, #48).** **Which test?** offers 2D DIC first: Semper's wizard, no load
-  card, and the session records no test type. The load card's ⓘ shows the CSV header and a
-  diagram of each test; bending's row reads **Beam height → Set**. The keyboard makes room
-  on every screen with a text field: wizard, ROI editor, viewer frame jump (#71, TD-99).
-  The ROI editor zooms (pinch to 10×, double-tap 2× / fit) and pans with two fingers
-  (#84); `e2e/RoiEditorGestureTest` passes on the API 37 emulator (2026-09-28); a pan
-  now stops where the fingers lift (TD-142), which had kept Tier 3 red on `main` since #86;
-  and a pan pushed against an edge stays on it when they lift (TD-146), which had made
-  the test's last check flaky on CI.
-- **Lab end to end (#24).** `e2e/LabWorkflowDeviceTest` and `e2e/BeamTapEditorGestureTest`
-  run in Tier 3 and pass on a Galaxy S21+ and the API 37 emulator (TD-95).
-  `WizardDraftRestoreTest`: a load log survives process death.
-- **CI and benchmarks.** A docs-only PR skips Tier 1 (#63, TD-96); a merge no longer
-  cancels `main`'s running CI (#67, TD-97). `HotPathMicroBenchmark` runs in CI (#31); the
-  Pixel 6 medians and the report-only `benchmark/gates.json` are in
-  [TESTING.md](docs/app/TESTING.md). The 2026-09-25/26 re-runs pass every gate, but
-  the wizard cold start sits at +23 %, 75 % of its headroom: the phone's state, not
-  the code (TD-135). Gates now skip throttled or unplugged runs and a trip is settled
-  A/B (ADR-008); the Pixel 6 references are owed a re-take.
-  TD-86–TD-88 and TD-90 match the parent's numbers; its TD-81 is TD-89 here.
-- **Owed.**
-  - By hand on a phone ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): how ROI zoom and pan feel
-    on a real screen (§6.21–6.25; the gestures themselves pass in e2e on the emulator).
-    §5.1a again on Semper's sampling sheet, which the 2026-10-14 sync brought in
-    (the fork's own sheet passed on a Pixel 6 with synthetic clips on 2026-09-26),
-    including a load log matched to Keyframes (5.1a.14), a phone-recorded MP4 and a
-    real UTM clip. A Material Testing build beside a Semper build for 2D DIC
-    (§3b), and the screenshots ADR-022 lists. MP4 and codec AVI
-    frames are now stretched to full range (TD-134), not yet re-measured on a phone. The Galaxy S21+'s demo account is over its cap (45 / 25), so a new
-    analysis there needs a licensed key or deletes first.
-  - Owner decision: Terms §1.2 (professional use only) and §1.3 (18+) sit badly with a
-    first-semester student audience ([CHANGELOG](docs/ops/CHANGELOG.md) 2026-09-24).
-  - **Own app (ADR-009, TD-133).** `main` installs as `com.sempermechanics.materialtesting`
-    since #122 (ADR-019: no in-place upgrade from the released
-    `com.indicvision.semper.materialtesting` builds, so testers install it beside them) beside Semper, on Semper's Firebase project and backend; released as `v1.2-beta.1`
-    (#82), with Asset Links on Hosting. One phone per app ([ADR-010](docs/adr/ADR-010-device-binding-per-app.md),
-    TD-138) is deployed and synced here: `v1.2-beta.2` (2026-09-29, from `fc1aaa4e`)
-    sends `X-App-Id` and signed in licensed on a Pixel 6, which now runs `v1.2-beta.3`
-    (`528afdfc`, versionCode 4). Released since: `v1.4-beta.1` (`3afbc76f`, 2026-10-01)
-    and `v1.4-beta.2` (`d08aae07`, 2026-10-17, versionCode 1006). The latter is the first
-    release under the new id and has not yet been smoked on a phone. Don't hand out `main`'s CI APK: its versionCode is
-    CI's run number, above every release (TD-148). Signed out (a debug build with no
-    API URL), Home's Beta notice is acked once per phone, no longer on every launch
-    (#106, TD-149; Pixel 6 2026-09-30); each account still acks once. A release
-    installed over a debug build is a new phone to the backend (`ANDROID_ID` follows
-    the signing key): reset this app's device first. Owed: signing in where Semper is
-    signed in too, and App Check for this app once it is on Google Play (a sideloaded
-    APK cannot attest; production runs it `off`). A `sync/` merge keeps this repo's `applicationId` and
-    `google-services.json`.
-  - The parent owns backend and Hosting deploys; see its CONTEXT.md for production state.
+  **Which test?** offers 2D DIC (Semper's analysis: no load card, no test type recorded),
+  Tensile and Bending; a fork change to a shared screen runs only for a lab test.
+- **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `5b59cf3`,
+  2026-10-19, not yet merged or deployed: its #436–#447 (tip cards, the viewer's summary
+  pill, Cancel keeps nothing, the run overlay, frame-jump focus, engine CI) and **Re-run
+  as a copy** (its [ADR-022](docs/adr/ADR-022-rerun-as-copy.md)), which does not carry a
+  lab test's type or loads yet (TD-280). Before: `8ba7081` (#133), `85650da` (#122:
+  ADR-015 package move, ADR-019 app id, `engine/`). Metadata schema `/7` here (ours past
+  `/3` are not the parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical`
+  (ADR-004), `ViewerArgs` (ADR-003), `WizardDraft` (ADR-005). ADR and TD numbers are
+  shared; the next TD free in both is TD-281.
+- **Readiness port, merged 2026-10-19, not deployed** (#137, #138: semperdic-app's
+  #448/#449; TD-214–TD-279, FI-17–FI-24). **minSdk 30**; the signed offline entitlement
+  ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); tokens name
+  `materialtesting`); its own version-gate pair `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING`
+  / `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING`; kill switches; EMM config;
+  account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md):
+  nothing typed or sold in the app, **Refresh licence**, locked not hidden, 503
+  `feature_paused`). **Update** opens this repo's releases page for a sideloaded build.
+  The backend, consoles, indexes and dashboards deploy only from semperdic-app, in its
+  order; never deploy Hosting from here. Owed: TD-214–TD-217, TD-219, TD-226,
+  TD-229–TD-232, counsel on the Terms (TD-277); for a release, this repo's
+  `SEMPER_ENTITLEMENT_PUBKEYS` variable and `SEMPER_API_CERT_PINS` secret.
+- **Lab outputs.** Tensile: stress–strain (ΔL / L₀, ADR-012), E, Rp0.2, **Adjust curve**,
+  a lab report. Bending: beam-edge taps, δ and E = WL³/(48δI), loads in kg, a deflection
+  correction (ADR-013), a lab report. Checked against published steel and PMMA data
+  ([REAL_WORLD_VALIDATION.md](docs/app/REAL_WORLD_VALIDATION.md)); owed again on engine 0.4.2.
+- **Releases.** `com.sempermechanics.materialtesting` (ADR-009, ADR-019) beside Semper, on
+  its backend; last `v1.4-beta.2` (`d08aae07`, 2026-10-17, versionCode 1006), not yet
+  smoked on a phone. Never hand out `main`'s CI APK (TD-148). App Check waits for Play.
+- **Owed by hand** ([WORKFLOWS.md](docs/app/WORKFLOWS.md)): ROI zoom and pan on a phone
+  (§6.21–6.25); §5.1a on Semper's sampling sheet with a load log, a phone MP4 and a UTM
+  clip; Material Testing beside Semper (§3b) and ADR-022's screenshots; the synced tip
+  cards, summary pill and Re-run (3.11a–3.11m); Pixel 6 benchmark references (TD-135).
+  Owner decision: Terms §1.2 and §1.3 against a student audience.
 - **Look it up; this list rots.** `gh pr list --state open`; history in
   [CHANGELOG.md](docs/ops/CHANGELOG.md); proposals in [FUTURE_IMPROVEMENTS.md](docs/ops/FUTURE_IMPROVEMENTS.md).
 

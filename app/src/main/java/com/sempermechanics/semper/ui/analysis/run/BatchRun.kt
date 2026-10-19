@@ -2,6 +2,8 @@ package com.sempermechanics.semper.ui.analysis.run
 
 import androidx.annotation.MainThread
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.ui.analysis.rerun.RerunSetup
+import com.sempermechanics.semper.ui.analysis.rerun.snapshotRerunSetup
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import java.io.File
 import kotlin.coroutines.CoroutineContext
@@ -26,7 +28,12 @@ internal class BatchRun(
  * [RunSpec] (ADR-004); the session it writes is resolved inside the run,
  * after the quota check.
  */
-internal class RunInputs(val reference: Reference, val frames: Frames) {
+internal class RunInputs(
+    val reference: Reference,
+    val frames: Frames,
+    /** What a saved run keeps for Home's Re-run beyond its spec and images; null keeps nothing. */
+    val setup: RerunSetup? = null,
+) {
 
     /**
      * The reference image: its encoded [bytes] (null if none was picked, which
@@ -60,4 +67,5 @@ internal fun AnalysisViewModel.snapshotRunInputs(): RunInputs = RunInputs(
         timesMs = defFrameTimesMs?.toList(),
         videoName = defVideoName,
     ),
+    setup = snapshotRerunSetup(),
 )

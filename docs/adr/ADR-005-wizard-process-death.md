@@ -138,6 +138,9 @@ the import, which on a 150-frame batch is minutes.
 - **When the draft goes.** It is deleted when the wizard finishes
   (`onDestroy` with `isFinishing`), not when a run commits: the user
   re-runs from the same wizard, and a kill after a run must still restore.
+  *Since 2026-10-15 ([ADR-022](ADR-022-rerun-as-copy.md))* the wizard
+  finishes when results open, so a draft lives only until a run's results
+  open or the user leaves; a run that fails or is cancelled keeps it.
   `discard()` does not block Main: it sets a `@Volatile` flag that turns
   any write still queued into a no-op, then deletes the files on the same
   lane. `ViewModel.onCleared`

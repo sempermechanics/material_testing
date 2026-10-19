@@ -140,7 +140,7 @@ twice.
 - **The `tmp → renameTo → copy-fallback` promote idiom** exists six times
   exactly (`DriveTransfer.kt:350,497`, `SemperApi.kt:200`,
   `SessionEverythingExporter.kt:91`, `SessionStore.kt:467`, `SessionZip.kt:231`)
-  plus two variants (`SessionRepository.kt:105`, `BatchAnalysis.kt:182`).
+  plus two variants (`SessionRepository.kt:105`, `BatchAnalysis.kt:190`).
   One `util/AtomicFiles.promote(tmp, dest)` covers all of them.
 - **Cache filenames** (`semper-account-export.json`, `roi_mask_cache.bin`,
   `temp_roi_ref.bin`) are spelled in both their writer and `CacheJanitor`'s

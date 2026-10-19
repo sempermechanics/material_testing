@@ -140,4 +140,17 @@ class WizardParamFieldsTest {
         assertEquals(SweepStudy.nearestWindowPoints(61, DicParams.DEFAULT_STEP), window)
         assertFalse(bed.settings.advancedBody.isVisible)
     }
+
+    @Test
+    fun `a Re-run's settings land on the sliders as the user's own, a large step included`() {
+        fields.reset()
+        // A step larger than the default subset allows: the step's range must follow the subset first.
+        val run = DicParams(subset = 61, step = 18, strainWindow = SweepStudy.vsgFor(9, 18))
+
+        fields.applyRerun(run.subset, run.step, run.strainWindow, use6x6 = true)
+
+        assertEquals(run, fields.dicParams())
+        assertTrue(fields.isKeysInterpolatorSelected())
+        assertTrue("the recommendation must not move it", bed.viewModel.subsetUserModified)
+    }
 }

@@ -48,7 +48,7 @@ reachable from the environment this record was written in).
    payment page, no "email us to renew" or "request a higher limit" line. A
    feature the licence lacks is shown **locked**: present, disabled, with one
    note naming what includes it (`license_lock_note`,
-   `app/src/main/res/values/strings.xml:422`; `FeatureLocks`,
+   `app/src/main/res/values/strings.xml:447`; `FeatureLocks`,
    `data/policy/FeatureLocks.kt:41-67`; `LicenseLock`,
    `ui/common/dialog/LicenseLock.kt:14-36`). A kill switch or an EMM setting
    still hides or pauses, because it says nothing about the licence.

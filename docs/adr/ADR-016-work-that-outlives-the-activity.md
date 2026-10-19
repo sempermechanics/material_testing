@@ -68,14 +68,14 @@ Pick the home by how long the work must live and who must see its outcome.
 **The wizard is the exception, on purpose.** `StaticAnalysisActivity`
 absorbs every configuration change (`app/src/main/AndroidManifest.xml:154-158`),
 so rotation never recreates it. Its batch and sweep runs sit on
-`viewModelScope` (`ui/analysis/wizard/RunChannels.kt:112`, `:171`), but
+`viewModelScope` (`ui/analysis/wizard/RunChannels.kt:117`, `:187`), but
 `onDestroy` raises the run's cancel flag on every destroy
-(`ui/analysis/StaticAnalysisActivity.kt:246`), and a destroy that is not a
+(`ui/analysis/StaticAnalysisActivity.kt:252`), and a destroy that is not a
 configuration change also clears the view model and its scope: a solve
 belongs to the screen that shows it. Process death is covered by the
 draft ([ADR-005](ADR-005-wizard-process-death.md)), not by keeping the run.
 A run's outcome is held in the view model until a started screen takes it,
-once (`PendingOutcome`, `ui/analysis/wizard/RunChannels.kt:73`), so a run
+once (`PendingOutcome`, `ui/analysis/wizard/RunChannels.kt:78`), so a run
 that ends while the wizard is in the background is handled when it returns.
 
 **Rule for new code.**

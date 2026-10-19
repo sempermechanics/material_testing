@@ -5,11 +5,17 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.field.DicParams
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.RunStop
+import com.sempermechanics.semper.navigation.IntentKeys
+import com.sempermechanics.semper.ui.analysis.VsgLatticeActivity
 import com.sempermechanics.semper.ui.analysis.WizardTestBed
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
+import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,7 +33,9 @@ import org.robolectric.shadows.ShadowToast
 /**
  * A failed run names its frame and leaves the ⓘ by the status line; a sweep
  * that failed outright says so; a cancelled sweep that kept nothing opens
- * nothing. The status line clears on new input, but not mid-run.
+ * nothing. The status line clears on new input, but not mid-run. A run whose
+ * result opens closes the wizard (owner decision, 2026-10-15): Home launched
+ * it, so the result's Back lands on Home, and New analysis starts empty.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -135,6 +143,58 @@ class WizardRunOutcomesTest {
         outcomes.onSweepFinished(cancelled)
         assertNull(shadowOf(bed.activity).nextStartedActivity)
         assertEquals(0, checks)
+    }
+
+    /** The view model as a saved run of [frames] frames in session `saved` leaves it. */
+    private fun startedClass() = shadowOf(bed.activity).nextStartedActivity.component?.className
+
+    private fun savedRun(spec: RunSpec, frames: Int = 2) = bed.viewModel.apply {
+        realRefWidth = 64
+        realRefHeight = 64
+        deformedFrames = (1..frames).map { DeformedFrame(path = "/f/$it.png", name = "$it.png") }
+        resetRunResult("/sessions/saved", spec, "saved")
+        recordRunSettings(spec.recordSettings())
+    }
+
+    private val single = RunSpec.of(DicParams(21, 5, 15), Roi(0, 0, 64, 64), null, false, null)
+
+    @Test
+    fun `a finished run opens its result and closes the wizard, so the result's Back goes Home`() {
+        savedRun(single)
+
+        outcomes.openResultViewer()
+
+        val started = shadowOf(bed.activity).nextStartedActivity
+        assertEquals(ResultViewerActivity::class.java.name, started.component?.className)
+        assertEquals("the run's own session", "saved", started.getStringExtra(IntentKeys.SESSION_LOCAL_ID))
+        assertTrue("the wizard is not left under the result", bed.activity.isFinishing)
+    }
+
+    @Test
+    fun `a stop with frames saved opens its result from View results and closes the wizard`() {
+        savedRun(single, frames = 4)
+        outcomes.onPartialRun(outcome(frames = 2, code = RunStop.LowConvergence.wireCode).copy(saved = true))
+        bed.idle()
+        assertFalse("the dialog explains first", bed.activity.isFinishing)
+
+        (ShadowDialog.getLatestDialog() as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        bed.idle()
+
+        assertEquals(ResultViewerActivity::class.java.name, startedClass())
+        assertTrue(bed.activity.isFinishing)
+    }
+
+    @Test
+    fun `a finished sweep opens its lattice and closes the wizard`() {
+        val plan = listOf(SweepStudy.Point(21, 5, 3), SweepStudy.Point(31, 5, 3))
+        val spec = RunSpec.sweep(RunSpec.Sweep(plan, listOf("a", "b"), true, 0), Roi(0, 0, 64, 64), null, false, null)
+        savedRun(spec, frames = 1)
+        bed.viewModel.sweepPlan = plan
+
+        outcomes.onSweepFinished(outcome(frames = 2, code = 0).copy(firstFrameValidPoints = 10, saved = true))
+
+        assertEquals(VsgLatticeActivity::class.java.name, startedClass())
+        assertTrue(bed.activity.isFinishing)
     }
 
     private companion object {

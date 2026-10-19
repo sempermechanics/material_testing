@@ -16,7 +16,8 @@
     <string name="next_frame">Next frame</string>
 
     <string name="analysis_caching_images">Caching images…</string>
-    <string name="analysis_importing_title">Importing Images</string>
+    <string name="analysis_importing_title">Importing photos</string>
+    <string name="video_extracting_title">Extracting frames</string>
     <plurals name="analysis_importing_fmt">
         <item quantity="one">Importing image %1$d of %2$d</item>
         <item quantity="other">Importing image %1$d of %2$d</item>
@@ -142,8 +143,6 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="forgot_password">Forgot Password?</string>
     <string name="or">or</string>
     <string name="continue_with_google">Continue with Google</string>
-    <string name="min_0_0">Min: 0.0</string>
-    <string name="max_0_0">Max: 0.0</string>
     <string name="frame_1_1">Frame: 1 / 1</string>
 
     <!-- Result viewer: summary animation and frame jump -->
@@ -158,8 +157,14 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
          literal extremum, which is what the ⓘ details sheet shows instead. -->
     <string name="scale_max_fmt">≥ %1$s %2$s</string>
     <string name="scale_min_fmt">≤ %1$s %2$s</string>
-    <string name="summary_building_fmt">Rendering %1$s… %2$d of %3$d</string>
-    <string name="summary_scanning_fmt">Reading frames… %1$d of %2$d</string>
+    <!-- A colour-scale end before its range is known (the summary's sequence
+         pass, or the first frame still drawing), in place of a fake "0.0". -->
+    <string name="scale_label_pending" translatable="false">—</string>
+    <!-- The summary's progress pill, one short line: the field is on the U chip
+         above, so it is not repeated here. -->
+    <string name="summary_building_fmt">Building summary · %1$d of %2$d</string>
+    <string name="summary_scanning_fmt">Reading frames · %1$d of %2$d</string>
+    <string name="summary_cancel_desc">Cancel summary</string>
     <string name="summary_failed">Could not build the animation.</string>
     <string name="summary_no_data">No correlated data to animate.</string>
     <string name="frame_number_hint">#</string>
@@ -240,6 +245,26 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="session_data_gone_title">Not on this phone</string>
     <string name="session_data_gone_body">If it was backed up, it\'s still in the cloud.</string>
     <string name="action_rename">Rename</string>
+    <!-- Home selection: start a new analysis from the selected one's photos and settings. -->
+    <string name="action_rerun">Re-run</string>
+    <string name="rerun_desc">Re-run as a new analysis</string>
+    <string name="rerun_unavailable_title">Can\'t re-run this analysis</string>
+    <!-- Re-run of a backed-up analysis that is not on this phone. -->
+    <string name="rerun_photos_in_cloud_body">Its photos aren\'t on this phone. Restore it first.</string>
+    <!-- Re-run of one this phone has no frames for (only in the cloud, or freed up). -->
+    <string name="rerun_photos_missing_body">This phone doesn\'t have its original photos.</string>
+    <!-- Re-run of an analysis saved before Re-run kept its reference (or restored): pick it again. -->
+    <string name="rerun_pick_reference_title">Pick its reference photo</string>
+    <string name="rerun_pick_reference_body">This analysis was saved before Re-run kept its reference. Choose the same reference photo; its frames and settings come from the analysis.</string>
+    <string name="rerun_choose_photo">Choose photo</string>
+    <string name="rerun_choose_another_photo">Choose another photo</string>
+    <string name="rerun_checking_photo">Checking the photo…</string>
+    <!-- The picked reference's size differs from the analysis's: width × height, then the analysis's. -->
+    <string name="rerun_reference_size_mismatch">This photo is %1$d × %2$d; the analysis used %3$d × %4$d.</string>
+    <!-- Shown once when an older analysis's drawn region is re-run as its rectangle. -->
+    <string name="rerun_mask_not_saved">The mask wasn\'t saved; the region is a rectangle.</string>
+    <string name="rerun_copy_failed_body">Its photos couldn\'t be copied. Check the free space on this phone.</string>
+    <string name="rerun_copying">Copying the analysis\'s photos…</string>
     <!-- After a rename to a name another analysis has. -->
     <string name="rename_saved_as_fmt">Saved as %1$s</string>
     <string name="action_delete">Delete</string>
@@ -513,8 +538,15 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <!-- Beside the sweep's strain-window title: the smallest and largest VSG the plan fits. -->
     <string name="strain_win_vsg_range_fmt">%1$d–%2$d px VSG</string>
     <string name="planned_lattice_heading">Planned lattice</string>
-    <string name="run_sweep_legend">Filled: solved · grey: waiting · red: skipped</string>
-    <string name="sweep_running_fmt">Solving subset %1$d · step %2$d · %3$d-point window</string>
+    <!-- The run sheet under a sweep's lattice: the combination being solved
+         (its window is the VSG in px), then how the last one to end went. -->
+    <string name="run_sweep_now_fmt">Subset %1$d · window %2$d px</string>
+    <plurals name="run_sweep_last_fmt">
+        <item quantity="one">Last: %1$d%% converged · %2$s point</item>
+        <item quantity="other">Last: %1$d%% converged · %2$s points</item>
+    </plurals>
+    <string name="run_sweep_last_solved">Last: solved</string>
+    <string name="run_sweep_last_skipped">Last: skipped</string>
     <string name="run_analysis_of_fmt">Analysis %1$d of %2$d</string>
     <!-- W is the strain window in data points; with St it fixes the VSG,
          (W − 1) × St + 1 px, so the label needs no VSG of its own. -->
@@ -549,7 +581,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="sweep_reason_low_convergence">Convergence collapsed before this combination</string>
     <string name="sweep_reason_vsg">VSG failure — no strain survived this window at this step</string>
     <string name="run_reason_cancelled">Cancelled before every frame was solved</string>
-    <string name="run_fail_cancelled">The analysis was cancelled before every frame was solved. The frames solved before the cancel are kept.</string>
+    <string name="run_fail_cancelled">The analysis was cancelled. Nothing from the run is kept.</string>
     <!-- A single run whose first frame kept no points (engine code 0), split by how many points ICGN accepted there. -->
     <plurals name="run_fail_strain_window_fmt">
         <item quantity="one">%1$d point correlated, but it did not have enough solved neighbours to fill the strain window (VSG %2$d px at step %3$d px), so no strain could be fitted. Use a smaller strain window, a smaller step, or a larger region of interest.</item>
@@ -579,8 +611,8 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
 
     <!-- Sweep lattice staging screen (VsgLatticeActivity) -->
     <string name="vsg_lattice_title">Parameter sweep</string>
-    <string name="vsg_lattice_axis_subset">Subset size (px)</string>
-    <string name="vsg_lattice_axis_vsg">VSG (px)</string>
+    <!-- The run sheet's lattice: between the smallest and largest subset under its axis. -->
+    <string name="vsg_lattice_axis_subset_range">subset px</string>
     <!-- Compact lattice: unit folded onto the rightmost subset tick instead of a
          separate axis title (see SweepLatticeView.compact). -->
     <string name="vsg_lattice_axis_subset_unit_fmt">%1$d px</string>
@@ -621,6 +653,17 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="line_cut_axis_strain">Strain (mε)</string>
 
     <string name="run_frame_of_fmt">Frame %1$d of %2$d</string>
+    <!-- The run sheet's line under its header: the reference's name, then the time left. -->
+    <string name="run_subline_fmt">%1$s · %2$s</string>
+    <string name="run_bins_caption">Convergence per frame</string>
+    <!-- The run sheet for a moment after a run solved every frame, before the viewer opens. -->
+    <plurals name="run_done_frames_fmt">
+        <item quantity="one">%1$d frame solved</item>
+        <item quantity="other">%1$d frames solved</item>
+    </plurals>
+    <string name="run_done_seconds_fmt">%1$d s</string>
+    <string name="run_done_minutes_fmt">%1$d min %2$d s</string>
+    <string name="run_done_detail_fmt">%1$s · lowest %2$d%% converged</string>
     <plurals name="run_bins_cd">
         <item quantity="one">Frame %1$d of %2$d, %3$d converged above %4$d%%</item>
         <item quantity="other">Frame %1$d of %2$d, %3$d converged above %4$d%%</item>
@@ -643,7 +686,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="progress_rate_fmt">%1$.1f %2$s/s</string>
     <string name="progress_joined_fmt">%1$s · %2$s</string>
     <string name="cancel_run_title">Cancel analysis?</string>
-    <string name="cancel_run_body">Results so far are discarded.</string>
+    <string name="cancel_run_body">Nothing from this run is kept.</string>
     <string name="cancel_import_title">Cancel import?</string>
     <string name="cancel_import_body">Your previous selection is kept.</string>
     <string name="keep_running">Keep running</string>
@@ -927,21 +970,25 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="frame_order_date_desc">Newest first</string>
     <string name="frame_order_manual">Manual</string>
     <string name="frame_order_manual_hint">Drag thumbnails to reorder</string>
+    <!-- First-run tips (CoachMarkController). Keep each to about three lines on a
+         phone: a sentence or two, nothing an info button already explains. -->
     <string name="coach_skip">Skip</string>
     <string name="coach_next">Next</string>
     <string name="coach_done">Got it</string>
-    <string name="coach_home_fab">Import photos or a video to start an analysis</string>
+    <!-- Which tip of a sequence is showing, e.g. "1 of 3". -->
+    <string name="coach_step_count">%1$d of %2$d</string>
+    <string name="coach_home_fab">Import photos or a video to start an analysis.</string>
 
-    <string name="coach_analysis_ref">The reference image can be changed at any time.</string>
-    <string name="coach_analysis_def">Add deformed frames next. When you pick several, you can sort by name, date, or drag.</string>
-    <string name="coach_analysis_mode">Single solve or parameter sweep?</string>
-    <string name="coach_analysis_roi">Choose RoI or defaults to full image.</string>
+    <string name="coach_analysis_ref">Add the reference image here. You can change it any time.</string>
+    <string name="coach_analysis_def">Add the deformed frames next. Sort them by name or date, or drag to reorder.</string>
+    <string name="coach_analysis_mode">Choose a single solve or a parameter sweep.</string>
+    <string name="coach_analysis_roi">Set an ROI here, or keep the full image.</string>
     <string name="coach_analysis_advanced">Change parameters when you need finer control.</string>
-    <string name="coach_sweep_lattice">This is the planned lattice — each node is one analysis.</string>
-    <string name="coach_sweep_line_cut">Strain will be read along this centre line of the region of interest.</string>
-    <string name="coach_sweep_graph">Each node is one combination: subset size across, strain window up. Filled nodes solved — tap one to focus its curve, double-tap to open it. Hollow ones failed; tap for the reason.</string>
-    <string name="coach_sweep_scrub">Drag across the plot to read the focused curve\'s value at any position — it\'s marked with a dot in its own colour.</string>
-    <string name="coach_sweep_ranges">Set the ranges the sweep covers; each pair of subset and strain window is one analysis.</string>
+    <string name="coach_sweep_lattice">Each dot in the planned lattice is one analysis.</string>
+    <string name="coach_sweep_line_cut">Strain is read along this centre line of the ROI.</string>
+    <string name="coach_sweep_graph">Each dot is one combination: subset size across, VSG up. Tap a filled one to focus its curve; tap a hollow one for the reason.</string>
+    <string name="coach_sweep_scrub">Drag across the plot to read the focused curve at any point.</string>
+    <string name="coach_sweep_ranges">Set the ranges to sweep. Each subset and strain window pair is one analysis.</string>
     <string name="coach_sweep_run">Run the sweep when the plan looks right.</string>
     
     <!-- The ROI row: the region, then the points the engine solves in it at this step. -->
@@ -963,10 +1010,10 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
         <item quantity="one">Use %d image</item>
         <item quantity="other">Use %d images</item>
     </plurals>
-    <string name="coach_picker_images">Images from the gallery</string>
-    <string name="coach_picker_files">Files opens the system file picker</string>
-    <string name="coach_picker_multi">Tap several images to add them together</string>
-    <string name="coach_picker_files_select_all">In the next screen, Select all is under the three-dot menu (top right)</string>
+    <string name="coach_picker_images">Pick images from your gallery here.</string>
+    <string name="coach_picker_files">Files opens the system file picker.</string>
+    <string name="coach_picker_multi">Tap several images to add them at once.</string>
+    <string name="coach_picker_files_select_all">In Files, Select all is under the three-dot menu at the top right.</string>
     <string name="warn_faq_desc">Why this warning</string>
     <string name="action_why">Why?</string>
     <string name="faq_redirect_title">Open in browser?</string>
@@ -974,7 +1021,7 @@ A large region at a small step can exhaust memory — try a coarser step or a sm
     <string name="faq_redirect_open">Open</string>
     <string name="results_title">Results</string>
     <string name="action_share">Share</string>
-    <string name="viewer_back_desc">Back to settings</string>
+    <string name="viewer_back_desc">Back</string>
     <string name="viewer_home_desc">Home</string>
     <string name="viewer_heatmap_overlay_desc">Strain or displacement heatmap overlay</string>
     <string name="viewer_field_fab_desc">Change field</string>
