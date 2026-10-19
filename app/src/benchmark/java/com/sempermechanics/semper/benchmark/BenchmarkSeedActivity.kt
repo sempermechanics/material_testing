@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.core.graphics.createBitmap
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.report.FieldRangesStore
@@ -64,8 +65,7 @@ class BenchmarkSeedActivity : Activity() {
         val args = if (results) {
             frames.copy(
                 startFrame = null,
-                testType = TENSILE,
-                crossSectionMm2 = CROSS_SECTION_MM2,
+                labSession = LabSession(testType = TENSILE, crossSectionMm2 = CROSS_SECTION_MM2),
                 loadsN = List(frameCount) { stressMPa(it, frameCount) * CROSS_SECTION_MM2 },
             )
         } else {

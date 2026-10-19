@@ -1,12 +1,14 @@
 package com.sempermechanics.semper.ui.common
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Locale
 
 /**
  * [ByteSize.format] is Settings' `humanSize`, ported: both run over the same
  * counts (every unit boundary and rounding edge) and must print the same.
+ * [ByteUnit] is the one unit table Home, Settings and the progress text share.
  */
 class ByteSizeTest {
 
@@ -46,6 +48,24 @@ class ByteSizeTest {
             assertEquals(humanSize(gb + gb / 2), ByteSize.format(gb + gb / 2))
         } finally {
             Locale.setDefault(previous)
+        }
+    }
+
+    @Test
+    fun `the unit is the largest that keeps the count at one or more, KB at least`() {
+        assertEquals(ByteUnit.KB, ByteUnit.of(0))
+        assertEquals(ByteUnit.KB, ByteUnit.of(mb - 1))
+        assertEquals(ByteUnit.MB, ByteUnit.of(mb))
+        assertEquals(ByteUnit.MB, ByteUnit.of(gb - 1))
+        assertEquals(ByteUnit.GB, ByteUnit.of(gb))
+        assertEquals(ByteUnit.GB, ByteUnit.of(Long.MAX_VALUE))
+        assertEquals(1.5, ByteUnit.MB.amount(mb + mb / 2), 0.0)
+    }
+
+    @Test
+    fun `every count names the unit its format prints`() {
+        for (bytes in counts) {
+            assertTrue("bytes=$bytes", ByteSize.format(bytes).endsWith(" " + ByteUnit.of(bytes).label))
         }
     }
 

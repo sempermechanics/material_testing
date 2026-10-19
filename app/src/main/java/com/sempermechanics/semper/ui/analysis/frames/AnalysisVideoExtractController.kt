@@ -113,7 +113,7 @@ class AnalysisVideoExtractController(
     private fun apply(result: VideoFrameExtractor.ExtractionResult) {
         viewModel.applyNewReference(result.reference.png, result.refName, result.reference.size)
         // A video frame has no EXIF time, and the beam's taps were on the old reference.
-        viewModel.refCaptureTimeMs = null
+        viewModel.refCapture = null
         viewModel.onReferenceReplaced()
         // Each frame carries its clip time; less the reference's, that is what
         // a timed load log is matched by (defTimesAfterRefMs). No typed loads come with it.

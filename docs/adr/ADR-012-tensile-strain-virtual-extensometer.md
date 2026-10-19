@@ -61,6 +61,12 @@ points' extent along the axis.
 Bending is unchanged: the camera sees the outer fibre, and the mean strain
 there is the flexural strain.
 
+*Amended 2026-10-19:* that premise was wrong once bending was filmed from the
+side face (STUDENT_LAB_WORKFLOW.md), where the strain runs linearly through
+the thickness and its mean is about zero. Bending's strain is now the outer
+fibre's, from that gradient across the tapped thickness under the load point
+(`BeamDeflection.Probe.outerFibreStrainMilli`), and none without the taps.
+
 ## Options considered
 
 ### A: Keep the region mean

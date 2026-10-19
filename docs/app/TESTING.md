@@ -20,7 +20,7 @@ chunk own?" here.
 | **analytics** | Consent-gated Firebase Analytics events | `diagnostics/SemperAnalyticsTest` | — |
 | **upgrade** | Prefs / session index forward compatibility | (covered in settings + session) | `upgrade/PrefsUpgradeSmokeTest` |
 | **e2e** | Wizard chrome smoke (Next + toolbar; Back / Compute / instruction GONE on step 1) | — | `AnalysisWizardSmokeTest` |
-| **lab** | Tensile and bending sessions: E from the phone's own `.dat` files, the viewer opening on Results, the Elastic region toggle, the lab-report PDF; viewer gestures (flick and slow swipe scrub one frame, pinch, pan, tap to probe); the beam-edge tap editor under real touches (bottom mark held to the top's x, zoom kept between taps) | `report/*` (`ElasticModulusTest`, `BeamDeflectionTest`, `LabReportTest`, …) | `e2e/LabWorkflowDeviceTest`, `e2e/BeamTapEditorGestureTest` |
+| **lab** | Tensile and bending sessions: E from the phone's own `.dat` files, the viewer opening on Results, the Elastic region toggle, the lab-report PDF; viewer gestures (flick and slow swipe scrub one frame, pinch, pan, tap to probe); the beam-edge tap editor under real touches (bottom mark snapped to the top's x on a slip, kept on a tilted beam, zoom kept between taps) | `report/*` (`ElasticModulusTest`, `BeamDeflectionTest`, `LabReportTest`, …) | `e2e/LabWorkflowDeviceTest`, `e2e/BeamTapEditorGestureTest` |
 | **pipeline** | JNI + native runtime | — | `pipeline/EnginePipelineSmokeTest` |
 | **benchmark** | Startup / screen / viewer-scrub / lab Results Macrobenchmarks; hot-path microbenchmarks | — | `:app` androidTest `benchmark/HotPathMicroBenchmark`, `:benchmark` module (both in CI's `tier-benchmark`: label `benchmark` / workflow_dispatch / a PR touching a hot path) |
 

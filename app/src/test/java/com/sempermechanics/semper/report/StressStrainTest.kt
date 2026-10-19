@@ -2,8 +2,11 @@
 
 package com.sempermechanics.semper.report
 
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.ui.analysis.load.BeamTapPlacement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -171,6 +174,21 @@ class StressStrainTest {
     }
 
     @Test
+    fun `a tensile correction moves the plotted reference to its bias`() {
+        // ε = 1 × ε + 0.5 mε, σ = 1 × σ + 10 MPa: the unloaded reference plots at (0.5, 10), not (0, 0).
+        val correction = CurveCorrection(strainBiasMilli = 0.5f, stressBiasMPa = 10f)
+        val curve = StressStrain.build(
+            loadsN = listOf(50f),
+            model = StressStrain.Model.Axial(areaMm2 = 5f, axisX = false, correction = correction),
+            frameData = { field(0f, 0.0015f) },
+        )
+
+        assertEquals(0.5f to 10f, curve.plotPoints().first())
+        assertEquals(2f, curve.plotPoints()[1].first, 1e-4f)
+        assertEquals(20f, curve.plotPoints()[1].second, 1e-4f)
+    }
+
+    @Test
     fun `flexural stress is three-point bending at the outer fibre`() {
         // σ = 3 P L / (2 b h²): 3 · 200 · 80 / (2 · 10 · 4²) = 48000 / 320 = 150 MPa
         val model = StressStrain.Model.Flexural(spanMm = 80f, widthMm = 10f, thicknessMm = 4f, axisX = true)
@@ -178,8 +196,180 @@ class StressStrainTest {
         assertTrue(model.isComplete)
         assertEquals(150f, model.stressMPa(200f), 1e-3f)
         assertEquals(-150f, model.stressMPa(-200f), 1e-3f)
-        assertEquals(2f, model.strainMilli(field(exx = 0.002f, eyy = -0.0006f), gauge = null)!!, 1e-3f)
         assertEquals(listOf(80f, 10f, 4f), model.dimensions.map { it.second })
+    }
+
+    /**
+     * The beam's side face, 100 px thick between taps at y = 0 and y = 100 and
+     * 100 px along it: Exx = [k] (y − 50), linear through the thickness and zero
+     * on the neutral axis, and every point moved [vPx] down.
+     */
+    private fun bentField(k: Float, vPx: Float): FloatArray {
+        val data = FloatArray(11 * 11 * DicResult.STRIDE)
+        var i = 0
+        for (row in 0..10) {
+            for (col in 0..10) {
+                data[i + DicResult.IDX_X] = col * 10f
+                data[i + DicResult.IDX_Y] = row * 10f
+                data[i + DicResult.IDX_V] = vPx
+                data[i + DicResult.IDX_EXX] = k * (row * 10f - 50f)
+                data[i + DicResult.IDX_ZNSSD] = 0.05f
+                i += DicResult.STRIDE
+            }
+        }
+        return data
+    }
+
+    private fun bending(taps: BeamEdgeTaps) =
+        StressStrain.Model.Flexural(200f, 10f, 10f, axisX = true, probe = BeamDeflection.Probe(taps, 10f))
+
+    @Test
+    fun `bending strain is the outer fibre's, from the gradient through the thickness`() {
+        // ±1 mε at the two faces (k = 2×10⁻⁵ per px over ±50 px). The field's
+        // mean, which the curve plotted before, is 0.
+        val data = bentField(k = 2e-5f, vPx = 0f)
+
+        assertEquals(1.0f, bending(BeamEdgeTaps(50f, 0f, 50f, 100f)).strainMilli(data, gauge = null)!!, 0.05f)
+        assertEquals(0f, DicResult.fieldStats(data, DicResult.IDX_EXX)!![2], 1e-6f)
+    }
+
+    /**
+     * A pure-bending side face whose beam runs at [degrees] to the image's x
+     * axis (y down): along the beam ε = [k] η, across it −ν k η with ν = 0.3, no
+     * shear in the beam's frame, η the distance from the neutral axis through
+     * (200, 150). Image components by the tensor rotation, Exy tensor shear as
+     * the engine writes it. Taps 100 px apart across the beam, through that
+     * point, top first.
+     */
+    private fun tiltedBend(degrees: Double, k: Double = 2e-5): Pair<FloatArray, BeamEdgeTaps> {
+        val t = Math.toRadians(degrees)
+        val c = Math.cos(t)
+        val s = Math.sin(t)
+        val nu = 0.3
+        val data = FloatArray(81 * 81 * DicResult.STRIDE)
+        var i = 0
+        for (row in 0..80) {
+            for (col in 0..80) {
+                val x = col * 5.0
+                val y = row * 5.0
+                val eta = -(x - 200.0) * s + (y - 150.0) * c
+                val along = k * eta
+                val across = -nu * k * eta
+                data[i + DicResult.IDX_X] = x.toFloat()
+                data[i + DicResult.IDX_Y] = y.toFloat()
+                data[i + DicResult.IDX_EXX] = (along * c * c + across * s * s).toFloat()
+                data[i + DicResult.IDX_EYY] = (along * s * s + across * c * c).toFloat()
+                data[i + DicResult.IDX_EXY] = ((along - across) * c * s).toFloat()
+                data[i + DicResult.IDX_ZNSSD] = 0.05f
+                i += DicResult.STRIDE
+            }
+        }
+        val taps = BeamEdgeTaps(
+            (200.0 + 50.0 * s).toFloat(),
+            (150.0 - 50.0 * c).toFloat(),
+            (200.0 - 50.0 * s).toFloat(),
+            (150.0 + 50.0 * c).toFloat(),
+        )
+        return data to taps
+    }
+
+    @Test
+    fun `a beam tilted in the photo reads the strain along the beam, not Exx`() {
+        // k = 2×10⁻⁵ per px over ±50 px: 1 mε at the faces whatever the tilt
+        // (numpy, the same lattice and section). Exx as it is read 0.9608 mε
+        // at 10° (−3.9 %) and 0.675 at 30° (−32.5 %): Poisson's ratio in Eyy
+        // and the shear leak into it as the beam turns.
+        listOf(0.0, 10.0, -10.0, 30.0).forEach { degrees ->
+            val (data, taps) = tiltedBend(degrees)
+
+            val strain = bending(taps).strainMilli(data, gauge = null)!!
+
+            assertEquals("tilt $degrees°", 1.0f, strain, 0.02f)
+        }
+    }
+
+    /** [taps] as the tap editor places them: the top edge tapped, then the bottom. */
+    private fun editorTaps(taps: BeamEdgeTaps): BeamEdgeTaps {
+        val first = BeamTapPlacement.place(BeamTapPlacement.Marks(), taps.topX, taps.topY)
+        val placed = BeamTapPlacement.place(first, taps.bottomX, taps.bottomY)
+        val top = placed.top!!
+        val bottom = placed.bottom!!
+        return BeamEdgeTaps(top.x, top.y, bottom.x, bottom.y)
+    }
+
+    @Test
+    fun `a tilted beam tapped in the editor reads its strain along the beam and its true thickness`() {
+        // TD-310. The editor keeps a pair tapped square to a 10° or 30° beam as
+        // tapped, so the probe is the one above: 1.000 mε (numpy, the same lattice
+        // and section) and 10 mm over 100 px.
+        listOf(10.0, -10.0, 30.0).forEach { degrees ->
+            val (data, square) = tiltedBend(degrees)
+            val taps = editorTaps(square)
+            val model = bending(taps)
+
+            assertEquals("tilt $degrees°", square, taps)
+            assertEquals("outer-fibre strain along the beam", model.strainName)
+            assertEquals("tilt $degrees°", 1.0f, model.strainMilli(data, gauge = null)!!, 0.002f)
+            assertEquals("tilt $degrees°", 0.1f, model.probe!!.mmPerPx, 1e-6f)
+        }
+    }
+
+    @Test
+    fun `a nearly level beam tapped in the editor is read as level, within its snap`() {
+        // A 2° beam tapped square to itself snaps to the top mark's vertical line:
+        // Exx over 99.939 px, which numpy reads as 0.9972 mε (−0.28 %) and
+        // 10 / 99.939 = 0.100061 mm/px (+0.06 %). At 0° the pair is exact.
+        val (level, levelTaps) = tiltedBend(0.0)
+        assertEquals(1.0f, bending(editorTaps(levelTaps)).strainMilli(level, gauge = null)!!, 0.002f)
+
+        val (data, square) = tiltedBend(2.0)
+        val taps = editorTaps(square)
+        val model = bending(taps)
+
+        assertEquals(taps.topX, taps.bottomX, 0f)
+        assertEquals(square.bottomY, taps.bottomY, 0f)
+        assertEquals("outer-fibre Exx", model.strainName)
+        assertEquals(0.9972f, model.strainMilli(data, gauge = null)!!, 0.001f)
+        assertEquals(0.100061f, model.probe!!.mmPerPx, 1e-6f)
+    }
+
+    @Test
+    fun `a beam upright in the photo reads Eyy from its side-by-side taps`() {
+        val (data, taps) = tiltedBend(90.0)
+
+        assertEquals(1.0f, bending(taps).strainMilli(data, gauge = null)!!, 0.02f)
+        assertEquals("outer-fibre Eyy", bending(taps).strainName)
+        assertEquals("outer-fibre Exx", bending(BeamEdgeTaps(50f, 0f, 50f, 100f)).strainName)
+        assertEquals("outer-fibre strain along the beam", bending(tiltedBend(10.0).second).strainName)
+    }
+
+    @Test
+    fun `the bending strain is the tension face's whichever edge was tapped first`() {
+        // Loads push the beam down the photo (+v), so the bottom face is in tension.
+        val loads = listOf(10f, 20f)
+        val frames = { f: Int -> bentField(k = 2e-5f * (f + 1), vPx = 2f * (f + 1)) }
+
+        val topFirst = StressStrain.build(loads, bending(BeamEdgeTaps(50f, 0f, 50f, 100f)), frames)
+        val bottomFirst = StressStrain.build(loads, bending(BeamEdgeTaps(50f, 100f, 50f, 0f)), frames)
+
+        listOf(topFirst, bottomFirst).forEach { curve ->
+            assertEquals(listOf(1f, 2f), curve.points.map { Math.round(it.strainMilli * 100f) / 100f })
+            assertEquals(listOf(0.2f, 0.4f), curve.points.map { Math.round(it.deflectionMm!! * 100f) / 100f })
+        }
+    }
+
+    @Test
+    fun `bending without the edge taps measures no strain but keeps its stress`() {
+        val model = StressStrain.Model.Flexural(spanMm = 80f, widthMm = 10f, thicknessMm = 4f, axisX = true)
+        val curve = StressStrain.build(listOf(200f), model, { field(exx = 0.002f, eyy = -0.0006f) })
+
+        assertFalse(model.measuresStrain)
+        assertTrue(model.strainMilli(field(exx = 0.002f, eyy = -0.0006f), gauge = null)!!.isNaN())
+        assertEquals(150f, curve.points.single().stressMPa, 1e-3f)
+        // Only the origin: no strain to plot against.
+        assertEquals(listOf(0f to 0f), curve.plotPoints())
+        assertTrue(StressStrain.Model.Axial(1f, true).measuresStrain)
+        assertTrue(bending(BeamEdgeTaps(50f, 0f, 50f, 100f)).measuresStrain)
     }
 
     @Test

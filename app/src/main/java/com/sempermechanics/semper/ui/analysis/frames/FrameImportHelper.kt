@@ -97,7 +97,8 @@ object FrameImportHelper {
                         path = file.absolutePath,
                         name = originalName,
                         size = frameSize,
-                        captureTimeMs = captured,
+                        captureTimeMs = captured?.ms,
+                        captureSubSec = captured?.subSeconds,
                     ),
                 )
             }

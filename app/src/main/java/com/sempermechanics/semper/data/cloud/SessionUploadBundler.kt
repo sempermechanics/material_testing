@@ -23,7 +23,6 @@ import com.sempermechanics.semper.report.PdfReportGenerator
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.report.ReportSource
-import com.sempermechanics.semper.report.StressStrain
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.HeatmapFit
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
@@ -31,6 +30,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -152,11 +152,7 @@ object SessionUploadBundler {
         roiY = record.roiY,
         roiW = record.roiW,
         roiH = record.roiH,
-        testType = record.testType,
-        crossSectionMm2 = record.crossSectionMm2,
-        loadAxisX = record.loadAxisX,
-        geometry = record.geometry,
-        curveCorrection = record.curveCorrection,
+        lab = record.labSession,
     )
 
     /**
@@ -307,6 +303,8 @@ object SessionUploadBundler {
                 strainWindow = params.strainWindow,
                 data = { data },
                 loadN = record.frameLoadN(index),
+                // [index] is the planned frame: frames without a `.dat` never get here.
+                plannedIndex = index,
             )
             csv?.appendFieldStats(frame, data)
             csv?.append(frame)
@@ -398,11 +396,15 @@ object SessionUploadBundler {
             var ok = true
             try {
                 scratch.outputStream().use { stream ->
-                    PdfReportGenerator.generate(reportData, stream, resources).collect { progress ->
-                        if (progress is PdfReportGenerator.Progress.Error) {
-                            Timber.e(progress.ex, "PDF generation failed for %s", frameName)
-                            ok = false
-                        }
+                    // The generator throws a failed render; the frame's report is
+                    // then skipped (its heatmaps still staged), cancellation is not.
+                    try {
+                        PdfReportGenerator.generate(reportData, stream, resources).collect()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                        Timber.e(e, "PDF generation failed for %s", frameName)
+                        ok = false
                     }
                 }
                 onFieldHeatmaps(reportData.fieldResults)
@@ -423,10 +425,6 @@ private fun SessionRecord.frameLoadN(index: Int): Float? =
 
 /** The cover's mechanical block, or null on a plain DIC session. */
 private fun SessionRecord.mechanicalCover(index: Int): MechanicalCover? {
-    if (testType.isBlank()) return null
-    return MechanicalCover(
-        testType = testType,
-        model = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection),
-        loadN = frameLoadN(index),
-    )
+    val model = labSession.stressModel() ?: return null
+    return MechanicalCover(testType = testType, model = model, loadN = frameLoadN(index))
 }

@@ -139,6 +139,68 @@ class MachineLoadMapperTest {
     }
 
     @Test
+    fun `a log timed in milliseconds matches frames in seconds`() {
+        // Read as seconds, rows 500 and 1000 sat 499.5 s and 999 s from the frames.
+        val parsed = (MachineLoadCsv.parse("Time (ms),Load (N)\n0,0\n500,5\n1000,10\n") as LoadCsvParse.Ok).csv
+        val table = MachineLoadMapper.map(parsed, 2, listOf(500L, 1000L), TestType.TENSILE)!!
+
+        assertEquals(listOf(5f, 10f), table.loadsN)
+        assertEquals(LoadMapping.TIME_NEAREST, table.mapping)
+    }
+
+    @Test
+    fun `whole-second photo times match within a second and say they are coarse`() {
+        // A 50 N/s ramp logged at 0, 1.6 and 3.2 s. Photos 2 s and 3 s after the
+        // reference, but EXIF without sub-seconds is only good to ±1 s: the
+        // nearest rows, 400 ms and 200 ms away, are taken, which a 100 ms window
+        // would refuse, and the chip says the times are coarse.
+        val parsed = parsed(listOf(0f, 80f, 160f), listOf(0f, 1.6f, 3.2f))
+        val frameTimes = listOf(2_000L, 3_000L)
+
+        val coarse = MachineLoadMapper.map(parsed, 2, frameTimes, TestType.TENSILE, wholeSecondTimes = true)!!
+        assertEquals(listOf(80f, 160f), coarse.loadsN)
+        assertEquals(listOf(LoadMapWarning.TIME_ALIGNED, LoadMapWarning.TIME_COARSE), coarse.warnings)
+        assertEquals(MachineLoadMapper.COARSE_MATCH_TOLERANCE_MS, coarse.matchToleranceMs, 0.0)
+
+        val fine = MachineLoadMapper.map(parsed, 2, frameTimes, TestType.TENSILE)!!
+        assertEquals(0, fine.matchedFrames)
+        assertFalse(LoadMapWarning.TIME_COARSE in fine.warnings)
+        assertEquals(MachineLoadMapper.MATCH_TOLERANCE_MS, fine.matchToleranceMs, 0.0)
+    }
+
+    @Test
+    fun `a whole-second reference with sub-second photos is matched as coarse`() {
+        // The reference's EXIF has no sub-seconds (another camera, an edited
+        // copy), the photos' do. Every photo's time after the reference is then
+        // good only to ±1 s, though none of them lands on a whole second.
+        val parsed = parsed(listOf(0f, 80f, 160f), listOf(0f, 1.6f, 3.2f))
+        val t0 = 1_790_000_000_000L
+        val reference = CaptureStamp(t0, subSeconds = false)
+        val photos = listOf(CaptureStamp(t0 + 2_300L, subSeconds = true), CaptureStamp(t0 + 2_900L, subSeconds = true))
+
+        val table = MachineLoadMapper.mapPhotos(parsed, 2, reference, photos, TestType.TENSILE)!!
+
+        assertEquals(listOf(80f, 160f), table.loadsN)
+        assertEquals(listOf(LoadMapWarning.TIME_ALIGNED, LoadMapWarning.TIME_COARSE), table.warnings)
+
+        // Read with sub-seconds throughout, the same times are fine: 100 ms.
+        val fine = MachineLoadMapper.mapPhotos(parsed, 2, CaptureStamp(t0, true), photos, TestType.TENSILE)!!
+        assertFalse(LoadMapWarning.TIME_COARSE in fine.warnings)
+        assertEquals(0, fine.matchedFrames)
+    }
+
+    @Test
+    fun `photos without capture times are matched by row order`() {
+        val parsed = parsed(listOf(10f, 20f), listOf(0f, 1f))
+        val photos = listOf(CaptureStamp(1_000L, true), null)
+
+        val table = MachineLoadMapper.mapPhotos(parsed, 2, CaptureStamp(0L, true), photos, TestType.TENSILE)!!
+
+        assertEquals(LoadMapping.ONE_TO_ONE, table.mapping)
+        assertEquals(listOf(10f, 20f), table.loadsN)
+    }
+
+    @Test
     fun `a timed log with photos, which have no times, pairs in order`() {
         val table = map(listOf(10f, 20f), frames = 2, times = listOf(0f, 1f))!!
 

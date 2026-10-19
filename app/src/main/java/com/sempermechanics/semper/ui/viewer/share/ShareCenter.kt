@@ -10,8 +10,7 @@ import android.view.View
 import androidx.annotation.StringRes
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.mechanical.CurveCorrection
-import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.loadOfFrame
 import com.sempermechanics.semper.data.policy.AppPolicy
 import com.sempermechanics.semper.data.policy.FeatureAccess
@@ -73,10 +72,10 @@ class ShareCenter(private val host: ResultViewerActivity) {
         if (!s.isSweep) sheet.row(R.id.rowShareAnimations) { offerSlowExport(ShareKind.GIFS, s) }
         // A typed test with loads offers the student's lab report.
         val labOffered = LabReportExporter.offered(
-            s.testType,
+            s.lab.testType,
             hasLoads = s.loadsN.isNotEmpty(),
             isSweep = s.isSweep,
-            hasLoadPoint = s.geometry.loadPoint.isSet,
+            hasLoadPoint = s.lab.geometry.loadPoint.isSet,
         )
         if (labOffered) {
             v.rowShareLabReport.visibility = View.VISIBLE
@@ -184,22 +183,19 @@ class ShareCenter(private val host: ResultViewerActivity) {
          * deformed image — from this, rather than reusing the one on screen.
          */
         val reportSource: ViewerReportFactory.Source,
-        /** Mechanical test, as the viewer has it; blank / empty on a plain DIC session. */
-        val testType: String = "",
-        val crossSectionMm2: Float = 0f,
-        val loadAxisX: Boolean = true,
+        /**
+         * Mechanical test, as the viewer has it: bending's dimensions with a
+         * deflection correction set in Results, tensile's scale and bias typed
+         * there, else the session's. [LabSession.NONE] on a plain DIC session.
+         */
+        val lab: LabSession = LabSession.NONE,
         /** Machine load per planned frame, N; empty without a load log. */
         val loadsN: FloatArray = FloatArray(0),
-        /** Bending's dimensions, with a deflection correction set in Results. */
-        val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
-        /** Tensile's scale and bias: one typed in Results, else the session's. */
-        val curveCorrection: CurveCorrection = CurveCorrection.NONE,
         /** The viewer's already-built curve, if a Results surface has been shown. */
         val stressStrain: StressStrain.Curve? = null,
     ) {
         /** How this session's loads become stress. */
-        val stressModel: StressStrain.Model
-            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
+        val stressModel: StressStrain.Model get() = lab.stressModelOrAxial()
 
         /**
          * The machine load behind the frame at position [index], or null without one.

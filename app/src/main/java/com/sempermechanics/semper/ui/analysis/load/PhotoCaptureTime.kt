@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.ui.analysis.load
 
 import androidx.exifinterface.media.ExifInterface
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import java.io.File
 import java.io.InputStream
 import java.text.ParseException
@@ -19,7 +20,9 @@ import java.util.TimeZone
  *
  * The camera's wall clock is read as UTC. Only differences between photos
  * are used, so the zone drops out, and no daylight-saving change can open a
- * gap mid-test. Without sub-seconds a time is good to the whole second.
+ * gap mid-test. Without sub-seconds a time is good to the whole second, and
+ * the stamp says so ([CaptureStamp.subSeconds]); how a batch is matched from
+ * its stamps is [CaptureStamp]'s.
  */
 object PhotoCaptureTime {
 
@@ -40,33 +43,29 @@ object PhotoCaptureTime {
         return seconds?.plus(fractionMs(subSec))
     }
 
+    /** [parse]'s time, and whether [subSec] gave it sub-seconds; null when [parse]'s is. */
+    fun stamp(dateTime: String?, subSec: String?): CaptureStamp? =
+        parse(dateTime, subSec)?.let { ms -> CaptureStamp(ms, subSeconds = subSecDigits(subSec).isNotEmpty()) }
+
     /**
      * `SubSecTime` is the digits after the decimal point: "5" is 500 ms,
      * "123" is 123 ms, "1234" is 123 ms. Anything else counts as none.
      */
     private fun fractionMs(subSec: String?): Long {
-        val digits = subSec?.trim()?.takeWhile { it.isDigit() }.orEmpty()
+        val digits = subSecDigits(subSec)
         if (digits.isEmpty()) return 0L
         return digits.take(MS_DIGITS).padEnd(MS_DIGITS, '0').toLong()
     }
 
-    /**
-     * Each frame's time after the reference, in ms, or empty (no time match)
-     * unless the reference and every frame have a capture time.
-     */
-    fun relativeTimesMs(referenceMs: Long?, framesMs: List<Long?>): List<Long> {
-        val times = framesMs.filterNotNull()
-        if (referenceMs == null || times.isEmpty() || times.size != framesMs.size) return emptyList()
-        return times.map { it - referenceMs }
-    }
+    private fun subSecDigits(subSec: String?): String = subSec?.trim()?.takeWhile { it.isDigit() }.orEmpty()
 
     /** The capture time in [file]'s EXIF, or null when it has none or cannot be read. */
-    fun read(file: File): Long? = runCatching { of(ExifInterface(file)) }.getOrNull()
+    fun read(file: File): CaptureStamp? = runCatching { of(ExifInterface(file)) }.getOrNull()
 
     /** As [read], from a stream the caller closes; for RAW files whose import drops the EXIF. */
-    fun read(stream: InputStream): Long? = runCatching { of(ExifInterface(stream)) }.getOrNull()
+    fun read(stream: InputStream): CaptureStamp? = runCatching { of(ExifInterface(stream)) }.getOrNull()
 
-    private fun of(exif: ExifInterface): Long? = parse(
+    private fun of(exif: ExifInterface): CaptureStamp? = stamp(
         exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL),
         exif.getAttribute(ExifInterface.TAG_SUBSEC_TIME_ORIGINAL),
     )

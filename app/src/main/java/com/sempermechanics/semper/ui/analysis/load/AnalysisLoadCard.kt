@@ -18,7 +18,6 @@ import com.sempermechanics.semper.data.mechanical.LoadCsvWarning
 import com.sempermechanics.semper.data.mechanical.LoadMapWarning
 import com.sempermechanics.semper.data.mechanical.LoadMapping
 import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
-import com.sempermechanics.semper.data.mechanical.MachineLoadMapper
 import com.sempermechanics.semper.data.mechanical.MachineLoadTable
 import com.sempermechanics.semper.data.mechanical.TestType
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisReadyGate
@@ -247,8 +246,10 @@ class AnalysisLoadCard(
     private fun csvWarningText(warning: LoadCsvWarning): String = activity.getString(
         when (warning) {
             LoadCsvWarning.UNITS_ASSUMED_N -> R.string.load_warn_units_assumed
+            LoadCsvWarning.KG_READ_AS_KGF -> R.string.load_warn_kg_as_kgf
             LoadCsvWarning.COLUMN_GUESSED -> R.string.load_warn_column_guessed
             LoadCsvWarning.TIME_IGNORED -> R.string.load_warn_time_ignored
+            LoadCsvWarning.TIME_UNIT_ASSUMED_S -> R.string.load_warn_time_unit_assumed
         },
     )
 
@@ -267,10 +268,11 @@ class AnalysisLoadCard(
                 unmatched,
                 unmatched,
                 table.loadsN.size,
-                MachineLoadMapper.MATCH_TOLERANCE_MS.toInt(),
+                table.matchToleranceMs.toInt(),
             )
         }
         LoadMapWarning.SIGN_UNEXPECTED -> activity.getString(R.string.load_warn_sign_tensile)
+        LoadMapWarning.TIME_COARSE -> activity.getString(R.string.load_warn_time_coarse)
     }
 
     private fun mappingRes(mapping: LoadMapping): Int = when (mapping) {

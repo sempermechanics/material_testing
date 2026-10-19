@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.LinearCorrection
 import com.sempermechanics.semper.field.DicResult
 import kotlin.math.abs
 import kotlin.math.max
@@ -48,6 +49,9 @@ object BeamDeflection {
     /** Smallest probe radius, so a thin beam still averages some points. */
     const val MIN_PROBE_RADIUS_PX = 8f
 
+    /** Fewest points across the section that give the outer-fibre strain a line. */
+    const val MIN_SECTION_POINTS = 3
+
     private const val MPA_PER_GPA = 1000f
     private const val TWELVE = 12f
     private const val FORTY_EIGHT = 48f
@@ -71,6 +75,75 @@ object BeamDeflection {
         val downY: Float = (taps.bottomY - taps.topY) / taps.thicknessPx
         val radiusPx: Float = max(taps.thicknessPx / 2f, MIN_PROBE_RADIUS_PX)
 
+        /**
+         * The beam's axis in the image, square to the taps, as the cos and sin
+         * of its angle to x: ([downY], −[downX]). Its sign does not matter; the
+         * strain along it takes only c², s² and c·s.
+         */
+        private val axisC: Float get() = downY
+        private val axisS: Float get() = -downX
+
+        /**
+         * The normal strain along the beam's axis, from the image-frame tensor
+         * (Exy the tensor shear, as the engine writes it):
+         * ε = Exx·c² + 2·Exy·c·s + Eyy·s². Taps along an image axis read Exx
+         * or Eyy exactly as they are, and not the other components at all.
+         */
+        fun strainAlongBeam(exx: Float, eyy: Float, exy: Float): Float = when {
+            downX == 0f -> exx
+            downY == 0f -> eyy
+            else -> exx * axisC * axisC + 2f * exy * axisC * axisS + eyy * axisS * axisS
+        }
+
+        /**
+         * The bending strain at the outer fibre under the load point, in
+         * millistrain. Filmed from the side face, the strain along the beam
+         * ([strainAlongBeam]: Exx for taps one above the other, Eyy for taps side
+         * by side, the rotated tensor for a beam tilted in the photo) is linear
+         * through the thickness and zero on the neutral axis. So a line is fitted to it against each
+         * point's distance from the taps' midpoint along the tap line, and its
+         * slope times half the tapped thickness is the strain at the face the
+         * second tap marks. The points are the accepted ones with a strain in
+         * the section: within half the thickness of the midpoint across the
+         * beam and [radiusPx] along it. The faces themselves are usually
+         * beyond the strain window's reach, which is why the gradient is read,
+         * not the edge values. Signed by tap order like
+         * [BeamDeflection.deflectionPx]; [BeamDeflection.alongLoad] turns it to
+         * the tension face. Null with fewer than [MIN_SECTION_POINTS] points or
+         * none spread across the section.
+         */
+        fun outerFibreStrainMilli(data: FloatArray): Float? {
+            val cx = taps.midX
+            val cy = taps.midY
+            val half = taps.thicknessPx / 2f
+            val across = ArrayList<Double>()
+            val strain = ArrayList<Double>()
+            var i = 0
+            while (i + DicResult.STRIDE <= data.size) {
+                val dx = data[i + DicResult.IDX_X] - cx
+                val dy = data[i + DicResult.IDX_Y] - cy
+                val s = dx * downX + dy * downY
+                val along = dy * downX - dx * downY
+                val value = strainAlongBeam(
+                    data[i + DicResult.IDX_EXX],
+                    data[i + DicResult.IDX_EYY],
+                    data[i + DicResult.IDX_EXY],
+                )
+                val inSection = abs(s) <= half && abs(along) <= radiusPx
+                if (inSection && value.isFinite() && DicResult.isAcceptedPoint(data[i + DicResult.IDX_ZNSSD])) {
+                    across += s.toDouble()
+                    strain += value.toDouble() * DicResult.STRAIN_TO_MILLISTRAIN
+                }
+                i += DicResult.STRIDE
+            }
+            val line = if (across.size < MIN_SECTION_POINTS) {
+                null
+            } else {
+                LinearFit.fit(across.toDoubleArray(), strain.toDoubleArray())
+            }
+            return line?.let { (it.slope * half).toFloat() }
+        }
+
         companion object {
             /** A probe when the taps are set and the thickness entered; else null. */
             fun of(taps: BeamEdgeTaps, thicknessMm: Float, correction: Correction = Correction.NONE): Probe? =
@@ -84,9 +157,12 @@ object BeamDeflection {
      * per-step E but not the slope E, whose fit has a free intercept.
      */
     data class Correction(val scale: Float = 1f, val biasMm: Float = 0f) {
-        val isNone: Boolean get() = scale == 1f && biasMm == 0f
+        /** The same line in [LinearCorrection]'s terms, which does the arithmetic. */
+        private val line: LinearCorrection get() = LinearCorrection(scale, biasMm)
 
-        fun apply(deflectionMm: Float): Float = scale * deflectionMm + biasMm
+        val isNone: Boolean get() = line.isNone
+
+        fun apply(deflectionMm: Float): Float = line.apply(deflectionMm)
 
         /**
          * [points] with every δ corrected. Call it on [alongLoad]'s output:
@@ -97,7 +173,7 @@ object BeamDeflection {
             if (isNone) points else points.map { p -> p.copy(deflectionMm = p.deflectionMm?.let(::apply)) }
 
         /** The camera's δ back from a corrected one: the inverse of [apply]. */
-        fun remove(deflectionMm: Float): Float = (deflectionMm - biasMm) / scale
+        fun remove(deflectionMm: Float): Float = line.remove(deflectionMm)
 
         companion object {
             val NONE = Correction()
@@ -111,16 +187,10 @@ object BeamDeflection {
                 if (scale > 0f && scale.isFinite() && biasMm.isFinite()) Correction(scale, biasMm) else NONE
 
             /** A typed scale: blank is 1, a decimal comma is accepted; null unless a positive number. */
-            fun parseScale(text: String): Float? = typed(text, blank = 1f)?.takeIf { it > 0f }
+            fun parseScale(text: String): Float? = LinearCorrection.parseScale(text)
 
             /** A typed bias in mm: blank is 0, a decimal comma is accepted; null unless a number. */
-            fun parseBias(text: String): Float? = typed(text, blank = 0f)
-
-            private fun typed(text: String, blank: Float): Float? {
-                val trimmed = text.trim()
-                if (trimmed.isEmpty()) return blank
-                return trimmed.replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() }
-            }
+            fun parseBias(text: String): Float? = LinearCorrection.parseBias(text)
 
             /**
              * [curve] under [model]'s correction instead of its own: each δ taken
@@ -174,15 +244,23 @@ object BeamDeflection {
      * student who taps the bottom edge first — or a camera mounted upside
      * down — would otherwise flip δ, the slope and both E. A central load
      * bends the beam its own way, so the sign comes from the test, not the
-     * taps, and a session saved with its taps reversed reads right. Points
-     * without a δ, and a curve with none (tensile), come back as they are.
+     * taps, and a session saved with its taps reversed reads right. The
+     * outer-fibre strain ([Probe.outerFibreStrainMilli]) was read at the second
+     * tap's face, so it flips with δ and is then the tension face's, the side
+     * the load pushes towards. Points without a δ, and a curve with none
+     * (tensile), come back as they are.
      */
     fun alongLoad(points: List<StressStrain.Point>): List<StressStrain.Point> {
         val work = points.sumOf { p ->
             val d = p.deflectionMm
             if (d == null || !p.loadN.isFinite()) 0.0 else p.loadN.toDouble() * d
         }
-        return if (work < 0.0) points.map { p -> p.copy(deflectionMm = p.deflectionMm?.let { -it }) } else points
+        // 0f − x, not −x: a zero strain stays +0 (a data class tells −0f from 0f).
+        return if (work < 0.0) {
+            points.map { p -> p.copy(deflectionMm = p.deflectionMm?.let { -it }, strainMilli = 0f - p.strainMilli) }
+        } else {
+            points
+        }
     }
 
     /** I = b t³ / 12, mm⁴. */

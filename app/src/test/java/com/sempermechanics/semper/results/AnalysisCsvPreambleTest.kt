@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.report.AnalysisCsvWriter
@@ -149,9 +150,7 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = "compression",
-            crossSectionMm2 = 12.5f,
-            loadAxisX = false,
+            lab = LabSession(testType = "compression", crossSectionMm2 = 12.5f, loadAxisX = false),
         )
         AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
         val text = out.readText()
@@ -195,8 +194,10 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = "bending",
-            geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f),
+            lab = LabSession(
+                testType = "bending",
+                geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f),
+            ),
         )
         AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
         val text = out.readText()
@@ -208,12 +209,14 @@ class AnalysisCsvPreambleTest {
         assertTrue(text.lines().any { it.startsWith("frame_a.jpg,") && it.endsWith(",200.000,150.0000") })
     }
 
-    private fun tensileFile(sweep: Boolean, testType: String): String {
+    /** [planned]: the 0-based planned frames on disk, in order; a gap is a frame the run did not save. */
+    private fun tensileFile(sweep: Boolean, testType: String, planned: List<Int> = listOf(0, 1, 2, 3)): String {
         val out = File.createTempFile("semper_csv_results", ".csv")
         out.deleteOnExit()
         // E = 200 GPa: stress 100 MPa per 0.5 mε, stretched along x so the
         // extensometer's ΔL / L₀ reads it too.
-        val frames = (1..4).map { k ->
+        val frames = planned.map { p ->
+            val k = p + 1
             val data = stretchedGrid(exx = 0.0005f * k)
             AnalysisCsvWriter.Frame(
                 image = "frame_$k.jpg",
@@ -222,6 +225,7 @@ class AnalysisCsvPreambleTest {
                 strainWindow = 15,
                 data = { data },
                 loadN = 1250f * k,
+                plannedIndex = p,
             )
         }
         val metadata = AnalysisCsvWriter.Metadata(
@@ -233,8 +237,7 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = testType,
-            crossSectionMm2 = 12.5f,
+            lab = LabSession(testType = testType, crossSectionMm2 = 12.5f),
         )
         AnalysisCsvWriter.write(out, sweep, frames, metadata)
         return out.readText()
@@ -250,9 +253,57 @@ class AnalysisCsvPreambleTest {
         assertEquals(200f, modulus, 0.01f)
         assertEquals("# elastic_fit_frames,1,4", trailer[1])
         assertTrue(trailer[2], trailer[2].startsWith("# elastic_fit_r2,"))
-        assertEquals("", trailer[3])
-        assertEquals(4, trailer.size)
+        // A straight line to the end never meets the offset line: no Rp0.2.
+        assertEquals("# yield_rp02_mpa,", trailer[3])
+        assertEquals("# peak_stress_mpa,400.0000,4,true", trailer[4])
+        assertEquals("", trailer[5])
+        assertEquals(6, trailer.size)
         assertTrue(text.indexOf("# mechanical_results") > text.lastIndexOf("frame_4.jpg,"))
+    }
+
+    @Test
+    fun `the trailer numbers planned frames, so a skipped frame does not shift them`() {
+        // Planned frame 2 (the third) was not saved: the fit runs from frame 1
+        // to frame 5, not 1 to 4.
+        val text = tensileFile(sweep = false, testType = "tensile", planned = listOf(0, 1, 3, 4))
+
+        val trailer = text.substringAfter("# mechanical_results\n", missingDelimiterValue = "").lines()
+        assertEquals(200f, trailer[0].removePrefix("# elastic_modulus_gpa,").toFloat(), 0.01f)
+        assertEquals("# elastic_fit_frames,1,5", trailer[1])
+    }
+
+    @Test
+    fun `the tensile trailer quotes Rp0_2 and the peak stress, as the Results do`() {
+        // E = 200 GPa to 250 MPa (1.25 mε), then 0.1 GPa of hardening: the
+        // 0.2 % offset line 200 (ε − 2) meets 250 + 0.1 (ε − 1.25) at
+        // ε = 3.2510 mε, σ = 250.20 MPa. The peak is the last frame, 250.775 MPa.
+        val elastic = (1..5).map { k -> 0.25f * k to 50f * k }
+        val plastic = listOf(2.5f, 4f, 6f, 9f).map { e -> e to 250f + 0.1f * (e - 1.25f) }
+        val out = File.createTempFile("semper_csv_yield", ".csv")
+        out.deleteOnExit()
+        val frames = (elastic + plastic).mapIndexed { i, (strainMilli, stressMPa) ->
+            val data = stretchedGrid(exx = strainMilli / 1000f)
+            AnalysisCsvWriter.Frame("frame_${i + 1}.jpg", 41, 5, 15, { data }, loadN = stressMPa * 12.5f)
+        }
+        val metadata = AnalysisCsvWriter.Metadata(
+            referenceName = "ref.jpg",
+            strainMethod = "VSG",
+            imgW = 640,
+            imgH = 480,
+            roiX = 0,
+            roiY = 0,
+            roiW = 640,
+            roiH = 480,
+            lab = LabSession(testType = "tensile", crossSectionMm2 = 12.5f),
+        )
+        AnalysisCsvWriter.write(out, false, frames, metadata)
+
+        val trailer = out.readText().substringAfter("# mechanical_results\n").lines()
+        assertEquals("# elastic_fit_frames,1,5", trailer[1])
+        assertEquals(250.0f, trailer[3].removePrefix("# yield_rp02_mpa,").toFloat(), 0.5f)
+        val peak = trailer[4].removePrefix("# peak_stress_mpa,").split(',')
+        assertEquals(250.775f, peak[0].toFloat(), 1e-3f)
+        assertEquals(listOf("9", "true"), peak.drop(1))
     }
 
     /** A bending file: 100 px over 5 mm, 0.05 mm/px; each frame drops 10·k px = 0.5·k mm under 100·k N. */
@@ -272,8 +323,10 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = "bending",
-            geometry = SpecimenGeometry(spanMm = 200f, widthMm = 20f, thicknessMm = 5f, loadPoint = taps),
+            lab = LabSession(
+                testType = "bending",
+                geometry = SpecimenGeometry(spanMm = 200f, widthMm = 20f, thicknessMm = 5f, loadPoint = taps),
+            ),
         )
         AnalysisCsvWriter.write(out, false, frames, metadata)
         return out.readText()
@@ -356,7 +409,7 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = testType,
+            lab = LabSession(testType = testType),
         )
         AnalysisCsvWriter.write(out, sweep, frames, metadata)
 

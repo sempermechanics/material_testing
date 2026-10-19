@@ -3,6 +3,7 @@ package com.sempermechanics.semper.ui.viewer.share
 import android.content.ContentResolver
 import android.net.Uri
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
+import com.sempermechanics.semper.util.SafCopy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -160,11 +161,6 @@ internal class ShareExportJobs(
     }
 
     /** Copies [file] into the picked document; true when any bytes landed. */
-    private suspend fun writeTo(uri: Uri, file: File): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            resolver.openOutputStream(uri)?.use { out ->
-                file.inputStream().use { it.copyTo(out) }
-            } ?: 0L
-        }.onFailure { Timber.e(it, "Save to Files failed") }.getOrDefault(0L) > 0L
-    }
+    private suspend fun writeTo(uri: Uri, file: File): Boolean =
+        withContext(Dispatchers.IO) { SafCopy.copy(resolver, uri, file) }
 }

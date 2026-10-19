@@ -11,7 +11,8 @@ import kotlin.math.min
  * curve that runs to 67 mε (docs/app/REAL_WORLD_VALIDATION.md). The viewer's
  * counterpart to the lab report's elastic graph ([LabReport.GRAPH_ELASTIC]).
  *
- * The window runs from the unloaded origin through the fitted run, widened by
+ * The window runs from the unloaded reference ([StressStrain.Curve.origin]:
+ * the origin, or a tensile correction's bias) through the fitted run, widened by
  * [MARGIN_FRACTION] of that span on each side; only frames up to the peak are
  * kept, so a fractured specimen springing back does not land in it. Signs are
  * kept as everywhere in [StressStrain], so a compressive curve zooms the same.
@@ -22,7 +23,7 @@ object ElasticRegion {
     const val MARGIN_FRACTION = 0.5f
 
     /**
-     * [points]: (strain mε, stress MPa) led by the origin, as [StressStrain.Curve.plotPoints].
+     * [points]: (strain mε, stress MPa) led by the unloaded reference, as [StressStrain.Curve.plotPoints].
      * [line]: the fitted line across the same strain range, so the student sees where the curve leaves it.
      */
     data class Plot(val points: List<Pair<Float, Float>>, val line: List<Pair<Float, Float>>)
@@ -31,12 +32,13 @@ object ElasticRegion {
     fun of(curve: StressStrain.Curve, fit: ElasticModulus.Fit, margin: Float = MARGIN_FRACTION): Plot? {
         val fitted = curve.points.filter { fit.covers(it.frame) }
         if (fitted.isEmpty()) return null
-        val low = min(0f, fitted.minOf { it.strainMilli })
-        val high = max(0f, fitted.maxOf { it.strainMilli })
+        val origin = curve.origin
+        val low = min(origin.first, fitted.minOf { it.strainMilli })
+        val high = max(origin.first, fitted.maxOf { it.strainMilli })
         val pad = (high - low) * margin
         val window = (low - pad)..(high + pad)
         val peakRow = curve.peak?.let { curve.points.indexOf(it) } ?: curve.points.lastIndex
-        val points = listOf(0f to 0f) + curve.points.take(peakRow + 1)
+        val points = listOf(origin) + curve.points.take(peakRow + 1)
             .filter { it.strainMilli in window }
             .map { it.strainMilli to it.stressMPa }
         val from = points.minOf { it.first }

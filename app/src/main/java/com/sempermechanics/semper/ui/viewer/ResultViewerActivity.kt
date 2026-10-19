@@ -123,9 +123,6 @@ class ResultViewerActivity : AppCompatActivity() {
 
     // Mechanical-test facts come through ViewerArgs (written for every
     // session, empty for a plain DIC one; filled from the record if absent).
-    internal val testType: String get() = args.testType
-    internal val crossSectionMm2: Float get() = args.crossSectionMm2
-    internal val loadAxisX: Boolean get() = args.loadAxisX
     internal val loadsN: FloatArray by lazy { args.loadsN.toFloatArray() }
     internal val stressStrain: ViewerStressStrainHelper by lazy { ViewerStressStrainHelper(this, viewModel) }
 

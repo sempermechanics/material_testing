@@ -344,13 +344,20 @@ matches one load to each deformed frame:
   than the reference, enter the gap under **Log started after the reference**
   (seconds; negative if the log started first). If no frame is within
   100 ms, **Next** stays disabled until the gap is right. Log at 10 rows a
-  second or faster so every frame has a row within reach.
+  second or faster so every frame has a row within reach. If the reference's
+  or any photo's EXIF time has no sub-seconds (a camera that writes none, an
+  edited copy), the batch is only good to about 1 s: its photos take the row
+  within 1 s, and a chip says so.
 - **Resampled** — any other row count. Frames are spread evenly through the
   log (reference ↔ first row, last frame ↔ last row). This is right when
   photos were taken at a steady rate through the whole test; otherwise export
   the log at the photo rate, or shoot video.
-- **No unit** — the header did not say N, kN or lbf, so the column is taken as
-  newtons. Add the unit to the header if that is wrong.
+- **No unit** — the header did not say N, kN, kgf (kp), tf or lbf, so the
+  column is taken as newtons. Add the unit to the header if that is wrong.
+- **kg read as kgf** — the load column says kg, a mass; it is read as
+  kilograms-force, N = kg × 9.80665.
+- **Time unit** — a time column in ms, min or h is converted to seconds; one
+  that names no unit is taken as seconds, and the chip says so.
 - **No load column** — no header named a load or force column; the last
   numeric column is used. Name the column `Load (N)` in the export.
 - **Sign** — loads are kept exactly as logged. A tensile test whose loads are

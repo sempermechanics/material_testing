@@ -21,7 +21,15 @@ internal object MechanicalPdfPages {
     private const val STRESS_STRAIN_ROWS_FIRST_PAGE = 14
     private const val STRESS_STRAIN_ROWS_PER_PAGE = 34
     private val STRESS_STRAIN_TABLE_WEIGHTS = listOf(0.31f, 0.23f, 0.23f, 0.23f)
+    private val NO_STRAIN_TABLE_WEIGHTS = listOf(0.34f, 0.33f, 0.33f)
     private val DEFLECTION_TABLE_WEIGHTS = listOf(0.24f, 0.19f, 0.19f, 0.19f, 0.19f)
+
+    /** Column weights for the per-frame table: with δ, with strain, or neither (bending without taps). */
+    private fun tableWeights(model: StressStrain.Model): List<Float> = when {
+        model.plotsLoadDeflection -> DEFLECTION_TABLE_WEIGHTS
+        model.measuresStrain -> STRESS_STRAIN_TABLE_WEIGHTS
+        else -> NO_STRAIN_TABLE_WEIGHTS
+    }
 
     /** The cover's "Mechanical Test" block, only on a typed session. */
     fun drawCoverBlock(layout: PdfLayoutEngine, m: MechanicalCover) {
@@ -53,13 +61,14 @@ internal object MechanicalPdfPages {
         layout.drawTitle(curve.model.curveTitle)
         layout.drawDimensions(curve.model)
         layout.drawKeyValue("Strain:", "${curve.model.strainName} ${curve.model.strainBasis}")
-        curve.peakStress?.let {
+        val results = TensileResults.of(curve, page.modulus)
+        results.peak?.let {
             val where = if (it.onCurve) "" else ", off the curve (no strain)"
             val value = "%.3f MPa at frame %d%s".format(Locale.US, it.stressMPa, it.frame + 1, where)
             layout.drawKeyValue("Peak Stress:", value)
         }
-        page.modulus?.let { layout.drawKeyValue("Modulus E (approx.):", LabReport.modulusSummary(it)) }
-        page.modulus?.let { YieldStrength.offset(curve, it) }?.let {
+        results.modulus?.let { layout.drawKeyValue("Modulus E (approx.):", LabReport.modulusSummary(it)) }
+        results.yieldPoint?.let {
             val value = "%.3f MPa at %.3f mε (0.2%% offset)".format(Locale.US, it.stressMPa, it.strainMilli)
             layout.drawKeyValue("Yield Strength Rp0.2:", value)
         }
@@ -73,12 +82,15 @@ internal object MechanicalPdfPages {
         }
 
         val deflection = curve.model.plotsLoadDeflection
+        // Bending without its edge taps reads no strain: the column is left
+        // out, and the "Strain:" line above says why.
+        val strain = curve.model.measuresStrain
         val rows = curve.points.map {
             listOfNotNull(
                 "Frame ${it.frame + 1}",
                 "%.2f".format(Locale.US, if (deflection) TypedLoads.kg(it.loadN) else it.loadN),
                 "%.3f".format(Locale.US, it.stressMPa),
-                "%.3f".format(Locale.US, it.strainMilli),
+                if (strain) strainCell(it.strainMilli) else null,
                 if (deflection) it.deflectionMm?.let { d -> "%.4f".format(Locale.US, d) } ?: "—" else null,
             )
         }
@@ -86,10 +98,10 @@ internal object MechanicalPdfPages {
             "Frame",
             if (deflection) "Load (kg)" else "Load (N)",
             "Stress (MPa)",
-            "Strain (mε)",
+            "Strain (mε)".takeIf { strain },
             "Deflection (mm)".takeIf { deflection },
         )
-        val weights = if (deflection) DEFLECTION_TABLE_WEIGHTS else STRESS_STRAIN_TABLE_WEIGHTS
+        val weights = tableWeights(curve.model)
         val first = rows.take(STRESS_STRAIN_ROWS_FIRST_PAGE)
         layout.drawSectionHeader("Per-frame values")
         layout.drawTable(headers, first, weights)
@@ -100,6 +112,10 @@ internal object MechanicalPdfPages {
         }
     }
 }
+
+/** A table cell for a strain in mε; a dash where the frame's strain could not be read (NaN). */
+private fun strainCell(strainMilli: Float): String =
+    if (strainMilli.isFinite()) "%.3f".format(Locale.US, strainMilli) else "—"
 
 /**
  * One key-value per entered dimension of a test's stress model. A file-level

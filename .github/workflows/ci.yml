@@ -445,6 +445,7 @@ jobs:
           path: |
             app/build/test-results/testDebugUnitTest/**
             app/build/reports/kover/**
+            app/build/test-crash/**
           if-no-files-found: ignore
 
   # ===================================================================

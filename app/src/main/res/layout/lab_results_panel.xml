@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A lab test's Results, once for both surfaces: a ViewStub on the viewer's summary page
+     (activity_result_viewer summaryResultsStub) and in the Details sheet
+     (sheet_settings_used stressStrainStub), inflated only for a session with loads.
+     ViewerStressStrainHelper.Views.of binds it; the summary page sets a taller plot. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tvLabResultsTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.08"
+            android:text="@string/results_title"
+            android:textAllCaps="true"
+            android:textColor="@color/viewer_chrome_muted"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- The session's correction (ViewerStressStrainHelper.draw): bending's
+             deflection scale and bias, or the tensile curve's. Label set in code.
+             In the header row: the summary page does not scroll. -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLabResultsAdjust"
+            style="@style/Widget.Semper.Button.Outlined.Compact"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/deflection_adjust"
+            android:visibility="gone" />
+
+        <!-- Whole curve or the elastic region E is fitted to; shown only with a fit.
+             Pill clip set in code, as activity_vsg_lattice.xml's togglePlotModeClip. -->
+        <FrameLayout
+            android:id="@+id/labResultsRangeClip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_pill_clip_mask"
+            android:visibility="gone">
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/toggleLabResultsRange"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/results_range_desc"
+                app:checkedButton="@+id/btnRangeWhole"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRangeWhole"
+                    style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped.ResultsRange"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/results_range_whole" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRangeElastic"
+                    style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped.ResultsRange"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/results_range_elastic" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </FrameLayout>
+    </LinearLayout>
+
+    <com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
+        android:id="@+id/plotLabResults"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/lab_results_plot_height"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:id="@+id/tvLabResultsCaption"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="@color/viewer_chrome_muted"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/tvLabResultsText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:lineSpacingExtra="2dp"
+        android:textColor="@color/viewer_chrome_text"
+        android:textSize="14sp"
+        android:visibility="gone" />
+</LinearLayout>

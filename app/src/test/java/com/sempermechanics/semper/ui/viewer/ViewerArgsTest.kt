@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SkippedNode
@@ -350,15 +351,17 @@ class ViewerArgsTest {
     fun `the lab fields of an Intent the base build wrote read back`() {
         val read = ViewerArgs.from(baseBuildIntent(), ::noRecord)
 
-        assertEquals("bending", read.testType)
-        assertEquals(12.5f, read.crossSectionMm2, 0f)
-        assertFalse(read.loadAxisX)
-        assertEquals(listOf(0f, 42f), read.loadsN)
         assertEquals(
-            SpecimenGeometry(80f, 10.5f, 4f, BeamEdgeTaps(100f, 40f, 100f, 90f), 1.05f, -0.12f),
-            read.geometry,
+            LabSession(
+                testType = "bending",
+                crossSectionMm2 = 12.5f,
+                loadAxisX = false,
+                geometry = SpecimenGeometry(80f, 10.5f, 4f, BeamEdgeTaps(100f, 40f, 100f, 90f), 1.05f, -0.12f),
+                curveCorrection = CurveCorrection(1.1f, 0.2f, 0.9f, -3f),
+            ),
+            read.labSession,
         )
-        assertEquals(CurveCorrection(1.1f, 0.2f, 0.9f, -3f), read.curveCorrection)
+        assertEquals(listOf(0f, 42f), read.loadsN)
     }
 
     /**
@@ -436,9 +439,7 @@ class ViewerArgsTest {
         )
         val fromRun = args()
             .copy(
-                testType = "compression",
-                crossSectionMm2 = 12.5f,
-                loadAxisX = false,
+                labSession = LabSession("compression", crossSectionMm2 = 12.5f, loadAxisX = false),
                 loadsN = listOf(0f, -950f),
             )
             .toIntent(context)
@@ -458,7 +459,7 @@ class ViewerArgsTest {
             context,
             record(testType = "bending", loadsN = listOf(0f, 100f)).copy(geometry = geometry),
         )
-        val fromRun = args().copy(testType = "bending", geometry = geometry).toIntent(context)
+        val fromRun = args().copy(labSession = LabSession("bending", geometry = geometry)).toIntent(context)
 
         for (intent in listOf(fromHome, fromRun)) {
             assertEquals(geometry, SpecimenGeometry.fromArray(intent.getFloatArrayExtra(IntentKeys.SPECIMEN_GEOMETRY)))
@@ -479,13 +480,48 @@ class ViewerArgsTest {
     @Test
     fun `a bending session survives the Intent unchanged`() {
         val sent = args().copy(
-            testType = "bending",
-            loadAxisX = false,
+            labSession = LabSession(
+                testType = "bending",
+                loadAxisX = false,
+                geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f),
+            ),
             loadsN = listOf(0f, 100f),
-            geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f),
         )
 
         assertEquals(sent, ViewerArgs.from(sent.toIntent(context), ::noRecord))
+    }
+
+    @Test
+    fun `a lab session round-trips the Intent as one value, in the keys it always had`() {
+        // TD-301: every field set off its default, so a dropped or swapped extra shows.
+        val lab = LabSession(
+            testType = "tensile",
+            crossSectionMm2 = 19.63f,
+            loadAxisX = false,
+            geometry = SpecimenGeometry(80f, 10.5f, 4f, BeamEdgeTaps(100f, 40f, 112f, 90f), 1.05f, -0.12f),
+            curveCorrection = CurveCorrection(1.1f, 0.2f, 0.9f, -3f),
+        )
+        val intent = args().copy(labSession = lab).toIntent(context)
+
+        assertEquals(lab, ViewerArgs.from(intent, ::noRecord).labSession)
+        assertEquals("tensile", intent.getStringExtra(IntentKeys.TEST_TYPE))
+        assertEquals(19.63f, intent.getFloatExtra(IntentKeys.CROSS_SECTION_MM2, 0f), 0f)
+        assertFalse(intent.getBooleanExtra(IntentKeys.LOAD_AXIS_X, true))
+        val geometry = intent.getFloatArrayExtra(IntentKeys.SPECIMEN_GEOMETRY)
+        assertEquals(lab.geometry, SpecimenGeometry.fromArray(geometry))
+        val correction = intent.getFloatArrayExtra(IntentKeys.CURVE_CORRECTION)
+        assertEquals(lab.curveCorrection, CurveCorrection.fromArray(correction))
+    }
+
+    @Test
+    fun `an Intent with only some lab extras fills the rest from the record`() {
+        val partial = Intent(context, ResultViewerActivity::class.java)
+            .putExtra(IntentKeys.TEST_TYPE, "bending")
+            .putExtra(IntentKeys.LOAD_AXIS_X, true)
+
+        val read = ViewerArgs.from(partial) { record(testType = "tensile", loadsN = listOf(0f, 500f)) }
+
+        assertEquals(LabSession("bending", crossSectionMm2 = 12.5f, loadAxisX = true), read.labSession)
     }
 
     @Test
@@ -494,9 +530,7 @@ class ViewerArgsTest {
 
         val read = ViewerArgs.from(bare) { record(testType = "tensile", loadsN = listOf(0f, 500f)) }
 
-        assertEquals("tensile", read.testType)
-        assertEquals(12.5f, read.crossSectionMm2, 1e-4f)
-        assertFalse(read.loadAxisX)
+        assertEquals(LabSession("tensile", crossSectionMm2 = 12.5f, loadAxisX = false), read.labSession)
         assertEquals(listOf(0f, 500f), read.loadsN)
     }
 }

@@ -1,5 +1,9 @@
 package com.sempermechanics.semper.analysis
 
+import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.LabSession
+import com.sempermechanics.semper.data.mechanical.MechanicalTestInputs
+import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.Roi
@@ -92,7 +96,7 @@ class RunSpecTest {
 
     // --------------------------------------------------------------- TD-61
 
-    private fun finishedRun(): AnalysisViewModel = AnalysisViewModel().apply {
+    private fun finishedRun(spec: RunSpec = this.spec): AnalysisViewModel = AnalysisViewModel().apply {
         realRefWidth = 2000
         realRefHeight = 435
         refName = "steel_24.png"
@@ -146,6 +150,35 @@ class RunSpecTest {
         assertEquals(home.plannedFrames, fresh.plannedFrames)
         assertEquals(home.refPath, fresh.refPath)
         assertEquals(home.batchDirPath, fresh.batchDirPath)
+    }
+
+    @Test
+    fun `the lab test reaches a result opened right after a run, as Home would open it`() {
+        // TD-301: the run's ViewerArgs carry one LabSession, the record's own.
+        val geometry = SpecimenGeometry(80f, 10.5f, 4f, BeamEdgeTaps(100f, 40f, 112f, 90f))
+        val mechanical = MechanicalTestInputs(
+            testType = "bending",
+            loadAxisX = false,
+            geometry = geometry,
+            loadsN = listOf(0f, 100f),
+        )
+        val vm = finishedRun(spec.copy(mechanical = mechanical))
+
+        val fresh = AnalysisNavHelper.resultArgs(vm, sweep = false, frameNames = listOf("f1.png", "f2.png"))
+        val home = SessionOpenHelper.argsFor(
+            savedRecord(spec.recordSettings()).copy(
+                testType = "bending",
+                loadAxisX = false,
+                geometry = geometry,
+                loadsN = listOf(0f, 100f),
+                defNames = listOf("f1.png", "f2.png"),
+            ),
+        )
+
+        assertEquals(LabSession("bending", loadAxisX = false, geometry = geometry), fresh.labSession)
+        assertEquals(home.labSession, fresh.labSession)
+        assertEquals(listOf(0f, 100f), fresh.loadsN)
+        assertEquals(home.loadsN, fresh.loadsN)
     }
 
     @Test

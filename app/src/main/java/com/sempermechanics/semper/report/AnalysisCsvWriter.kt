@@ -3,8 +3,7 @@
 
 package com.sempermechanics.semper.report
 
-import com.sempermechanics.semper.data.mechanical.CurveCorrection
-import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import java.io.File
@@ -44,23 +43,18 @@ object AnalysisCsvWriter {
         val roiY: Int,
         val roiW: Int,
         val roiH: Int,
-        /** Wire name of the mechanical test, or blank for a plain DIC session. */
-        val testType: String = "",
-        val crossSectionMm2: Float = 0f,
-        val loadAxisX: Boolean = true,
-        val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
-        val curveCorrection: CurveCorrection = CurveCorrection.NONE,
+        /** The mechanical test; [LabSession.NONE] for a plain DIC session. */
+        val lab: LabSession = LabSession.NONE,
     ) {
         /**
          * A tensile or bending session: its CSV is [LAB_CSV_VERSION], with the
          * test preamble and the `load_N,stress_MPa` columns. A plain DIC
          * session's is Semper's own [CSV_VERSION].
          */
-        val isLabTest: Boolean get() = testType.isNotBlank()
+        val isLabTest: Boolean get() = lab.isLabTest
 
         /** How this session's loads become the `stress_MPa` column. */
-        val stressModel: StressStrain.Model
-            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
+        val stressModel: StressStrain.Model get() = lab.stressModelOrAxial()
     }
 
     /** One frame: its identity columns plus a lazy provider of its decoded field. */
@@ -72,6 +66,12 @@ object AnalysisCsvWriter {
         val data: () -> FloatArray?,
         /** The machine load logged for this frame, or null without a load log. */
         val loadN: Float? = null,
+        /**
+         * The frame's 0-based index in the run's plan, which the curve and the
+         * `# mechanical_results` trailer number frames by; null for the order
+         * the frames are appended in. A run that skipped a frame has a gap here.
+         */
+        val plannedIndex: Int? = null,
     )
 
     /** Semper's format, which a plain 2D DIC session keeps. */
@@ -263,6 +263,9 @@ object AnalysisCsvWriter {
         /** 0-based index of the next [append]ed frame — frames arrive in order. */
         private var frameIndex = 0
 
+        /** Frames the curve spans: one past the highest planned index appended. */
+        private var frameCount = 0
+
         /** The curve's points, collected as frames stream past; null when there is no trailer. */
         private val mechanical: StressStrain.Collector? =
             if (!sweep && metadata.isLabTest) StressStrain.Collector(metadata.stressModel) else null
@@ -304,7 +307,9 @@ object AnalysisCsvWriter {
          * every [ROWS_PER_REPORT] rows; it only watches.
          */
         fun append(frame: Frame, onRows: (fraction: Double) -> Unit = {}) {
-            val index = frameIndex++
+            val index = frame.plannedIndex ?: frameIndex
+            frameIndex++
+            frameCount = maxOf(frameCount, index + 1)
             val data = frame.data() ?: return
             writeFrame(
                 if (pointSectionStarted) writer else stagedWriter(),
@@ -329,7 +334,7 @@ object AnalysisCsvWriter {
         override fun close() {
             try {
                 startPointSection()
-                mechanical?.takeUnless { it.isEmpty }?.let { MechanicalCsv.writeResults(writer, it.curve(frameIndex)) }
+                mechanical?.takeUnless { it.isEmpty }?.let { MechanicalCsv.writeResults(writer, it.curve(frameCount)) }
             } finally {
                 staged?.close()
                 stagingFile.delete()

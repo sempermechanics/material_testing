@@ -191,6 +191,12 @@ in `app/src/test/java/com/sempermechanics/semper/report/RealSteelModulusTest.kt`
 E 148.85 GPa over frames 1–26, the first three frames alone at R² 0.897, and
 within 10% of the gauge-point E.
 
+Since 2026-10-19 the fit is refitted over 10–40 % of the first line's Rp0.2
+(ISO 6892-1 Annex G), which a gradually yielding curve needs. Here that window
+is frames 7–16 (30.6–122.2 MPa), whose line reads R² 0.978, under 0.995, so
+the refit is refused and E stays 148.85 GPa, Rp0.2 305.6 MPa, on the stored
+curve. A new run on the current engine could land either side of 0.995.
+
 The viewer's Results section plots the whole curve, out to 67 mε at frame 35,
 so the elastic frames sit in a vertical line at the left edge. The lab-report
 PDF draws a separate elastic-region graph. The viewer has an **Elastic region**

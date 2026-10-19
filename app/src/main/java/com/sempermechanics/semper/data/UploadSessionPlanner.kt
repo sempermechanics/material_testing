@@ -130,6 +130,53 @@ internal class UploadSessionPlanner(
     }
 
     /**
+     * Free [cloudSessionId] before the staging it declared is built again. The
+     * run found that staging gone (a backup given up drops it but keeps the
+     * pointer) or failing its check ([UploadStaging.reuse] false), and a
+     * rebuild packs new zip timestamps: the same sizes, other bytes. Resumed,
+     * the old session would take those bytes (`:complete` checks Drive's md5
+     * against the file sent, and [matchPending] only role, name and size)
+     * while the backup keeps the sha256 it was created with, so every restore
+     * of it would fail `session_zip_sha256_mismatch`.
+     *
+     * Null when the run may restage with no session: there was none, it is
+     * gone, or it is now deleted ([discardCloudSession]). Otherwise the step to
+     * end on: [SessionStep.Synced] for a session that is already complete (no
+     * restage needed), or a retry that keeps the pointer — the backend could
+     * not say, or the delete failed — so nothing is restaged under it.
+     */
+    suspend fun releaseForRestage(cloudSessionId: String): SessionStep? {
+        if (cloudSessionId.isBlank()) return null
+        return when (val state = stateBeforeRestage(cloudSessionId)) {
+            Resume.Done -> SessionStep.Synced
+            is Resume.Unreachable -> SessionStep.Retry(
+                UploadLog.retry("upload state unavailable — keeping session, not restaging", state.requestId),
+            )
+            else -> {
+                Timber.w("Staging is not what the cloud session declared — deleting the session before restaging")
+                UploadLog.phase("restage_discard")
+                if (discardCloudSession(context, api, idToken, localId, cloudSessionId)) {
+                    null
+                } else {
+                    SessionStep.Retry(UploadLog.retry("restage under a live session — session not deleted yet"))
+                }
+            }
+        }
+    }
+
+    /**
+     * What [releaseForRestage] needs to know of [cloudSessionId]: [Resume.Done]
+     * when it is complete, [Resume.Unreachable] when the backend could not
+     * say, null otherwise (incomplete, or gone).
+     */
+    private suspend fun stateBeforeRestage(cloudSessionId: String): Resume? = try {
+        val status = api.listSessionUploads(idToken, cloudSessionId).status
+        Resume.Done.takeIf { status == UploadWorkOutcomes.STATUS_COMPLETED }
+    } catch (e: ApiException) {
+        unreadable(e) as? Resume.Unreachable
+    }
+
+    /**
      * Declare the whole analysis and obtain one resumable target per file;
      * returns the new session's id, already stored as the pointer.
      *

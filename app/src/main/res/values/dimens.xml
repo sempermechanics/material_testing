@@ -16,4 +16,7 @@
     <!-- Sweep page: the line-cut preview as a strip, and opened. -->
     <dimen name="line_cut_preview_strip">96dp</dimen>
     <dimen name="line_cut_preview_open_min">240dp</dimen>
+    <!-- Lab Results (lab_results_panel): the curve's height in the Details sheet, and on the summary page. -->
+    <dimen name="lab_results_plot_height">190dp</dimen>
+    <dimen name="lab_results_summary_plot_height">280dp</dimen>
 </resources>

@@ -9,9 +9,10 @@ import com.sempermechanics.semper.report.PdfReportGenerator.Stage
 import com.sempermechanics.semper.report.ReportData
 import com.sempermechanics.semper.report.RoiData
 import com.sempermechanics.semper.report.TelemetrySummary
-import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,45 +22,63 @@ import java.util.Locale
 
 /**
  * The report's progress contract and failure handling: the share sheet drives
- * its bar from these percents and treats [Progress.Error] as the only failure
- * signal, so a throw inside a render must arrive as Error, never escape.
+ * its bar from these percents, and a failed render is thrown to the collector
+ * (the flow stays exception-transparent), never emitted as an event.
  *
  * Robolectric's PdfDocument has no native document (`startPage` throws
  * "document is closed"), so drawing pages is covered on a device by
- * `PdfReportDeviceTest`; these cases never start a page.
+ * `PdfReportDeviceTest`; these cases never start a page, and [statuses]
+ * keeps what was emitted whether or not the final write then fails here.
  */
 @RunWith(RobolectricTestRunner::class)
 class PdfReportGeneratorTest {
 
-    private fun statuses(events: List<Progress>) = events.filterIsInstance<Progress.Status>()
+    /** What a flow emitted, and what ended it (here, normally the final write). */
+    private class Collected(
+        val statuses: List<Progress.Status>,
+        val failure: Throwable?,
+    ) {
+        val failureText: String get() = failure?.stackTraceToString() ?: "none"
+    }
+
+    private fun collect(flow: Flow<Progress>): Collected {
+        val events = mutableListOf<Progress>()
+        val failure = runCatching { runBlocking { flow.collect { events += it } } }.exceptionOrNull()
+        return Collected(events.filterIsInstance<Progress.Status>(), failure)
+    }
+
+    private fun statuses(flow: Flow<Progress>): List<Progress.Status> = collect(flow).statuses
 
     @Test
     fun `batch progress spreads frames over the middle of the bar`() {
-        val events = runBlocking {
-            PdfReportGenerator.generateBatch(4, { null }, ByteArrayOutputStream()).toList()
-        }
+        val collected = collect(PdfReportGenerator.generateBatch(4, { null }, ByteArrayOutputStream()))
+        val events = collected.statuses
         // The write, last, has its own status rather than the last frame's.
-        assertEquals(listOf(2, 25, 48, 71, 98), statuses(events).map { it.percent })
-        assertEquals(Progress.Status(Stage.FRAME, 2, frame = 1, frameCount = 4), statuses(events).first())
-        assertEquals(Stage.FINISHING, statuses(events).last().stage)
+        // The failure goes in the message: CI once saw no status at all here,
+        // so the flow threw before its first emit, and the cause was swallowed.
+        assertEquals(
+            "statuses; the flow ended with: ${collected.failureText}",
+            listOf(2, 25, 48, 71, 98),
+            events.map { it.percent },
+        )
+        assertEquals(Progress.Status(Stage.FRAME, 2, frame = 1, frameCount = 4), events.first())
+        assertEquals(Stage.FINISHING, events.last().stage)
     }
 
     @Test
     fun `batch with every frame unreadable has no telemetry page`() {
-        val events = runBlocking {
-            PdfReportGenerator.generateBatch(2, { null }, ByteArrayOutputStream()).toList()
-        }
-        assertTrue(statuses(events).none { it.stage == Stage.TELEMETRY })
+        val events = statuses(PdfReportGenerator.generateBatch(2, { null }, ByteArrayOutputStream()))
+        assertTrue(events.none { it.stage == Stage.TELEMETRY })
     }
 
     @Test
-    fun `a throwing frame source ends in Error, not an exception`() {
-        val events = runBlocking {
-            PdfReportGenerator.generateBatch(2, { error("unreadable .dat") }, ByteArrayOutputStream()).toList()
+    fun `a throwing frame source is thrown to the collector`() {
+        val thrown = assertThrows(IllegalStateException::class.java) {
+            runBlocking {
+                PdfReportGenerator.generateBatch(2, { error("unreadable .dat") }, ByteArrayOutputStream()).collect {}
+            }
         }
-        val last = events.last()
-        assertTrue(last is Progress.Error)
-        assertEquals("unreadable .dat", (last as Progress.Error).ex.message)
+        assertEquals("unreadable .dat", thrown.message)
     }
 
     private fun bitmap(): Bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
@@ -109,11 +128,10 @@ class PdfReportGeneratorTest {
     fun `a frame whose pages fail to draw still has its images freed`() {
         // No native document here, so the cover page's startPage throws.
         val data = reportData()
-        val events = runBlocking {
-            PdfReportGenerator.generateBatch(1, { data }, ByteArrayOutputStream()).toList()
+        assertThrows(IllegalStateException::class.java) {
+            runBlocking { PdfReportGenerator.generateBatch(1, { data }, ByteArrayOutputStream()).collect {} }
         }
 
-        assertTrue(events.last() is Progress.Error)
         val images = listOf(data.referenceImage, data.deformedImage, data.znssdHeatmap, data.solverPathMap) +
             data.fieldResults.map { it.bakedHeatmap }
         assertTrue("every page image recycled", images.all { it.isRecycled })

@@ -1,7 +1,6 @@
-// PDF assembly: literal DPI/page dimensions are inherent to layout, and the
-// broad catches guard a whole document render (any failure aborts that page),
-// so MagicNumber / TooGenericExceptionCaught are suppressed for this file.
-@file:Suppress("MagicNumber", "TooGenericExceptionCaught")
+// PDF assembly: literal DPI/page dimensions are inherent to layout, so
+// MagicNumber is suppressed for this file.
+@file:Suppress("MagicNumber")
 
 package com.sempermechanics.semper.report
 
@@ -14,7 +13,6 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -28,7 +26,9 @@ import java.io.OutputStream
 /**
  * Renders a [ReportData] into the multi-page PDF report (cover, field
  * statistics + heatmaps, engine telemetry), emitting progress as a Flow.
- * Page drawing primitives live in [PdfLayoutEngine].
+ * The flow completes when the document is written and throws when it cannot
+ * be: a failure is never a progress event. Page drawing primitives live in
+ * [PdfLayoutEngine].
  */
 object PdfReportGenerator {
 
@@ -47,8 +47,6 @@ object PdfReportGenerator {
             val frame: Int = 0,
             val frameCount: Int = 0,
         ) : Progress()
-        object Complete : Progress()
-        data class Error(val ex: Exception) : Progress()
     }
 
     /** Field visualisations are laid out strictly two to a page. */
@@ -155,9 +153,10 @@ object PdfReportGenerator {
      * [PdfLayoutEngine] (the wordmark from [resources] heads each page), then
      * the document is written under a [Stage.FINISHING] status at
      * [FINALIZING_PROGRESS] (one call over every page, so a batch is not left
-     * under its telemetry status while every frame's pages are written) and
-     * [Progress.Complete] follows. A failure is emitted as [Progress.Error]
-     * rather than thrown; cancellation is not caught.
+     * under its telemetry status while every frame's pages are written). The
+     * flow completes once the document is written; a failure, cancellation
+     * included, is thrown to the collector, never emitted, so the flow stays
+     * exception-transparent.
      */
     private fun renderPdf(
         outputStream: OutputStream,
@@ -174,15 +173,10 @@ object PdfReportGenerator {
             // writeTo()/close() while any page is unfinished.
             layout.finishCurrentPage()
             writeChecked(pdfDocument, outputStream)
-            emit(Progress.Complete)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            emit(Progress.Error(e))
         } finally {
             // PdfDocument.close() throws IllegalStateException while a page is
             // unfinished, so a draw that failed mid-page would otherwise replace
-            // the Error (or a cancellation) with that throw and skip the close.
+            // its failure (or a cancellation) with that throw and skip the close.
             layout.finishCurrentPage()
             pdfDocument.close()
             recycleLogo(brandLogo)

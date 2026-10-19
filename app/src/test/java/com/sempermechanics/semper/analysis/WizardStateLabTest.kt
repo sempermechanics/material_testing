@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.data.mechanical.LoadCsvParse
 import com.sempermechanics.semper.data.mechanical.LoadMapping
 import com.sempermechanics.semper.data.mechanical.MachineLoadCsv
@@ -17,7 +18,7 @@ import com.sempermechanics.semper.ui.analysis.frames.FrameImportHelper
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.DraftRestore
 import com.sempermechanics.semper.ui.analysis.wizard.WizardState
-import com.sempermechanics.semper.ui.analysis.wizard.defCaptureTimesMs
+import com.sempermechanics.semper.ui.analysis.wizard.defCaptureStamps
 import com.sempermechanics.semper.ui.analysis.wizard.defTimesAfterRefMs
 import com.sempermechanics.semper.ui.analysis.wizard.saveWizardState
 import com.sempermechanics.semper.ui.analysis.wizard.setLoadLog
@@ -69,10 +70,17 @@ class WizardStateLabTest {
         realRefWidth = 400
         realRefHeight = 300
         refName = "ref.png"
-        refCaptureTimeMs = PHOTO_T0
+        refCapture = CaptureStamp(PHOTO_T0, subSeconds = false)
         val paths = listOf("f1.png", "f2.png").map { File(frames, it).apply { writeBytes(byteArrayOf(1)) }.path }
         deformedFrames = listOf(
-            DeformedFrame(paths[0], "IMG_1.png", 100L, ImageSize(400, 300), captureTimeMs = PHOTO_T0 + 1_250L),
+            DeformedFrame(
+                paths[0],
+                "IMG_1.png",
+                100L,
+                ImageSize(400, 300),
+                captureTimeMs = PHOTO_T0 + 1_250L,
+                captureSubSec = true,
+            ),
             DeformedFrame(paths[1], "IMG_2.png", Long.MAX_VALUE),
         )
     }
@@ -91,9 +99,28 @@ class WizardStateLabTest {
         val before = editedWizard()
         val after = afterProcessDeath(before)
 
-        assertEquals(PHOTO_T0, after.refCaptureTimeMs)
+        assertEquals(CaptureStamp(PHOTO_T0, subSeconds = false), after.refCapture)
         assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
-        assertEquals(before.defCaptureTimesMs, after.defCaptureTimesMs)
+        assertEquals(listOf(CaptureStamp(PHOTO_T0 + 1_250L, subSeconds = true), null), after.defCaptureStamps)
+    }
+
+    @Test
+    fun `capture times an older app saved come back with their precision unknown`() {
+        val before = editedWizard()
+        // An older app wrote no precision, and no frames fingerprint either.
+        val oldFrames = WizardState.frames(before).copy(captureSubSec = emptyList())
+        draft.writeReference(before.refBytes)
+        draft.writeMask(before.roiMaskBytes)
+        draft.writeFrames(WizardState.encodeFrames(oldFrames))
+        val saved = before.saveWizardState().apply {
+            remove("refCaptureSubSec")
+            remove("framesFingerprint")
+        }
+        val after = AnalysisViewModel(SavedStateHandle(mapOf(WizardState.KEY to saved))).also { it.attachDraft(draft) }
+
+        assertEquals(CaptureStamp(PHOTO_T0, subSeconds = null), after.refCapture)
+        assertEquals(DraftRestore.RESTORED, runBlocking { after.restoreDraft() })
+        assertEquals(listOf(CaptureStamp(PHOTO_T0 + 1_250L, subSeconds = null), null), after.defCaptureStamps)
     }
 
     @Test
@@ -103,8 +130,8 @@ class WizardStateLabTest {
         File(before.defFilePaths[1]).delete()
 
         assertEquals(DraftRestore.LOST, runBlocking { after.restoreDraft() })
-        assertNull(after.refCaptureTimeMs)
-        assertTrue(after.defCaptureTimesMs.isEmpty())
+        assertNull(after.refCapture)
+        assertTrue(after.defCaptureStamps.isEmpty())
     }
 
     @Test

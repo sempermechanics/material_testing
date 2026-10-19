@@ -1,9 +1,12 @@
 package com.sempermechanics.semper.data
 
+import android.annotation.SuppressLint
 import android.content.Context
 import androidx.core.net.toUri
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
+import androidx.work.ListenableWorker
+import androidx.work.WorkInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.sempermechanics.semper.data.account.LicenseErrors
@@ -86,7 +89,10 @@ class DicBundleDownloadWorker internal constructor(
             staged = downloadOrPack(cloudSessionId, displayName, localSessionId)
             deliver(staged, dest, cloudSessionId)
         } catch (e: CancellationException) {
-            dest.delete()
+            // A stop WorkManager reruns (network lost, quota, the system) writes
+            // to the same document again, so it keeps the document and its grant;
+            // deleting them failed the rerun's write. Only a cancel ends the work.
+            if (keepsDestinationOnStop(stopReasonNow())) releaseGrant = false else dest.delete()
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
             val failure = DownloadFailure.of(e)
@@ -241,3 +247,24 @@ class DicBundleDownloadWorker internal constructor(
         const val KEY_DEST_URI = "DEST_URI"
     }
 }
+
+/**
+ * Whether a download stopped for [stopReason] keeps its Save-to-Files document
+ * and grant. Only the app's own cancel (the user's Cancel) ends the work;
+ * any other stop (connectivity, quota, the system) runs it again into the
+ * same document. A cancellation with no stop at all
+ * ([WorkInfo.STOP_REASON_NOT_STOPPED]) ends the work too.
+ */
+internal fun keepsDestinationOnStop(stopReason: Int): Boolean =
+    stopReason != WorkInfo.STOP_REASON_CANCELLED_BY_APP && stopReason != WorkInfo.STOP_REASON_NOT_STOPPED
+
+/**
+ * Why WorkManager stopped this worker. Read on API 30 too, past
+ * `@RequiresApi(31)`: WorkManager records the reason itself
+ * (`WorkerWrapper` → `ListenableWorker.stop(reason)`), and an app cancel is
+ * [WorkInfo.STOP_REASON_CANCELLED_BY_APP] on every API level
+ * (`CancelWorkRunnable`). Only JobScheduler's own reasons need 31; below it
+ * they read [WorkInfo.STOP_REASON_UNKNOWN], which keeps the document.
+ */
+@SuppressLint("NewApi")
+private fun ListenableWorker.stopReasonNow(): Int = stopReason

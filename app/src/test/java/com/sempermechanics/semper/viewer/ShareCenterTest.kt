@@ -10,6 +10,7 @@ import android.widget.TextView
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ApplicationProvider
 import com.sempermechanics.semper.R
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.fixtures.idleUntil
 import com.sempermechanics.semper.fixtures.launchViewer
@@ -75,7 +76,7 @@ class ShareCenterTest {
         loadsN: List<Float> = emptyList(),
     ): ResultViewerActivity {
         val args = viewerArgs(batchDir, GRID, STEP, frameNames)
-        val tensile = args.copy(testType = "tensile", crossSectionMm2 = 10f, loadsN = loadsN)
+        val tensile = args.copy(labSession = LabSession("tensile", crossSectionMm2 = 10f), loadsN = loadsN)
         val activity = launchViewer(if (loadsN.isEmpty()) args else tensile)
         idleUntil("the viewer") { activity.buildShareSnapshot() != null }
         return activity

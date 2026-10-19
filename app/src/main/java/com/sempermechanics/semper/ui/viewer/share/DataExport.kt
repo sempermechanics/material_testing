@@ -98,6 +98,7 @@ internal class DataExport(
                 strainWindow = params.strainWindow,
                 data = { DicResult.decodeDatFile(file) },
                 loadN = s.loadAt(index),
+                plannedIndex = s.plannedAt(index),
             )
         }
         val roi = source.roi
@@ -110,11 +111,7 @@ internal class DataExport(
             roiY = roi.y,
             roiW = roi.w,
             roiH = roi.h,
-            testType = s.testType,
-            crossSectionMm2 = s.crossSectionMm2,
-            loadAxisX = s.loadAxisX,
-            geometry = s.geometry,
-            curveCorrection = s.curveCorrection,
+            lab = s.lab,
         )
         val f = File(outDir, "${s.baseName}_data.csv")
         val stats = report.within(0.0, CSV_STATS_SHARE)
@@ -155,14 +152,11 @@ internal class DataExport(
                 resources = resources,
                 stressStrain = stressStrain,
             ).collect { progress ->
+                // A failed render throws out of collect, so the share job fails
+                // (and logs) instead of handing back an empty PDF.
                 when (progress) {
-                    // generateBatch reports failures as a Flow event rather than
-                    // throwing; surface it so the share job actually fails (and logs)
-                    // instead of silently handing back an empty PDF.
-                    is PdfReportGenerator.Progress.Error -> throw progress.ex
                     is PdfReportGenerator.Progress.Status ->
                         report(progress.percent.toDouble(), progress.text(resources))
-                    PdfReportGenerator.Progress.Complete -> Unit
                 }
             }
         }

@@ -17,7 +17,7 @@ internal object MechanicalCsv {
      */
     fun writePreamble(w: Writer, metadata: AnalysisCsvWriter.Metadata) {
         val model = metadata.stressModel
-        w.append("# test_type,").append(AnalysisCsvWriter.escape(metadata.testType)).append('\n')
+        w.append("# test_type,").append(AnalysisCsvWriter.escape(metadata.lab.testType)).append('\n')
         w.append("# stress_model,").append(model.wireName).append('\n')
         // Cross-section is written even at 0, as the first version-2 files
         // did; the bending dimensions only once entered.
@@ -27,7 +27,7 @@ internal object MechanicalCsv {
                     .append(String.format(Locale.US, "%.4f", value)).append('\n')
             }
         }
-        w.append("# load_axis,").append(if (metadata.loadAxisX) "x" else "y").append('\n')
+        w.append("# load_axis,").append(if (metadata.lab.loadAxisX) "x" else "y").append('\n')
         w.append("# load_unit,N\n")
         (model as? StressStrain.Model.Flexural)?.probe?.let { writeLoadPoint(w, it) }
         (model as? StressStrain.Model.Axial)?.correction?.takeUnless { it.isNone }?.let { writeCorrection(w, it) }
@@ -58,10 +58,12 @@ internal object MechanicalCsv {
 
     /**
      * The trailer: what the lab report's Results section quotes. Tensile gets
-     * Young's modulus from [ElasticModulus]; an empty value means no straight
-     * run was found. Bending with a load point gets the lab's observation
-     * table and both of its E values ([BeamDeflection]). 1-based frame
-     * numbers, like the viewer and the report.
+     * [TensileResults]: Young's modulus, its frames and R² (an empty value
+     * means no straight run was found), `# yield_rp02_mpa` (empty when there is
+     * none) and `# peak_stress_mpa,<MPa>,<frame>,<on_curve>`, where on_curve is
+     * false for a frame with a load but no strain (TD-147). Bending with a load
+     * point gets the lab's observation table and both of its E values
+     * ([BeamDeflection]). 1-based frame numbers, like the viewer and the report.
      */
     fun writeResults(w: Writer, curve: StressStrain.Curve) {
         when {
@@ -71,7 +73,8 @@ internal object MechanicalCsv {
     }
 
     private fun writeTensileResults(w: Writer, curve: StressStrain.Curve) {
-        val fit = ElasticModulus.fit(curve)
+        val results = TensileResults.of(curve, ElasticModulus.fit(curve))
+        val fit = results.modulus
         w.append("# mechanical_results\n")
         w.append("# elastic_modulus_gpa,")
         if (fit != null) {
@@ -81,7 +84,14 @@ internal object MechanicalCsv {
         } else {
             w.append('\n')
         }
+        w.append("# yield_rp02_mpa,").append(results.yieldPoint?.let { mpa(it.stressMPa) }.orEmpty()).append('\n')
+        results.peak?.let { peak ->
+            w.append("# peak_stress_mpa,").append(mpa(peak.stressMPa))
+                .append(",${peak.frame + 1},${peak.onCurve}\n")
+        }
     }
+
+    private fun mpa(value: Float): String = String.format(Locale.US, "%.4f", value)
 
     private fun writeBendingResults(w: Writer, summary: BeamDeflection.Summary) {
         w.append("# mechanical_results\n")

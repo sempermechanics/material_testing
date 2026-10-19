@@ -1,10 +1,10 @@
 package com.sempermechanics.semper.analysis
 
 import androidx.exifinterface.media.ExifInterface
+import com.sempermechanics.semper.data.mechanical.CaptureStamp
 import com.sempermechanics.semper.ui.analysis.load.PhotoCaptureTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -60,18 +60,16 @@ class PhotoCaptureTimeTest {
     }
 
     @Test
-    fun `frame times are after the reference, negative when taken before it`() {
-        assertEquals(
-            listOf(1_500L, 3_000L, -200L),
-            PhotoCaptureTime.relativeTimesMs(t0, listOf(t0 + 1_500L, t0 + 3_000L, t0 - 200L)),
-        )
-    }
-
-    @Test
-    fun `one photo without a time and there are no frame times`() {
-        assertTrue(PhotoCaptureTime.relativeTimesMs(t0, listOf(t0 + 1_000L, null)).isEmpty())
-        assertTrue(PhotoCaptureTime.relativeTimesMs(null, listOf(t0 + 1_000L)).isEmpty())
-        assertTrue(PhotoCaptureTime.relativeTimesMs(t0, emptyList()).isEmpty())
+    fun `a stamp says whether SubSecTimeOriginal gave the sub-seconds`() {
+        val date = "2026:09:26 14:30:00"
+        assertEquals(CaptureStamp(t0 + 250L, subSeconds = true), PhotoCaptureTime.stamp(date, "25"))
+        // A camera that writes sub-seconds and lands on .000 is still precise.
+        assertEquals(CaptureStamp(t0, subSeconds = true), PhotoCaptureTime.stamp(date, "000"))
+        // None, blank or not digits: the time is good only to the second.
+        assertEquals(CaptureStamp(t0, subSeconds = false), PhotoCaptureTime.stamp(date, null))
+        assertEquals(CaptureStamp(t0, subSeconds = false), PhotoCaptureTime.stamp(date, " "))
+        assertEquals(CaptureStamp(t0, subSeconds = false), PhotoCaptureTime.stamp(date, "x1"))
+        assertNull(PhotoCaptureTime.stamp(null, "250"))
     }
 
     @Test
@@ -84,8 +82,19 @@ class PhotoCaptureTimeTest {
             saveAttributes()
         }
 
-        assertEquals(2_250L, PhotoCaptureTime.read(jpeg)!! - t0)
-        assertEquals(2_250L, jpeg.inputStream().use { PhotoCaptureTime.read(it) }!! - t0)
+        assertEquals(CaptureStamp(t0 + 2_250L, subSeconds = true), PhotoCaptureTime.read(jpeg))
+        assertEquals(CaptureStamp(t0 + 2_250L, subSeconds = true), jpeg.inputStream().use { PhotoCaptureTime.read(it) })
+    }
+
+    @Test
+    fun `a photo without SubSecTimeOriginal reads as whole seconds`() {
+        val jpeg = folder.newFile("whole.jpg").apply { writeBytes(MINIMAL_JPEG) }
+        ExifInterface(jpeg).apply {
+            setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, "2026:09:26 14:30:02")
+            saveAttributes()
+        }
+
+        assertEquals(CaptureStamp(t0 + 2_000L, subSeconds = false), PhotoCaptureTime.read(jpeg))
     }
 
     @Test

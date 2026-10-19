@@ -11,11 +11,14 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.databinding.LabResultsPanelBinding
+import com.sempermechanics.semper.databinding.SheetSettingsUsedBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.ElasticModulus
 import com.sempermechanics.semper.report.ElasticRegion
 import com.sempermechanics.semper.report.StressStrain
+import com.sempermechanics.semper.report.TensileResults
 import com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
@@ -32,7 +35,7 @@ import java.util.WeakHashMap
 /**
  * The stress–strain curve in the viewer: the Results on the summary page and
  * in the Details sheet (its per-frame rows are [ViewerFrameRows]). The
- * curve needs the mean strain of every frame, so it is a full decode pass over
+ * curve needs every frame's strain (and δ for bending), so it is a full decode pass over
  * the batch — started only when a Results surface is shown, and cached in the
  * ViewModel so the other surface, a reopen, or the share sheet reuses it.
  */
@@ -52,7 +55,18 @@ class ViewerStressStrainHelper(
         val result: TextView,
         val range: MaterialButtonToggleGroup,
         val adjust: MaterialButton,
-    )
+    ) {
+        companion object {
+            /** The one results panel both surfaces inflate (`lab_results_panel`). */
+            fun of(panel: LabResultsPanelBinding): Views = Views(
+                panel.plotLabResults,
+                panel.tvLabResultsCaption,
+                panel.tvLabResultsText,
+                panel.toggleLabResultsRange,
+                panel.btnLabResultsAdjust,
+            )
+        }
+    }
 
     private var job: Job? = null
 
@@ -76,20 +90,11 @@ class ViewerStressStrainHelper(
      * is not cached. The sheet may be dismissed before the build finishes; the
      * views are then simply updated off screen.
      */
-    fun populate(sheetView: View) {
-        val section = sheetView.findViewById<View>(R.id.stressStrainSection)
-        section.isVisible = showsResults
+    fun populate(sheet: SheetSettingsUsedBinding) {
+        sheet.stressStrainSection.isVisible = showsResults
         if (!showsResults) return
-        sheetView.findViewById<TextView>(R.id.tvStressStrainTitle).setText(R.string.results_title)
-        fill(
-            Views(
-                sheetView.findViewById(R.id.plotStressStrain),
-                sheetView.findViewById(R.id.tvStressStrainCaption),
-                sheetView.findViewById(R.id.tvStressStrainResult),
-                sheetView.findViewById(R.id.toggleStressStrainRange),
-                sheetView.findViewById(R.id.btnStressStrainAdjust),
-            ),
-        )
+        // A fresh sheet each time, so its stub is inflated once.
+        fill(Views.of(LabResultsPanelBinding.bind(sheet.stressStrainStub.inflate())))
     }
 
     /** Draws the curve into [views], building it first if it is not cached. */
@@ -165,11 +170,8 @@ class ViewerStressStrainHelper(
         views.adjust.setOnClickListener {
             if (bending) ViewerDeflectionCorrection.show(host) else ViewerCurveCorrection.show(host)
         }
-        if (curve.isEmpty) {
-            plot.isVisible = false
-            result.isVisible = false
-            (views.range.parent as View).isVisible = false
-            views.caption.setText(R.string.stress_strain_empty)
+        if (curve.isEmpty || !curve.model.measuresStrain) {
+            drawWithoutPlot(views, curve)
             return
         }
         plot.isVisible = true
@@ -178,22 +180,37 @@ class ViewerStressStrainHelper(
         // The summary is the whole test, so no frame is highlighted there.
         val current = if (host.isShowingSummary) null else curve.at(host.plannedFrameIndex(host.currentFrameIndex))
         val (xAxis, yAxis) = axisLabels(host, curve.model)
-        val modulus = modulusOf(curve)
+        // E, Rp0.2, the peak and the fit line, worked out once for the plot, marks and text.
+        val results = resultsOf(curve)
+        val modulus = results?.modulus
         val region = modulus?.let { ElasticRegion.of(curve, it) }
         bindRange(views, shown = region != null)
         val zoomed = region?.takeIf { vm.showElasticRegion }
         plot.setData(
-            zoomed?.let { ViewerStressStrainResults.elasticPlotSeries(host, it) } ?: plotSeries(host, curve, modulus),
+            zoomed?.let { ViewerStressStrainResults.elasticPlotSeries(host, it) } ?: plotSeries(host, curve, results),
             xAxis,
             yAxis,
             highlightX = if (bending) current?.deflectionMm else current?.strainMilli,
             xUnit = if (bending) ViewerBendingResults.UNIT_DEFLECTION else StressStrain.UNIT_STRAIN,
             yUnit = if (bending) ViewerBendingResults.UNIT_LOAD else StressStrain.UNIT_STRESS,
-            marks = plotMarks(host, curve, modulus),
+            marks = plotMarks(host, curve, results),
         )
         views.caption.text = caption(curve, current, modulus?.takeIf { zoomed != null })
         result.isVisible = true
-        result.text = resultsText(host, curve, modulus)
+        result.text = resultsText(host, curve, results)
+    }
+
+    /**
+     * No curve to draw: an empty one, or bending without its edge taps, which
+     * has stresses but no strain or δ to plot them against. A caption says
+     * which; the latter keeps its Results text (the peak stress).
+     */
+    private fun drawWithoutPlot(views: Views, curve: StressStrain.Curve) {
+        views.plot.isVisible = false
+        (views.range.parent as View).isVisible = false
+        views.caption.setText(if (curve.isEmpty) R.string.stress_strain_empty else R.string.stress_strain_no_strain)
+        views.result.isVisible = !curve.isEmpty
+        if (!curve.isEmpty) views.result.text = resultsText(host, curve, null)
     }
 
     /**
@@ -272,9 +289,11 @@ class ViewerStressStrainHelper(
             return context.createConfigurationContext(light)
         }
 
+        /** The tensile results ([TensileResults]), or null for a model that has none. */
+        fun resultsOf(curve: StressStrain.Curve): TensileResults? = TensileResults.of(curve)
+
         /** The tensile modulus fit, or null for a model that has none. */
-        fun modulusOf(curve: StressStrain.Curve): ElasticModulus.Fit? =
-            if (curve.model is StressStrain.Model.Axial) ElasticModulus.fit(curve) else null
+        fun modulusOf(curve: StressStrain.Curve): ElasticModulus.Fit? = resultsOf(curve)?.modulus
 
         /**
          * The curve, plus — when there is a fit — the fitted elastic line as a
@@ -284,23 +303,23 @@ class ViewerStressStrainHelper(
         fun plotSeries(
             context: Context,
             curve: StressStrain.Curve,
-            modulus: ElasticModulus.Fit?,
+            results: TensileResults?,
         ): List<SweepPlotView.Series> = if (curve.model.plotsLoadDeflection) {
             ViewerBendingResults.plotSeries(context, curve)
         } else {
-            ViewerStressStrainResults.plotSeries(context, curve, modulus)
+            ViewerStressStrainResults.plotSeries(context, curve, results)
         }
 
         /** The yield point on a tensile curve's plot; none for bending. */
         fun plotMarks(
             context: Context,
             curve: StressStrain.Curve,
-            modulus: ElasticModulus.Fit?,
+            results: TensileResults?,
         ): List<SweepPlotView.Mark> =
             if (curve.model.plotsLoadDeflection) {
                 emptyList()
             } else {
-                listOfNotNull(ViewerStressStrainResults.yieldMark(context, curve, modulus))
+                listOfNotNull(ViewerStressStrainResults.yieldMark(context, results))
             }
 
         /**
@@ -308,11 +327,11 @@ class ViewerStressStrainHelper(
          * section asks for: E with the frames it came from, and the peak stress;
          * for bending with a load point, [ViewerBendingResults.resultsText].
          */
-        fun resultsText(context: Context, curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): String =
+        fun resultsText(context: Context, curve: StressStrain.Curve, results: TensileResults?): String =
             if (curve.model.plotsLoadDeflection) {
                 ViewerBendingResults.resultsText(context, curve)
             } else {
-                ViewerStressStrainResults.resultsText(context, curve, modulus)
+                ViewerStressStrainResults.resultsText(context, curve, results)
             }
 
         /** Plot axis titles (x, y) worded for the model: strain and stress, or deflection and load. */

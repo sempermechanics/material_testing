@@ -40,6 +40,14 @@ enum class LoadMapWarning {
 
     /** Every non-zero load has the sign the chosen test would not produce. */
     SIGN_UNEXPECTED,
+
+    /**
+     * Some of the photos' capture times, the reference's or a photo's, were
+     * read without EXIF sub-seconds ([CaptureStamp.coarse]), so each frame's
+     * time is good only to ±1 s and rows are matched within
+     * [MachineLoadMapper.COARSE_MATCH_TOLERANCE_MS].
+     */
+    TIME_COARSE,
 }
 
 /**
@@ -55,6 +63,14 @@ data class MachineLoadTable(
 ) {
     /** Frames that carry a load. */
     val matchedFrames: Int get() = loadsN.count { it.isFinite() }
+
+    /** How far, in ms, a log row could be from a frame and still give it its load. */
+    val matchToleranceMs: Double
+        get() = if (LoadMapWarning.TIME_COARSE in warnings) {
+            MachineLoadMapper.COARSE_MATCH_TOLERANCE_MS
+        } else {
+            MachineLoadMapper.MATCH_TOLERANCE_MS
+        }
 }
 
 /** The load of frame [index], or null when there is none (NaN: no log row matched it). */
@@ -81,6 +97,14 @@ object MachineLoadMapper {
     const val MATCH_TOLERANCE_MS = 100.0
 
     /**
+     * The window for photo times read to the whole second. EXIF without
+     * sub-seconds truncates both the reference's and a photo's time, so their
+     * difference is off by up to 1 s either way; a 100 ms window would leave
+     * most frames without a load, or take whichever row happened to be close.
+     */
+    const val COARSE_MATCH_TOLERANCE_MS = 1000.0
+
+    /**
      * Log times are stored as Float, which at a few hundred seconds is only
      * good to about 0.03 ms; a row exactly 100 ms away must still match.
      */
@@ -99,13 +123,18 @@ object MachineLoadMapper {
      * @param logStartS when the log's first row was taken, in seconds after
      *   the reference frame; negative when the log started first. Used only
      *   by the time match.
+     * @param wholeSecondTimes [frameTimesMs] are photo times read to the
+     *   whole second ([CaptureStamp.coarse]; [mapPhotos] decides it): rows are matched within
+     *   [COARSE_MATCH_TOLERANCE_MS] and the table says so ([LoadMapWarning.TIME_COARSE]).
      */
+    @Suppress("LongParameterList") // the log, the frames, and the two facts about their clocks
     fun map(
         parsed: ParsedLoadCsv,
         frameCount: Int,
         frameTimesMs: List<Long>,
         testType: TestType,
         logStartS: Float = 0f,
+        wholeSecondTimes: Boolean = false,
     ): MachineLoadTable? {
         if (frameCount <= 0 || parsed.rows == 0) return null
         val warnings = mutableListOf<LoadMapWarning>()
@@ -113,7 +142,9 @@ object MachineLoadMapper {
         val table = when {
             parsed.timesS != null && frameTimesMs.size == frameCount -> {
                 warnings += LoadMapWarning.TIME_ALIGNED
-                val loads = matchInTime(rows, parsed.timesS, frameTimesMs, logStartS)
+                if (wholeSecondTimes) warnings += LoadMapWarning.TIME_COARSE
+                val toleranceMs = if (wholeSecondTimes) COARSE_MATCH_TOLERANCE_MS else MATCH_TOLERANCE_MS
+                val loads = matchInTime(rows, parsed.timesS, frameTimesMs, logStartS, toleranceMs)
                 if (loads.any { it.isNaN() }) warnings += LoadMapWarning.UNMATCHED_FRAMES
                 MachineLoadTable(loads, LoadMapping.TIME_NEAREST, warnings, rows.size)
             }
@@ -131,6 +162,29 @@ object MachineLoadMapper {
         return table
     }
 
+    /**
+     * [map] for a photo batch: each frame's time is its EXIF capture time less
+     * the [reference]'s, and the match is coarse when any of those times was
+     * read without sub-seconds ([CaptureStamp.coarse]). A batch where the
+     * reference or any photo has no capture time falls back to row order.
+     */
+    @Suppress("LongParameterList") // map's, with the reference's and the photos' stamps for the frame times
+    fun mapPhotos(
+        parsed: ParsedLoadCsv,
+        frameCount: Int,
+        reference: CaptureStamp?,
+        frames: List<CaptureStamp?>,
+        testType: TestType,
+        logStartS: Float = 0f,
+    ): MachineLoadTable? = map(
+        parsed,
+        frameCount,
+        CaptureStamp.relativeTimesMs(reference, frames),
+        testType,
+        logStartS,
+        wholeSecondTimes = CaptureStamp.coarse(reference, frames),
+    )
+
     /** The extra leading row is the reference only if nothing in the log is closer to zero. */
     private fun isUnloadedFirstRow(rows: List<Float>): Boolean {
         val first = abs(rows.first())
@@ -141,7 +195,7 @@ object MachineLoadMapper {
      * The log's first row is taken [logStartS] after the reference frame, so
      * row `i` is at `(timesS[i] - t0) + logStartS` seconds after the
      * reference. Each frame takes the nearest row (the earlier on a tie) when
-     * it is no more than [MATCH_TOLERANCE_MS] away, and NaN otherwise: a
+     * it is no more than [toleranceMs] away, and NaN otherwise: a
      * frame before the log began, after it ended, or between sparse rows.
      * Times are non-decreasing (the parser drops any that are not), so a
      * binary search finds the neighbours.
@@ -151,12 +205,13 @@ object MachineLoadMapper {
         timesS: List<Float>,
         frameTimesMs: List<Long>,
         logStartS: Float,
+        toleranceMs: Double,
     ): List<Float> {
         val t0 = timesS.first().toDouble()
         val rowMs = DoubleArray(timesS.size) { (timesS[it] - t0 + logStartS) * MS_PER_S }
         return frameTimesMs.map { frameMs ->
             val at = nearestRow(rowMs, frameMs.toDouble())
-            if (abs(rowMs[at] - frameMs) <= MATCH_TOLERANCE_MS + FLOAT_SLACK_MS) rows[at] else Float.NaN
+            if (abs(rowMs[at] - frameMs) <= toleranceMs + FLOAT_SLACK_MS) rows[at] else Float.NaN
         }
     }
 

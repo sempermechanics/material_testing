@@ -38,6 +38,7 @@ import com.sempermechanics.semper.ui.analysis.frames.WizardMediaPickers
 import com.sempermechanics.semper.ui.analysis.frames.checkFrameSizes
 import com.sempermechanics.semper.ui.analysis.load.AnalysisLoadCard
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommendationController
+import com.sempermechanics.semper.ui.analysis.rerun.LabRerun
 import com.sempermechanics.semper.ui.analysis.rerun.PickedReference
 import com.sempermechanics.semper.ui.analysis.rerun.RerunImportController
 import com.sempermechanics.semper.ui.analysis.rerun.RerunInputs
@@ -95,6 +96,9 @@ class StaticAnalysisActivity :
     private lateinit var sweepPage: WizardStepSweepBinding
 
     private var refPreviewBmp: Bitmap? = null
+
+    /** A Home Re-run's lab test until its photos are in ([showRerun]); null otherwise. */
+    private var labRerun: LabRerun? = null
 
     // Prominent progress overlay (compute + video extraction), and whether
     // the wizard is busy with either.
@@ -159,6 +163,10 @@ class StaticAnalysisActivity :
         // after process death re-reads it, and the ViewModel is authoritative
         // once set.
         TestType.fromWire(intent.getStringExtra(IntentKeys.TEST_TYPE))?.let { viewModel.testType = it }
+        // Home's Re-run of a lab test: its dimensions and taps, before the load card reads them (TD-280).
+        if (savedInstanceState == null && intent.hasExtra(IntentKeys.RERUN_SESSION_ID)) {
+            labRerun = LabRerun.from(intent)?.also { it.applyTo(viewModel) }
+        }
         // The slider keeps its own value across recreation; set it only on first open.
         if (savedInstanceState == null) {
             settings.sliderStrainWindow.value = viewModel.testType.defaultStrainWindow.toFloat()
@@ -451,6 +459,9 @@ class StaticAnalysisActivity :
         val run = inputs.params
         params.applyRerun(run.subset, run.step, run.strainWindow, run.use6x6)
         sweepController.showRerun()
+        // Typed masses onto the copied frames; step 1 when a load log must be imported again.
+        labRerun?.applyLoadsTo(viewModel)
+        labRerun = null
         onImagesChanged(newReference = true, newFrames = true)
         goToStep(viewModel.step, animate = false)
     }

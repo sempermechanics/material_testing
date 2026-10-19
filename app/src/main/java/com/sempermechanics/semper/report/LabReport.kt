@@ -107,6 +107,7 @@ object LabReport {
     ): Document {
         val t = LabReportText.Tensile
         val first = curve.points.first()
+        val results = TensileResults.of(curve, modulus)
         return Document(
             experiment = LabReportText.EXPERIMENT,
             title = t.TITLE,
@@ -142,14 +143,14 @@ object LabReport {
                         ) + extensionLine(curve, first) + correctedLine(model.correction, first),
                     ),
                 )
-                addAll(tensileGraphs(curve, modulus))
+                addAll(tensileGraphs(curve, results))
                 add(Block.Heading(LabReportText.RESULTS))
                 add(Block.Field(t.RESULT_E, modulus?.let { modulusSummary(it) } ?: t.NO_FIT))
-                modulus?.takeIf { it.modulusGPa > 0f }?.let { fit ->
-                    val point = YieldStrength.offset(curve, fit)
-                    add(Block.Field(t.RESULT_YIELD, point?.let { "${num(it.stressMPa, 2)} MPa" } ?: t.NO_YIELD))
+                modulus?.takeIf { it.modulusGPa > 0f }?.let {
+                    val point = results.yieldPoint
+                    add(Block.Field(t.RESULT_YIELD, point?.let { p -> "${num(p.stressMPa, 2)} MPa" } ?: t.NO_YIELD))
                 }
-                curve.peakStress?.let { add(Block.Field(t.RESULT_PEAK, t.peakValue(num(it.stressMPa, 2), it))) }
+                results.peak?.let { add(Block.Field(t.RESULT_PEAK, t.peakValue(num(it.stressMPa, 2), it))) }
                 add(Block.Paragraph(LabReportText.APPROXIMATE_NOTE))
                 add(Block.Heading(LabReportText.CONCLUSIONS))
                 add(Block.RuledLines(CONCLUSION_LINES))
@@ -214,11 +215,12 @@ object LabReport {
         }
     }
 
-    private fun tensileGraphs(curve: StressStrain.Curve, modulus: ElasticModulus.Fit?): List<Block> {
+    private fun tensileGraphs(curve: StressStrain.Curve, results: TensileResults): List<Block> {
         val t = LabReportText.Tensile
-        val fitSeries = modulus?.let { fitLine(curve, it) }
+        val modulus = results.modulus
+        val fitSeries = results.fitLine?.let { Series(it, isFit = true) }
         val annotation = modulus?.let { "E = ${gpa(it.modulusGPa)} GPa" }
-        val yieldMark = modulus?.let { YieldStrength.offset(curve, it) }
+        val yieldMark = results.yieldPoint
             ?.let { Mark(it.strainMilli, it.stressMPa, t.yieldMark(num(it.stressMPa, 1))) }
         return buildList {
             if (modulus != null && fitSeries != null) {
@@ -246,14 +248,6 @@ object LabReport {
                 ),
             )
         }
-    }
-
-    private fun fitLine(curve: StressStrain.Curve, fit: ElasticModulus.Fit): Series? {
-        val fitted = curve.points.filter { fit.covers(it.frame) }
-        if (fitted.isEmpty()) return null
-        val from = fitted.minOf { it.strainMilli }
-        val to = fitted.maxOf { it.strainMilli }
-        return Series(listOf(from to fit.stressAt(from), to to fit.stressAt(to)), isFit = true)
     }
 
     /** "194.0 GPa (frames 1–12, R² 0.9989)" — the one wording for E everywhere. */

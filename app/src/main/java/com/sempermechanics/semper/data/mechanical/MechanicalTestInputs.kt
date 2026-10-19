@@ -19,6 +19,12 @@ data class MechanicalTestInputs(
     val loadSource: String = "",
     val loadMapping: String = "",
 ) {
+    /**
+     * The test as a [LabSession], with no curve correction: a run has none
+     * until the viewer sets one.
+     */
+    val labSession: LabSession get() = LabSession(testType, crossSectionMm2, loadAxisX, geometry)
+
     companion object {
         val NONE = MechanicalTestInputs()
     }
