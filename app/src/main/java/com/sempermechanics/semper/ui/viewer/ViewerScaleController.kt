@@ -8,6 +8,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.databinding.DialogCustomScaleBinding
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.BakedHeatmap
 import com.sempermechanics.semper.report.HeatmapRequest
@@ -41,6 +42,10 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
 
     private val visualizationJob = SerialJob()
 
+    /** The field and the frame on screen, as the ViewModel holds them. */
+    private val field: FieldKind get() = host.viewModel.field
+    private val frameIndex: Int get() = host.viewModel.currentFrameIndex
+
     /** Fixed colour scales per field; in the ViewModel so a rotation keeps them. */
     private val customBoundsMap: MutableMap<Int, ValueRange> get() = host.viewModel.customBounds
 
@@ -61,7 +66,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
     }
 
     fun showCustomScaleDialog() {
-        val currentDataIndex = host.field.dataIndex
+        val currentDataIndex = field.dataIndex
         val dialog = DialogCustomScaleBinding.inflate(host.layoutInflater)
 
         val isStrain = DicResult.isStrainFieldIndex(currentDataIndex)
@@ -73,7 +78,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
 
         val shown = shownRange.takeIf { cachedHeatmap != null && !host.isShowingSummary && !isGeneratingHeatmap }
         CustomScalePrefill.text(
-            custom = host.customBoundsFor(currentDataIndex),
+            custom = host.viewModel.customBounds[currentDataIndex],
             shown = shown,
             multiplier = multiplier,
         )?.let { (min, max) ->
@@ -82,16 +87,16 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         }
 
         MaterialAlertDialogBuilder(host)
-            .setTitle(host.getString(R.string.scale_dialog_title_fmt, host.field.label))
+            .setTitle(host.getString(R.string.scale_dialog_title_fmt, field.label))
             .setView(dialog.root)
             .setPositiveButton(R.string.apply) { _, _ ->
                 val maxVal = dialog.etScaleMax.text?.toString()?.toFloatOrNull()
                 val minVal = dialog.etScaleMin.text?.toString()?.toFloatOrNull()
 
                 if (maxVal != null && minVal != null && maxVal > minVal) {
-                    customBoundsMap[host.field.dataIndex] = ValueRange(minVal / multiplier, maxVal / multiplier)
-                    updateVisualization(host.field.dataIndex)
-                    host.summary.onScaleChanged(host.field.dataIndex)
+                    customBoundsMap[field.dataIndex] = ValueRange(minVal / multiplier, maxVal / multiplier)
+                    updateVisualization(field.dataIndex)
+                    host.summary.onScaleChanged(field.dataIndex)
                 } else {
                     FaqRedirect.snackbar(
                         host,
@@ -101,9 +106,9 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
                 }
             }
             .setNeutralButton(R.string.auto_scale) { _, _ ->
-                customBoundsMap.remove(host.field.dataIndex)
-                updateVisualization(host.field.dataIndex)
-                host.summary.onScaleChanged(host.field.dataIndex)
+                customBoundsMap.remove(field.dataIndex)
+                updateVisualization(field.dataIndex)
+                host.summary.onScaleChanged(field.dataIndex)
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -113,17 +118,17 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
         val data = host.rawData ?: return
         isGeneratingHeatmap = true
 
-        val custom = host.customBoundsFor(index)
-        val displaced = host.onFramePhoto
+        val custom = host.viewModel.customBounds[index]
+        val displaced = host.images.onFramePhoto
         val heatKey = ScrubFrameCache.HeatKey(
-            frame = host.currentFrameIndex,
+            frame = frameIndex,
             field = index,
             step = host.step,
             custom = custom,
             displaced = displaced,
         )
 
-        val frameAtStart = host.currentFrameIndex
+        val frameAtStart = frameIndex
 
         host.scrubCache.getHeat(heatKey)?.let { hit ->
             visualizationJob.cancel()
@@ -156,7 +161,7 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
             host.scrubCache.putHeat(heatKey, heatmap)
 
             withContext(Dispatchers.Main) {
-                if (host.field.dataIndex != index || host.currentFrameIndex != frameAtStart) return@withContext
+                if (field.dataIndex != index || frameIndex != frameAtStart) return@withContext
                 showHeatmap(heatmap, index)
                 host.captions.applyFieldMetrics(metrics, index)
             }

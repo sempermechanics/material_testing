@@ -71,7 +71,7 @@ class ShareCenterTest {
 
     private fun viewer(frameNames: List<String> = emptyList()): ResultViewerActivity {
         val activity = launchViewer(viewerArgs(batchDir, GRID, STEP, frameNames))
-        idleUntil("the viewer") { activity.buildShareSnapshot() != null }
+        idleUntil("the viewer") { activity.share.buildShareSnapshot() != null }
         return activity
     }
 
@@ -114,7 +114,7 @@ class ShareCenterTest {
         val activity = viewer(listOf("a.png", "b.png", "c.png"))
 
         assertEquals("c.png", activity.frameDisplayName(1))
-        val snapshot = activity.buildShareSnapshot()!!
+        val snapshot = activity.share.buildShareSnapshot()!!
         assertEquals(2, snapshot.plannedAt(1))
         assertEquals("c.png", snapshot.nameAt(1))
         // Same rows as the cloud bundle's CSV (SessionUploadBundlerTest).
@@ -144,7 +144,7 @@ class ShareCenterTest {
     /** The viewer, resumed and its frames listed; the caller keeps it to recreate it. */
     private fun controller(): ActivityController<ResultViewerActivity> {
         val controller = viewerController(viewerArgs(batchDir, GRID, STEP))
-        idleUntil("the viewer") { controller.get().buildShareSnapshot() != null }
+        idleUntil("the viewer") { controller.get().share.buildShareSnapshot() != null }
         return controller
     }
 
@@ -185,7 +185,7 @@ class ShareCenterTest {
     fun `a save-as picked across a rotation saves from the rebuilt viewer`() {
         val controller = controller()
         val activity = controller.get()
-        activity.pickShareDocument(ShareKind.CSV, "picked.csv")
+        activity.share.pickShareDocument(ShareKind.CSV, "picked.csv")
         val picker = shadowOf(activity).nextStartedActivityForResult
 
         // Rotated while the picker was up: its answer reaches the new viewer.
@@ -206,7 +206,7 @@ class ShareCenterTest {
     fun `a save-as answer that lands before the frames are read still saves`() {
         val held = mutableListOf<Runnable>()
         val activity = heldController(held).setup().get()
-        activity.pickShareDocument(ShareKind.CSV, "picked.csv")
+        activity.share.pickShareDocument(ShareKind.CSV, "picked.csv")
         val picker = shadowOf(activity).nextStartedActivityForResult
         val dest = File(temp.root, "picked.csv")
 
@@ -231,7 +231,7 @@ class ShareCenterTest {
         val held = mutableListOf<Runnable>()
         val controller = heldController(held)
         val activity = controller.setup().get()
-        activity.pickShareDocument(ShareKind.CSV, "picked.csv")
+        activity.share.pickShareDocument(ShareKind.CSV, "picked.csv")
         val picker = shadowOf(activity).nextStartedActivityForResult
         val dest = File(temp.root, "picked.csv")
         activity.activityResultRegistry.dispatchResult(
@@ -326,7 +326,7 @@ class ShareCenterTest {
     @Test
     fun `two exports of the same file name each keep their own bytes`() {
         val activity = viewer()
-        val whole = activity.buildShareSnapshot()!!
+        val whole = activity.share.buildShareSnapshot()!!
         val oneFrame = whole.copy(batchFiles = whole.batchFiles.take(1))
         val app = activity.applicationContext
 
@@ -353,7 +353,7 @@ class ShareCenterTest {
     @Test
     fun `an export's snapshot does not reach the viewer`() {
         val activity = viewer()
-        val snapshot = activity.buildShareSnapshot()!!
+        val snapshot = activity.share.buildShareSnapshot()!!
 
         // A job keeps its snapshot until it ends, past a rotation; anything in it
         // that reaches the Activity keeps the destroyed viewer (and its views) alive.
@@ -392,7 +392,7 @@ class ShareCenterTest {
 
     @Test
     fun `a sweep renders each frame at its own pitch`() {
-        val base = viewer().buildShareSnapshot()!!
+        val base = viewer().share.buildShareSnapshot()!!
         val source = base.reportSource
         val sweepArgs = ViewerSweepArgs(
             subsets = emptyList(),

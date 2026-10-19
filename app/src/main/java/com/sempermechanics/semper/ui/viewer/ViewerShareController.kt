@@ -59,7 +59,7 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
         imageSize = host.imageSize,
         plannedFrames = host.plannedFrames,
         defImagePaths = host.defImagePaths,
-        displayBase = host.cachedBaseImage,
+        displayBase = host.images.cachedBaseImage,
     )
 
     /**
@@ -88,9 +88,9 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
             data = host.rawData,
             batchFiles = host.batchFiles,
             baseName = shareBaseName(),
-            frameIndex = host.currentFrameIndex,
-            dataIndex = host.field.dataIndex,
-            typeString = host.field.label,
+            frameIndex = host.viewModel.currentFrameIndex,
+            dataIndex = host.viewModel.field.dataIndex,
+            typeString = host.viewModel.field.label,
             summary = if (isSweep) null else host.summary.animation,
             summaryBounds = if (isSweep) {
                 emptyMap()

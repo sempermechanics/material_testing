@@ -59,7 +59,7 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
      */
     fun title(): String {
         if (host.isShowingSummary) return host.getString(R.string.summary_title)
-        val position = host.currentFrameIndex
+        val position = host.viewModel.currentFrameIndex
         val node = if (host.isSweep) host.frameParams.at(position) else null
         val timeMs = host.args.frameTimesMs?.getOrNull(host.plannedFrameIndex(position))
         return frameTitle(host.resources, host.frameDisplayName(position), node, timeMs)

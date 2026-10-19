@@ -38,7 +38,7 @@ import java.util.Locale
  */
 class ShareCenter(private val host: ResultViewerActivity) {
 
-    private val snap by lazy { host.buildShareSnapshot() }
+    private val snap by lazy { host.share.buildShareSnapshot() }
 
     private fun ensureShareAllowed(): Boolean {
         val blocked = blockedMessage(access(host)) ?: return true
@@ -81,7 +81,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
     private fun offerSlowExport(kind: ShareKind, s: Snapshot) {
         SendToSheet.showChooser(
             host,
-            onSave = { host.pickShareDocument(kind, suggestedName(kind, s)) },
+            onSave = { host.share.pickShareDocument(kind, suggestedName(kind, s)) },
             onShare = { runJob(kind, direct = true) },
         )
     }

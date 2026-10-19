@@ -70,7 +70,7 @@ object SettingsUsedSheet {
         val roi = args.roi
         // A sweep varies the settings frame by frame, so the sheet must describe
         // the combination on screen rather than the one the run started with.
-        val params = host.frameParams.at(host.currentFrameIndex)
+        val params = host.frameParams.at(host.viewModel.currentFrameIndex)
         val subset = params.subset
         val strainWin = params.strainWindow
         return buildList {
@@ -134,20 +134,21 @@ object SettingsUsedSheet {
             return
         }
         val data = host.rawData
-        val hist = data?.let { FieldHistogram.from(it, host.field.dataIndex) }
+        val field = host.viewModel.field
+        val hist = data?.let { FieldHistogram.from(it, field.dataIndex) }
         if (hist == null) {
             section.visibility = View.GONE
             return
         }
         section.visibility = View.VISIBLE
         val unit = host.getString(
-            if (DicResult.isStrainFieldIndex(host.field.dataIndex)) {
+            if (DicResult.isStrainFieldIndex(field.dataIndex)) {
                 R.string.scale_unit_strain
             } else {
                 R.string.scale_unit_px
             },
         )
-        sheetView.tvHistogramTitle.text = host.getString(R.string.viewer_histogram_title_fmt, host.field.label)
+        sheetView.tvHistogramTitle.text = host.getString(R.string.viewer_histogram_title_fmt, field.label)
         val caption = sheetView.tvHistogramCaption
         val plot = sheetView.plotFieldHistogram
         plot.setHistogram(hist, unit)

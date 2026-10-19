@@ -61,7 +61,7 @@ class ShareExportProgressTest {
 
     private fun ResultViewerActivity.reports(
         kind: ShareKind,
-        snapshot: ShareCenter.Snapshot = buildShareSnapshot()!!,
+        snapshot: ShareCenter.Snapshot = share.buildShareSnapshot()!!,
         seen: MutableList<Pair<Double, String>> = mutableListOf(),
     ): List<Pair<Double, String>> {
         runBlocking {
@@ -131,7 +131,7 @@ class ShareExportProgressTest {
     @Test
     fun `the animations count the range pass when the viewer has not finished it`() {
         val activity = viewer()
-        val snapshot = activity.buildShareSnapshot()!!.copy(summaryBounds = emptyMap())
+        val snapshot = activity.share.buildShareSnapshot()!!.copy(summaryBounds = emptyMap())
         val seen = activity.reports(ShareKind.GIFS, snapshot)
 
         assertClimbsToDone(seen)
@@ -141,7 +141,7 @@ class ShareExportProgressTest {
     @Test
     fun `the frame's photos report each field`() {
         val activity = viewer()
-        val base = activity.buildShareSnapshot()!!
+        val base = activity.share.buildShareSnapshot()!!
         // The fixture has no reference photo; draw over a plain one.
         val reference: Bitmap = createBitmap(GRID * STEP, GRID * STEP)
         val snapshot = base.copy(reportSource = base.reportSource.copy(displayBase = reference))

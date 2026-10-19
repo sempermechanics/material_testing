@@ -41,15 +41,16 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
         spatialIndex = null
     }
 
-    fun wireTapHandling() {
+    /** Taps probe, a scrub swipe goes to [onScrub] (one frame back or on), edge swipes show the chrome. */
+    fun wireTapHandling(onScrub: (delta: Int) -> Unit) {
         imgMain.onTapListener = { x, y ->
-            host.bumpChrome()
+            host.chrome.bumpChrome()
             onScreenTap(x, y)
         }
-        imgMain.onScrubListener = { delta -> host.stepFrame(delta) }
-        imgMain.onCenterDoubleTapShowChrome = { host.showChromeIfHidden() }
+        imgMain.onScrubListener = onScrub
+        imgMain.onCenterDoubleTapShowChrome = { host.chrome.showChromeIfHidden() }
         imgMain.onChromeSwipeListener = { show ->
-            if (show) host.bumpChrome()
+            if (show) host.chrome.bumpChrome()
         }
         tvProbeReadout.setOnClickListener { dismissProbe() }
     }
@@ -79,7 +80,7 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
         val data = host.rawData ?: return
         val searchRadius = host.step * SEARCH_RADIUS_STEPS
         val index = spatialIndex ?: PointSpatialIndex.build(
-            if (host.onFramePhoto) displacedPositions(data) else data,
+            if (host.images.onFramePhoto) displacedPositions(data) else data,
             host.step,
         ).also { spatialIndex = it }
         lastClosestIdx = index.nearest(physX, physY, searchRadius)
@@ -96,8 +97,8 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
         }
         val data = host.rawData ?: return
 
-        val dataIndex = host.field.dataIndex
-        val typeString = host.field.label
+        val dataIndex = host.viewModel.field.dataIndex
+        val typeString = host.viewModel.field.label
         val multiplier = DicResult.strainMultiplier(dataIndex)
         val unit = FieldKind.unitOf(dataIndex)
 
@@ -118,7 +119,7 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
                 actualY,
             )
 
-            val pts = if (host.onFramePhoto) {
+            val pts = if (host.images.onFramePhoto) {
                 floatArrayOf(
                     data[lastClosestIdx] + data[lastClosestIdx + DicResult.IDX_U],
                     data[lastClosestIdx + 1] + data[lastClosestIdx + DicResult.IDX_V],

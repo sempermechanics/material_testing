@@ -40,7 +40,7 @@ class ViewerPersistedKeysTest {
         val batchDir = temp.newFolder("batch")
         writeGridBatch(batchDir, frames = 2, grid = 4, step = 4)
         val controller = viewerController(viewerArgs(batchDir, grid = 4, step = 4))
-        controller.get().pickShareDocument(ShareKind.CSV, "picked.csv")
+        controller.get().share.pickShareDocument(ShareKind.CSV, "picked.csv")
 
         val saved = Bundle()
         controller.saveInstanceState(saved)

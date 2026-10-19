@@ -128,7 +128,7 @@ internal class ViewerImageLoader(private val host: ResultViewerActivity) {
      * reference-position map: a frame whose photo is gone (a restore without
      * it, storage reclaim) still lines up.
      */
-    val onFramePhoto: Boolean get() = framePhotoPathFor(host.currentFrameIndex) != null
+    val onFramePhoto: Boolean get() = framePhotoPathFor(host.viewModel.currentFrameIndex) != null
 
     /**
      * Puts the photo of the frame at [index] under its map — or the reference,
@@ -167,10 +167,10 @@ internal class ViewerImageLoader(private val host: ResultViewerActivity) {
                 Timber.w("Frame %d photo did not decode; showing it on the reference", index)
                 framePhotos[index] = ""
                 val data = host.rawData
-                if (host.currentFrameIndex == index && data != null) host.applyLoadedFrame(index, data)
+                if (host.viewModel.currentFrameIndex == index && data != null) host.applyLoadedFrame(index, data)
                 return@launch
             }
-            if (framePhotoPathFor(host.currentFrameIndex) != path) {
+            if (framePhotoPathFor(host.viewModel.currentFrameIndex) != path) {
                 bmp.recycle()
                 return@launch
             }

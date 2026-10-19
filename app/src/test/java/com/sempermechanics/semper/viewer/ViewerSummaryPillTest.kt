@@ -65,7 +65,7 @@ class ViewerSummaryPillTest {
             idleUntil("the viewer and the summary's ranges") {
                 activity.frameSetLoaded &&
                     activity.rawData != null &&
-                    activity.summary.boundsFor(activity.field.dataIndex) != null
+                    activity.summary.boundsFor(activity.viewModel.field.dataIndex) != null
             }
         }
 
@@ -150,7 +150,7 @@ class ViewerSummaryPillTest {
         val activity = launchViewer(viewerArgs(single, GRID, STEP))
         idleUntil("the frame's heatmap") { activity.frameSetLoaded && activity.scale.cachedHeatmap != null }
         assertTrue("the frame labels its own ends", activity.scaleMax.startsWith("≥"))
-        assertNull(activity.summary.boundsFor(activity.field.dataIndex))
+        assertNull(activity.summary.boundsFor(activity.viewModel.field.dataIndex))
         val held = mutableListOf<Runnable>()
         activity.summary.rangesDispatcher = Executor { held += it }.asCoroutineDispatcher()
 
@@ -164,7 +164,7 @@ class ViewerSummaryPillTest {
         assertEquals("the range pass was launched and is held", 1, held.size)
 
         held.toList().forEach { it.run() }
-        idleUntil("the summary's ranges") { activity.summary.boundsFor(activity.field.dataIndex) != null }
+        idleUntil("the summary's ranges") { activity.summary.boundsFor(activity.viewModel.field.dataIndex) != null }
         shadowOf(activity.mainLooper).idle()
         assertTrue(activity.scaleMax, activity.scaleMax.startsWith("≥"))
         assertTrue(activity.scaleMin, activity.scaleMin.startsWith("≤"))

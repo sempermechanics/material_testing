@@ -77,7 +77,7 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
                 scrubCache.putData(index, data)
 
                 withContext(Dispatchers.Main) {
-                    if (host.currentFrameIndex == index) host.applyLoadedFrame(index, data)
+                    if (host.viewModel.currentFrameIndex == index) host.applyLoadedFrame(index, data)
                     // On Main: prefetchJob is a SerialJob, which is main-thread only.
                     prefetchAround(index)
                 }

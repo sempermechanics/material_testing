@@ -61,9 +61,9 @@ class ViewerFieldPillsTest {
         val activity = controller.get()
         shadowOf(activity.mainLooper).idle()
 
-        activity.field = FieldKind.EXX
+        activity.viewModel.field = FieldKind.EXX
         shadowOf(activity.mainLooper).idle()
-        assertEquals(FieldKind.EXX, activity.field)
+        assertEquals(FieldKind.EXX, activity.viewModel.field)
 
         val rebuilt = controller.recreate().get()
         shadowOf(rebuilt.mainLooper).idle()

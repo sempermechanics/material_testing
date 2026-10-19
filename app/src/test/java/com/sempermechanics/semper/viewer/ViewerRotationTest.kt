@@ -68,7 +68,7 @@ class ViewerRotationTest {
         idleUntil("the frame listing") { activity.frameSetLoaded }
         assertEquals(FRAMES, activity.frameCount())
         idleUntil("the first frame") { activity.rawData != null }
-        assertEquals(0, activity.currentFrameIndex)
+        assertEquals(0, activity.viewModel.currentFrameIndex)
     }
 
     @Test
@@ -76,8 +76,8 @@ class ViewerRotationTest {
         val controller = viewerController(viewerArgs(batchDir, GRID, STEP))
         val activity = controller.get()
         idleUntil("the first frame") { activity.rawData != null }
-        activity.currentFrameIndex = 1
-        activity.field = FieldKind.EXY
+        activity.viewModel.currentFrameIndex = 1
+        activity.viewModel.field = FieldKind.EXY
         val listed = checkNotNull(activity.viewModel.state.value.frameSet)
 
         val rebuilt = controller.recreate().get()
@@ -86,7 +86,7 @@ class ViewerRotationTest {
         // The same listing object: the rebuilt viewer did not read the batch again.
         assertSame(listed, rebuilt.viewModel.state.value.frameSet)
         assertEquals(FRAMES, rebuilt.frameCount())
-        assertEquals(1, rebuilt.currentFrameIndex)
+        assertEquals(1, rebuilt.viewModel.currentFrameIndex)
         assertEquals(FieldKind.EXY, rebuilt.viewModel.state.value.field)
     }
 
@@ -103,11 +103,11 @@ class ViewerRotationTest {
         dialog.findViewById<EditText>(R.id.etScaleMax)!!.setText("3")
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick()
         shadowOf(activity.mainLooper).idle()
-        assertEquals(ValueRange(-2f, 3f), activity.customBoundsFor(DicResult.IDX_U))
+        assertEquals(ValueRange(-2f, 3f), activity.viewModel.customBounds[DicResult.IDX_U])
 
         val rebuilt = controller.recreate().get()
         idleUntil("the rebuilt viewer's frame") { rebuilt.rawData != null }
 
-        assertEquals(ValueRange(-2f, 3f), rebuilt.customBoundsFor(DicResult.IDX_U))
+        assertEquals(ValueRange(-2f, 3f), rebuilt.viewModel.customBounds[DicResult.IDX_U])
     }
 }

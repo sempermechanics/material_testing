@@ -9,7 +9,6 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.annotation.MainThread
@@ -23,11 +22,9 @@ import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
 import com.sempermechanics.semper.field.DicParams
-import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
-import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.ui.common.Insets
@@ -38,7 +35,6 @@ import com.sempermechanics.semper.ui.home.HomeActivity
 import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareExportController
-import com.sempermechanics.semper.ui.viewer.share.ShareKind
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
 import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
 import kotlinx.coroutines.CoroutineDispatcher
@@ -67,13 +63,13 @@ class ResultViewerActivity : AppCompatActivity() {
 
     internal lateinit var binding: ActivityResultViewerBinding
 
-    private val chrome = ViewerChromeController(this)
+    internal val chrome = ViewerChromeController(this)
     internal val images = ViewerImageLoader(this)
     internal val frames = ViewerFrameLoader(this)
     internal val scale = ViewerScaleController(this)
     private val frameJump = FrameJumpController(this)
     internal val captions = ViewerCaptions(this)
-    private val share = ViewerShareController(this)
+    internal val share = ViewerShareController(this)
     private val fieldPopup = FieldPopup(this)
 
     internal lateinit var shareBanner: TransferBannerController
@@ -119,29 +115,14 @@ class ResultViewerActivity : AppCompatActivity() {
     /** The ROI the run solved over. */
     internal val roi: Roi by lazy { args.roi }
 
-    /** The reference at display size. Exports and the report read it; it is never a frame's photo. */
-    internal val cachedBaseImage: Bitmap? get() = images.cachedBaseImage
-
     internal val batchFiles: List<File> get() = opened?.batchFiles.orEmpty()
 
     /** The planned frame behind each of [batchFiles], by position. */
     internal val plannedFrames: List<Int> get() = opened?.plannedFrames.orEmpty()
 
     internal val defImagePaths: List<String> get() = opened?.defImagePaths.orEmpty()
-    internal var currentFrameIndex: Int
-        get() = viewModel.currentFrameIndex
-        set(value) {
-            viewModel.currentFrameIndex = value
-        }
 
     internal val scrubCache = ScrubFrameCache()
-
-    /** The field on screen; kept by [viewModel], saved state included. */
-    internal var field: FieldKind
-        get() = viewModel.field
-        set(value) {
-            viewModel.field = value
-        }
 
     internal lateinit var summary: ViewerSummaryController
         private set
@@ -152,21 +133,14 @@ class ResultViewerActivity : AppCompatActivity() {
     /** How many frames this analysis actually holds. */
     internal fun frameCount(): Int = batchFiles.size
 
-    /**
-     * The fixed colour scale of field [dataIndex], or null for the engine's
-     * auto scale (the frame's own clamped range). Sequence-global scale is
-     * reserved for the summary GIF / share animations, not the on-screen frame.
-     */
-    internal fun customBoundsFor(dataIndex: Int): ValueRange? = viewModel.customBounds[dataIndex]
-
     /** Called when [ViewerSummaryController] finishes the whole-sequence range pass. */
     internal fun onSequenceRangesReady() {
         // The summary colour bar is sequence-global; refresh ⓘ so it quotes
         // the same ends instead of the hidden first frame's extrema.
         if (!isShowingSummary) return
         val data = rawData ?: return
-        val metrics = viewModel.fieldMetricsFor(currentFrameIndex, field.dataIndex, data)
-        captions.applyFieldMetrics(metrics, field.dataIndex)
+        val metrics = viewModel.fieldMetricsFor(viewModel.currentFrameIndex, viewModel.field.dataIndex, data)
+        captions.applyFieldMetrics(metrics, viewModel.field.dataIndex)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -198,13 +172,13 @@ class ResultViewerActivity : AppCompatActivity() {
         if (savedInstanceState != null) {
             val savedProbe = savedInstanceState.getInt(STATE_PROBE_INDEX, -1)
             inspect.restoreProbe(savedProbe)
-            currentFrameIndex = savedInstanceState.getInt(STATE_FRAME, 0)
+            viewModel.currentFrameIndex = savedInstanceState.getInt(STATE_FRAME, 0)
             frameJump.showingSummary = savedInstanceState.getBoolean(STATE_SHOWING_SUMMARY, false)
             share.restoreState(savedInstanceState)
         } else {
             // A lattice node tap asks to open on a specific frame; clamped once
             // the batch is loaded below.
-            currentFrameIndex = args.startFrame ?: 0
+            viewModel.currentFrameIndex = args.startFrame ?: 0
             // Otherwise the summary is what the viewer opens on — it answers
             // "what happened across the test" before any single frame does.
             // Sweeps never use the summary slot (combinations are not a time series).
@@ -237,12 +211,12 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         binding.btnPrevFrame.setOnClickListener {
-            bumpChrome()
-            stepFrame(-1)
+            chrome.bumpChrome()
+            frameJump.stepFrame(-1)
         }
         binding.btnNextFrame.setOnClickListener {
-            bumpChrome()
-            stepFrame(1)
+            chrome.bumpChrome()
+            frameJump.stepFrame(1)
         }
 
         frameJump.wireFrameJump()
@@ -250,16 +224,16 @@ class ResultViewerActivity : AppCompatActivity() {
         binding.imgBaseResult.onMatrixChangedListener = {
             scale.applyHeatmapMatrix()
             inspect.refreshCrosshairs()
-            bumpChrome()
+            chrome.bumpChrome()
         }
 
         // Field FAB: shows the current field, tap opens a glass-pill popup of all
         // five with the live field checked. The live field comes back from the
         // ViewModel after a rotation, so re-derive the label or it disagrees
         // with the heatmap.
-        binding.btnFieldFab.text = field.label
+        binding.btnFieldFab.text = viewModel.field.label
         binding.btnFieldFab.setOnClickListener {
-            bumpChrome()
+            chrome.bumpChrome()
             fieldPopup.show(it)
         }
 
@@ -277,20 +251,20 @@ class ResultViewerActivity : AppCompatActivity() {
         }
         binding.btnViewerHome.setOnClickListener { goHome() }
         binding.btnViewerSettingsInfo.setOnClickListener {
-            bumpChrome()
+            chrome.bumpChrome()
             SettingsUsedSheet.show(this)
         }
 
         binding.layoutColorScale.setOnClickListener {
-            bumpChrome()
+            chrome.bumpChrome()
             scale.showCustomScaleDialog()
         }
-        inspect.wireTapHandling()
+        inspect.wireTapHandling(onScrub = frameJump::stepFrame)
         frameJump.wireSummaryGestures()
 
         binding.imgBaseResult.post {
             inspect.refreshCrosshairs()
-            bumpChrome()
+            chrome.bumpChrome()
         }
     }
 
@@ -306,9 +280,9 @@ class ResultViewerActivity : AppCompatActivity() {
 
         if (batchFiles.isNotEmpty()) {
             // A START_FRAME (or restored index) past the batch would load nothing.
-            currentFrameIndex = currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
+            viewModel.currentFrameIndex = viewModel.currentFrameIndex.coerceIn(0, batchFiles.lastIndex)
             binding.tvFrameTotal.text = getString(R.string.frame_total_fmt, batchFiles.size)
-            frames.loadFrameData(currentFrameIndex)
+            frames.loadFrameData(viewModel.currentFrameIndex)
             // Summary GIF / share animations are single-setting only.
             if (!isSweep && batchFiles.size > 1) summary.start()
             if (isShowingSummary && !isSweep) {
@@ -316,7 +290,7 @@ class ResultViewerActivity : AppCompatActivity() {
             } else {
                 frameJump.showingSummary = false
                 frameJump.updateNavButtons()
-                bumpChrome()
+                chrome.bumpChrome()
             }
         } else {
             frameJump.showingSummary = false
@@ -336,18 +310,6 @@ class ResultViewerActivity : AppCompatActivity() {
         finish()
     }
 
-    /** Bring edge chrome back, then schedule auto-hide. */
-    internal fun bumpChrome() = chrome.bumpChrome()
-
-    /**
-     * Centre double-tap while chrome is hidden: show the bars. Returns true when
-     * consumed so zoom does not also run.
-     */
-    internal fun showChromeIfHidden(): Boolean = chrome.showChromeIfHidden()
-
-    /** Advance or retreat one frame (or leave/enter the summary). Used by buttons and fling. */
-    internal fun stepFrame(delta: Int) = frameJump.stepFrame(delta)
-
     override fun onDestroy() {
         super.onDestroy()
         if (::binding.isInitialized) chrome.cancel()
@@ -365,7 +327,7 @@ class ResultViewerActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt(STATE_PROBE_INDEX, inspect.lastClosestIdx)
-        outState.putInt(STATE_FRAME, currentFrameIndex)
+        outState.putInt(STATE_FRAME, viewModel.currentFrameIndex)
         outState.putBoolean(STATE_SHOWING_SUMMARY, isShowingSummary)
         share.saveState(outState)
     }
@@ -384,17 +346,11 @@ class ResultViewerActivity : AppCompatActivity() {
         frameJump.syncFrameNumber()
         // updateVisualization warms this frame's stats off the main thread
         // and pushes them to the caption when the render completes.
-        scale.updateVisualization(field.dataIndex)
+        scale.updateVisualization(viewModel.field.dataIndex)
         if (inspect.lastClosestIdx != -1) {
             inspect.refreshCrosshairs()
         }
     }
-
-    /**
-     * True when the frame on screen is drawn over its own photo, with its map
-     * at the displaced positions. See [ViewerImageLoader.onFramePhoto].
-     */
-    internal val onFramePhoto: Boolean get() = images.onFramePhoto
 
     /**
      * Same rest-fit box the summary GIF should fill. Custom ROI when set;
@@ -455,16 +411,10 @@ class ResultViewerActivity : AppCompatActivity() {
      */
     internal val args: ViewerArgs by lazy { ViewerArgs.from(intent) { sessionRecord } }
 
-    /** Everything an export needs; see [ViewerShareController.buildShareSnapshot]. */
-    internal fun buildShareSnapshot(): ShareCenter.Snapshot? = share.buildShareSnapshot()
-
     /** Share sheet (wireframe 08) - targets wired via ShareCenter. */
     private fun showShareSheet() {
         ShareCenter(this).show()
     }
-
-    /** SAF CreateDocument for a slow export; generation starts only after a URI returns. */
-    internal fun pickShareDocument(kind: ShareKind, filename: String) = share.pickShareDocument(kind, filename)
 
     private companion object {
         // Saved-state keys; their strings are what a restored viewer reads back.

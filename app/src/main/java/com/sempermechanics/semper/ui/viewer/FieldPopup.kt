@@ -28,14 +28,14 @@ internal class FieldPopup(private val host: ResultViewerActivity) {
             val button = popup.root.findViewById<MaterialButton>(id)
             button.text = field.label
             button.isCheckable = true
-            button.isChecked = field == host.field
+            button.isChecked = field == host.viewModel.field
             button.setOnClickListener {
-                if (field == host.field) {
+                if (field == host.viewModel.field) {
                     window.dismiss()
                     return@setOnClickListener
                 }
                 // One value: the label and the data index can no longer disagree.
-                host.field = field
+                host.viewModel.field = field
                 host.binding.btnFieldFab.text = field.label
                 // Caption + probe value are refreshed by updateVisualization once the
                 // new field's metrics are computed off the main thread.
@@ -43,7 +43,7 @@ internal class FieldPopup(private val host: ResultViewerActivity) {
                 host.summary.onFieldChanged()
                 if (host.isShowingSummary) host.binding.tvFrameCounter.text = host.summary.counterText()
                 host.inspect.refreshCrosshairs()
-                host.bumpChrome()
+                host.chrome.bumpChrome()
                 window.dismiss()
             }
         }
