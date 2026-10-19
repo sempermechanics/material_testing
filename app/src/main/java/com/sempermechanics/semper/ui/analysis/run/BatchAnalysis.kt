@@ -42,7 +42,8 @@ import java.io.File
 
 /**
  * The batch DIC run loop, moved as one unit from [AnalysisViewModel].
- * JNI [SemperNativeLib.computeFullFieldDirect] stays in this loop — do not
+ * JNI [SemperNativeLib.computeFullFieldDirect] (or, for an incremental run,
+ * [SemperNativeLib.computeIncrementalFrame]) stays in this loop — do not
  * fragment it. Buffer allocate / overrun / `.dat` write are [DicFieldIo].
  */
 // One JNI loop over the deformed frames, writing `.dat` results: its size,
@@ -103,12 +104,15 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     var stop: RunStop = RunStop.Finished
 
     onProgress(BatchProgressUpdate(0f, "Caching reference in engine…", plannedFrames = plannedFrames))
-    SemperNativeLib.initializeReference(
-        refBytes,
-        spec.mask,
-        reference.size.width,
-        reference.size.height,
-    )
+    // An incremental run opens its session just before the loop, below.
+    if (!spec.incremental) {
+        SemperNativeLib.initializeReference(
+            refBytes,
+            spec.mask,
+            reference.size.width,
+            reference.size.height,
+        )
+    }
 
     val roi = spec.roi
     val dic = spec.params
@@ -157,6 +161,23 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         DicResult.IDX_EXY,
     )
     val perFrameSummaryRanges = mutableListOf<Map<Int, ValueRange?>>()
+
+    // An incremental run opens a session that moves the reference forward as it
+    // goes, and holds two images until the finally below releases it, however
+    // the run ends. Its init failure is reported at the first frame, where a
+    // fixed run's engine would report the same code.
+    val incrementalInfo = IntArray(SemperNativeLib.INC_INFO_LEN)
+    val incrementalInit = if (spec.incremental) {
+        SemperNativeLib.initializeIncremental(
+            refBytes, spec.mask,
+            reference.size.width, reference.size.height,
+            roi.x, roi.y, roi.w, roi.h,
+            dic.step, dic.subset, dic.strainWindow, spec.use6x6,
+            spec.refUpdateInterval,
+        )
+    } else {
+        0
+    }
 
     // A run that throws before its results are committed (a full disk under
     // DicFieldIo.write, say) keeps nothing either: it is undone as a cancel is
@@ -236,12 +257,23 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             outputBuffer.clear()
             val metricsCatcher = EngineStats.newMetrics(EngineStats.ENGINE_SLOT_COUNT)
 
-            val validPointsCount = SemperNativeLib.computeFullFieldDirect(
-                refBytes, defBytes, spec.mask,
-                roi.x, roi.y, roi.w, roi.h,
-                dic.step, dic.subset, dic.strainWindow, spec.use6x6,
-                outputBuffer, callback, metricsCatcher,
-            )
+            // Incremental: the total from the first image, on its grid, in the same layout.
+            val validPointsCount = when {
+                incrementalInit < 0 -> incrementalInit
+                spec.incremental -> SemperNativeLib.computeIncrementalFrame(
+                    defBytes,
+                    outputBuffer,
+                    callback,
+                    metricsCatcher,
+                    incrementalInfo,
+                )
+                else -> SemperNativeLib.computeFullFieldDirect(
+                    refBytes, defBytes, spec.mask,
+                    roi.x, roi.y, roi.w, roi.h,
+                    dic.step, dic.subset, dic.strainWindow, spec.use6x6,
+                    outputBuffer, callback, metricsCatcher,
+                )
+            }
 
             if (validPointsCount < 0) {
                 stop = RunStop.fromWireCode(validPointsCount)
@@ -292,6 +324,13 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
 
             solvedFrames++
             lastConvergence = metricsCatcher[EngineStats.SLOT_CONVERGENCE]
+            if (spec.incremental) {
+                lastConvergence = ConvergenceGate.incremental(
+                    lastConvergence,
+                    incrementalInfo[SemperNativeLib.INC_INFO_TRACKED_POINTS],
+                    incrementalInfo[SemperNativeLib.INC_INFO_FRAME0_POINTS],
+                )
+            }
             frameConvergence[frameIndex] = lastConvergence
             if (convergenceGate.record(lastConvergence)) {
                 stop = RunStop.LowConvergence
@@ -320,6 +359,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         if (stop != RunStop.Cancelled) session.commit()
     } catch (e: Exception) {
         undoFailedBatch(appContext, session, frames.paths, resolvedDefPaths, e)
+    } finally {
+        if (spec.incremental) SemperNativeLib.releaseIncremental()
     }
     if (stop == RunStop.Cancelled) {
         discardCancelledBatch(appContext, session, frames.paths, resolvedDefPaths)
