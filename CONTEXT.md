@@ -140,7 +140,7 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   erasure and account-anchored entitlements ([ADR-024](docs/adr/ADR-024-account-anchored-entitlements.md):
   nothing entered or sold in the app, Refresh licence, locked-not-hidden features, claim codes on
   the web account page, kill switches refused server-side, a per-device demo cap). No release
-  is built from it yet. Owed at deploy, in order: indexes (TD-216, TD-271), backend, gateway,
+  is built from it yet. Owed at deploy, in order ([checklist](docs/ops/DEPLOY_CHECKLIST_2026-10.md)): indexes (TD-216, TD-271), backend, gateway,
   Hosting (with the aligned Terms), monitoring (TD-217); also TD-214, TD-215, a device smoke
   (TD-219), TD-226, TD-229–TD-232, and counsel on the Terms (TD-277).
 - **material_testing** merges this `main` (last `8ba7081`, material_testing#133,
