@@ -246,10 +246,72 @@ const REAUTH_FAILURES = {
  */
 export function unfinishedStepUpText(resume, label) {
   const deleting = resume.action === "delete";
-  const why = REAUTH_FAILURES[resume.reauthFailed] ||
-    `re-authentication failed (${resume.reauthFailed})`;
+  const why = reauthFailureText(resume.reauthFailed);
   return `${label} was not ${deleting ? "deleted" : "revoked"}: ${why}. ` +
     `${deleting ? "Delete" : "Revoke"} it again to retry.`;
+}
+
+/** Why a step-up's return leg did not finish (`resume.reauthFailed`), in words. */
+export function reauthFailureText(reason) {
+  return REAUTH_FAILURES[reason] || `re-authentication failed (${reason})`;
+}
+
+/* ------------------------------------------------------- test accounts */
+
+/** The test-account limits the backend holds (`admin_test_accounts.py`). */
+export const TEST_ACCOUNT = { maxDays: 90, defaultDays: 30, maxDevices: 10, defaultDevices: 3, maxNote: 200 };
+
+/** A whole number in 1..`max` from a form field's text, null for anything else. */
+function wholeIn(text, max) {
+  const t = String(text ?? "").trim();
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return n >= 1 && n <= max ? n : null;
+}
+
+/** The days an Extend asks for (1..90), or null when the text is not that. */
+export function extendDays(text) {
+  return wholeIn(text, TEST_ACCOUNT.maxDays);
+}
+
+/**
+ * The `POST /v1/admin/test-accounts` body for the create form's fields (their
+ * text, as typed), as `{ body }`, or `{ error }` saying what to fix. QC
+ * accounts always end: days 1..90. A CI account may leave days blank, which
+ * is sent as `days: null`, no expiry. Phones at once is 1..10, the backend's
+ * default (3) when blank. An empty note is left out.
+ */
+export function testAccountBody({ email, purpose, days, maxDevices, note }) {
+  const address = String(email ?? "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) {
+    return { error: "Enter the test account's email address." };
+  }
+  if (purpose !== "qc" && purpose !== "ci") return { error: "Choose QC or CI." };
+  const body = { email: address, purpose };
+  const dayText = String(days ?? "").trim();
+  if (purpose === "ci" && !dayText) {
+    body.days = null;
+  } else {
+    body.days = wholeIn(dayText, TEST_ACCOUNT.maxDays);
+    if (body.days == null) {
+      return { error: purpose === "ci"
+        ? "Days is 1 to 90, or blank for a CI account that never ends."
+        : "Days is 1 to 90: a QC account always ends." };
+    }
+  }
+  if (String(maxDevices ?? "").trim()) {
+    body.maxDevices = wholeIn(maxDevices, TEST_ACCOUNT.maxDevices);
+    if (body.maxDevices == null) return { error: "Phones at once is 1 to 10." };
+  }
+  const text = String(note ?? "").trim();
+  if (text.length > TEST_ACCOUNT.maxNote) return { error: "The note is at most 200 characters." };
+  if (text) body.note = text;
+  return { body };
+}
+
+/** When a test account ends, as the desk shows it: its UTC day, or "Never". */
+export function testAccountEnds(account) {
+  return account && account.expiresAt ? day(account.expiresAt) : "Never";
 }
 
 /** The UTC calendar day (YYYY-MM-DD) of a stored instant, or "". */
