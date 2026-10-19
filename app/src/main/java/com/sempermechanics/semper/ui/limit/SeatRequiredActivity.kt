@@ -26,8 +26,8 @@ import timber.log.Timber
  * Gate shown when every seat on a floating institution license is in use.
  *
  * Deliberately not shaped like [SessionLimitActivity], which it otherwise
- * resembles. Being at the analysis limit needs a human — an email to support to
- * raise the cap. Having no seat needs nobody: seats free themselves as
+ * resembles. Being at the analysis limit needs the user to free room (or a
+ * licence refresh). Having no seat needs nobody: seats free themselves as
  * colleagues finish, so the whole screen is one button that tries again.
  *
  * The user is **not blocked from the app**. They are eligible, in demo mode,
@@ -71,8 +71,9 @@ class SeatRequiredActivity : AppCompatActivity() {
             outcome
                 .onSuccess { config ->
                     AppRemoteConfig.apply(this@SeatRequiredActivity, config)
-                    // The checkout answer has no entitlement token; /v1/config does.
-                    SeatLease.refreshConfigBestEffort(this@SeatRequiredActivity)
+                    // The checkout answer has no entitlement token; /v1/config
+                    // does, and a failed fetch is retried in the background.
+                    SeatLease.refreshConfigAfterCheckout(this@SeatRequiredActivity)
                     LicenseConfigWorker.enqueue(this@SeatRequiredActivity)
                     Feedback.toast(this@SeatRequiredActivity, R.string.seat_taken)
                     finish()

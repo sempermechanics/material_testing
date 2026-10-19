@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.data.cloud
 
+import androidx.work.ListenableWorker
 import com.sempermechanics.semper.data.cloud.UploadErrors.Kind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,6 +28,7 @@ class UploadErrorsTest {
     @Test
     fun `only the quota code makes a 409 a quota failure`() {
         assertEquals(Kind.QUOTA, UploadErrors.classify(409, body("session_quota_exceeded: 25/25 analyses stored.")))
+        assertEquals(Kind.QUOTA, UploadErrors.classify(409, body("device_quota_exceeded: the demo allows 25")))
         assertEquals(Kind.TOO_LARGE, UploadErrors.classify(413, body("too_many_files")))
         // `:complete` 409s when the file record no longer matches: the session
         // can't be finished, but nothing about the analysis is too large.
@@ -51,6 +53,15 @@ class UploadErrorsTest {
         assertEquals(Kind.STALE_SESSION, UploadErrors.classify(404, body("session_not_found")))
         // A bare 404 is a route the gateway does not know, not a missing session.
         assertEquals(Kind.TRANSIENT, UploadErrors.classify(404, "Not Found"))
+    }
+
+    @Test
+    fun `a paused upload or backup waits and retries, never fails`() {
+        // POST /v1/sessions and :complete answer 503 feature_paused while the
+        // upload or backup kill switch is on.
+        assertEquals(Kind.PAUSED, UploadErrors.classify(503, body("feature_paused")))
+        assertEquals(ListenableWorker.Result.retry(), UploadWorkOutcomes.fromHttpCode(503, body("feature_paused")))
+        assertFalse(UploadWorkOutcomes.isQuotaExhausted(503, body("feature_paused")))
     }
 
     @Test

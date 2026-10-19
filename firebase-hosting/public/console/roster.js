@@ -121,7 +121,7 @@ export function wireRoster({ rows, email, add, base, report, reload, retry = rel
       await api(`${root}/invites/${encodeURIComponent(inviteId)}`, { method: "DELETE" });
       await reload();
     } catch (e) {
-      report(`Could not withdraw: ${e.message}`, true);
+      report(explain(e, {}, (text) => `Could not withdraw: ${text}`), true);
     }
   }
 

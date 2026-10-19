@@ -6,7 +6,6 @@ import com.sempermechanics.semper.data.net.ConsentUpdateRequest
 import com.sempermechanics.semper.data.net.DeviceRegisterRequest
 import com.sempermechanics.semper.data.net.ErasureStatus
 import com.sempermechanics.semper.data.net.FileCompleteRequest
-import com.sempermechanics.semper.data.net.LicenseActivateRequest
 import com.sempermechanics.semper.data.net.LicenseActivateResponse
 import com.sempermechanics.semper.data.net.MeResponse
 import com.sempermechanics.semper.data.net.SessionCreateRequest
@@ -178,8 +177,9 @@ class ApiDtosContractTest {
 
     @Test
     fun `license activate response decodes the nested config`() {
-        // Only GET /v1/config carries the token and the version and kill-switch
-        // fields; activation leaves them out (key absent).
+        // The seat routes' answer (checkout, release) has this shape. Only
+        // GET /v1/config carries the token and the version and kill-switch
+        // fields; these answers leave them out (key absent).
         val resp = response<LicenseActivateResponse>(
             "license_activate_response",
             absentOk = setOf("entitlement", "minSupportedVersionCode", "recommendedVersionCode", "killSwitches")
@@ -236,8 +236,7 @@ class ApiDtosContractTest {
     }
 
     @Test
-    fun `license activate, terms and consent requests are exactly the fixtures' bodies`() {
-        assertEquals("SEMP-U8BX-4KQ2-ZP7M-W3RT", request<LicenseActivateRequest>("license_activate_request").key)
+    fun `terms and consent requests are exactly the fixtures' bodies`() {
         assertEquals("2026-09-15", request<TermsAcceptRequest>("terms_accept_request").version)
         assertTrue(request<ConsentUpdateRequest>("consent_update_request").improvement)
     }

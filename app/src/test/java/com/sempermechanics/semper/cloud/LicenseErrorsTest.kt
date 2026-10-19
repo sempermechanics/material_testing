@@ -26,6 +26,14 @@ class LicenseErrorsTest {
     }
 
     @Test
+    fun `a paused restore or download says paused, not demo and not a failure`() {
+        val body = """{"detail":"${ApiErrors.FEATURE_PAUSED}"}"""
+        val paused = ctx.getString(com.sempermechanics.semper.R.string.restore_paused)
+        assertEquals(paused, LicenseErrors.restoreMessage(ctx, body))
+        assertEquals(paused, LicenseErrors.downloadMessage(ctx, body))
+    }
+
+    @Test
     fun `demo feature refusal maps to the demo-mode restore message`() {
         val msg = LicenseErrors.restoreMessage(ctx, ApiErrors.FEATURE_NOT_LICENSED)
         assertEquals(ctx.getString(com.sempermechanics.semper.R.string.restore_not_licensed), msg)

@@ -15,6 +15,7 @@ you are changing `backend/` or the sync path in `app/.../data/`.
 | Renew or extend a license, or reason about expiry | [§20.6 Duration, grace, and renewal](#206-duration-grace-and-renewal) |
 | Understand shared/concurrent institution seats | [§20.7 Floating seats](#207-floating-seats) |
 | Use or deploy the web consoles | [§20.8 The consoles](#208-the-consoles-and-what-a-browser-may-do) |
+| Know what the server checks per request, kill switches, claim codes | [§20.14 Account-anchored entitlements](#2014-account-anchored-entitlements-what-the-server-checks) |
 | Fix sign-in | [AUTH_SETUP.md](AUTH_SETUP.md) |
 
 > **Status / scope.** This document specifies the **GCP-native** backend:
@@ -585,7 +586,10 @@ challenges/{nonce}                (short-lived, TTL-deleted)
   uid, deviceId, createdAt, expireAt (Timestamp, TTL policy)
 
 sessions/{sessionId}
-  uid, deviceId
+  uid, deviceId                   (deviceId: the registered device that created
+                                  it; a demo account's cap also counts every
+                                  stored session with this device's id,
+                                  whatever its uid: `count_device_sessions`, §7)
   app: "semper" | "materialtesting"   (the app that created it, from X-App-Id,
                                   never the body — ADR-014. Absent on sessions
                                   from before the tag, which read as "semper"
@@ -796,6 +800,21 @@ with optional per-user values on `users/{uid}`, so one tester can be raised
 without redeploying. Admins set them via
 `PATCH /v1/admin/users/{uid}/config`, and the app reads the resolved numbers
 rather than hardcoding its own.
+
+**The demo cap is counted per account and per device.** Both halves count
+analyses stored at once, less `PROVISION_FAILED`, so a delete frees a place
+(the product owner's choice, TD-275). The account half is `count_user_sessions`
+(`backend/app/repo/sessions.py:394-412`); for a demo account `create_session`
+also refuses when the device's stored analyses, every account's, reach the cap
+(`count_device_sessions`, `:415-439`; `_device_cap_reached`,
+`backend/app/routers/sessions.py:473-486`, applied at `:546-547`), with a
+`409 device_quota_exceeded` that names neither the count nor the owners (its
+own code since TD-279, so the app does not lift it on the account's count). A
+session with no `deviceId` counts toward no device. `GET /v1/sessions`
+`quota.used` stays the account's count (`sessions.py:131`). A demo create costs
+11 reads, not 9 ([request-volume.md](../perf/request-volume.md) Pass 4). After
+a staff device release the phone still counts its previous holder's analyses
+(TD-276). Tests `backend/tests/test_demo_device_cap.py`.
 
 **`MAX_SESSIONS_PER_USER` is deleted, not merely unread.** It used to be the
 one cap for everyone (default 4). `mode` now selects between
@@ -1313,8 +1332,14 @@ makes the GCS migration a config flag tomorrow.
 ## 20. Licensing & entitlements
 
 Three shapes, all resolved server-side by `resolve_user_config` — the app
-never decides its own entitlement, it reads `GET /v1/config` (and the
-`activate` response) and renders around what the backend says.
+never decides its own entitlement, it reads `GET /v1/config` and renders around
+what the backend says. **Paid entitlements are anchored to the account**
+([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)): every user signs in, Demo is the default, and a roster seat, an
+email-locked individual licence or a one-time claim code redeemed on the web
+account page (`POST /v1/me/claim`) attaches the paid entitlement to the account.
+Nothing is entered or sold in the app, which is consumption-only under Google
+Play's Payments policy. Every cloud route re-checks the account on each
+request (§20.14); share, which has no route, rests on the signed token.
 
 Each shape is independently perpetual or timed, and a timed one keeps working
 through a grace window after its expiry — see [§20.6](#206-duration-grace-and-renewal).
@@ -1326,7 +1351,7 @@ see [§20.7](#207-floating-seats).
 |---|---|---|---|
 | **Demo** | Default for every approved account; `ensure_demo_license` issues a Demo-plan license on first verified+device-bound login | email + device (so a Demo key can't be shared) | nobody — it's the floor |
 | **Licensed, individual** | Semper staff mint against one address (`POST /v1/admin/licenses`, `kind=individual`); it attaches when that address signs in and binds to the first device it signs in on | one email + one device | Semper staff only (`admin_user` + `verified_device`) |
-| **Licensed, institution** | Semper staff mint a key (`kind=institution`) with a `domainLock` and a list of `adminEmails`; any verified `@domainLock` member self-activates and claims a seat | a verified-email **domain**, per-member seat locked to one device | Institution IT, self-service, via the three `/v1/institutions/licenses/{id}/seats*` routes — from `/console/institution` (§20.8) or their own tooling |
+| **Licensed, institution** | Semper staff mint a key (`kind=institution`) with a `domainLock` and a list of `adminEmails`; IT seats members by address, and any verified `@domainLock` member may also redeem the key as a claim code on the account page and take a seat | a verified-email **domain**, per-member seat locked to one device | Institution IT, self-service, via the three `/v1/institutions/licenses/{id}/seats*` routes — from `/console/institution` (§20.8) or their own tooling |
 
 **Institution IT has a console** at `/console/institution` (§20.8); the routes
 below remain the whole API surface behind it, and are equally usable from a
@@ -1369,10 +1394,19 @@ Either way the person signs in and `ensure_entitlement` attaches what they are
 owed on their first request — see
 [§20.7](#joining-it-adds-an-address-whether-or-not-it-has-an-account).
 
-The key still exists and still redeems, and `POST /v1/licenses/activate` is
-still the route that does it. It is the **support-recovery** path: re-attaching
-a licence whose invite has been consumed but whose account has lost it. Nothing
-in the app calls it, and nothing should have to.
+The key still exists and still redeems, as a **one-time claim code** typed on
+the web account page (`POST /v1/me/claim`, `backend/app/routers/licenses.py:195-256`;
+the card is `firebase-hosting/public/console/account/claim.js`). It is for what
+the invite cannot do: a reseller deal for an address nobody knew at mint, an
+institution member joining by email domain, and re-attaching a licence whose
+invite was consumed by the wrong account. The route needs the user step-up (a
+second factor on a recent sign-in, or a signed device request) and a verified
+address (`403 email_not_verified`), shares the activation rate bucket, and
+writes a `LICENSE_CLAIM_CODE` audit row with the code's prefix only. A browser
+names no device, so `activate_license` compares and binds no lock
+(`backend/app/repo/activation.py:62-68`); the phone's next request binds it.
+No app screen takes a code ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)). `POST /v1/licenses/activate` runs the same
+redemption and stays for installed builds only (TD-278).
 
 #### The device lock is bound, not declared
 
@@ -1412,11 +1446,11 @@ sequenceDiagram
     participant A as Android
     participant R as Cloud Run
     participant F as Firestore
-    A->>R: POST /v1/licenses/activate {key} (ID token, X-Device-Id)
+    A->>R: POST /v1/me/claim {code} (browser: ID token + second factor; no device)
     R->>F: licenses/{sha256(key)}
     alt kind = individual
-        R->>R: emailLock == caller email? deviceIdLock unset, or == X-Device-Id?
-        R->>F: licenses/{id}.deviceIdLock = X-Device-Id (if unset)
+        R->>R: emailLock == caller email? (a device, when one is named: lock unset or equal)
+        R->>F: licenses/{id}.deviceIdLock = X-Device-Id (only when a device is named and the lock is unset)
         R->>F: users/{uid}.mode = licensed, licenseKind = individual
     else kind = institution
         R->>R: verified-email domain == license.domainLock?
@@ -1479,10 +1513,12 @@ count as stored and kept under the demo limit rather than as "120 of 25".
 
 Two consequences follow. An installed build that predates licensing keeps
 backing up after the backend deploys — its upload worker retries a 403 from
-session creation forever, which is why the gate is on retrieval and not on
-creation. And the app shows a demo account **no** backup or restore surface at
-all: no sync badge, no pending-upload banner, no Settings backup/restore
-section. The upload is silent; the account's data is there for the day a
+session creation forever, which is why the licence gate is on retrieval and not
+on creation. (A kill switch does refuse creation, with `503 feature_paused`,
+which every build retries as a 5xx: §20.14.) And the app shows a demo account no
+sync badge or pending-upload banner, and shows Settings' backup, Analyses data
+and Free-up controls **locked**, never working (`FeatureLocks`,
+`app/src/main/java/com/sempermechanics/semper/data/policy/FeatureLocks.kt:41-67`). The upload is silent; the account's data is there for the day a
 licence attaches, and for the operator's own use under the Terms. On the phone
 that is `CloudSync.uploadsEnabled`, which ignores the Save-to-cloud toggle
 while backup is not licensed, and `StorageBudget`, which refuses to free local
@@ -1503,7 +1539,7 @@ writing anything:
 | Path | Refusal |
 |------|---------|
 | Staff mint (`POST /v1/admin/licenses`, individual) | `409 email_already_licensed: <licence id>` |
-| Key typed in the app (`POST /v1/licenses/activate`) | `409 already_licensed` |
+| Claim code on the account page (`POST /v1/me/claim`; legacy `POST /v1/licenses/activate`) | `409 already_licensed` |
 | IT adds a roster member or invite (`POST /v1/institutions/licenses/{id}/seats`) | `409 member_already_licensed` |
 
 An address holds a licence four ways, and all four count: its account points
@@ -1795,7 +1831,8 @@ entitlement, not a warning state.
 
 `/v1/me` and `/v1/config` carry `licenseExpiresAt`, `licenseGraceEndsAt` and
 `inGrace`. The app shows a Home notice inside 14 days of expiry, or whenever in
-grace, and **never gates on those values**: a cached date can be arbitrarily
+grace (in grace it names the day grace ends, from `licenseGraceEndsAt`; no
+renew, buy or email call to action, ADR-024), and **never gates on those values**: a cached date can be arbitrarily
 stale, and a renewal may have landed while the device was offline. `mode`
 remains the only thing that changes what the app will do. The client suppresses
 the notice entirely once its cached config is over a week old, which is what
@@ -2039,7 +2076,7 @@ would cost more than it saves.
 | Path | Who | What it can do |
 |---|---|---|
 | `/login` (`/console/`) | Anyone with an account | Signs in and forwards to whichever dashboard below is theirs (§20.11) |
-| `/account` (`/console/account`) | Anyone with an account | Read the licence, its term, the seat and the stored analyses; return a floating seat, move the licence to another device, download an analysis. The last two need a second factor |
+| `/account` (`/console/account`) | Anyone with an account | Read the licence, its term, the seat and the stored analyses; return a floating seat, move the licence to another device, download an analysis, and, while no licence is attached, redeem a one-time claim code (`POST /v1/me/claim`). The last three need a second factor |
 | `/console/institution` | IT named in a licence's `adminEmails` | Add/remove roster members, withdraw an unclaimed invitation, see who holds a seat, hold a member, clear a device lock |
 | `/console/operator` | Semper staff **with a second factor** | Issue individual and institution licences, extend a term, revoke a key, unbind a licence or a seat from its device, drive any roster, approve accounts |
 
@@ -2599,5 +2636,35 @@ that keep the phone from contradicting it.
 - **Restore explains a lock that has not moved yet.** `LicenseErrors` maps
   `license_device_mismatch` on a download to a sign-in-first message, since
   restoring before the lock binds is the ordering failure in §20.10.
-- **The key never reaches the device.** Settings → Account shows the licence
-  **prefix** (`SettingsAccountSection`), which is what support asks for.
+- **The key never reaches the device, and none is typed there.** Settings →
+  Account shows the licence **prefix** (`SettingsAccountSection`), which is what
+  support asks for, and **Refresh licence**, which fetches `/v1/config` now
+  (`ui/limit/LicenseRefresh`); the analysis-limit screen has the same button.
+- **Locked, not hidden.** What the licence lacks stays on screen, disabled, with
+  one note and no price or link (`FeatureLocks`, `LicenseLock`); a kill switch or
+  EMM hides or pauses as before.
+
+### 20.14 Account-anchored entitlements: what the server checks
+
+Decided in [ADR-024](../adr/ADR-024-account-anchored-entitlements.md). Every authenticated request
+re-resolves the account (`get_or_create_user` → `ensure_entitlement`) and, with
+`X-Device-Id`, re-validates the device lock (§20.2). On top of that, per route:
+
+| Route | Gates |
+|---|---|
+| `POST /v1/sessions` | kill switch `upload` / `backup`; account cap; demo device cap (§7) |
+| `POST /v1/files/{id}/complete` | kill switch `upload` / `backup` |
+| `GET /v1/files/{id}/content`, `GET /v1/sessions/{sid}/bundle` | kill switch `restore`; `403 feature_not_licensed` for demo (§20.3) |
+| `POST /v1/me/claim` | step-up, verified address, activation rate bucket, `activate_license` |
+| Share | no route: the app's licence check and the signed token |
+
+**Kill switches are enforced.** `KILL_SWITCHES` is published on `/v1/config`
+*and* refused server-side by `deps.unless_paused`
+(`backend/app/deps.py:296-331`): after the token check, before the route's own
+parameters, so a paused request reads nothing and leaves a signed request's
+nonce unspent. The answer is `503 feature_paused` with `Retry-After: 300`, logged
+`event="feature_paused"` with `switch` and `routeTemplate`. An upload keeps
+its work and retries (`UploadErrors.Kind.PAUSED`); a restore or download ends
+saying restoring is paused, counted as no failure (`DownloadFailure.Paused`); an
+older build treats the 503 as transient and retries. `share` has no route
+and is published only. Tests `backend/tests/test_kill_switches.py`.

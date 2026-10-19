@@ -1,11 +1,13 @@
-/* The institution page's audit-log panel: this licence's events, newest
- * first, a page at a time, filtered by date, and exported as CSV or JSON
- * (`GET …/audit`). Read on demand rather than with the roster: it is a
- * query over everything that ever happened to the licence.
+/* A licence's audit-log panel: its events, newest first, a page at a time,
+ * filtered by date, and exported as CSV or JSON (`GET …/audit`). Read on
+ * demand rather than with the roster: it is a query over everything that
+ * ever happened to the licence. Shared, like roster.js, by the institution
+ * page (IT's routes) and the operator desk's roster card (the staff routes):
+ * `base()` names the tier.
  */
-import { api, apiBlob, saveBlob, esc, when } from "../auth.js";
-import { explain } from "../messages.js";
-import { auditQuery } from "../util.js";
+import { api, apiBlob, saveBlob, esc, when } from "./auth.js";
+import { explain } from "./messages.js";
+import { auditQuery } from "./util.js";
 
 /** A page in the panel; an export is one request of the backend's largest page. */
 const PAGE = 50;

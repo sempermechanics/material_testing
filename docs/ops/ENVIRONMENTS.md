@@ -5,8 +5,11 @@ workflow expects. Companion to [CI.md](CI.md) and [RELEASING.md](RELEASING.md).
 
 ## Free private org constraint
 
-This repo lives on a **Free** private GitHub org plan. Environment *shells*
-exist and workflows can still select them (`environment: staging`), but:
+This repo's org is on the GitHub **Free** plan. The repository itself reports
+**public** (GitHub REST API, checked 2026-10-18), so its Releases and Actions logs are
+public too; what follows was written for a private repo and may now be loosened
+(TD-228). Environment *shells* exist and workflows can still select them
+(`environment: staging`), but:
 
 - **Required reviewers / deployment protection** on Environments may be limited
   or unavailable.
@@ -97,9 +100,31 @@ once pointed staging's tasks at the production service and queue.
 | `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS` | vars | Unset → `ent-1` / `14`. Key id stamped on signed entitlements, and the offline grace they carry |
 | `ENTITLEMENT_SIGNING_SECRET` | var | Name of the Secret Manager secret holding the entitlement signing key (e.g. `entitlement-signing-key`). Set → the deploy mounts it as `ENTITLEMENT_SIGNING_KEY=<name>:latest`, if the secret exists; unset or missing → the deploy goes ahead without it, with a notice or warning. The deploy SA needs `roles/secretmanager.viewer` to see it, the runtime SA `roles/secretmanager.secretAccessor` on it |
 | `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE` | vars | Unset → `0` / `0` (no gating). Semper's release gate: `/v1/config` sends them to Semper builds only, and the app's update gate compares its own versionCode |
-| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING`, `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | vars | Unset → `0` / `0`. The same gate for Material Testing builds, which number their versionCodes from their own release counter (`settings.release_gate(app)`, `backend/app/config.py:280-287`) |
-| `KILL_SWITCHES` | var | Unset → empty. Feature names to switch off, **space-separated** (the deploy action splits on commas); unknown names are ignored and logged |
+| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING`, `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | vars | Unset → `0` / `0`. The same gate for Material Testing builds, which number their versionCodes from their own release counter (`settings.release_gate(app)`, `backend/app/config.py:293-300`) |
+| `KILL_SWITCHES` | var | Unset → empty. Feature names to switch off (`backup`, `share`, `restore`, `upload`), **space-separated** (the deploy action splits on commas); unknown names are ignored and logged. Published on `/v1/config` and, since 2026-10-18, **enforced by the backend**: `upload` / `backup` refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`, `restore` refuses file content and the bundle, with 503 `feature_paused` and `Retry-After: 300` (`deps.unless_paused`, `backend/app/deps.py:296-331`). `share` has no route and is published only |
 | `CONSOLE_ORIGINS` | var | Browser origins the API answers CORS for. Unset → `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com`. Space-separated, never commas (the deploy action splits `env_vars` on them). Add a Hosting preview channel here while testing a console change |
+
+`AUTH_ADMIN_CALLS_PER_SECOND` and `AUTH_ADMIN_BURST` (the per-instance Firebase Auth
+Admin budget, defaults 10 and 20) are **not** passed by `deploy-backend.yml`: the
+service runs on the defaults unless set on it by hand
+([BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md), optional variables).
+
+**Workflow inputs.** Besides `environment`, `project`, `region`, `service` and
+`gateway_mode`, `release_train` (since 2026-10-18, TD-262) names the app release
+train the deploy ships with. It is set as the Cloud Run label `release-train` on the
+service and the new revision: lowercased, dots and other characters turned into
+`-`, at most 63 characters (`v1.2-beta.4` becomes `v1-2-beta-4`). Empty, it is the
+newest `v*` tag reachable from the deployed commit, or `untagged`; the deploy job
+checks out the full history for that (`fetch-depth: 0`). Find the revision a
+release was tested against with
+`gcloud run revisions list --service semper-api --region asia-south1 --filter=metadata.labels.release-train=v1-2-beta-4`.
+
+**Deploy order** when a release adds a Firestore index, a gateway path or a console
+change: indexes (`scripts/deploy-firestore.sh indexes`, wait for the build), then
+the backend (this workflow, `gateway_mode: dry-run`), then the gateway (`apply`),
+then Hosting (`scripts/deploy-console.sh` from a clean `main`), then monitoring
+(`scripts/apply-monitoring.sh`). A backend ahead of its index fails the query at
+runtime (`FAILED_PRECONDITION`); a console ahead of its gateway path gets 404s.
 
 ### Storage hygiene
 

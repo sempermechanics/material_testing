@@ -2,6 +2,9 @@ package com.sempermechanics.semper.data.account
 
 import android.content.Context
 import com.sempermechanics.semper.data.LicenseConfigWorker
+import com.sempermechanics.semper.data.account.entitlement.ConfigFetch
+import com.sempermechanics.semper.data.account.entitlement.EntitlementRefresh
+import com.sempermechanics.semper.data.net.AppConfigDto
 import com.sempermechanics.semper.data.net.AppRemoteConfig
 import com.sempermechanics.semper.data.net.Authed
 import com.sempermechanics.semper.data.net.CloudApi
@@ -52,7 +55,7 @@ object SeatLease {
      * A renewal is followed by a `/v1/config` fetch: the checkout answer
      * carries no entitlement token, and a floating seat's token ends with the
      * lease it was issued under, so without a fresh one the token would lapse
-     * while the seat itself was renewed.
+     * while the seat itself was renewed ([refreshConfigAfterCheckout]).
      */
     suspend fun heartbeatBestEffort(
         context: Context,
@@ -62,21 +65,48 @@ object SeatLease {
         val renewed = seatCall(holdsFloatingSeat(context), api, tokens, "heartbeat") {
             AppRemoteConfig.apply(context, checkoutLease(it))
         }
-        if (renewed) refreshConfigBestEffort(context, api, tokens)
+        if (renewed) refreshConfigAfterCheckout(context, api, tokens)
+    }
+
+    /**
+     * After a seat checkout or heartbeat went through: fetch `/v1/config` for
+     * the token that follows the new lease, and when that fetch fails, queue
+     * the one-off refresh, which retries with backoff a bounded number of
+     * times ([LicenseConfigWorker.refreshNow], TD-266). Without it the old
+     * token lapses at the old lease's end and an online seat holder runs as
+     * demo until the next periodic refresh.
+     */
+    suspend fun refreshConfigAfterCheckout(
+        context: Context,
+        api: CloudApi = SemperApi.get(context),
+        tokens: TokenSource = TokenProvider,
+    ) {
+        if (EntitlementRefresh.retryAfterCheckout(fetchConfig(context, api, tokens))) {
+            LicenseConfigWorker.refreshNow(context)
+        }
     }
 
     /**
      * Fetch `/v1/config` and record it ([AppRemoteConfig.record]), the one
-     * answer that carries the entitlement token. True when it answered.
+     * answer that carries the entitlement token: whether it answered, failed,
+     * or was never made (no backend, nobody signed in).
      */
-    suspend fun refreshConfigBestEffort(
+    suspend fun fetchConfig(
         context: Context,
         api: CloudApi = SemperApi.get(context),
         tokens: TokenSource = TokenProvider,
-    ): Boolean {
-        val fetched = bestEffort(api, tokens) { getConfig(it) }.toResult() ?: return false
-        return AppRemoteConfig.record(context, fetched)
+    ): ConfigFetch {
+        val fetched = configCall(api, tokens) ?: return ConfigFetch.NOT_MADE
+        return if (AppRemoteConfig.record(context, fetched)) ConfigFetch.ANSWERED else ConfigFetch.FAILED
     }
+
+    /** The `/v1/config` answer or failure, or null when no call was made (no backend, no token). */
+    internal suspend fun configCall(api: CloudApi, tokens: TokenSource): Result<AppConfigDto>? =
+        when (val outcome = bestEffort(api, tokens) { getConfig(it) }) {
+            is Authed.Ok -> Result.success(outcome.value)
+            is Authed.Failed -> Result.failure(outcome.failure.cause)
+            Authed.Disabled, Authed.NoToken -> null
+        }
 
     /**
      * Fetch `/v1/config`, apply it, and re-checkout when the account still
@@ -88,7 +118,7 @@ object SeatLease {
         api: CloudApi = SemperApi.get(context),
         tokens: TokenSource = TokenProvider,
     ) {
-        if (refreshConfigBestEffort(context, api, tokens) && holdsFloatingSeat(context)) {
+        if (fetchConfig(context, api, tokens) == ConfigFetch.ANSWERED && holdsFloatingSeat(context)) {
             heartbeatBestEffort(context, api, tokens)
         }
     }
@@ -126,13 +156,6 @@ object SeatLease {
     } catch (@Suppress("TooGenericExceptionCaught") e: Throwable) {
         e.rethrowIfCallerCancelled()
         Authed.Failed(HttpFailure.classify(e))
-    }
-
-    /** The value or failure of a call that was made; null when none was (no backend, no token). */
-    private fun <T> Authed<T>.toResult(): Result<T>? = when (this) {
-        is Authed.Ok -> Result.success(value)
-        is Authed.Failed -> Result.failure(failure.cause)
-        Authed.Disabled, Authed.NoToken -> null
     }
 
     /**

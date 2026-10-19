@@ -89,7 +89,7 @@ async function sendRevoke(id, label) {
       setStatus("Revoke cancelled.");
       return;
     }
-    setStatus(`Could not revoke: ${e.message}`, true);
+    setStatus(explain(e, {}, (text) => `Could not revoke: ${text}`), true);
   }
 }
 

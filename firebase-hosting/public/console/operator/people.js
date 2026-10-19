@@ -29,7 +29,7 @@ export async function clearLicenceDevice(id) {
     setStatus(`${labelOf(id)} unbound — the next device to sign in takes it.`);
     showLicence(out);
   } catch (e) {
-    setStatus(`Could not unbind: ${e.message}`, true);
+    setStatus(explain(e, {}, (text) => `Could not unbind: ${text}`), true);
   }
 }
 
@@ -151,7 +151,7 @@ $("userRows").addEventListener("click", async (ev) => {
     setStatus("Approved.");
     loadUsers();
   } catch (e) {
-    setStatus(`Could not approve: ${e.message}`, true);
+    setStatus(explain(e, {}, (text) => `Could not approve: ${text}`), true);
     btn.disabled = false;
   }
 });

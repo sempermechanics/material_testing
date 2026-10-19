@@ -131,14 +131,14 @@ twice.
   differ. The `catch (CancellationException) { remove }` in both is dead — the
   `finally` two lines below already removes the banner.
 - **The support-mail intent is built four times** (`SettingsHelpSupportSection`
-  ×2, `PendingApprovalActivity` ×1, `ui/limit/SessionLimitActivity.kt:83`),
+  ×2, `PendingApprovalActivity` ×1, `ui/limit/SessionLimitActivity.kt:107`),
   diagnostics body included.
 - **`.part`/`.full` sidecar names** have no constant anywhere: they are spelled
-  inline in `DriveTransfer` (:263, :317), in `SemperApi.kt:213`, and hand-rebuilt
+  inline in `DriveTransfer` (:263, :317), in `SemperApi.kt:194`, and hand-rebuilt
   at five sites in `CloudRestore` (:309, :355, :598, :645, :767); a rename in one
   place silently stops the other cleanup paths from cleaning up.
 - **The `tmp → renameTo → copy-fallback` promote idiom** exists six times
-  exactly (`DriveTransfer.kt:350,497`, `SemperApi.kt:219`,
+  exactly (`DriveTransfer.kt:350,497`, `SemperApi.kt:200`,
   `SessionEverythingExporter.kt:91`, `SessionStore.kt:467`, `SessionZip.kt:231`)
   plus two variants (`SessionRepository.kt:105`, `BatchAnalysis.kt:182`).
   One `util/AtomicFiles.promote(tmp, dest)` covers all of them.
@@ -217,14 +217,14 @@ shipped):
 - ~~`DicUploadWorker`'s progress sampler writes every 700 ms with no change
   guard.~~ **Done:** `UploadProgressSampler` publishes only when phase or percent
   moves (`UploadProgressSamplerTest`).
-- `SettingsActivity` calls `listCompleted` (`SettingsActivity.kt:240`), which has
+- `SettingsActivity` calls `listCompleted` (`SettingsActivity.kt:250`), which has
   no cache. The dead `listRestorable` pair and its 60-second cache were deleted
   (TD-51), so a cache for `listCompleted` would be new code, and it would need
   the invalidation the old one had after restores and erasures. Only worth it
   if the settings open is measurably slow.
 - A session's file collection is paged twice on the **inline** provision path —
   once in `session_provision.py:51` and again by `list_pending_uploads` in
-  `routers/sessions.py:469` — not twice inside `session_provision` as previously
+  `routers/sessions.py:528` — not twice inside `session_provision` as previously
   written. Each page also costs one extra document read to resolve its cursor
   (`backend/app/repo/_base.py:227-228`, `_cursor_page`).
 
@@ -279,7 +279,7 @@ import file. There is no SCIM endpoint, and Identity Platform documents none.
 **Proposal.** `/scim/v2/Users` and `/scim/v2/Groups` per institution licence,
 authenticated by a machine token (FI-20), mapping a user's `active=false` to the
 seat revoke (`DELETE …/seats/{uid}`, `roster.py:368`) plus refresh-token revocation
-(`backend/app/google_auth.py:92`), and group membership to the seat.
+(`backend/app/google_auth.py:104`), and group membership to the seat.
 
 **Acceptance (framework 5.7 Verify).** "Doc review. API contract tests."
 
@@ -288,7 +288,7 @@ seat revoke (`DELETE …/seats/{uid}`, `roster.py:368`) plus refresh-token revoc
 **Framework** 5.2; Part C "Console essentials" (role management).
 
 **Now.** Two roles, each all-or-nothing. Semper staff are `role: admin` or listed
-in `ADMIN_EMAILS` (`backend/app/deps.py:290-301`). Institution IT is any verified
+in `ADMIN_EMAILS` (`backend/app/deps.py:334-345`). Institution IT is any verified
 address in the licence's `adminEmails` (`backend/app/routers/institutions.py:53`),
 and every such address may read, add, hold, remove, import and export
 (`backend/app/routers/roster.py:104-382`, mounted for IT at
@@ -328,7 +328,7 @@ written to `audit_logs` with the token's id. A separate route tier in
 
 **Now.** Deprovisioning is manual. IT removes or holds a seat
 (`roster.py:334`, `:368`); staff suspend an account, which also revokes its
-refresh tokens (`backend/app/routers/admin.py:54-71`), best-effort until TD-214's
+refresh tokens (`backend/app/routers/admin.py:75-92`), best-effort until TD-214's
 IAM grant. A device that is offline keeps its signed entitlement until its
 `graceUntil` (`backend/app/entitlement_token.py:193-207`).
 
@@ -347,7 +347,7 @@ online; ≤ grace period offline')."
 **Now.** The release gate is per app but not per institution:
 `MIN_SUPPORTED_VERSION_CODE` / `RECOMMENDED_VERSION_CODE` for Semper and the
 `_MATERIAL_TESTING` pair for Material Testing (`settings.release_gate(app)`,
-`backend/app/config.py:273-287`) go into every `/v1/config` answer for that app
+`backend/app/config.py:286-300`) go into every `/v1/config` answer for that app
 (`backend/app/routers/account.py:147-174`), and the app gates
 itself (`VersionGate.decide`,
 `app/src/main/java/com/sempermechanics/semper/data/policy/VersionGate.kt:33`).
@@ -368,7 +368,7 @@ gating UX", for one institution while another stays ungated.
 **Now.** Per user: `GET /v1/me/export` (`backend/app/routers/account.py:194`) and
 `DELETE /v1/me` (`:294`), which also deletes the Firebase Auth user when TD-214's
 grant is in place (`:350`). Per licence: delete into a 30-day hold
-(`backend/app/routers/admin.py:300`), which drops holders to Demo and leaves their
+(`backend/app/routers/admin.py:347`), which drops holders to Demo and leaves their
 data untouched by design. Nothing exports or erases every member's data for one
 institution in one operation.
 
@@ -377,3 +377,34 @@ that runs the per-user export or erasure for every seat holder of one licence,
 with a manifest of what was produced or erased and one audit row per member.
 
 **Acceptance (framework 8.5 Verify).** "Scripted test."
+
+### FI-24 Google Play Billing as an entitlement source
+
+**Framework** 4.1; Part B "First activation"; [ADR-024](../adr/ADR-024-account-anchored-entitlements.md)
+"Entitlement sources".
+
+**Now.** Paid entitlements reach an account three ways, all server-side: a
+roster seat, an email-locked individual licence, or a one-time claim code
+redeemed on the web account page (`POST /v1/me/claim`,
+`backend/app/routers/licenses.py:195-256`). The app is consumption-only: it sells
+nothing and links to no payment page. There is no Play listing or developer
+account linked to the project (TD-229, TD-230), so there is nothing to buy
+through Play either.
+
+**Proposal.** A fourth source: a Google Play purchase (a subscription or a
+one-time product) bought through Play Billing. The app hands the purchase token
+to the backend; the backend verifies it with the Play Developer API
+(`purchases.subscriptionsv2` / `purchases.products`), acknowledges it, and writes
+a purchase record bound to the account (`obfuscatedExternalAccountId` = a hash of
+the uid). The record attaches the paid entitlement exactly as the other sources
+do (`licenseId`, `mode`, mirrored terms), so one licence per person, grace and
+revocation apply unchanged. Real-time developer notifications (Pub/Sub) end or
+renew it; a refund or chargeback revokes it at the next request. Buying moves
+the app off consumption-only, so it needs its own decision record and a Data
+safety update (TD-232). Needs TD-229 (a Play developer account linked to the
+project) first.
+
+**Acceptance** (the framework has no Play Billing item; this one is ADR-024's). A Play test purchase, made with a licence-tester account on an
+internal track, yields a licensed `/v1/config` and signed token (`mode:
+licensed`) on the next refresh (Refresh licence, or the next periodic fetch);
+refunding it in Play Console returns the account to Demo at its next request.

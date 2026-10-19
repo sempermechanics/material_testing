@@ -49,6 +49,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
+import java.time.Instant
 
 /**
  * The pieces split out of HomeActivity, each on a bare screen: the quota
@@ -134,6 +135,59 @@ class HomeControllersTest {
 
         card.render(localSessionCount = 3)
         assertEquals("hidden again under it", View.GONE, quotaView.visibility)
+    }
+
+    // ── HomeQuotaCard: the licence line, informational only ──────────────
+
+    private val dayMs = 24L * 60 * 60 * 1000
+
+    private fun timedLicence(expiresAtMs: Long, inGrace: Boolean = false, graceEndsAtMs: Long? = null) =
+        AppRemoteConfig.apply(
+            context,
+            AppConfigDto(
+                mode = "licensed",
+                maxSessions = 500,
+                licenseDuration = "timed",
+                licenseExpiresAt = Instant.ofEpochMilli(expiresAtMs).toString(),
+                licenseGraceEndsAt = graceEndsAtMs?.let { Instant.ofEpochMilli(it).toString() },
+                inGrace = inGrace,
+            ),
+        )
+
+    /** No email address, no renew or buy: the line only informs. */
+    private fun assertNoCallToAction(text: String) {
+        for (word in listOf("@", "renew", "buy", "purchase", "price", "upgrade", "email")) {
+            assertFalse("'$word' in '$text'", text.lowercase().contains(word))
+        }
+    }
+
+    @Test
+    fun `a licence in grace says until when it keeps working`() {
+        val now = System.currentTimeMillis()
+        val graceEnd = now + 10 * dayMs
+        timedLicence(expiresAtMs = now - 3 * dayMs, inGrace = true, graceEndsAtMs = graceEnd)
+
+        card.render(localSessionCount = 0)
+
+        assertEquals(View.VISIBLE, licenseView.visibility)
+        val expected = activity.getString(R.string.license_grace_until_fmt, HomeLicenseNotice.formatDay(graceEnd))
+        assertEquals(expected, licenseView.text.toString())
+        assertNoCallToAction(licenseView.text.toString())
+    }
+
+    @Test
+    fun `a licence ending today or already ended says so, and nothing more`() {
+        val now = System.currentTimeMillis()
+        val endOfTodayUtc = Math.floorDiv(now, dayMs) * dayMs + dayMs - 1000
+        timedLicence(expiresAtMs = endOfTodayUtc)
+        card.render(localSessionCount = 0)
+        assertEquals(activity.getString(R.string.license_expiring_today), licenseView.text.toString())
+        assertNoCallToAction(licenseView.text.toString())
+
+        timedLicence(expiresAtMs = now - 2 * dayMs)
+        card.render(localSessionCount = 0)
+        assertEquals(activity.getString(R.string.license_expired), licenseView.text.toString())
+        assertNoCallToAction(licenseView.text.toString())
     }
 
     @Test

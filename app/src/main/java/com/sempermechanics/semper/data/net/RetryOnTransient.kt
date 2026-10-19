@@ -20,6 +20,9 @@ private const val MS_PER_SECOND = 1000L
 /** How often a backoff wait looks for a cancelled call. */
 private const val CANCEL_POLL_MS = 100L
 
+/** Enough of a 503's body to read its `detail` code (`{"detail":"feature_paused"}`). */
+private const val PAUSED_PEEK_BYTES = 512L
+
 /**
  * Retries the transient answers this backend actually gives.
  *
@@ -32,6 +35,9 @@ private const val CANCEL_POLL_MS = 100L
  * handlers are idempotent by contract — seat checkout *is* the heartbeat, and a
  * release that frees nothing still succeeds. Session create and the upload
  * broker are deliberately absent: a duplicate there costs a Drive object.
+ * A 503 `feature_paused` (a kill switch) is never retried here: it lasts
+ * minutes, not seconds, and the restore or upload worker decides what it
+ * means ([ApiErrors.FEATURE_PAUSED]).
  *
  * Bounded on purpose. Where a call is worker-mediated, `Result.retry()` and
  * WorkManager's own [androidx.work.BackoffPolicy] own the long game; this layer
@@ -66,12 +72,20 @@ class RetryOnTransient : Interceptor {
             // Rejected before the handler ran, so nothing happened.
             HttpStatus.TOO_MANY_REQUESTS -> true
             // May already have been delivered, so only where a repeat is harmless.
-            HttpStatus.SERVICE_UNAVAILABLE ->
-                request.method == "GET" ||
+            // A kill switch's pause is not a blip: it lasts minutes, so the
+            // caller hears it at once instead of after every backoff.
+            HttpStatus.SERVICE_UNAVAILABLE -> {
+                val harmless = request.method == "GET" ||
                     (request.method == "POST" && request.url.encodedPath in IDEMPOTENT_POSTS)
+                harmless && !isPaused(response)
+            }
             else -> false
         }
     }
+
+    /** Whether [response] is a kill switch's `feature_paused`, read without consuming its body. */
+    private fun isPaused(response: Response): Boolean =
+        ApiErrors.hasCode(response.peekBody(PAUSED_PEEK_BYTES).string(), ApiErrors.FEATURE_PAUSED)
 
     /**
      * Waits [millis] before the retry, in slices, so a call cancelled meanwhile

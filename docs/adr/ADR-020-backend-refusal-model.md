@@ -38,8 +38,8 @@ adding the member, 403 to a typed key). Nothing said whether that was intended.
   named where they happened with `errors.restatus({code: status})`: activation
   (`license_seat_disabled` → 403), conversion and seat holds (`license_revoked`
   → 409). They are gone (TD-185): no client read those statuses. The app
-  matches the `detail` code, and its one activation call has no caller
-  (`data/net/SemperApi.kt:180`); the consoles match the code through
+  matches the `detail` code, and its activation call is gone (removed
+  2026-10-18, [ADR-024](ADR-024-account-anchored-entitlements.md)); the consoles match the code through
   `explain` (`firebase-hosting/public/console/messages.js:28`) and compare no
   status. `license_revoked` is 403 and `license_seat_disabled` 409 on every
   route, and `restatus` is removed.

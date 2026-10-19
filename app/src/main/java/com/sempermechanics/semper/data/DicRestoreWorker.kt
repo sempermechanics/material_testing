@@ -128,6 +128,12 @@ class DicRestoreWorker internal constructor(
                 // logged above, never shown.
                 failWith(applicationContext.getString(R.string.restore_failed_generic))
             }
+            is DownloadFailure.Paused -> {
+                // The restore kill switch: not a failure, so no failure event.
+                clearPartialArtifacts(targetLocalId)
+                Timber.i("Restore of %s paused by the backend", cloudSessionId)
+                failWith(LicenseErrors.restoreMessage(applicationContext, failure.cause.body))
+            }
             is DownloadFailure.Transient -> {
                 Timber.w(failure.cause, "Restore of %s failed; will retry", cloudSessionId)
                 Result.retry()

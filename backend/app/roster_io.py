@@ -58,7 +58,9 @@ def parse_import(text: str) -> list[ImportRow]:
     column is the address. Blank lines are skipped; every other record is a
     row, reported by its line number in the file so whoever is fixing it can
     find it. A row with nothing in the address column is still a row: it is
-    answered `invalid` rather than silently dropped.
+    answered `invalid` rather than silently dropped. The address is read
+    through `undefused`, so a cell the export quoted for a spreadsheet comes
+    back as the address it was (TD-267).
     """
     reader = csv.reader(io.StringIO(text.lstrip("﻿")), strict=True)
     records = []
@@ -83,7 +85,7 @@ def parse_import(text: str) -> list[ImportRow]:
     if len(records) > MAX_IMPORT_ROWS:
         raise RosterRefused(errors.ROSTER_IMPORT_TOO_MANY_ROWS)
     return [
-        ImportRow(line, (record[column] if column < len(record) else "").strip())
+        ImportRow(line, undefused(record[column] if column < len(record) else ""))
         for line, record in records
     ]
 
@@ -95,6 +97,11 @@ def parse_import(text: str) -> list[ImportRow]:
 #: opened in Excel by someone else, and `=HYPERLINK(...)@x.edu` is a valid
 #: local part.
 _FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
+#: What `_cell` puts a guard `'` in front of: a formula lead, and a `'` of the
+#: value's own (a valid local-part character), so that `undefused` can tell
+#: the guard from the value. Without the second, an address `'-a@x.edu` was
+#: written as is and read back as `-a@x.edu`, a different address.
+_GUARDED_LEAD = (*_FORMULA_LEAD, "'")
 
 
 def _cell(value) -> str:
@@ -104,7 +111,19 @@ def _cell(value) -> str:
     if isinstance(value, datetime):
         value = iso(value)
     text = str(value)
-    return f"'{text}" if text.startswith(_FORMULA_LEAD) else text
+    return f"'{text}" if text.startswith(_GUARDED_LEAD) else text
+
+
+def undefused(cell: str) -> str:
+    """One imported address cell, trimmed, with the export's formula guard
+    undone: exactly one leading `'` is dropped when what follows it is a
+    formula lead or another `'` (`_GUARDED_LEAD`), which are the only cases
+    `_cell` adds one. A `'` before anything else is the address's own and is
+    kept."""
+    text = cell.strip()
+    if text.startswith("'") and text[1:2] and text[1] in _GUARDED_LEAD:
+        text = text[1:]
+    return text.strip()
 
 
 def iso(value) -> str:

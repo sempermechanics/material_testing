@@ -176,12 +176,14 @@ async def _measure(client, priv, meter):
 #: quota count subtracts a second count of PROVISION_FAILED sessions, which
 #: store nothing and were being charged as stored analyses. POST /v1/sessions
 #: lost one again on 2026-10-05: the retry lookup is one query, not two.
+#: It gained two on 2026-10-18 for a demo account (this one): the demo cap
+#: also counts the device's stored analyses, total less PROVISION_FAILED.
 BUDGET = {
     "GET /v1/config (first ever)": (4, 3),
     "GET /v1/config": (1, 0),
     "GET /v1/me": (1, 0),
     f"GET /v1/sessions (S={SESSIONS})": (SESSIONS + 3, 0),
-    f"POST /v1/sessions (N={FILES})": (9, 11),
+    f"POST /v1/sessions (N={FILES})": (11, 11),
     "POST /v1/files/{id}/complete (each)": (6, 4),
     f"DELETE /v1/sessions/{{id}} (N={FILES})": (7, 5),
 }
@@ -203,8 +205,9 @@ async def test_firestore_cost_per_request_stays_in_budget(world, client, capsys)
 #: Reads for one POST /v1/sessions by manifest size, up to the largest manifest
 #: provisioned inline (INLINE_PROVISION_MAX_FILES). Before: 8 + 2N, then 6 + N,
 #: then 7 + N with the failed-session count in the quota check (TD-121), then
-#: 6 + N once the retry lookup became one `status in` query (2026-10-05).
-CREATE_READS = {1: 7, 3: 9, 8: 14}
+#: 6 + N once the retry lookup became one `status in` query (2026-10-05),
+#: then 8 + N for a demo account with the per-device count (2026-10-18).
+CREATE_READS = {1: 9, 3: 11, 8: 16}
 
 
 @pytest.mark.asyncio

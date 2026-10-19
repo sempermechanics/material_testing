@@ -5,8 +5,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   esc, when, day, licenceState, licenceStatePill, holdsLicence, leaseHeld, seatCells, seatDevices, inviteCells,
-  errorDetail, licenceListPath, searchableLicenceText, upsertLicence, alreadyLicensedId,
+  errorDetail, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence, alreadyLicensedId,
   isoDay, emailList, licenceEditPatch, daysLeft, reauthMethods, unfinishedStepUpText,
+  normaliseClaimCode, claimCodeShaped, MAX_CLAIM_CODE,
 } from "../public/console/util.js";
 
 const NOW = Date.parse("2026-09-23T12:00:00Z");
@@ -131,11 +132,24 @@ test("the licence list asks the backend to leave Demo and revoked rows out", () 
     licenceListPath({ limit: 50, showDemo: true, showRevoked: true, pageToken: "abc" }),
     "/v1/admin/licenses?limit=50&include_demo=true&page_token=abc",
   );
-  // A search is not a page: the token is dropped.
+  // A search is never a query parameter (TD-244): it is licenceSearchBody.
   assert.equal(
-    licenceListPath({ limit: 50, showRevoked: true, pageToken: "abc", q: "a@b.com" }),
-    "/v1/admin/licenses?limit=50&q=a%40b.com",
+    licenceListPath({ limit: 50, showRevoked: true, q: "a@b.com" }),
+    "/v1/admin/licenses?limit=50",
   );
+});
+
+test("a licence search is a JSON body: the text, the page size, any page token and the toggles", () => {
+  const hidden = { include_demo: false, include_revoked: false };
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: " a@b.com ", limit: 50 })),
+    { q: "a@b.com", limit: 50, ...hidden });
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: "uni.edu", limit: 50, pageToken: "t2" })),
+    { q: "uni.edu", limit: 50, page_token: "t2", ...hidden });
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: null })), { q: "", ...hidden });
+  // The boxes the list's query sends, sent the same way: a ticked "Show Demo
+  // keys" has the backend include Demo keys in a search too.
+  assert.deepEqual(JSON.parse(licenceSearchBody({ q: "a@b.com", showDemo: true, showRevoked: true })),
+    { q: "a@b.com", include_demo: true, include_revoked: true });
 });
 
 test("only an address, a domain or a key prefix is sent as a search", () => {
@@ -263,4 +277,24 @@ test("a past end is refused before the typed key is asked for", () => {
   assert.deepEqual(
     licenceEditPatch(expired, form({ expiry: "2026-09-01", note: "renewal due" }), NOW).patch,
     { note: "renewal due" });
+});
+
+test("a claim code is tidied character by character: upper case, letters, digits and dashes", () => {
+  assert.equal(normaliseClaimCode(" semp-ab2c de3f\t'gh4j'\n-km5n "), "SEMP-AB2CDE3FGH4J-KM5N");
+  assert.equal(normaliseClaimCode("ünï-cødé"), "N-CD", "nothing outside ASCII letters and digits");
+  assert.equal(normaliseClaimCode(null), "");
+  assert.equal(normaliseClaimCode(undefined), "");
+  // Tidying the part before a caret gives where the caret goes.
+  const raw = "ab cd ef";
+  assert.equal(normaliseClaimCode(raw.slice(0, 5)).length, 4);
+});
+
+test("a claim code is shaped as dash-split groups, eight to sixty-four long", () => {
+  for (const ok of ["SEMP-AB2C-DE3F-GH4J-KM5N", "ABCD2345", "A-B-C-D-E-F-G-H", "A".repeat(MAX_CLAIM_CODE)]) {
+    assert.equal(claimCodeShaped(ok), true, ok);
+  }
+  for (const bad of ["", "ABC-1234", "SEMP--ABCD-EFGH", "-ABCDEFGH", "ABCDEFGH-", "abcdefgh",
+    "ABCD EFGH", "A".repeat(MAX_CLAIM_CODE + 1), null, undefined]) {
+    assert.equal(claimCodeShaped(bad), false, String(bad));
+  }
 });

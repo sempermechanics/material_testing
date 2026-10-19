@@ -287,6 +287,26 @@ class PrefKeyTest {
     }
 
     @Test
+    fun `the licence's grace end is AppRemoteConfig's own, none until one arrives`() {
+        val r = PrefFiles.RemoteConfig
+        val p = prefs(r.NAME)
+        assertEquals(AppRemoteConfig.NO_INSTANT, p[r.GRACE_ENDS_AT])
+
+        AppRemoteConfig.apply(
+            context,
+            AppConfigDto(
+                mode = "licensed",
+                licenseExpiresAt = "2027-01-01T00:00:00Z",
+                licenseGraceEndsAt = "2027-01-15T00:00:00Z",
+            ),
+        )
+        assertEquals(AppRemoteConfig.licenseGraceEndsAtMs(context), p[r.GRACE_ENDS_AT])
+        assertEquals(14L * 24 * 60 * 60 * 1000, p[r.GRACE_ENDS_AT] - p[r.LICENSE_EXPIRES_AT])
+        assertEquals(p[r.GRACE_ENDS_AT], p.getLong("license_grace_ends_at", 0L))
+        AppRemoteConfig.clear(context)
+    }
+
+    @Test
     fun `semper_remote_config keys are AppRemoteConfig's own`() {
         val r = PrefFiles.RemoteConfig
         val p = prefs(r.NAME)

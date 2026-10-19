@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.data.cloud.restore
 
+import com.sempermechanics.semper.data.net.ApiErrors
 import com.sempermechanics.semper.data.net.ApiException
 import com.sempermechanics.semper.data.net.HttpFailure
 
@@ -15,6 +16,13 @@ internal sealed interface DownloadFailure {
 
     /** The backend answered 404 (the backup is gone) or 403 (not this account's). Retrying can't fix either. */
     data class Rejected(override val cause: ApiException) : DownloadFailure
+
+    /**
+     * The restore kill switch is on (503 `feature_paused`): not a failure of
+     * this backup. The work ends saying restoring is paused, without counting
+     * a failure; the user tries again once it lifts.
+     */
+    data class Paused(override val cause: ApiException) : DownloadFailure
 
     /**
      * The backup cannot be downloaded as it is: corrupt bytes ([corrupt]), or no
@@ -33,6 +41,7 @@ internal sealed interface DownloadFailure {
 
     companion object {
         fun of(e: Exception): DownloadFailure = when {
+            e is ApiException && ApiErrors.hasCode(e.body, ApiErrors.FEATURE_PAUSED) -> Paused(e)
             e is ApiException -> if (HttpFailure.classify(e).isGoneOrNotOurs) Rejected(e) else Transient(e)
             RestoreDownloadOutcomes.isTerminalFailure(e) ->
                 Unusable(e, corrupt = RestoreDownloadOutcomes.isTerminalCorruptFailure(e))

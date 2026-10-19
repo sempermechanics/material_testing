@@ -142,12 +142,33 @@ restore drills.
 
 ## Account-erasure audit policy
 
-Account erasure deletes users, devices, sessions, files, and Drive artifacts.
+Account erasure deletes users, devices, sessions, files, Drive artifacts, and
+every `auth_links` row that maps a sign-in to the account. Seats the account
+held, on any licence and in a deleted licence's 30-day hold, are kept (they
+count against the licence and appear in its audit export) with `email` blanked;
+a live one is revoked first (`backend/app/repo/account.py:156-244`). The
+`ACCOUNT_DELETE` audit row records the counts, including `authLinks`,
+`seatsBlanked` and `seatScanComplete`. The seat search is a collection-group
+query on `uid` that needs the `seats.uid` / `deleted_seats.uid` COLLECTION_GROUP
+index (`backend/firestore.indexes.json:161-204`): deploy the indexes before the
+backend. Without it the search fails, only the current licence's seat is
+blanked, `seatScanComplete` is false and `erasure_seat_scan_failed` is logged
+(TD-271).
+
 `audit_logs` is deliberately excluded so security and deletion events remain
 available for incident response and proof of erasure. Audit records must not
 contain uploaded content, filenames, specimen names, email addresses, tokens,
 keys, or resumable URLs. They may retain the opaque uid/device id and event
-metadata only. Access is server/admin-only under the deny-all client rules.
+metadata only. Where an action needs to name an address it records
+`audit.address_tag` (`observability.short_hash`, a 12-hex hash;
+`backend/app/audit.py:35-47`): `emailLockHash` on an individual mint, and
+`adminEmailHashes` with `adminEmailCount` on an institution mint, a convert and an
+`adminEmails` edit (`backend/app/routers/admin.py:27-40`). A reader who already
+knows an address can match it. The hash is unkeyed (`backend/app/observability.py:192-199`),
+so it keeps the address out of clear text; it does not stop someone with a list of
+candidate addresses from confirming one. One exception
+remains: `ADMIN_LICENSE_EXTEND` records a licence's free-text `note` as typed,
+so staff must not put personal data in a note (TD-270). Access is server/admin-only under the deny-all client rules.
 Legal/privacy owners must set and document the retention period and configure a
 Firestore TTL field before production launch; backups inherit the same approved
 retention/legal-hold policy.

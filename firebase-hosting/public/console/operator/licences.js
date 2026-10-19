@@ -4,7 +4,7 @@
  */
 import { api, setStatus, esc, markFirstData, whileWaiting } from "../auth.js";
 import {
-  day, licenceStatePill, licenceListPath, searchableLicenceText, upsertLicence,
+  day, licenceStatePill, licenceListPath, licenceSearchBody, searchableLicenceText, upsertLicence,
   placeholderRows, retryRow,
 } from "../util.js";
 import { $, desk, demoCapNote } from "./state.js";
@@ -24,6 +24,9 @@ export function onLicenceRead(fn) {
 
 // Newest first, and without Demo keys, so the first page is the one wanted.
 const LICENCE_PAGE = 50;
+// The most pages one search reads. A search is an exact match on an address,
+// a domain or a key prefix, so the backend answers it in one page today.
+const SEARCH_PAGES = 10;
 const COLUMNS = 9;
 let searchTimer = 0;
 // Which table load is the latest: a toggle flipped twice sends two, and the
@@ -137,13 +140,35 @@ function onFilterInput() {
   if (searchableLicenceText($("filter").value)) searchTimer = setTimeout(searchLicences, 300);
 }
 
+/**
+ * Look the filter text up on the backend. A POST with the text in the body
+ * (TD-244): sent as a `q` query parameter, the address searched for was
+ * written into every request log between here and Cloud Run. A search
+ * answers in the list's shape; a further page is asked for with its token
+ * in the body too, up to `SEARCH_PAGES` pages. The Demo and revoked boxes
+ * go in the body as the list's query sends them, so a ticked box finds those
+ * licences too; the table still drops any it is not showing.
+ */
 export async function searchLicences() {
   const q = $("filter").value.trim();
+  const showDemo = $("showDemo").checked;
+  const showRevoked = $("showRevoked").checked;
   try {
-    const data = await api(listPath({ q }));
+    let hits = [];
+    let pageToken = "";
+    for (let pages = 0; pages < SEARCH_PAGES; pages += 1) {
+      const data = await api("/v1/admin/licenses/search", {
+        method: "POST",
+        body: licenceSearchBody({ q, limit: LICENCE_PAGE, pageToken, showDemo, showRevoked }),
+      });
+      hits = hits.concat(data.licenses || []);
+      const next = (data.page && data.page.nextPageToken) || "";
+      if (!next || next === pageToken) break;
+      pageToken = next;
+    }
     // Typing moved on while this was in flight: its answer is for old text.
     if ($("filter").value.trim() !== q) return;
-    desk.searchHits = data.licenses || [];
+    desk.searchHits = hits;
     renderLicences();
   } catch (e) {
     setStatus(`Could not search: ${e.message}`, true);

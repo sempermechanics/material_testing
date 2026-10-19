@@ -61,11 +61,16 @@ object LicenseEntitlements {
      */
     fun serverSaysLicensed(context: Context): Boolean = AppRemoteConfig.mode(context) == MODE_LICENSED
 
-    fun cloudBackupEnabled(context: Context): Boolean =
-        isLicensed(context) &&
-            AppRemoteConfig.cloudBackupEnabled(context) &&
-            tokenBound(context).backup &&
-            AppPolicy.backupAllowed(context)
+    fun cloudBackupEnabled(context: Context): Boolean = backupLicensed(context) && AppPolicy.backupAllowed(context)
+
+    /**
+     * Whether the licence includes cloud backup, before device and fleet
+     * policy. Apart from [cloudBackupEnabled] because the screens tell the
+     * two apart: a feature the licence lacks is shown locked, one policy
+     * holds back is hidden or paused (`FeatureLocks`).
+     */
+    fun backupLicensed(context: Context): Boolean =
+        isLicensed(context) && AppRemoteConfig.cloudBackupEnabled(context) && tokenBound(context).backup
 
     /**
      * Whether a backup may be pulled down now (restore, Save to Files from
@@ -74,11 +79,11 @@ object LicenseEntitlements {
      */
     fun restoreEnabled(context: Context): Boolean = cloudBackupEnabled(context) && AppPolicy.restoreAllowed(context)
 
-    fun shareEnabled(context: Context): Boolean =
-        isLicensed(context) &&
-            AppRemoteConfig.shareEnabled(context) &&
-            tokenBound(context).share &&
-            AppPolicy.shareAllowed(context)
+    fun shareEnabled(context: Context): Boolean = shareLicensed(context) && AppPolicy.shareAllowed(context)
+
+    /** Whether the licence includes sharing exports, before the share kill switch ([backupLicensed]'s twin). */
+    fun shareLicensed(context: Context): Boolean =
+        isLicensed(context) && AppRemoteConfig.shareEnabled(context) && tokenBound(context).share
 
     /** The most the entitlement token allows; unbounded when tokens are not in use. */
     private fun tokenBound(context: Context): TokenBound =
@@ -120,14 +125,19 @@ object LicenseEntitlements {
      * a member with no seat would sail past every existing check.
      *
      * Reads [serverSaysLicensed] as the answer rather than the cached lease
-     * date, and not [isLicensed]: a token past its offline grace drops to
-     * demo's limits, not to this screen. The
-     * backend already folds the lease into `mode` — it resolves demo the
-     * moment a seat lapses — so trusting a local timestamp instead would just
-     * be a second, staler opinion of the same thing.
+     * date, and not [isLicensed]. The backend already folds the lease into
+     * `mode` — it resolves demo the moment a seat lapses — so trusting a
+     * local timestamp instead would just be a second, staler opinion of the
+     * same thing. One exception: a floating seat's token ends with the lease
+     * it was issued under, so a token past its `graceUntil` or `exp` means
+     * the lease ran out unrenewed, and this screen (which checks out a seat
+     * and fetches a fresh token) is the way back, not demo's limits
+     * ([EntitlementPolicy.seatRequired]). A token lapsed for another reason,
+     * or no token, leaves the server's answer alone.
      */
     fun isSeatRequiredToStart(context: Context): Boolean =
-        needsSeat(context) && !serverSaysLicensed(context)
+        needsSeat(context) &&
+            EntitlementPolicy.seatRequired(serverSaysLicensed(context), EntitlementStore.status(context))
 
     /** How often to renew a held seat while work is in progress, in minutes. */
     fun seatHeartbeatMinutes(context: Context): Int =
@@ -208,4 +218,14 @@ object LicenseEntitlements {
         }
         return EntitlementPolicy.cap(cached, tokenBound(context))
     }
+
+    /**
+     * The ceiling the quota line and the limit screen show: [analysisCap],
+     * the cap actually enforced, once the backend has reported `maxSessions`;
+     * 0 before that, which they read as "not known yet". With the token past
+     * its grace this is demo's cap, not the server's `maxSessions`, so the
+     * screens never show room the gate will refuse.
+     */
+    fun shownAnalysisCap(context: Context): Int =
+        EntitlementPolicy.shownCap(AppRemoteConfig.maxSessions(context), tokenBound(context))
 }

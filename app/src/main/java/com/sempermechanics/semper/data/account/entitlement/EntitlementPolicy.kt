@@ -39,6 +39,34 @@ sealed interface StoredEntitlement {
     data class Sealed(val record: SealedEntitlement.Record) : StoredEntitlement
 }
 
+/** Whether the Keystore holds the record's HMAC key, as far as the glue can tell. */
+enum class KeyPresence { PRESENT, ABSENT, UNREADABLE }
+
+/** What to make of the record, its key and the first-seal mark found on disk ([EntitlementPolicy.reading]). */
+enum class StoreReading {
+    /** Nothing stored, or nothing that can be read now: no token. */
+    NOTHING,
+
+    /** A record and its key: check the record's MAC. */
+    UNSEAL,
+
+    /**
+     * A record with no key to check it: the Keystore lost the key, or a clear
+     * stopped between the two. Drop the record; no token, so the cached config
+     * decides until the next `/v1/config` seals a fresh one.
+     */
+    DROP_RECORD,
+
+    /**
+     * A key with no record while a first seal was in flight: the process died
+     * between making the key and writing the record. Drop the key; no token.
+     */
+    DROP_KEY,
+
+    /** A key with no record and no seal in flight: the record was deleted. */
+    TAMPERED,
+}
+
 /** What a `/v1/config`-shaped answer does to the stored token. */
 enum class TokenIntake {
     /** Verify and keep the new token. */
@@ -78,6 +106,42 @@ object EntitlementPolicy {
 
     /** [cachedCap] held to [bound]'s ceiling. */
     fun cap(cachedCap: Int, bound: TokenBound): Int = bound.maxAnalyses?.let { minOf(cachedCap, it) } ?: cachedCap
+
+    /**
+     * The ceiling a screen shows: [serverMax] (the cached `maxSessions`) held
+     * to [bound], the same number [cap] enforces once the server has reported
+     * one; 0 while it has not, which the screens read as "unknown". A token
+     * past its grace shows demo's cap, not the licence's.
+     */
+    fun shownCap(serverMax: Int, bound: TokenBound): Int = if (serverMax > 0) cap(serverMax, bound) else 0
+
+    /**
+     * Whether a floating-seat account must take a seat before starting work:
+     * the server no longer counts it licensed ([serverLicensed] false), or its
+     * token ran past `graceUntil` or `exp`, which on a floating seat end with
+     * the lease it was issued under. A token that lapsed for another reason
+     * (a clock rollback, an altered record) means demo's limits, not a seat;
+     * with no token the server's answer alone decides, as before tokens.
+     */
+    fun seatRequired(serverLicensed: Boolean, status: TokenStatus): Boolean =
+        !serverLicensed || (status is TokenStatus.Lapsed && status.why in LEASE_ENDED)
+
+    private val LEASE_ENDED = setOf(GraceEnd.GRACE_OVER.name, GraceEnd.EXPIRED.name)
+
+    /**
+     * What the stored pieces mean. Only a key with no record and no first
+     * seal in flight reads as tampering; a lost key, a clear cut short, or a
+     * crash between making the key and writing the record reads as no token.
+     * A Keystore that cannot be read is no token too, and nothing is deleted.
+     */
+    fun reading(hasRecord: Boolean, key: KeyPresence, sealing: Boolean): StoreReading = when {
+        key == KeyPresence.UNREADABLE -> StoreReading.NOTHING
+        hasRecord && key == KeyPresence.PRESENT -> StoreReading.UNSEAL
+        hasRecord -> StoreReading.DROP_RECORD
+        key == KeyPresence.ABSENT -> StoreReading.NOTHING
+        sealing -> StoreReading.DROP_KEY
+        else -> StoreReading.TAMPERED
+    }
 
     /**
      * What to do with [token] from a backend answer. Only the `/v1/config`

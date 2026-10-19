@@ -70,9 +70,9 @@ it cannot license a device the backend never licensed.
 
 1. **Stop issuing with the key.** Clear the repo variable
    `ENTITLEMENT_SIGNING_SECRET` and redeploy (`deploy-backend.yml` mounts the key
-   only when it is set, `.github/workflows/deploy-backend.yml:218-238`). `/v1/config`
+   only when it is set, `.github/workflows/deploy-backend.yml:258-278`). `/v1/config`
    then carries no `entitlement`, and every app that receives that answer forgets
-   its token (`EntitlementPolicy.intake` answers CLEAR, `EntitlementPolicy.kt:87-92`)
+   its token (`EntitlementPolicy.intake` answers CLEAR, `EntitlementPolicy.kt:151-156`)
    and runs on the cached config as before tokens.
 2. **Disable the secret version** (`gcloud secrets versions disable <v>
    --secret=<name> --project indicvision-dic-app`) and find how it leaked
@@ -80,7 +80,7 @@ it cannot license a device the backend never licensed.
 3. **New key, new `kid`** (`ent-2`), as in [BACKEND_SETUP_GCP.md](../backend/BACKEND_SETUP_GCP.md) A8.
    Release a build whose `SEMPER_ENTITLEMENT_PUBKEYS` pins **only** `ent-2`. It
    ignores tokens signed with the old key: an unverifiable token counts as no
-   token and the cached config decides (`EntitlementPolicy.kt:113-120`), so a
+   token and the cached config decides (`EntitlementPolicy.kt:177-184`), so a
    forged `ent-1` token gains nothing on it.
 4. After adoption, raise `MIN_SUPPORTED_VERSION_CODE` (and the `_MATERIAL_TESTING`
    pair for Material Testing) to that build, so builds pinning the old key stop
@@ -144,7 +144,10 @@ drill passed with an import RTO of 111 s
    (`scripts/firestore-restore-drill.sh`, which refuses the production project),
    verify with `scripts/firestore_verify.py`, then decide what to copy back.
 3. **Stop writers** while copying back: set `KILL_SWITCHES="backup restore upload"`
-   and redeploy, so phones queue instead of writing.
+   and redeploy, so phones queue instead of writing. The backend refuses new
+   backups, their completion, restores and downloads with 503 `feature_paused`
+   for every build (`backend/app/deps.py:296-331`); deletes
+   (`DELETE /v1/sessions/{sid}`), metadata updates and sign-ins still write.
 4. Record the RTO, recovery point and verification in the gate.
 
 ## Runbook: App Check enforcement rollback
@@ -153,7 +156,7 @@ Symptom: the `auth-denied-spike` alert with `stage="app_check"`, or users of a
 genuine build refused with `app_check_required`.
 
 1. Set the repo variable `APP_CHECK_MODE` to `monitor` (or `off`) and redeploy
-   (`.github/workflows/deploy-backend.yml:279`). For speed, `gcloud run services
+   (`.github/workflows/deploy-backend.yml:324`). For speed, `gcloud run services
    update semper-api --update-env-vars APP_CHECK_MODE=monitor --region asia-south1`
    first; the variable must change too, or the next deploy re-applies `enforce`.
 2. Find the build that lacks a token (`appId`, `appVersion` on `app_check_missing`

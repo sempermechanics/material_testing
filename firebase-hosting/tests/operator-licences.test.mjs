@@ -102,7 +102,7 @@ test("Load more that fails says so, and the button can be pressed again", async 
   assert.deepEqual(labels(), ["SEMP-IND1", "SEMP-UNI1"]);
 });
 
-const SEARCH = "GET /v1/admin/licenses?limit=50&include_revoked=false&q=far%40else.org";
+const SEARCH = "POST /v1/admin/licenses/search";
 
 test("a failed backend search says so; the loaded rows still filter", async () => {
   mock.timers.enable({ apis: ["setTimeout"] });
@@ -128,12 +128,63 @@ test("a search answer for text since changed is dropped", async () => {
     $("filter").dispatch("input");
     mock.timers.tick(300);
     await settle();
-    assert.deepEqual(sent(/q=/), [SEARCH]);
+    assert.deepEqual(sent(/search/), [SEARCH]);
     $("filter").value = "chen";
     $("filter").dispatch("input");
     answer.resolve(json(200, { licenses: [far] }));
     await settle();
     assert.deepEqual(labels(), ["SEMP-IND1"], "the answer for the old text is not shown");
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("a search with more pages asks for each with its token in the body, and stops on a repeated one", async () => {
+  const hit = (n) => ({ ...UNI, id: `lic-hit-${n}`, keyPrefix: `SEMP-HIT${n}`, domainLock: "far.edu" });
+  const answers = [
+    { licenses: [hit(1)], page: { nextPageToken: "t2", hasMore: true } },
+    { licenses: [hit(2)], page: { nextPageToken: "t3", hasMore: true } },
+    { licenses: [hit(3)], page: { nextPageToken: "t3", hasMore: true } }, // a token it already sent
+  ];
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    await openDesk({ routes: { [SEARCH]: () => json(200, answers.shift()) } });
+    $("filter").value = "far.edu";
+    $("filter").dispatch("input");
+    mock.timers.tick(300);
+    await settle();
+    const bodies = net.requests.filter((r) => r.method === "POST").map((r) => JSON.parse(r.body));
+    const hidden = { include_demo: false, include_revoked: false };
+    assert.deepEqual(bodies, [
+      { q: "far.edu", limit: 50, ...hidden },
+      { q: "far.edu", limit: 50, page_token: "t2", ...hidden },
+      { q: "far.edu", limit: 50, page_token: "t3", ...hidden },
+    ]);
+    assert.deepEqual(labels(), ["SEMP-HIT1", "SEMP-HIT2", "SEMP-HIT3"]);
+    assert.deepEqual(sent(/far/), [], "nothing searched for is in a URL");
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("with Show Demo keys ticked a search asks for Demo keys, and finds one", async () => {
+  const demoHit = { ...DEMO, id: "lic-demo-far", keyPrefix: "SEMP-DFAR", emailLock: "far@else.org" };
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    await openDesk({ routes: {
+      "GET /v1/admin/licenses?limit=50&include_demo=true&include_revoked=false": () => json(200, { licenses: [] }),
+      [SEARCH]: (req) => json(200, { licenses: JSON.parse(req.body).include_demo ? [demoHit] : [] }),
+    } });
+    $("showDemo").checked = true;
+    $("showDemo").dispatch("change");
+    await settle();
+    $("filter").value = "far@else.org";
+    $("filter").dispatch("input");
+    mock.timers.tick(300);
+    await settle();
+    const [body] = net.requests.filter((r) => r.method === "POST").map((r) => JSON.parse(r.body));
+    assert.deepEqual(body, { q: "far@else.org", limit: 50, include_demo: true, include_revoked: false });
+    assert.deepEqual(labels(), ["SEMP-DFAR"]);
   } finally {
     mock.timers.reset();
   }
@@ -150,7 +201,7 @@ test("typing again before the pause ends sends one search, for the last text", a
     $("filter").dispatch("input");
     mock.timers.tick(300);
     await settle();
-    assert.deepEqual(sent(/q=/), [SEARCH]);
+    assert.deepEqual(sent(/search/), [SEARCH]);
     assert.equal($("licenceRows").textContent.trim(), "No licences match. Clear the filter, or tick Show revoked or Show Demo keys.");
   } finally {
     mock.timers.reset();
@@ -206,7 +257,9 @@ test("a roster change that finishes after the card closed reads nothing more", a
   await click($("rosterClose"));
   answer.resolve(json(200, {}));
   await settle();
-  assert.deepEqual(sent(/lic-uni-1/), [`GET ${seatsOf(UNI)}`, `PATCH ${seatsOf(UNI)}/u1`],
+  assert.deepEqual(sent(/lic-uni-1/), [
+    `GET ${seatsOf(UNI)}`, `GET /v1/admin/licenses/${UNI.id}/summary`, `PATCH ${seatsOf(UNI)}/u1`,
+  ],
     "no roster or licence re-read for a closed card");
 });
 

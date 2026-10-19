@@ -20,13 +20,13 @@ chips and 7 copies of the Settings section header.
 
 **ViewBinding for every screen's own layout.** `viewBinding = true`
 (`app/build.gradle.kts:155-160`, #310). Each Activity inflates its binding in
-`onCreate` and keeps it (`ResultViewerActivity.kt:65`, `:182`); 46 main-source
+`onCreate` and keeps it (`ResultViewerActivity.kt:66`, `:183`); 46 main-source
 files use generated bindings.
 
 Conventions:
 
 - **Controllers built before `onCreate` read `binding` lazily.** The viewer's
-  parts are property initialisers of the Activity (`ResultViewerActivity.kt:69-73`),
+  parts are property initialisers of the Activity (`ResultViewerActivity.kt:70-74`),
   so they exist before the binding does. Each one reads it through a getter,
   `private val binding get() = host.binding` (`ui/viewer/ViewerScaleController.kt:26-30`),
   never in its constructor.
@@ -39,7 +39,7 @@ Conventions:
   `SettingsScrollContentView` own their inflated layout and hand out
   `binding`, so callers never search by id across the Activity.
 - **An `<include>` is bound through its own binding**, as the seven Settings
-  section headers are (`SettingsSectionHeader.bind`, `ui/common/SettingsSectionHeader.kt:24`).
+  section headers are (`SettingsSectionHeader.bind`, `ui/common/SettingsSectionHeader.kt:25`).
 - **Parts take the binding (or the views) they need**, not the Activity's
   whole view tree.
 
@@ -56,6 +56,7 @@ Conventions:
 | A busy spinner over controls | `View.setBusy` (`ui/common/Busy.kt:15`) | |
 | A wait shown in one view slot, only past 300 ms, still with animations off | `InlineBusy` (`ui/common/InlineBusy.kt:32`), latest wins through `SerialJob` | A spinner shown at once, or nothing |
 | One refresh at a time, a burst folded into one more | `ConflatedRefresh` (`ui/common/ConflatedRefresh.kt:22`) | |
+| A feature the licence lacks | `LicenseLock.lock` / `LicenseLock.explain` (`ui/common/dialog/LicenseLock.kt:27`, `:17`), decided by `FeatureLocks` (`data/policy/FeatureLocks.kt:41`); since 2026-10-18, [ADR-024](ADR-024-account-anchored-entitlements.md) | Hiding the control; a price, a purchase or a link to either |
 
 **Still hand-built, and why.**
 

@@ -18,6 +18,7 @@ from ..observability import DependencyError
 
 from . import _base
 from ._base import (
+    SCHEMA_VERSION,
     _is_institution,
     _is_revoked,
     db,
@@ -145,7 +146,8 @@ def bind_device_lock(ref, device_id: str, app: str = apps.SEMPER) -> bool:
         snap = _get(ref, tx)
         if not snap.exists or ((snap.to_dict() or {}).get(lock) or ""):
             return False
-        tx.update(ref, {lock: device_id})
+        # A seat or an individual licence; both are stamped (TD-254).
+        tx.update(ref, {lock: device_id, "schemaVersion": SCHEMA_VERSION})
         return True
 
     for round_ in range(_BIND_ROUNDS):
@@ -286,6 +288,9 @@ def _devlock_drop(user: dict, stage: str) -> None:
     """The structured line a log-based metric counts (A7.3): a licensed
     account resolved Demo at the device lock. `stage` is `revoked` (the
     licence or seat ended, stored) or `mismatch` (this device is not the
-    locked one, this request only)."""
-    obs.log_event(log, logging.INFO, "devlock_drop",
+    locked one, this request only).
+
+    `uid` is given explicitly (TD-245): this runs inside `current_user`
+    before it binds the request's uid, so the bound value is not there yet."""
+    obs.log_event(log, logging.INFO, "devlock_drop", uid=user.get("uid") or None,
                   licenseId=user.get("licenseId"), stage=stage, outcome="demo")

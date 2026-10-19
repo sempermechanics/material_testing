@@ -37,7 +37,7 @@ Pick the home by how long the work must live and who must see its outcome.
 | A configuration change, while the user stays on the screen | The screen's ViewModel (`viewModelScope`) | Viewer exports: `ResultViewerViewModel.exports` (`ui/viewer/ResultViewerViewModel.kt:37`) runs `ShareExportJobs` (`ui/viewer/share/ShareExportJobs.kt:47`); the custom colour scales (`:34`) and the field-metrics cache (`:72`) live there too. Save to Files: `SaveExportViewModel` (`ui/viewer/SaveExportViewModel.kt:32`) |
 | The screen closing, but not the process | An application-lifetime scope in a singleton `object` that exposes a `StateFlow` | Account deletion: `AccountDeletionRun` (`ui/settings/AccountDeletionRun.kt:48`, scope `:73`), with its stage on disk (`data/prefs/AccountDeletionMarker.kt`) so a new process finishes it (`resumeInterrupted`, `:141`, from `SemperApp.onCreate`). Sign-out: `SignOutRun` (`ui/common/auth/SignOutRun.kt:42`, scope `:56`) |
 | Cancellation of the caller, for a short sequence that must not stop half-way | `withContext(NonCancellable)` around that sequence only | The erase → wipe → sign-out sequence, `CloudErase.deleteAccount` (`data/cloud/CloudErase.kt:46-66`) |
-| Process death, or the app leaving the screen | WorkManager unique work | `oneTimeWork` + `enqueueUnique` (`data/cloud/WorkTags.kt:90`, `:113`): upload (`data/cloud/CloudSync.kt:392-398`), restore and bundle download (`data/cloud/restore/CloudRestore.kt:73-81`, `:102-112`), backup deletes (`data/cloud/SessionDeletes.kt:91-96`), metadata sends (`data/cloud/SessionMetadataSync.kt:135-139`); the licence refresh is periodic (`data/LicenseConfigWorker.kt:45`) |
+| Process death, or the app leaving the screen | WorkManager unique work | `oneTimeWork` + `enqueueUnique` (`data/cloud/WorkTags.kt:96`, `:119`): upload (`data/cloud/CloudSync.kt:392-398`), restore and bundle download (`data/cloud/restore/CloudRestore.kt:73-81`, `:102-112`), backup deletes (`data/cloud/SessionDeletes.kt:91-96`), metadata sends (`data/cloud/SessionMetadataSync.kt:135-139`); the licence refresh is periodic (`data/LicenseConfigWorker.kt:97`) |
 
 **What each home promises.**
 
@@ -93,7 +93,7 @@ that ends while the wizard is in the background is handled when it returns.
    `CancellationException` everywhere else (ADR-018).
 
 Other application-lifetime scopes exist for housekeeping, not for user
-requests: startup cleanup and the seat heartbeat (`SemperApp.kt:28`, `:46-53`),
+requests: startup cleanup and the seat heartbeat (`SemperApp.kt:29`, `:47-54`),
 the status re-check after splash (`ui/auth/StatusRecheck.kt:27`), the wizard
 draft's write lane (`data/prefs/WizardDraft.kt:101`) and the shared config
 fetch (`data/net/SingleFlight.kt:18`). The summary GIF's build records and

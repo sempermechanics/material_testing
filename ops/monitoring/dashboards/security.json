@@ -1,0 +1,268 @@
+{
+  "displayName": "semper-security",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 48,
+        "height": 5,
+        "widget": {
+          "text": {
+            "content": "Refusals and auth-dependency failures on **__SERVICE__**, per 5 min. AUTH_DENIED counts every refused request by stage (an App Check refusal in enforce mode is stage `app_check` here too); App Check failures are logged in monitor mode as well. Runbooks: `ops/monitoring/README.md` (auth-denied-spike, audit-write-failed).",
+            "format": "MARKDOWN"
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 5,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "AUTH_DENIED by stage",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_auth_denied\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.stage"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.stage}"
+              }
+            ],
+            "yAxis": {
+              "label": "per 5 min",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "thresholds": [
+              {
+                "value": "__AUTH_DENIED_PER_5MIN__",
+                "label": "alert (all stages)",
+                "color": "YELLOW",
+                "direction": "ABOVE",
+                "targetAxis": "Y1"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 5,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Audit write failures by action",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_audit_write_failed\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.action"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.action}"
+              }
+            ],
+            "yAxis": {
+              "label": "per 5 min",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 21,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Revocation check failures by exception",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_revocation_check_failed\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.errorCode"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.errorCode}"
+              }
+            ],
+            "yAxis": {
+              "label": "per 5 min",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 21,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Firebase Auth admin calls rate-limited",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_auth_admin_rate_limited\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${resource.labels.service_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "per 5 min",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 37,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "App Check failures by verdict",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_app_check_failed\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.verdict"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.verdict}"
+              }
+            ],
+            "yAxis": {
+              "label": "per 5 min",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 37,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "App Check failures by app and build",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_app_check_failed\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.appId",
+                        "metric.label.appVersion"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.appId} v${metric.labels.appVersion}"
+              }
+            ],
+            "yAxis": {
+              "label": "per 5 min",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "labels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

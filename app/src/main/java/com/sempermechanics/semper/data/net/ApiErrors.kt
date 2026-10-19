@@ -89,6 +89,14 @@ object ApiErrors {
     const val SESSION_QUOTA_EXCEEDED = "session_quota_exceeded"
 
     /**
+     * A demo account's own count has room, but this device's stored analyses,
+     * every account's, are at the demo cap (409, TD-279). Re-checking the
+     * account's count cannot lift it, so it holds its own stop
+     * ([AccountCache.setDeviceLimitReached]).
+     */
+    const val DEVICE_QUOTA_EXCEEDED = "device_quota_exceeded"
+
+    /**
      * Every seat on the institution's floating licence is in use (409).
      *
      * Not a fault in the account: the caller stays on the roster and gets a
@@ -99,6 +107,17 @@ object ApiErrors {
 
     /** Cloud backup/share refused because the account is on demo (403). */
     const val FEATURE_NOT_LICENSED = "feature_not_licensed"
+
+    /**
+     * A kill switch has the feature off for now (503, with `Retry-After`):
+     * upload or backup on `POST /v1/sessions` and `…/files/{id}/complete`,
+     * restore on `GET /v1/files/{id}/content` and `…/sessions/{sid}/bundle`.
+     *
+     * Not a fault and not a licence refusal: an upload waits and retries, a
+     * restore or download says the feature is paused. Never shown as
+     * [FEATURE_NOT_LICENSED].
+     */
+    const val FEATURE_PAUSED = "feature_paused"
 
     /**
      * This device is not the one the licence is bound to (403). Usually means

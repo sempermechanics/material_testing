@@ -18,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
+import com.sempermechanics.semper.data.policy.FeatureAccess
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ActivityResultViewerBinding
@@ -273,11 +274,13 @@ class ResultViewerActivity : AppCompatActivity() {
         }
 
         binding.btnViewerBack.setOnClickListener { finish() }
-        val canShare = LicenseEntitlements.shareEnabled(this)
+        // Greyed, never hidden: locked without the licence, paused by the kill switch.
+        val canShare = ShareCenter.access(this) == FeatureAccess.OPEN
         binding.btnViewerShare.alpha = if (canShare) 1f else LicenseEntitlements.BLOCKED_ALPHA
         binding.btnViewerShare.setOnClickListener {
-            if (!LicenseEntitlements.shareEnabled(this)) {
-                CrispToast.show(this, getString(R.string.share_licensed_only), long = true)
+            val blocked = ShareCenter.blockedMessage(ShareCenter.access(this))
+            if (blocked != null) {
+                CrispToast.show(this, getString(blocked), long = true)
                 return@setOnClickListener
             }
             showShareSheet()

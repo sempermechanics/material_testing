@@ -1,0 +1,14 @@
+# A Firebase Auth admin call the backend made was rate-limited
+# (backend/app/google_auth.py, event `auth_admin_rate_limited`). Counted on
+# its own so a burst of revocation_check_failed can be told apart from a lost
+# IAM grant. No labels: the line's other fields are request context.
+description: Firebase Auth admin calls the backend saw rate-limited.
+filter: >-
+  resource.type="cloud_run_revision"
+  AND resource.labels.service_name="__SERVICE__"
+  AND jsonPayload.event="auth_admin_rate_limited"
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  unit: "1"
+  displayName: semper-api Auth admin rate limited

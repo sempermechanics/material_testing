@@ -45,6 +45,12 @@ NOT_TASK_INVOKER = "not_task_invoker"
 # --- sessions, files, quotas -----------------------------------------------
 SESSION_NOT_FOUND = "session_not_found"
 SESSION_QUOTA_EXCEEDED = "session_quota_exceeded"
+# 409 from `POST /v1/sessions` when a demo account's own count has room but
+# this device's stored analyses, every account's, are at the demo cap
+# (TD-279). Its own code because a re-check of the account's count cannot
+# clear it: the app holds this stop until an upload succeeds or an analysis
+# is deleted, rather than reporting room the next upload refuses.
+DEVICE_QUOTA_EXCEEDED = "device_quota_exceeded"
 TOO_MANY_FILES = "too_many_files"
 FILE_NOT_FOUND = "file_not_found"
 FILE_NOT_UPLOADED = "file_not_uploaded"
@@ -241,6 +247,16 @@ READYZ_FAILED = "readyz_failed"
 # lock is still empty. Nobody holds the licence, so the caller retries; it is
 # never reported as `license_device_mismatch`.
 DEVICE_LOCK_CONTENDED = "device_lock_contended"
+# 503 from the browser step-up when this instance has spent its Firebase Auth
+# Admin budget (`rate_limit.auth_admin_bucket`, TD-239) and cannot ask whether
+# the token was revoked. Nothing is wrong with the caller's token, so it is
+# never `invalid_token`; it carries Retry-After and the caller tries again.
+AUTH_CHECK_BUSY = "auth_check_busy"
+# 503 with Retry-After: an operator has switched this feature off fleet-wide
+# (`KILL_SWITCHES`, `deps.unless_paused`). Nothing is wrong with the caller or
+# the request; the app holds the work and tries again later rather than
+# failing it, and says the feature is paused rather than "server error".
+FEATURE_PAUSED = "feature_paused"
 
 #: Codes the Android client branches on or surfaces by name. Changing
 #: one of these needs the matching edit in ApiErrors.kt in the same commit --
@@ -259,6 +275,7 @@ CLIENT_BRANCHED = frozenset(
         FILE_NOT_FOUND,
         RATE_LIMITED,
         SESSION_QUOTA_EXCEEDED,
+        DEVICE_QUOTA_EXCEEDED,
         # The app renders this as "all seats are in use, try again" rather
         # than a failure, so a rename here needs the matching ApiErrors.kt edit.
         NO_FLOATING_SEAT,
@@ -272,6 +289,9 @@ CLIENT_BRANCHED = frozenset(
         SIZE_OR_STATE_MISMATCH,
         CHECKSUM_MISMATCH,
         SIZE_MISMATCH,
+        # A kill switch is on: the upload or restore worker waits (Retry-After)
+        # and keeps its work, instead of retrying at once or giving up.
+        FEATURE_PAUSED,
     }
 )
 
