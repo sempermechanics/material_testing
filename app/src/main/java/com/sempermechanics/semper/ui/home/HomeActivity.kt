@@ -133,11 +133,12 @@ class HomeActivity : AppCompatActivity() {
         observeViewModel()
     }
 
-    /** Each list read, and each restore's outcome once, on whichever Home is current. */
+    /** Each list read, and each restore's and erase's outcome once, on whichever Home is current. */
     private fun observeViewModel() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { viewModel.list.collect { list -> list?.let(::showList) } }
+                launch { viewModel.eraseOutcomes.collect { selection.showEraseOutcome(it) } }
                 viewModel.restoreOutcomes.collect { showRestoreOutcome(it) }
             }
         }
@@ -227,6 +228,7 @@ class HomeActivity : AppCompatActivity() {
         fab = binding.fabNewAnalysis,
         backCallback = backCallback,
         onRefresh = { refresh() },
+        onEraseLocally = { records, deviceOnly -> viewModel.eraseLocally(records, deviceOnly) },
         onDeviceOnlyDeleted = { showDeviceOnlyKeptSnackbar() },
         restoreEnabled = { LicenseEntitlements.restoreEnabled(this) },
         onRestore = { records -> startRestore(records) },

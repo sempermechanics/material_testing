@@ -9,12 +9,15 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.fixtures.sessionRecord
+import kotlinx.coroutines.launch
 import org.junit.Before
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
@@ -42,6 +45,7 @@ abstract class SessionSelectionFixture {
     protected lateinit var activity: AppCompatActivity
     protected lateinit var controller: SessionSelectionController
     protected lateinit var adapter: SessionListAdapter
+    private val homeViewModel by lazy { ViewModelProvider(activity)[HomeViewModel::class.java] }
 
     protected lateinit var topBar: View
     protected lateinit var selectionBar: View
@@ -93,6 +97,8 @@ abstract class SessionSelectionFixture {
             fab = fab,
             backCallback = back,
             onRefresh = { refreshes++ },
+            // As Home wires it: the erase runs in the view model, its outcome comes back here.
+            onEraseLocally = { records, deviceOnly -> homeViewModel.eraseLocally(records, deviceOnly) },
             onDeviceOnlyDeleted = { deviceOnlyDeletes++ },
             restoreEnabled = { restoreAllowed },
             onRestore = { records -> restored += records.map { it.id } },
@@ -104,6 +110,9 @@ abstract class SessionSelectionFixture {
             },
         )
         controller.bindBarActions(btnClose = close, btnDelete = delete)
+        activity.lifecycleScope.launch {
+            homeViewModel.eraseOutcomes.collect { controller.showEraseOutcome(it) }
+        }
     }
 
     /** [local] gives the record a session dir holding a `.dat`, so it has phone data. */

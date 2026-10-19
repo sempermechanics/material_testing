@@ -29,12 +29,13 @@ import kotlinx.coroutines.withContext
 /**
  * Home's work that must not die with a rotation (ADR-016): the phone's list
  * as last read, the rows a queued delete hides, the backups on offer, and the
- * restores Home asks for.
+ * restores and phone erases Home asks for.
  *
  * A restore used to run on the Activity's scope: a rotation during its cloud
  * lookup cancelled it after the selection had already been cleared, so the
- * tap did nothing. Here it runs on [viewModelScope], and what it came to is
- * handed out once through [restoreOutcomes], to whichever Home is current.
+ * tap did nothing. A multi-row erase did the same part-way through, with no
+ * toast. Both run on [viewModelScope] here, and what each came to is handed
+ * out once ([restoreOutcomes], [eraseOutcomes]) to whichever Home is current.
  */
 @MainThread
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
@@ -45,6 +46,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         val withoutLocalData: Set<String>,
         /** Counts reads, so a read equal to the last one is still shown (the cards re-read too). */
         val generation: Long,
+    )
+
+    /** What one erase from [eraseLocally] came to. Plain data: no screen is held. */
+    data class LocalErase(
+        val records: List<SessionRecord>,
+        /** Only the phone copies went; every backup stays. */
+        val deviceOnly: Boolean,
+        /** Rows kept because a cloud copy they may have could not be erased (0 when [deviceOnly]). */
+        val kept: Int,
     )
 
     private val _list = MutableStateFlow<HomeList?>(null)
@@ -64,6 +74,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     /** What each restore request came to, once each; buffered while no Home is there to take it. */
     val restoreOutcomes: Flow<RestoreRequest> = restoreChannel.receiveAsFlow()
 
+    private val eraseChannel = Channel<LocalErase>(Channel.UNLIMITED)
+
+    /** What each erase came to, once each; buffered while no Home is there to take it. */
+    val eraseOutcomes: Flow<LocalErase> = eraseChannel.receiveAsFlow()
+
     /** Where the disk reads run; tests hold them. */
     @VisibleForTesting
     internal var io: CoroutineDispatcher = Dispatchers.IO
@@ -72,6 +87,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     @VisibleForTesting
     internal var requestRestore: suspend (List<RestoreStart.Target>) -> RestoreRequest =
         { targets -> RestoreStart.request(getApplication(), targets, io) }
+
+    /** How one row is erased with any backup it has; tests stand in for it. */
+    @VisibleForTesting
+    internal var eraseEverywhere: suspend (String) -> CloudSync.EraseOutcome =
+        { id -> CloudSync.eraseEverywhere(getApplication(), id) }
+
+    /** How one row's phone copy is dropped, keeping its backup; tests stand in for it. */
+    @VisibleForTesting
+    internal var eraseLocalOnly: suspend (String) -> Unit =
+        { id -> CloudSync.eraseLocalOnly(getApplication(), id) }
 
     /**
      * Re-reads the phone's list. Latest wins: a newer call cancels the read
@@ -132,6 +157,28 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Erases [records] one by one and hands the outcome to [eraseOutcomes].
+     * [deviceOnly] drops the phone copies and keeps the backups; otherwise the
+     * rows have no backup the phone knows of and go entirely. Survives a rotation.
+     */
+    fun eraseLocally(records: List<SessionRecord>, deviceOnly: Boolean) {
+        viewModelScope.launch {
+            // A row whose backup is still being made can have a cloud copy the
+            // phone does not know of yet; eraseEverywhere looks, and keeps the row
+            // when it cannot.
+            var kept = 0
+            for (record in records) {
+                if (deviceOnly) {
+                    eraseLocalOnly(record.id)
+                } else if (eraseEverywhere(record.id) != CloudSync.EraseOutcome.ERASED_EVERYWHERE) {
+                    kept++
+                }
+            }
+            eraseChannel.send(LocalErase(records, deviceOnly, kept))
+        }
+    }
+
     private suspend fun readList(): HomeList {
         val app = getApplication<Application>()
         val justQueued = justQueuedDeletes.toSet()
@@ -146,6 +193,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         restoreChannel.close()
+        eraseChannel.close()
         super.onCleared()
     }
 }

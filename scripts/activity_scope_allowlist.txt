@@ -25,9 +25,3 @@ ui/home/BackupBadgeActions.kt | enqueueBackup | CloudSync.enqueueUpload | The PE
 ui/settings/SettingsAnalysesSection.kt | startBackup | CloudSync.enqueueUpload | Same as Home's Back up: PENDING stamped first, re-queued by the next reconcile (CloudReconcile.repairRows); ADR-016 rule 3 holds for the upload itself
 ui/home/SessionSelectionController.kt | promptRename | SessionMetadataSync.enqueue | Rename and enqueue run on Dispatchers.IO with no suspension point between them, and metadataStale is on disk for the next reconcile to re-send (ADR-013, ADR-016)
 ui/settings/SettingsYourDataSection.kt | observeConsent | setImprovementConsent | A false positive: the match is SettingsViewModel.setImprovementConsent in the switch listener that showConsent installs; the send itself runs on viewModelScope (ADR-016 rule 1, TD-291 heuristic: lambdas are not told apart)
-
-# ── Real ADR-016 rule-1 violations still open (TD-291 triage, 2026-10-19) ────
-# A write the user asked for, whose outcome a rotation loses. Each moves to the
-# screen's ViewModel (or an application-lifetime run) and its entry goes.
-
-ui/home/SessionSelectionController.kt | eraseLocally | CloudSync.eraseEverywhere | OPEN, TD-291 triage: a multi-row delete loops on Home's scope; a rotation stops it part-way with no toast and the selection gone. Move to HomeViewModel (ADR-016 rule 1)
