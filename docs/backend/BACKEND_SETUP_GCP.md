@@ -356,7 +356,8 @@ gcloud secrets create $SECRET --replication-policy=automatic \
 
 # Grant the runtime first, before the repo variable names the secret: a
 # deploy mounts any secret it can see, and a revision whose runtime SA cannot
-# read its secret fails to start (TD-269). The deploy only checks existence.
+# read its secret fails to start. The deploy checks the grant first
+# (scripts/check_secret_access.sh) and stops with the command to run.
 gcloud secrets add-iam-policy-binding $SECRET --project $PROJECT \
   --member="serviceAccount:$API_SA" --role="roles/secretmanager.secretAccessor"
 gcloud secrets add-iam-policy-binding $SECRET --project $PROJECT \
@@ -374,13 +375,15 @@ gh variable set SEMPER_ENTITLEMENT_PUBKEYS --body "$KID:$PUB"
 - `deploy-backend.yml` mounts the key as `ENTITLEMENT_SIGNING_KEY=<secret>:latest`
   only when `ENTITLEMENT_SIGNING_SECRET` names a secret the deploy SA can see; a
   missing secret deploys without it, with a warning
-  (`.github/workflows/deploy-backend.yml:258-278`). Never pass the key with
+  (`.github/workflows/deploy-backend.yml:258-291`). Never pass the key with
   `--set-env-vars`.
-- **Order matters.** The deploy SA only checks that the secret exists. If it
-  exists but the runtime SA cannot read it, the candidate revision fails to start,
-  the deploy stops and traffic stays on the previous revision (TD-269). So: create
-  the secret, grant `secretAccessor` to the runtime SA, grant `secretmanager.viewer`
-  to the deploy SA, and only then set `ENTITLEMENT_SIGNING_SECRET`.
+- **Order matters.** A revision whose runtime SA cannot read a mounted secret
+  never starts. The deploy checks the grant before mounting
+  (`scripts/check_secret_access.sh`, reading the secret's and the project's IAM
+  policy) and stops with the `add-iam-policy-binding` command to run; when the deploy
+  SA cannot read those policies it only warns. So: create the secret, grant
+  `secretAccessor` to the runtime SA, grant `secretmanager.viewer` to the deploy SA,
+  and only then set `ENTITLEMENT_SIGNING_SECRET`.
 - `SEMPER_ENTITLEMENT_PUBKEYS` is `kid:base64SPKI`, several separated by commas
   during a rotation; `release.yml` passes it to Gradle
   ([RELEASING.md](../ops/RELEASING.md) variables). A build without it ignores tokens.

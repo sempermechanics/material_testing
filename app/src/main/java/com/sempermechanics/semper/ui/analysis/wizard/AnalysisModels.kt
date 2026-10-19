@@ -29,6 +29,8 @@ data class RunResult(
     val engineStats: FloatArray? = null,
     val spec: RunSpec? = null,
     val settings: SessionRecordSettings? = null,
+    /** The Home-list id of the session the run wrote, which the viewer opens on. */
+    val sessionId: String? = null,
 ) {
     /** The settings the viewer shows: the saved session's, else the spec's (a sweep that solved nothing). */
     fun viewerSettings(): SessionRecordSettings? = settings ?: spec?.recordSettings()
@@ -63,7 +65,8 @@ data class BatchAnalysisOutcome(
     /**
      * Frames that actually produced a field. Below the planned count when the
      * run stopped early — the frames before that point are kept, so this is
-     * what the session holds and what the user should be told.
+     * what the session holds and what the user should be told. 0 for a
+     * cancelled run, which keeps none.
      */
     val totalFrames: Int,
     val executionTimeMs: Int,
@@ -85,8 +88,7 @@ data class BatchAnalysisOutcome(
     val firstFrameCorrelatedPoints: Int = -1,
     /**
      * Whether a Home row holds this run's frames: its own record was
-     * written, or a re-run's row now lists the frames it left on disk. A
-     * first run writes a record only when its first frame kept points, so
+     * written. A run writes a record only when its first frame kept points, so
      * later frames can solve (a non-zero [totalFrames]) with nothing
      * saved; only a saved run may be told its frames are kept.
      */

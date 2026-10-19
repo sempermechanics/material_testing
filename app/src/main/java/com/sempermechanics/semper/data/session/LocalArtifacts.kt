@@ -18,6 +18,11 @@ internal object LocalArtifacts {
         SessionPaths.RAW_DEFORMED_SUBDIR,
         SessionPaths.PROCESSED_SUBDIR,
         SessionPaths.UPLOAD_STAGING_SUBDIR,
+        // Only ever left behind by a run the process died in.
+        SessionPaths.RUN_STAGING_SUBDIR,
+        // Re-run's photos: not re-downloadable, but useless once the frames
+        // in raw_deformed/ above are gone, since a re-run needs them all.
+        SessionPaths.RERUN_SUBDIR,
     )
 
     /** Whether [child], a direct entry of a session directory, is dropped. */

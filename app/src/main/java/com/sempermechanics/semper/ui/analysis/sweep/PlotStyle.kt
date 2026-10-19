@@ -17,7 +17,8 @@ import com.sempermechanics.semper.ui.common.dp
  * Each built the same 11 sp monospace axis text and 1 dp grid stroke in
  * `viewer_plot_*` colours. The values here are copied from them; where the
  * lattice differs ([LATTICE_TICK_GAP_DP], [LATTICE_TICK_BASELINE]) its own
- * value is kept beside the shared one rather than folded in.
+ * value is kept beside the shared one rather than folded in. The lattice's
+ * labels have since moved to the app's sans ([labelTextPaint]).
  */
 object PlotStyle {
 
@@ -53,6 +54,14 @@ object PlotStyle {
             color = ContextCompat.getColor(context, colorRes)
             typeface = Typeface.MONOSPACE
         }
+
+    /**
+     * The lattice's tick and axis text: [axisTextPaint] in the app's sans, as
+     * the screens around it are, since its labels are counts, not columns of
+     * figures to line up.
+     */
+    fun labelTextPaint(context: Context, @ColorRes colorRes: Int = R.color.viewer_plot_ink): Paint =
+        axisTextPaint(context, colorRes).apply { typeface = Typeface.DEFAULT }
 
     /** The bold value label beside a scrub point (the strain plot's). */
     fun valueTextPaint(context: Context): Paint =

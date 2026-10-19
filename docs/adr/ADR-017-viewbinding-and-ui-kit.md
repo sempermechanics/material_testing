@@ -32,7 +32,7 @@ Conventions:
   never in its constructor.
 - **A ViewStub page gets its own binding.** Inflate the stub, then bind the
   inflated view: `WizardStepSettingsBinding.bind(binding.stubStepSettings.inflate())`
-  (`ui/analysis/StaticAnalysisActivity.kt:111-115`). Pages stay in stubs so the
+  (`ui/analysis/StaticAnalysisActivity.kt:132-136`). Pages stay in stubs so the
   host layout stays under lint's `TooManyViews`.
 - **A content view exposes its binding.** `WizardStepSettingsContentView`
   (`ui/analysis/wizard/WizardStepSettingsContentView.kt:18`) and
@@ -61,17 +61,17 @@ Conventions:
 **Still hand-built, and why.**
 
 - **The run's "Keep running" confirm** (`RunChrome.confirmCancel`,
-  `ui/analysis/run/RunChrome.kt:67-82`): its negative button says "Keep
+  `ui/analysis/run/RunChrome.kt:89-100`): its negative button says "Keep
   running", not Cancel, because Cancel is what the user just pressed.
   `Dialogs.confirm` has fixed button labels.
 - **Dialogs with their own view or behaviour:** the rename field
-  (`ui/home/SessionSelectionController.kt:220`), the custom colour scale
+  (`ui/home/SessionSelectionController.kt:246`), the custom colour scale
   (`ui/viewer/ViewerScaleController.kt:83`), list pickers
   (`ui/analysis/sweep/SweepFramePicker.kt:51`, `ui/home/CloudBackupsCard.kt:76`),
   the non-cancellable beta notice and deletion progress
   (`ui/home/FirstRunPrompts.kt:48`, `ui/settings/SettingsYourDataSection.kt:251`).
 - **The wizard's batch and sweep jobs** keep their own `Job` fields
-  (`ui/analysis/wizard/RunChannels.kt:53-54`): they run on the native
+  (`ui/analysis/wizard/RunChannels.kt:58-59`): they run on the native
   dispatcher, and `SerialJob` is main-thread only.
 - **39 `findViewById` calls remain.** 23 are the sweep page
   (`SweepSetupController`, `SweepRangeFields`), which still finds its views on the

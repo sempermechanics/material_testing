@@ -593,8 +593,8 @@ the bar is a correlation of at least 0.925.
 24 px across, and the ink label and the open crack are in view. Camera noise
 and JPEG make up much of each patch. Two frames 2 minutes apart, under the
 same light and with about 7 px of movement, correlate at about 0.88. The
-wizard warns "Speckle contrast is low" (`subset_low_texture_fmt`,
-`app/src/main/res/values/strings.xml:609`).
+wizard warns "Speckle contrast is low" (`subset_low_texture`,
+`app/src/main/res/values/strings.xml:706`).
 
 **The subset cap.** A larger subset averages the noise out, but not far
 enough. The share of points that pass on these photos, measured off the device

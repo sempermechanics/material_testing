@@ -38,6 +38,9 @@ object CacheJanitor {
     /** The reference image `StaticAnalysisActivity` hands to `RoiDrawActivity`. */
     const val TEMP_ROI_REF = "temp_roi_ref.bin"
 
+    /** The reference Home hands the wizard for an older analysis's Re-run, decoded. */
+    const val RERUN_REFERENCE_CACHE = "rerun_reference.bin"
+
     /** The cloud account export, before the user picks where to save it. */
     const val ACCOUNT_EXPORT = "semper-account-export.json"
 
@@ -47,7 +50,7 @@ object CacheJanitor {
      * inflate the Temporary files size while Clear left them untouched. Named
      * here and used by their writers, so a rename cannot leave one unreclaimed.
      */
-    private val REGENERABLE_FILE_NAMES = setOf(ROI_MASK_CACHE, TEMP_ROI_REF, ACCOUNT_EXPORT)
+    private val REGENERABLE_FILE_NAMES = setOf(ROI_MASK_CACHE, TEMP_ROI_REF, RERUN_REFERENCE_CACHE, ACCOUNT_EXPORT)
 
     /** The directory share and export bundles are written to, created if missing. */
     fun shareDir(cacheDir: File): File = File(cacheDir, SHARE_SUBDIR).apply { mkdirs() }
@@ -136,7 +139,8 @@ object CacheJanitor {
             entry.name.startsWith(FrameImportHelper.STAGING_DIR_PREFIX) -> true
             entry.name == FrameImportHelper.PREVIOUS_DIR_NAME -> true
             // A finished run moves its frames out, leaving this empty; a
-            // cancelled one leaves the frames it never reached. Only startup
+            // partial one leaves the frames it never reached, and a cancelled
+            // one puts back every frame it moved. Only startup
             // may assume no other screen still holds these paths, and only
             // when no wizard draft is waiting to restore them.
             entry.name == FrameImportHelper.COMMITTED_DIR_NAME -> mode == SweepMode.STARTUP && !keepImport

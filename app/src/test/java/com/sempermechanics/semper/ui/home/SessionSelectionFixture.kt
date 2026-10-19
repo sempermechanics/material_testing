@@ -48,6 +48,7 @@ abstract class SessionSelectionFixture {
     protected lateinit var count: TextView
     protected lateinit var rename: ImageButton
     protected lateinit var restore: ImageButton
+    protected lateinit var rerun: ImageButton
     protected lateinit var selectAll: MaterialCheckBox
     protected lateinit var fab: ImageButton
     protected lateinit var close: ImageButton
@@ -60,6 +61,7 @@ abstract class SessionSelectionFixture {
     protected val queuedDeletes = mutableListOf<List<SessionDeletes.Item>>()
     protected val announced = mutableListOf<Pair<UUID, Int>>()
     protected val restored = mutableListOf<List<String>>()
+    protected val reruns = mutableListOf<String>()
     protected var restoreAllowed = true
 
     @Before
@@ -73,6 +75,7 @@ abstract class SessionSelectionFixture {
         count = TextView(activity)
         rename = ImageButton(activity)
         restore = ImageButton(activity).apply { visibility = View.GONE }
+        rerun = ImageButton(activity).apply { visibility = View.GONE }
         selectAll = MaterialCheckBox(activity)
         fab = ImageButton(activity)
         close = ImageButton(activity)
@@ -85,6 +88,7 @@ abstract class SessionSelectionFixture {
             selectionCount = count,
             btnSelectionRename = rename,
             btnSelectionRestore = restore,
+            btnSelectionRerun = rerun,
             selectAllBox = selectAll,
             fab = fab,
             backCallback = back,
@@ -92,6 +96,7 @@ abstract class SessionSelectionFixture {
             onDeviceOnlyDeleted = { deviceOnlyDeletes++ },
             restoreEnabled = { restoreAllowed },
             onRestore = { records -> restored += records.map { it.id } },
+            onRerun = { record -> reruns += record.id },
             onDeleteQueued = { id, items -> announced += id to items.size },
             enqueueDelete = { items ->
                 queuedDeletes += items

@@ -8,15 +8,20 @@ import androidx.annotation.WorkerThread
 import androidx.lifecycle.viewModelScope
 import com.sempermechanics.semper.SemperNativeLib
 import com.sempermechanics.semper.data.session.SessionLayout
+import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionQuota
 import com.sempermechanics.semper.data.session.SessionStore
+import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.BatchRun
+import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
 import com.sempermechanics.semper.ui.analysis.run.snapshotRunInputs
+import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
+import com.sempermechanics.semper.util.AtomicFiles
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -104,19 +109,22 @@ internal class PendingOutcome<T : Any> {
  * not cancel a minutes-long native solve. Progress is published on
  * [AnalysisViewModel.progress]; completion (or failure) is held on
  * [AnalysisViewModel.batchOutcome] until the screen takes it. The run's
- * images are frozen here, on Main, before it leaves for the native thread
- * ([snapshotRunInputs]).
+ * images, [inputs], are frozen by the caller on Main before it leaves for the
+ * native thread ([snapshotRunInputs]).
  */
 @MainThread
 @Suppress("TooGenericExceptionCaught") // any failure is the run's outcome
-fun AnalysisViewModel.launchBatchAnalysis(
+internal fun AnalysisViewModel.launchBatchAnalysis(
     appContext: Context,
     spec: RunSpec,
+    inputs: RunInputs,
     cacheDir: File,
     processingStartTime: Long,
 ) {
     if (runs.batchJob?.isActive == true) return
-    val inputs = snapshotRunInputs()
+    // Cleared here, before the run, rather than inside it: a Cancel confirmed
+    // while the run is still starting (caching the reference) then stops it.
+    cancelRequested = false
     runs.batchJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
         runs.progress.tryEmit(null)
         SemperAnalytics.event(
@@ -179,6 +187,8 @@ private suspend fun AnalysisViewModel.runBatchAnalysis(
 fun AnalysisViewModel.launchSweep(appContext: Context, spec: RunSpec) {
     require(spec.sweep != null) { "not a sweep" }
     if (runs.sweepJob?.isActive == true) return
+    // As for a batch run: a Cancel confirmed before the first solve stops it.
+    cancelRequested = false
     val inputs = snapshotRunInputs()
     runs.sweepJob = viewModelScope.launch(SemperNativeLib.nativeDispatcher) {
         runs.sweepProgress.tryEmit(null)
@@ -207,34 +217,22 @@ internal sealed interface RunAdmission {
     /** At the limit: the run ends with [outcome] before any native work. */
     class Blocked(val outcome: BatchAnalysisOutcome) : RunAdmission
 
-    /** A new session [SessionQuota.blocked] let start. */
+    /** A new analysis [SessionQuota.blocked] let start. */
     data object Admitted : RunAdmission
-
-    /**
-     * A re-run over the working session's row: nothing new to admit. Its save
-     * updates that row; one that finds the row gone is a new row, and the
-     * save applies the rule.
-     */
-    data object Rerun : RunAdmission
 
     /** Whether the run's save may go past the cap. */
     val admitted: Boolean get() = this == Admitted
 }
 
 /**
- * Hard stop before any native work: a new session cannot start at the
+ * Hard stop before any native work: a new analysis cannot start at the
  * account's limit ([SessionQuota.blocked], with the index's live rows; this
- * runs on the native thread). Re-runs of the same kind over an existing
- * [AnalysisViewModel.workingLocalId] are not checked; a run of the other
- * kind, a sweep when [sweep], is a new session ([resolveLocalSessionId]).
+ * runs on the native thread). Every run is checked: a saved analysis is
+ * never written over (owner decision, 2026-10-15), so whatever a run saves is
+ * a new Home row.
  */
 @WorkerThread
-internal fun AnalysisViewModel.admitRun(
-    appContext: Context,
-    plannedFrames: Int,
-    sweep: Boolean,
-): RunAdmission = when {
-    !wouldCreateNewSession(sweep) -> RunAdmission.Rerun
+internal fun AnalysisViewModel.admitRun(appContext: Context, plannedFrames: Int): RunAdmission = when {
     // Before the config is fetched a demo account is held to the demo cap
     // (LicenseEntitlements.analysisCap); a licensed one has no local cap.
     // The upload is gated separately in CloudSync until config is known.
@@ -254,38 +252,109 @@ internal fun AnalysisViewModel.admitRun(
 }
 
 /**
- * The working session's id for a run, a sweep when [sweep]: the one the last
- * run saved under when it was of the same kind, otherwise a new one. A single
- * run and a sweep never share a session: switching kinds is like new inputs,
- * a new record, and the earlier one keeps its row, `.dat` files and images.
+ * The session a run, a sweep when [sweep], writes, with an empty
+ * [RunSession.staging] for its results.
+ *
+ * A saved analysis is never written over (owner decision, 2026-10-15): the
+ * working session is reused only while no Home row names it, which is when
+ * the last run of the same kind in this wizard saved nothing (its first frame
+ * kept no points, or the index refused it). Its folder then holds that run's
+ * frames, the next run's own inputs, and no one's results. Any other run
+ * mints a new id. A single run and a sweep never share a session.
  */
-internal fun AnalysisViewModel.resolveLocalSessionId(sweep: Boolean): String {
-    workingLocalId?.takeIf { workingIsSweep == sweep }?.let { return it }
-    return UUID.randomUUID().toString().take(SESSION_ID_LENGTH).also {
+@WorkerThread
+internal fun AnalysisViewModel.openRunSession(appContext: Context, sweep: Boolean): RunSession {
+    val before = WizardRunState(workingLocalId, workingIsSweep, runResult.value, sweepPlan, sweepSkippedNodes)
+    val unsaved = workingLocalId?.takeIf { workingIsSweep == sweep && SessionStore.get(appContext, it) == null }
+    val id = unsaved ?: UUID.randomUUID().toString().take(SESSION_ID_LENGTH).also {
         workingLocalId = it
         workingIsSweep = sweep
+    }
+    val dir = SessionStore.dirFor(appContext, id)
+    // A process that died mid-run left its staging behind; it is no one's results.
+    val staging = SessionPaths.runStaging(dir).apply {
+        deleteRecursively()
+        mkdirs()
+    }
+    return RunSession(id, dir, staging, fresh = unsaved == null, before = before)
+}
+
+/**
+ * A run's save went into the index: that analysis is finished, and the next
+ * run in this wizard is a new one ([openRunSession]), never a re-run over it.
+ */
+internal fun AnalysisViewModel.closeSavedSession() {
+    workingLocalId = null
+    workingIsSweep = false
+}
+
+/**
+ * A run's session: its Home-list id, its directory, and [staging], where the
+ * run writes its `.dat` results until it ends.
+ *
+ * @property fresh whether this run minted [id]: a new session, which nothing
+ *   saved before it
+ * @property before what the wizard knew of its runs before this one started,
+ *   which a cancelled run puts back
+ */
+internal class RunSession(
+    val id: String,
+    val dir: File,
+    val staging: File = SessionPaths.runStaging(dir),
+    val fresh: Boolean = false,
+    val before: WizardRunState? = null,
+) {
+    /**
+     * Replaces the session's previous results with this run's: the old `.dat`
+     * files and the summary's field-range sidecar, which
+     * `SummaryAnimation.globalRanges` would otherwise take for a new run with
+     * as many frames, go, and the staged `.dat` files move up. Every run that
+     * is not cancelled ends here, whether or not it then saves a record.
+     */
+    @WorkerThread
+    fun commit() {
+        dir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
+        SessionLayout(dir).fieldRanges.delete()
+        staging.listFiles()?.forEach { AtomicFiles.promote(it, File(dir, it.name)) }
+        staging.deleteRecursively()
     }
 }
 
 /**
- * The session a run, a sweep when [sweep], writes ([resolveLocalSessionId]),
- * its directory cleared of the results a previous run of the same kind left
- * there: the `.dat` files and the summary's field-range sidecar, which
- * `SummaryAnimation.globalRanges` would otherwise take for a new run with as
- * many frames. The deformed images stay; they may be this run's own inputs,
- * and each run prunes them once it is done with them.
+ * The wizard's view of its runs, as a run found it: the working session and
+ * its kind, the last run's result, and the last sweep's plan and skips.
+ */
+internal class WizardRunState(
+    val workingLocalId: String?,
+    val workingIsSweep: Boolean,
+    val runResult: RunResult,
+    val sweepPlan: List<SweepStudy.Point>,
+    val sweepSkippedNodes: List<SkippedNode>,
+)
+
+/**
+ * Throws away everything a cancelled run in [session] wrote, so nothing of it
+ * is kept: its staged results, and the session itself when the run started
+ * it ([RunSession.fresh]) and [keepDir] is false, as long as no Home row
+ * names it ([SessionStore.deleteUnsavedDir]). A session that was there
+ * before keeps its directory, its results and its row exactly as they were;
+ * nothing is saved, so no upload is queued and Home does not change. The
+ * wizard's working session and last result go back to what they were, so the
+ * next run is admitted ([admitRun]) as if this one had never started.
+ * [keepDir] is for a deformed image the run could not put back where it found
+ * it: the directory then still holds it, and the wizard reads it from there.
  */
 @WorkerThread
-internal fun AnalysisViewModel.openRunSession(appContext: Context, sweep: Boolean): RunSession {
-    val id = resolveLocalSessionId(sweep)
-    val dir = SessionStore.dirFor(appContext, id)
-    dir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
-    SessionLayout(dir).fieldRanges.delete()
-    return RunSession(id, dir)
+internal fun AnalysisViewModel.discardRun(appContext: Context, session: RunSession, keepDir: Boolean = false) {
+    session.staging.deleteRecursively()
+    if (session.fresh && !keepDir) SessionStore.deleteUnsavedDir(appContext, session.id)
+    val before = session.before ?: return
+    workingLocalId = before.workingLocalId
+    workingIsSweep = before.workingIsSweep
+    lastRunResult = before.runResult
+    sweepPlan = before.sweepPlan
+    sweepSkippedNodes = before.sweepSkippedNodes
 }
-
-/** A run's session: its Home-list id and its directory. */
-internal class RunSession(val id: String, val dir: File)
 
 /** Characters of a random UUID a new working session's id keeps. */
 private const val SESSION_ID_LENGTH = 12
@@ -294,7 +363,8 @@ private const val SESSION_ID_LENGTH = 12
  * Follows the deformed images to wherever a run left them. They are moved
  * from the import cache into the session directory rather than copied, so the
  * staged cache paths this view model was handed at import time go stale the
- * moment a run finishes; a re-run reading them would find nothing. An image
+ * moment a run finishes; the next run in this wizard reading them would find
+ * nothing. An image
  * in another session's directory is copied, never moved: it is that
  * session's own input.
  * [AnalysisViewModel.defFrameSizes] is keyed by path, so it is re-keyed alongside.

@@ -25,6 +25,25 @@ object SessionPaths {
     /** Transient upload pack folder under the session dir. */
     const val UPLOAD_STAGING_SUBDIR = "upload_staging"
 
+    /**
+     * Where a run writes its `.dat` results (and nothing else) until it ends,
+     * under the session dir. A run that ends any way but a cancel moves them up
+     * into the session dir; a cancelled one deletes this folder, so the
+     * session's previous results are never touched by it.
+     */
+    const val RUN_STAGING_SUBDIR = "run_staging"
+
+    /**
+     * What Home's Re-run starts a new analysis from, under the session dir:
+     * the run's inputs as the wizard held them, its original reference and
+     * mask, and the frames the run never reached (`SessionLayout.rerun*`).
+     * Kept on this phone only: never uploaded, so never restored.
+     */
+    const val RERUN_SUBDIR = "rerun"
+
+    /** [RUN_STAGING_SUBDIR] of [sessionDir]. */
+    fun runStaging(sessionDir: File): File = File(sessionDir, RUN_STAGING_SUBDIR)
+
     /** Engine result filename pattern under a session dir (`frame_0000.dat`). */
     const val FRAME_DAT_FMT = "frame_%04d.dat"
 

@@ -10,13 +10,13 @@ import android.graphics.drawable.Animatable
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.widget.ImageView
-import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.databinding.LabResultsPanelBinding
@@ -42,16 +42,22 @@ import java.io.File
  * and the heatmap animations stay one tap away in Share.
  *
  * The heavy lifting is [SummaryAnimation]'s; this owns the screen: which field
- * is showing, the progress line while a field is still rendering, and playback.
+ * is showing, the progress pill above the scrubber while a field is still
+ * building (its line, its bar, and its close button that cancels), the colour
+ * scale's ends ("—" until the sequence range is known), and playback.
+ *
+ * The pill is not part of the auto-hiding chrome
+ * ([com.sempermechanics.semper.ui.viewer.ViewerChromeController]): it stays up
+ * while the summary builds, since that is what the user is waiting on.
  */
 class ViewerSummaryController(private val host: ResultViewerActivity) {
 
     private val layer: View = host.binding.summaryLayer
     private val image: ImageView = host.binding.imgSummary
     private val statusPanel: View = host.binding.summaryStatus
-    private val progress: ProgressBar = host.binding.progressSummary
+    private val progress: LinearProgressIndicator = host.binding.progressSummary
     private val status: TextView = host.binding.tvSummaryStatus
-    private val cancelButton: MaterialButton = host.binding.btnSummaryCancel
+    private val cancelButton: View = host.binding.btnSummaryCancel
     private val resultsPanel: View = host.binding.summaryResults
 
     /** The Results panel, inflated from its stub on the first show of a session with loads. */
@@ -126,8 +132,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
                     SummaryAnimation.globalRanges(files, rangesFile) { done, total ->
                         host.lifecycleScope.launch(Dispatchers.Main.immediate) {
                             if (!isShowing || showsResults || !rangesJob.isActive) return@launch
-                            progress.progress = done * PERCENT / total.coerceAtLeast(1)
-                            showStatus(host.getString(R.string.summary_scanning_fmt, done, total))
+                            showProgress(R.string.summary_scanning_fmt, done, total)
                         }
                     }
                 }
@@ -147,7 +152,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         layer.isVisible = true
         resultsPanel.isVisible = showsResults
         if (showsResults) {
-            statusPanel.isVisible = false
+            hideStatus()
             // Only a tensile curve has a scale and bias to match the machine with.
             host.stressStrain.fill(resultsViews)
             return
@@ -161,6 +166,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         isShowing = false
         stopPlayback()
         layer.isVisible = false
+        hideStatus()
     }
 
     /** The field toggle moved; re-render if the summary is the thing on screen. */
@@ -174,10 +180,12 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         if (isShowing && !showsResults) render(host.currentDataIndex)
     }
 
+    /** The pill's close button, and the viewer going away: stop both passes and drop the pill. */
     fun cancel() {
         rangesJob.cancel()
         buildJob.cancel()
         stopPlayback()
+        hideStatus()
     }
 
     /** Bounds for [dataIndex]: a user-set fixed scale wins, else the global range. */
@@ -196,38 +204,33 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     }
 
     private fun render(dataIndex: Int) {
+        val bounds = boundsFor(dataIndex)
         if (shownField == dataIndex && image.drawable != null) {
+            // Back from a frame, whose own labels replaced the summary's.
+            bounds?.let { host.refreshSummaryScaleLabels(dataIndex, it) }
             startPlayback()
             return
         }
-        val bounds = boundsFor(dataIndex)
         if (bounds == null) {
-            // Either the range pass is still running or nothing correlated at all.
-            // Do not steal the determinate "Reading frames…" status that [start]
-            // already pushes — a static "Preparing files…" looked hung on PLC.
-            if (rangesJob.isActive) {
-                if (!statusPanel.isVisible) {
-                    showStatus(host.getString(R.string.summary_scanning_fmt, 0, host.summaryBatchFiles().size))
-                }
-            } else {
-                showStatus(host.getString(R.string.summary_no_data))
-            }
+            renderWithoutRange()
             return
         }
 
+        // The range is known: the scale shows the ends the animation is built on.
+        host.refreshSummaryScaleLabels(dataIndex, bounds)
         val label = host.currentTypeString
         val total = host.summaryBatchFiles().size
         buildJob.cancel()
         stopPlayback()
-        showStatus(host.getString(R.string.summary_building_fmt, label, 0, total))
+        showProgress(R.string.summary_building_fmt, 0, total)
         buildJob.launch(host.lifecycleScope) {
             val file = try {
                 withContext(Dispatchers.Default) {
                     animation.build(dataIndex, label, bounds) { done, count ->
                         host.lifecycleScope.launch {
-                            if (host.currentDataIndex != dataIndex) return@launch
-                            progress.progress = done * PERCENT / count.coerceAtLeast(1)
-                            status.text = host.getString(R.string.summary_building_fmt, label, done, count)
+                            // showProgress itself skips a slot that is no longer up.
+                            if (host.currentDataIndex != dataIndex || !buildJob.isActive) return@launch
+                            showProgress(R.string.summary_building_fmt, done, count)
                         }
                     }
                 }
@@ -239,7 +242,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
             }
             if (host.currentDataIndex != dataIndex || !isShowing) return@launch
             if (file == null) {
-                showStatus(host.getString(R.string.summary_failed))
+                showMessage(R.string.summary_failed)
                 return@launch
             }
             val decoded = decodeForDisplay(file)
@@ -247,7 +250,21 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
             if (host.currentDataIndex != dataIndex || !isShowing) return@launch
             shownField = dataIndex
             display(decoded)
-            host.refreshSummaryScaleLabels(dataIndex, bounds)
+        }
+    }
+
+    /** No range for the field yet: the pass is still reading frames, or nothing correlated at all. */
+    private fun renderWithoutRange() {
+        // "—", not a "0.0" that reads as a measurement, nor the last frame's ends.
+        showScalePending()
+        // Do not steal the determinate "Reading frames" status that [start]
+        // already pushes — a static "Preparing files…" looked hung on PLC.
+        if (rangesJob.isActive) {
+            if (!statusPanel.isVisible) {
+                showProgress(R.string.summary_scanning_fmt, 0, host.summaryBatchFiles().size)
+            }
+        } else {
+            showMessage(R.string.summary_no_data)
         }
     }
 
@@ -264,16 +281,16 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
 
     private fun display(drawable: Drawable?) {
         if (drawable == null) {
-            showStatus(host.getString(R.string.summary_failed))
+            showMessage(R.string.summary_failed)
             return
         }
         image.setImageDrawable(drawable)
-        statusPanel.isVisible = false
+        hideStatus()
         (drawable as? Animatable)?.start()
     }
 
     private fun startPlayback() {
-        statusPanel.isVisible = false
+        hideStatus()
         (image.drawable as? Animatable)?.start()
     }
 
@@ -281,14 +298,41 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         (image.drawable as? Animatable)?.stop()
     }
 
-    private fun showStatus(message: String?) {
-        statusPanel.isVisible = message != null
-        status.text = message.orEmpty()
-        val building = message != null &&
-            message != host.getString(R.string.summary_failed) &&
-            message != host.getString(R.string.summary_no_data)
-        progress.isVisible = building
-        cancelButton.isVisible = building && (rangesJob.isActive || buildJob.isActive)
+    /**
+     * The pill as progress: "Building summary · 3 of 5", its bar, and the close
+     * button. The bar runs indeterminate until the phase reports its first frame.
+     */
+    private fun showProgress(@StringRes format: Int, done: Int, total: Int) {
+        if (!isShowing) return
+        statusPanel.isVisible = true
+        status.text = host.getString(format, done, total)
+        progress.isVisible = true
+        if (done <= 0) {
+            progress.isIndeterminate = true
+        } else {
+            progress.isIndeterminate = false
+            progress.setProgressCompat(done * PERCENT / total.coerceAtLeast(1), true)
+        }
+        cancelButton.isVisible = true
+    }
+
+    /** The pill as a plain note (failed, nothing to animate, needs Android 9): nothing to cancel. */
+    private fun showMessage(@StringRes message: Int) {
+        if (!isShowing) return
+        statusPanel.isVisible = true
+        status.text = host.getString(message)
+        progress.isVisible = false
+        cancelButton.isVisible = false
+    }
+
+    private fun hideStatus() {
+        statusPanel.isVisible = false
+    }
+
+    private fun showScalePending() {
+        val pending = host.getString(R.string.scale_label_pending)
+        host.binding.tvScaleMax.text = pending
+        host.binding.tvScaleMin.text = pending
     }
 
     private companion object {

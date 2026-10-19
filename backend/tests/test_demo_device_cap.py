@@ -139,3 +139,21 @@ def test_count_device_sessions_counts_every_account_less_failed(demo):
     assert repo.count_device_sessions("elsewhere") == 4
     assert repo.count_device_sessions("") == 0
     assert repo.count_device_sessions(None) == 0
+
+
+async def test_after_a_staff_release_the_next_holder_is_not_held_by_the_last(demo, client, monkeypatch):
+    """TD-276 acceptance: a phone released by staff and registered by a second
+    account does not count the first account's analyses toward its demo cap."""
+    demo._data["users"]["old-holder"] = {
+        "email": "old@lab.org", "access_status": "APPROVED", "mode": "demo",
+        "activeDeviceId": DEV_DEVICE}
+    _stored(demo, CAP, uid="old-holder")
+    refused = await client.post("/v1/sessions", json=_BODY)
+    assert refused.status_code == 409, refused.text
+
+    released = repo.release_account_device("old-holder")
+    assert repo.forget_device_sessions("old-holder", released.values()) == CAP
+
+    created = await client.post("/v1/sessions", json=_BODY)
+    assert created.status_code == 200, created.text
+    assert repo.count_user_sessions("old-holder") == CAP, "still the old account's"

@@ -484,3 +484,71 @@ def test_monitoring_refuses_bad_input(tmp_path):
     proc, _ = _run(tmp_path, _APPLY, "monitoring_fresh", "--project", "demo-app-prod", "--notification-channel", "1",
                    "--activations-per-licence-per-day", "lots")
     assert proc.returncode == 2
+
+
+# ---------------------------------------------- secret access pre-check (TD-269)
+
+_SECRET_CHECK = _REPO / "scripts" / "check_secret_access.sh"
+_RUNTIME_SA = "api@demo-app-prod.iam.gserviceaccount.com"
+
+
+def _iam_scenario(tmp_path: Path, secret_policy, project_policy) -> Path:
+    """Answers for the two policy reads; None leaves a read unanswered (the
+    stub's NOT_FOUND, as for a caller without getIamPolicy)."""
+    root = tmp_path / "iam"
+    root.mkdir(exist_ok=True)
+    rules = []
+    for words, policy in ((["secrets", "get-iam-policy"], secret_policy),
+                          (["projects", "get-iam-policy"], project_policy)):
+        if policy is not None:
+            rules.append({"match": words, "stdout": json.dumps(policy)})
+    (root / "gcloud.json").write_text(json.dumps(rules), encoding="utf-8")
+    return root
+
+
+def _grant(role: str, member: str = f"serviceAccount:{_RUNTIME_SA}") -> dict:
+    return {"bindings": [{"role": role, "members": [member]}]}
+
+
+@pytest.mark.parametrize(("secret_policy", "project_policy", "where"), [
+    (_grant("roles/secretmanager.secretAccessor"), {}, "secret policy"),
+    ({}, _grant("roles/secretmanager.secretAccessor"), "project policy"),
+    ({}, _grant("roles/owner"), "project policy"),
+])
+def test_secret_check_passes_on_a_grant(tmp_path, secret_policy, project_policy, where):
+    proc, calls = _run(tmp_path, _SECRET_CHECK, _iam_scenario(tmp_path, secret_policy, project_policy),
+                       "demo-app-prod", "entitlement-key", _RUNTIME_SA)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.startswith("OK:") and where in proc.stdout
+    assert all("add-iam-policy-binding" not in c and "set-iam-policy" not in c for c in calls)
+
+
+def test_secret_check_fails_with_the_grant_to_make(tmp_path):
+    other = _grant("roles/secretmanager.secretAccessor", "serviceAccount:someone@else.com")
+    viewer = _grant("roles/secretmanager.viewer")
+    proc, _ = _run(tmp_path, _SECRET_CHECK, _iam_scenario(tmp_path, other, viewer),
+                   "demo-app-prod", "entitlement-key", _RUNTIME_SA)
+    assert proc.returncode == 1
+    assert proc.stdout.startswith("FAIL:")
+    assert "gcloud secrets add-iam-policy-binding entitlement-key --project demo-app-prod" in proc.stdout
+    assert f"--member=serviceAccount:{_RUNTIME_SA} --role=roles/secretmanager.secretAccessor" in proc.stdout
+
+
+def test_secret_check_only_warns_when_a_policy_is_unreadable(tmp_path):
+    proc, _ = _run(tmp_path, _SECRET_CHECK, _iam_scenario(tmp_path, {}, None),
+                   "demo-app-prod", "entitlement-key", _RUNTIME_SA)
+    assert proc.returncode == 0
+    assert proc.stdout.startswith("WARN:") and "project demo-app-prod" in proc.stdout
+
+
+def test_secret_check_requires_its_arguments(tmp_path):
+    proc, calls = _run(tmp_path, _SECRET_CHECK, _iam_scenario(tmp_path, {}, {}), "demo-app-prod", "")
+    assert proc.returncode == 2 and "usage:" in proc.stderr
+    assert calls == []
+
+
+def test_the_deploy_runs_the_secret_check_before_mounting():
+    workflow = (_REPO / ".github" / "workflows" / "deploy-backend.yml").read_text(encoding="utf-8")
+    check = workflow.index("scripts/check_secret_access.sh")
+    assert check < workflow.index('ENTITLEMENT_SIGNING_KEY=${ENTITLEMENT_SECRET}:latest')
+    assert "RUNTIME_SA: ${{ vars.SERVICE_ACCOUNT_EMAIL }}" in workflow

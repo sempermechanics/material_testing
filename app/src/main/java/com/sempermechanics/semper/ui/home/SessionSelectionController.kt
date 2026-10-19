@@ -9,6 +9,7 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.TooltipCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.checkbox.MaterialCheckBox
@@ -31,7 +32,7 @@ import java.util.UUID
 
 /**
  * Multi-select bar for the Home session list: selection set, select-all,
- * rename/restore/delete actions, and bar visibility. Dialogs use the Activity; list
+ * rename/re-run/restore/delete actions, and bar visibility. Dialogs use the Activity; list
  * refresh is a callback so the Activity keeps owning cloud reconcile.
  */
 class SessionSelectionController(
@@ -42,6 +43,8 @@ class SessionSelectionController(
     private val selectionCount: TextView,
     private val btnSelectionRename: ImageButton,
     private val btnSelectionRestore: ImageButton,
+    /** Re-run: a new analysis from the one selected row's photos and settings. */
+    private val btnSelectionRerun: ImageButton,
     private val selectAllBox: MaterialCheckBox,
     private val fab: ImageButton,
     private val backCallback: OnBackPressedCallback,
@@ -51,6 +54,8 @@ class SessionSelectionController(
     private val restoreEnabled: () -> Boolean = { true },
     /** Restore these cloud-only rows to the phone; the host queues and reports. */
     private val onRestore: (List<SessionRecord>) -> Unit = {},
+    /** Start a new analysis from this row, whose frames are on this phone; the host checks the rest. */
+    private val onRerun: (SessionRecord) -> Unit = {},
     /** A cloud delete was queued: the host hides the rows and shows progress. */
     private val onDeleteQueued: (workId: UUID, items: List<SessionDeletes.Item>) -> Unit = { _, _ -> },
     private val enqueueDelete: (List<SessionDeletes.Item>) -> UUID = { SessionDeletes.enqueue(activity, it) },
@@ -83,6 +88,8 @@ class SessionSelectionController(
             selectedRecords().singleOrNull()?.let { promptRename(it) }
         }
         btnSelectionRestore.setOnClickListener { restoreSelected() }
+        TooltipCompat.setTooltipText(btnSelectionRerun, activity.getString(R.string.action_rerun))
+        btnSelectionRerun.setOnClickListener { rerunSelected() }
     }
 
     /** Long-press on an unselected list: enters selection mode with that row. */
@@ -117,8 +124,8 @@ class SessionSelectionController(
 
     /**
      * Swaps the title row for the contextual bar and keeps the FAB out of the
-     * way. Rename needs exactly one target, so it only appears for a single
-     * selection.
+     * way. Rename and Re-run need exactly one target, so they only appear for
+     * a single selection.
      */
     fun updateSelectionBar() {
         // Rows can disappear under a selection (a refresh, a delete elsewhere);
@@ -136,6 +143,7 @@ class SessionSelectionController(
             selectedIds.size,
         )
         btnSelectionRename.isVisible = selectedIds.size == 1
+        btnSelectionRerun.isVisible = selectedIds.size == 1
         btnSelectionRestore.isVisible = canRestoreSelection()
         // Ticked only when every row is in the selection, so the box reports
         // the real state rather than just what was last tapped.
@@ -158,6 +166,24 @@ class SessionSelectionController(
         val records = selectedRecords()
         clearSelection()
         onRestore(records)
+    }
+
+    /**
+     * Re-run: a new analysis from the one selected row's photos and settings;
+     * the saved one is never re-run in place (owner decision, 2026-10-15). A
+     * row whose frames are not on this phone says why instead: restore it
+     * first when it is backed up.
+     */
+    fun rerunSelected() {
+        val record = selectedRecords().singleOrNull() ?: return
+        if (!hasLocalData(record)) {
+            val inCloud = restoreEnabled() && record.isRestorable(hasLocalData = false)
+            val body = if (inCloud) R.string.rerun_photos_in_cloud_body else R.string.rerun_photos_missing_body
+            Dialogs.info(activity, R.string.rerun_unavailable_title, body)
+            return
+        }
+        clearSelection()
+        onRerun(record)
     }
 
     /** Reads phone presence from the list, which read it on IO: a toggle never touches the disk. */

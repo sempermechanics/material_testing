@@ -91,6 +91,12 @@ once whether it may send crash diagnostics. Nothing is collected unless you say
 yes, and you can change your mind at any time under **Settings → Your data →
 Send crash reports**.
 
+**First-run tips.** The first time you reach a screen, a short tip card points
+at the control it describes, with the rest of the screen dimmed. When a screen
+has several tips the card counts them ("1 of 3") and offers **Skip** beside
+**Next**; the last tip, and a screen with only one, shows **Got it**. Skip or
+Got it puts that screen's tips away for good.
+
 <img src="images/home.png" width="300" alt="Home screen">
 
 The app icon follows your phone's dark theme: the S in black on a light
@@ -274,31 +280,47 @@ status line.
 
 ### While it runs
 
-<img src="images/running.png" width="300" alt="Progress dialog">
+<img src="images/running.png" width="300" alt="Run progress sheet">
 
-The card's header reads *Frame 23 of 40* with the whole run's percentage at its
-end, then the time left (once a few seconds of progress give a steady rate).
-Under it, one bin per planned frame shows **convergence per frame**: a finished
-frame is a blue bar as tall as its convergence, red under the dashed line at
-50%; the frame being solved is a pale outlined bar rising with its progress;
-frames still to come are empty slots. Over 100 frames, neighbouring frames share
-a bin that shows the lowest of them, so a low frame is never hidden. Once every
-frame is solved the header reads *Completed 40 of 40 frames · saving* while the
-run writes the analysis. After one low frame an amber line warns that one more
-stops the run.
-**Cancel** stops the run
+A sheet docks at the bottom of the screen, over a light shade that keeps the
+wizard readable above it (it still takes every touch). Its header reads *Frame
+23 of 40* with the whole run's percentage at its end; under it, the reference
+you picked and the time left, *steel_00 · About 2 s left* (once a few seconds
+of progress give a steady rate). Under that, one bin per planned frame shows
+**convergence per frame** on a scale labelled 100 and 50: a finished frame is a
+blue bar as tall as its convergence, red under the dashed line at 50%; the frame
+being solved is a pale outlined bar rising with its progress; frames still to
+come are empty slots. A short run's bins stay narrow, grouped in the middle,
+and up to 12 frames each finished bar carries its convergence above it (red
+under 50) and the running one its progress. Over 100 frames, neighbouring frames
+share a bin that shows the lowest of them, so a low frame is never hidden. Once
+every frame is solved the header reads *Completed 40 of 40 frames · saving*
+while the run writes the analysis. After one low frame an amber line warns that
+one more stops the run.
+
+When every frame solves, the sheet holds for a moment with a green check, *40
+frames solved* and *7 s · lowest 94% converged*, then the results open. A run
+that stops early, fails or is cancelled goes on at once.
+**Cancel** asks first (*Cancel analysis?*), then stops the run
 where it is, within a moment — it does not wait out the frame being solved.
-Nothing is kept. Back is blocked. Cancelling a parameter sweep abandons the whole
-sweep, not just the combination in flight.
+Nothing from the run is kept: not the frames it solved, not a row on Home, not
+a backup, and it does not count towards your analyses. A run never touches an
+analysis you already have, so cancelling one leaves those exactly as they
+were. Back asks the same question. Cancelling a parameter sweep abandons the whole sweep, not
+just the combination in flight, and saves none of it.
 
-The same overlay covers importing frames and extracting video, but there it
-shows a progress bar and counts frames instead: the convergence bins are hidden,
-because nothing is being solved yet. A parameter sweep's header reads *Analysis
-7 of 9* with the percentage, then the time left, and its planned lattice takes
-the bins' place: every combination starts as a grey ring, fills when it solves,
-turns into a red ring if it is skipped, and the one being solved is circled. The
-status under it names that combination; at the end the header reads *Solved 9
-of 9 analyses · saving*. Cancelling an import asks for confirmation and leaves nothing behind.
+The same sheet covers importing frames (*Importing photos*) and extracting video
+(*Extracting frames*), but there it shows a progress bar and counts frames
+instead: the convergence bins are hidden, because nothing is being solved yet. A
+parameter sweep's header reads *Analysis 7 of 9* with the percentage, then the
+time left, and its planned lattice takes the bins' place, labelled only at the
+ends of its ranges (the smallest and largest VSG at the left, the smallest and
+largest subset under it): every combination starts as a grey ring, fills when it
+solves, turns into a red ring if it is skipped, and the one being solved is
+circled. Under it, *Subset 25 · window 41 px* names that combination, and once
+one has ended a second line says how it went, *Last: 96% converged · 30,968
+points*, or *Last: skipped* in red; at the end the header reads *Solved 9 of 9
+analyses · saving*. Cancelling an import asks for confirmation and leaves nothing behind.
 
 **A run stops itself if the images decorrelate.** Two consecutive frames below
 50% convergence end it — the frames after them would be no better. The
@@ -324,17 +346,19 @@ gone.
 | Result | You land on |
 |---|---|
 | Single setting | Result viewer, frame 1 |
+| Run stopped early | The *Stopped at frame N* message, then the result viewer from **View results** |
 | Parameter sweep | Result lattice |
 | Some sweep points failed | `N of M skipped` toast, then the lattice |
-| Engine failed | A dialog naming the cause, and which frame and image it failed on |
+| Engine failed | A dialog naming the cause, and which frame and image it failed on; you stay in the wizard |
 | Every sweep combination failed | The lattice, every node hollow — tap one for its reason. **View** and **Save graph** are disabled |
 
-Re-running the same inputs updates the same analysis. Different inputs make a
-new one, which counts towards your quota. Picking the reference again counts as
-different inputs, even when it is the same image, and so does importing the
-frames again. So does switching between **Single setting** and **Parameter
-sweep**: a sweep after a single run (or a single run after a sweep) is a new
-analysis, and the earlier one is kept as it was.
+**A finished analysis is done.** Once its results open, the wizard closes:
+**Back** from the result viewer (or the lattice) goes to Home, not back into
+the wizard, and **New analysis** starts empty. A run never changes an analysis
+you already have; every run that saves is a new analysis on Home, which counts
+towards your quota and gets a name of its own (*steel_00 (2)* when the first
+*steel_00* is still there). To try other settings on the same photos, use
+**Re-run** on Home (§10).
 
 ---
 
@@ -510,7 +534,7 @@ window and land on different VSGs. The lattice plots each node at its VSG, so on
 window sits higher at a larger subset's step.
 
 The lattice preview on this step is **inert** — taps do nothing until it has
-run. The coach mark points it out on a first visit.
+run. A first-run tip points it out.
 
 ### Reading the result lattice
 
@@ -528,8 +552,8 @@ ever carries meaning at a time.
 
 The screen is built to be worked with one thumb. It scrolls — summary line,
 lattice, controls, then plot — while **Save graph** and **View** stay pinned at
-the bottom. The y axis is the **VSG (px)**; the lattice draws compact, so
-the coach mark on first visit is what names the axes.
+the bottom. The x axis is the **subset size** and the y axis the **VSG (px)**;
+the lattice draws compact, with tick numbers and a "px" unit but no axis titles.
 
 **Choosing a combination**
 
@@ -579,6 +603,10 @@ Look for the VSG where the curves stop separating.
 appear, a small pill in the middle reads **Opening steel_00 · 40 frames** (the
 reference's name and the frame count) until that frame draws.
 
+**Back** goes to Home, whether you opened the result from Home or it opened
+when a run finished; from a sweep's lattice, Back from a combination returns to
+the lattice, and Back from the lattice to Home.
+
 The field button (top left) switches field. Pinch to zoom (~10×), drag to pan; both survive a
 field change. Double-tap zooms or resets. A horizontal fling while fit-to-screen
 steps frames. Chrome auto-hides after a short idle; pan or scrub brings it back,
@@ -613,7 +641,10 @@ looping field overview of the whole sequence — every frame, never longer than
 10 seconds, about 300 ms a frame until the frame count forces it faster. It is
 framed on the same coloured region the live view rest-fits to (your ROI, or the
 accepted points), scaled to fill — not a letterboxed full photo. While it builds
-you get a progress readout and a **Cancel**. **Next** enters the
+a pill above the frame scrubber says how far it has got ("Reading frames · 2 of 5",
+then "Building summary · 3 of 5") over a thin bar, with a **✕** that cancels; it
+stays up when the other controls fade. Until the sequence range is known the colour
+scale's ends read "—". **Next** enters the
 frames; **Prev** on frame 1 comes back to it. Switching field rebuilds it in that
 field. The field button stays available while it plays. A parameter sweep opens from
 the lattice onto one combination instead; there is no overview slot.
@@ -690,6 +721,31 @@ fields and parameters in one archive is what makes the result reproducible.
 Long-press a row to select. Pencil renames (one row only), bin deletes. When
 every selected row is **Only in cloud**, a cloud-download button restores them
 all at once; each row shows its own progress.
+
+**Re-run** (the circular arrow, one row only) starts a **new** analysis from the
+selected one: the wizard opens on **Parameters** (or the sweep's settings page
+for a parameter sweep) with a copy of the same reference photo, the same frames
+in the same order (a video's frames keep their times and clip name), the same
+ROI and mask, and every setting as it was run. Change what you want and tap
+**Compute**; the analysis you started from is never changed. The new one counts
+towards your analyses like any other and is named after the reference, with
+*(2)* added while the first is still on Home. A parameter sweep keeps only the
+one frame it was solved against, so its Re-run has that frame alone. Re-run
+needs the original photos on this phone: an **Only in cloud** row asks you to
+restore it first, and a freed-up one says this phone doesn't have them.
+In Material Testing, Re-run copies the photos and the DIC settings, not the test:
+a **Tensile** or **Bending** analysis comes back as a **2D DIC** one, with no load
+log, specimen sizes, Results or lab report. To redo a lab test with other
+settings, start it again with **+** and import the load log (TD-280).
+
+An analysis made before Re-run kept its reference, or restored from the cloud
+(the backup does not carry Re-run's copy), asks you to **Pick its reference
+photo**: choose the same photo again, and its frames and settings come from the
+analysis. The photo must be the analysis's size; another says "This photo is
+W × H; the analysis used W × H." and lets you choose again or cancel. Such an
+analysis kept only its region's rectangle, so a region you drew comes back as
+that rectangle, and the app says once "The mask wasn't saved; the region is a
+rectangle." Redraw the shape on the ROI step if it was not a rectangle.
 
 **Backups that are not on this phone.** On a new phone, or after a reinstall,
 Home shows a card above the list — "4 analyses in your cloud backup aren't on
@@ -780,9 +836,9 @@ up again with it is licensed straight away.
 
 **Quota.** From 80% of the cap, a chip under the Home title reads
 `N / M analyses used`; it turns red at the cap. Below 80% it is hidden.
-Only a run that makes a new analysis is checked against it: a re-run of the
-same inputs is not, but one after picking a new reference or new frames, or
-after switching between a single run and a sweep, is.
+Every run is checked against it, since every run that saves makes a new
+analysis (Re-run included); a run already under way when the cap fills still
+saves.
 Not a paywall: the limit screen asks for nothing. Delete an analysis and tap
 **Re-check**, or, if a seat or licence has just been added, tap **Refresh
 licence**. **Email support** opens a plain mail with the account details
@@ -817,10 +873,10 @@ Write above that block; leave it in place.
 | Sweep ended early | Same rule: two combinations under 50% and it stops rather than sweep the rest |
 | Password rejected on sign-up | 8+ chars, upper and lower case, a digit and a special character — or tap **Generate secure password** |
 | Only the first N frames | *Max frames* capped it |
-| Frames in the wrong order | Sort on step 1, then re-run |
+| Frames in the wrong order | **Re-run** it from Home, sort on step 1, then Compute |
 | Run vanished | The app was killed. No resume — run it again in the foreground |
 | Frames look incomparable | Auto colour scale. Fix the bounds, or on a single-setting run use the summary overview — it already puts them on one |
-| Summary still says "Rendering" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
+| Summary still says "Building summary" | A long analysis takes a while to render five fields; the frames are usable meanwhile |
 | Delete account opens the sign-in screen | Expected — that is where your identity is confirmed |
 | Cloud icon stuck on Upload pending | Offline, Wi-Fi-only, or backup off |
 | Cloud icon crossed out in red | The backup failed. Tap the icon — the dialog names why (device conflict, too large, ran out of memory) and offers **Try again** |

@@ -95,7 +95,6 @@ class ViewerEntryParityDeviceTest {
         realRefWidth = IMG_W
         realRefHeight = IMG_H
         refName = record.refName
-        workingLocalId = ID
         // The ROI the user drew; the run solved the inset one.
         roiX = 0
         roiY = 0
@@ -110,7 +109,7 @@ class ViewerEntryParityDeviceTest {
             use6x6 = false,
             debugDir = null,
         )
-        resetRunResult(dir.absolutePath, spec)
+        resetRunResult(dir.absolutePath, spec, ID)
         recordRunSettings(spec.recordSettings())
         lastRefPath = record.refPath
         lastPlannedFrames = FRAMES

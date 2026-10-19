@@ -206,7 +206,7 @@ erase itself, which is account-wide: it removes the sessions, files and devices 
 both apps, and (since 2026-10-18, TD-243) the account's `auth_links` rows and the
 address on every seat it held (`backend/app/repo/account.py:206-244`). The app's
 delete confirmation says the sign-in goes for both apps
-(`delete_account_body`, `app/src/main/res/values/strings.xml:321`). Recorded as intended, not as
+(`delete_account_body`, `app/src/main/res/values/strings.xml:346`). Recorded as intended, not as
 debt.
 
 ## Action items

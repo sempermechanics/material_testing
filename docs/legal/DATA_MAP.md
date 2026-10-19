@@ -58,7 +58,7 @@ no client can read or write any of them (`firestore.rules:7-9`).
 | `licenses/{id}/seats/{uid}` | `uid`, `email`, per-app `deviceIdLock`, lease fields (`backend/app/repo/claims.py:246-254`) | Institution roster | A revoked seat keeps `email` until its holder's account is erased, which blanks it on every seat the account held, live seats revoked first (`_blank_seat_addresses`, `backend/app/repo/account.py:186-203`). Seats on other licences are found by a collection-group query whose index must be deployed first (TD-271) |
 | `licenseInvites/{id}` | `email`, `licenseId`, `invitedByUid` (`backend/app/repo/invites.py:155-163`) | Promise of a seat before sign-up | Until redeemed or withdrawn; an individual licence is re-invited to its address after its holder's erasure (`backend/app/repo/account.py:146-148`) |
 | `deleted_licenses/{id}`, `…/deleted_seats/{uid}` | copies of the above | 30-day hold for restore | TTL on `purgeAt` (`backend/firestore.indexes.json:123-160`); a held seat's `email` is blanked on its holder's erasure |
-| `audit_logs/{autoId}` | `uid`, `deviceId`, `action`, `target`, `detail`, `licenseId` (`backend/app/audit.py:64-78`). An `ip` field exists but no caller sets it. `detail` holds no address: mint, convert and an `adminEmails` edit record hashes (`emailLockHash`, `adminEmailHashes`, `adminEmailCount`; `audit.address_tag`, `backend/app/audit.py:35-47`). A licence edit records its free-text `note` as typed (TD-270). A claim-code redemption (`POST /v1/me/claim`, since 2026-10-18) writes `LICENSE_CLAIM_CODE` with the account's `uid`, the device id when a signed device redeemed it (none from a browser), `outcome` `OK` or `DENIED`, and `detail` holding `keyPrefix` (`SEMP-` and the code's first group, never the code), `via` (`web` or `app`) and `mode` or `errorCode`; an `OK` row's `target` is the licence id (`backend/app/routers/licenses.py:239-255`) | Security and accountability; customer-visible per licence | **Kept after erasure, no TTL** (TD-237) |
+| `audit_logs/{autoId}` | `uid`, `deviceId`, `action`, `target`, `detail`, `licenseId` (`backend/app/audit.py:64-78`). An `ip` field exists but no caller sets it. `detail` holds no address: mint, convert and an `adminEmails` edit record hashes (`emailLockHash`, `adminEmailHashes`, `adminEmailCount`; `audit.address_tag`, `backend/app/audit.py:35-47`). A licence edit records only that its free-text `note` changed and its length (`noteChanged`, `noteLength`; `backend/app/routers/admin.py:34-45`). A claim-code redemption (`POST /v1/me/claim`, since 2026-10-18) writes `LICENSE_CLAIM_CODE` with the account's `uid`, the device id when a signed device redeemed it (none from a browser), `outcome` `OK` or `DENIED`, and `detail` holding `keyPrefix` (`SEMP-` and the code's first group, never the code), `via` (`web` or `app`) and `mode` or `errorCode`; an `OK` row's `target` is the licence id (`backend/app/routers/licenses.py:239-255`) | Security and accountability; customer-visible per licence | **Kept after erasure, no TTL** (TD-237) |
 
 ### Google Drive (Shared Drive, runtime SA as Manager)
 
@@ -126,7 +126,7 @@ transfer exclude preferences and session files
 
 ## Findings recorded elsewhere
 
-TD-237 (audit retention and lock), TD-270 (free-text `note` in audit rows), TD-271
+TD-237 (audit retention and lock), TD-271
 (erasure's seat index; erasures before the change), TD-273 (the deprecated search
 query), TD-227 (location), TD-232
 (Data safety, `AD_ID`), TD-36 (policy placeholders). `docs/backend/CLOUD_ARCHITECTURE_GCP.md`

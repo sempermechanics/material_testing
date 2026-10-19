@@ -378,8 +378,8 @@ the chip — it never blocks the analysis.
 
 **When you see it:** Result viewer opened without a `.dat` batch for this session.
 
-**What to do:** Re-run analysis from the wizard, or open a session that completed
-successfully.
+**What to do:** Re-run it from Home (long-press the row, then **Re-run**), or open
+a session that completed successfully.
 
 ---
 

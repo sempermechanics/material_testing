@@ -57,7 +57,7 @@
 
     <!-- bg_probe_chip is deliberately dark in BOTH themes (a dark puck reads over any
          jet colour), so its ink and rim stay light in both — no night override. Used
-         by the probe readout and the summary progress card. -->
+         by the probe readout. -->
     <color name="viewer_probe_ink">#FFFFFFFF</color>
     <color name="viewer_probe_stroke">#73FFFFFF</color>
 
@@ -76,6 +76,7 @@
 
     <color name="viewer_peek_scrim">#FFFFFFFF</color>       <!-- peek sheet surface -->
     <color name="image_overlay_scrim">#EB000000</color>     <!-- behind an image shown over the page -->
+    <color name="run_sheet_scrim">#66000814</color>         <!-- behind the run sheet: the wizard stays readable -->
     <color name="viewer_peek_handle">#40152430</color>
     <color name="viewer_peek_text">#152430</color>
 

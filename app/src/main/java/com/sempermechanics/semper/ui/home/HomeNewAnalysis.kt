@@ -4,10 +4,8 @@
 package com.sempermechanics.semper.ui.home
 
 import android.content.Intent
-import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.ui.analysis.StaticAnalysisActivity
-import com.sempermechanics.semper.ui.analysis.wizard.AnalysisNavHelper
 import com.sempermechanics.semper.ui.common.TestTypeSheet
 import com.sempermechanics.semper.ui.common.media.MediaSourceChooser
 import com.sempermechanics.semper.ui.settings.SettingsActivity
@@ -17,20 +15,10 @@ internal fun HomeActivity.wireButtons() {
     val fab = binding.fabNewAnalysis
     HomeFabLayout.pinAtNineTenths(binding.homeRoot, fab, binding.sessionList)
     fab.setOnClickListener {
-        // A build the backend no longer supports: its gate screen is opened.
-        if (!AnalysisNavHelper.ensureUpToDate(this)) return@setOnClickListener
-        // Two more, independent reasons new work cannot start. The seat check is
-        // first because an institution member is licensed, so the quota
-        // check below is false for them by definition and would wave them
-        // through. btnEmptyRestore delegates here via performClick(), so
-        // both entry points are covered by this one listener.
-        if (LicenseEntitlements.isSeatRequiredToStart(this)) {
-            AnalysisNavHelper.openSeatRequired(this)
-            return@setOnClickListener
-        }
-        // At the account's analysis limit, block new work behind the persistent
-        // limit screen (email support) instead of letting it fail on upload.
-        if (quotaCard.openLimitScreenIfReached()) return@setOnClickListener
+        // The version gate, the seat and the quota, in that order: the same
+        // check Re-run makes. btnEmptyRestore delegates here via
+        // performClick(), so both entry points are covered by this listener.
+        if (!mayStartNewAnalysis()) return@setOnClickListener
         // Which test first: the wizard decides on open whether to ask for
         // machine loads, so it has to know before any media is picked.
         TestTypeSheet.show(this) { type ->

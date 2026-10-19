@@ -118,11 +118,7 @@ class WizardParamFields(
         host.commitParamFields()
         val shown = settings.etOverlapValue.text.toString() to settings.ddInterpolator.text.toString()
         viewModel.subsetUserModified = true
-        settings.sliderSubsetSize.value = snapToSlider(settings.sliderSubsetSize, params.subset).toFloat()
-        settings.sliderStepSize.value = snapToSlider(settings.sliderStepSize, params.step).toFloat()
-        // The clipboard holds a VSG in px; the slider takes points at the pasted step.
-        settings.sliderStrainWindow.value = SweepStudy.nearestWindowPoints(params.vsg, stepSize).toFloat()
-        sheet.syncFromStep()
+        setSliders(params.subset, params.step, params.vsg)
         if (shown != settings.etOverlapValue.text.toString() to settings.ddInterpolator.text.toString()) {
             advanced.expand()
         }
@@ -132,5 +128,29 @@ class WizardParamFields(
         // Bring the correlation section into view so the pasted values are visible.
         val card = settings.advancedParamsCard
         card.post { card.requestRectangleOnScreen(Rect(0, 0, card.width, card.height), false) }
+    }
+
+    /**
+     * A Re-run's settings, as the user's own: [subset], [step] and the strain
+     * window [vsg] (px) on the sliders, and the Keys interpolator when
+     * [use6x6]. The overlap follows the step, as it always does.
+     */
+    internal fun applyRerun(subset: Int, step: Int, vsg: Int, use6x6: Boolean) {
+        host.commitParamFields()
+        viewModel.subsetUserModified = true
+        settings.ddInterpolator.setText(if (use6x6) keys else bicubic, false)
+        setSliders(subset, step, vsg)
+    }
+
+    /** [subset] and [step] snapped onto their sliders, then the window in points at that step. */
+    private fun setSliders(subset: Int, step: Int, vsg: Int) {
+        settings.sliderSubsetSize.value = snapToSlider(settings.sliderSubsetSize, subset).toFloat()
+        // The step slider's range follows the subset: widen it first, or a
+        // larger step than the old subset allowed would be clamped.
+        sheet.syncFromStep()
+        settings.sliderStepSize.value = snapToSlider(settings.sliderStepSize, step).toFloat()
+        // A VSG in px; the slider takes points at the step just set.
+        settings.sliderStrainWindow.value = SweepStudy.nearestWindowPoints(vsg, stepSize).toFloat()
+        sheet.syncFromStep()
     }
 }

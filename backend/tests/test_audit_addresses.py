@@ -89,3 +89,20 @@ async def test_a_conversion_records_hashes(store, audited, client):
     assert row["detail"]["adminEmailCount"] == 1
     assert row["detail"]["claimedByUid"] == "dr-1"
     _no_address(audited)
+
+
+@pytest.mark.asyncio
+async def test_a_note_edit_records_its_length_not_its_text(store, audited, client):
+    """TD-270: staff may type a name or an address into the note, and the row
+    outlives erasure and reaches the licence's audit export."""
+    minted = await client.post("/v1/admin/licenses", json={
+        "kind": "institution", "domainLock": "uni.edu", "adminEmails": ["it@uni.edu"]})
+    lid = minted.json()["license"]["id"]
+    note = "Call Dr Rao on rao@uni.edu"
+
+    resp = await client.patch(f"/v1/admin/licenses/{lid}", json={"note": note})
+    assert resp.status_code == 200, resp.text
+
+    [row] = [r for r in audited if r["action"] == "ADMIN_LICENSE_EXTEND"]
+    assert row["detail"] == {"noteChanged": "true", "noteLength": str(len(note))}
+    assert "Rao" not in str(audited)
