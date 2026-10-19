@@ -24,7 +24,7 @@ def _mint(domain="university.edu"):
 
 def _account(store, uid, email, **extra):
     store._data.setdefault("users", {})[uid] = {
-        "email": email, "access_status": "APPROVED", "mode": "demo", **extra}
+        "email": email, "access_status": "APPROVED", "emailVerified": True, "mode": "demo", **extra}
 
 
 def _seats(store, license_id):

@@ -47,9 +47,13 @@ _LAST_SEEN_THROTTLE = timedelta(hours=1)
 
 
 # ---------------- users ----------------
-def _is_admin_email(claims: dict) -> bool:
-    # Never grant admin off an unverified email — an email/password user could
-    # otherwise claim an admin address without proving they own it.
+def is_admin_email(claims: dict) -> bool:
+    """Whether the token proves an address in ADMIN_EMAILS.
+
+    Never grant admin off an unverified email — an email/password user could
+    otherwise claim an admin address without proving they own it. Read off
+    the token, not the stored profile: `deps.admin_user` asks it per request.
+    """
     return bool(claims.get("email_verified")) and \
         claims.get("email", "").lower() in settings.ADMIN_EMAILS
 
@@ -61,7 +65,7 @@ def _auto_approved(claims: dict) -> bool:
     Microsoft sign-ins are verified by construction; a new email/password user
     is not verified until they confirm, so they land PENDING until then.
     """
-    if _is_admin_email(claims):
+    if is_admin_email(claims):
         return True
     if not claims.get("email_verified"):
         return False
@@ -133,10 +137,19 @@ def _touch_existing(cur: dict, claims: dict, device_id: str | None) -> dict:
         changed["signInProvider"] = provider
     if cur.get("emailVerified") != verified:
         changed["emailVerified"] = verified
+    # The stored address follows the token, as `emailVerified` does. Kept
+    # from the first sign-in while the flag followed every token, an account
+    # that squatted someone's address unverified, then changed its email to
+    # one it owns and verified that, read as the victim's address verified:
+    # their invite, their roster seat, their IT membership. A token with no
+    # address leaves the stored one, and the flag above is then false.
+    email = claims.get("email")
+    if email and cur.get("email") != email:
+        changed["email"] = email
     if cur.get("schemaVersion") != SCHEMA_VERSION:
         changed["schemaVersion"] = SCHEMA_VERSION
     # Keep admin role in sync with ADMIN_EMAILS for pre-existing users.
-    if _is_admin_email(claims) and cur.get("role") != "admin":
+    if is_admin_email(claims) and cur.get("role") != "admin":
         changed["role"] = "admin"
     # A previously-PENDING user who has since verified a domain email (or been
     # made admin) is auto-approved on this sign-in.
@@ -205,7 +218,7 @@ def get_or_create_user(claims: dict, device_id: str | None = None) -> dict:
         "emailVerified": verified,
         "signInProvider": provider,
         "displayName": claims.get("name"),
-        "role": "admin" if _is_admin_email(claims) else "user",
+        "role": "admin" if is_admin_email(claims) else "user",
         "access_status": (statuses.ACCESS_APPROVED if _auto_approved(claims)
                           else statuses.ACCESS_PENDING),
         "activeDeviceId": None,

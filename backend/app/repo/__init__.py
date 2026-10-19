@@ -46,6 +46,7 @@ from .invites import (  # noqa: F401
 from .holders import (  # noqa: F401
     licence_is_live,
     licence_held_by,
+    verified_address,
 )
 from .mint import (  # noqa: F401
     ensure_demo_license,
@@ -100,6 +101,7 @@ from .devices import (  # noqa: F401
 from .users import (  # noqa: F401
     DeviceInUseError,
     get_or_create_user,
+    is_admin_email,
     list_users,
     release_account_device,
     set_user_status,

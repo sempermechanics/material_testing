@@ -25,7 +25,7 @@ from .. import errors, repo
 from .. import rate_limit
 from ..config import settings
 from ..deps import current_user, step_up_check
-from ..licenses import KIND_INSTITUTION, normalize_email, normalize_kind
+from ..licenses import KIND_INSTITUTION, normalize_kind
 from ..validation import DocumentId
 from .roster import RosterAdmin, Tier, roster_router
 
@@ -45,12 +45,13 @@ def institution_admin_context(license_id: DocumentId,
     The roster routes use `institution_admin_stepup`, which layers the
     dashboard step-up on top of this check.
     """
-    if not user.get("emailVerified"):
+    address = repo.verified_address(user)
+    if not address:
         raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
     lic = repo.get_license(license_id)
     if not lic or normalize_kind(lic.get("kind")) != KIND_INSTITUTION:
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
-    if not repo.is_institution_admin(lic, normalize_email(user.get("email"))):
+    if not repo.is_institution_admin(lic, address):
         raise HTTPException(404, errors.LICENSE_NOT_FOUND)
     return RosterAdmin(user, license_id, lic)
 
@@ -92,9 +93,10 @@ def list_my_licenses(user=Depends(current_user)):
     overwhelming majority of accounts and is not an error.
     """
     rate_limit.enforce(rate_limit.institution_bucket, user["uid"])
-    if not user.get("emailVerified"):
+    address = repo.verified_address(user)
+    if not address:
         raise HTTPException(403, errors.EMAIL_NOT_VERIFIED)
-    licenses = repo.list_licenses_administered_by(user.get("email") or "")
+    licenses = repo.list_licenses_administered_by(address)
     return {"licenses": licenses}
 
 

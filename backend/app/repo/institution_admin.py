@@ -20,7 +20,9 @@ from .claims import (
     _public_claim_error,
 )
 from .holders import (
+    _eligible_holder,
     licence_held_by,
+    verified_address,
 )
 from .invites import (
     find_user_by_email,
@@ -102,13 +104,17 @@ def add_institution_member(license_id: str, email: str,
     # seat on this licence is excluded, so re-adding a member stays a no-op.
     if licence_held_by(email, user=user or {}, exclude_id=license_id):
         raise Refusal(errors.MEMBER_ALREADY_LICENSED)
-    if not user:
+    # An account that is not approved, or whose address is unproven, is not
+    # seated: the address is the whole claim to the seat. It gets the invite
+    # an address with no account gets, which its next request claims once it
+    # qualifies (`repo.entitlement`), as the mint path already did.
+    if not _eligible_holder(user):
         return None, invite_institution_member(license_id, email, invited_by_uid)
     uid = user["uid"]
 
     # No device lock: IT adds a member before that member has picked a device,
     # and the lock is set the first time they actually use the license.
-    err = claim_seat(license_id, uid, user.get("email") or email, "",
+    err = claim_seat(license_id, uid, verified_address(user), "",
                      _member_patch(license_id, lic))
     if err:
         raise Refusal(_public_claim_error(err))

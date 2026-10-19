@@ -331,16 +331,19 @@ def unless_paused(*switches: str):
     return Depends(check)
 
 
-def admin_user(user: dict = Depends(current_user)) -> dict:
-    """Authenticated caller that is an admin (role=admin or in ADMIN_EMAILS).
+def admin_user(request: Request, user: dict = Depends(current_user)) -> dict:
+    """Authenticated caller that is an admin: `role=admin`, or a token that
+    proves an address in ADMIN_EMAILS (`repo.is_admin_email`). Not the stored
+    address: an account that typed a staff address and never verified it is
+    not staff.
 
     ID-token based (no device signature) so list/read admin screens and curl in
     dev mode work without a registered device. **Mutating** admin routes
     (approve / revoke / config-patch) additionally require `verified_device` so
     a stolen ID token alone cannot change access — see those handlers.
     """
-    email = (user.get("email") or "").lower()
-    if user.get("role") != "admin" and email not in settings.ADMIN_EMAILS:
+    claims = getattr(request.state, "claims", None) or {}
+    if user.get("role") != "admin" and not repo.is_admin_email(claims):
         raise HTTPException(403, errors.NOT_ADMIN)
     return user
 

@@ -58,10 +58,10 @@ def test_nonce_unknown_rejected(store):
 # ---------------- admin / approval ----------------
 def test_admin_email_requires_verified(monkeypatch, store):
     monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", {"boss@corp.com"})
-    assert repo._is_admin_email(_claims(email="boss@corp.com", verified=True)) is True
+    assert repo.is_admin_email(_claims(email="boss@corp.com", verified=True)) is True
     # Unverified email must never grant admin, even if it matches.
-    assert repo._is_admin_email(_claims(email="boss@corp.com", verified=False)) is False
-    assert repo._is_admin_email(_claims(email="nobody@corp.com", verified=True)) is False
+    assert repo.is_admin_email(_claims(email="boss@corp.com", verified=False)) is False
+    assert repo.is_admin_email(_claims(email="nobody@corp.com", verified=True)) is False
 
 
 def test_auto_approved_policy(monkeypatch, store):
@@ -373,3 +373,33 @@ def test_new_documents_include_schema_version(store):
     assert store._data["users"]["versioned"]["schemaVersion"] == repo.SCHEMA_VERSION
     nonce = repo.issue_nonce("versioned", "device-123")
     assert store._data["challenges"][nonce]["schemaVersion"] == repo.SCHEMA_VERSION
+
+
+# ---------------- the verified address (B2) ----------------
+# The stored `email` was written once, at first sign-in, while `emailVerified`
+# followed every token. Squat someone's address unverified, change the
+# account's email to one you own and verify that, and the flag turned true
+# against the victim's stored address: their invite, their IT roster.
+def test_email_change_does_not_carry_old_address(monkeypatch, store):
+    monkeypatch.setattr(repo.settings, "ADMIN_EMAILS", set())
+    monkeypatch.setattr(repo.settings, "AUTO_APPROVE", True)
+    lic = repo.create_institution_license(
+        domain_lock="uni.edu", admin_emails=["it@uni.edu"], created_by_uid="staff")
+    license_id = lic["license"]["id"]
+    repo.invite_institution_member(license_id, "victim@uni.edu", "it")
+    store._data["users"] = {"u1": {"email": "victim@uni.edu", "emailVerified": False,
+                                   "access_status": "APPROVED", "role": "user"}}
+
+    user = repo.get_or_create_user(_claims(email="attacker@own.example", verified=True))
+
+    assert store._data["users"]["u1"]["email"] == "attacker@own.example"
+    assert repo.verified_address(user) == "attacker@own.example"
+    assert user.get("licenseId") != license_id
+    assert not store._data.get(f"licenses/{license_id}/seats")
+
+
+def test_an_unverified_address_is_no_address():
+    assert repo.verified_address({"email": "A@Uni.edu", "emailVerified": True}) == "a@uni.edu"
+    assert repo.verified_address({"email": "a@uni.edu", "emailVerified": False}) == ""
+    assert repo.verified_address({"email": "a@uni.edu"}) == ""
+    assert repo.verified_address({"emailVerified": True}) == ""

@@ -591,3 +591,40 @@ async def test_institution_seats_take_only_a_device_registered_with_a_second_fac
     assert r.status_code == status, r.text
     if not eligible:
         assert r.json()["detail"] == "mfa_required"
+
+
+@pytest.mark.asyncio
+async def test_admin_user_requires_verified_admin_email(secure, client, monkeypatch):
+    """An address in ADMIN_EMAILS is staff only once proved: an approved
+    account that typed a staff address and never verified it is not admin."""
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", {"boss@sempermechanics.com"})
+    secure._data["users"] = {"squatter": {
+        "email": "boss@sempermechanics.com", "emailVerified": False,
+        "role": "user", "access_status": "APPROVED"}}
+    monkeypatch.setattr(
+        deps, "verify_id_token",
+        lambda _t: {"sub": "squatter", "email": "boss@sempermechanics.com",
+                    "email_verified": False},
+    )
+
+    r = await client.get("/v1/admin/users", headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 403
+    assert r.json()["detail"] == "not_admin"
+
+
+@pytest.mark.asyncio
+async def test_a_verified_admin_email_is_admin(secure, client, monkeypatch):
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", {"boss@sempermechanics.com"})
+    secure._data["users"] = {"boss": {
+        "email": "boss@sempermechanics.com", "emailVerified": True,
+        "role": "user", "access_status": "APPROVED"}}
+    monkeypatch.setattr(
+        deps, "verify_id_token",
+        lambda _t: {"sub": "boss", "email": "boss@sempermechanics.com",
+                    "email_verified": True},
+    )
+
+    r = await client.get("/v1/admin/users", headers={"Authorization": "Bearer ok"})
+
+    assert r.status_code == 200, r.text

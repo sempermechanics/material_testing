@@ -1895,9 +1895,18 @@ for a member to type. Seats are uid-keyed — they have to be, since a uid is
 what every entitlement check has in hand — so the backend resolves the address
 first:
 
-- **the address has an account** → a seat is claimed immediately;
-- **it does not** → a **pending invite** is written instead, and redeemed
-  automatically the first time that person signs in.
+- **the address has an account that is approved and has verified it** → a
+  seat is claimed immediately;
+- **it does not** (no account, or one that is pending or has not proved the
+  address) → a **pending invite** is written instead, and redeemed
+  automatically on that person's first request once their account qualifies.
+
+"Its address" is `repo.verified_address` (`backend/app/repo/holders.py`):
+the stored `email`, which follows the sign-in token like `emailVerified` does,
+and only while it is verified. The invite claim, IT membership, the IT
+licence list, a claim code and the mint's attach to an existing holder all
+read it, and one test, `_eligible_holder`, decides whether an existing account
+may be seated now, so a roster add and a staff mint cannot disagree.
 
 The invite path exists because IT works from a list of addresses and cannot
 make people sign up on cue. Refusing with `user_not_found` until they had was

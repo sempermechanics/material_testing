@@ -41,7 +41,7 @@ def _mint_floating(max_seats=2):
 
 def _roster(store, license_id, *uids):
     store._data["users"] = {
-        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "mode": "demo"}
+        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"}
         for uid in uids
     }
     for uid in uids:
@@ -175,7 +175,7 @@ def test_a_lost_race_to_add_a_member_is_claim_contended(store, monkeypatch):
 
 def test_a_lost_race_to_activate_is_claim_contended(store, monkeypatch):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=5)
     repo.patch(monkeypatch, "claim_seat", lambda *a, **k: repo._CONTENDED)
@@ -190,8 +190,8 @@ async def test_a_lost_race_is_503_over_http_on_both_routes(client, monkeypatch):
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "mode": "demo"},
-        "student": {"email": "s@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
+        "student": {"email": "s@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=5)
     license_id = minted["license"]["id"]
@@ -251,7 +251,7 @@ async def test_the_quota_refusal_says_why_the_cap_dropped(client, monkeypatch, e
     monkeypatch.setattr(rate_limit.session_bucket, "allow", lambda uid: True)
     monkeypatch.setattr(settings, "DEMO_MAX_ANALYSES", 2)
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, **extra})
-    store._data["users"] = {"dev-user": {"email": "dev@test", "access_status": "APPROVED"}}
+    store._data["users"] = {"dev-user": {"email": "dev@test", "access_status": "APPROVED", "emailVerified": True}}
     store._data["sessions"] = {
         f"s{i}": {"uid": "dev-user", "status": "COMPLETED", "fileCount": 1, "completedCount": 1}
         for i in range(3)
@@ -345,7 +345,7 @@ async def test_a_refusal_that_only_update_license_sees_is_still_422(client, monk
 
 def test_a_seat_claim_writes_the_terms_read_in_its_transaction(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=5)
     license_id = minted["license"]["id"]

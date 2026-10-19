@@ -3,7 +3,7 @@ and institution keys.
 """
 import logging
 
-from .. import apps, errors, statuses
+from .. import apps, errors
 from ..config import settings
 from ..licenses import (
     DURATION_PERPETUAL,
@@ -42,7 +42,9 @@ from .claims import (
     _public_claim_error,
 )
 from .holders import (
+    _eligible_holder,
     licence_is_live,
+    verified_address,
 )
 from .invites import (
     find_user_by_email,
@@ -191,11 +193,9 @@ def ensure_demo_license(user: dict, device_id: str | None) -> dict:
     uid = user.get("uid")
     if not uid or user.get("licenseId"):
         return user
-    if user.get("access_status") != statuses.ACCESS_APPROVED:
+    if not _eligible_holder(user):
         return user
-    if not user.get("emailVerified"):
-        return user
-    email = normalize_email(user.get("email"))
+    email = verified_address(user)
     device = device_id or user.get("activeDeviceId") or user.get("claimedDeviceId")
     if not email or not device:
         return user
@@ -331,7 +331,7 @@ def _attach_to_existing_holder(license_id: str, lic: dict, email: str) -> tuple[
     holder = find_user_by_email(address) if address else None
     if not holder:
         return "", ""
-    if holder.get("access_status") != statuses.ACCESS_APPROVED or not holder.get("emailVerified"):
+    if not _eligible_holder(holder):
         return "", ""
     if not _holds_only_a_demo_key(holder):
         return "", errors.HOLDER_ALREADY_LICENSED

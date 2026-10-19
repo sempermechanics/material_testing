@@ -34,7 +34,7 @@ def _mint_floating(max_seats=2):
 
 def _roster(store, *uids):
     store._data["users"] = {
-        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "mode": "demo"}
+        uid: {"email": f"{uid}@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"}
         for uid in uids
     }
 
@@ -103,7 +103,7 @@ def test_a_removed_seat_cannot_be_resumed(store):
     """Resume used to set a revoked seat active again: licensed, on the
     roster, and not counted in seatsUsed."""
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     license_id = minted["license"]["id"]
@@ -120,7 +120,7 @@ def test_a_removed_seat_cannot_be_resumed(store):
 
 def test_a_seat_on_a_revoked_licence_cannot_be_resumed(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -183,7 +183,7 @@ def test_revoking_a_floating_licence_clears_every_lease(store):
 
 def test_erasing_an_account_frees_its_institution_seat(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     license_id = minted["license"]["id"]
@@ -231,7 +231,7 @@ def test_erasing_a_demo_account_leaves_its_demo_key(store):
 def _full_roster_with_invite(store):
     """An assigned licence with its one seat taken, and a newcomer invited."""
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     license_id = minted["license"]["id"]
@@ -298,8 +298,8 @@ async def test_resuming_a_removed_seat_over_http_is_a_conflict(client, monkeypat
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "mode": "demo"},
-        "student": {"email": "a@university.edu", "access_status": "APPROVED", "mode": "demo"},
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "mode": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]

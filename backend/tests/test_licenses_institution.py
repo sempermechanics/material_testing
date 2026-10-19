@@ -20,7 +20,7 @@ from refusals import attempt, attempt_add
 
 def test_activate_institution_requires_domain_match(store):
     store._data["users"] = {
-        "u1": {"email": "student@other.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "student@other.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     err, cfg = attempt(repo.activate_license, "u1", "student@other.edu", "dev-1", minted["key"])
@@ -30,7 +30,7 @@ def test_activate_institution_requires_domain_match(store):
 
 def test_activate_institution_creates_seat_and_locks_device(store):
     store._data["users"] = {
-        "u1": {"email": "student@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "student@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -54,7 +54,7 @@ def test_activate_institution_creates_seat_and_locks_device(store):
 
 def test_activate_institution_device_mismatch_once_seat_is_locked(store):
     store._data["users"] = {
-        "u1": {"email": "student@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "student@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     repo.activate_license("u1", "student@university.edu", "dev-1", minted["key"])
@@ -65,8 +65,8 @@ def test_activate_institution_device_mismatch_once_seat_is_locked(store):
 
 def test_activate_institution_seats_exhausted_returns_409(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
-        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
+        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     err1, _ = attempt(repo.activate_license, "u1", "a@university.edu", "dev-1", minted["key"])
@@ -88,8 +88,8 @@ async def test_activate_institution_seats_exhausted_over_http_is_409(client, mon
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
-        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "dev-user": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
+        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     repo.activate_license("u2", "b@university.edu", "dev-2", minted["key"])
@@ -104,8 +104,8 @@ async def test_activate_institution_seats_exhausted_over_http_is_409(client, mon
 
 def test_revoke_whole_institution_license_drops_every_seat_and_frees_slots(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
-        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
+        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -124,8 +124,8 @@ def test_revoke_whole_institution_license_drops_every_seat_and_frees_slots(store
 
 def test_revoke_single_institution_seat_frees_only_that_slot(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
-        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
+        "u2": {"email": "b@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -140,13 +140,13 @@ def test_revoke_single_institution_seat_frees_only_that_slot(store):
 
     # The freed slot can now be claimed by a third student under maxSeats=2.
     store._data["users"]["u3"] = {
-        "email": "c@university.edu", "access_status": "APPROVED", "plan": "demo",
+        "email": "c@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo",
     }
 
 
 def test_disable_seat_drops_to_demo_without_freeing_slot(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution(max_seats=1)
     license_id = minted["license"]["id"]
@@ -158,7 +158,7 @@ def test_disable_seat_drops_to_demo_without_freeing_slot(store):
     # Slot is still occupied — a second student cannot claim it while disabled.
     assert store._data["licenses"][license_id]["seatsUsed"] == 1
     store._data["users"]["u2"] = {
-        "email": "b@university.edu", "access_status": "APPROVED", "plan": "demo",
+        "email": "b@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo",
     }
     err, cfg = attempt(repo.activate_license, "u2", "b@university.edu", "dev-2", minted["key"])
     assert err == "license_seats_exhausted"
@@ -171,7 +171,7 @@ def test_disable_seat_drops_to_demo_without_freeing_slot(store):
 
 def test_clearing_a_seat_lock_lets_the_key_be_re_activated_elsewhere(store):
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -190,7 +190,7 @@ def test_activation_is_in_place_session_data_untouched(store):
     """Activating a license (individual or institution) must never migrate or touch
     the account's existing session/file docs — same uid, same doc, config only."""
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     store._data["sessions"] = {
         f"s{i}": {"uid": "u1", "status": "COMPLETED", "localSessionId": f"l{i}"}
@@ -218,7 +218,7 @@ def test_downgrade_preserves_data_blocks_retrieval_then_reactivation_restores(st
     and confirm it comes back with zero data loss. Recording was never gated."""
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     store._data["sessions"] = {
         f"s{i}": {"uid": "u1", "status": "COMPLETED", "localSessionId": f"l{i}"}
@@ -269,7 +269,7 @@ async def test_demo_after_downgrade_still_records_but_cannot_restore(client, mon
     from app import deps, drive
 
     store = fake_firestore.install(monkeypatch)
-    store._data["users"] = {"dev-user": {"email": "dev@test", "access_status": "APPROVED"}}
+    store._data["users"] = {"dev-user": {"email": "dev@test", "access_status": "APPROVED", "emailVerified": True}}
     store._data["files"] = {"f1": {"uid": "dev-user", "driveFileId": "d1", "name": "a.zip"}}
     _recording_stubs(monkeypatch)
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "mode": "demo", "plan": "demo"})
@@ -294,7 +294,7 @@ def test_device_lock_is_revalidated_on_every_authed_call_not_just_at_activation(
     which deps.current_user/verified_device call on every request that carries
     a device id."""
     store._data["users"] = {
-        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "u1": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -351,8 +351,8 @@ async def test_institution_seat_patch_clear_device_lock_over_http(client, monkey
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "plan": "demo"},
-        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -376,8 +376,8 @@ async def test_institution_seat_revoke_over_http(client, monkeypatch):
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "plan": "demo"},
-        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     minted = _mint_institution()
     license_id = minted["license"]["id"]
@@ -399,9 +399,9 @@ async def test_roster_routes_read_one_seat_not_the_roster(client, monkeypatch, a
     store = fake_firestore.install(monkeypatch)
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     store._data["users"] = {
-        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "plan": "demo"},
-        "member": {"email": "m@university.edu", "access_status": "APPROVED", "plan": "demo"},
-        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "dev-user": {"email": "it@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
+        "member": {"email": "m@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     license_id = _mint_institution()["license"]["id"]
     base = f"/v1/institutions/licenses/{license_id}"
@@ -445,8 +445,8 @@ def staff_desk(monkeypatch, audited):
     monkeypatch.setattr(repo.notify, "access_request", lambda *a, **k: None)
     monkeypatch.setattr(deps, "_DEV_USER", {**deps._DEV_USER, "email": "staff@semper.test"})
     store._data["users"] = {
-        "dev-user": {"email": "staff@semper.test", "access_status": "APPROVED", "role": "admin"},
-        "student": {"email": "a@university.edu", "access_status": "APPROVED", "plan": "demo"},
+        "dev-user": {"email": "staff@semper.test", "access_status": "APPROVED", "emailVerified": True, "role": "admin"},
+        "student": {"email": "a@university.edu", "access_status": "APPROVED", "emailVerified": True, "plan": "demo"},
     }
     return store
 
