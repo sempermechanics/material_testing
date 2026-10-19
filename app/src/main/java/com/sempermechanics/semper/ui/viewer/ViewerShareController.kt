@@ -33,12 +33,14 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
     }
 
     /**
-     * Starts the ViewModel's pending save-as export once the frames it covers
-     * are known. Taking it clears it, so a viewer recreated after the export
+     * Starts the ViewModel's pending save-as export, once this viewer has its
+     * frames: before then it waits, and the viewer calls this again when they
+     * are open. Taking it clears it, so a viewer recreated after the export
      * started does not start it again.
      */
-    fun startPendingSave() = host.whenFrameSetLoaded {
-        val (kind, uri) = host.viewModel.takePendingSave() ?: return@whenFrameSetLoaded
+    fun startPendingSave() {
+        if (!host.frameSetLoaded) return
+        val (kind, uri) = host.viewModel.takePendingSave() ?: return
         ShareCenter(host).writeKindToUri(kind, uri)
     }
 

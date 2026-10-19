@@ -10,6 +10,14 @@ import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.FieldStats
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.ui.viewer.share.ShareExportJobs
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -21,21 +29,58 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ResultViewerViewModel(
     app: Application,
-    private val state: SavedStateHandle,
+    private val savedState: SavedStateHandle,
 ) : AndroidViewModel(app) {
-    var currentFrameIndex: Int = 0
+
+    private val mutableState = MutableStateFlow(ViewerState(field = savedField()))
+
+    /**
+     * What the viewer shows, as one value: the frame set once listed, the
+     * frame on screen and the field. A rebuilt viewer (a rotation) reads it
+     * back rather than listing the batch again.
+     */
+    internal val state: StateFlow<ViewerState> = mutableState.asStateFlow()
+
+    /** The frame on screen, by position in the listed batch. */
+    var currentFrameIndex: Int
+        get() = mutableState.value.frameIndex
+        set(value) {
+            mutableState.update { it.copy(frameIndex = value) }
+        }
 
     /**
      * The field on screen. One value (it was a data index and a label, set
-     * one after the other), kept in the saved state so a restored viewer
+     * one after the other), kept in the saved state too so a restored viewer
      * opens on it.
      */
     var field: FieldKind
-        get() = state.get<String>(KEY_FIELD)?.let { name -> FieldKind.entries.firstOrNull { it.name == name } }
-            ?: FieldKind.U
+        get() = mutableState.value.field
         set(value) {
-            state[KEY_FIELD] = value.name
+            savedState[KEY_FIELD] = value.name
+            mutableState.update { it.copy(field = value) }
         }
+
+    /** The listing in flight; see [listFrames]. */
+    private var listing: Job? = null
+
+    /**
+     * Lists the batch with [read] on [dispatcher], once per view model: a
+     * viewer rebuilt by a rotation finds [ViewerState.frameSet] already there
+     * (or the listing still running) and starts none of its own. [read] must
+     * hold plain data only, never the viewer that asked.
+     */
+    internal fun listFrames(dispatcher: CoroutineDispatcher, read: () -> ViewerFrameLoader.FrameSet) {
+        if (mutableState.value.frameSet != null || listing?.isActive == true) return
+        listing = viewModelScope.launch {
+            val set = withContext(dispatcher) { read() }
+            useFrameListing(set.batchFiles)
+            mutableState.update { it.copy(frameSet = set) }
+        }
+    }
+
+    private fun savedField(): FieldKind =
+        savedState.get<String>(KEY_FIELD)?.let { name -> FieldKind.entries.firstOrNull { it.name == name } }
+            ?: FieldKind.U
 
     /**
      * Fixed colour-scale bounds per field, set in the custom-scale dialog.
@@ -53,17 +98,17 @@ class ResultViewerViewModel(
      * not listed yet. Held here, and in the saved state for process death, so
      * whichever viewer is current when the frames are known starts it — once.
      */
-    val hasPendingSave: Boolean get() = state.contains(KEY_SAVE_KIND)
+    val hasPendingSave: Boolean get() = savedState.contains(KEY_SAVE_KIND)
 
     fun setPendingSave(kind: String, uri: Uri) {
-        state[KEY_SAVE_URI] = uri
-        state[KEY_SAVE_KIND] = kind
+        savedState[KEY_SAVE_URI] = uri
+        savedState[KEY_SAVE_KIND] = kind
     }
 
     /** The pending save-as, cleared as it is handed out so its export starts once. */
     fun takePendingSave(): Pair<String, Uri>? {
-        val kind = state.remove<String>(KEY_SAVE_KIND)
-        val uri = state.remove<Uri>(KEY_SAVE_URI)
+        val kind = savedState.remove<String>(KEY_SAVE_KIND)
+        val uri = savedState.remove<Uri>(KEY_SAVE_URI)
         return if (kind != null && uri != null) kind to uri else null
     }
 
@@ -156,3 +201,13 @@ class ResultViewerViewModel(
         const val LOW_32_BITS = 0xFFFF_FFFFL
     }
 }
+
+/**
+ * The result viewer's state, one value ([ResultViewerViewModel.state]):
+ * [frameSet] is null until the batch is listed.
+ */
+internal data class ViewerState(
+    val frameSet: ViewerFrameLoader.FrameSet? = null,
+    val frameIndex: Int = 0,
+    val field: FieldKind = FieldKind.U,
+)

@@ -52,40 +52,6 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
     private val batchFiles: List<File> get() = host.batchFiles
     private val scrubCache: ScrubFrameCache get() = host.scrubCache
 
-    /**
-     * Reads the batch listing, the deformed originals, each frame's size and (for an
-     * Intent without it) the reference's dimensions. Disk only — call it off the
-     * main thread.
-     */
-    fun readFrameSet(refPath: String?, knownSize: ImageSize): FrameSet {
-        var size = knownSize
-        if (!size.isKnown && refPath != null) {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(refPath, bounds)
-            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
-                size = ImageSize(bounds.outWidth, bounds.outHeight)
-            }
-        }
-        val args = host.args
-        val batchDirPath = args.batchDirPath
-        // Prefer the raw deformed originals persisted in the session dir (survive
-        // reopen/eviction); fall back to the just-analysed session's temp paths.
-        val rawDeformedDir = batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
-        val defPaths = rawDeformedDir?.takeIf { it.isDirectory }
-            ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
-            ?: args.defFilePaths
-        val dir = batchDirPath?.let { File(it) }?.takeIf { it.isDirectory }
-        val files = dir?.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name }.orEmpty()
-        return FrameSet(
-            imageSize = size,
-            defImagePaths = defPaths,
-            batchFiles = files,
-            plannedFrames = SessionPaths.plannedFrameIndices(files),
-            // Once, here: the prefetch heap guard used to stat() every file per load.
-            maxDatBytes = files.maxOfOrNull { it.length() } ?: 0L,
-        )
-    }
-
     /** Takes what this loader needs from the [set] the viewer has just read. Main thread. */
     fun useFrameSet(set: FrameSet) {
         maxDatBytes = set.maxDatBytes
@@ -225,8 +191,42 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
         loadFrameJob.cancel()
     }
 
-    private companion object {
+    companion object {
         /** Free heap a prefetch needs, in largest frames. */
-        const val PREFETCH_HEADROOM_FRAMES = 3
+        private const val PREFETCH_HEADROOM_FRAMES = 3
+
+        /**
+         * Reads the batch listing of [args], the deformed originals, each frame's
+         * size and (for an Intent without it) the reference's dimensions from
+         * [refPath]. Plain data in and out, so the view model can keep it across
+         * a rotation. Disk only — call it off the main thread.
+         */
+        fun readFrameSet(args: ViewerArgs, refPath: String?, knownSize: ImageSize): FrameSet {
+            var size = knownSize
+            if (!size.isKnown && refPath != null) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(refPath, bounds)
+                if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                    size = ImageSize(bounds.outWidth, bounds.outHeight)
+                }
+            }
+            val batchDirPath = args.batchDirPath
+            // Prefer the raw deformed originals persisted in the session dir (survive
+            // reopen/eviction); fall back to the just-analysed session's temp paths.
+            val rawDeformedDir = batchDirPath?.let { File(it, SessionPaths.RAW_DEFORMED_SUBDIR) }
+            val defPaths = rawDeformedDir?.takeIf { it.isDirectory }
+                ?.listFiles()?.sortedBy { it.name }?.map { it.absolutePath }
+                ?: args.defFilePaths
+            val dir = batchDirPath?.let { File(it) }?.takeIf { it.isDirectory }
+            val files = dir?.listFiles { file -> file.extension == "dat" }?.sortedBy { it.name }.orEmpty()
+            return FrameSet(
+                imageSize = size,
+                defImagePaths = defPaths,
+                batchFiles = files,
+                plannedFrames = SessionPaths.plannedFrameIndices(files),
+                // Once, here: the prefetch heap guard used to stat() every file per load.
+                maxDatBytes = files.maxOfOrNull { it.length() } ?: 0L,
+            )
+        }
     }
 }

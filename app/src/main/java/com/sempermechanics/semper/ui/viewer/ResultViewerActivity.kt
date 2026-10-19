@@ -43,8 +43,9 @@ import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
 import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -80,23 +81,23 @@ class ResultViewerActivity : AppCompatActivity() {
     /** Shows the running exports, which live in [viewModel] and outlive this screen's rotations. */
     internal lateinit var shareExports: ShareExportController
 
-    /** Run once the frame set is read; see [whenFrameSetLoaded]. */
-    private val afterFrameSet = mutableListOf<() -> Unit>()
-
-    /** Runs [action] now if the frame set is read, else right after [onFrameSetRead]. */
-    internal fun whenFrameSetLoaded(action: () -> Unit) {
-        if (frameSetLoaded) action() else afterFrameSet += action
-    }
-
     internal lateinit var inspect: ViewerInspectController
         private set
 
     internal var rawData: FloatArray? = null
         private set
 
+    /**
+     * The frame set this screen has opened ([onFrameSetRead]): the view
+     * model's, listed once and kept across a rotation. Null until then.
+     */
+    private var opened: ViewerFrameLoader.FrameSet? = null
+
+    /** True once [onFrameSetRead] has run: [batchFiles] and the rest are final. */
+    internal val frameSetLoaded: Boolean get() = opened != null
+
     /** The reference's true size: from the Intent, else read from its header off the main thread. */
-    internal var imageSize: ImageSize = ImageSize.UNKNOWN
-        private set
+    internal val imageSize: ImageSize get() = opened?.imageSize ?: args.imageSize
 
     /** Every frame's solver parameters; a sweep varies them frame by frame. */
     internal val frameParams: FrameParams by lazy { args.frameParams }
@@ -121,15 +122,12 @@ class ResultViewerActivity : AppCompatActivity() {
     /** The reference at display size. Exports and the report read it; it is never a frame's photo. */
     internal val cachedBaseImage: Bitmap? get() = images.cachedBaseImage
 
-    internal var batchFiles: List<File> = emptyList()
-        private set
+    internal val batchFiles: List<File> get() = opened?.batchFiles.orEmpty()
 
-    /** The planned frame behind each of [batchFiles], by position; set with it. */
-    internal var plannedFrames: List<Int> = emptyList()
-        private set
+    /** The planned frame behind each of [batchFiles], by position. */
+    internal val plannedFrames: List<Int> get() = opened?.plannedFrames.orEmpty()
 
-    internal var defImagePaths: List<String> = emptyList()
-        private set
+    internal val defImagePaths: List<String> get() = opened?.defImagePaths.orEmpty()
     internal var currentFrameIndex: Int
         get() = viewModel.currentFrameIndex
         set(value) {
@@ -150,8 +148,6 @@ class ResultViewerActivity : AppCompatActivity() {
 
     /** True while the looping summary GIF is the thing on screen; see [FrameJumpController.showingSummary]. */
     internal val isShowingSummary: Boolean get() = frameJump.showingSummary
-
-    internal fun summaryBatchFiles(): List<File> = batchFiles
 
     /** How many frames this analysis actually holds. */
     internal fun frameCount(): Int = batchFiles.size
@@ -214,11 +210,6 @@ class ResultViewerActivity : AppCompatActivity() {
             // Sweeps never use the summary slot (combinations are not a time series).
             frameJump.showingSummary = args.startFrame == null
         }
-        // A save-as picked before the last viewer had listed its frames (a
-        // rotation, or process death) waits in the ViewModel for this one.
-        if (viewModel.hasPendingSave) share.startPendingSave()
-
-        imageSize = args.imageSize
         step = frameParams.base.step
         // Sweep extras are available now; drop any restored summary flag.
         if (isSweep) frameJump.showingSummary = false
@@ -226,7 +217,7 @@ class ResultViewerActivity : AppCompatActivity() {
         val refPath = args.refPath.ifBlank { null }
         // Every writer puts the image size on the Intent; only an old one makes
         // the reference's header be read for it, off the main thread below.
-        val dimsKnown = imageSize.isKnown
+        val dimsKnown = args.imageSize.isKnown
         if (dimsKnown) images.showReference(refPath)
 
         summary = ViewerSummaryController(this)
@@ -234,11 +225,14 @@ class ResultViewerActivity : AppCompatActivity() {
         // Past 300 ms, "Opening … · N frames" until the first frame draws.
         captions.showOpening()
         // The directory listings, and a stat per frame, used to run here on the
-        // main thread on every open. The first frame (and, with it, everything
-        // the batch drives) starts once they are read, as it did before.
-        val knownSize = imageSize
+        // main thread on every open. The view model reads them once, off the
+        // main thread, and keeps them across a rotation; the first frame (and,
+        // with it, everything the batch drives) starts once they are there.
+        val knownSize = args.imageSize
+        val viewerArgs = args
+        viewModel.listFrames(frameSetDispatcher) { ViewerFrameLoader.readFrameSet(viewerArgs, refPath, knownSize) }
         lifecycleScope.launch {
-            val set = withContext(frameSetDispatcher) { frames.readFrameSet(refPath, knownSize) }
+            val set = viewModel.state.mapNotNull { it.frameSet }.first()
             onFrameSetRead(set, refPath, dimsKnown)
         }
 
@@ -300,24 +294,15 @@ class ResultViewerActivity : AppCompatActivity() {
         }
     }
 
-    /** True once [onFrameSetRead] has run: [batchFiles] and the rest are final. */
-    internal var frameSetLoaded = false
-        private set
-
     /** Where the frame set is read. A test holds it to see what onCreate does without it. */
     @VisibleForTesting
     internal var frameSetDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     /** The rest of [onCreate], once the frame set is back: open the batch on its first frame or summary. */
     private fun onFrameSetRead(set: ViewerFrameLoader.FrameSet, refPath: String?, referenceShownAlready: Boolean) {
-        imageSize = set.imageSize
+        opened = set
         if (!referenceShownAlready) images.showReference(refPath)
-        defImagePaths = set.defImagePaths
-        batchFiles = set.batchFiles
-        plannedFrames = set.plannedFrames
         frames.useFrameSet(set)
-        viewModel.useFrameListing(set.batchFiles)
-        frameSetLoaded = true
 
         if (batchFiles.isNotEmpty()) {
             // A START_FRAME (or restored index) past the batch would load nothing.
@@ -338,9 +323,9 @@ class ResultViewerActivity : AppCompatActivity() {
             captions.openingDone()
             FaqRedirect.snackbar(this, R.string.no_batch_data, R.string.url_faq_no_batch_data)
         }
-        val waiting = afterFrameSet.toList()
-        afterFrameSet.clear()
-        waiting.forEach { it() }
+        // A save-as picked before this viewer had its frames (picked on a
+        // viewer a rotation replaced, or before process death) starts now.
+        share.startPendingSave()
     }
 
     /** Clears the back stack to Home. Used by the top-bar Home action. */
@@ -350,9 +335,6 @@ class ResultViewerActivity : AppCompatActivity() {
         startActivity(home)
         finish()
     }
-
-    /** Max / min (with coordinates) / mean for the info peek sheet. */
-    internal fun detailStatsText(): String = captions.detailStatsText()
 
     /** Bring edge chrome back, then schedule auto-hide. */
     internal fun bumpChrome() = chrome.bumpChrome()

@@ -73,7 +73,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         val frameParams = host.frameParams
         SummaryAnimation(
             SummaryAnimation.Spec(
-                batchFiles = host.summaryBatchFiles(),
+                batchFiles = host.batchFiles,
                 imgW = host.imageSize.width,
                 imgH = host.imageSize.height,
                 stepAt = { index -> frameParams.at(index).step },
@@ -100,10 +100,10 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
      * which set the 150-frame heap (TD-87).
      */
     fun start() {
-        if (host.summaryBatchFiles().isEmpty()) return
+        if (host.batchFiles.isEmpty()) return
         if (rangesJob.isActive || ranges.isNotEmpty()) return
         rangesJob.launch(host.lifecycleScope) {
-            val files = host.summaryBatchFiles()
+            val files = host.batchFiles
             val computed = try {
                 withContext(Dispatchers.Default) {
                     val rangesFile = files.firstOrNull()?.parentFile?.let {
@@ -186,7 +186,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         // The range is known: the scale shows the ends the animation is built on.
         host.refreshSummaryScaleLabels(dataIndex, bounds)
         val label = host.field.label
-        val total = host.summaryBatchFiles().size
+        val total = host.batchFiles.size
         buildJob.cancel()
         stopPlayback()
         showProgress(R.string.summary_building_fmt, 0, total)
@@ -228,7 +228,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         // already pushes — a static "Preparing files…" looked hung on PLC.
         if (rangesJob.isActive) {
             if (!statusPanel.isVisible) {
-                showProgress(R.string.summary_scanning_fmt, 0, host.summaryBatchFiles().size)
+                showProgress(R.string.summary_scanning_fmt, 0, host.batchFiles.size)
             }
         } else {
             showMessage(R.string.summary_no_data)

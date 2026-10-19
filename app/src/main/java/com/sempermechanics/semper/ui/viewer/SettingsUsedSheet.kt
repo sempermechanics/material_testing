@@ -110,7 +110,7 @@ object SettingsUsedSheet {
             ?.setBackgroundColor(Color.TRANSPARENT)
 
         view.tvSettingsUsedSpecimen.text = host.args.refName
-        view.tvSheetStats.text = host.detailStatsText()
+        view.tvSheetStats.text = host.captions.detailStatsText()
         populateHistogram(host, view)
 
         entriesFor(host).forEachIndexed { index, (label, value) ->
