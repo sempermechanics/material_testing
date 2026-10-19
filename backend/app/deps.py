@@ -370,8 +370,21 @@ async def verified_device(
         raise HTTPException(400, errors.INVALID_SIGNATURE)
 
     dev = await run_in_threadpool(repo.get_device, x_device_id)
-    if not dev or dev["uid"] != user["uid"] or dev["status"] != statuses.DEVICE_ACTIVE:
+    # `_authenticate` resolved the app this request came from (ADR-010).
+    app = getattr(request.state, "app", None) or apps.SEMPER
+    if not _device_is_bound(dev, user, x_device_id, app):
         raise HTTPException(409, errors.DEVICE_NOT_ACTIVE)
+    if _device_app(dev) != app:
+        # One signing key gives two apps one device id, and the record holds
+        # the key of whichever registered last. A key registered under the
+        # other app must not sign for this one, where the same id may be the
+        # bound phone. `bad_signature`, because that is what it is to the
+        # phone: the backend holds another key for its id, and the app
+        # registers again and resends once (`DeviceKeyRecovery`). No nonce
+        # is spent.
+        audit.record(user["uid"], x_device_id, action="AUTH_DENIED", outcome="DENIED",
+                     detail={"stage": "device_app", "app": app})
+        raise HTTPException(401, errors.BAD_SIGNATURE)
     client_nonce_ts = parse_client_nonce(x_nonce)
     if client_nonce_ts is None:
         # Server-issued challenge: claimed (deleted) before the signature check,
@@ -420,6 +433,28 @@ async def verified_device(
     return Caller(user, dev)
 
 
+def _device_is_bound(dev: dict | None, user: dict, device_id: str, app: str) -> bool:
+    """Whether `dev` is the device `user` has bound for `app`.
+
+    ACTIVE and the caller's is not enough: the account's binding for the
+    asking app must name this device too, so a stale ACTIVE record (a
+    registration that lost a race, a release that left one behind) cannot
+    sign (ADR-010, device trust).
+    """
+    return bool(
+        dev
+        and dev.get("uid") == user.get("uid")
+        and dev.get("status") == statuses.DEVICE_ACTIVE
+        and user.get(apps.field("activeDeviceId", app)) == device_id
+    )
+
+
+def _device_app(dev: dict) -> str:
+    """The app `dev` was registered under. A record from before devices
+    named their app is Semper's, as every request without `X-App-Id` is."""
+    return dev.get("app") or apps.SEMPER
+
+
 _CLIENT_NONCE = re.compile(r"t1\.(\d{9,11})\.[A-Za-z0-9_-]{22,86}")
 
 
@@ -454,6 +489,11 @@ def _second_factor(claims: dict) -> str:
     return str(firebase.get("sign_in_second_factor") or "")
 
 
+def second_factor(request: Request) -> str:
+    """The second factor the request's verified ID token records, or ""."""
+    return _second_factor(getattr(request.state, "claims", None) or {})
+
+
 def _auth_age_seconds(claims: dict) -> float | None:
     """How long ago this session authenticated, or None if the token does not
     say. None is treated as too old: a token that will not state its own age
@@ -465,10 +505,10 @@ def _auth_age_seconds(claims: dict) -> float | None:
         return None
 
 
-def _step_up(base, window: str, doc: str):
+def _step_up(base, window: str, doc: str, *, device_needs_second_factor: bool):
     """A route dependency: `base`'s caller, held to `step_up_check` with the
     freshness window `settings.<window>` (read per request, so a test or a
-    redeploy that changes it is honoured)."""
+    redeploy that changes it is honoured) and the tier's device rule."""
     async def dependency(
         request: Request,
         user: dict = Depends(base),
@@ -477,7 +517,8 @@ def _step_up(base, window: str, doc: str):
         x_signature: str = Header(default=""),
     ) -> Caller:
         return await step_up_check(request, user, x_device_id, x_nonce, x_signature,
-                                   max_age_seconds=getattr(settings, window))
+                                   max_age_seconds=getattr(settings, window),
+                                   device_needs_second_factor=device_needs_second_factor)
 
     dependency.__doc__ = doc
     return dependency
@@ -486,8 +527,10 @@ def _step_up(base, window: str, doc: str):
 #: State-changing Semper-staff caller: an attested device, or a 2FA browser.
 #:
 #: The device path is preferred: a request carrying any device header is held
-#: to the full `verified_device` check, so the phone admin screen keeps exactly
-#: the guarantee it had. The browser path exists because a browser cannot
+#: to the full `verified_device` check, and the device must have been
+#: registered from a second-factor sign-in (`stepUpEligible`, ADR-010 device
+#: trust): registration takes a bare ID token, so without that a stolen staff
+#: token could register its own key and sign as staff. The browser path exists because a browser cannot
 #: produce an ECDSA attestation. It needs a completed **second factor** on the
 #: ID token (so a token stolen from a password-only session is refused) and a
 #: **recent** sign-in (ADMIN_WEB_REAUTH_SECONDS, so a token that leaks later
@@ -498,20 +541,29 @@ def _step_up(base, window: str, doc: str):
 attested_or_mfa_admin = _step_up(
     admin_user, "ADMIN_WEB_REAUTH_SECONDS",
     "Semper staff, attested device or a second factor on a recent sign-in.",
+    device_needs_second_factor=True,
 )
 #: The same, with the tighter window whole-licence revoke and delete ask for:
 #: the console forces password (or Google re-auth) plus TOTP first.
 attested_or_mfa_admin_fresh = _step_up(
     admin_user, "ADMIN_WEB_REVOKE_REAUTH_SECONDS",
     "Semper staff, step-up within the revoke window.",
+    device_needs_second_factor=True,
 )
 #: The same step-up for an account holder acting on their own licence: moving
 #: it to a new device, pulling an analysis out through a browser. The question
 #: does not change with who asks; only the tier below it does, so this
 #: authorises nothing beyond what the holder already holds.
+#:
+#: The holder's own phone steps up here without having been registered from
+#: a second-factor sign-in: an ordinary account has no second factor, and the
+#: same phone signature already reaches every device-attested route
+#: (`verified_device`: file content, account export and erasure), so asking
+#: more of this tier alone would protect nothing and lock every holder out.
 attested_or_mfa_user = _step_up(
     current_user, "ADMIN_WEB_REAUTH_SECONDS",
     "An account holder, attested device or a second factor on a recent sign-in.",
+    device_needs_second_factor=False,
 )
 
 
@@ -523,6 +575,7 @@ async def step_up_check(
     x_signature: str,
     *,
     max_age_seconds: int,
+    device_needs_second_factor: bool,
 ) -> Caller:
     """The step-up itself, shared by the admin, user and institution tiers.
 
@@ -535,12 +588,21 @@ async def step_up_check(
     governed by ADMIN_WEB_MFA_ENABLED and the caller's freshness window: the
     trade being made is the same one either way, and a deployment that
     withdraws the browser path should withdraw all of it.
+
+    `device_needs_second_factor` (staff and IT): the device path also needs
+    a device registered from a second-factor sign-in (`stepUpEligible`),
+    else 403 `mfa_required`, which is what the phone is missing. The holder
+    tier passes False; see `attested_or_mfa_user`.
     """
     if settings.DEV_INSECURE_AUTH:
         return Caller(user, _DEV_DEVICE, via="dev")
 
     if x_device_id or x_nonce or x_signature:
         ctx = await verified_device(request, user, x_device_id, x_nonce, x_signature)
+        if device_needs_second_factor and ctx.device.get("stepUpEligible") is not True:
+            audit.record(user["uid"], ctx.device_id, action="AUTH_DENIED", outcome="DENIED",
+                         detail={"stage": "device_second_factor"})
+            raise HTTPException(403, errors.MFA_REQUIRED)
         return replace(ctx, via="device")
 
     if not settings.ADMIN_WEB_MFA_ENABLED:

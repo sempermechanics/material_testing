@@ -751,6 +751,42 @@ def test_the_first_device_wins_an_unbound_lock(emulator_repo):
     assert emulator_repo.get_license(license_id)["deviceIdLock"] == locked
 
 
+def test_concurrent_register_leaves_one_active(emulator_repo):
+    """Two phones registering one account at once used to both pass the
+    "already bound?" check the router read before the write, and both end up
+    ACTIVE. The check now runs inside the registration's transaction, so
+    exactly one device is ACTIVE for the account and it is the one its
+    binding names; every other registration is refused (or told to retry)."""
+    from app.models import DeviceReg
+    from key_helpers import _ec_pem
+
+    tag = uuid.uuid4().hex[:8]
+    uid = f"emu-{tag}"
+    _emu_user(emulator_repo, uid, f"reg-{tag}@lab.org")
+    devices = [f"dev-{tag}-{i}" for i in range(6)]
+    pem = _ec_pem()
+
+    def _register(device):
+        return attempt(emulator_repo.register_device, uid,
+                       DeviceReg(deviceId=device, publicKeyPem=pem))[0]
+
+    def race():
+        with ThreadPoolExecutor(max_workers=len(devices)) as pool:
+            return list(pool.map(_register, devices))
+
+    def settled(codes):
+        assert set(codes) <= {"", "device_conflict", "claim_contended"}, codes
+        active = [d for d in devices
+                  if (emulator_repo.get_device(d) or {}).get("status") == "ACTIVE"]
+        assert len(active) <= 1, f"{len(active)} devices ACTIVE: {active}"
+        bound = emulator_repo._load_user(uid).get("activeDeviceId")
+        assert active == ([bound] if bound else []), (active, bound)
+        assert codes.count("") == len(active), codes
+        return bool(active)
+
+    _race_until(race, settled, what="no registration committed")
+
+
 def test_an_address_finds_the_licences_it_administers(emulator_repo):
     """`array_contains` against a real Firestore, not the double.
 

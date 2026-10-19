@@ -83,6 +83,13 @@ Actions → `deploy-backend.yml` (`.github/workflows/deploy-backend.yml`).
 
 ## 6. After the deploy
 
+- [ ] **Staff and IT phones re-register with a second factor** (ADR-010
+      amendment, device trust). A device registered before this backend has no
+      `stepUpEligible`, so its signed staff or IT calls answer `403
+      mfa_required`. On each such phone: sign out, sign in completing the TOTP
+      second factor (that registers the device again, stamped). Holders are not
+      affected; the browser consoles are not affected.
+
 - [ ] 24 h log watch: `feature_not_licensed` only from restore and bundle;
       `app_check_required` = 0; the rate of `session_quota_exceeded` and
       `device_quota_exceeded`; `feature_paused` only if a kill switch was set;

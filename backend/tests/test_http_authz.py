@@ -242,7 +242,10 @@ async def test_admin_mutation_with_valid_device_attestation(secure, client, monk
         "target": {"email": "t@e.com", "role": "user", "access_status": "PENDING"},
     }
     secure._data["devices"] = {
-        "adev": {"uid": "admin-1", "status": "ACTIVE", "publicKeyPem": pem},
+        # Registered from a second-factor sign-in: only such a device steps
+        # up for staff (ADR-010, device trust).
+        "adev": {"uid": "admin-1", "status": "ACTIVE", "publicKeyPem": pem,
+                 "stepUpEligible": True},
     }
     repo.patch(monkeypatch, "consume_nonce", lambda *a, **k: True)
 
@@ -558,3 +561,33 @@ async def test_institution_seats_accept_a_fresh_second_factor(secure, client, mo
     )
     assert r.status_code == 200, r.text
     assert r.json()["seats"] == []
+
+
+@pytest.mark.parametrize("eligible, status", [(False, 403), (True, 200)])
+@pytest.mark.asyncio
+async def test_institution_seats_take_only_a_device_registered_with_a_second_factor(
+    secure, client, monkeypatch, eligible, status,
+):
+    """IT is a staff-like tier: its phone path needs a device registered from
+    a second-factor sign-in, as the operator's does (ADR-010, device trust)."""
+    import time as _time
+
+    license_id = _institution_it_token(secure, monkeypatch, {})
+    repo.patch(monkeypatch, "get_or_create_user",
+        lambda c, device_id=None: {
+            "uid": "it-1", "email": "it@university.edu", "role": "user",
+            "access_status": "APPROVED", "emailVerified": True, "activeDeviceId": "it-phone",
+        },
+    )
+    priv, pem = _pem_and_priv()
+    secure._data["devices"] = {"it-phone": {"uid": "it-1", "status": "ACTIVE",
+                                            "publicKeyPem": pem, "stepUpEligible": eligible}}
+    path = f"/v1/institutions/licenses/{license_id}/seats"
+    nonce = f"t1.{int(_time.time())}.{'C' * 30}"
+    r = await client.get(path, headers={
+        "Authorization": "Bearer ok", "X-Device-Id": "it-phone", "X-Nonce": nonce,
+        "X-Signature": _sign(priv, nonce, "GET", path, b"")})
+
+    assert r.status_code == status, r.text
+    if not eligible:
+        assert r.json()["detail"] == "mfa_required"

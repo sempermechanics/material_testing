@@ -24,7 +24,7 @@ window, using the ID token of a signed-in session.
   project. The gateway checks it and forwards it as `X-Forwarded-Authorization`;
   the backend verifies it again (`backend/app/deps.py:56-70`).
 - **Errors:** JSON `{"detail": "<code>"}`, sometimes `"<code>: <suffix>"`. The
-  code is stable; the status per code is `backend/app/errors.py:296-340`
+  code is stable; the status per code is `backend/app/errors.py:300-351`
   ([ADR-020](../adr/ADR-020-backend-refusal-model.md)). A 429 carries `Retry-After`.
 - **Paging:** `page_size` (or `limit`) and `page_token`; the answer's `page` block
   carries `nextPageToken` and `hasMore`.
@@ -39,7 +39,7 @@ window, using the ID token of a signed-in session.
 | `user` | any approved account | ID token | 401 `invalid_token`, 403 `not_approved` |
 | `institution-stepup` | an address in this licence's `adminEmails`, verified | ID token + TOTP second factor on a sign-in younger than `ADMIN_WEB_REAUTH_SECONDS` (`backend/app/routers/institutions.py:58-74`) | 403 `email_not_verified`; 404 `license_not_found` for a licence that does not name the caller, exactly as for one that does not exist; then 403 `mfa_required` / `reauth_required` |
 | `admin` | Semper staff (`role: admin` or `ADMIN_EMAILS`) | ID token (`backend/app/deps.py:334-345`) | 403 `not_admin` |
-| `admin-stepup` | staff | a signed request from the staff phone, or the browser step-up as above | as above |
+| `admin-stepup` | staff | a signed request from the staff phone, registered from a sign-in that completed the second factor (`stepUpEligible`; [ADR-010](../adr/ADR-010-device-binding-per-app.md) amendment), or the browser step-up as above | as above; a phone registered without the second factor is 403 `mfa_required` |
 | `admin-stepup-fresh` | staff | as `admin-stepup`, with a sign-in younger than `ADMIN_WEB_REVOKE_REAUTH_SECONDS` (default 120 s) | `reauth_required` |
 
 With `CHECK_REVOKED_ON_STEP_UP=true` (after TD-214), a step-up call by a revoked or
@@ -47,7 +47,7 @@ disabled Firebase user is 401 `invalid_token`. The check spends a per-instance b
 for Firebase Auth Admin calls (`AUTH_ADMIN_CALLS_PER_SECOND`, default 10, burst
 `AUTH_ADMIN_BURST` 20; `backend/app/rate_limit.py:138-147`). When it is spent the
 check is not made and the call answers **503 `auth_check_busy`** with `Retry-After`
-(`backend/app/deps.py:598-606`): the token is not judged, so retry after the delay.
+(`backend/app/deps.py:660-668`): the token is not judged, so retry after the delay.
 The consoles say "The server is busy checking sign-ins — wait a few seconds and try again." (`firebase-hosting/public/console/messages.js:18`) and do not retry by themselves.
 
 **A paused feature.** While an operator has a kill switch on (`KILL_SWITCHES`,

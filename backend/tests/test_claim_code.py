@@ -231,6 +231,7 @@ async def test_a_signed_device_claims_and_binds_its_own_device(web, client, capl
     pem = priv.public_key().public_bytes(
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode()
     web._data["devices"] = {"phone-1": {"uid": UID, "status": "ACTIVE", "publicKeyPem": pem}}
+    web._data["users"][UID]["activeDeviceId"] = "phone-1"
     web.claims = {}  # no second factor: the device signature is the step-up
     repo.patch(monkeypatch, "consume_nonce", lambda *a, **k: True)
     minted = _mint_individual(email=EMAIL)

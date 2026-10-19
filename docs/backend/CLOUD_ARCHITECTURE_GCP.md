@@ -204,9 +204,9 @@ sequenceDiagram
     participant F as Firestore
     A->>A: generateKeyPair(EC P-256, StrongBox, user-auth optional)
     A->>R: POST /v1/devices/register {deviceId, publicKeyPem, model, osVer}\n(Authorization: ID token)
-    R->>F: users/{uid} exists? one active device already bound?
+    R->>F: one transaction: users/{uid} bound to another device? devices/{deviceId} another account's?
     alt no active device
-        R->>F: devices/{deviceId} = {uid, publicKeyPem, status: ACTIVE}
+        R->>F: devices/{deviceId} = {uid, app, publicKeyPem, status: ACTIVE, stepUpEligible}
         R-->>A: 201 registered
     else already bound to another device
         R-->>A: 409 device_conflict (needs admin re-bind)
@@ -228,7 +228,15 @@ the stored public key and returns `201` with `healed: true` (see
 `register_device` in `backend/app/routers/devices.py`). Registering a *different* second device for a
 `uid` that already has one returns `409 device_conflict`; moving to genuinely
 new hardware means an admin revokes the prior device first. (There is no
-`:rebind` endpoint — that was a design idea, not something implemented.)
+`:rebind` endpoint — that was a design idea, not something implemented.) Both
+checks run inside `repo.register_device`'s transaction, so two phones
+registering at once cannot both stay ACTIVE. A signed request is accepted only
+from the device the account binds for the asking app (`activeDeviceId`, else
+`409 device_not_active`) and registered under that app (else `401
+bad_signature`, which the app recovers from as below). Staff and IT step-up
+also need the device's `stepUpEligible`, set when it registered from a
+second-factor sign-in ([ADR-010](../adr/ADR-010-device-binding-per-app.md)
+amendment).
 
 **One key per device id.** `devices/{deviceId}` holds one public key and names
 no app in its id (`repo/devices.py` `register_device`). Apps signed with the

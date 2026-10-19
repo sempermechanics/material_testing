@@ -37,7 +37,8 @@ def _request(query: str) -> Request:
 async def _verify(priv, query: str, signed_target: str):
     return await deps.verified_device(
         request=_request(query),
-        user={"uid": "u1", "email": "a@b.com", "access_status": "APPROVED"},
+        user={"uid": "u1", "email": "a@b.com", "access_status": "APPROVED",
+              "activeDeviceId": "d1"},
         x_device_id="d1",
         x_nonce="n1",
         x_signature=_sign(priv, "n1", "GET", signed_target, b""),

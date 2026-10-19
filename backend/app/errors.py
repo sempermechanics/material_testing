@@ -328,6 +328,10 @@ STATUS: dict[str, int] = {
     INVITE_EXISTS: 409,
     SEAT_REVOKED: 409,
     SEAT_BUSY: 409,
+    # Device registration (`repo.register_device`): the account is bound to
+    # another phone for this app, or this phone is another account's.
+    DEVICE_CONFLICT: 409,
+    DEVICE_IN_USE: 409,
     DELETED_LICENSE_PURGED: 410,
     # A licence edit or conversion that is not allowed as asked.
     CONVERT_DOMAIN_MISMATCH: 422,

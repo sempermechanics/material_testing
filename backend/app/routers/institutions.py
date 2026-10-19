@@ -70,7 +70,8 @@ async def institution_admin_stepup(
     """
     admin = institution_admin_context(license_id, user)
     await step_up_check(request, user, x_device_id, x_nonce, x_signature,
-                        max_age_seconds=settings.ADMIN_WEB_REAUTH_SECONDS)
+                        max_age_seconds=settings.ADMIN_WEB_REAUTH_SECONDS,
+                        device_needs_second_factor=True)
     return admin
 
 

@@ -76,11 +76,11 @@ revocation, grace and the 30-day hold apply unchanged.
 
 **The claim route.** `POST /v1/me/claim`, body `{"code"}` of 8–64 characters,
 any other field 422 (`LicenseClaim`, `backend/app/models.py:182-191`). Auth is
-`attested_or_mfa_user` (`backend/app/deps.py:512`): a browser with a second
+`attested_or_mfa_user` (`backend/app/deps.py:563`): a browser with a second
 factor on a recent sign-in, or a signed device request. An unverified address is
 refused first, 403 `email_not_verified` (`licenses.py:236-237`). It runs the same
 `repo.activate_license` as the legacy route, so refusal codes and statuses are
-shared (`errors.STATUS`, `backend/app/errors.py:296-340`). A browser names no
+shared (`errors.STATUS`, `backend/app/errors.py:300-351`). A browser names no
 device, so no device lock is compared or bound
 (`backend/app/repo/activation.py:62-68`); the phone's next request binds it
 (`revalidate_device_lock`, `backend/app/repo/devlock.py:204`). It shares
