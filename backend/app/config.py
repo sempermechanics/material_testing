@@ -34,6 +34,14 @@ def parse_kill_switches(raw: str) -> list[str]:
     return [n for n in KILL_SWITCH_NAMES if n in named]
 
 
+def parse_domains(raw: str) -> frozenset[str]:
+    """Address domains from a list separated by commas, whitespace or `;`:
+    lowercased, a leading "@" dropped, blanks ignored."""
+    return frozenset(
+        d.lower().lstrip("@") for d in re.split(r"[\s,;]+", raw) if d.lstrip("@")
+    )
+
+
 class Settings:
     # There is deliberately no sign-in domain gate. Any account Firebase Auth
     # accepts may authenticate; whether it may *use* anything is decided by
@@ -125,6 +133,16 @@ class Settings:
         for e in re.split(r"[\s,;]+", os.environ.get("ADMIN_EMAILS", ""))
         if e
     }
+
+    # --- test accounts (QC and CI, ADR-027) ----------------------------------
+    # The address domains a staff-created test account may use, e.g.
+    # "qa.sempermechanics.com". Empty (the default) turns the feature off:
+    # every create answers 403 `test_accounts_disabled`. A test account can
+    # therefore never be made on a customer's address, only on a domain the
+    # company controls. Separated by commas, whitespace or `;`; prefer spaces
+    # for a list, for the reason ADMIN_EMAILS gives (the deploy action splits
+    # its env_vars block on commas). Lowercased; a leading "@" is dropped.
+    TEST_ACCOUNT_DOMAINS = parse_domains(os.environ.get("TEST_ACCOUNT_DOMAINS", ""))
 
     # --- browser dashboards ---------------------------------------------------
     # Origins allowed to call the API from a browser. The dashboards live on

@@ -11,9 +11,13 @@ module, so a test double patches one place (`tests/fake_firestore.install`).
 """
 from ._base import (  # noqa: F401
     SCHEMA_VERSION,
+    TEST_ACCOUNT_DEFAULT_DEVICES,
+    TEST_ACCOUNT_MAX_DEVICES,
     db,
     ping,
     get_license,
+    max_test_devices,
+    test_account_of,
 )
 from .audit_log import (  # noqa: F401
     DEVICE_HISTORY_ACTIONS,
@@ -178,6 +182,22 @@ from .sessions import (  # noqa: F401
     complete_file,
     bump_session_progress,
 )
+from .testaccounts import (  # noqa: F401
+    PURPOSE_CI,
+    PURPOSE_QC,
+    PURPOSES,
+    STATUS_ACTIVE,
+    STATUS_EXPIRED,
+    STATUS_SUSPENDED,
+    create_test_account_user,
+    expired_test_accounts,
+    get_test_account,
+    licences_of_test_account,
+    list_test_accounts,
+    row_of_test_account,
+    set_test_account_expiry,
+    status_of_test_account,
+)
 
 from . import (
     _base,
@@ -198,10 +218,11 @@ from . import (
     reconcile,
     seats,
     sessions,
+    testaccounts,
     upgrade,
     user_config,
     users,
 )
 
 #: Every module of the package, each after everything it imports.
-PACKAGE = (_base, audit_log, user_config, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, seats, reconcile, account, sessions)
+PACKAGE = (_base, audit_log, user_config, devlock, claims, invites, holders, mint, activation, entitlement, license_admin, upgrade, deletion, institution_admin, devices, users, leases, seats, reconcile, account, sessions, testaccounts)

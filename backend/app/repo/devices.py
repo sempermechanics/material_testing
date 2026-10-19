@@ -12,6 +12,7 @@ from ..models import DeviceReg
 from . import _base
 from ._base import (
     _BATCH_LIMIT,
+    _active_devices,
     db,
     _load_user,
     _now,
@@ -22,6 +23,8 @@ from ._base import (
     _stream,
     _set_doc,
     _create_doc,
+    max_test_devices,
+    test_account_of,
 )
 from .entitlement import (
     ensure_entitlement,
@@ -120,6 +123,10 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     registering at once both passed and both stayed ACTIVE. The same device id
     re-registering is the reinstall heal: its key and stamp are replaced.
 
+    A test account (ADR-027) is not bound to one device: it may register
+    while fewer than its `maxDevices` devices are ACTIVE for `app`, and its
+    `activeDeviceId` names the latest. A real account is unchanged.
+
     `step_up_eligible` is whether the registering token proved a second factor
     (ADR-010, device trust). Stamped on every registration, a heal included,
     because a registration replaces the key: only a device registered from a
@@ -148,9 +155,19 @@ def register_device(uid: str, body: DeviceReg, app: str = apps.SEMPER, *,
     @_base.firestore.transactional
     def _register(tx):
         user_snap = _get(user_ref, tx)
-        bound = (user_snap.to_dict() or {}).get(active_field) if user_snap.exists else None
-        if bound and bound != body.deviceId:
-            raise Refusal(errors.DEVICE_CONFLICT)
+        held_user = (user_snap.to_dict() or {}) if user_snap.exists else {}
+        tag = test_account_of(held_user)
+        if tag is not None:
+            # A test account holds up to `maxDevices` phones per app (ADR-027).
+            # Counted after the user document is read in this transaction:
+            # every registration writes that document, so a second phone
+            # registering at once retries and counts this one.
+            if len(_active_devices(uid, app, exclude=body.deviceId)) >= max_test_devices(tag):
+                raise Refusal(errors.DEVICE_CONFLICT)
+        else:
+            bound = held_user.get(active_field) if user_snap.exists else None
+            if bound and bound != body.deviceId:
+                raise Refusal(errors.DEVICE_CONFLICT)
         existing = _get(device_ref, tx)
         held = (existing.to_dict() or {}) if existing.exists else {}
         if held.get("status") == statuses.DEVICE_ACTIVE and held.get("uid") != uid:

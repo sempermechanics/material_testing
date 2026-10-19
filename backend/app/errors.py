@@ -78,6 +78,12 @@ USER_NOT_FOUND = "user_not_found"
 #: device lock: **New device** on the licence moves both bindings (TD-126).
 LICENSE_DEVICE_CLEAR_REQUIRED = "license_device_clear_required"
 EMPTY_PATCH = "empty_patch"
+#: 403 from `POST /v1/admin/test-accounts` (ADR-027): `TEST_ACCOUNT_DOMAINS`
+#: is empty, or the address is not in one of its domains.
+TEST_ACCOUNTS_DISABLED = "test_accounts_disabled"
+#: 409 from the same route: the address already has an account, a Firebase
+#: Auth user or a licence, or is a staff address (`ADMIN_EMAILS`).
+EMAIL_IN_USE = "email_in_use"
 
 # --- licensing, seats and leases -------------------------------------------
 # `feature_not_licensed` gates *retrieval* (file content, session bundle)
@@ -317,6 +323,7 @@ STATUS: dict[str, int] = {
     LICENSE_EMAIL_MISMATCH: 403,
     LICENSE_DEVICE_MISMATCH: 403,
     NOT_ELIGIBLE: 403,
+    TEST_ACCOUNTS_DISABLED: 403,
     # Conflicts with the state it is in.
     ALREADY_LICENSED: 409,
     LICENSE_ALREADY_REDEEMED: 409,
@@ -327,6 +334,7 @@ STATUS: dict[str, int] = {
     LICENSE_DEVICE_CLEAR_REQUIRED: 409,
     DEMO_KEY_NOT_DELETABLE: 409,
     LICENSE_EXISTS: 409,
+    EMAIL_IN_USE: 409,
     LICENSE_NOT_CONVERTIBLE: 409,
     MEMBER_ALREADY_LICENSED: 409,
     INVITE_EXISTS: 409,

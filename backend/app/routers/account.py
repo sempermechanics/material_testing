@@ -34,6 +34,16 @@ def _terms_block(user: dict) -> dict:
     }
 
 
+def _test_account(user: dict) -> dict | None:
+    """`{purpose, expiresAt}` for a staff test account (ADR-027), so the app
+    can tag its analytics and say when the login ends; null for every real
+    account."""
+    tag = repo.test_account_of(user)
+    if tag is None:
+        return None
+    return {"purpose": tag.get("purpose") or "", "expiresAt": tag.get("expiresAt")}
+
+
 def _improvement_consent(user: dict) -> bool | None:
     """None until the user has answered; the app treats None as "not asked"."""
     consent = user.get("improvementConsent")
@@ -165,6 +175,7 @@ def app_config(
         "minSupportedVersionCode": min_supported,
         "recommendedVersionCode": recommended,
         "killSwitches": list(settings.KILL_SWITCHES),
+        "testAccount": _test_account(user),
     }
     token = _entitlement(user, config, app, x_device_id)
     if token:

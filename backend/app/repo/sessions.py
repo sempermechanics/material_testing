@@ -24,6 +24,7 @@ from ._base import (
     _set_doc,
     _update_doc,
     _delete_doc,
+    test_account_of,
 )
 
 
@@ -548,6 +549,12 @@ def create_session(sid: str, user: dict, device: dict, body: SessionCreate,
         "updatedAt": _base.firestore.SERVER_TIMESTAMP,
         "schemaVersion": SCHEMA_VERSION,
     }
+    if test_account_of(user) is not None:
+        # A test account's analyses count toward no phone's demo cap
+        # (ADR-027): `count_device_sessions` matches on `deviceId`, so the
+        # device is kept under another name and the session is tagged.
+        doc["testDeviceId"] = doc.pop("deviceId")
+        doc["testAccount"] = True
     _set_doc(db().collection("sessions").document(sid), doc)
     return {**doc, "sessionId": sid}
 

@@ -155,6 +155,13 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
     ],
     "app/repo/users.py::set_user_status": [_q("devices", ("uid", "=="))],
     "app/repo/users.py::sign_in_uids": [_q("auth_links", ("uid", "=="))],
+    # Test accounts (ADR-027): one field each, so the automatic indexes.
+    "app/repo/_base.py::_active_devices": [_q("devices", ("uid", "=="))],
+    "app/repo/testaccounts.py::licences_of_test_account": [_q("licenses", ("emailLock", "=="))],
+    "app/repo/testaccounts.py::list_test_accounts": [_q("users", ("testAccount.purpose", "in"))],
+    "app/repo/testaccounts.py::expired_test_accounts": [
+        _q("users", ("testAccount.expiresAt", "<")),
+    ],
 }
 
 #: Functions that order a query their caller built; the caller declares the shape.

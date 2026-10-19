@@ -22,11 +22,11 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
         raise HTTPException(410, errors.APP_RETIRED)
     rate_limit.enforce(rate_limit.device_register_bucket, user["uid"])
     active = user.get(apps.field("activeDeviceId", app))
-    # A device-lock clear just released THIS phone for a new one. Its upload
-    # worker re-registers on `device_not_active`; letting it would hand the
-    # account back and refuse the new phone. Installed builds read any 409 here
-    # as "bound to a different device", which is what the old phone now is.
-    if not active and repo.released_device_held(user, body.deviceId, app):
+    tag = repo.test_account_of(user)  # Several phones, no hold and no mail (ADR-027).
+    # A device-lock clear just released THIS phone for a new one; its upload
+    # worker re-registers on `device_not_active`, which would hand the account
+    # back. Installed builds read any 409 here as "bound to another device".
+    if not active and tag is None and repo.released_device_held(user, body.deviceId, app):
         audit.record(user["uid"], body.deviceId, action="DEVICE_REGISTER", outcome="DENIED",
                      detail={"reason": "released", "app": app})
         raise HTTPException(409, errors.DEVICE_CONFLICT)
@@ -49,10 +49,9 @@ def register_device(body: DeviceReg, request: Request, user=Depends(current_user
             audit.record(user["uid"], body.deviceId, action="DEVICE_IN_USE", outcome="DENIED",
                          detail={"owner": (repo.get_device(body.deviceId) or {}).get("uid")})
         raise
-    audit.record(user["uid"], body.deviceId,
-                 action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
-                 detail={"app": app, "stepUpEligible": eligible})
-    if not healed:  # A new device tells its holder (TD-295); a key heal is not one.
+    audit.record(user["uid"], body.deviceId, action="DEVICE_REBIND" if healed else "DEVICE_REGISTER",
+                 detail={"app": app, "stepUpEligible": eligible, **({"testAccount": True} if tag else {})})
+    if not healed and tag is None:  # A new device tells its holder (TD-295); a heal is not one.
         notify.device_registered(user["uid"], repo.verified_address(user), body.deviceId, app,
                                  model=body.model)
     return {"deviceId": body.deviceId, "healed": healed}

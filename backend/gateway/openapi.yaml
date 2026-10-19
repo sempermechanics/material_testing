@@ -19,7 +19,9 @@ info:
     POST /v1/tasks/provision-session is deliberately absent: it is the Cloud
     Tasks callback, delivered straight to the Cloud Run URL with an OIDC token
     for the task invoker service account, and must not be reachable through the
-    public front door at all.
+    public front door at all. So are POST /v1/tasks/license-fanout and POST
+    /v1/tasks/test-account-expiry (the Cloud Scheduler job), for the same
+    reason.
   version: '1.0'
 schemes:
   - https
@@ -620,13 +622,96 @@ paths:
         '409': { description: "Already redeemed by another account, institution seats exhausted, or the seat is on hold (license_already_redeemed, license_seats_exhausted, license_seat_disabled)" }
         '429': { description: Rate limited }
         '503': { description: "Lost the race for a seat, or for an empty device lock; retry (claim_contended, device_lock_contended)" }
+  /v1/admin/test-accounts:
+    get:
+      operationId: adminListTestAccounts
+      description: >
+        Semper staff. Every staff test account (QC and CI logins, ADR-027),
+        newest first, with its end, phone cap, active phones and status. A
+        read, so the ordinary admin token.
+      responses:
+        '200': { description: OK }
+        '429': { description: Rate limited }
+    post:
+      operationId: adminCreateTestAccount
+      description: >
+        Semper staff, fresh step-up (device attestation, or a console second
+        factor within the revoke window). Create a pre-approved, licensed
+        test login on an address in TEST_ACCOUNT_DOMAINS; the generated
+        password is in this answer only.
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+      responses:
+        '201': { description: Created }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "test_accounts_disabled, or the console path's mfa_required / reauth_required" }
+        '409': { description: "The address has an account, an Auth user or a licence, or is staff's (email_in_use)" }
+        '422': { description: Invalid body }
+  /v1/admin/test-accounts/{uid}/extend:
+    post:
+      operationId: adminExtendTestAccount
+      description: >
+        Semper staff, fresh step-up. End the test account and its licence
+        `days` (1..90) from now.
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          type: string
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: Not a test account (user_not_found) }
+  /v1/admin/test-accounts/{uid}/password:
+    post:
+      operationId: adminResetTestAccountPassword
+      description: >
+        Semper staff, fresh step-up. A new generated password, returned once;
+        the account's refresh tokens are revoked.
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '200': { description: OK }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: Not a test account (user_not_found) }
+  /v1/admin/test-accounts/{uid}:
+    delete:
+      operationId: adminEndTestAccount
+      description: >
+        Semper staff, fresh step-up. End the test account now: suspended,
+        tokens and licence revoked, its data erased, its Auth user deleted.
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          type: string
+      responses:
+        '204': { description: Ended }
+        '401': { description: Missing or invalid device attestation }
+        '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
+        '404': { description: Not a test account (user_not_found) }
   /v1/admin/licenses:
     get:
       operationId: adminListLicenses
       description: >
         Semper staff. Licences newest first, cursor-paged (limit, page_token).
-        System Demo keys are left out unless include_demo=true; revoked
-        licences are left out when include_revoked=false. q searches by exact
+        System Demo keys are left out unless include_demo=true, test-account
+        licences unless include_test=true; revoked licences are left out when
+        include_revoked=false. q searches by exact
         email, domain or key prefix instead of paging; it is deprecated (the
         address lands in request logs) in favour of POST
         /v1/admin/licenses/search and is served for one more release.
@@ -659,7 +744,8 @@ paths:
         terms in a JSON body so an address never reaches a URL or a request
         log: q (required; an exact email, a domain or a key prefix, at most
         320 characters; empty pages the listing), limit, page_token,
-        include_demo (default false) and include_revoked (default true).
+        include_demo (default false), include_test (default false) and
+        include_revoked (default true).
         Unknown fields are refused with 422. The answer is the GET's. A read,
         so the ordinary admin token, like the GET.
       responses:

@@ -173,6 +173,9 @@ def classify_route(method: str, path: str, template: str | None = None) -> tuple
     # Finishing a staff revoke or edit's fan-out (ADR-026).
     if template == "/v1/tasks/license-fanout":
         return "admin", template
+    # Ending test accounts past their date (ADR-027): staff work, run daily.
+    if template == "/v1/tasks/test-account-expiry":
+        return "admin", template
     if template == "/v1/sessions" and method_u == "POST":
         return "backup", template
     if template.endswith("/uploads") and "/sessions/" in template:

@@ -172,7 +172,8 @@ def record_session(user: dict, device: dict, device_id: str | None,
         device_id,
         action="SESSION_CREATE",
         target={"type": "session", "id": sid},
-        detail={**counts, "app": app},
+        detail={**counts, "app": app,
+                **({"testAccount": True} if repo.test_account_of(user) else {})},
     )
 
     # Opening a Drive resumable session per file is ~2 round-trips each; at the

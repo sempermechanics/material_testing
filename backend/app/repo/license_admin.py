@@ -63,7 +63,7 @@ SEARCH_LIMIT = 50
 
 def list_licenses(limit: int = 50, page_token: str | None = None, *,
                   include_demo: bool = False, include_revoked: bool = True,
-                  q: str = "") -> tuple[list, str | None]:
+                  q: str = "", include_test: bool = False) -> tuple[list, str | None]:
     """The staff desk's licence table, newest first.
 
     It used to be the whole collection in document-id order. The id is the
@@ -74,10 +74,17 @@ def list_licenses(limit: int = 50, page_token: str | None = None, *,
 
     `q` is a search instead of a page: licences whose `emailLock` or
     `domainLock` is `q`, or whose key starts with it, with the same filters.
+
+    A staff test account's licence (`testAccount`, ADR-027) is left out
+    unless `include_test`. Filtered from the page rather than by the query:
+    Firestore cannot ask for "no such field" without dropping every licence
+    that lacks it, which is every real one. A page may then hold fewer rows
+    than `limit` with more to come; `nextPageToken` still says so.
     """
     col = db().collection("licenses")
     if q:
-        return _search_licenses(col, q, include_demo, include_revoked), None
+        rows = _search_licenses(col, q, include_demo, include_revoked)
+        return _without_test(rows, include_test), None
     query = col
     if not include_demo:
         query = query.where("mode", "==", MODE_LICENSED)
@@ -85,7 +92,13 @@ def list_licenses(limit: int = 50, page_token: str | None = None, *,
         query = query.where("status", "in", list(LIVE_STATUSES))
     docs, next_token = _cursor_page(col, query, limit, page_token,
                                     order_field="createdAt", descending=True)
-    return [_license_public(d.id, d.to_dict() or {}) for d in docs], next_token
+    rows = [_license_public(d.id, d.to_dict() or {}) for d in docs]
+    return _without_test(rows, include_test), next_token
+
+
+def _without_test(rows: list, include_test: bool) -> list:
+    """`rows` without test-account licences, unless they are asked for."""
+    return rows if include_test else [r for r in rows if not r["testAccount"]]
 
 
 def _search_licenses(col, q: str, include_demo: bool, include_revoked: bool) -> list:

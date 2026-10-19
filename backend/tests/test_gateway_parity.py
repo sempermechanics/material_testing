@@ -43,6 +43,9 @@ _NOT_PUBLISHED = {
     # The other Cloud Tasks callback, for the same reason: it finishes a
     # licence's pending fan-out (ADR-026).
     ("POST", "/v1/tasks/license-fanout"),
+    # The Cloud Scheduler job that ends expired test accounts (ADR-027): the
+    # same OIDC invoker, straight to the Cloud Run URL, for the same reason.
+    ("POST", "/v1/tasks/test-account-expiry"),
     # Readiness. It runs a Firestore read and a Drive call per hit, needs no
     # token, and its 503 names the failing dependency — published at the
     # gateway it was a free way to drive Drive quota and to learn which
