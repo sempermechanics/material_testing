@@ -47,4 +47,16 @@ class LabSessionTest {
         assertTrue(lab.isLabTest)
         assertEquals(StressStrain.Model.Axial(12.5f, axisX = true), lab.stressModel())
     }
+
+    @Test
+    fun `the viewer's and the exports' model reads a plain DIC session as axial`() {
+        // The CSV's stress column and the viewer's curve want a model even
+        // without a test; Model.of's blank-as-axial reading, in one place.
+        val untyped = LabSession(crossSectionMm2 = 12.5f, loadAxisX = false)
+        assertEquals(StressStrain.Model.Axial(12.5f, axisX = false), untyped.stressModelOrAxial())
+        assertEquals(StressStrain.Model.Axial(0f, axisX = true), LabSession.NONE.stressModelOrAxial())
+        val geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f)
+        val lab = LabSession("bending", geometry = geometry)
+        assertEquals(lab.stressModel(), lab.stressModelOrAxial())
+    }
 }

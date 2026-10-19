@@ -152,11 +152,7 @@ object SessionUploadBundler {
         roiY = record.roiY,
         roiW = record.roiW,
         roiH = record.roiH,
-        testType = record.testType,
-        crossSectionMm2 = record.crossSectionMm2,
-        loadAxisX = record.loadAxisX,
-        geometry = record.geometry,
-        curveCorrection = record.curveCorrection,
+        lab = record.labSession,
     )
 
     /**

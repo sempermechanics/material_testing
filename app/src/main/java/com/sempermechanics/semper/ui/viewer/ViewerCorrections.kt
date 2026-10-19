@@ -7,6 +7,7 @@ import android.content.Context
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.data.cloud.SessionMetadataSync
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.report.BeamDeflection
@@ -22,9 +23,13 @@ internal val ResultViewerActivity.geometry: SpecimenGeometry
 internal val ResultViewerActivity.curveCorrection: CurveCorrection
     get() = viewModel.curveCorrection ?: args.curveCorrection
 
+/** The session's lab test with Results' corrections: what the curve, share sheet, report and CSV read. */
+internal val ResultViewerActivity.labSession: LabSession
+    get() = args.labSession.copy(geometry = geometry, curveCorrection = curveCorrection)
+
 /** How this session's loads become stress; axial for a plain DIC session. */
 internal val ResultViewerActivity.stressModel: StressStrain.Model
-    get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
+    get() = labSession.stressModelOrAxial()
 
 /**
  * Results' Adjust curve: redraws the cached curve under [correction]

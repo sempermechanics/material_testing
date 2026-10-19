@@ -3,8 +3,7 @@
 
 package com.sempermechanics.semper.report
 
-import com.sempermechanics.semper.data.mechanical.CurveCorrection
-import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import java.io.File
@@ -44,23 +43,18 @@ object AnalysisCsvWriter {
         val roiY: Int,
         val roiW: Int,
         val roiH: Int,
-        /** Wire name of the mechanical test, or blank for a plain DIC session. */
-        val testType: String = "",
-        val crossSectionMm2: Float = 0f,
-        val loadAxisX: Boolean = true,
-        val geometry: SpecimenGeometry = SpecimenGeometry.NONE,
-        val curveCorrection: CurveCorrection = CurveCorrection.NONE,
+        /** The mechanical test; [LabSession.NONE] for a plain DIC session. */
+        val lab: LabSession = LabSession.NONE,
     ) {
         /**
          * A tensile or bending session: its CSV is [LAB_CSV_VERSION], with the
          * test preamble and the `load_N,stress_MPa` columns. A plain DIC
          * session's is Semper's own [CSV_VERSION].
          */
-        val isLabTest: Boolean get() = testType.isNotBlank()
+        val isLabTest: Boolean get() = lab.isLabTest
 
         /** How this session's loads become the `stress_MPa` column. */
-        val stressModel: StressStrain.Model
-            get() = StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
+        val stressModel: StressStrain.Model get() = lab.stressModelOrAxial()
     }
 
     /** One frame: its identity columns plus a lazy provider of its decoded field. */

@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.data.mechanical.BeamEdgeTaps
+import com.sempermechanics.semper.data.mechanical.LabSession
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.report.AnalysisCsvWriter
@@ -149,9 +150,7 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = "compression",
-            crossSectionMm2 = 12.5f,
-            loadAxisX = false,
+            lab = LabSession(testType = "compression", crossSectionMm2 = 12.5f, loadAxisX = false),
         )
         AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
         val text = out.readText()
@@ -195,8 +194,10 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = "bending",
-            geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f),
+            lab = LabSession(
+                testType = "bending",
+                geometry = SpecimenGeometry(spanMm = 80f, widthMm = 10f, thicknessMm = 4f),
+            ),
         )
         AnalysisCsvWriter.write(out, sweep = false, frames, metadata)
         val text = out.readText()
@@ -236,8 +237,7 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = testType,
-            crossSectionMm2 = 12.5f,
+            lab = LabSession(testType = testType, crossSectionMm2 = 12.5f),
         )
         AnalysisCsvWriter.write(out, sweep, frames, metadata)
         return out.readText()
@@ -294,8 +294,7 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = "tensile",
-            crossSectionMm2 = 12.5f,
+            lab = LabSession(testType = "tensile", crossSectionMm2 = 12.5f),
         )
         AnalysisCsvWriter.write(out, false, frames, metadata)
 
@@ -324,8 +323,10 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = "bending",
-            geometry = SpecimenGeometry(spanMm = 200f, widthMm = 20f, thicknessMm = 5f, loadPoint = taps),
+            lab = LabSession(
+                testType = "bending",
+                geometry = SpecimenGeometry(spanMm = 200f, widthMm = 20f, thicknessMm = 5f, loadPoint = taps),
+            ),
         )
         AnalysisCsvWriter.write(out, false, frames, metadata)
         return out.readText()
@@ -408,7 +409,7 @@ class AnalysisCsvPreambleTest {
             roiY = 0,
             roiW = 640,
             roiH = 480,
-            testType = testType,
+            lab = LabSession(testType = testType),
         )
         AnalysisCsvWriter.write(out, sweep, frames, metadata)
 

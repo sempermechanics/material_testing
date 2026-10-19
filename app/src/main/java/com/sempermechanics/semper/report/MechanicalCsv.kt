@@ -17,7 +17,7 @@ internal object MechanicalCsv {
      */
     fun writePreamble(w: Writer, metadata: AnalysisCsvWriter.Metadata) {
         val model = metadata.stressModel
-        w.append("# test_type,").append(AnalysisCsvWriter.escape(metadata.testType)).append('\n')
+        w.append("# test_type,").append(AnalysisCsvWriter.escape(metadata.lab.testType)).append('\n')
         w.append("# stress_model,").append(model.wireName).append('\n')
         // Cross-section is written even at 0, as the first version-2 files
         // did; the bending dimensions only once entered.
@@ -27,7 +27,7 @@ internal object MechanicalCsv {
                     .append(String.format(Locale.US, "%.4f", value)).append('\n')
             }
         }
-        w.append("# load_axis,").append(if (metadata.loadAxisX) "x" else "y").append('\n')
+        w.append("# load_axis,").append(if (metadata.lab.loadAxisX) "x" else "y").append('\n')
         w.append("# load_unit,N\n")
         (model as? StressStrain.Model.Flexural)?.probe?.let { writeLoadPoint(w, it) }
         (model as? StressStrain.Model.Axial)?.correction?.takeUnless { it.isNone }?.let { writeCorrection(w, it) }

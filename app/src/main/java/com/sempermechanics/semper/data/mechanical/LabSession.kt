@@ -20,8 +20,16 @@ data class LabSession(
     val isLabTest: Boolean get() = testType.isNotBlank()
 
     /** How this session's loads become stress, or null for a plain DIC session. */
-    fun stressModel(): StressStrain.Model? =
-        if (isLabTest) StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection) else null
+    fun stressModel(): StressStrain.Model? = if (isLabTest) stressModelOrAxial() else null
+
+    /**
+     * How this session's loads become stress, a plain DIC session's read as
+     * axial (`StressStrain.Model.of`'s blank): for the readers that want a
+     * model whatever the session, the viewer's curve and the CSV's stress
+     * column, which ask [isLabTest] for whether to show it.
+     */
+    fun stressModelOrAxial(): StressStrain.Model =
+        StressStrain.Model.of(testType, crossSectionMm2, loadAxisX, geometry, curveCorrection)
 
     companion object {
         val NONE = LabSession()

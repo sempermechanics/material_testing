@@ -111,11 +111,7 @@ internal class DataExport(
             roiY = roi.y,
             roiW = roi.w,
             roiH = roi.h,
-            testType = s.testType,
-            crossSectionMm2 = s.crossSectionMm2,
-            loadAxisX = s.loadAxisX,
-            geometry = s.geometry,
-            curveCorrection = s.curveCorrection,
+            lab = s.lab,
         )
         val f = File(outDir, "${s.baseName}_data.csv")
         val stats = report.within(0.0, CSV_STATS_SHARE)

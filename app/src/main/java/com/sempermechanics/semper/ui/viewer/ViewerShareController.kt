@@ -98,12 +98,8 @@ internal class ViewerShareController(private val host: ResultViewerActivity) {
                     .toMap()
             },
             reportSource = reportSource(),
-            testType = host.testType,
-            crossSectionMm2 = host.crossSectionMm2,
-            loadAxisX = host.loadAxisX,
+            lab = host.labSession,
             loadsN = host.loadsN,
-            geometry = host.geometry,
-            curveCorrection = host.curveCorrection,
             stressStrain = host.viewModel.stressStrain,
         )
     }
