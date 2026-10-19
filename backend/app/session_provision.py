@@ -66,12 +66,15 @@ def provision_session(sid: str, *, purge_on_failure: bool = False,
     stop waiting.
 
     The inline caller passes the `session` doc it has just written so it is not
-    read again, and answers the client from the returned `uploads` (the
+    read again (a retry reads it through `repo.start_provisioning`), and answers the client from the returned `uploads` (the
     targets opened here) instead of listing them back. The user doc is still
     read here: the folder pointers must come from the stored doc, not from
     whatever the auth layer handed the route.
     """
-    session = session or repo.get_session(sid)
+    # A retry (no `session` handed in) stamps `updatedAt` as it starts, so the
+    # delete guard sees it running however late it began (TD-296). The inline
+    # caller's session was written by this same request.
+    session = session or repo.start_provisioning(sid)
     if not session:
         return {"sessionId": sid, "provisioned": 0, "status": "gone", "uploads": []}
     if session.get("status") == statuses.SESSION_COMPLETED:

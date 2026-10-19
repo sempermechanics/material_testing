@@ -222,6 +222,36 @@ def test_a_contended_status_write_on_an_erased_session_is_a_no_op(store, contend
     assert "gone" not in store._data.get("sessions", {})
 
 
+def test_a_contended_provisioning_start_still_stamps_the_session(store, contended):
+    """TD-296: losing the transaction still stamps `updatedAt`, so the delete
+    guard sees the retry running."""
+    store._data["sessions"] = {"s1": {"uid": "u1", "status": statuses.SESSION_PROVISIONING,
+                                      "updatedAt": datetime(2020, 1, 1)}}
+    session = repo.start_provisioning("s1")
+    assert session["sessionId"] == "s1"
+    assert store._data["sessions"]["s1"]["updatedAt"] != datetime(2020, 1, 1)
+
+
+def test_a_contended_provisioning_start_leaves_other_statuses_alone(store, contended):
+    store._data["sessions"] = {"s1": {"uid": "u1", "status": statuses.SESSION_COMPLETED}}
+    assert repo.start_provisioning("s1")["status"] == statuses.SESSION_COMPLETED
+    assert store._data["sessions"]["s1"] == {"uid": "u1", "status": statuses.SESSION_COMPLETED}
+    assert repo.start_provisioning("gone") is None
+
+
+def test_a_contended_provisioning_start_on_a_session_erased_meanwhile_is_none(
+        store, contended, monkeypatch):
+    """Read PROVISIONING, erased before the stamp: the retry is told it is gone."""
+    from app.repo import sessions
+    store._data["sessions"] = {"s1": {"uid": "u1", "status": statuses.SESSION_PROVISIONING}}
+
+    def erased(ref, patch):
+        raise NotFound("gone")
+
+    monkeypatch.setattr(sessions, "_update_doc", erased)
+    assert repo.start_provisioning("s1") is None
+
+
 def test_a_new_session_status_on_an_erased_session_is_a_no_op(store):
     repo.set_new_session_status("gone", statuses.SESSION_UPLOADING)
     assert "gone" not in store._data.get("sessions", {})

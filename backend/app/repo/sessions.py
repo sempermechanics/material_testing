@@ -222,6 +222,45 @@ def set_session_status(sid: str, status: str, error_code: str | None = None) -> 
     _run_tx(_set, on_contended=_guarded_write)
 
 
+def start_provisioning(sid: str) -> dict | None:
+    """The session a provisioning attempt is about to work on, or None if it
+    is gone; a session still PROVISIONING has its `updatedAt` stamped first.
+
+    `DELETE /v1/sessions/{sid}` refuses a PROVISIONING session written within
+    `PROVISIONING_GRACE` (`session_provision.provisioning_in_progress`). A
+    Cloud Tasks retry can start long after the session's last write, and
+    without the stamp a delete during its Drive work went ahead and left the
+    folder it then created (TD-296). Read and stamp share a transaction, so a
+    delete that lands first wins and the retry finds nothing; any other
+    status is read back untouched.
+    """
+    ref = db().collection("sessions").document(sid)
+    stamp = {"updatedAt": _base.firestore.SERVER_TIMESTAMP}
+
+    def _read(snap) -> dict | None:
+        return {**(snap.to_dict() or {}), "sessionId": sid} if snap.exists else None
+
+    @_base.firestore.transactional
+    def _start(tx) -> dict | None:
+        session = _read(_get(ref, tx))
+        if session and session.get("status") == statuses.SESSION_PROVISIONING:
+            tx.update(ref, stamp)
+        return session
+
+    def _guarded_stamp() -> dict | None:
+        # Every attempt lost: files are being written to this session right
+        # now. A plain guarded stamp still beats leaving the delete unguarded.
+        session = _read(_get(ref))
+        if session and session.get("status") == statuses.SESSION_PROVISIONING:
+            try:
+                _update_doc(ref, stamp)
+            except NotFound:
+                return None
+        return session
+
+    return _run_tx(_start, on_contended=_guarded_stamp)
+
+
 def set_new_session_status(sid: str, status: str) -> None:
     """`set_session_status` for a session this request created, as a plain
     write: its upload targets have not left the request yet, so nothing can

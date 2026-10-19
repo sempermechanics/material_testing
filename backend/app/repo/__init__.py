@@ -157,6 +157,7 @@ from .sessions import (  # noqa: F401
     upload_target,
     list_session_files,
     set_session_status,
+    start_provisioning,
     set_new_session_status,
     iter_unprovisioned_files,
     set_file_upload_urls,
