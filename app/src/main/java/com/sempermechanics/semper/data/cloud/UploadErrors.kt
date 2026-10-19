@@ -16,7 +16,10 @@ internal object UploadErrors {
 
     /** What an HTTP error that ended an upload run means for the backup. */
     enum class Kind {
-        /** The account's analysis quota is full (409 `session_quota_exceeded`). Terminal. */
+        /**
+         * The account's analysis quota is full (409 `session_quota_exceeded`),
+         * or for demo the device's (409 `device_quota_exceeded`). Terminal.
+         */
         QUOTA,
 
         /** Too many files for one analysis (413). Terminal. */
@@ -66,7 +69,8 @@ internal object UploadErrors {
     private fun refusal(code: Int, detail: String): Kind {
         fun detailIs(vararg codes: String) = codes.any { ApiErrors.isCode(detail, it) }
         return when {
-            code == HttpStatus.CONFLICT && detailIs(ApiErrors.SESSION_QUOTA_EXCEEDED) -> Kind.QUOTA
+            code == HttpStatus.CONFLICT &&
+                detailIs(ApiErrors.SESSION_QUOTA_EXCEEDED, ApiErrors.DEVICE_QUOTA_EXCEEDED) -> Kind.QUOTA
             code == HttpStatus.PAYLOAD_TOO_LARGE -> Kind.TOO_LARGE
             code == HttpStatus.BAD_REQUEST -> Kind.STALE_SESSION
             code == HttpStatus.CONFLICT && detailIs(ApiErrors.SIZE_OR_STATE_MISMATCH) -> Kind.STALE_SESSION

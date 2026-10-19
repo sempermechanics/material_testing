@@ -82,6 +82,9 @@ object AccountCache {
     /** True while an upload's quota refusal holds the stop ([setSessionLimitReached]). */
     fun isLimitForced(context: Context): Boolean = prefs(context)[Session.LIMIT_FORCED]
 
+    /** True while the device half of the demo cap holds the stop ([setDeviceLimitReached]). */
+    fun isDeviceLimitForced(context: Context): Boolean = prefs(context)[Session.DEVICE_LIMIT_FORCED]
+
     /**
      * The server's session ceiling, owned by [AppRemoteConfig]; 0 until the
      * backend reports it. Not what a screen shows: that is the cap enforced,
@@ -96,8 +99,10 @@ object AccountCache {
     /**
      * Refresh the cached USED count. [localCount] is folded in so the client
      * blocks new analyses even before the next cloud reconcile. Fresh numbers
-     * clear any forced stop; the hard stop itself is recomputed live by
-     * `SessionQuota.blocked` from used vs the [AppRemoteConfig] ceiling.
+     * clear the account's forced stop; the hard stop itself is recomputed live by
+     * `SessionQuota.blocked` from used vs the [AppRemoteConfig] ceiling. The
+     * device's stop stays: these are the account's numbers, and room in them
+     * says nothing about the device's (TD-279).
      */
     fun setQuota(context: Context, used: Int, localCount: Int = 0) {
         prefs(context).edit {
@@ -120,20 +125,30 @@ object AccountCache {
 
     /**
      * Sessions were deleted from the phone, leaving [localCount]: refresh the
-     * count and lift a forced stop, so the user is not held at a limit they
-     * just made room under. The next upload re-forces it if the server still
-     * says no.
+     * count and lift both forced stops, so the user is not held at a limit they
+     * just made room under. The next upload re-forces either if the server
+     * still says no.
      */
     fun onLocalSessionsRemoved(context: Context, localCount: Int) {
         prefs(context).edit {
             put(Session.LOCAL_COUNT, localCount)
             put(Session.LIMIT_FORCED, false)
+            put(Session.DEVICE_LIMIT_FORCED, false)
         }
     }
 
     /** Force the hard stop (e.g. an upload rejected 409 without fresh numbers). */
     fun setSessionLimitReached(context: Context, v: Boolean) {
         prefs(context).edit { put(Session.LIMIT_FORCED, v) }
+    }
+
+    /**
+     * Force the device's stop: an upload refused `device_quota_exceeded`.
+     * Unlike [setSessionLimitReached], [setQuota] does not lift it; a delete
+     * on the phone ([onLocalSessionsRemoved]) or sign-out ([clear]) does.
+     */
+    fun setDeviceLimitReached(context: Context, v: Boolean) {
+        prefs(context).edit { put(Session.DEVICE_LIMIT_FORCED, v) }
     }
 
     /**

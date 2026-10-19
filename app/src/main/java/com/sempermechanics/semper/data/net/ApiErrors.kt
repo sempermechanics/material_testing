@@ -89,6 +89,14 @@ object ApiErrors {
     const val SESSION_QUOTA_EXCEEDED = "session_quota_exceeded"
 
     /**
+     * A demo account's own count has room, but this device's stored analyses,
+     * every account's, are at the demo cap (409, TD-279). Re-checking the
+     * account's count cannot lift it, so it holds its own stop
+     * ([AccountCache.setDeviceLimitReached]).
+     */
+    const val DEVICE_QUOTA_EXCEEDED = "device_quota_exceeded"
+
+    /**
      * Every seat on the institution's floating licence is in use (409).
      *
      * Not a fault in the account: the caller stays on the roster and gets a

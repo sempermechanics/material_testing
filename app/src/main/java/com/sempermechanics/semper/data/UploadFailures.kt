@@ -156,7 +156,13 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
     private fun quotaFull(e: ApiException): ListenableWorker.Result {
         Timber.e("Upload rejected (%d): %s", e.code, e.parsedDetail)
         run.abandon(stagingDir, analyticsReason = "quota")
-        AccountCache.setSessionLimitReached(context, true)
+        // The device's stop is its own: a re-check of the account's count
+        // would lift the account's and find room the next upload refuses.
+        if (ApiErrors.isCode(e.parsedDetail, ApiErrors.DEVICE_QUOTA_EXCEEDED)) {
+            AccountCache.setDeviceLimitReached(context, true)
+        } else {
+            AccountCache.setSessionLimitReached(context, true)
+        }
         // Android blocks a background activity start, so open it only while the
         // app is on screen; otherwise Home opens it from the gate (and can read
         // UPLOAD_FAIL_KIND).

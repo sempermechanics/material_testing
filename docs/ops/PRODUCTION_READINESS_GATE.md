@@ -351,7 +351,7 @@ pre-licensing documents)
       200 (was 401 `nonce_invalid_or_replayed`, leaving analyses in the cloud).
 - [ ] 24 h log watch: `feature_not_licensed` only from restore/bundle by demo
       accounts (never from `POST /v1/sessions`); `app_check_required` **= 0**;
-      `session_quota_exceeded`; `license_device_mismatch`; `mfa_required`;
+      `session_quota_exceeded`; `device_quota_exceeded`; `license_device_mismatch`; `mfa_required`;
       5xx rate; Cloud Tasks backlog.
 
 **Deferred / risk-accepted for launch**
@@ -507,6 +507,7 @@ B-resilience, C-provisioning, C-console, C-emm, D5 and E-tamper were brought up 
 the account-anchored entitlement change at `2371bec`
 ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)); no status moved, so the
 count stands. TD-259 and TD-272 closed; TD-274, TD-276 and TD-277 joined owner cells.
+TD-279 closed on 2026-10-19 (no row's status moved); row 8.4's evidence names the aligned Terms.
 
 Status: **PASS** (built or done, with evidence), **PARTIAL** (part built, the rest
 owned), **GAP** (not built), **EXTERNAL** (a console, Play or human step; the repo
@@ -571,7 +572,7 @@ owner id does not resolve.
 | 8.1 | Data map | PARTIAL | [DATA_MAP.md](../legal/DATA_MAP.md), derived from the code. No DPIA; findings recorded | TD-241, TD-270, TD-271 |
 | 8.2 | DPDP readiness by 13 May 2027; Rule 7 playbook | PARTIAL | [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md) "Personal-data breach"; Grievance Officer and operator fields unfilled; no tabletop | TD-241, TD-36 |
 | 8.3 | GDPR for EU customers | N-A | The service is not offered in the EU, EEA or UK (`docs/legal/PRIVACY_POLICY.md:25-29`); revisit before serving them | — |
-| 8.4 | Play Data safety consistent with SDKs | EXTERNAL | Draft [PLAY_DATA_SAFETY.md](../legal/PLAY_DATA_SAFETY.md) from `app/build.gradle.kts:354-418`; not submitted; `AD_ID` unchecked. The app is consumption-only ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)); the Terms it links still describe fees, for counsel | TD-232, TD-277 |
+| 8.4 | Play Data safety consistent with SDKs | EXTERNAL | Draft [PLAY_DATA_SAFETY.md](../legal/PLAY_DATA_SAFETY.md) from `app/build.gradle.kts:354-418`; not submitted; `AD_ID` unchecked. The app is consumption-only ([ADR-024](../adr/ADR-024-account-anchored-entitlements.md)); the Terms it links say so (6.6) and keep fees for access arranged outside the app, for counsel | TD-232, TD-277 |
 | 8.5 | Export and deletion per tenant and per user | PARTIAL | Per user: `GET /v1/me/export`, `DELETE /v1/me` (`backend/app/routers/account.py:194`, `:294`), Auth user deleted after TD-214 (`:350`), which removes the sign-in for both apps (ADR-023 decision note; the app's confirmation says so, `app/src/main/res/values/strings.xml:321`); erasure also deletes the account's `auth_links` rows and blanks the address on every seat it held (`backend/app/repo/account.py:156-244`). Per institution: none. The seat search needs its index deployed first | FI-23, TD-271 |
 
 ### Parts B–E

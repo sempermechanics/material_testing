@@ -1033,7 +1033,12 @@ row (`SessionStore.save`). In order:
 3. The server has said full → blocked. An upload refused with 409
    `session_quota_exceeded` forces the stop (`AccountCache.setSessionLimitReached`);
    fresh server numbers (`setQuota`) or a delete on the phone
-   (`onLocalSessionsRemoved`) lift it.
+   (`onLocalSessionsRemoved`) lift it. An upload refused with 409
+   `device_quota_exceeded` (the demo cap counted per device) forces the device's
+   stop instead (`AccountCache.setDeviceLimitReached`, read by
+   `SessionQuota.deviceStop` while the server counts the account as demo). Fresh
+   account numbers do not lift it, so the limit screen's Re-check keeps it; a
+   delete on the phone, sign-out or a licence does (TD-279).
 4. Otherwise blocked when the larger of the server's last count and the phone's
    rows reaches `LicenseEntitlements.analysisCap()`. The phone's rows are the
    session index's: a check off the main thread counts them, and a tap on the main
@@ -1048,8 +1053,8 @@ if the row was deleted meanwhile, its save is a new row with no admission, the
 rule applies, and a refusal ends the run as `RunStop.SessionLimit` (`afterSave`).
 The backend counts account-wide (every app and phone) and refuses only at
 `POST /v1/sessions`, the upload. For a demo account it also counts every
-account's analyses stored from this phone, and refuses at the cap with the same
-`409 session_quota_exceeded` (`count_device_sessions`,
+account's analyses stored from this phone, and refuses at the cap with its own
+`409 device_quota_exceeded` (`count_device_sessions`,
 `backend/app/repo/sessions.py:415-439`); both counts are of analyses stored now,
 so a delete frees a place.
 

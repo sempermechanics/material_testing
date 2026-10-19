@@ -45,6 +45,12 @@ NOT_TASK_INVOKER = "not_task_invoker"
 # --- sessions, files, quotas -----------------------------------------------
 SESSION_NOT_FOUND = "session_not_found"
 SESSION_QUOTA_EXCEEDED = "session_quota_exceeded"
+# 409 from `POST /v1/sessions` when a demo account's own count has room but
+# this device's stored analyses, every account's, are at the demo cap
+# (TD-279). Its own code because a re-check of the account's count cannot
+# clear it: the app holds this stop until an upload succeeds or an analysis
+# is deleted, rather than reporting room the next upload refuses.
+DEVICE_QUOTA_EXCEEDED = "device_quota_exceeded"
 TOO_MANY_FILES = "too_many_files"
 FILE_NOT_FOUND = "file_not_found"
 FILE_NOT_UPLOADED = "file_not_uploaded"
@@ -269,6 +275,7 @@ CLIENT_BRANCHED = frozenset(
         FILE_NOT_FOUND,
         RATE_LIMITED,
         SESSION_QUOTA_EXCEEDED,
+        DEVICE_QUOTA_EXCEEDED,
         # The app renders this as "all seats are in use, try again" rather
         # than a failure, so a rename here needs the matching ApiErrors.kt edit.
         NO_FLOATING_SEAT,
