@@ -33,17 +33,34 @@ import java.util.Locale
 @RunWith(RobolectricTestRunner::class)
 class PdfReportGeneratorTest {
 
-    private fun statuses(flow: Flow<Progress>): List<Progress.Status> {
-        val events = mutableListOf<Progress>()
-        runCatching { runBlocking { flow.collect { events += it } } }
-        return events.filterIsInstance<Progress.Status>()
+    /** What a flow emitted, and what ended it (here, normally the final write). */
+    private class Collected(
+        val statuses: List<Progress.Status>,
+        val failure: Throwable?,
+    ) {
+        val failureText: String get() = failure?.stackTraceToString() ?: "none"
     }
+
+    private fun collect(flow: Flow<Progress>): Collected {
+        val events = mutableListOf<Progress>()
+        val failure = runCatching { runBlocking { flow.collect { events += it } } }.exceptionOrNull()
+        return Collected(events.filterIsInstance<Progress.Status>(), failure)
+    }
+
+    private fun statuses(flow: Flow<Progress>): List<Progress.Status> = collect(flow).statuses
 
     @Test
     fun `batch progress spreads frames over the middle of the bar`() {
-        val events = statuses(PdfReportGenerator.generateBatch(4, { null }, ByteArrayOutputStream()))
+        val collected = collect(PdfReportGenerator.generateBatch(4, { null }, ByteArrayOutputStream()))
+        val events = collected.statuses
         // The write, last, has its own status rather than the last frame's.
-        assertEquals(listOf(2, 25, 48, 71, 98), events.map { it.percent })
+        // The failure goes in the message: CI once saw no status at all here,
+        // so the flow threw before its first emit, and the cause was swallowed.
+        assertEquals(
+            "statuses; the flow ended with: ${collected.failureText}",
+            listOf(2, 25, 48, 71, 98),
+            events.map { it.percent },
+        )
         assertEquals(Progress.Status(Stage.FRAME, 2, frame = 1, frameCount = 4), events.first())
         assertEquals(Stage.FINISHING, events.last().stage)
     }
