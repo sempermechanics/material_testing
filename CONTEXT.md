@@ -139,18 +139,21 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
   --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `17d7bc8` by #139
   (`71649bd6`), 2026-10-19, not deployed: its #454, #436–#447 and **Re-run as a copy**
-  (its [ADR-022](docs/adr/ADR-022-rerun-as-copy.md)), which does not carry a lab test's
-  type or loads yet (TD-280). Metadata schema `/7` here (ours past `/3` are not the
+  (its [ADR-022](docs/adr/ADR-022-rerun-as-copy.md)), which here copies the lab test too
+  (`LabRerun`, #140). Metadata schema `/7` here (ours past `/3` are not the
   parent's numbers). Lab inputs ride its seams: `RunSpec.mechanical` (ADR-004),
   `ViewerArgs` (ADR-003), `WizardDraft` (ADR-005). ADR and TD numbers are shared; the
-  next TD free in both is TD-311.
+  next TD free in both is TD-312.
 - **Open: #140** (`ccr-603fe346-1bw2fa`, the 2026-10-19 review; `main` merged in): load logs
   in kgf/tf, decimal commas and the delimiter read after a long preamble, logged time units;
   photo times matched within 1 s when any lacks EXIF sub-seconds; E refitted over 10–40 % of
   Rp0.2; bending strain along the beam from the thickness gradient (none without taps); Rp0.2
-  and peak in the CSV trailer; one `LabWizardState`, `LabSession` and Results panel; #457's
-  upload, download and ui-4 commits. Left: TD-300, TD-301 (`ViewerArgs`), TD-305 (the rest of
-  #457, now with its TD-281–TD-297 batch, at the next sync) and TD-310 (taps held vertical).
+  and peak in the CSV trailer; one `LabWizardState`, `LabSession` and Results panel, and
+  `ViewerArgs` carries one `LabSession` (TD-301); beam-edge taps that lie square to a tilted
+  beam, snapped within 3° (TD-310); Home's Re-run copies a tensile or bending test, typed
+  masses included (TD-280); #457's upload, download and ui-4 commits. Head `afefdb45`. Left:
+  TD-300, TD-305 (the rest of #457, its tech-debt batches included, at the next sync) and
+  TD-311 (`StaticAnalysisActivity.kt` 510 lines).
 - **Readiness port, merged 2026-10-19, not deployed** (#137, #138: semperdic-app's
   #448/#449; TD-214–TD-279, FI-17–FI-24): **minSdk 30**, the signed offline entitlement
   ([ADR-023](docs/adr/ADR-023-signed-offline-entitlement.md); tokens name `materialtesting`),
