@@ -7,6 +7,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.annotation.StringRes
+import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.policy.AppPolicy
@@ -20,7 +21,6 @@ import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.inflateSheet
-import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import timber.log.Timber
 import java.io.File
@@ -36,20 +36,20 @@ import java.util.Locale
  * pick a Save-to-Files destination first, then write there. Field GIFs are
  * single-setting only; a parameter sweep hides that row.
  */
-class ShareCenter(private val host: ResultViewerActivity) {
+internal class ShareCenter(private val activity: AppCompatActivity, private val source: ShareSource) {
 
-    private val snap by lazy { host.share.buildShareSnapshot() }
+    private val snap by lazy { source.buildShareSnapshot() }
 
     private fun ensureShareAllowed(): Boolean {
-        val blocked = blockedMessage(access(host)) ?: return true
-        CrispToast.show(host, host.getString(blocked), long = true)
+        val blocked = blockedMessage(access(activity)) ?: return true
+        CrispToast.show(activity, activity.getString(blocked), long = true)
         return false
     }
 
     fun show() {
         if (!ensureShareAllowed()) return
         val s = snap ?: return
-        val sheet = inflateSheet(host, R.layout.sheet_share)
+        val sheet = inflateSheet(activity, R.layout.sheet_share)
         val v = SheetShareBinding.bind(sheet.view)
 
         val frameName = s.nameAt(s.frameIndex) ?: "Frame ${s.plannedAt(s.frameIndex) + 1}"
@@ -60,7 +60,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
             typeString = s.typeString,
             frameName = frameName,
             sourceName = s.sourceImageName(s.frameIndex) ?: frameName,
-        ).applyTo(v, host.resources)
+        ).applyTo(v, activity.resources)
 
         sheet.row(R.id.rowSharePhoto) { runJob(ShareKind.PHOTO) }
         sheet.row(R.id.rowShareAllPhotos) { offerSlowExport(ShareKind.PHOTOS, s) }
@@ -80,8 +80,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
      */
     private fun offerSlowExport(kind: ShareKind, s: Snapshot) {
         SendToSheet.showChooser(
-            host,
-            onSave = { host.share.pickShareDocument(kind, suggestedName(kind, s)) },
+            activity,
+            onSave = { source.pickShareDocument(kind, suggestedName(kind, s)) },
             onShare = { runJob(kind, direct = true) },
         )
     }
@@ -95,7 +95,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val known = ShareKind.fromWire(kind)
         if (known == null) {
             Timber.e("Unknown share kind %s", kind)
-            CrispToast.show(host, host.getString(R.string.share_failed), long = true)
+            CrispToast.show(activity, activity.getString(R.string.share_failed), long = true)
             return
         }
         runJob(known, destUri = uri)
@@ -123,13 +123,13 @@ class ShareCenter(private val host: ResultViewerActivity) {
         val s = snap
         if (s == null) {
             Timber.e("Share snapshot unavailable for %s", kind.wire)
-            CrispToast.show(host, host.getString(R.string.share_failed), long = true)
+            CrispToast.show(activity, activity.getString(R.string.share_failed), long = true)
             return
         }
-        val app = host.applicationContext
+        val app = activity.applicationContext
         val resources = app.resources
         val cacheDir = app.cacheDir
-        host.shareExports.start(kind, host.getString(kind.progressText), destUri, direct) { report ->
+        source.startExport(kind, activity.getString(kind.progressText), destUri, direct) { report ->
             ShareExportBuilder(s, resources, ShareExportBuilder.newJobDir(cacheDir)).produce(kind, report)
         }
     }
@@ -221,4 +221,25 @@ class ShareCenter(private val host: ResultViewerActivity) {
             FeatureAccess.PAUSED, FeatureAccess.HIDDEN -> R.string.share_paused
         }
     }
+}
+
+/**
+ * What the share sheet needs from the viewer: the snapshot it exports from,
+ * the save-as picker, and the job runner that outlives a rotation.
+ */
+internal interface ShareSource {
+    /** Everything an export needs, or null before the frame set is read or with no frames. */
+    fun buildShareSnapshot(): ShareCenter.Snapshot?
+
+    /** Opens the save-as picker for a slow export of [kind], suggesting [filename]. */
+    fun pickShareDocument(kind: ShareKind, filename: String)
+
+    /** Starts an export of [kind]; see [ShareExportController.start]. */
+    fun startExport(
+        kind: ShareKind,
+        title: String,
+        destUri: Uri?,
+        direct: Boolean,
+        produce: suspend (report: ExportReport) -> Pair<File, String>,
+    )
 }

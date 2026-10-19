@@ -84,7 +84,7 @@ class ShareCenterTest {
     fun `save to Files writes the whole batch as one csv`() {
         val activity = viewer()
         val dest = File(temp.root, "picked.csv")
-        ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
+        ShareCenter(activity, activity.share).writeKindToUri("csv", Uri.fromFile(dest))
         idleUntil("the save toast") { ShadowToast.getLatestToast() != null }
 
         assertEquals(activity.getString(R.string.save_success), ShadowToast.getTextOfLatestToast())
@@ -100,7 +100,7 @@ class ShareCenterTest {
     /** The share CSV's point rows, keyed by their image column. */
     private fun csvRowsByImage(activity: ResultViewerActivity): Map<String, Int> {
         val dest = File(temp.root, "picked_${System.nanoTime()}.csv")
-        ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
+        ShareCenter(activity, activity.share).writeKindToUri("csv", Uri.fromFile(dest))
         idleUntil("the save toast") { ShadowToast.getLatestToast() != null }
         val lines = dest.readLines()
         val header = lines.indexOfFirst { it.startsWith("image,") }
@@ -134,7 +134,7 @@ class ShareCenterTest {
     fun `an unknown kind reports failure instead of saving`() {
         val activity = viewer()
         val dest = File(temp.root, "picked.bin")
-        ShareCenter(activity).writeKindToUri("bogus", Uri.fromFile(dest))
+        ShareCenter(activity, activity.share).writeKindToUri("bogus", Uri.fromFile(dest))
         idleUntil("the failure pill") { pillText(activity) != null }
 
         assertEquals(activity.getString(R.string.share_failed), pillText(activity))
@@ -172,7 +172,7 @@ class ShareCenterTest {
         val activity = controller.get()
         val dest = File(temp.root, "picked.csv")
 
-        ShareCenter(activity).writeKindToUri("csv", Uri.fromFile(dest))
+        ShareCenter(activity, activity.share).writeKindToUri("csv", Uri.fromFile(dest))
         // Rotate before the job can report back to the main thread.
         val rebuilt = controller.recreate().get()
         idleUntil("the save toast") { ShadowToast.getLatestToast() != null || pillText(rebuilt) != null }

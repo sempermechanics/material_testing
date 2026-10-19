@@ -123,7 +123,7 @@ whole however long it is, and only the code around it moves out. They are
 | The heatmap pixel loops | `HeatmapRenderer.generateHeatmapIndices` (`report/HeatmapRenderer.kt:59`), `DeformedHeatmap.generateDeformedHeatmapIndices` (`report/DeformedHeatmap.kt:40`) | 119, 78 |
 | GIF LZW | `GifEncoder`'s `compress` (`report/GifEncoder.kt:184`) | |
 | `.dat` decode | `DatDecoder.decodeInto` (`field/DatDecoder.kt:32`), behind `DicResult.decodeDatFile` | |
-| Viewer look-ahead | `ViewerFrameLoader.prefetchAround` (`ui/viewer/ViewerFrameLoader.kt:121`) | |
+| Viewer look-ahead | `ViewerFrameLoader.prefetchAround` (`ui/viewer/ViewerFrameLoader.kt:142`) | |
 | Inspect index | `PointSpatialIndex.build` (`ui/viewer/inspect/PointSpatialIndex.kt:50`) | |
 
 After #331 no main-source file is over 500 lines; the largest is

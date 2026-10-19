@@ -2,20 +2,47 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.common.commitOnDone
 import com.sempermechanics.semper.ui.common.hideKeyboard
+import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
+import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
 import kotlinx.coroutines.delay
+import java.io.File
+
+/** What [FrameJumpController] needs from the viewer; its lifecycle scopes the debounce. */
+internal interface FrameJumpHost :
+    ViewerViews,
+    LifecycleOwner {
+    /** Holds the frame on screen ([ResultViewerViewModel.currentFrameIndex]); this moves it. */
+    val viewModel: ResultViewerViewModel
+
+    /** The opened frame set's `.dat` files; empty until it is read. */
+    val batchFiles: List<File>
+
+    /** True when the frames are a sweep's combinations: no summary slot. */
+    val isSweep: Boolean
+}
 
 /**
  * Moving between the viewer's frames: Prev / Next (debounced, so a burst
  * decodes only the frame it settles on), the summary slot before frame 1, and
- * the typed frame number.
+ * the typed frame number. A move loads through [frames], brings back
+ * [chrome], and swaps the frame for [summary] (dropping [inspect]'s probe,
+ * titled by [captions]) at the slot.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * Constructed before onCreate; reads [ViewerViews.binding] lazily.
  */
-internal class FrameJumpController(private val host: ResultViewerActivity) {
+internal class FrameJumpController(
+    private val host: FrameJumpHost,
+    private val chrome: ViewerChromeController,
+    private val frames: ViewerFrameLoader,
+    private val summary: ViewerSummaryController,
+    private val inspect: ViewerInspectController,
+    private val captions: ViewerCaptions,
+) {
 
     private val binding get() = host.binding
 
@@ -29,7 +56,7 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
 
     /** Advance or retreat one frame (or leave/enter the summary). Used by buttons and fling. */
     fun stepFrame(delta: Int) {
-        host.chrome.bumpChrome()
+        chrome.bumpChrome()
         if (delta == 0) return
         if (delta > 0) {
             if (showingSummary) {
@@ -56,12 +83,12 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
     private fun requestFrameLoad(debounced: Boolean) {
         scrubDebounceJob.cancel()
         if (!debounced) {
-            host.frames.loadFrameData(host.viewModel.currentFrameIndex)
+            frames.loadFrameData(host.viewModel.currentFrameIndex)
             return
         }
         scrubDebounceJob.launch(host.lifecycleScope) {
             delay(SCRUB_DEBOUNCE_MS)
-            host.frames.loadFrameData(host.viewModel.currentFrameIndex)
+            frames.loadFrameData(host.viewModel.currentFrameIndex)
         }
     }
 
@@ -88,17 +115,17 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
     fun wireSummaryGestures() {
         val gif = binding.imgSummary
         gif.onScrubListener = { stepFrame(it) }
-        gif.onCenterDoubleTapShowChrome = { host.chrome.showChromeIfHidden() }
-        gif.onChromeSwipeListener = { show -> if (show) host.chrome.bumpChrome() }
-        gif.onTapListener = { _, _ -> host.chrome.bumpChrome() }
+        gif.onCenterDoubleTapShowChrome = { chrome.showChromeIfHidden() }
+        gif.onChromeSwipeListener = { show -> if (show) chrome.bumpChrome() }
+        gif.onTapListener = { _, _ -> chrome.bumpChrome() }
     }
 
     fun enterSummary() {
         if (host.isSweep) return
         showingSummary = true
-        host.inspect.dismissProbe()
-        host.summary.show()
-        binding.tvFrameCounter.text = host.summary.counterText()
+        inspect.dismissProbe()
+        summary.show()
+        binding.tvFrameCounter.text = summary.counterText()
         binding.tvFrameCounter.visibility = View.VISIBLE
         // Hiding the field takes its focus, and losing focus commits what it
         // holds: its "1" would leave the summary at once. Empty it first so that
@@ -106,21 +133,21 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
         syncFrameNumber()
         binding.etFrameNumber.clearFocus()
         binding.layoutFrameJump.visibility = View.GONE
-        binding.tvFinding.text = host.captions.title()
+        binding.tvFinding.text = captions.title()
         updateNavButtons()
-        host.chrome.bumpChrome()
+        chrome.bumpChrome()
     }
 
     private fun leaveSummary() {
         showingSummary = false
-        host.summary.hide()
+        summary.hide()
         // On a frame the jump field ("3 / 5") is the count; the pill is the summary's.
         binding.tvFrameCounter.visibility = View.GONE
         binding.layoutFrameJump.visibility = View.VISIBLE
         updateNavButtons()
         // Re-apply the frame's own labels and heatmap after the summary's.
         requestFrameLoad(debounced = false)
-        host.chrome.bumpChrome()
+        chrome.bumpChrome()
     }
 
     // ── Typed frame jump ─────────────────────────────────────────────────
@@ -139,7 +166,7 @@ internal class FrameJumpController(private val host: ResultViewerActivity) {
      * user did not ask for.
      */
     private fun commitFrameJump() {
-        host.chrome.bumpChrome()
+        chrome.bumpChrome()
         val field = binding.etFrameNumber
         val typed = field.text?.toString()?.trim()?.toIntOrNull()
         val target = typed?.minus(1)?.takeIf { it in host.batchFiles.indices }

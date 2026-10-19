@@ -3,17 +3,42 @@ package com.sempermechanics.semper.ui.viewer.inspect
 import android.graphics.Matrix
 import android.view.View
 import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.report.ReportBuilder
-import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
+import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel
+import com.sempermechanics.semper.ui.viewer.ViewerChromeController
+import com.sempermechanics.semper.ui.viewer.ViewerImageLoader
+import com.sempermechanics.semper.ui.viewer.ViewerViews
+
+/** What [ViewerInspectController] needs from the viewer: the frame it probes. */
+internal interface InspectHost : ViewerViews {
+    /** Holds the field on screen ([ResultViewerViewModel.field]), the one a probe reads. */
+    val viewModel: ResultViewerViewModel
+
+    /** The frame on screen's data; null until one is decoded. */
+    val rawData: FloatArray?
+
+    /** Grid pitch of the frame on screen. */
+    val step: Int
+}
 
 /**
  * Tap-to-probe overlay: nearest correlated point, one crosshair, one readout.
- * Frame data and field index stay on [ResultViewerActivity].
+ * Frame data and field index stay with the viewer ([InspectHost]); [images]
+ * says whether the points sit where they moved to, and a tap or swipe brings
+ * back [chrome]. The readout's text comes from [activity].
+ *
+ * Constructed before onCreate; reads [ViewerViews.binding] lazily.
  */
-class ViewerInspectController(private val host: ResultViewerActivity) {
+internal class ViewerInspectController(
+    private val activity: AppCompatActivity,
+    private val host: InspectHost,
+    private val chrome: ViewerChromeController,
+    private val images: ViewerImageLoader,
+) {
 
     private val imgMain: TouchImageView get() = host.binding.imgBaseResult
     private val glassShield: InspectOverlayView get() = host.binding.glassShield
@@ -44,13 +69,13 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
     /** Taps probe, a scrub swipe goes to [onScrub] (one frame back or on), edge swipes show the chrome. */
     fun wireTapHandling(onScrub: (delta: Int) -> Unit) {
         imgMain.onTapListener = { x, y ->
-            host.chrome.bumpChrome()
+            chrome.bumpChrome()
             onScreenTap(x, y)
         }
         imgMain.onScrubListener = onScrub
-        imgMain.onCenterDoubleTapShowChrome = { host.chrome.showChromeIfHidden() }
+        imgMain.onCenterDoubleTapShowChrome = { chrome.showChromeIfHidden() }
         imgMain.onChromeSwipeListener = { show ->
-            if (show) host.chrome.bumpChrome()
+            if (show) chrome.bumpChrome()
         }
         tvProbeReadout.setOnClickListener { dismissProbe() }
     }
@@ -80,7 +105,7 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
         val data = host.rawData ?: return
         val searchRadius = host.step * SEARCH_RADIUS_STEPS
         val index = spatialIndex ?: PointSpatialIndex.build(
-            if (host.images.onFramePhoto) displacedPositions(data) else data,
+            if (images.onFramePhoto) displacedPositions(data) else data,
             host.step,
         ).also { spatialIndex = it }
         lastClosestIdx = index.nearest(physX, physY, searchRadius)
@@ -110,7 +135,7 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
             val actualY = data[lastClosestIdx + 1].toInt()
             val value = data[lastClosestIdx + dataIndex] * multiplier
 
-            tvProbeReadout.text = host.getString(
+            tvProbeReadout.text = activity.getString(
                 R.string.probe_reading_fmt,
                 typeString,
                 ReportBuilder.formatMetric(value),
@@ -119,7 +144,7 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
                 actualY,
             )
 
-            val pts = if (host.images.onFramePhoto) {
+            val pts = if (images.onFramePhoto) {
                 floatArrayOf(
                     data[lastClosestIdx] + data[lastClosestIdx + DicResult.IDX_U],
                     data[lastClosestIdx + 1] + data[lastClosestIdx + DicResult.IDX_V],
@@ -131,7 +156,7 @@ class ViewerInspectController(private val host: ResultViewerActivity) {
             glassShield.updatePosition(pts[0], pts[1])
         } else {
             glassShield.hide()
-            tvProbeReadout.text = host.getString(R.string.probe_no_data)
+            tvProbeReadout.text = activity.getString(R.string.probe_no_data)
         }
     }
 

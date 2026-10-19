@@ -1,7 +1,7 @@
 // Result viewer Activity: frame scrubbing, overlays, tap-to-probe and export
 // live on one screen; the screen's parts are its controllers. onCreate wires
-// them all, which is long by nature, and the Activity is what the controllers,
-// the sheets and the tests reach the screen's state through.
+// them all, which is long by nature. Each controller declares the small host
+// interface it reads the screen through, and this Activity implements them.
 @file:Suppress("LongMethod", "TooManyFunctions")
 @file:SuppressLint("SetTextI18n")
 
@@ -32,10 +32,12 @@ import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.FaqRedirect
 import com.sempermechanics.semper.ui.common.transfer.TransferBannerController
 import com.sempermechanics.semper.ui.home.HomeActivity
+import com.sempermechanics.semper.ui.viewer.inspect.InspectHost
 import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
 import com.sempermechanics.semper.ui.viewer.share.ShareCenter
 import com.sempermechanics.semper.ui.viewer.share.ShareExportController
 import com.sempermechanics.semper.ui.viewer.share.ViewerReportFactory
+import com.sempermechanics.semper.ui.viewer.summary.SummaryHost
 import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -54,33 +56,48 @@ import java.io.File
  * [ViewerImageLoader] (the photo under the map), [ViewerFrameLoader] (frame
  * data and look-ahead), [ViewerScaleController] (the heatmap and its scale),
  * [FrameJumpController] (frame navigation), [ViewerCaptions] (the stats text)
- * and [ViewerShareController] (what exports read).
+ * and [ViewerShareController] (what exports read). Each reads the screen
+ * through its own host interface ([FrameLoaderHost], [ScaleHost], ...), which
+ * this Activity implements, and is handed the parts it calls directly. The
+ * frame and field on screen are the [viewModel]'s ([ViewerState]).
  */
 @MainThread
-class ResultViewerActivity : AppCompatActivity() {
+class ResultViewerActivity :
+    AppCompatActivity(),
+    FrameLoaderHost,
+    ImageHost,
+    ScaleHost,
+    FrameJumpHost,
+    CaptionsHost,
+    FieldPopupHost,
+    ShareControllerHost,
+    SummaryHost,
+    InspectHost {
 
-    internal val viewModel: ResultViewerViewModel by viewModels()
+    override val viewModel: ResultViewerViewModel by viewModels()
 
-    internal lateinit var binding: ActivityResultViewerBinding
+    override lateinit var binding: ActivityResultViewerBinding
+        private set
 
+    // Built with the Activity, each before the parts that call it; none reads
+    // the views until onCreate has set [binding].
     internal val chrome = ViewerChromeController(this)
-    internal val images = ViewerImageLoader(this)
-    internal val frames = ViewerFrameLoader(this)
-    internal val scale = ViewerScaleController(this)
-    private val frameJump = FrameJumpController(this)
-    internal val captions = ViewerCaptions(this)
-    internal val share = ViewerShareController(this)
-    private val fieldPopup = FieldPopup(this)
+    internal val summary = ViewerSummaryController(this, this)
+    internal val captions = ViewerCaptions(this, this, summary)
+    internal val images = ViewerImageLoader(this, this)
+    internal val frames = ViewerFrameLoader(this, this, images, captions)
+    internal val scale = ViewerScaleController(this, this, images, captions, summary)
+    internal val inspect = ViewerInspectController(this, this, chrome, images)
+    private val frameJump = FrameJumpController(this, chrome, frames, summary, inspect, captions)
+    internal val share = ViewerShareController(this, this, images, summary) { shareExports }
+    private val fieldPopup = FieldPopup(this, this, chrome, scale, summary, inspect)
 
     internal lateinit var shareBanner: TransferBannerController
 
     /** Shows the running exports, which live in [viewModel] and outlive this screen's rotations. */
     internal lateinit var shareExports: ShareExportController
 
-    internal lateinit var inspect: ViewerInspectController
-        private set
-
-    internal var rawData: FloatArray? = null
+    override var rawData: FloatArray? = null
         private set
 
     /**
@@ -90,51 +107,48 @@ class ResultViewerActivity : AppCompatActivity() {
     private var opened: ViewerFrameLoader.FrameSet? = null
 
     /** True once [onFrameSetRead] has run: [batchFiles] and the rest are final. */
-    internal val frameSetLoaded: Boolean get() = opened != null
+    override val frameSetLoaded: Boolean get() = opened != null
 
     /** The reference's true size: from the Intent, else read from its header off the main thread. */
-    internal val imageSize: ImageSize get() = opened?.imageSize ?: args.imageSize
+    override val imageSize: ImageSize get() = opened?.imageSize ?: args.imageSize
 
     /** Every frame's solver parameters; a sweep varies them frame by frame. */
-    internal val frameParams: FrameParams by lazy { args.frameParams }
+    override val frameParams: FrameParams by lazy { args.frameParams }
 
     /**
      * Step size of the frame on screen. A parameter sweep varies it from frame
      * to frame — rendering, point picking and the report all key off it — so it
      * is re-read whenever a frame loads rather than fixed at launch.
      */
-    internal var step = DicParams.DEFAULT_STEP
+    override var step = DicParams.DEFAULT_STEP
         private set
 
     /** Axis of the study's line cut through the ROI centre. */
     internal val lineCutHorizontal: Boolean get() = args.sweep?.lineCutHorizontal ?: true
 
     /** True when the frames are parameter combinations rather than images. */
-    internal val isSweep: Boolean get() = args.sweep != null
+    override val isSweep: Boolean get() = args.sweep != null
 
     /** The ROI the run solved over. */
-    internal val roi: Roi by lazy { args.roi }
+    override val roi: Roi by lazy { args.roi }
 
-    internal val batchFiles: List<File> get() = opened?.batchFiles.orEmpty()
+    override val batchFiles: List<File> get() = opened?.batchFiles.orEmpty()
 
     /** The planned frame behind each of [batchFiles], by position. */
-    internal val plannedFrames: List<Int> get() = opened?.plannedFrames.orEmpty()
+    override val plannedFrames: List<Int> get() = opened?.plannedFrames.orEmpty()
 
-    internal val defImagePaths: List<String> get() = opened?.defImagePaths.orEmpty()
+    override val defImagePaths: List<String> get() = opened?.defImagePaths.orEmpty()
 
-    internal val scrubCache = ScrubFrameCache()
-
-    internal lateinit var summary: ViewerSummaryController
-        private set
+    override val scrubCache = ScrubFrameCache()
 
     /** True while the looping summary GIF is the thing on screen; see [FrameJumpController.showingSummary]. */
-    internal val isShowingSummary: Boolean get() = frameJump.showingSummary
+    override val isShowingSummary: Boolean get() = frameJump.showingSummary
 
     /** How many frames this analysis actually holds. */
     internal fun frameCount(): Int = batchFiles.size
 
     /** Called when [ViewerSummaryController] finishes the whole-sequence range pass. */
-    internal fun onSequenceRangesReady() {
+    override fun onSequenceRangesReady() {
         // The summary colour bar is sequence-global; refresh ⓘ so it quotes
         // the same ends instead of the hidden first frame's extrema.
         if (!isShowingSummary) return
@@ -154,7 +168,7 @@ class ResultViewerActivity : AppCompatActivity() {
 
         shareBanner = TransferBannerController(binding.transferBannerRoot.root)
         // Re-attaches any export a rotation left running.
-        shareExports = ShareExportController(this, viewModel.exports).also { it.attach() }
+        shareExports = ShareExportController(this, viewModel.exports, shareBanner).also { it.attach() }
 
         Insets.padTop(binding.viewerTopStack)
         // Lifted, not padded, above the keyboard: the image is fitted to the
@@ -162,7 +176,6 @@ class ResultViewerActivity : AppCompatActivity() {
         Insets.padBottomLiftAboveIme(binding.layoutScrubber)
         chrome.wireContentInsets()
 
-        inspect = ViewerInspectController(this)
         // Warm [sessionRecord] here rather than at the share tap that needs it:
         // the lazy reads the session index off disk, and by lazy is synchronized,
         // so a tap arriving mid-read waits on the read it would have done itself
@@ -194,7 +207,7 @@ class ResultViewerActivity : AppCompatActivity() {
         val dimsKnown = args.imageSize.isKnown
         if (dimsKnown) images.showReference(refPath)
 
-        summary = ViewerSummaryController(this)
+        summary.wire()
 
         // Past 300 ms, "Opening … · N frames" until the first frame draws.
         captions.showOpening()
@@ -332,7 +345,7 @@ class ResultViewerActivity : AppCompatActivity() {
         share.saveState(outState)
     }
 
-    internal fun applyLoadedFrame(index: Int, data: FloatArray) {
+    override fun applyLoadedFrame(index: Int, data: FloatArray) {
         rawData = data
         // A sweep's frames each have their own grid pitch.
         step = frameParams.at(index).step
@@ -357,20 +370,20 @@ class ResultViewerActivity : AppCompatActivity() {
      * otherwise null so [com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation]
      * discovers accepted points from the first readable frame.
      */
-    internal fun summaryFitBounds(): FloatArray? = roi.takeIf { it.isCustomFor(imageSize) }?.toLtrb()
+    override fun summaryFitBounds(): FloatArray? = roi.takeIf { it.isCustomFor(imageSize) }?.toLtrb()
 
     /**
      * The planned frame behind the [position]-th `.dat` on disk. A frame the
      * batch skipped leaves a gap in the numbering, so the two part ways there.
      */
-    internal fun plannedFrameIndex(position: Int): Int = plannedFrames.getOrElse(position) { position }
+    override fun plannedFrameIndex(position: Int): Int = plannedFrames.getOrElse(position) { position }
 
     /**
      * What the frame at [position] is called on screen: its image name (or a
      * sweep's combination label), looked up by the planned frame, not the
      * position, so a frame after a skipped one keeps its own name.
      */
-    internal fun frameDisplayName(position: Int): String {
+    override fun frameDisplayName(position: Int): String {
         val planned = plannedFrameIndex(position)
         return ReportImageNames.frameName(args.frameNames, planned) ?: "Frame ${planned + 1}"
     }
@@ -382,7 +395,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * keeps the user's own file names and sorts them alphabetically, not in
      * frame order.
      */
-    internal fun deformedImagePathAt(position: Int): String? =
+    override fun deformedImagePathAt(position: Int): String? =
         ViewerReportFactory.deformedImagePath(
             args,
             isSweep,
@@ -399,7 +412,7 @@ class ResultViewerActivity : AppCompatActivity() {
      * all-frames report want the same few fields off it, and re-reading the
      * session index per report page would be a file read per page.
      */
-    internal val sessionRecord: SessionRecord? by lazy {
+    override val sessionRecord: SessionRecord? by lazy {
         intent.getStringExtra(IntentKeys.SESSION_LOCAL_ID)
             ?.let { runCatching { SessionStore.get(this, it) }.getOrNull() }
     }
@@ -409,11 +422,11 @@ class ResultViewerActivity : AppCompatActivity() {
      * the session index only for an Intent missing a key, which no current
      * writer produces.
      */
-    internal val args: ViewerArgs by lazy { ViewerArgs.from(intent) { sessionRecord } }
+    override val args: ViewerArgs by lazy { ViewerArgs.from(intent) { sessionRecord } }
 
     /** Share sheet (wireframe 08) - targets wired via ShareCenter. */
     private fun showShareSheet() {
-        ShareCenter(this).show()
+        ShareCenter(this, share).show()
     }
 
     private companion object {

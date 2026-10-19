@@ -1,25 +1,62 @@
 package com.sempermechanics.semper.ui.viewer
 
 import android.content.res.Resources
+import androidx.appcompat.app.AppCompatActivity
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicParams
 import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.imaging.video.VideoKeyframeHelper
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.common.InlineBusy
 import com.sempermechanics.semper.ui.viewer.ResultViewerViewModel.FieldMetrics
 import com.sempermechanics.semper.ui.viewer.summary.SummaryCaption
+import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
+import java.io.File
+
+/** What [ViewerCaptions] needs from the viewer. */
+internal interface CaptionsHost : ViewerViews {
+    /** Holds the frame on screen ([ResultViewerViewModel.currentFrameIndex]). */
+    val viewModel: ResultViewerViewModel
+
+    /** This viewer's arguments: the reference's name, the frames' names and times. */
+    val args: ViewerArgs
+
+    /** True once the frame set is opened: [batchFiles] is final. */
+    val frameSetLoaded: Boolean
+    val batchFiles: List<File>
+
+    /** True while the summary animation, not a frame, is on screen. */
+    val isShowingSummary: Boolean
+
+    /** True when the frames are a sweep's combinations, each titled by its settings. */
+    val isSweep: Boolean
+    val frameParams: FrameParams
+
+    /** The frame on screen's data; null until one is decoded. */
+    val rawData: FloatArray?
+
+    /** The planned frame behind the `.dat` at [position]. */
+    fun plannedFrameIndex(position: Int): Int
+
+    /** What the frame at [position] is called on screen. */
+    fun frameDisplayName(position: Int): String
+}
 
 /**
  * The viewer's edge title (what is on screen: [title]) and the field's stats:
  * max and min (with where they are) and mean, in the caption and in the info
  * peek sheet. Also the "Opening steel_00 · 40 frames" pill while the first
- * frame loads.
+ * frame loads. While the summary is up the stats are [summary]'s sequence range.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * Constructed before onCreate; reads [ViewerViews.binding] lazily.
  */
-internal class ViewerCaptions(private val host: ResultViewerActivity) {
+internal class ViewerCaptions(
+    private val activity: AppCompatActivity,
+    private val host: CaptionsHost,
+    private val summary: ViewerSummaryController,
+) {
 
     /** The stats text last shown, kept for the info peek sheet. */
     private var detailStats: String = ""
@@ -34,11 +71,11 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
      */
     fun showOpening() {
         val binding = host.binding
-        val busy = InlineBusy(host, binding.viewerOpening, spinner = binding.viewerOpeningSpinner)
+        val busy = InlineBusy(activity, binding.viewerOpening, spinner = binding.viewerOpeningSpinner)
         opening = busy
         openingToken = busy.start {
-            val frames = if (host.frameSetLoaded) host.frameCount() else host.args.frameNames.size
-            binding.tvViewerOpening.text = openingText(host.resources, host.args.refName, frames)
+            val frames = if (host.frameSetLoaded) host.batchFiles.size else host.args.frameNames.size
+            binding.tvViewerOpening.text = openingText(activity.resources, host.args.refName, frames)
         }
     }
 
@@ -49,7 +86,7 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
     }
 
     /** Max / min (with coordinates) / mean for the info peek sheet. */
-    fun detailStatsText(): String = detailStats.ifBlank { host.getString(R.string.stat_empty) }
+    fun detailStatsText(): String = detailStats.ifBlank { activity.getString(R.string.stat_empty) }
 
     /**
      * The edge title. The field chip names the field, and the pill under the
@@ -58,11 +95,11 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
      * subset and window ([frameTitle]).
      */
     fun title(): String {
-        if (host.isShowingSummary) return host.getString(R.string.summary_title)
+        if (host.isShowingSummary) return activity.getString(R.string.summary_title)
         val position = host.viewModel.currentFrameIndex
         val node = if (host.isSweep) host.frameParams.at(position) else null
         val timeMs = host.args.frameTimesMs?.getOrNull(host.plannedFrameIndex(position))
-        return frameTitle(host.resources, host.frameDisplayName(position), node, timeMs)
+        return frameTitle(activity.resources, host.frameDisplayName(position), node, timeMs)
     }
 
     /** Edge title + peek-sheet stats for [index], from pre-computed [metrics]. Main thread only. */
@@ -72,14 +109,14 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
         binding.tvFinding.text = title()
 
         if (host.isShowingSummary) {
-            detailStats = SummaryCaption.text(host.resources, host.summary.boundsFor(index), index, unit)
+            detailStats = SummaryCaption.text(activity.resources, summary.boundsFor(index), index, unit)
             binding.tvStatsCaption.text = detailStats
             return
         }
 
         val stats = metrics.stats
         if (stats == null) {
-            detailStats = host.getString(R.string.stat_empty)
+            detailStats = activity.getString(R.string.stat_empty)
             binding.tvStatsCaption.text = detailStats
             return
         }
@@ -92,7 +129,7 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
             metrics.maxIdx in data.indices &&
             metrics.minIdx in data.indices
         ) {
-            host.getString(
+            activity.getString(
                 R.string.viewer_stats_fmt,
                 maxText,
                 data[metrics.maxIdx].toInt(),
@@ -104,7 +141,7 @@ internal class ViewerCaptions(private val host: ResultViewerActivity) {
                 unit,
             )
         } else {
-            host.getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
+            activity.getString(R.string.viewer_stats_plain_fmt, maxText, minText, meanText, unit)
         }
         binding.tvStatsCaption.text = detailStats
     }

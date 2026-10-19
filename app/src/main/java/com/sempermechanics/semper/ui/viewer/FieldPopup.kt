@@ -3,19 +3,39 @@ package com.sempermechanics.semper.ui.viewer
 import android.view.View
 import android.view.ViewGroup
 import android.widget.PopupWindow
+import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.sempermechanics.semper.databinding.PopupFieldOptionsBinding
+import com.sempermechanics.semper.ui.viewer.inspect.ViewerInspectController
+import com.sempermechanics.semper.ui.viewer.summary.ViewerSummaryController
+
+/** What [FieldPopup] needs from the viewer. */
+internal interface FieldPopupHost : ViewerViews {
+    /** Holds the field on screen ([ResultViewerViewModel.field]); a pill tap sets it. */
+    val viewModel: ResultViewerViewModel
+
+    /** True while the summary animation, not a frame, is on screen. */
+    val isShowingSummary: Boolean
+}
 
 /**
- * The field button's popup: a glass pill per field, the live one checked; a tap switches field.
+ * The field button's popup: a glass pill per field, the live one checked; a tap switches field
+ * and has [scale], [summary] and [inspect] redraw for it.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * Constructed before onCreate; reads [ViewerViews.binding] lazily.
  */
-internal class FieldPopup(private val host: ResultViewerActivity) {
+internal class FieldPopup(
+    private val activity: AppCompatActivity,
+    private val host: FieldPopupHost,
+    private val chrome: ViewerChromeController,
+    private val scale: ViewerScaleController,
+    private val summary: ViewerSummaryController,
+    private val inspect: ViewerInspectController,
+) {
 
     /** Glass-pill popup listing every field; the live field is checked. */
     fun show(anchor: View) {
-        val popup = PopupFieldOptionsBinding.inflate(host.layoutInflater)
+        val popup = PopupFieldOptionsBinding.inflate(activity.layoutInflater)
         val window = PopupWindow(
             popup.root,
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -39,11 +59,11 @@ internal class FieldPopup(private val host: ResultViewerActivity) {
                 host.binding.btnFieldFab.text = field.label
                 // Caption + probe value are refreshed by updateVisualization once the
                 // new field's metrics are computed off the main thread.
-                host.scale.updateVisualization(field.dataIndex)
-                host.summary.onFieldChanged()
-                if (host.isShowingSummary) host.binding.tvFrameCounter.text = host.summary.counterText()
-                host.inspect.refreshCrosshairs()
-                host.chrome.bumpChrome()
+                scale.updateVisualization(field.dataIndex)
+                summary.onFieldChanged()
+                if (host.isShowingSummary) host.binding.tvFrameCounter.text = summary.counterText()
+                inspect.refreshCrosshairs()
+                chrome.bumpChrome()
                 window.dismiss()
             }
         }

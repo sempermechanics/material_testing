@@ -2,6 +2,7 @@ package com.sempermechanics.semper.ui.viewer
 
 import android.graphics.BitmapFactory
 import android.os.Trace
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.SessionPaths
@@ -16,14 +17,34 @@ import kotlinx.coroutines.yield
 import timber.log.Timber
 import java.io.File
 
+/** What [ViewerFrameLoader] needs from the viewer. */
+internal interface FrameLoaderHost {
+    /** Holds the frame on screen ([ResultViewerViewModel.currentFrameIndex]). */
+    val viewModel: ResultViewerViewModel
+
+    /** The opened frame set's `.dat` files; empty until it is read. */
+    val batchFiles: List<File>
+    val scrubCache: ScrubFrameCache
+
+    /** Puts frame [index], decoded as [data], on screen. Main thread. */
+    fun applyLoadedFrame(index: Int, data: FloatArray)
+}
+
 /**
  * The viewer's frame data: the batch listing read when the viewer opens, each
  * frame's `.dat` decoded off the main thread, and a bounded look-ahead that
  * keeps the scrub cache warm around the frame on screen.
  *
- * Constructed before onCreate; reads [ResultViewerActivity.binding] lazily.
+ * [activity] is the scope the decodes run in and the snackbar's window;
+ * [images] learns which photo a frame goes on as it is read, and [captions]
+ * drops the opening pill when a frame cannot be drawn.
  */
-internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
+internal class ViewerFrameLoader(
+    private val activity: AppCompatActivity,
+    private val host: FrameLoaderHost,
+    private val images: ViewerImageLoader,
+    private val captions: ViewerCaptions,
+) {
 
     /** What the viewer needs from disk before the first frame can load; see [readFrameSet]. */
     class FrameSet(
@@ -66,12 +87,12 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
             return
         }
 
-        loadFrameJob.launch(host.lifecycleScope, Dispatchers.IO) {
+        loadFrameJob.launch(activity.lifecycleScope, Dispatchers.IO) {
             try {
                 val data = readFrameDat(index)
                 if (data == null) {
                     // Nothing to draw: the opening pill must not wait on it.
-                    withContext(Dispatchers.Main) { host.captions.openingDone() }
+                    withContext(Dispatchers.Main) { captions.openingDone() }
                     return@launch
                 }
                 scrubCache.putData(index, data)
@@ -88,16 +109,16 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
                 Timber.e(e, "OOM loading frame $index")
                 scrubCache.clear()
                 withContext(Dispatchers.Main) {
-                    host.captions.openingDone()
+                    captions.openingDone()
                     FaqRedirect.snackbar(
-                        host,
+                        activity,
                         R.string.viewer_frame_oom,
                         R.string.url_faq_viewer_oom,
                     )
                 }
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
                 Timber.e(e, "Failed to load frame $index")
-                withContext(Dispatchers.Main) { host.captions.openingDone() }
+                withContext(Dispatchers.Main) { captions.openingDone() }
             }
         }
     }
@@ -123,7 +144,7 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
         val direction = if (center >= lastPrefetchCenter) 1 else -1
         lastPrefetchCenter = center
 
-        prefetchJob.launch(host.lifecycleScope, Dispatchers.IO) {
+        prefetchJob.launch(activity.lifecycleScope, Dispatchers.IO) {
             try {
                 for (offset in lookAheadOffsets(direction)) {
                     val index = center + offset
@@ -166,7 +187,7 @@ internal class ViewerFrameLoader(private val host: ResultViewerActivity) {
         try {
             // Off the main thread, before the frame can be shown: which photo it
             // goes on decides how its map is drawn.
-            host.images.lookUpFramePhoto(index)
+            images.lookUpFramePhoto(index)
             val file = batchFiles[index]
             val data = DicResult.decodeDatFile(file)
             if (data == null) {
