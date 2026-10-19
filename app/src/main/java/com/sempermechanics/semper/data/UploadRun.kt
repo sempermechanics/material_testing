@@ -71,6 +71,9 @@ internal class UploadRun(
     fun currentCloudId(): String =
         SessionStore.get(context, localId)?.cloudSessionId.orEmpty().ifBlank { record.cloudSessionId }
 
+    /** What decides this run's cloud session ([UploadSessionPlanner]). */
+    fun planner(): UploadSessionPlanner = UploadSessionPlanner(context, api, idToken, localId)
+
     /**
      * This run with no cloud session to resume, once
      * [UploadSessionPlanner.releaseForRestage] has freed the old one: the

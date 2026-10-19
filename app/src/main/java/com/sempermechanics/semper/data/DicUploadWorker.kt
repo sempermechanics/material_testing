@@ -171,16 +171,12 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         var run = started
         fun failures() = UploadFailures(run, stagingDir)
         return try {
-            val ended = if (staging.reuse) null else planner(started).releaseForRestage(started.currentCloudId())
+            val ended = if (staging.reuse) null else started.planner().releaseForRestage(started.currentCloudId())
             if (ended != null) {
                 finish(run, ended, progress, stagingDir)
             } else {
                 if (!staging.reuse) run = started.withoutCloudSession()
-                when (val staged = staging.stage(progress)) {
-                    is StagingOutcome.Ready -> upload(run, staged.files, progress, stagingDir)
-                    is StagingOutcome.Retry -> UploadLog.retry(staged.reason)
-                    StagingOutcome.InputsGone -> failures().inputsGone()
-                }
+                stageAndUpload(run, staging, progress)
             }
         } catch (e: DeviceNotActiveException) {
             failures().deviceNotActive(e)
@@ -202,7 +198,16 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         }
     }
 
-    private fun planner(run: UploadRun) = UploadSessionPlanner(applicationContext, run.api, run.idToken, run.localId)
+    /** Stage the files, then (once they are ready) upload them ([upload]). */
+    private suspend fun stageAndUpload(
+        run: UploadRun,
+        staging: UploadStaging,
+        progress: UploadProgressSampler,
+    ): Result = when (val staged = staging.stage(progress)) {
+        is StagingOutcome.Ready -> upload(run, staged.files, progress, staging.layout.dir)
+        is StagingOutcome.Retry -> UploadLog.retry(staged.reason)
+        StagingOutcome.InputsGone -> UploadFailures(run, staging.layout.dir).inputsGone()
+    }
 
     /** Ensure the cloud session for [files], upload into it, and complete. */
     private suspend fun upload(
@@ -217,7 +222,7 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         progress.begin(TransferPhase.UPLOAD, 1)
         Timber.i("Uploading %s: %d files (%s)", run.localId, files.size, files.groupingBy { it.role }.eachCount())
         UploadLog.phase("start", count = files.size, stage = "upload")
-        return finish(run, planner(run).ensureSession(run.record, files), progress, stagingDir)
+        return finish(run, run.planner().ensureSession(run.record, files), progress, stagingDir)
     }
 
     /** Do what the cloud session [step] says: upload into it and complete, record the sync, or end the run. */
