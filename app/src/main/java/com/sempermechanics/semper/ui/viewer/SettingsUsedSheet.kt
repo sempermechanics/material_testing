@@ -127,7 +127,7 @@ object SettingsUsedSheet {
             view.settingsUsedRows.addView(settingsRow(host, label, value))
         }
         if (host.isSweep) populateLineCut(host, view)
-        host.stressStrain.populate(view.root)
+        host.stressStrain.populate(view)
 
         sheet.show()
     }

@@ -14,10 +14,12 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.CacheJanitor
+import com.sempermechanics.semper.databinding.LabResultsPanelBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.ReportBuilder
@@ -51,6 +53,16 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     private val status: TextView = host.binding.tvSummaryStatus
     private val cancelButton: MaterialButton = host.binding.btnSummaryCancel
     private val resultsPanel: View = host.binding.summaryResults
+
+    /** The Results panel, inflated from its stub on the first show of a session with loads. */
+    private val resultsViews: ViewerStressStrainHelper.Views by lazy {
+        val panel = LabResultsPanelBinding.bind(host.binding.summaryResultsStub.inflate())
+        // The summary page has the room the Details sheet does not.
+        panel.plotLabResults.updateLayoutParams {
+            height = host.resources.getDimensionPixelSize(R.dimen.lab_results_summary_plot_height)
+        }
+        ViewerStressStrainHelper.Views.of(panel)
+    }
 
     /** Value range per field over the whole sequence; empty until the pass finishes. */
     private var ranges: Map<Int, Pair<Float, Float>> = emptyMap()
@@ -137,15 +149,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         if (showsResults) {
             statusPanel.isVisible = false
             // Only a tensile curve has a scale and bias to match the machine with.
-            host.stressStrain.fill(
-                ViewerStressStrainHelper.Views(
-                    host.binding.plotSummaryResults,
-                    host.binding.tvSummaryResultsCaption,
-                    host.binding.tvSummaryResultsText,
-                    host.binding.toggleSummaryRange,
-                    host.binding.btnSummaryAdjust,
-                ),
-            )
+            host.stressStrain.fill(resultsViews)
             return
         }
         // The colour-scale scan is only needed once the summary is actually on screen.

@@ -11,6 +11,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.databinding.LabResultsPanelBinding
+import com.sempermechanics.semper.databinding.SheetSettingsUsedBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.report.BeamDeflection
 import com.sempermechanics.semper.report.ElasticModulus
@@ -53,7 +55,18 @@ class ViewerStressStrainHelper(
         val result: TextView,
         val range: MaterialButtonToggleGroup,
         val adjust: MaterialButton,
-    )
+    ) {
+        companion object {
+            /** The one results panel both surfaces inflate (`lab_results_panel`). */
+            fun of(panel: LabResultsPanelBinding): Views = Views(
+                panel.plotLabResults,
+                panel.tvLabResultsCaption,
+                panel.tvLabResultsText,
+                panel.toggleLabResultsRange,
+                panel.btnLabResultsAdjust,
+            )
+        }
+    }
 
     private var job: Job? = null
 
@@ -77,20 +90,11 @@ class ViewerStressStrainHelper(
      * is not cached. The sheet may be dismissed before the build finishes; the
      * views are then simply updated off screen.
      */
-    fun populate(sheetView: View) {
-        val section = sheetView.findViewById<View>(R.id.stressStrainSection)
-        section.isVisible = showsResults
+    fun populate(sheet: SheetSettingsUsedBinding) {
+        sheet.stressStrainSection.isVisible = showsResults
         if (!showsResults) return
-        sheetView.findViewById<TextView>(R.id.tvStressStrainTitle).setText(R.string.results_title)
-        fill(
-            Views(
-                sheetView.findViewById(R.id.plotStressStrain),
-                sheetView.findViewById(R.id.tvStressStrainCaption),
-                sheetView.findViewById(R.id.tvStressStrainResult),
-                sheetView.findViewById(R.id.toggleStressStrainRange),
-                sheetView.findViewById(R.id.btnStressStrainAdjust),
-            ),
-        )
+        // A fresh sheet each time, so its stub is inflated once.
+        fill(Views.of(LabResultsPanelBinding.bind(sheet.stressStrainStub.inflate())))
     }
 
     /** Draws the curve into [views], building it first if it is not cached. */

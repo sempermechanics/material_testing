@@ -88,31 +88,31 @@ class LabWorkflowDeviceTest {
     fun aTensileSessionOpensOnResultsAndTheElasticToggleRedraws() {
         val record = seedTensile()
         ActivityScenario.launch<ResultViewerActivity>(SessionOpenHelper.intentFor(context, record)).use { scenario ->
-            awaitOn(scenario, "Results") { it.findViewById<View>(R.id.tvSummaryResultsText).isVisible }
+            awaitOn(scenario, "Results") { it.findViewById<View>(R.id.tvLabResultsText).isVisible }
             var wholeCaption = ""
             scenario.onActivity { viewer ->
                 assertTrue(viewer.findViewById<View>(R.id.summaryResults).isVisible)
                 assertTrue(
                     "a tensile fit shows the range toggle",
-                    viewer.findViewById<View>(R.id.summaryRangeClip).isVisible,
+                    viewer.findViewById<View>(R.id.labResultsRangeClip).isVisible,
                 )
-                assertTrue(viewer.findViewById<TextView>(R.id.tvSummaryResultsText).text.isNotBlank())
-                wholeCaption = viewer.findViewById<TextView>(R.id.tvSummaryResultsCaption).text.toString()
+                assertTrue(viewer.findViewById<TextView>(R.id.tvLabResultsText).text.isNotBlank())
+                wholeCaption = viewer.findViewById<TextView>(R.id.tvLabResultsCaption).text.toString()
                 viewer.findViewById<View>(R.id.btnRangeElastic).performClick()
             }
             instrumentation.waitForIdleSync()
             scenario.onActivity { viewer ->
-                val group = viewer.findViewById<MaterialButtonToggleGroup>(R.id.toggleSummaryRange)
+                val group = viewer.findViewById<MaterialButtonToggleGroup>(R.id.toggleLabResultsRange)
                 assertEquals(R.id.btnRangeElastic, group.checkedButtonId)
-                val elasticCaption = viewer.findViewById<TextView>(R.id.tvSummaryResultsCaption).text.toString()
+                val elasticCaption = viewer.findViewById<TextView>(R.id.tvLabResultsCaption).text.toString()
                 assertFalse("the caption names the fit when zoomed", elasticCaption == wholeCaption)
                 viewer.findViewById<View>(R.id.btnRangeWhole).performClick()
             }
             instrumentation.waitForIdleSync()
             scenario.onActivity { viewer ->
-                val group = viewer.findViewById<MaterialButtonToggleGroup>(R.id.toggleSummaryRange)
+                val group = viewer.findViewById<MaterialButtonToggleGroup>(R.id.toggleLabResultsRange)
                 assertEquals(R.id.btnRangeWhole, group.checkedButtonId)
-                assertEquals(wholeCaption, viewer.findViewById<TextView>(R.id.tvSummaryResultsCaption).text.toString())
+                assertEquals(wholeCaption, viewer.findViewById<TextView>(R.id.tvLabResultsCaption).text.toString())
             }
         }
     }
@@ -138,12 +138,12 @@ class LabWorkflowDeviceTest {
     fun aBendingSessionOpensOnResultsWithoutTheTensileToggle() {
         val record = seedBending()
         ActivityScenario.launch<ResultViewerActivity>(SessionOpenHelper.intentFor(context, record)).use { scenario ->
-            awaitOn(scenario, "Results") { it.findViewById<View>(R.id.tvSummaryResultsText).isVisible }
+            awaitOn(scenario, "Results") { it.findViewById<View>(R.id.tvLabResultsText).isVisible }
             scenario.onActivity { viewer ->
-                assertTrue(viewer.findViewById<TextView>(R.id.tvSummaryResultsText).text.isNotBlank())
+                assertTrue(viewer.findViewById<TextView>(R.id.tvLabResultsText).text.isNotBlank())
                 assertFalse(
                     "the Elastic region is tensile only",
-                    viewer.findViewById<View>(R.id.summaryRangeClip).isVisible,
+                    viewer.findViewById<View>(R.id.labResultsRangeClip).isVisible,
                 )
             }
         }

@@ -2,7 +2,6 @@
 <!-- Details sheet: max/min (+ mean on a frame), then the frame histogram, then settings used,
      then Results. Scrolls: with a load log the Results section runs past a phone screen. -->
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_viewer_peek_sheet"
@@ -139,7 +138,8 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- Stress-strain curve; only for a session with a machine load per frame. -->
+        <!-- Results (lab_results_panel, as on the summary page); only for a session with a
+             machine load per frame, so the panel is inflated only then. -->
         <LinearLayout
             android:id="@+id/stressStrainSection"
             android:layout_width="match_parent"
@@ -148,90 +148,12 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <LinearLayout
+            <ViewStub
+                android:id="@+id/stressStrainStub"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvStressStrainTitle"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:letterSpacing="0.08"
-                    android:textAllCaps="true"
-                    android:textColor="@color/viewer_chrome_muted"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-
-                <!-- Whole curve or the elastic region E is fitted to; shown only with a fit.
-                     Pill clip set in code, as activity_vsg_lattice.xml's togglePlotModeClip. -->
-                <FrameLayout
-                    android:id="@+id/stressStrainRangeClip"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_pill_clip_mask"
-                    android:visibility="gone">
-
-                    <com.google.android.material.button.MaterialButtonToggleGroup
-                        android:id="@+id/toggleStressStrainRange"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:contentDescription="@string/results_range_desc"
-                        app:checkedButton="@id/btnRangeWhole"
-                        app:selectionRequired="true"
-                        app:singleSelection="true">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnRangeWhole"
-                            style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped.ResultsRange"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/results_range_whole" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnRangeElastic"
-                            style="@style/Widget.Semper.SegmentedButton.ViewerImmersive.Grouped.ResultsRange"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/results_range_elastic" />
-                    </com.google.android.material.button.MaterialButtonToggleGroup>
-                </FrameLayout>
-            </LinearLayout>
-
-            <com.sempermechanics.semper.ui.analysis.sweep.SweepPlotView
-                android:id="@+id/plotStressStrain"
-                android:layout_width="match_parent"
-                android:layout_height="190dp"
-                android:layout_marginTop="8dp" />
-
-            <TextView
-                android:id="@+id/tvStressStrainCaption"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:textColor="@color/viewer_chrome_muted"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/tvStressStrainResult"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:textColor="@color/viewer_chrome_text"
-                android:textSize="13sp"
-                android:visibility="gone" />
-
-            <!-- Bending: the deflection scale and bias (ViewerDeflectionCorrection). -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnStressStrainAdjust"
-                style="@style/Widget.Semper.Button.Outlined"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/deflection_adjust"
-                android:visibility="gone" />
+                android:inflatedId="@+id/stressStrainPanel"
+                android:layout="@layout/lab_results_panel" />
         </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
