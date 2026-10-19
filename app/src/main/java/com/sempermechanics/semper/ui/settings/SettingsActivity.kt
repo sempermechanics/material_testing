@@ -21,7 +21,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
-import com.sempermechanics.semper.data.cloud.CloudSync
 import com.sempermechanics.semper.data.cloud.SessionDeletes
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.cloud.restore.RestoreStart
@@ -150,13 +149,19 @@ class SettingsActivity : AppCompatActivity() {
 
     /**
      * A restore still being asked for keeps its row busy on a recreated
-     * screen, and each restore's outcome is said once, on whichever Settings
-     * is started.
+     * screen, and each restore's outcome and each phone-only erase is said
+     * once, on whichever Settings is started.
      */
     private fun observeViewModel() {
         viewModel.restoringKeys.forEach(analyses::markBusy)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.localErasures.collect {
+                        toast(getString(R.string.delete_device_only_done))
+                        wireAnalysesDataSection()
+                    }
+                }
                 viewModel.restoreOutcomes.collect(::showRestoreOutcome)
             }
         }
@@ -379,13 +384,8 @@ class SettingsActivity : AppCompatActivity() {
             message = getString(R.string.delete_confirm_body_cloud),
             choices = DeleteChoiceDialog.phoneCloudEverywhere(
                 this,
-                onPhone = {
-                    lifecycleScope.launch {
-                        CloudSync.eraseLocalOnly(this@SettingsActivity, record.id)
-                        toast(getString(R.string.delete_device_only_done))
-                        wireAnalysesDataSection()
-                    }
-                },
+                // In the view model, so a rotation does not lose the confirmation.
+                onPhone = { viewModel.eraseLocalOnly(record.id) },
                 onCloud = { scheduleDelete(entry, record.id, cloud.sessionId, SessionDeletes.Mode.CLOUD) },
                 onEverywhere = { scheduleDelete(entry, record.id, cloud.sessionId, SessionDeletes.Mode.EVERYWHERE) },
             ),
