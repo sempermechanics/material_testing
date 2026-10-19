@@ -105,16 +105,17 @@ class DicRestoreWorker internal constructor(
     }
 
     /**
-     * Give up on a backup no retry can fix, clearing what this attempt wrote, or
-     * retry from scratch. A retry starts the files over: CloudRestore deletes its
-     * cache temps and their `*.part` sidecars on the way out, and the session dir
-     * is cleared at the top of [doWork]. Only after a stop WorkManager reruns
-     * ([clearStoppedRestore]) or process death (no way out) does the next
-     * attempt resume the bundle from its leftover `.part` — see
+     * Give up on a backup no retry can fix, clearing what this attempt wrote and
+     * the bundle's `.part` (nothing will resume it), or retry. A retry unpacks
+     * afresh (the session dir is cleared at the top of [doWork]) and refetches
+     * every file but the bundle, whose `.part` a [DownloadFailure.Transient]
+     * keeps (TD-307), as does a stop WorkManager reruns ([clearStoppedRestore],
+     * TD-283) or process death (no way out): the next attempt resumes it — see
      * [RestoreDownloadOutcomes]; the bundle's sha256 catches a bad resume.
      */
-    private fun onFailure(failure: DownloadFailure, cloudSessionId: String, targetLocalId: String): Result =
-        when (failure) {
+    private fun onFailure(failure: DownloadFailure, cloudSessionId: String, targetLocalId: String): Result {
+        if (failure !is DownloadFailure.Transient) CloudRestore.discardDownloads(applicationContext, cloudSessionId)
+        return when (failure) {
             is DownloadFailure.Rejected -> {
                 clearPartialArtifacts(targetLocalId)
                 Timber.e(failure.cause, "Restore of %s rejected — giving up", cloudSessionId)
@@ -140,6 +141,7 @@ class DicRestoreWorker internal constructor(
                 Result.retry()
             }
         }
+    }
 
     private fun restoreFailed(reason: String) {
         SemperAnalytics.event(applicationContext, SemperAnalytics.CLOUD_RESTORE_FAILED, mapOf("reason" to reason))

@@ -95,9 +95,12 @@ internal object RestoreBundleFetcher {
     /**
      * Download Session.zip with size checks, verify zip magic, unpack.
      * Deletes `.part` / `.full` sidecars so a corrupt transfer cannot stick,
-     * except when the attempt is cancelled: a stop WorkManager reruns resumes
-     * from them (TD-283), and the worker drops them when the app cancelled
-     * ([CloudRestore.discardDownloads]). The bundle's sha256 catches a bad resume.
+     * except when the attempt will run again: a stop WorkManager reruns
+     * (TD-283) or a failure the worker retries ([keepsPartFor], TD-307)
+     * resumes from them. A failed size, zip or sha256 check, or any failure
+     * the worker gives up on, drops them, as does the worker when the app
+     * cancelled or it gave up ([CloudRestore.discardDownloads]). The bundle's
+     * sha256 catches a bad resume.
      * [onProgress] is byte-based: (bytesOnDisk, declaredSize).
      */
     private suspend fun downloadAndUnpackBundle(
@@ -106,7 +109,7 @@ internal object RestoreBundleFetcher {
         onProgress: suspend (done: Long, total: Long) -> Unit,
     ): PayloadOutcome {
         val zipTmp = fetch.scratch(BUNDLE_SCRATCH)
-        var stopped = false
+        var keepPart = false
         try {
             val whole = fetch.api.downloadReporting(fetch.token, bundle, zipTmp, onProgress)
             RestoreZipVerifier.verifySessionZip(zipTmp, bundle.declaredSize, bundle.sha256, requireEntries = true)
@@ -115,12 +118,22 @@ internal object RestoreBundleFetcher {
             onProgress(whole, whole)
             return PayloadOutcome(RestoreUnpacker.unpackBundle(zipTmp, fetch.layout), "whole-bundle", zipTmp.length())
         } catch (e: CancellationException) {
-            stopped = true
+            keepPart = true
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            keepPart = keepsPartFor(e)
             throw e
         } finally {
-            if (stopped) zipTmp.delete() else discard(zipTmp)
+            if (keepPart) zipTmp.delete() else discard(zipTmp)
         }
     }
+
+    /**
+     * Whether a bundle download that failed with [e] keeps its `.part` for
+     * the next attempt: only for a failure `DicRestoreWorker` retries
+     * ([DownloadFailure.Transient]: a dropped connection, a 5xx, no sign-in).
+     */
+    private fun keepsPartFor(e: Exception): Boolean = DownloadFailure.of(e) is DownloadFailure.Transient
 
     /**
      * Legacy backup: one `Session.zip` holding raw/, dat/, csv/, reports/ and

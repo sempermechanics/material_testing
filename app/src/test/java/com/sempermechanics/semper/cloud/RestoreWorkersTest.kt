@@ -400,6 +400,73 @@ class RestoreWorkersTest {
         assertFalse(bundlePart.exists())
     }
 
+    // ------------------------------------------- a restore that fails part-way
+
+    /** A schema/3 backup: metadata plus a payload-only bundle, which the restore fetches whole. */
+    private fun scriptSplitBackup(bundleSha256: String? = null): ByteArray {
+        val zip = FakeRestoreApi.zipOf(
+            listOf(
+                "raw/Reference.png" to byteArrayOf(1, 2, 3),
+                "raw/def.png" to byteArrayOf(4, 5),
+                "dat/frame_0001.dat" to FakeRestoreApi.onePointDat(),
+            ),
+        )
+        val bundle = if (bundleSha256 == null) {
+            api.file("bundle-1", "bundle", zip)
+        } else {
+            api.file("bundle-1", "bundle", zip, sha256 = bundleSha256)
+        }
+        api.files = listOf(api.file("meta-1", "metadata", FakeRestoreApi.metadataJson()), bundle)
+        return zip
+    }
+
+    @Test
+    fun `a dropped connection mid-bundle keeps the part and the retry resumes from it`() {
+        val zip = scriptSplitBackup()
+        val half = zip.size / 2
+        var dropNext = true
+        var resumedFrom = -1L
+        api.beforeDownload = { fileId, dest ->
+            if (fileId == "bundle-1") {
+                if (dropNext) {
+                    dropNext = false
+                    AtomicFiles.partOf(dest).writeBytes(zip.copyOf(half))
+                    throw IOException("connection reset")
+                }
+                resumedFrom = AtomicFiles.partOf(dest).length()
+            }
+        }
+
+        assertEquals(ListenableWorker.Result.retry(), runRestore(cloudRestorer))
+        assertEquals("the retried failure keeps what arrived (TD-307)", half.toLong(), bundlePart.length())
+
+        assertEquals(ListenableWorker.Result.success(), runRestore(cloudRestorer))
+        assertEquals("the retry starts from the bytes the failure kept", half.toLong(), resumedFrom)
+        assertFalse("a finished restore leaves no part behind", bundlePart.exists())
+    }
+
+    @Test
+    fun `a bundle that fails its sha256 check drops the part`() {
+        val zip = scriptSplitBackup(bundleSha256 = "0".repeat(64))
+        api.beforeDownload = { fileId, dest ->
+            if (fileId == "bundle-1") AtomicFiles.partOf(dest).writeBytes(zip.copyOf(zip.size / 2))
+        }
+
+        assertEquals(context.getString(R.string.restore_failed_generic), failureReason(runRestore(cloudRestorer)))
+
+        assertFalse("a bad resume must not stick", bundlePart.exists())
+    }
+
+    @Test
+    fun `a restore the worker gives up on drops a part an earlier attempt kept`() {
+        bundlePart.writeBytes(byteArrayOf(1, 2, 3))
+        api.files = emptyList()
+
+        assertTrue(runRestore(cloudRestorer) is ListenableWorker.Result.Failure)
+
+        assertFalse("nothing will resume it", bundlePart.exists())
+    }
+
     // -------------------------------------------------------------- helpers
 
     private fun factory(create: (WorkerParameters) -> ListenableWorker) = object : WorkerFactory() {
