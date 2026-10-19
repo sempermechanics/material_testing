@@ -1,7 +1,8 @@
 # ADR-015: Feature subpackages, about 15 files each; pinned names stay put
 
 **Status:** Accepted, built. Amended 2026-10-03 for the layout after the quality
-program's second move (#331): see [Amendments](#amendments)
+program's second move (#331), and 2026-10-19 when CI began checking the file-size
+guide (TD-292): see [Amendments](#amendments)
 **Date:** 2026-10-01
 **Deciders:** app owner
 
@@ -93,8 +94,8 @@ count of started screens (the upload worker reads it; `ManagedConfigReader` and
 `ui/analysis/run/RunEnd` with `WizardRunOutcomes` deleted (19), `ui/auth/AuthViewModel`
 and `AuthScreen` (13), `ui/common/transfer/RestoreRequest` (5), `ui/home/HomeViewModel`
 and `HomeNewAnalysis` (19), and `util/SafCopy` (12). One main file is now over the
-size guide, `data/cloud/SessionMetadataDoc.kt` at 506 lines, and nothing checks the
-guide in CI (TD-292).
+size guide, `data/cloud/SessionMetadataDoc.kt` at 506 lines; CI now checks the guide
+and lists that file as its one exception (TD-292, [Amendments](#amendments)).
 
 Eight packages are still over the ~15-file guide: `data/net/` (23),
 `report/` (22), `ui/analysis/wizard/` (22), `ui/viewer/` (19),
@@ -112,7 +113,8 @@ cover several classes keep their packages and import what they test.
 passes about 15 files, split it by feature in its own pure-move PR.
 
 **File size: about 500 lines.** A file that grows past about 500 lines is
-split. Fused hot loops are exempt: the function that holds one keeps its body
+split; `scripts/check_kotlin_file_size.py` fails CI at 501 (see
+[Amendments](#amendments)). Fused hot loops are exempt: the function that holds one keeps its body
 whole however long it is, and only the code around it moves out. They are
 (CONTEXT.md § Invariants):
 
@@ -226,3 +228,22 @@ cleanup (the rules are in CONTRIBUTING's "Code style"): the stateful
 `*Helper` classes are `*Controller`s, the `*Ext.kt` files are named for
 their content, and `DriveDownload` has its own file. Renames are not moves,
 so no mapping replays them; [FORK_SYNC](../ops/FORK_SYNC.md) lists each one.
+
+**2026-10-19, the size guide is checked in CI (TD-292).**
+`scripts/check_kotlin_file_size.py` counts every `*.kt` under `app/src/main` and
+fails when one passes 500 lines. It runs in the `legal-pages` job, on every event
+([CI.md](../ops/CI.md)), since it needs no build.
+
+- **Hot loops are not counted.** The script's `HOT_LOOPS` names the functions in
+  the table above, and their lines are subtracted from their file's count, so a
+  file is split around its loop, never through it. A listed function or file that
+  is no longer found fails the check: a rename updates the script and this table
+  together.
+- **Exceptions are listed, with a ceiling.** `scripts/kotlin_file_size_allowlist.txt`
+  names each file allowed over the budget, the most lines it may reach (its size
+  when listed), and a reason with a TD- or ADR- pointer. A listed file that grows
+  fails, and so does an entry whose file is back within the budget or gone, so
+  the list only shrinks. On 2026-10-19 its one entry is
+  `data/cloud/SessionMetadataDoc.kt` at 506, to be split first.
+- Its tests are `scripts/tests/test_check_kotlin_file_size.py` (stdlib `unittest`,
+  run in the same job).

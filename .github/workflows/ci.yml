@@ -106,6 +106,19 @@ jobs:
       - name: Readiness framework fully mapped
         run: python scripts/check_framework_coverage.py
 
+      # ADR-015's ~500-line file guide (TD-292). Reads files, no Gradle, so it
+      # runs here on every event rather than behind Tier 1's app filter. Fused
+      # hot loops are not counted; the files allowed over the budget, and the
+      # most lines each may reach, are in scripts/kotlin_file_size_allowlist.txt.
+      - name: Main Kotlin files within ADR-015's size budget
+        run: python scripts/check_kotlin_file_size.py
+
+      # The tests of the checks above that live in scripts/tests (stdlib
+      # unittest, nothing to install). The older checks' tests are in
+      # backend/tests (test_script_*.py) and run in Tier 4.
+      - name: Tests of the source checks
+        run: python -m unittest discover -s scripts/tests -p "test_*.py"
+
   console-pages:
     name: Console pages
     runs-on: ubuntu-24.04

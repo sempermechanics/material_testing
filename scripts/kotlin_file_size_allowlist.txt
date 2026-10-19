@@ -1,0 +1,12 @@
+# Main Kotlin files allowed over ADR-015's 500-line budget, checked by
+# scripts/check_kotlin_file_size.py (TD-292).
+#
+#   path (under app/src/main/java/com/sempermechanics/semper/) | max lines | reason
+#
+# The max is the file's size when it was listed: the file may shrink, never grow.
+# An entry whose file is back within the budget, or gone, fails the check, so
+# this list only shrinks. Fused hot loops need no entry: their lines are not
+# counted (HOT_LOOPS in the script, ADR-015's table). A new entry needs a reason
+# and a TD- or ADR- pointer; prefer the split.
+
+data/cloud/SessionMetadataDoc.kt | 506 | Over the guide since #457 (2026-10-19); TD-292 says split it first, a pure move under ADR-015's split rule

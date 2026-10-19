@@ -391,6 +391,22 @@ the app's own startup path has nothing to gain: on a Pixel 6, `Full` compilation
 starts no faster than `None` ([perf/startup.md](../perf/startup.md), which has the
 `StartupHeadroomBenchmark` steps). Measure that again before generating one.
 
+## Source checks (no Gradle)
+
+Rules that read the sources rather than run them are Python checks, stdlib
+only, run in CI's `legal-pages` job on every event ([CI.md](../ops/CI.md)).
+Their tests are `unittest` modules in `scripts/tests`, run in the same job:
+
+```bash
+python scripts/check_kotlin_file_size.py                   # ADR-015's 500-line file budget (TD-292)
+python -m unittest discover -s scripts/tests -p "test_*.py"
+```
+
+`check_kotlin_file_size.py` does not count the fused hot-loop functions
+([ADR-015](../adr/ADR-015-package-layout.md#amendments)); an exception goes in
+`scripts/kotlin_file_size_allowlist.txt` with its ceiling and a TD/ADR pointer,
+and an entry that is no longer needed fails the check.
+
 ## What not to test here
 
 - Algorithm accuracy → the engine's own suite, which lives in the `engine/`
