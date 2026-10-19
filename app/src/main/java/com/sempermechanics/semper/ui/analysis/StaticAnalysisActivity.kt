@@ -43,7 +43,6 @@ import com.sempermechanics.semper.ui.analysis.run.ComputeOverlayController
 import com.sempermechanics.semper.ui.analysis.run.RunChrome
 import com.sempermechanics.semper.ui.analysis.run.RunStatusLine
 import com.sempermechanics.semper.ui.analysis.run.WizardRunLauncher
-import com.sempermechanics.semper.ui.analysis.run.WizardRunOutcomes
 import com.sempermechanics.semper.ui.analysis.sweep.SweepSetupController
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.wizard.AnalysisLeaveController
@@ -125,7 +124,7 @@ class StaticAnalysisActivity :
         status = RunStatusLine(this, chrome, settings.tvStaticResult, settings.btnEngineFailFaq)
         clearRunStatus()
         buildPages()
-        val outcomes = buildRuns()
+        runs = WizardRunLauncher(this, viewModel, chrome, sweepController, ::checkReady)
         buildImports()
 
         binding.btnNext.setOnClickListener {
@@ -150,7 +149,7 @@ class StaticAnalysisActivity :
         if (savedInstanceState == null) Motion.enterStaggered(binding.contentColumn)
 
         restoreUiFromViewModel()
-        BatchRunController(this, viewModel, chrome, settings.tvStaticResult, host = outcomes).observe()
+        BatchRunController(this, viewModel, chrome, status, recheck = ::checkReady).observe()
         wireButtons()
     }
 
@@ -180,11 +179,6 @@ class StaticAnalysisActivity :
             frameOrderAdapter = frameOrder.adapter,
             onLineCutPreview = { sweepController.refreshLineCutPreview() },
         )
-    }
-
-    private fun buildRuns(): WizardRunOutcomes {
-        runs = WizardRunLauncher(this, viewModel, chrome, sweepController, ::checkReady)
-        return WizardRunOutcomes(this, viewModel, chrome, status, sweepController, ::checkReady)
     }
 
     private fun buildImports() {

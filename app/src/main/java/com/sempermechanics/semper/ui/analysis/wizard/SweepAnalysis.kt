@@ -11,6 +11,7 @@ import com.sempermechanics.semper.data.session.RunOutcome
 import com.sempermechanics.semper.data.session.RunReference
 import com.sempermechanics.semper.data.session.SessionNaming
 import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.originalNameOr
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
@@ -26,6 +27,7 @@ import com.sempermechanics.semper.ui.analysis.run.discardCancelledSweep
 import com.sempermechanics.semper.ui.analysis.run.saveRunRecord
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
 import com.sempermechanics.semper.ui.analysis.sweep.toSkippedNode
+import com.sempermechanics.semper.ui.viewer.ViewerArgs
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -117,9 +119,9 @@ private fun AnalysisViewModel.solveSweep(
  * How a sweep in [session], which the runner left as [run], ends. A cancel
  * keeps nothing, however many combinations it solved
  * ([discardCancelledSweep]). Any other end moves the results into the
- * session ([RunSession.commit]) and saves the combinations that solved; the
- * outcome carries what the wizard records of the sweep, which it takes on
- * Main (`applyRunOutcome`).
+ * session ([RunSession.commit]) and saves the combinations that solved. One
+ * that solved none opens its lattice of failed nodes with no row behind it
+ * ([ViewerArgs.forFailedSweep]).
  */
 @WorkerThread
 internal fun AnalysisViewModel.endSweep(
@@ -144,35 +146,12 @@ internal fun AnalysisViewModel.endSweep(
             executionTimeMs = run.executionTimeMs,
             batchDirPath = run.batchDir.absolutePath,
             session = WorkingSession(run.localSessionId, sweep = true),
-            result = sweepRunResult(run),
+            spec = run.spec,
+            failedSweep = ViewerArgs.forFailedSweep(run),
         )
     } else {
         finishSolvedSweep(appContext, run, admitted = admitted)
     }
-}
-
-/**
- * What the wizard records of the sweep [run] left (ADR-004), before its save
- * adds the reference: its stop, its plan's size (not what was reached), the
- * first solve's engine stats and settings (none when nothing solved), the
- * combination behind each frame and those the engine could not solve.
- */
-private fun sweepRunResult(run: SweepSession): RunResult {
-    val result = run.result
-    return RunResult(
-        batchDirPath = run.batchDir.absolutePath,
-        stop = RunStop.fromWireCode(result.engineErrorCode),
-        plannedFrames = checkNotNull(run.spec.sweep).plan.size,
-        engineStats = result.firstMetrics,
-        spec = run.spec,
-        settings = result.runs.firstOrNull()?.point?.let {
-            run.spec.recordSettings().copy(subset = it.subset, step = it.step, strainWin = it.vsg)
-        },
-        sessionId = run.localSessionId,
-        sweepPlan = result.runs.map { it.point },
-        // One per combination the engine could not solve, in plan order.
-        sweepSkippedNodes = result.skipped.mapIndexed { i, point -> point.toSkippedNode(result.skippedCodes[i]) },
-    )
 }
 
 /**
@@ -198,12 +177,14 @@ internal fun AnalysisViewModel.finishSolvedSweep(
         totalFrames = run.result.runs.size,
         executionTimeMs = run.executionTimeMs,
         batchDirPath = run.batchDir.absolutePath,
-        saved = saved.after.recordSaved,
+        // The row as the index holds it: what the lattice opens on.
+        record = saved.record.takeIf { saved.after.recordSaved }
+            ?.let { SessionStore.get(appContext, it.id) ?: it },
         indexUnavailable = saved.after.indexUnavailable,
         // Once saved, that analysis is finished: the next run in this wizard
         // is a new one (applyRunOutcome).
         session = WorkingSession(run.localSessionId, sweep = true),
-        result = saved.result,
+        spec = run.spec,
     )
     sweepEndEvent(appContext, outcome)
     return outcome
@@ -241,8 +222,8 @@ internal class SweepSession(
     val executionTimeMs: Int,
 )
 
-/** How a sweep's save came back ([after]), and what the wizard records of it ([result]). */
-private class SweepSave(val after: AfterSave, val result: RunResult)
+/** How a sweep's save came back ([after]), and the [record] it saved, or tried to. */
+private class SweepSave(val after: AfterSave, val record: SessionRecord)
 
 /**
  * The deformed frame the sweep was solved against is persisted once, under
@@ -282,12 +263,12 @@ private fun AnalysisViewModel.persistSweepSession(
         frames.originalNames.originalNameOr(frameIndex, File(frames.paths[frameIndex]).name)
     }.baseName()
     val summary = sweepSummary(appContext, run.localSessionId, result, sweep, defDisplay)
-    val recorded = sweepRunResult(run).copy(refPath = refPngPath)
+    val first = result.runs.first().point
     val input = RunInput(
         localSessionId = run.localSessionId,
         dir = run.batchDir,
         reference = RunReference(refPngPath, reference.name, reference.size),
-        settings = checkNotNull(recorded.settings),
+        settings = run.spec.recordSettings().copy(subset = first.subset, step = first.step, strainWin = first.vsg),
     )
     val outcome = RunOutcome(
         frameCount = result.runs.size,
@@ -310,11 +291,12 @@ private fun AnalysisViewModel.persistSweepSession(
         sweepStrainWindows = result.runs.map { it.point.vsg },
         sweepLabels = summary.solvedLabels,
         lineCutHorizontal = sweep.lineCutHorizontal,
-        sweepSkippedNodes = recorded.sweepSkippedNodes,
+        // One per combination the engine could not solve, in plan order.
+        sweepSkippedNodes = result.skipped.mapIndexed { i, point -> point.toSkippedNode(result.skippedCodes[i]) },
         headline = summary.headline,
     )
     val saved = saveRunRecord(appContext, record, cloudEnabled, admitted)
-    return SweepSave(afterSave(RunStop.fromWireCode(result.engineErrorCode), saved), recorded)
+    return SweepSave(afterSave(RunStop.fromWireCode(result.engineErrorCode), saved), record)
 }
 
 /** The Home-list name, headline and per-frame labels of a finished sweep. */

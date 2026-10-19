@@ -5,26 +5,19 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import com.sempermechanics.semper.SemperNativeLib
 import com.sempermechanics.semper.data.prefs.WizardDraft
-import com.sempermechanics.semper.data.session.SessionRecordSettings
 import com.sempermechanics.semper.data.session.SessionRepository
-import com.sempermechanics.semper.data.session.SkippedNode
 import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.field.Roi
-import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.frames.DeformedFrame
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderDirection
 import com.sempermechanics.semper.ui.analysis.frames.FrameOrderMode
 import com.sempermechanics.semper.ui.analysis.recommend.SubsetRecommender
-import com.sempermechanics.semper.ui.analysis.run.RunSpec
+import com.sempermechanics.semper.ui.analysis.run.RunEnd
 import com.sempermechanics.semper.ui.analysis.sweep.SweepRanges
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudyRunner
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 
 /**
  * Holds analysis inputs/state across configuration changes and runs the
@@ -181,56 +174,12 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
             roi = roi.copy(h = value)
         }
 
-    private val _runResult = MutableStateFlow(RunResult())
-    val runResult: StateFlow<RunResult> = _runResult.asStateFlow()
-
-    /** A clean result for a run in session [sessionId], at [batchDirPath], solving [spec]. */
-    internal fun resetRunResult(batchDirPath: String, spec: RunSpec, sessionId: String? = null) {
-        _runResult.value = RunResult(batchDirPath = batchDirPath, spec = spec, sessionId = sessionId)
-    }
-
-    /** [runResult]'s value, which a run's outcome sets on Main (`applyRunOutcome`). */
-    internal var lastRunResult: RunResult
-        get() = _runResult.value
-        set(value) {
-            _runResult.value = value
-        }
-
-    internal fun recordRunSettings(settings: SessionRecordSettings) {
-        _runResult.update { it.copy(settings = settings) }
-    }
-
     /** The runs' channels; [progress] and the rest are their read-only faces. */
     internal val runs = RunChannels()
     val progress: SharedFlow<BatchProgressUpdate?> = runs.progress.asSharedFlow()
 
     /** The batch run's end, held until the screen takes it ([PendingOutcome]). */
-    internal val batchOutcome: PendingOutcome<Result<BatchAnalysisOutcome>> get() = runs.batchOutcome
-
-    var lastBatchDirPath: String?
-        get() = _runResult.value.batchDirPath
-        set(v) = _runResult.update { it.copy(batchDirPath = v) }
-
-    var lastRefPath: String?
-        get() = _runResult.value.refPath
-        set(v) = _runResult.update { it.copy(refPath = v) }
-
-    var lastDefPath: String?
-        get() = _runResult.value.defPath
-        set(v) = _runResult.update { it.copy(defPath = v) }
-
-    /** Why the last run stopped ([RunStop.Finished] when it ran to completion), and its planned size. */
-    var lastStop: RunStop
-        get() = _runResult.value.stop
-        set(v) = _runResult.update { it.copy(stop = v) }
-
-    var lastPlannedFrames: Int
-        get() = _runResult.value.plannedFrames
-        set(v) = _runResult.update { it.copy(plannedFrames = v) }
-
-    var engineStatsArray: FloatArray?
-        get() = _runResult.value.engineStats
-        set(v) = _runResult.update { it.copy(engineStats = v) }
+    internal val batchOutcome: PendingOutcome<RunEnd> get() = runs.batchOutcome
 
     /** The page the wizard shows. */
     var step: WizardStep = WizardStep.IMAGES
@@ -329,7 +278,7 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      */
     var subsetOverlap: Double = SweepStudy.overlapForDenominator(SweepStudy.DEFAULT_STEP_DENOM)
 
-    /** True when the line cut runs along x; false for a cut along y. Editing state; a run reads its [RunSpec]. */
+    /** True when the line cut runs along x; false for a cut along y. Editing state; a run reads its `RunSpec`. */
     var lineCutHorizontal: Boolean = true
 
     /**
@@ -338,27 +287,15 @@ class AnalysisViewModel(private val saved: SavedStateHandle) : ViewModel() {
      */
     var sweepFrameIndex: Int = -1
 
-    /** Parameter combination behind each frame of the last sweep, in order. */
-    var sweepPlan: List<SweepStudy.Point>
-        get() = _runResult.value.sweepPlan
-        set(v) = _runResult.update { it.copy(sweepPlan = v) }
-
-    /** Combinations the engine could not solve in the last sweep. */
-    var sweepSkippedNodes: List<SkippedNode>
-        get() = _runResult.value.sweepSkippedNodes
-        set(v) = _runResult.update { it.copy(sweepSkippedNodes = v) }
-
     val sweepProgress: SharedFlow<SweepStudyRunner.Progress?> = runs.sweepProgress.asSharedFlow()
 
     /** The sweep's end, held until the screen takes it ([PendingOutcome]). */
-    internal val sweepOutcome: PendingOutcome<Result<BatchAnalysisOutcome>> get() = runs.sweepOutcome
+    internal val sweepOutcome: PendingOutcome<RunEnd> get() = runs.sweepOutcome
 
     fun isReadyToCompute(): Boolean = refBytes != null && defFilePaths.isNotEmpty()
 
+    /** New inputs: the next run starts in a new session folder. */
     fun clearPreviousResults() {
-        lastBatchDirPath = null
-        lastRefPath = null
-        lastDefPath = null
         workingLocalId = null
     }
 

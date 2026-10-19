@@ -208,23 +208,19 @@ class RunKindOwnRecordTest {
         vm.deformedFrames = staged.map { DeformedFrame(it.absolutePath, it.name) }
         val single = openRunSession(ctx, vm.working, sweep = false)
         vm.applyRunOutcome(unsaved(single))
-        val before = vm.runResult.value
         val sweep = openRunSession(ctx, vm.working, sweep = true)
 
         val outcome = solveSweep(sweep)
 
         assertEquals("the working session", single.id, vm.workingLocalId)
-        assertEquals("the last result", before, vm.runResult.value)
-        assertTrue("the plan", vm.sweepPlan.isEmpty())
+        assertFalse(vm.workingIsSweep)
         assertEquals(sweep.id, outcome.sessionId)
-        assertTrue(outcome.saved)
+        assertEquals("the row it opens on", listOf(21, 31), outcome.record?.sweepSubsets)
+        assertEquals(21, outcome.record?.subset)
 
         vm.applyRunOutcome(outcome)
 
         assertNull("a saved sweep is finished: the next run is a new one", vm.workingLocalId)
-        assertEquals(listOf(21, 31), vm.sweepPlan.map { it.subset })
-        assertEquals(sweep.id, vm.runResult.value.sessionId)
-        assertEquals(21, vm.runResult.value.settings?.subset)
     }
 
     @Test

@@ -141,7 +141,7 @@ class CancelDiscardsRunTest {
         totalFrames = 1,
         executionTimeMs = 0,
         batchDirPath = session.dir.absolutePath,
-        saved = saved,
+        record = if (saved) sessionRecord(id = session.id, sessionDir = session.dir.absolutePath) else null,
         session = session.working,
     )
 
@@ -165,7 +165,6 @@ class CancelDiscardsRunTest {
             cloudSessionId = "cloud-1",
         )
         assertTrue(SessionStore.upsert(ctx, row, allowOverLimit = true))
-        vm.lastRefPath = layout.referencePng.absolutePath
         // As the wizard takes the run's outcome once its row is saved.
         vm.applyRunOutcome(ended(session, saved = true))
         return session
@@ -198,7 +197,6 @@ class CancelDiscardsRunTest {
         frames.forEachIndexed { i, file -> assertArrayEquals("frame $i is back", bytes[i], file.readBytes()) }
         assertEquals(launched, vm.defFilePaths)
         assertNull("the next run is a new session", vm.workingLocalId)
-        assertNull("no result to open", vm.runResult.value.batchDirPath)
         assertEquals("the one analysis allowed is still free", RunAdmission.Admitted, vm.admitRun(ctx, 3))
     }
 
@@ -232,7 +230,6 @@ class CancelDiscardsRunTest {
         val saved = savedRun(solved = 2)
         val files = hashes(saved.dir)
         val row = SessionStore.get(ctx, saved.id)
-        val result = vm.runResult.value
         val launched = vm.defFilePaths
         val thumbTime = SessionPaths.resultThumb(saved.dir).lastModified()
 
@@ -255,7 +252,6 @@ class CancelDiscardsRunTest {
         assertTrue("the frame the run moved in is back in the import", frames[2].isFile)
         assertEquals(launched, vm.defFilePaths)
         assertNull(vm.workingLocalId)
-        assertEquals("the wizard's last result", result, vm.runResult.value)
     }
 
     @Test
@@ -340,7 +336,7 @@ class CancelDiscardsRunTest {
         assertFalse("no session folder", session.dir.exists())
         assertEquals("no upload", 0, uploadsQueuedFor(session.id))
         assertTrue("the sweep's frame stays in the import", frames[0].isFile)
-        assertTrue(vm.sweepPlan.isEmpty())
+        assertNull("no session for the wizard to take", outcome.session)
         assertNull(vm.workingLocalId)
     }
 
@@ -356,7 +352,6 @@ class CancelDiscardsRunTest {
         assertTrue("committed into the session", SessionPaths.frameDat(first.dir, 1).isFile)
         val files = hashes(first.dir)
         val row = SessionStore.get(ctx, first.id)
-        val plan = vm.sweepPlan
         val uploads = uploadsQueuedFor(first.id)
 
         val next = openRunSession(ctx, vm.working, sweep = true)
@@ -369,7 +364,7 @@ class CancelDiscardsRunTest {
         assertEquals(files, hashes(first.dir))
         assertEquals(row, SessionStore.get(ctx, first.id))
         assertEquals(uploads, uploadsQueuedFor(first.id))
-        assertEquals(plan, vm.sweepPlan)
+        assertNull(outcome.session)
         assertFalse(next.dir.exists())
         assertNull(vm.workingLocalId)
     }

@@ -101,7 +101,7 @@ class AnalysisViewModelTest {
         totalFrames = 0,
         executionTimeMs = 0,
         batchDirPath = session.dir.path,
-        saved = saved,
+        record = if (saved) sessionRecord(id = session.id, sessionDir = session.dir.path) else null,
         session = session.working,
     )
 
@@ -174,49 +174,12 @@ class AnalysisViewModelTest {
     // -------------------------------------------------------------- reset logic
 
     @Test
-    fun `clearPreviousResults resets every field a new input set must not inherit`() {
-        vm.lastBatchDirPath = "/tmp/batch"
-        vm.lastRefPath = "/tmp/ref.png"
-        vm.lastDefPath = "/tmp/def.png"
+    fun `clearPreviousResults starts the next run in a new session`() {
         vm.workingLocalId = "abc123"
 
         vm.clearPreviousResults()
 
-        assertNull(vm.lastBatchDirPath)
-        assertNull(vm.lastRefPath)
-        assertNull(vm.lastDefPath)
         assertNull(vm.workingLocalId)
-    }
-
-    // ------------------------------------------- RunResult accessor consistency
-
-    @Test
-    fun `the lastX accessors read and write through the runResult snapshot`() {
-        vm.lastBatchDirPath = "/tmp/batch"
-        vm.lastRefPath = "/tmp/ref.png"
-        vm.lastDefPath = "/tmp/def.png"
-        vm.lastStop = RunStop.Other(7)
-        vm.lastPlannedFrames = 12
-
-        val snapshot = vm.runResult.value
-        assertEquals("/tmp/batch", snapshot.batchDirPath)
-        assertEquals("/tmp/ref.png", snapshot.refPath)
-        assertEquals("/tmp/def.png", snapshot.defPath)
-        assertEquals(RunStop.Other(7), snapshot.stop)
-        assertEquals(12, snapshot.plannedFrames)
-    }
-
-    @Test
-    fun `each setter leaves the other RunResult fields untouched`() {
-        vm.lastPlannedFrames = 12
-        vm.lastRefPath = "/tmp/ref.png"
-
-        // A later, unrelated write must not clobber the earlier ones.
-        vm.lastStop = RunStop.InitFailed
-
-        assertEquals(12, vm.lastPlannedFrames)
-        assertEquals("/tmp/ref.png", vm.lastRefPath)
-        assertEquals(RunStop.InitFailed, vm.lastStop)
     }
 
     // ------------------------------------------------------------ new reference
@@ -231,7 +194,6 @@ class AnalysisViewModelTest {
         roiH = 150
         roiMaskBytes = ByteArray(640 * 480)
         workingLocalId = "abc123"
-        lastBatchDirPath = "/tmp/batch"
     }
 
     @Test
@@ -266,7 +228,6 @@ class AnalysisViewModelTest {
         vm.applyNewReference(ByteArray(8), "second.png", ImageSize(640, 480))
 
         assertNull("a new reference wrote into the previous one's folder", vm.workingLocalId)
-        assertNull(vm.lastBatchDirPath)
     }
 
     // ------------------------------------------------------- run on the native thread
@@ -285,16 +246,6 @@ class AnalysisViewModelTest {
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(listOf("/session/a.png", "/session/b.png"), vm.defFilePaths)
         assertEquals(mapOf("/session/a.png" to (4 to 3), "/session/b.png" to (4 to 3)), vm.defFrameSizes)
-    }
-
-    @Test
-    fun `a fresh run result starts empty`() {
-        val snapshot = vm.runResult.value
-        assertNull(snapshot.batchDirPath)
-        assertNull(snapshot.spec)
-        assertNull(snapshot.settings)
-        assertEquals(RunStop.Finished, snapshot.stop)
-        assertEquals(0, snapshot.plannedFrames)
     }
 
     // ------------------------------------------------------------ saved state

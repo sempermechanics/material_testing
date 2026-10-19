@@ -16,6 +16,7 @@ import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.RunStop
 import com.sempermechanics.semper.ui.analysis.run.BatchRun
+import com.sempermechanics.semper.ui.analysis.run.RunEnd
 import com.sempermechanics.semper.ui.analysis.run.RunInputs
 import com.sempermechanics.semper.ui.analysis.run.RunSpec
 import com.sempermechanics.semper.ui.analysis.run.runBatchAnalysisBody
@@ -53,12 +54,12 @@ internal class RunChannels {
         extraBufferCapacity = PROGRESS_BUFFER,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val batchOutcome = PendingOutcome<Result<BatchAnalysisOutcome>>()
+    val batchOutcome = PendingOutcome<RunEnd>()
     val sweepProgress = MutableSharedFlow<SweepStudyRunner.Progress?>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val sweepOutcome = PendingOutcome<Result<BatchAnalysisOutcome>>()
+    val sweepOutcome = PendingOutcome<RunEnd>()
     var batchJob: Job? = null
     var sweepJob: Job? = null
 
@@ -107,7 +108,7 @@ internal class PendingOutcome<T : Any> {
 /**
  * Runs the batch on [viewModelScope] so destroying the Activity mid-run does
  * not cancel a minutes-long native solve. Progress is published on
- * [AnalysisViewModel.progress]; completion (or failure) is held on
+ * [AnalysisViewModel.progress]; how it ended ([RunEnd]) is held on
  * [AnalysisViewModel.batchOutcome] until the screen takes it. The run's
  * images and the working session, [inputs], are frozen by the caller on Main
  * before it leaves for the native thread ([snapshotRunInputs]); what it
@@ -143,7 +144,7 @@ internal fun AnalysisViewModel.launchBatchAnalysis(
                 if (isActive) runs.progress.tryEmit(update)
             }
             withContext(Dispatchers.Main) { applyRunOutcome(outcome) }
-            runs.batchOutcome.post(Result.success(outcome))
+            runs.batchOutcome.post(RunEnd.of(outcome))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -153,7 +154,7 @@ internal fun AnalysisViewModel.launchBatchAnalysis(
                 SemperAnalytics.ANALYSIS_FAILED,
                 mapOf("mode" to "batch", "reason" to "exception"),
             )
-            runs.batchOutcome.post(Result.failure(e))
+            runs.batchOutcome.post(RunEnd.unexpected(e))
         } finally {
             runs.progress.tryEmit(null)
         }
@@ -200,12 +201,12 @@ fun AnalysisViewModel.launchSweep(appContext: Context, spec: RunSpec) {
                 if (isActive) runs.sweepProgress.tryEmit(update)
             }
             withContext(Dispatchers.Main) { applyRunOutcome(outcome) }
-            runs.sweepOutcome.post(Result.success(outcome))
+            runs.sweepOutcome.post(RunEnd.of(outcome))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.e(e, "Parameter sweep failed")
-            runs.sweepOutcome.post(Result.failure(e))
+            runs.sweepOutcome.post(RunEnd.unexpected(e))
         } finally {
             runs.sweepProgress.tryEmit(null)
         }
@@ -286,17 +287,16 @@ internal fun openRunSession(appContext: Context, working: WorkingSession?, sweep
  * Takes what a run that ended with [outcome] learned, once, on Main: the
  * session the next run of its kind writes again, none once this one saved
  * (a saved analysis is finished: the next run is a new one, never a re-run
- * over it), and its result. A run writes none of the wizard's fields itself:
- * they are Main's, and `WizardState.save` reads them there. A run that never
- * got a session (the quota blocked it) or kept nothing (it was cancelled)
- * changes nothing.
+ * over it). A run writes none of the wizard's fields itself: they are
+ * Main's, and `WizardState.save` reads them there. A run that never got a
+ * session (the quota blocked it) or kept nothing (it was cancelled) changes
+ * nothing. What it shows is [RunEnd.of] the same outcome.
  */
 @MainThread
 internal fun AnalysisViewModel.applyRunOutcome(outcome: BatchAnalysisOutcome) {
     if (BuildConfig.DEBUG) check(Looper.getMainLooper().isCurrentThread) { "a run's outcome is applied on Main" }
     val session = outcome.session ?: return
     working = if (outcome.saved) null else session
-    outcome.result?.let { lastRunResult = it }
 }
 
 /**

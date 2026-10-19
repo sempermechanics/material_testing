@@ -11,6 +11,7 @@ import com.sempermechanics.semper.data.session.RunMetrics
 import com.sempermechanics.semper.data.session.RunOutcome
 import com.sempermechanics.semper.data.session.RunReference
 import com.sempermechanics.semper.data.session.SessionPaths
+import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.originalNameOr
 import com.sempermechanics.semper.diagnostics.EngineDebug
@@ -29,7 +30,6 @@ import com.sempermechanics.semper.ui.analysis.wizard.AnalysisViewModel
 import com.sempermechanics.semper.ui.analysis.wizard.BatchAnalysisOutcome
 import com.sempermechanics.semper.ui.analysis.wizard.BatchProgressUpdate
 import com.sempermechanics.semper.ui.analysis.wizard.RunAdmission
-import com.sempermechanics.semper.ui.analysis.wizard.RunResult
 import com.sempermechanics.semper.ui.analysis.wizard.admitRun
 import com.sempermechanics.semper.ui.analysis.wizard.openRunSession
 import com.sempermechanics.semper.ui.analysis.wizard.repointDeformedPathsOnMain
@@ -96,8 +96,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     var firstFrameValidPoints = 0
     var firstFrameCorrelatedPoints = -1
     var firstFrameAvgIters = 0f
-    // The first frame's engine stats. A local, not the view model's field: the
-    // run hands them back in its outcome, and the wizard takes them on Main.
+    // The first frame's engine stats, which its saved record keeps.
     var engineStatsArray: FloatArray? = null
     var stop: RunStop = RunStop.Finished
 
@@ -376,16 +375,9 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         val rate = RunEstimate.nextRate(previous, points, solvedFrames, executionTimeMs.toLong())
         AppSettings.setRunPointsPerSecond(appContext, rate)
     }
-    var recordSaved = false
+    // The row the run saved, as the index holds it: what its viewer opens on.
+    var savedRecord: SessionRecord? = null
     var indexUnavailable = false
-    // What the viewer reads of this run (ADR-004); the wizard takes it on Main.
-    // Its record's fields are set only when the run saves one.
-    var result = RunResult(
-        batchDirPath = batchDir.absolutePath,
-        engineStats = engineStatsArray,
-        spec = spec,
-        sessionId = localSessionId,
-    )
     // The names actually on disk in raw_deformed/ — reopening a session,
     // exporting and cloud upload resolve images by these.
     val defNames = persistedRawNames.mapIndexed { i, persisted ->
@@ -398,15 +390,13 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         // Persist a viewable copy of the reference next to the frames —
         // the Home list and reopened sessions depend on it surviving.
         val refPngPath = sessions.writeReferenceCopy(batchDir, refBytes, reference.size.width, reference.size.height)
-        val settings = spec.recordSettings()
-        result = result.copy(refPath = refPngPath, settings = settings, stop = stop, plannedFrames = plannedFrames)
 
         val cloudEnabled = CloudSync.uploadsEnabled(appContext)
         val input = RunInput(
             localSessionId = localSessionId,
             dir = batchDir,
             reference = RunReference(refPngPath, reference.name, reference.size),
-            settings = settings,
+            settings = spec.recordSettings(),
             videoName = videoName,
             frameTimesMs = frameTimesMs,
         )
@@ -425,7 +415,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         val record = sessions.buildSessionRecord(appContext, input, outcome, cloudEnabled)
         val saved = afterSave(stop, saveRunRecord(appContext, record, cloudEnabled, admission.admitted))
         stop = saved.stop
-        recordSaved = saved.recordSaved
+        if (saved.recordSaved) savedRecord = SessionStore.get(appContext, localSessionId) ?: record
         indexUnavailable = saved.indexUnavailable
     }
 
@@ -440,12 +430,12 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
             .takeIf { it >= 0 }
             ?.let { resolvedDefPaths.getOrNull(it)?.substringAfterLast('/') },
         firstFrameCorrelatedPoints = firstFrameCorrelatedPoints,
-        saved = recordSaved,
+        record = savedRecord,
         indexUnavailable = indexUnavailable,
         // Once saved, that analysis is finished: the next run in this wizard
         // is a new one (applyRunOutcome).
         session = session.working,
-        result = result,
+        spec = spec,
     )
     batchEndEvent(appContext, outcome, stop)
     return outcome
