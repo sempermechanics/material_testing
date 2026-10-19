@@ -24,6 +24,7 @@ import com.sempermechanics.semper.data.net.TokenSource
 import com.sempermechanics.semper.data.net.UploadLinkExpiredException
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.data.session.SessionZip
+import com.sempermechanics.semper.data.session.StagingLayout
 import com.sempermechanics.semper.data.session.StorageBudget
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.navigation.IntentKeys
@@ -151,7 +152,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
     /**
      * [backUp]'s steps, every failure mapped by [UploadFailures]. A staging
      * that is not the one [started]'s cloud session declared ([UploadStaging.reuse]
-     * false) is built again only once that session is out of the way
+     * false: unfinished, or its [StagingBinding] names another session or other
+     * bytes) is built again only once that session is out of the way
      * ([UploadSessionPlanner.releaseForRestage]); the run then goes on with no
      * session, so the files are declared afresh.
      */
@@ -211,7 +213,8 @@ class DicUploadWorker(context: Context, params: WorkerParameters) : CoroutineWor
         progress.begin(TransferPhase.UPLOAD, 1)
         Timber.i("Uploading %s: %d files (%s)", run.localId, files.size, files.groupingBy { it.role }.eachCount())
         UploadLog.phase("start", count = files.size, stage = "upload")
-        return finish(run, run.planner().ensureSession(run.record, files), progress, stagingDir)
+        val step = run.planner().ensureSession(run.record, files, StagingLayout(stagingDir))
+        return finish(run, step, progress, stagingDir)
     }
 
     /** Do what the cloud session [step] says: upload into it and complete, record the sync, or end the run. */

@@ -13,6 +13,7 @@ import com.sempermechanics.semper.data.net.SessionCreateRequest
 import com.sempermechanics.semper.data.net.SessionUploadsResponse
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
+import com.sempermechanics.semper.data.session.StagingLayout
 import com.sempermechanics.semper.util.Digests
 import com.sempermechanics.semper.util.suspendRunCatching
 import kotlinx.coroutines.delay
@@ -134,19 +135,23 @@ internal class UploadSessionPlanner(
 
     /**
      * Continue the session a prior run created, tracked by [record]'s stored
-     * pointer, or create one declaring [files]; then decide what to do with it
-     * ([nextStep]).
+     * pointer, or create one declaring [files] and bind [staging] to it
+     * ([StagingBinding]); then decide what to do with it ([nextStep]).
      *
      * Deliberately NOT looked up by localSessionId: incomplete staging is
      * cleared when the pointer is blank, so resuming a session found any other
      * way would upload freshly-sized files into a session that expects the old
      * sizes → a size mismatch.
      */
-    suspend fun ensureSession(record: SessionRecord, files: List<UploadArtifact>): SessionStep {
+    suspend fun ensureSession(
+        record: SessionRecord,
+        files: List<UploadArtifact>,
+        staging: StagingLayout,
+    ): SessionStep {
         val cloudId = record.cloudSessionId.ifBlank {
             Timber.w("Upload — creating a new cloud session")
             UploadLog.phase("create_session")
-            createSession(record, files)
+            createSession(record, files, staging)
         }
         val step = nextStep(cloudId, files)
         if (step is SessionStep.Upload) SessionStore.setCloudSessionId(context, localId, step.plan.sessionId)
@@ -203,7 +208,9 @@ internal class UploadSessionPlanner(
 
     /**
      * Declare the whole analysis and obtain one resumable target per file;
-     * returns the new session's id, already stored as the pointer.
+     * returns the new session's id, already stored as the pointer, with
+     * [staging] bound to it: the session and the sha256 declared for each
+     * file, which a later run's [UploadStaging.prepare] checks before resuming.
      *
      * The backend opens those targets in a Cloud Task rather than inside the
      * request (600 files was ~1200 sequential Drive round-trips in a 60s
@@ -218,7 +225,11 @@ internal class UploadSessionPlanner(
      * ~84 MB zip resumable URI → Drive 400 Content-Range size mismatch.
      * Always resolve via [resumeSession] / [awaitProvisioned] (role+name+size+sha256).
      */
-    private suspend fun createSession(record: SessionRecord, artifacts: List<UploadArtifact>): String {
+    private suspend fun createSession(
+        record: SessionRecord,
+        artifacts: List<UploadArtifact>,
+        staging: StagingLayout,
+    ): String {
         val specs = artifacts.map {
             FileSpecDto(it.name, it.role, it.file.length(), it.sha256Hex ?: Digests.sha256Hex(it.file))
         }
@@ -244,6 +255,9 @@ internal class UploadSessionPlanner(
         // Persist the pointer before anything can fail: a session that exists in
         // the cloud but is not recorded here would be orphaned against quota.
         SessionStore.setCloudSessionId(context, localId, session.sessionId)
+        // Then the binding: a run that dies between the two finds a pointer with
+        // no binding, and releases the session rather than resuming it blind.
+        StagingBinding.of(session.sessionId, specs).write(staging)
         return session.sessionId
     }
 

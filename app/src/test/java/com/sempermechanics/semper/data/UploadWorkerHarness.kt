@@ -19,6 +19,7 @@ import com.sempermechanics.semper.data.net.TokenProvider
 import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
+import com.sempermechanics.semper.data.session.StagingLayout
 import com.sempermechanics.semper.navigation.IntentKeys
 import com.sempermechanics.semper.util.Digests
 import kotlinx.coroutines.runBlocking
@@ -142,6 +143,8 @@ open class UploadWorkerHarness {
         zip(File(staging, "Session.zip"), "raw/Reference.png")
         zip(File(staging, "Extras.zip"), "csv/analysis_data.csv")
         File(staging, ".bundles_done").createNewFile()
+        // The staging a run under [cloudSessionId] declared to it (TD-282).
+        if (cloudSessionId.isNotBlank()) bind(cloudSessionId)
 
         val record = SessionRecord(
             id = ID, name = "n", createdAt = 1L, updatedAt = 1L, frameCount = 1,
@@ -155,6 +158,18 @@ open class UploadWorkerHarness {
         assertTrue(SessionStore.upsert(context, record, allowOverLimit = true))
         return record
     }
+
+    /** The sha256 of each staged file the upload declares, as a session create sent them. */
+    protected fun stagedHashes(): Map<String, String> =
+        listOf("metadata.json", "Session.zip", "Extras.zip").associateWith { Digests.sha256Hex(File(staging, it)) }
+
+    /** Binds the staging to [cloudSessionId], as the run that created that session does ([StagingBinding]). */
+    protected fun bind(cloudSessionId: String, sha256ByName: Map<String, String> = stagedHashes()) {
+        assertTrue(StagingBinding(cloudSessionId, sha256ByName).write(StagingLayout(staging)))
+    }
+
+    /** The binding the staging holds now, or null. */
+    internal fun binding(): StagingBinding? = StagingBinding.read(StagingLayout(staging))
 
     /** The three staged files as the backend would list them pending. */
     protected fun pendingAll(): List<PendingUploadDto> = listOf(

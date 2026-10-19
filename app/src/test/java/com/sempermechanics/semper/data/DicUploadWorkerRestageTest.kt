@@ -96,6 +96,69 @@ class DicUploadWorkerRestageTest : UploadWorkerHarness() {
         assertEquals(SessionRecord.SyncState.SYNCED, row().syncState)
     }
 
+    // ── the staging's binding to its session (TD-282) ──────────────────────
+
+    @Test
+    fun `a whole staging bound to another session releases this one and is declared afresh`() {
+        seed(cloudSessionId = "cs1")
+        bind("cs0")
+        api.onSessionUploads = { uploading(it) }
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs2", status = "UPLOADING") }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        assertEquals(listOf("cs1"), api.deleted)
+        assertEquals(setOf("cs2"), api.completed.map { it.sessionId }.toSet())
+        assertEquals("cs2", row().cloudSessionId)
+    }
+
+    @Test
+    fun `a whole staging with no binding under a pointer is not resumed blind`() {
+        // An older build's staging, or a run that died between storing the
+        // pointer and the binding: nothing says cs1 declared these bytes.
+        seed(cloudSessionId = "cs1")
+        File(staging, ".declared").delete()
+        api.onSessionUploads = { uploading(it) }
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs2", status = "UPLOADING") }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        assertEquals(listOf("cs1"), api.deleted)
+        assertEquals(setOf("cs2"), api.completed.map { it.sessionId }.toSet())
+    }
+
+    @Test
+    fun `a binding whose declared hash is not the staged archive's is not resumed`() {
+        seed(cloudSessionId = "cs1")
+        bind("cs1", stagedHashes() + ("Session.zip" to "0".repeat(64)))
+        api.onSessionUploads = { uploading(it) }
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs2", status = "UPLOADING") }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        assertEquals(listOf("cs1"), api.deleted)
+        assertEquals("cs2", row().cloudSessionId)
+    }
+
+    @Test
+    fun `a created session binds the staging to it with the hashes it declared`() {
+        seed()
+        api.onCreateSession = { SessionCreateResponse(sessionId = "cs9", status = "UPLOADING") }
+        api.onSessionUploads = { uploading(it) }
+        api.onComplete = { _, _ -> throw apiError(503, "firestore_unreachable") }
+
+        assertEquals(ListenableWorker.Result.retry(), run())
+
+        val bound = binding()!!
+        assertEquals("cs9", bound.cloudSessionId)
+        assertEquals(api.created!!.files.associate { it.name to it.sha256 }, bound.sha256ByName)
+        // The next run resumes cs9 with the same staging: bound, nothing released.
+        api.onComplete = { _, req -> api.completed += req }
+        assertEquals(ListenableWorker.Result.success(), run())
+        assertTrue(api.deleted.isEmpty())
+        assertEquals(setOf("cs9"), api.completed.map { it.sessionId }.toSet())
+    }
+
     // ── archives built on one run, reused on the next ───────────────────────
 
     @Test
