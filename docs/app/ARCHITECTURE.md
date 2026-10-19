@@ -41,7 +41,7 @@ on 2026-10-03.
 
 | Package | Files | Role |
 |---|---|---|
-| `ui/auth/` | 11 | Splash, sign-in (`AuthActivity` with `AuthTotpController` and `AuthPasswordReset`), pending approval, terms, `AccessRouter`, `GoogleSignInHelper`, `PasswordPolicy` |
+| `ui/auth/` | 13 | Splash, sign-in (`AuthActivity` with `AuthTotpController` and `AuthPasswordReset`; its form, an `AuthScreen`, and its calls live in `AuthViewModel`, which a rotation keeps), pending approval, terms, `AccessRouter`, `GoogleSignInHelper`, `PasswordPolicy` |
 | `ui/home/` | 19 | `HomeActivity` and its parts: `HomeViewModel` (the list read, queued deletes, offered backups and restores, which a rotation keeps; ADR-016), `HomeNewAnalysis` (the + button's source chooser and Re-run), session list and selection (cards under the day headers `SessionDays` inserts, painted by `SessionRowText`, `SessionStateIcon` and `SessionThumbs`, the last caching the last frame's U heatmap as `SessionPaths.resultThumb`), `HomeQuotaCard`, `HomeLicenseNotice` (the expiry chip, naming the day grace ends; no call to action), `CloudBackupsCard`, `FirstRunPrompts`, `HomeFabLayout`, `HomeTransferWatch` (backup and restore jobs), `BackupBadgeActions` |
 | `ui/analysis/` | 3 | The three analysis Activities only: `StaticAnalysisActivity` (the wizard), `RoiDrawActivity`, `VsgLatticeActivity` |
 | `ui/analysis/wizard/` | 22 | `AnalysisViewModel` with `RunChannels` (launch batch and sweep) and `SweepAnalysis`; `WizardStep`, `AnalysisWizardChrome.applyStep`, `AnalysisWizardHost`; `WizardState` / `WizardDraftBinding` (process death, [ADR-005](../adr/ADR-005-wizard-process-death.md)); slots, coach, nav, ready / cancel / leave gates; parameter fields and sliders; settings sheet |
