@@ -159,7 +159,8 @@ internal class UploadSessionPlanner(
      * pointer) or failing its check ([UploadStaging.reuse] false), and a
      * rebuild packs new zip timestamps: the same sizes, other bytes. Resumed,
      * the old session would take those bytes (`:complete` checks Drive's md5
-     * against the file sent, and [matchPending] only role, name and size)
+     * against the file sent, and [matchPending] only role, name and size when
+     * the backend sends no hash)
      * while the backup keeps the sha256 it was created with, so every restore
      * of it would fail `session_zip_sha256_mismatch`.
      *
@@ -215,7 +216,7 @@ internal class UploadSessionPlanner(
      * (`{sid}_{role}_{name}`), so `bundle/Session.zip` sorts *before*
      * `metadata/metadata.json`. Index pairing PUT the ~2 KB JSON onto the
      * ~84 MB zip resumable URI → Drive 400 Content-Range size mismatch.
-     * Always resolve via [resumeSession] / [awaitProvisioned] (role+name+size).
+     * Always resolve via [resumeSession] / [awaitProvisioned] (role+name+size+sha256).
      */
     private suspend fun createSession(record: SessionRecord, artifacts: List<UploadArtifact>): String {
         val specs = artifacts.map {
@@ -316,8 +317,9 @@ internal class UploadSessionPlanner(
     /**
      * Decide whether an existing session can be continued.
      *
-     * Every pending file must match a current artifact by role, name **and
-     * size** — the session's resumable URIs were opened for exactly those sizes.
+     * Every pending file must match a current artifact by role, name, **size**
+     * and declared sha256 ([matchPending]) — the session's resumable URIs were
+     * opened for exactly those sizes, and its manifest keeps those hashes.
      * A single mismatch (an older build's report names, changed content) means
      * the session can't be finished, so we rebuild rather than silently upload a
      * partial set and mark it "synced". This is the guard against a false sync.
@@ -360,14 +362,20 @@ internal class UploadSessionPlanner(
     }
 
     /**
-     * Each pending upload paired with the artifact of the same role, name and
-     * size; null at the first one that has none.
+     * Each pending upload paired with the artifact of the same role, name,
+     * size and, when the backend sends it, declared sha256; null at the first
+     * one that has none. The hash is what tells a rebuilt zip (same size, new
+     * entry timestamps) from the bytes the session declared (TD-281); an older
+     * backend sends none, and the size match stands.
      */
     private fun matchPending(uploads: List<PendingUploadDto>, artifacts: List<UploadArtifact>): List<UploadJob>? {
         val byKey = artifacts.associateBy { it.role to it.name }
         return uploads.mapIndexed { index, u ->
-            val art = byKey[u.role to u.name]
-            if (art == null || art.file.length() != u.sizeBytes) {
+            val art = byKey[u.role to u.name]?.takeIf { a ->
+                a.file.length() == u.sizeBytes &&
+                    (u.sha256 == null || u.sha256.equals(a.sha256Hex ?: Digests.sha256Hex(a.file), ignoreCase = true))
+            }
+            if (art == null) {
                 // Role, index and size only: a name can be the user's own file
                 // name, and WARN reaches Crashlytics.
                 Timber.w(

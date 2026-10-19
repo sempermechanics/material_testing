@@ -9,7 +9,8 @@
       "chunkSize": 33554432,
       "name": "metadata.json",
       "role": "metadata",
-      "sizeBytes": 2048
+      "sizeBytes": 2048,
+      "sha256": "4e7d1c0b9a8f7e6d5c4b3a291807f6e5d4c3b2a1908f7e6d5c4b3a2918070f6e"
     }
   ],
   "page": {

@@ -163,6 +163,9 @@ def upload_target(file_id: str, url: str, f: dict) -> dict:
         "name": f.get("name"),
         "role": f.get("role"),
         "sizeBytes": f.get("sizeBytes", 0),
+        # The hash the file was declared with: the app resumes a pending upload
+        # only with bytes that hash to it, not just the same size (TD-281).
+        "sha256": f.get("sha256"),
     }
 
 
@@ -281,7 +284,7 @@ def iter_unprovisioned_files(sid: str):
     for d in _session_file_docs(sid):
         f = d.to_dict()
         if f.get("status") != statuses.FILE_COMPLETED and not f.get("uploadUrl"):
-            yield _file_view(d.id, f)
+            yield _file_view(d.id, f, "sha256")
 
 
 def set_file_upload_urls(opened: list[tuple[str, str]]) -> None:

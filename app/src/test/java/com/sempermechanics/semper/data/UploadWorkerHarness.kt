@@ -181,6 +181,10 @@ open class UploadWorkerHarness {
         ),
     )
 
+    /** [uploads] as a backend that answers each file's declared sha256 lists them: the staged file's (TD-281). */
+    protected fun hashed(uploads: List<PendingUploadDto>): List<PendingUploadDto> =
+        uploads.map { it.copy(sha256 = Digests.sha256Hex(File(staging, it.name))) }
+
     protected fun uploading(sid: String, uploads: List<PendingUploadDto> = pendingAll()) =
         SessionUploadsResponse(sessionId = sid, status = "UPLOADING", uploads = uploads)
 

@@ -248,6 +248,26 @@ async def test_inline_create_hands_back_what_the_uploads_listing_would(
     assert [u["uploadUrl"] for u in uploads] == [f"https://drive/{n}" for n in "abc"]
 
 
+async def test_a_pending_upload_carries_the_hash_its_file_was_declared_with(
+    store, queued, client, monkeypatch,
+):
+    """TD-281: the app pairs a pending upload with its staged file by role, name,
+    size and this hash, so other bytes of the same size are never resumed into
+    a session that declared the old ones."""
+    monkeypatch.setattr(rate_limit.listing_bucket, "allow", lambda uid: True)
+    other = "b" * 64
+    sid = (await client.post(
+        "/v1/sessions",
+        json={"specimen": "s", "files": [_file("a"), {**_file("b"), "sha256": other}]},
+    )).json()["sessionId"]
+
+    provisioned = session_provision.provision_session(sid)
+    listed = (await client.get(f"/v1/sessions/{sid}/uploads")).json()["uploads"]
+
+    assert {u["name"]: u["sha256"] for u in provisioned["uploads"]} == {"a": _SHA, "b": other}
+    assert {u["name"]: u["sha256"] for u in listed} == {"a": _SHA, "b": other}
+
+
 def test_one_listing_page_holds_a_whole_session():
     """create_session returns the first page of upload targets. That page is
     the whole manifest only while the file cap stays below the page size."""

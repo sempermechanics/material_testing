@@ -59,20 +59,21 @@ def test_upload_target_is_the_manifest_entry_the_app_reads(store):
     assert repo.upload_target("f1", "https://up/1", {"name": "a.png", "role": "raw",
                                                      "sizeBytes": 7, "sha256": "x"}) == {
         "fileId": "f1", "uploadUrl": "https://up/1", "chunkSize": 32 * 1024 * 1024,
-        "name": "a.png", "role": "raw", "sizeBytes": 7,
+        "name": "a.png", "role": "raw", "sizeBytes": 7, "sha256": "x",
     }
 
 
 def test_upload_target_defaults_a_missing_size_to_zero(store):
     out = repo.upload_target("f1", "u", {})
     assert out["sizeBytes"] == 0 and out["name"] is None and out["role"] is None
+    assert out["sha256"] is None  # a file doc written before the hash was kept
 
 
 # --------------------------------------------------- iter_unprovisioned_files
 
 def test_iter_unprovisioned_files_yields_only_files_with_no_uri(store):
     store._data["files"] = {
-        "s1_a": _file("s1", name="a"),
+        "s1_a": _file("s1", name="a", sha256="sha-a"),
         "s1_b": _file("s1", name="b", uploadUrl="https://up/b"),
         "s1_c": _file("s1", name="c", status=statuses.FILE_COMPLETED),
         "s1_d": _file("s1", name="d", uploadUrl=""),
@@ -80,7 +81,8 @@ def test_iter_unprovisioned_files_yields_only_files_with_no_uri(store):
     }
     out = list(repo.iter_unprovisioned_files("s1"))
     assert [f["fileId"] for f in out] == ["s1_a", "s1_d"]
-    assert out[0] == {"fileId": "s1_a", "name": "a", "role": "raw", "sizeBytes": 10}
+    # The declared hash rides along: provisioning answers it in the upload target (TD-281).
+    assert out[0] == {"fileId": "s1_a", "name": "a", "role": "raw", "sizeBytes": 10, "sha256": "sha-a"}
 
 
 def test_iter_unprovisioned_files_reads_past_one_batch(store):
