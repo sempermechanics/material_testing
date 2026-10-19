@@ -2,7 +2,9 @@
  * see the desk, and routes each licence row's buttons to the card or dialog
  * that handles them; the rest is in the modules imported below.
  */
-import { requireSignIn, api, setStatus, whileWaiting } from "../auth.js";
+import { requireSignIn } from "../auth.js";
+import { api } from "../api.js";
+import { setStatus, whileWaiting } from "../status.js";
 import { unfinishedStepUpText } from "../util.js";
 import { mountSwitcher } from "../switcher.js";
 import { licencesAdministered } from "../roles.js";

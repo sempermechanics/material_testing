@@ -1,10 +1,11 @@
 /* Revoke, delete and restore: the changes that need the key typed and a
  * fresh sign-in, and the 30 days in which a delete can be undone.
  */
-import {
-  api, setStatus, esc, askInPage, confirmInPage, confirmByTyping, stepUpForRevoke, ERR_CANCELLED,
-} from "../auth.js";
-import { day, daysLeft, placeholderRows, retryRow } from "../util.js";
+import { stepUpForRevoke } from "../auth.js";
+import { api } from "../api.js";
+import { askInPage, confirmInPage, confirmByTyping, ERR_CANCELLED } from "../dialogs.js";
+import { setStatus } from "../status.js";
+import { esc, day, daysLeft, placeholderRows, retryRow } from "../util.js";
 import { explain } from "../messages.js";
 import { $, desk, findLicence, labelOf } from "./state.js";
 import { showLicence, renderLicences } from "./licences.js";
