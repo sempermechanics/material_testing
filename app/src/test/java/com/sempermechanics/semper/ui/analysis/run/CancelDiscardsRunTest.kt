@@ -40,6 +40,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -48,6 +50,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import java.io.File
+import java.io.IOException
 
 /**
  * Cancel keeps nothing of a run, and a saved analysis is never written over
@@ -58,8 +61,9 @@ import java.io.File
  * a cancel still keeps its frames. The JVM has no engine, so the batch loop's own steps are driven
  * here as it takes them: [openRunSession] at its start, [keepDeformedFrame]
  * and a staged `.dat` per frame it reaches, then [discardCancelledBatch] or
- * [RunSession.commit] at its end (the instrumented `EnginePipelineSmokeTest`
- * runs the real loop). A sweep is handed its runner's result ([endSweep]).
+ * [RunSession.commit] at its end, or [undoFailedBatch] when it throws before
+ * that (the instrumented `EnginePipelineSmokeTest` runs the real loop). A
+ * sweep is handed its runner's result ([endSweep]).
  */
 @RunWith(RobolectricTestRunner::class)
 class CancelDiscardsRunTest {
@@ -190,6 +194,29 @@ class CancelDiscardsRunTest {
         assertNull("the next run is a new session", vm.workingLocalId)
         assertNull("no result to open", vm.runResult.value.batchDirPath)
         assertEquals("the one analysis allowed is still free", RunAdmission.Admitted, vm.admitRun(ctx, 3))
+    }
+
+    @Test
+    fun `a run that throws before its commit is undone as a cancel is, and its frames are back`() {
+        val frames = importFrames(3)
+        val bytes = frames.map { it.readBytes() }
+        val launched = vm.defFilePaths
+        val session = vm.openRunSession(ctx, sweep = false)
+        // Frame 0 solved and was moved in; writing frame 1's .dat then fails (a full disk).
+        val resolved = solveUpTo(session, launched, reached = 1, tag = "failed")
+        assertFalse("the loop moved the frame it reached", frames[0].exists())
+        val failure = IOException("ENOSPC")
+
+        val thrown = assertThrows(IOException::class.java) {
+            vm.undoFailedBatch(ctx, session, launched, resolved, failure)
+        }
+        idle()
+
+        assertSame("the run's own failure goes on up", failure, thrown)
+        frames.forEachIndexed { i, file -> assertArrayEquals("frame $i is back", bytes[i], file.readBytes()) }
+        assertEquals(launched, vm.defFilePaths)
+        assertFalse("no session folder", session.dir.exists())
+        assertTrue("no Home row", SessionStore.list(ctx).isEmpty())
     }
 
     @Test

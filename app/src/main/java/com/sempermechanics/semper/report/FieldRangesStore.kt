@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.report
 
+import timber.log.Timber
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -65,6 +66,18 @@ internal object FieldRangesStore {
             }
         }
         file.writeBytes(buffer.array())
+    }
+
+    /**
+     * [write]s a run's [perFrameRanges], one entry per frame it wrote, into
+     * [dir]'s sidecar, best-effort: nothing when it wrote none, and a failed
+     * write only costs the cache its speedup, never correctness (the reader
+     * falls back to decoding the frames).
+     */
+    fun writeBestEffort(dir: File, fieldIndices: IntArray, perFrameRanges: List<Map<Int, Pair<Float, Float>?>>) {
+        if (perFrameRanges.isEmpty()) return
+        runCatching { write(File(dir, FILE_NAME), fieldIndices, perFrameRanges) }
+            .onFailure { Timber.w(it, "Could not persist summary field ranges") }
     }
 
     /**
