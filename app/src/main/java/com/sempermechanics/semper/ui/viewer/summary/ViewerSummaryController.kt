@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.StringRes
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -25,6 +26,7 @@ import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.common.SerialJob
 import com.sempermechanics.semper.ui.viewer.ResultViewerActivity
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,6 +58,14 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     /** Value range per field over the whole sequence; empty until the pass finishes. */
     private var ranges: Map<Int, ValueRange> = emptyMap()
     private val rangesJob = SerialJob()
+
+    /**
+     * Where the range pass reads the frames. A test holds it: on a small batch
+     * the pass can finish before [start]'s `withContext` suspends, and then its
+     * result lands in the same main-thread task as the click that asked for it.
+     */
+    @VisibleForTesting
+    internal var rangesDispatcher: CoroutineDispatcher = Dispatchers.Default
     private val buildJob = SerialJob()
 
     /** Which field the on-screen animation belongs to, so a re-show can skip work. */
@@ -105,7 +115,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
         rangesJob.launch(host.lifecycleScope) {
             val files = host.batchFiles
             val computed = try {
-                withContext(Dispatchers.Default) {
+                withContext(rangesDispatcher) {
                     val rangesFile = files.firstOrNull()?.parentFile?.let {
                         File(it, FieldRangesStore.FILE_NAME)
                     }
