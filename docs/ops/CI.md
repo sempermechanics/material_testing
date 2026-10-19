@@ -298,6 +298,7 @@ Required secrets / vars (repo-level on Free private orgs is fine — Environment
 `SHARED_DRIVE_ID`, `SERVICE_ACCOUNT_EMAIL`, `AUTO_APPROVE_HD`, `ADMIN_EMAILS`,
 `SUPPORT_EMAIL`, `NOTIFY_FROM`, async provisioning `TASKS_QUEUE`,
 `TASKS_LOCATION`, `TASKS_TARGET_BASE_URL` and `TASKS_INVOKER_SA`; optional
+`NOTIFY_SECURITY_FROM` (the new-device mail; unset keeps it off),
 `CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
 `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, `KILL_SWITCHES`
 (space-separated) and `ENTITLEMENT_SIGNING_SECRET` (a Secret Manager secret name,

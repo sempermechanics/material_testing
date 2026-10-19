@@ -318,6 +318,8 @@ jobs:
           # never to an empty string the backend would parse as something else.
           # CONSOLE_ORIGINS and KILL_SWITCHES are space-separated: this block
           # splits pairs on commas, so a comma inside a value truncates it.
+          # NOTIFY_SECURITY_FROM unset (empty) keeps the holder's new-device
+          # mail off (TD-295, TD-309); set it to a verified Resend sender.
           env_vars: |-
             GOOGLE_CLOUD_PROJECT=${{ github.event.inputs.project }}
             FIREBASE_PROJECT_ID=${{ vars.FIREBASE_PROJECT_ID }}
@@ -327,6 +329,7 @@ jobs:
             ADMIN_EMAILS=${{ vars.ADMIN_EMAILS }}
             SUPPORT_EMAIL=${{ vars.SUPPORT_EMAIL }}
             NOTIFY_FROM=${{ vars.NOTIFY_FROM }}
+            NOTIFY_SECURITY_FROM=${{ vars.NOTIFY_SECURITY_FROM }}
             TASKS_QUEUE=${{ vars.TASKS_QUEUE }}
             TASKS_LOCATION=${{ vars.TASKS_LOCATION }}
             TASKS_TARGET_BASE_URL=${{ vars.TASKS_TARGET_BASE_URL }}

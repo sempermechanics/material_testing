@@ -535,7 +535,9 @@ to a verified Resend sender (for example `Semper security <security@yourdomain.c
 and each account's holder is mailed, at their verified address, when a new device
 registers to the account: once per account and device, never for a key heal of
 the device already bound. Unset, that mail is off; the access-request mail is
-unaffected.
+unaffected. `deploy-backend.yml` passes it from the `NOTIFY_SECURITY_FROM` repo
+variable, like `NOTIFY_FROM` (TD-309): verify the sender in Resend, then set the
+variable and redeploy.
 
 > `--no-allow-unauthenticated` keeps Cloud Run private: only the service
 > accounts in C0 invoke it, and the API Gateway is the public door. **Auth is
