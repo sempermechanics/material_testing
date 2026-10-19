@@ -310,12 +310,6 @@ class SummaryAnimation(private val spec: Spec) {
         const val MIN_CENTIS = 2
 
         /**
-         * Each field's (label, data index), from [FieldKind]: the backup
-         * bundler still walks these pairs. New code walks [FieldKind.entries].
-         */
-        val FIELDS: List<Pair<String, Int>> = FieldKind.entries.map { it.label to it.dataIndex }
-
-        /**
          * How long each frame is shown, in hundredths of a second.
          *
          * Every frame is included, and the total is capped at [MAX_TOTAL_CENTIS]:

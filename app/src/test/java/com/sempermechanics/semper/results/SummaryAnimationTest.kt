@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.VisualizationEngine
@@ -161,8 +162,8 @@ class SummaryAnimationTest {
     fun `all five fields come back from one pass`() {
         val ranges = runBlocking { SummaryAnimation.globalRanges(listOf(frame("a.dat", 0f, 1f))) }
 
-        for ((label, index) in SummaryAnimation.FIELDS) {
-            assertTrue("$label missing", ranges.containsKey(index))
+        for (field in FieldKind.entries) {
+            assertTrue("${field.label} missing", ranges.containsKey(field.dataIndex))
         }
     }
 
