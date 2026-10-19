@@ -157,6 +157,8 @@ async def test_a_redeemed_key_logs_an_activation(licensing, client, caplog):
     assert event["licenseId"] == minted["license"]["id"] == key_hash(minted["key"])
     assert event["appId"] == "com.sempermechanics.semper"
     assert event["appVersion"] == 35
+    # Passed by the handler, not read from the request context (TD-245).
+    assert event["uid"] == "dev-user"
     assert "dev@local" not in caplog.text
 
 
@@ -170,6 +172,7 @@ async def test_a_refused_key_logs_its_refusal(licensing, client, caplog):
     assert (event["outcome"], event["errorCode"]) == ("refused", "license_email_mismatch")
     assert event["licenseId"] == minted["license"]["id"]
     assert event["appId"] == "none"
+    assert event["uid"] == "dev-user"
     assert "else@lab.org" not in caplog.text
 
 
@@ -191,6 +194,7 @@ async def test_a_checkout_logs_its_refusal(licensing, client, caplog):
     assert r.status_code == 404
     [event] = _events(caplog, "checkout")
     assert (event["outcome"], event["errorCode"]) == ("refused", "no_license")
+    assert event["uid"] == "dev-user"
 
 
 async def test_a_checkout_logs_the_licence_it_leased(client, monkeypatch, caplog):
@@ -214,6 +218,7 @@ async def test_a_checkout_logs_the_licence_it_leased(client, monkeypatch, caplog
     assert r.status_code == 200, r.text
     [event] = _events(caplog, "checkout")
     assert (event["outcome"], event["licenseId"]) == ("ok", license_id)
+    assert event["uid"] == "dev-user"
     assert event["appId"] == "com.sempermechanics.materialtesting"
 
 
@@ -232,6 +237,8 @@ def test_a_device_mismatch_logs_a_devlock_drop(store, caplog):
     assert user["mode"] == "demo"
     [event] = _events(caplog, "devlock_drop")
     assert (event["licenseId"], event["stage"], event["outcome"]) == (license_id, "mismatch", "demo")
+    # Logged before `current_user` binds the uid, so it is passed in (TD-245).
+    assert event["uid"] == "solo-1"
     assert "solo@lab.org" not in caplog.text
 
 
@@ -244,6 +251,7 @@ def test_a_revoked_licence_logs_a_devlock_drop(store, caplog):
     assert store._data["users"]["solo-1"]["mode"] == "demo"
     [event] = _events(caplog, "devlock_drop")
     assert (event["licenseId"], event["stage"]) == (license_id, "revoked")
+    assert event["uid"] == "solo-1"
 
 
 def test_the_matching_device_logs_nothing(store, caplog):

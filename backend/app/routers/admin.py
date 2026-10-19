@@ -1,6 +1,9 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import apps, audit, errors, google_auth, repo, statuses
+from .. import observability as obs
 from .. import rate_limit
 from ..config import settings
 from ..deps import admin_user, attested_or_mfa_admin, attested_or_mfa_admin_fresh, rate_limited
@@ -9,6 +12,7 @@ from ..models import (
     AdminDeviceRelease,
     AdminLicenseConvert,
     AdminLicenseCreate,
+    AdminLicenseSearch,
     AdminLicenseUpdate,
     UserConfigPatch,
 )
@@ -16,7 +20,24 @@ from ..validation import AccessStatus, DocumentId, LicenceSearch, PageToken, Uid
 from ._shared import clamp_page_size, page_block
 from .roster import RosterAdmin, Tier, roster_router
 
+log = logging.getLogger("semper.admin")
 router = APIRouter()
+
+
+def _admin_email_detail(admin_emails) -> dict:
+    """`adminEmails` as an audit detail holds it: hashed, with the count
+    (TD-242). Audit rows outlive account erasure and must hold no address."""
+    emails = list(admin_emails or [])
+    return {"adminEmailHashes": audit.address_tags(emails), "adminEmailCount": len(emails)}
+
+
+def _audited_patch(patch: dict) -> dict:
+    """A licence edit as ADMIN_LICENSE_EXTEND records it: each term as text,
+    except `adminEmails`, which is hashed (`_admin_email_detail`)."""
+    out = {k: str(v) for k, v in patch.items() if k != "adminEmails"}
+    if "adminEmails" in patch:
+        out.update(_admin_email_detail(patch["adminEmails"]))
+    return out
 
 
 @router.get("/v1/admin/users")
@@ -129,7 +150,33 @@ def admin_list_licenses(
     """Licences, newest first. System Demo keys are left out unless
     `include_demo`; revoked licences are left out when `include_revoked` is
     false. `q` searches by exact address, domain or key prefix instead of
-    paging (see `repo.list_licenses`)."""
+    paging (see `repo.list_licenses`).
+
+    `q` here is deprecated (TD-244): it puts an address in the URL, which
+    request logs keep. `POST /v1/admin/licenses/search` takes it in a body.
+    It is still served for one release, with a warning that names the caller
+    and never the value."""
+    if q:
+        obs.log_event(log, logging.WARNING, "deprecated_query_search",
+                      uid=admin["uid"], path="/v1/admin/licenses")
+    return _licence_listing(admin, limit=limit, page_token=page_token,
+                            include_demo=include_demo, include_revoked=include_revoked, q=q)
+
+
+@router.post("/v1/admin/licenses/search")
+def admin_search_licenses(body: AdminLicenseSearch, admin=Depends(admin_user)):
+    """The licence search with its terms in the body, so an address never
+    reaches a URL (TD-244). A read: the ordinary admin token, the admin
+    bucket and the answer of `GET /v1/admin/licenses`, whose query fields
+    the body repeats."""
+    return _licence_listing(admin, limit=body.limit, page_token=body.page_token,
+                            include_demo=body.include_demo,
+                            include_revoked=body.include_revoked, q=body.q)
+
+
+def _licence_listing(admin: dict, *, limit: int, page_token: str, include_demo: bool,
+                     include_revoked: bool, q: str) -> dict:
+    """The licence table or a search over it, for the GET and the POST."""
     rate_limit.enforce(rate_limit.admin_bucket, admin["uid"])
     limit = clamp_page_size(limit, 200)
     licenses, next_token = repo.list_licenses(
@@ -184,7 +231,7 @@ def admin_create_license(
             admin["uid"], action="ADMIN_LICENSE_MINT",
             target={"type": "license", "id": minted["license"]["id"]},
             detail={"kind": KIND_INSTITUTION, "domainLock": body.domainLock,
-                    "adminEmails": body.adminEmails, "maxSeats": body.maxSeats,
+                    **_admin_email_detail(body.adminEmails), "maxSeats": body.maxSeats,
                     "seating": body.seating},
         )
         return minted
@@ -208,7 +255,7 @@ def admin_create_license(
     audit.record(
         admin["uid"], action="ADMIN_LICENSE_MINT",
         target={"type": "license", "id": minted["license"]["id"]},
-        detail={"kind": KIND_INDIVIDUAL, "emailLock": body.emailLock,
+        detail={"kind": KIND_INDIVIDUAL, "emailLockHash": audit.address_tag(body.emailLock),
                 "deviceIdLock": body.deviceIdLock,
                 "inviteError": minted.get("inviteError") or "",
                 # Set when the address already had an account, which the
@@ -292,7 +339,7 @@ def admin_update_license(
         audit.record(
             admin["uid"], action="ADMIN_LICENSE_EXTEND",
             target={"type": "license", "id": license_id},
-            detail={k: str(v) for k, v in patch.items()},
+            detail=_audited_patch(patch),
         )
     return updated
 
@@ -384,7 +431,7 @@ def admin_convert_license(
         admin["uid"], action="ADMIN_LICENSE_CONVERT",
         target={"type": "license", "id": license_id},
         detail={"to": out["license"]["id"], "domainLock": body.domainLock,
-                "adminEmails": body.adminEmails, "maxSeats": body.maxSeats,
+                **_admin_email_detail(body.adminEmails), "maxSeats": body.maxSeats,
                 "seating": body.seating, "claimedByUid": out["claimedByUid"]},
     )
     return out

@@ -11,6 +11,7 @@ import androidx.work.workDataOf
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.DicBundleDownloadWorker
 import com.sempermechanics.semper.data.DicRestoreWorker
+import com.sempermechanics.semper.data.account.LicenseErrors
 import com.sempermechanics.semper.data.cloud.CorruptTransferException
 import com.sempermechanics.semper.data.cloud.restore.CloudRestore
 import com.sempermechanics.semper.data.net.ApiErrors
@@ -167,6 +168,15 @@ class RestoreWorkersTest {
         assertEquals(ListenableWorker.Result.retry(), runRestore { _, _, _, _ -> throw ApiException(503, "") })
     }
 
+    @Test
+    fun `a restore the kill switch pauses ends saying paused, not retried or failed as demo`() {
+        val paused = ApiException(503, """{"detail":"${ApiErrors.FEATURE_PAUSED}"}""")
+
+        val result = runRestore { _, _, _, _ -> throw paused }
+
+        assertEquals(context.getString(R.string.restore_paused), failureReason(result))
+    }
+
     // ------------------------------------------------------ bundle download
 
     private fun runDownload(
@@ -257,6 +267,16 @@ class RestoreWorkersTest {
         val result = runDownload({ _, _, _, _ -> throw ApiException(403, body) }, localSessionId = "local-1")
 
         assertEquals(body, failureReason(result))
+    }
+
+    @Test
+    fun `a bundle download the kill switch pauses ends with the code Settings reads as paused`() {
+        val body = """{"detail":"${ApiErrors.FEATURE_PAUSED}"}"""
+
+        val result = runDownload({ _, _, _, _ -> throw ApiException(503, body) })
+
+        assertEquals(body, failureReason(result))
+        assertEquals(context.getString(R.string.restore_paused), LicenseErrors.downloadMessage(context, body))
     }
 
     @Test

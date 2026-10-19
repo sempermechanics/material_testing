@@ -182,15 +182,33 @@ class SettingsLocalSectionsTest {
     }
 
     @Test
-    fun `a demo account has no free-up or auto-free controls, even with a backed-up analysis`() {
+    fun `a demo account sees free-up and auto-free locked, even with a backed-up analysis`() {
         demo()
         seedSession("synced", SessionRecord.SyncState.SYNCED)
         open()
         awaitStorageTotals()
 
-        listOf(R.id.btnStorageFreeUp, R.id.rowAutoFreeHeader, R.id.tvAutoFreeValue, R.id.sliderAutoFree)
-            .forEach { assertEquals("view $it", View.GONE, view<View>(it).visibility) }
+        // Locked, not hidden: shown, disabled, under the licence note.
+        val freeUp = view<TextView>(R.id.btnStorageFreeUp)
+        assertEquals(View.VISIBLE, freeUp.visibility)
+        assertFalse(freeUp.isEnabled)
+        assertEquals(settings.getString(R.string.storage_free_up_confirm), freeUp.text.toString())
+        assertFalse(view<Slider>(R.id.sliderAutoFree).isEnabled)
+        assertEquals("Off", view<TextView>(R.id.tvAutoFreeValue).text.toString())
+        val note = view<TextView>(R.id.tvStorageLockNote)
+        assertEquals(View.VISIBLE, note.visibility)
+        assertEquals(settings.getString(R.string.license_lock_note), note.text.toString())
         assertEquals(View.VISIBLE, view<View>(R.id.tvStorageCacheSize).visibility)
+    }
+
+    @Test
+    fun `a licensed account has no storage lock note`() {
+        licensed()
+        open()
+        awaitStorageTotals()
+
+        assertEquals(View.GONE, view<View>(R.id.tvStorageLockNote).visibility)
+        assertTrue(view<Slider>(R.id.sliderAutoFree).isEnabled)
     }
 
     @Test

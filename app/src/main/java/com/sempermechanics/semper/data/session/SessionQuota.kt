@@ -20,6 +20,7 @@ import com.sempermechanics.semper.data.net.SemperApi
  * - licensed with no config yet ([LicenseEntitlements.hasUnlimitedAnalysis]) → no cap;
  * - the server has said full (an upload refused with 409, the forced stop
  *   [AccountCache.setSessionLimitReached] sets) → blocked;
+ * - the server has said this device is full ([deviceStop]) → blocked;
  * - otherwise blocked when the larger of the server's last count and the
  *   phone's rows reaches [LicenseEntitlements.analysisCap].
  *
@@ -45,6 +46,7 @@ object SessionQuota {
         !api(context).enabled -> false
         LicenseEntitlements.hasUnlimitedAnalysis(context) -> false
         AccountCache.isLimitForced(context) -> true
+        deviceStop(context) -> true
         else -> maxOf(AccountCache.serverQuotaUsed(context), liveRows) >= LicenseEntitlements.analysisCap(context)
     }
 
@@ -57,4 +59,13 @@ object SessionQuota {
      * stores it again.
      */
     fun blockedNow(context: Context): Boolean = blocked(context, AccountCache.localCount(context))
+
+    /**
+     * Whether the device half of the demo cap holds the stop (TD-279): an
+     * upload was refused `device_quota_exceeded`, and the server still counts
+     * the account as demo. The server holds a licensed account to its own cap
+     * only, so a licence arriving lifts it with no further check.
+     */
+    fun deviceStop(context: Context): Boolean =
+        AccountCache.isDeviceLimitForced(context) && !LicenseEntitlements.serverSaysLicensed(context)
 }

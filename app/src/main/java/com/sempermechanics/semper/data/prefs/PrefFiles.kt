@@ -77,6 +77,9 @@ object PrefFiles {
         val QUOTA_USED = PrefKey.int("quota_used")
         val LOCAL_COUNT = PrefKey.int("quota_local_count")
         val LIMIT_FORCED = PrefKey.boolean("session_limit_forced")
+
+        /** The device half of the demo cap refused an upload (`device_quota_exceeded`). */
+        val DEVICE_LIMIT_FORCED = PrefKey.boolean("device_limit_forced")
         val TERMS_REQUIRED = PrefKey.string("terms_required_version")
         val TERMS_ACCEPTED = PrefKey.string("terms_accepted_version")
         val TERMS_SYNCED = PrefKey.boolean("terms_accepted_synced")
@@ -119,6 +122,9 @@ object PrefFiles {
         val LICENSE_DURATION = PrefKey.string("license_duration", "perpetual")
         val LICENSE_EXPIRES_AT = PrefKey.long("license_expires_at", 0L)
         val IN_GRACE = PrefKey.boolean("license_in_grace")
+
+        /** `licenseGraceEndsAt`, epoch millis; 0 = none on file. */
+        val GRACE_ENDS_AT = PrefKey.long("license_grace_ends_at", 0L)
         val SEATING = PrefKey.string("license_seating", "assigned")
         val HEARTBEAT_MINUTES = PrefKey.int("lease_heartbeat_minutes")
         val FETCHED_AT = PrefKey.long("fetched_at")
@@ -143,6 +149,9 @@ object PrefFiles {
     object Entitlement {
         const val NAME = "semper_entitlement"
         val SEALED = PrefKey.string("sealed")
+
+        /** Set, committed, before a first seal makes its key; cleared with the record's write. */
+        val SEALING = PrefKey.boolean("sealing")
     }
 
     /** `DeviceKeys.deviceId`. */

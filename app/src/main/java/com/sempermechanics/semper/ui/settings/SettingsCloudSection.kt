@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.ui.settings
 
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.cloud.CloudSync
@@ -8,7 +9,9 @@ import com.sempermechanics.semper.data.prefs.AppSettings
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.data.session.SessionStore
 import com.sempermechanics.semper.databinding.ViewSettingsScrollContentBinding
+import com.sempermechanics.semper.ui.common.SettingsSectionHeader
 import com.sempermechanics.semper.ui.common.dialog.Dialogs
+import com.sempermechanics.semper.ui.common.dialog.LicenseLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -16,7 +19,8 @@ import kotlinx.coroutines.withContext
 /**
  * Settings → Cloud backup: the save-to-cloud and Wi-Fi-only switches, the
  * backup status line, and the offer to back up what is still phone-only
- * when backup is turned on. Licensed accounts only.
+ * when backup is turned on. Wired for licensed accounts; an account whose
+ * licence lacks backup sees it [lock]ed.
  */
 internal class SettingsCloudSection(
     private val activity: SettingsActivity,
@@ -43,6 +47,18 @@ internal class SettingsCloudSection(
             }
             status.text = BackupStatus.text(activity.resources, states)
         }
+    }
+
+    /**
+     * Locked, not hidden: both switches shown off and disabled, the status
+     * line gone, the licence note in their place. A tap says the note.
+     */
+    fun lock() {
+        SettingsSectionHeader.setLocked(views.headerCloud, true)
+        views.switchSaveCloud.isChecked = false
+        views.switchWifiOnly.isChecked = false
+        views.tvCloudSyncStatus.isVisible = false
+        LicenseLock.lock(views.bodyCloud, views.tvCloudLockNote, listOf(views.switchSaveCloud, views.switchWifiOnly))
     }
 
     private fun maybeOfferBackfill() {

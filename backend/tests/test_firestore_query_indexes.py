@@ -24,6 +24,9 @@ Rules (https://firebase.google.com/docs/firestore/query-data/index-overview):
 * Anything else over two or more fields needs a composite index: the equality
   fields first (in any order), then the inequality field, then the order fields
   with their directions.
+* A collection-group query (`collection_group(name)`) is served by no automatic
+  index: even on one field it needs that field's single-field index enabled at
+  COLLECTION_GROUP scope, a `fieldOverrides` entry in the indexes file.
 """
 from __future__ import annotations
 
@@ -40,6 +43,7 @@ _APP = _BACKEND / "app"
 _INDEXES = _BACKEND / "firestore.indexes.json"
 
 ASC, DESC = "ASCENDING", "DESCENDING"
+GROUP = "COLLECTION_GROUP"
 _EQUALITY_OPS = {"==", "in", "array_contains", "array_contains_any"}
 _RANGE_OPS = {"<", "<=", ">", ">=", "!=", "not-in"}
 
@@ -52,16 +56,18 @@ class Shape:
     filters: tuple[tuple[str, str], ...] = ()
     order: tuple[tuple[str, str], ...] = ()
     note: str = ""
+    scope: str = "COLLECTION"
 
     def describe(self) -> str:
-        parts = [f"collection({self.collection!r})"]
+        opener = "collection_group" if self.scope == GROUP else "collection"
+        parts = [f"{opener}({self.collection!r})"]
         parts += [f".where({f!r}, {op!r}, ...)" for f, op in self.filters]
         parts += [f".order_by({f!r}, {d})" for f, d in self.order]
         return "".join(parts)
 
 
-def _q(collection, *filters, order=(), note=""):
-    return Shape(collection, tuple(filters), tuple(order), note)
+def _q(collection, *filters, order=(), note="", scope="COLLECTION"):
+    return Shape(collection, tuple(filters), tuple(order), note, scope)
 
 
 _BY_ID = (("__name__", ASC),)
@@ -82,10 +88,16 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
         _q("audit_logs", ("licenseId", "=="), ("ts", ">="), ("ts", "<"), order=(("ts", DESC),)),
     ],
     "app/repo/account.py::list_user_devices": [_q("devices", ("uid", "=="))],
+    # Every seat an erased account held, on any licence (TD-243).
+    "app/repo/account.py::_seats_of": [
+        _q("seats", ("uid", "=="), scope=GROUP),
+        _q("deleted_seats", ("uid", "=="), scope=GROUP),
+    ],
     "app/repo/account.py::delete_all_user_data": [
         _q("files", ("uid", "==")),
         _q("sessions", ("uid", "==")),
         _q("devices", ("uid", "==")),
+        _q("auth_links", ("uid", "==")),
     ],
     "app/repo/claims.py::_drop_superseded_demos": [_q("licenses", ("redeemedByUid", "in"))],
     "app/repo/deletion.py::list_deleted_licenses": [
@@ -123,6 +135,11 @@ QUERY_SHAPES: dict[str, list[Shape]] = {
     "app/repo/sessions.py::count_user_sessions": [
         _q("sessions", ("uid", "==")),
         _q("sessions", ("uid", "=="), ("status", "=="), note="equality only: merged"),
+    ],
+    # The demo cap's per-device half: any account's sessions from one device.
+    "app/repo/sessions.py::count_device_sessions": [
+        _q("sessions", ("deviceId", "==")),
+        _q("sessions", ("deviceId", "=="), ("status", "=="), note="equality only: merged"),
     ],
     "app/repo/sessions.py::find_incomplete_session": [
         _q("sessions", ("uid", "=="), ("localSessionId", "=="), ("status", "in")),
@@ -178,7 +195,7 @@ def _index_fields(index: dict) -> list[tuple[str, str]]:
 def serves(index: dict, shape: Shape, need) -> bool:
     if index.get("collectionGroup") != shape.collection:
         return False
-    if index.get("queryScope", "COLLECTION") != "COLLECTION":
+    if index.get("queryScope", "COLLECTION") != shape.scope:
         return False
     eq_fields, order = need
     fields = _index_fields(index)
@@ -255,7 +272,7 @@ def _queries_in_code() -> dict[str, _Found]:
                 if not isinstance(node, ast.Call):
                     continue
                 name = _call_name(node)
-                if name == "collection" and node.args:
+                if name in ("collection", "collection_group") and node.args:
                     arg = node.args[0]
                     coll = _const(arg) or (constants.get(arg.id) if isinstance(arg, ast.Name) else None)
                     if coll:
@@ -339,6 +356,42 @@ def test_query_has_its_composite_index(where, shape):
         "then deploy it (scripts/deploy-firestore.sh indexes) and wait for the build "
         "before the backend that queries it."
     )
+
+
+def _group_single_field_indexes() -> set[tuple[str, str]]:
+    """(collection, field) pairs whose single-field index is enabled at
+    COLLECTION_GROUP scope by a `fieldOverrides` entry."""
+    overrides = json.loads(_INDEXES.read_text(encoding="utf-8")).get("fieldOverrides", [])
+    return {
+        (o["collectionGroup"], o["fieldPath"])
+        for o in overrides
+        for ix in o.get("indexes", [])
+        if ix.get("queryScope") == GROUP and ix.get("order") == ASC
+    }
+
+
+@pytest.mark.parametrize(("where", "shape"), [
+    (where, shape) for where, shapes in sorted(QUERY_SHAPES.items())
+    for shape in shapes if shape.scope == GROUP
+])
+def test_a_collection_group_query_has_its_group_scope_index(where, shape):
+    fields = {f for f, _ in shape.filters} | {f for f, _ in shape.order if f != "__name__"}
+    assert len(fields) == 1, f"{where}: a composite collection-group query needs a review"
+    (field,) = fields
+    assert (shape.collection, field) in _group_single_field_indexes(), (
+        f"{where} runs {shape.describe()}, which needs {shape.collection}.{field} indexed "
+        "at COLLECTION_GROUP scope: a fieldOverrides entry in backend/firestore.indexes.json "
+        "that also restates the field's COLLECTION indexes. Deploy it "
+        "(scripts/deploy-firestore.sh indexes) before the backend that queries it."
+    )
+
+
+def test_every_group_scope_override_is_used_by_some_query():
+    used = {
+        (s.collection, f) for ss in QUERY_SHAPES.values() for s in ss if s.scope == GROUP
+        for f, _ in s.filters
+    }
+    assert _group_single_field_indexes() <= used
 
 
 def test_every_composite_index_is_used_by_some_query():

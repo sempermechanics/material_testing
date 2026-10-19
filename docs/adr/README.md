@@ -13,7 +13,7 @@ record that replaced it.
 | [004](ADR-004-runspec.md) | Immutable `RunSpec` built once at Compute | Accepted, built | FI-6, TD-61 |
 | [005](ADR-005-wizard-process-death.md) | The wizard survives process death through a draft | Accepted, built | TD-26 |
 | [006](ADR-006-gateway-deploy-job.md) | CI deploys the API Gateway after the Cloud Run promote | Accepted, built (not yet dispatched) | TD-27 |
-| [007](ADR-007-licence-lifecycle.md) | Licence lifecycle: one per person, replace by revoke, delete into a 30-day hold | Accepted, built (TTL policies owed) | — |
+| [007](ADR-007-licence-lifecycle.md) | Licence lifecycle: one per person, replace by revoke, delete into a 30-day hold | Accepted, built (TTL policies owed); superseded in part by 024 (no key typed in the app) | — |
 | [008](ADR-008-startup-gates-phone-state.md) | Real-device startup gates check the phone's state; a trip is settled A/B | Accepted, built (references owed) | TD-135 |
 | [009](ADR-009-material-testing-app-identity.md) | Material Testing is its own Android app on Semper's backend | Accepted, built (App Check owed) | TD-133 |
 | [010](ADR-010-device-binding-per-app.md) | Device binding per app: one phone per app, not per account | Accepted, built | TD-137, TD-138 |
@@ -29,7 +29,8 @@ record that replaced it.
 | [020](ADR-020-backend-refusal-model.md) | Backend refusals are one exception (`errors.Refusal`) with one status table (`errors.STATUS`) | Accepted, built | TD-185, TD-186 |
 | [021](ADR-021-retire-firestore-repo-facade.md) | Retire the `firestore_repo` facade; `app.repo` is a plain package and tests patch through `repo_view.patch` | Accepted, built | TD-190 |
 | [022](ADR-022-semper-ui-plus-lab-tests.md) | Material Testing is Semper's UI plus two test choices; a fork change to a shared screen is gated on the test | Accepted, built | — |
-| [023](ADR-023-signed-offline-entitlement.md) | A signed, time-limited entitlement (ES256 JWS, pinned by `kid`) the app verifies offline, with a bounded grace and clock-rollback detection; never a lock-out | Accepted, built; key not yet provisioned | TD-215, TD-219, TD-234, TD-235, TD-236, TD-238, TD-261, TD-263–TD-266 |
+| [023](ADR-023-signed-offline-entitlement.md) | A signed, time-limited entitlement (ES256 JWS, pinned by `kid`) the app verifies offline, with a bounded grace and clock-rollback detection; never a lock-out | Accepted, built; key not yet provisioned | TD-215, TD-219, TD-234, TD-235, TD-236, TD-238, TD-261 (TD-263–TD-266 closed 2026-10-18) |
+| [024](ADR-024-account-anchored-entitlements.md) | Paid entitlements are anchored to the account and never entered in the app; the backend checks every cloud request; the app is consumption-only | Accepted, built (not merged or deployed); supersedes in part 007 and TD-259 | TD-274–TD-278, FI-24 (TD-259 and TD-272 closed 2026-10-18) |
 
 Register IDs refer to [../ops/TECH_DEBT.md](../ops/TECH_DEBT.md). ADR-008, ADR-009,
-ADR-011, ADR-012, ADR-013 and ADR-022 are material_testing's; ADR-010, ADR-014 and ADR-015 to ADR-021 are semperdic-app's (ADR-008's harness, ADR-011's viewer and ADR-013's route are in both). ADR-023 is in both: it was written in semperdic-app and ported here with its code. semperdic-app's own ADR-022 is a different record (Re-run as a copy). The numbers are shared so they do not collide.
+ADR-011, ADR-012, ADR-013 and ADR-022 are material_testing's; ADR-010, ADR-014 and ADR-015 to ADR-021 are semperdic-app's (ADR-008's harness, ADR-011's viewer and ADR-013's route are in both). ADR-023 and ADR-024 are in both: each was written in semperdic-app and ported here with its code. semperdic-app's own ADR-022 is a different record (Re-run as a copy). The numbers are shared so they do not collide.

@@ -149,3 +149,15 @@ def test_gateway_responses_carry_only_swagger_keys():
                 if extra:
                     bad.append(f"{method.upper()} {path} {status}: {sorted(extra)}")
     assert not bad, "unquoted description with a comma? " + "; ".join(bad)
+
+
+def test_the_licence_search_is_its_own_literal_path_ahead_of_the_template():
+    """`/v1/admin/licenses/search` also matches `/v1/admin/licenses/{licenseId}`,
+    which has no POST, so the console check's pattern match cannot tell it is
+    missing. The literal path carries the POST and comes first (TD-244)."""
+    spec = yaml.safe_load(_spec_text())["paths"]
+    order = list(spec)
+    literal, template = "/v1/admin/licenses/search", "/v1/admin/licenses/{licenseId}"
+    assert set(spec[literal]) == {"post"}
+    assert "post" not in spec[template]
+    assert order.index(literal) < order.index(template)

@@ -21,8 +21,10 @@ from ..deps import (
     current_user,
     rate_limited,
     request_app,
+    unless_paused,
     verified_device,
 )
+from ..licenses import MODE_DEMO
 from ..models import SessionCreate
 from ..session_provision import provision_session
 from ..validation import PageToken, SessionId
@@ -350,7 +352,9 @@ def _zip_time(value) -> tuple:
     return _ZIP_EPOCH
 
 
-@router.get("/v1/sessions/{sid}/bundle", dependencies=[rate_limited(rate_limit.download_bucket)])
+@router.get("/v1/sessions/{sid}/bundle", dependencies=[
+    rate_limited(rate_limit.download_bucket), unless_paused("restore"),
+])
 def download_session_bundle(sid: SessionId, ctx=Depends(attested_or_mfa_user)):
     """One analysis as a single zip — how the data leaves through a browser.
 
@@ -466,7 +470,40 @@ _QUOTA_REMEDY = {
 }
 
 
-@router.post("/v1/sessions", dependencies=[rate_limited(rate_limit.session_bucket)])
+def _device_cap_reached(cfg: dict, device_id: str | None) -> bool:
+    """Whether a demo account's analysis would go over the demo cap counted
+    per device: every account's stored analyses from this phone
+    (`repo.count_device_sessions`).
+
+    The demo cap is `max(account's stored, device's stored) >= maxSessions`;
+    the account half is checked first, in the caller. Without the device half
+    a new account on the same phone was a fresh 25. A licensed account is
+    held to its own cap only: its allowance is bought per person, and a lab
+    phone may well carry several licensed members' analyses.
+    """
+    if cfg["mode"] != MODE_DEMO or not device_id:
+        return False
+    return repo.count_device_sessions(device_id) >= cfg["maxSessions"]
+
+
+def _device_quota_detail(cap: int) -> str:
+    """The 409 when the device, not the account, is at the demo cap.
+
+    Says neither how many analyses the device holds nor whose they are: the
+    other analyses may belong to another account, and the caller must not
+    learn that one exists, let alone its count. Its own code, not the
+    account's (TD-279): the app's Re-check counts the account, finds room,
+    and would lift a stop the next upload refuses again. A build that
+    predates the code fails that one backup as refused (`Kind.REJECTED`).
+    """
+    return (f"{errors.DEVICE_QUOTA_EXCEEDED}: the demo allows {cap} analyses stored "
+            "from one device. Delete an older analysis from this device, or use a "
+            "licence, to sync a new one.")
+
+
+@router.post("/v1/sessions", dependencies=[
+    rate_limited(rate_limit.session_bucket), unless_paused("upload", "backup"),
+])
 def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_device),
                    app=Depends(request_app)):
     """Record an analysis: create the session and hand back its upload slots.
@@ -479,6 +516,9 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
     routes and deliberately not here. Installed builds that predate licensing
     retry a 403 from this route forever, which is one more reason the gate
     would be the wrong shape.
+
+    The cap counts analyses stored at once, per account; for a demo account
+    also per device, whichever account stored them (`_device_cap_reached`).
     """
     user = ctx.user
     cfg = repo.resolve_user_config(user)
@@ -505,6 +545,8 @@ def create_session(body: SessionCreate, request: Request, ctx=Depends(verified_d
             f"{errors.SESSION_QUOTA_EXCEEDED}: {used}/{cfg['maxSessions']} analyses stored. "
             + _QUOTA_REMEDY.get(repo.inactive_licence_reason(user), _QUOTA_REMEDY[""]),
         )
+    if _device_cap_reached(cfg, ctx.device_id):
+        raise HTTPException(409, _device_quota_detail(cfg["maxSessions"]))
 
     sid = uuid.uuid4().hex
     # Reserve the session doc immediately after the quota check and BEFORE any

@@ -2,6 +2,8 @@
 token was revoked, a staff suspension revokes the user's refresh tokens, and
 an account erase deletes the Firebase user. The Admin-SDK calls are
 best-effort until the runtime account holds Firebase Auth admin."""
+import json
+import logging
 import time
 
 import pytest
@@ -9,7 +11,7 @@ from firebase_admin import auth as fb_auth
 
 import fake_firestore
 import repo_view as repo
-from app import deps, drive, google_auth
+from app import config, deps, drive, google_auth, rate_limit
 from app.config import settings
 
 
@@ -246,4 +248,115 @@ async def test_a_failed_auth_delete_still_erases_and_says_so(erasable, audited, 
     assert "dev-user" not in erasable._data.get("users", {})
     assert next(a for a in audited if a["action"] == "ACCOUNT_DELETE")["detail"][
         "authUserDeleted"] is False
+
+
+# ---------------- the Auth Admin budget (TD-239) ----------------
+@pytest.fixture
+def spent(monkeypatch):
+    """This instance's Firebase Auth Admin budget, already spent."""
+    monkeypatch.setattr(rate_limit, "auth_admin_bucket",
+                        rate_limit.TokenBucket(rate_per_sec=0.5, burst=0.0))
+
+
+def _events(caplog, name):
+    return [json.loads(r.message) for r in caplog.records
+            if r.message.startswith("{") and json.loads(r.message).get("event") == name]
+
+
+def test_the_budget_defaults_and_reads_its_env(monkeypatch):
+    assert (settings.AUTH_ADMIN_CALLS_PER_SECOND, settings.AUTH_ADMIN_BURST) == (10, 20)
+    monkeypatch.setenv("AUTH_ADMIN_CALLS_PER_SECOND", "3")
+    monkeypatch.setenv("AUTH_ADMIN_BURST", "7")
+    import importlib
+
+    try:
+        fresh = importlib.reload(config).Settings()
+        assert (fresh.AUTH_ADMIN_CALLS_PER_SECOND, fresh.AUTH_ADMIN_BURST) == (3, 7)
+        # A 0 or less is not "off": it would refuse every call for good.
+        monkeypatch.setenv("AUTH_ADMIN_CALLS_PER_SECOND", "0")
+        monkeypatch.setenv("AUTH_ADMIN_BURST", "-5")
+        fresh = importlib.reload(config).Settings()
+        assert (fresh.AUTH_ADMIN_CALLS_PER_SECOND, fresh.AUTH_ADMIN_BURST) == (1, 1)
+    finally:
+        monkeypatch.delenv("AUTH_ADMIN_CALLS_PER_SECOND")
+        monkeypatch.delenv("AUTH_ADMIN_BURST")
+        importlib.reload(config)
+
+
+def test_the_budget_runs_out_after_its_burst(monkeypatch):
+    monkeypatch.setattr(rate_limit, "auth_admin_bucket",
+                        rate_limit.TokenBucket(rate_per_sec=0.001, burst=2.0))
+    assert [rate_limit.auth_admin_allowed() for _ in range(3)] == [True, True, False]
+
+
+@pytest.mark.parametrize(("call", "sdk"), [
+    (google_auth.revoke_sessions, "revoke_refresh_tokens"),
+    (google_auth.delete_auth_user, "delete_user"),
+])
+def test_over_budget_an_admin_call_is_not_made_and_answers_false(spent, monkeypatch, caplog,
+                                                                 call, sdk):
+    seen = []
+    monkeypatch.setattr(google_auth.fb_auth, sdk, seen.append)
+    with caplog.at_level(logging.WARNING, logger="semper.auth"):
+        assert call("u1") is False
+    assert seen == []
+    [event] = _events(caplog, "auth_admin_rate_limited")
+    assert (event["uid"], event["action"], event["dependency"]) == (
+        "u1", call.__name__, "firebase_auth")
+
+
+async def test_over_budget_a_suspension_still_lands_and_says_so(spent, admin_store, audited,
+                                                                client):
+    r = await client.post("/v1/admin/users/u1/revoke")
+    assert r.status_code == 200
+    assert admin_store._data["users"]["u1"]["access_status"] == "SUSPENDED"
+    assert next(a for a in audited if a["action"] == "ADMIN_REVOKE")["detail"] == {
+        "sessionsRevoked": False}
+
+
+async def test_over_budget_the_step_up_check_is_503_not_invalid_token(
+    spent, stepping_admin, client, monkeypatch, caplog,
+):
+    monkeypatch.setattr(settings, "CHECK_REVOKED_ON_STEP_UP", True)
+    with caplog.at_level(logging.WARNING, logger="semper"):
+        r = await client.post("/v1/admin/users/target/approve",
+                              headers={"Authorization": "Bearer tok"})
+    assert r.status_code == 503
+    assert r.json()["detail"] == "auth_check_busy"
+    assert int(r.headers["Retry-After"]) >= 1
+    # The Auth project was not asked, and nothing was refused as a bad token.
+    assert stepping_admin["calls"] == [("tok", False)]
+    assert not [a for a in stepping_admin["audited"] if a.get("action") == "AUTH_DENIED"]
+    assert stepping_admin["store"]._data["users"]["target"]["access_status"] == "PENDING"
+    [event] = _events(caplog, "auth_admin_rate_limited")
+    assert (event["stage"], event["errorCode"], event["uid"]) == (
+        "revocation_check", "auth_check_busy", "admin-1")
+
+
+async def test_the_step_up_check_spends_the_shared_budget(stepping_admin, client, monkeypatch):
+    monkeypatch.setattr(settings, "CHECK_REVOKED_ON_STEP_UP", True)
+    monkeypatch.setattr(rate_limit, "auth_admin_bucket",
+                        rate_limit.TokenBucket(rate_per_sec=0.001, burst=1.0))
+    first = await client.post("/v1/admin/users/target/approve",
+                              headers={"Authorization": "Bearer tok"})
+    assert first.status_code == 200, first.text
+    # The check spent the only token, so a revoke now is skipped too.
+    assert google_auth.revoke_sessions("target") is False
+
+
+async def test_a_quota_error_from_the_check_is_still_a_failed_check(
+    stepping_admin, client, monkeypatch, caplog,
+):
+    """Under budget here, but the Auth project's own quota refuses: the
+    fail-closed rule of `_require_not_revoked` applies, 401, logged as the
+    check failing (TD-239's acceptance)."""
+    from google.api_core import exceptions as google_exceptions
+
+    monkeypatch.setattr(settings, "CHECK_REVOKED_ON_STEP_UP", True)
+    stepping_admin["outcome"]["revoked_check"] = google_exceptions.ResourceExhausted("quota")
+    r = await client.post("/v1/admin/users/target/approve", headers={"Authorization": "Bearer tok"})
+    assert r.status_code == 401
+    assert r.json()["detail"] == "invalid_token"
+    assert '"event":"revocation_check_failed"' in caplog.text
+    assert '"errorCode":"ResourceExhausted"' in caplog.text
 

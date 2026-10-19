@@ -3,14 +3,19 @@
 
 package com.sempermechanics.semper.ui.viewer.share
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.View
+import androidx.annotation.StringRes
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.account.LicenseEntitlements
 import com.sempermechanics.semper.data.mechanical.CurveCorrection
 import com.sempermechanics.semper.data.mechanical.SpecimenGeometry
 import com.sempermechanics.semper.data.mechanical.loadOfFrame
+import com.sempermechanics.semper.data.policy.AppPolicy
+import com.sempermechanics.semper.data.policy.FeatureAccess
+import com.sempermechanics.semper.data.policy.FeatureLocks
 import com.sempermechanics.semper.databinding.SheetShareBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.FrameParams
@@ -41,8 +46,8 @@ class ShareCenter(private val host: ResultViewerActivity) {
     private val snap by lazy { host.buildShareSnapshot() }
 
     private fun ensureShareAllowed(): Boolean {
-        if (LicenseEntitlements.shareEnabled(host)) return true
-        CrispToast.show(host, host.getString(R.string.share_licensed_only), long = true)
+        val blocked = blockedMessage(access(host)) ?: return true
+        CrispToast.show(host, host.getString(blocked), long = true)
         return false
     }
 
@@ -235,5 +240,26 @@ class ShareCenter(private val host: ResultViewerActivity) {
         /** Filename stamped on share photos: the real image, not a sweep settings label. */
         fun sourceImageName(frameIndex: Int): String? =
             if (isSweep) defImagePaths.firstOrNull()?.let { File(it).name } else nameAt(frameIndex)
+    }
+
+    companion object {
+        /**
+         * How Share shows for this account now ([FeatureLocks.share]): greyed
+         * whenever it is not [FeatureAccess.OPEN], never hidden.
+         */
+        fun access(context: Context): FeatureAccess =
+            FeatureLocks.share(LicenseEntitlements.shareLicensed(context), AppPolicy.shareAllowed(context))
+
+        /**
+         * What a tap on a greyed Share says, or null when it works: the
+         * licence note when the licence lacks sharing, "temporarily
+         * unavailable" when the share kill switch has it off.
+         */
+        @StringRes
+        fun blockedMessage(access: FeatureAccess): Int? = when (access) {
+            FeatureAccess.OPEN -> null
+            FeatureAccess.LOCKED -> R.string.license_lock_note
+            FeatureAccess.PAUSED, FeatureAccess.HIDDEN -> R.string.share_paused
+        }
     }
 }

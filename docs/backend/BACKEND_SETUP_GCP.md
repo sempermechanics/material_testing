@@ -96,18 +96,29 @@ shows `expireAt` in state `ACTIVE` (may take a few minutes to apply).
 
 ### A2b. Deploy the composite indexes
 
-`backend/firestore.indexes.json` declares five composite indexes: the
+`backend/firestore.indexes.json` declares six composite indexes: the
 duplicate-session lookup's (`sessions`: `uid`, `localSessionId`, `status`), the
 account export's (`files`: `uid` + `sessionId`, so the export reads the
-account's files as one stream ordered by session), and three for the staff
+account's files as one stream ordered by session), three for the staff
 licence list (`licenses`: `mode` + `createdAt` DESC,
-`mode` + `status` + `createdAt` DESC, `status` + `createdAt` DESC). Every other query the backend and the consoles run is a single-field equality or
+`mode` + `status` + `createdAt` DESC, `status` + `createdAt` DESC), and the
+per-licence audit log's (`audit_logs`: `licenseId` + `ts` DESC). Its
+`fieldOverrides` hold the three TTL policies (A2a, and `purgeAt` on deleted
+licences and seats) and, since 2026-10-18, an ascending **COLLECTION_GROUP**
+index on `uid` for `seats` and `deleted_seats`: account erasure finds every seat
+an account held with a collection-group query (`_seats_of`,
+`backend/app/repo/account.py:156-183`), and a collection-group query has no
+automatic index. Without it that query fails, erasure blanks the current
+licence's seat only and logs `erasure_seat_scan_failed` (TD-271). Every other query the backend and the consoles run is a single-field equality or
 `array-contains`, optionally ordered by `__name__`, and Firestore serves those
 from its automatic single-field indexes — do not add `field + __name__` entries
 to the file; the index API refuses them ("this index is not necessary") and
-aborts the whole deploy. A missing composite does not fail at deploy time — it
-fails at runtime with `FAILED_PRECONDITION`, so deploy before the first real
-client.
+aborts the whole deploy. A missing index does not fail at deploy time — it
+fails at runtime with `FAILED_PRECONDITION` — so deploy the indexes, wait for
+them to build, and only then deploy the backend that queries them. A release
+that adds an index is deployed in this order: indexes, backend, gateway
+(`gateway_mode: apply`), Hosting (`scripts/deploy-console.sh`), monitoring
+(`scripts/apply-monitoring.sh`).
 
 The file has no `firebase.json` of its own, and the CLI refuses files outside
 its project directory, so the script stages it in a scratch directory (it
@@ -118,8 +129,10 @@ PROJECT=$PROJECT ./scripts/deploy-firestore.sh indexes
 ```
 
 **Check:** `gcloud firestore indexes composite list --project $PROJECT` shows
-all four in state `READY` (building can take a few minutes on a populated
-database).
+all six in state `READY` (building can take a few minutes on a populated
+database), and `gcloud firestore indexes fields describe uid --collection-group=seats --project $PROJECT`
+(and the same for `deleted_seats`) lists an ascending `COLLECTION_GROUP` index.
+After the next erasure, its `ACCOUNT_DELETE` audit row has `seatScanComplete: true`.
 
 ### A3. Create the runtime service account
 ```bash
@@ -309,7 +322,7 @@ deletion are attempted and reported as not done in the audit row, and the
 revocation check on step-up stays off. Design: [ADR-023](../adr/ADR-023-signed-offline-entitlement.md).
 
 **1. Firebase Auth admin for the runtime SA, on the Auth project.** `revoke_sessions`
-and `delete_auth_user` (`backend/app/google_auth.py:92`, `:106`) and the revocation
+and `delete_auth_user` (`backend/app/google_auth.py:104`, `:121`) and the revocation
 check behind `CHECK_REVOKED_ON_STEP_UP` call the Auth project, not `$PROJECT`:
 
 ```bash
@@ -320,7 +333,7 @@ gcloud projects add-iam-policy-binding $AUTH_PROJECT \
 
 Then set the repository variable `CHECK_REVOKED_ON_STEP_UP=true` and redeploy. Not
 before: with the setting on and no grant, every console step-up call fails closed
-with 401 `invalid_token` (`backend/app/deps.py:527-561`). The posture check passes 3.4-iam only on
+with 401 `invalid_token` (`backend/app/deps.py:571-620`). The posture check passes 3.4-iam only on
 `roles/firebaseauth.admin`, `roles/firebase.admin`, or a custom role holding
 `firebaseauth.users.update` and `firebaseauth.users.delete`
 (`scripts/check_gcp_posture.sh:315-353`).
@@ -361,7 +374,7 @@ gh variable set SEMPER_ENTITLEMENT_PUBKEYS --body "$KID:$PUB"
 - `deploy-backend.yml` mounts the key as `ENTITLEMENT_SIGNING_KEY=<secret>:latest`
   only when `ENTITLEMENT_SIGNING_SECRET` names a secret the deploy SA can see; a
   missing secret deploys without it, with a warning
-  (`.github/workflows/deploy-backend.yml:218-238`). Never pass the key with
+  (`.github/workflows/deploy-backend.yml:258-278`). Never pass the key with
   `--set-env-vars`.
 - **Order matters.** The deploy SA only checks that the secret exists. If it
   exists but the runtime SA cannot read it, the candidate revision fails to start,
@@ -425,13 +438,14 @@ Everything above is required (or near enough). These are the rest of what
 | `LICENSE_LEASE_HOURS` · `LICENSE_LEASE_HEARTBEAT_MINUTES` | `8` · `30` | Floating-seat lease length and how often the app renews it. A crashed client parks a seat for at most the lease |
 | `SELF_DEVICE_CHANGE_COOLDOWN_DAYS` | `30` | Wait between self-service device changes on one licence. `0` disables the wait. Staff-initiated changes ignore it |
 | `DEVICE_RELEASE_HOLD_HOURS` | `24` | How long the phone a device-lock clear released is refused at `POST /v1/devices/register`, so its upload worker cannot take the account back before the new phone signs in. Registering any other device ends it; `0` disables it. Not pinned by `deploy-backend.yml` |
+| `AUTH_ADMIN_CALLS_PER_SECOND` · `AUTH_ADMIN_BURST` | `10` · `20` | Per-instance budget for Firebase Auth Admin calls: the step-up revocation check, refresh-token revocation and Auth-user deletion share it (`backend/app/config.py:259-260`, `rate_limit.auth_admin_bucket`). Spent, a revoke or delete is skipped and reported as not done in its audit row, and the revocation check answers 503 `auth_check_busy` with `Retry-After`; each logs `auth_admin_rate_limited` (metric `semper_auth_admin_rate_limited`). Not pinned by `deploy-backend.yml` |
 | `CHECK_REVOKED_ON_STEP_UP` | `false` | `true` re-verifies a browser step-up caller's ID token with revocation checked, so a revoked or disabled user stops at once rather than when the token expires. Needs A8 step 1 first; without the grant it fails closed (`backend/app/config.py:232-247`) |
 | `ENTITLEMENT_SIGNING_KEY` | empty | PEM of the EC P-256 key that signs `/v1/config`'s `entitlement`. From Secret Manager only (A8 step 2). Empty issues no token and fails nothing |
 | `ENTITLEMENT_KID` | `ent-1` | The key's id in the token header; the app pins keys by it |
 | `ENTITLEMENT_OFFLINE_GRACE_DAYS` | `14` | How long a token lets the app keep its entitlement offline, capped at a timed licence's end plus grace and a floating lease's end |
 | `MIN_SUPPORTED_VERSION_CODE` · `RECOMMENDED_VERSION_CODE` | `0` · `0` | Semper's release gate, published on `/v1/config` to Semper builds only; the app blocks new runs and cloud calls below the minimum and nudges below the recommended. The server refuses nothing on them. `0` = no gate |
-| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` · `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | `0` · `0` | The same pair for Material Testing builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:280-287`) |
-| `KILL_SWITCHES` | empty | Features every build switches off: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:18-34`) |
+| `MIN_SUPPORTED_VERSION_CODE_MATERIAL_TESTING` · `RECOMMENDED_VERSION_CODE_MATERIAL_TESTING` | `0` · `0` | The same pair for Material Testing builds, which number their versionCodes separately (`settings.release_gate(app)`, `backend/app/config.py:293-300`) |
+| `KILL_SWITCHES` | empty | Features switched off fleet-wide: any of `backup`, `share`, `restore`, `upload`, **space-separated**. An unknown name is logged and ignored (`backend/app/config.py:18-34`). Published on `/v1/config` and enforced by the backend (`backend/app/config.py:305-317`; `deps.unless_paused`, `backend/app/deps.py:296-331`): `upload` or `backup` refuse `POST /v1/sessions` and `POST /v1/files/{id}/complete`; `restore` refuses `GET /v1/files/{id}/content` and `GET /v1/sessions/{sid}/bundle`; each answers 503 `feature_paused` with `Retry-After: 300`, logged `event="feature_paused"`. `share` is the app's own export and is published only. A change is a new revision |
 | `CONSOLE_ORIGINS` | `https://app.sempermechanics.com https://indicvision-dic-app-auth.firebaseapp.com` | Browser origins the API answers CORS for. The dashboards live on Firebase Hosting, never on the gateway host, so every console call is cross-origin and preflighted; an origin missing here renders a page whose every button silently does nothing. Exact origins, **space-separated** (the deploy action splits its `env_vars` on commas, so a comma-separated value is truncated), no wildcard. The phone sends no `Origin` and is unaffected. The gateway must also carry `allowCors` (step 3 below) or the preflight never reaches Cloud Run |
 
 > **`MAX_SESSIONS_PER_USER` and `PRO_MAX_SESSIONS_PER_USER` are no longer
@@ -448,8 +462,13 @@ Everything above is required (or near enough). These are the rest of what
 > `CHECK_REVOKED_ON_STEP_UP`, `ENTITLEMENT_KID`, `ENTITLEMENT_OFFLINE_GRACE_DAYS`,
 > `MIN_SUPPORTED_VERSION_CODE`, `RECOMMENDED_VERSION_CODE`, their `_MATERIAL_TESTING` pair and `KILL_SWITCHES` from repository
 > variables of the same name, with the defaults above when a variable is unset
-> (`.github/workflows/deploy-backend.yml:263-289`), and mounts `ENTITLEMENT_SIGNING_KEY`
-> from the secret `ENTITLEMENT_SIGNING_SECRET` names (A8).
+> (`.github/workflows/deploy-backend.yml:308-334`), and mounts `ENTITLEMENT_SIGNING_KEY`
+> from the secret `ENTITLEMENT_SIGNING_SECRET` names (A8). Its `release_train` input
+> (empty: the newest `v*` tag reachable from the deployed commit) is set as the
+> Cloud Run label `release-train` on the service and the new revision
+> (`.github/workflows/deploy-backend.yml:39-47`, `:136-156`, `:300-301`); a deploy
+> by hand with `gcloud run deploy` sets it with
+> `--update-labels release-train=<train>`.
 > `deploy-cloudrun` *merges* env into the live revision, so a retired variable
 > stays on the service until removed by hand; the workflow's "Describe live
 > env" step warns while `MAX_SESSIONS_PER_USER` or `REQUIRE_ATTESTED_UPLOADS`

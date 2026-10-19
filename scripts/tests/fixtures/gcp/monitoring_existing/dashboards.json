@@ -1,0 +1,47 @@
+[
+  {
+    "name": "projects/111/dashboards/existing-0",
+    "displayName": "semper-licensing",
+    "etag": "etag-7",
+    "mosaicLayout": {
+      "columns": 48,
+      "tiles": []
+    }
+  },
+  {
+    "name": "projects/111/dashboards/existing-1",
+    "displayName": "semper-security",
+    "etag": "etag-8",
+    "mosaicLayout": {
+      "columns": 48,
+      "tiles": []
+    }
+  },
+  {
+    "name": "projects/111/dashboards/existing-2",
+    "displayName": "semper-service-health",
+    "etag": "etag-9",
+    "mosaicLayout": {
+      "columns": 48,
+      "tiles": []
+    }
+  },
+  {
+    "name": "projects/111/dashboards/existing-3",
+    "displayName": "semper-slo",
+    "etag": "etag-10",
+    "mosaicLayout": {
+      "columns": 48,
+      "tiles": []
+    }
+  },
+  {
+    "name": "projects/111/dashboards/other",
+    "displayName": "semper-slo (copy)",
+    "etag": "etag-1",
+    "mosaicLayout": {
+      "columns": 48,
+      "tiles": []
+    }
+  }
+]

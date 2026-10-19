@@ -6,10 +6,19 @@ import com.sempermechanics.semper.data.net.NotApprovedException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import java.io.IOException
 import java.util.zip.ZipException
 
-/** [DownloadFailure.of]: the rule both download workers branch on. */
+/**
+ * [DownloadFailure.of]: the rule both download workers branch on.
+ *
+ * Robolectric because a paused restore is read from the body's code through
+ * [com.sempermechanics.semper.data.net.ApiErrors], which parses it with
+ * `org.json`, a stub on the plain JVM classpath.
+ */
+@RunWith(RobolectricTestRunner::class)
 class DownloadFailureTest {
 
     @Test
@@ -26,6 +35,16 @@ class DownloadFailureTest {
             assertTrue("$code", failure is DownloadFailure.Transient)
             assertEquals(code, (failure as DownloadFailure.Transient).api?.code)
         }
+    }
+
+    @Test
+    fun `the restore kill switch is a pause, not a failure or a refusal`() {
+        val paused = DownloadFailure.of(ApiException(503, """{"detail":"feature_paused"}""", "r1"))
+        assertTrue(paused is DownloadFailure.Paused)
+        assertEquals("r1", (paused as DownloadFailure.Paused).cause.requestId)
+        // Any other 503 is still an outage to ride out.
+        val outage = DownloadFailure.of(ApiException(503, """{"detail":"firestore_unreachable"}"""))
+        assertTrue(outage is DownloadFailure.Transient)
     }
 
     @Test

@@ -106,6 +106,7 @@ EXPECTED = {
     ("POST", "/v1/admin/device-releases"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/users/{uid}/config"): ADMIN_STEPUP,
     ("GET", "/v1/admin/licenses"): ADMIN,
+    ("POST", "/v1/admin/licenses/search"): ADMIN,                   # the GET's search, in a body
     ("GET", "/v1/admin/licenses/{license_id}"): ADMIN,             # one row of the list
     ("POST", "/v1/admin/licenses"): ADMIN_STEPUP,
     ("PATCH", "/v1/admin/licenses/{license_id}"): ADMIN_STEPUP,
@@ -148,6 +149,11 @@ EXPECTED = {
     # is exactly what a stolen one is, and this decides which device the
     # licence follows.
     ("POST", "/v1/licenses/unbind"): USER_STEPUP,
+    # A claim code redeemed on the web account page. USER_STEPUP: a code is
+    # worth a licence, and a stolen bare token must not be able to spend one
+    # onto the account (or burn it). The app's own key route above stays USER
+    # for installed builds.
+    ("POST", "/v1/me/claim"): USER_STEPUP,
     # "Which licences do I administer" — USER, not INSTITUTION_ADMIN, because
     # it is the question that finds the licence id every other route here
     # already requires. It cannot be scoped to a licence the caller has not
@@ -366,6 +372,7 @@ async def test_attested_user_cannot_complete_another_users_file(attacker, client
     ("POST", "/v1/admin/users/victim-uid/revoke"),
     ("PATCH", "/v1/admin/users/victim-uid/config"),
     ("GET", "/v1/admin/licenses"),
+    ("POST", "/v1/admin/licenses/search"),
     ("GET", "/v1/admin/licenses/abc"),
     ("POST", "/v1/admin/licenses"),
     ("POST", "/v1/admin/licenses/abc/revoke"),

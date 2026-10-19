@@ -37,6 +37,9 @@ export async function openDesk({ licenses = [IND, UNI], page = {}, users = [], r
       [PENDING]: () => json(200, { users }),
       [LIST]: () => json(200, { licenses, page, demoMaxAnalyses: 25 }),
       "GET /v1/institutions/licenses": () => json(200, { licenses: [] }),
+      // The seat counts an opened roster card reads after the roster.
+      [`GET /v1/admin/licenses/${UNI.id}/summary`]: () => json(200, { counts: {} }),
+      "GET /v1/admin/licenses/lic-uni-2/summary": () => json(200, { counts: {} }),
       ...routes,
     },
   });

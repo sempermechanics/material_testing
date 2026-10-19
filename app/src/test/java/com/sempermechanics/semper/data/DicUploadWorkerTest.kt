@@ -374,6 +374,20 @@ class DicUploadWorkerTest {
     }
 
     @Test
+    fun `the device's cap holds its own stop, not the account's (TD-279)`() {
+        seed()
+        api.onCreateSession = { throw apiError(409, "device_quota_exceeded: the demo allows 25 analyses.") }
+        DicUploadSeams.inForeground = { false }
+
+        val result = run()
+
+        assertTrue(result is ListenableWorker.Result.Failure)
+        assertEquals(UploadErrors.FAIL_KIND_QUOTA, result.outputData.getString(UploadErrors.UPLOAD_FAIL_KIND))
+        assertTrue(AccountCache.isDeviceLimitForced(context))
+        assertFalse("a re-check of the account would lift it", AccountCache.isLimitForced(context))
+    }
+
+    @Test
     fun `quota full with the app on screen opens the limit screen`() {
         seed()
         api.onCreateSession = { throw apiError(409, "session_quota_exceeded: 25/25 analyses stored.") }

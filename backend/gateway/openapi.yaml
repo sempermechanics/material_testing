@@ -204,6 +204,26 @@ paths:
       description: Grant or withdraw the optional product-improvement consent (PENDING accounts allowed).
       responses:
         '200': { description: OK }
+  /v1/me/claim:
+    post:
+      operationId: claimCode
+      description: >
+        Redeem a one-time claim code onto the signed-in account, from the web
+        account page. Body {"code": "<code>"}, 8 to 64 characters, case,
+        spaces and dashes ignored. The same checks and refusal codes as
+        /v1/licenses/activate, and the same answer, {"config": ...}. Requires
+        the user step-up (an attested device, or a second factor on a recent
+        sign-in) and a verified email address. Shares the activation rate
+        limit. Preflighted from the browser like every console call; CORS is
+        answered by the backend (allowCors above).
+      responses:
+        '200': { description: OK }
+        '403': { description: "email_not_verified, mfa_required, reauth_required, license_email_mismatch, license_device_mismatch, license_revoked, or license_expired" }
+        '404': { description: "license_not_found (no licence has that code)" }
+        '409': { description: "already_licensed, license_already_redeemed, license_seats_exhausted, or license_seat_disabled" }
+        '422': { description: Malformed body }
+        '429': { description: Rate limited }
+        '503': { description: "claim_contended or device_lock_contended; retry" }
   /v1/devices/register:
     post:
       operationId: registerDevice
@@ -274,10 +294,11 @@ paths:
           session-create-requests: 1
       responses:
         '200': { description: OK }
-        '409': { description: session_quota_exceeded }
+        '409': { description: "session_quota_exceeded (the account's stored analyses) or, for a demo account, device_quota_exceeded (the device's)" }
         '413': { description: too_many_files }
         '429': { description: Rate limited }
         '401': { description: Missing or invalid device attestation }
+        '503': { description: "feature_paused: the upload or backup kill switch is on; Retry-After" }
   /v1/sessions/{sid}:
     delete:
       operationId: deleteSession
@@ -397,6 +418,7 @@ paths:
         '409': { description: "file_not_uploaded — nothing in this analysis finished uploading" }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
+        '503': { description: "feature_paused: the restore kill switch is on; Retry-After" }
   /v1/files/{fileId}/complete:
     post:
       operationId: completeFile
@@ -413,6 +435,7 @@ paths:
         '200': { description: OK }
         '403': { description: file_not_in_session }
         '422': { description: size or checksum mismatch }
+        '503': { description: "feature_paused: the upload or backup kill switch is on; Retry-After" }
   /v1/files/{fileId}/content:
     get:
       operationId: downloadFile
@@ -451,6 +474,7 @@ paths:
         '416': { description: range_not_satisfiable }
         '429': { description: Rate limited }
         '502': { description: Drive download failed }
+        '503': { description: "feature_paused: the restore kill switch is on; Retry-After" }
   /v1/admin/users:
     get:
       operationId: adminListUsers
@@ -603,7 +627,9 @@ paths:
         Semper staff. Licences newest first, cursor-paged (limit, page_token).
         System Demo keys are left out unless include_demo=true; revoked
         licences are left out when include_revoked=false. q searches by exact
-        email, domain or key prefix instead of paging.
+        email, domain or key prefix instead of paging; it is deprecated (the
+        address lands in request logs) in favour of POST
+        /v1/admin/licenses/search and is served for one more release.
       responses:
         '200': { description: OK }
     post:
@@ -621,6 +647,25 @@ paths:
         '401': { description: Missing or invalid device attestation }
         '403': { description: "Console path: no second factor on the token, or the sign-in is too old (mfa_required, reauth_required)" }
         '422': { description: "kind=institution missing domainLock/adminEmails, or kind=individual missing emailLock" }
+  # Declared before, and apart from, /v1/admin/licenses/{licenseId}: the
+  # literal path also matches that template, which has no POST. ESPv2 matches
+  # a literal segment ahead of a {variable} one, so POST .../search reaches
+  # this operation; GET .../search is still the template (a licence id).
+  /v1/admin/licenses/search:
+    post:
+      operationId: adminSearchLicenses
+      description: >
+        Semper staff. The licence search of GET /v1/admin/licenses, with its
+        terms in a JSON body so an address never reaches a URL or a request
+        log: q (required; an exact email, a domain or a key prefix, at most
+        320 characters; empty pages the listing), limit, page_token,
+        include_demo (default false) and include_revoked (default true).
+        Unknown fields are refused with 422. The answer is the GET's. A read,
+        so the ordinary admin token, like the GET.
+      responses:
+        '200': { description: OK }
+        '422': { description: "q missing or longer than 320 characters, a malformed page_token, or an unknown field" }
+        '429': { description: Rate limited }
   /v1/admin/licenses/{licenseId}:
     get:
       operationId: adminGetLicense

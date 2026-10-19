@@ -153,6 +153,15 @@ class _DocRef:
         _note("delete", timeout, retry)
         self._bucket().pop(self.id, None)
 
+    @property
+    def path(self):
+        return f"{self._collection}/{self.id}"
+
+    @property
+    def parent(self):
+        """The collection holding this document, as the real client has it."""
+        return _Collection(self._store, self._collection)
+
     def collection(self, name):
         """Subcollection under this document (e.g. licenses/{id}/seats/{uid}),
         stored as its own flat bucket keyed by the joined path — mirrors how
@@ -167,13 +176,23 @@ class _AggResult:
 
 
 class _Query:
-    def __init__(self, store, collection, filters=None, limit=None, order_by=None, start_after=None):
+    def __init__(self, store, collection, filters=None, limit=None, order_by=None, start_after=None,
+                 group=False):
         self._store = store
         self._collection = collection
         self._filters = filters or []
         self._limit = limit
         self._order_by = order_by
         self._start_after = start_after
+        #: A collection-group query (`client.collection_group(name)`): every
+        #: collection named `name`, top-level or under any document.
+        self._group = group
+
+    def _with(self, **changes):
+        state = dict(filters=self._filters, limit=self._limit, order_by=self._order_by,
+                     start_after=self._start_after, group=self._group)
+        state.update(changes)
+        return _Query(self._store, self._collection, **state)
 
     #: Positional `.where(field, op, value)` only — the production code uses
     #: that legacy signature rather than FieldFilter precisely so this double
@@ -195,32 +214,19 @@ class _Query:
 
     def where(self, field, op, value):
         assert op in self._OPS, f"fake store does not support {op!r}"
-        return _Query(
-            self._store, self._collection,
-            self._filters + [(field, op, value)], self._limit,
-            self._order_by, self._start_after,
-        )
+        return self._with(filters=self._filters + [(field, op, value)])
 
     def limit(self, n):
-        return _Query(
-            self._store, self._collection, self._filters, n,
-            self._order_by, self._start_after,
-        )
+        return self._with(limit=n)
 
     def order_by(self, field, direction=None):
         """One sort field, as the repo uses. Ties break on the document id in
         the same direction, which is what Firestore's implicit `__name__`
         ordering does."""
-        return _Query(
-            self._store, self._collection, self._filters, self._limit,
-            (field, direction == DESCENDING), self._start_after,
-        )
+        return self._with(order_by=(field, direction == DESCENDING))
 
     def start_after(self, snapshot_or_doc):
-        return _Query(
-            self._store, self._collection, self._filters, self._limit,
-            self._order_by, snapshot_or_doc,
-        )
+        return self._with(start_after=snapshot_or_doc)
 
     @classmethod
     def _field_value(cls, data: dict, field: str):
@@ -258,12 +264,18 @@ class _Query:
         value, present = self._field_value(data or {}, field)
         return (not present or value is None, value if present else None, doc_id)
 
+    def _buckets(self):
+        if not self._group:
+            return [(self._collection, self._store._data.get(self._collection, {}))]
+        return [(path, bucket) for path, bucket in self._store._data.items()
+                if path.rsplit("/", 1)[-1] == self._collection]
+
     def _matching(self):
-        bucket = self._store._data.get(self._collection, {})
         rows = []
-        for doc_id, data in bucket.items():
-            if all(self._passes(data, f, op, v) for f, op, v in self._filters):
-                rows.append(_Snapshot(doc_id, data, _DocRef(self._store, self._collection, doc_id)))
+        for path, bucket in self._buckets():
+            for doc_id, data in bucket.items():
+                if all(self._passes(data, f, op, v) for f, op, v in self._filters):
+                    rows.append(_Snapshot(doc_id, data, _DocRef(self._store, path, doc_id)))
         field, desc = self._order_by or ("__name__", False)
         if field != "__name__":
             # Firestore leaves out documents that lack the order field.
@@ -299,6 +311,19 @@ class _Query:
 class _Collection(_Query):
     def document(self, doc_id):
         return _DocRef(self._store, self._collection, doc_id)
+
+    @property
+    def id(self):
+        return self._collection.rsplit("/", 1)[-1]
+
+    @property
+    def parent(self):
+        """The document a subcollection sits under; None for a top-level one."""
+        if "/" not in self._collection:
+            return None
+        doc_path, _name = self._collection.rsplit("/", 1)
+        coll, doc_id = doc_path.rsplit("/", 1)
+        return _DocRef(self._store, coll, doc_id)
 
 
 class _Transaction:
@@ -354,6 +379,9 @@ class FakeClient:
 
     def collection(self, name):
         return _Collection(self, name)
+
+    def collection_group(self, name):
+        return _Query(self, name, group=True)
 
     def get_all(self, references, transaction=None, *, retry=None, timeout=None):
         _note("get_all", timeout, retry)

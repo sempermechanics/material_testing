@@ -17,7 +17,7 @@ from firebase_admin import auth as fb_auth
 from starlette.concurrency import run_in_threadpool
 
 from . import apps, audit, errors, repo, rate_limit, statuses
-from .config import settings
+from .config import KILL_SWITCH_NAMES, settings
 from .google_auth import verify_app_check_token, verify_id_token
 from .validation import require_header_identifier
 from . import observability as obs
@@ -287,6 +287,50 @@ def rate_limited(bucket: rate_limit.TokenBucket):
     return Depends(check)
 
 
+#: How long a paused feature tells the caller to wait before asking again.
+#: Long enough that a fleet of upload workers does not hammer a switched-off
+#: route, short enough that work resumes soon after the switch is cleared.
+FEATURE_PAUSED_RETRY_AFTER_SECONDS = 300
+
+
+def unless_paused(*switches: str):
+    """Route dependency: 503 `feature_paused` while any of `switches` is in
+    `settings.KILL_SWITCHES`, else nothing.
+
+    Declare it in the route decorator's `dependencies=[...]`, after
+    `rate_limited(...)`: it then runs after the ID token is verified and the
+    account is approved (`current_user`, which it shares with the rate limit),
+    and before the endpoint's own parameters, so a paused request reads no
+    file, session or device record and touches no Drive object. On a
+    device-signed route it also runs before `verified_device`, so the nonce
+    stays unclaimed and the app's later retry of the same signed request is
+    not a replay, as for a 429 (`rate_limited`).
+
+    The refusal carries `Retry-After` and logs `event="feature_paused"` with
+    the switch and the route template, so a dashboard can show what the
+    switch is holding back.
+    """
+    unknown = set(switches).difference(KILL_SWITCH_NAMES)
+    if not switches or unknown:
+        raise ValueError(f"not kill switches: {sorted(unknown) or 'none named'}")
+
+    async def check(request: Request, user: dict = Depends(current_user)) -> None:
+        on = [name for name in switches if name in settings.KILL_SWITCHES]
+        if not on:
+            return
+        route = request.scope.get("route")
+        template = getattr(route, "path", "") or obs.route_template(request.url.path)
+        obs.log_event(log, logging.WARNING, "feature_paused", uid=user.get("uid"),
+                      switch=",".join(on), routeTemplate=template,
+                      outcome="refused", errorCode=errors.FEATURE_PAUSED)
+        raise HTTPException(
+            503, errors.FEATURE_PAUSED,
+            headers={"Retry-After": str(FEATURE_PAUSED_RETRY_AFTER_SECONDS)},
+        )
+
+    return Depends(check)
+
+
 def admin_user(user: dict = Depends(current_user)) -> dict:
     """Authenticated caller that is an admin (role=admin or in ADMIN_EMAILS).
 
@@ -539,12 +583,27 @@ def _require_not_revoked(request: Request, uid: str) -> None:
     the setting on asked for revoked users to be kept out, and a check that
     cannot answer cannot say this one is not. Not 503: the console and app
     already handle `invalid_token`, and a new wire code would reach neither.
+
+    The one exception is this instance's own Auth Admin budget
+    (`rate_limit.auth_admin_bucket`, TD-239). Spent, the check is not asked
+    and the answer is 503 `auth_check_busy` with Retry-After, logged as
+    `auth_admin_rate_limited`: the token may well be fine, and telling the
+    caller it is invalid would sign a working console out.
     """
     bearer = _client_bearer(
         request.headers.get("authorization", ""),
         request.headers.get("x-forwarded-authorization", ""),
     )
     token = bearer[7:] if bearer.startswith("Bearer ") else ""
+    if not rate_limit.auth_admin_allowed():
+        obs.log_event(log, logging.WARNING, "auth_admin_rate_limited", uid=uid,
+                      stage="revocation_check", outcome="refused",
+                      errorCode=errors.AUTH_CHECK_BUSY, dependency="firebase_auth")
+        raise HTTPException(
+            503, errors.AUTH_CHECK_BUSY,
+            headers={"Retry-After": str(rate_limit.auth_admin_bucket.retry_after(
+                rate_limit.AUTH_ADMIN_KEY))},
+        )
     try:
         verify_id_token(token, check_revoked=True)
     except (fb_auth.RevokedIdTokenError, fb_auth.UserDisabledError) as e:

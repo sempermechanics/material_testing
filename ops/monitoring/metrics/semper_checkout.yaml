@@ -23,8 +23,12 @@ metricDescriptor:
     - key: appId
       valueType: STRING
       description: The calling app (X-App-Id, listed ids only).
+    - key: appVersion
+      valueType: STRING
+      description: The calling build's versionCode (X-App-Version; empty when absent).
 labelExtractors:
   licenseId: EXTRACT(jsonPayload.licenseId)
   outcome: EXTRACT(jsonPayload.outcome)
   errorCode: EXTRACT(jsonPayload.errorCode)
   appId: EXTRACT(jsonPayload.appId)
+  appVersion: EXTRACT(jsonPayload.appVersion)

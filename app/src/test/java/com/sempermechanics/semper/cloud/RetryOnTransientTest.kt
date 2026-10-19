@@ -14,6 +14,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import java.io.IOException
 
 /**
@@ -24,7 +26,12 @@ import java.io.IOException
  * happened and a repeat is free. 503 carries no such promise, so it is retried
  * only where a duplicate is harmless. Getting that wrong duplicates a
  * server-side effect nobody would see.
+ *
+ * Robolectric because the kill-switch case reads the body's code through
+ * [com.sempermechanics.semper.data.net.ApiErrors], which parses it with
+ * `org.json`, a stub on the plain JVM classpath.
  */
+@RunWith(RobolectricTestRunner::class)
 class RetryOnTransientTest {
 
     @get:Rule
@@ -154,6 +161,28 @@ class RetryOnTransientTest {
         post("/v1/licenses/checkout").use { assertEquals(HttpStatus.OK, it.code) }
 
         assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `a kill switch's pause is answered at once, body intact, not waited out`() {
+        val paused = """{"detail":"feature_paused"}"""
+        server.enqueue(
+            MockResponse(
+                code = HttpStatus.SERVICE_UNAVAILABLE,
+                headers = Headers.headersOf("Retry-After", "300"),
+                body = paused,
+            ),
+        )
+        server.enqueue(ok())
+
+        // A restore's GET: retried, it would sit out two capped backoffs for
+        // an answer that lasts minutes, then say paused anyway.
+        get("/v1/files/f1/content").use {
+            assertEquals(HttpStatus.SERVICE_UNAVAILABLE, it.code)
+            assertEquals("the worker still reads the code", paused, it.body.string())
+        }
+
+        assertEquals(1, server.requestCount)
     }
 
     // ------------------------------------------------------ everything else

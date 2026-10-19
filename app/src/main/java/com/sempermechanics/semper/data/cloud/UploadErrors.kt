@@ -16,7 +16,10 @@ internal object UploadErrors {
 
     /** What an HTTP error that ended an upload run means for the backup. */
     enum class Kind {
-        /** The account's analysis quota is full (409 `session_quota_exceeded`). Terminal. */
+        /**
+         * The account's analysis quota is full (409 `session_quota_exceeded`),
+         * or for demo the device's (409 `device_quota_exceeded`). Terminal.
+         */
         QUOTA,
 
         /** Too many files for one analysis (413). Terminal. */
@@ -42,16 +45,32 @@ internal object UploadErrors {
         /** Any other 409: refused for a reason retrying will not fix. Terminal. */
         REJECTED,
 
+        /**
+         * The upload or backup kill switch is on (503 `feature_paused`): a
+         * pause, not a failure. Keep staging and retry with WorkManager's
+         * backoff, however long it lasts; never marked failed.
+         */
+        PAUSED,
+
         /** 5xx, 429, a bare 404 (route not reachable), anything else: keep staging and retry. */
         TRANSIENT,
     }
 
-    /** Classify an upload-ending HTTP [code] by the `detail` code in [body]. */
+    /**
+     * Classify an upload-ending HTTP [code] by the `detail` code in [body]. A
+     * pause (`feature_paused`) is told apart first, whatever its status.
+     */
     fun classify(code: Int, body: String): Kind {
         val detail = ApiErrors.detailOf(body)
+        return if (ApiErrors.isCode(detail, ApiErrors.FEATURE_PAUSED)) Kind.PAUSED else refusal(code, detail)
+    }
+
+    /** [classify] for anything but a pause. */
+    private fun refusal(code: Int, detail: String): Kind {
         fun detailIs(vararg codes: String) = codes.any { ApiErrors.isCode(detail, it) }
         return when {
-            code == HttpStatus.CONFLICT && detailIs(ApiErrors.SESSION_QUOTA_EXCEEDED) -> Kind.QUOTA
+            code == HttpStatus.CONFLICT &&
+                detailIs(ApiErrors.SESSION_QUOTA_EXCEEDED, ApiErrors.DEVICE_QUOTA_EXCEEDED) -> Kind.QUOTA
             code == HttpStatus.PAYLOAD_TOO_LARGE -> Kind.TOO_LARGE
             code == HttpStatus.BAD_REQUEST -> Kind.STALE_SESSION
             code == HttpStatus.CONFLICT && detailIs(ApiErrors.SIZE_OR_STATE_MISMATCH) -> Kind.STALE_SESSION

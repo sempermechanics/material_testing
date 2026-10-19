@@ -1,0 +1,416 @@
+{
+  "displayName": "semper-service-health",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 48,
+        "height": 5,
+        "widget": {
+          "text": {
+            "content": "**__SERVICE__** and **__STAGING_SERVICE__** (Cloud Run, __REGION__), one series per service. Platform metrics, so 5xx Cloud Run answered before the app count too. Alerts and runbooks: `ops/monitoring/README.md` (http-5xx-ratio, latency-p95, uptime-readyz).",
+            "format": "MARKDOWN"
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 5,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Requests/s by response code class",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_RATE",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "resource.label.service_name",
+                        "metric.label.response_code_class"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "60s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${resource.labels.service_name} ${metric.labels.response_code_class}"
+              }
+            ],
+            "yAxis": {
+              "label": "req/s",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 5,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "5xx ratio (10 min; alert at 2 %)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilterRatio": {
+                    "numerator": {
+                      "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\") AND metric.label.response_code_class=\"5xx\"",
+                      "aggregation": {
+                        "alignmentPeriod": "600s",
+                        "perSeriesAligner": "ALIGN_DELTA",
+                        "crossSeriesReducer": "REDUCE_SUM",
+                        "groupByFields": [
+                          "resource.label.service_name"
+                        ]
+                      }
+                    },
+                    "denominator": {
+                      "filter": "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                      "aggregation": {
+                        "alignmentPeriod": "600s",
+                        "perSeriesAligner": "ALIGN_DELTA",
+                        "crossSeriesReducer": "REDUCE_SUM",
+                        "groupByFields": [
+                          "resource.label.service_name"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "600s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${resource.labels.service_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "5xx / all",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "thresholds": [
+              {
+                "value": 0.02,
+                "label": "alert: 2 %",
+                "color": "RED",
+                "direction": "ABOVE",
+                "targetAxis": "Y1"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 21,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Request latency p50 / p95 / p99",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_latencies\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_PERCENTILE_50",
+                      "groupByFields": [
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "p50 ${resource.labels.service_name}"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_latencies\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_PERCENTILE_95",
+                      "groupByFields": [
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "p95 ${resource.labels.service_name}"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/request_latencies\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_PERCENTILE_99",
+                      "groupByFields": [
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "p99 ${resource.labels.service_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "ms",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "thresholds": [
+              {
+                "value": 2000,
+                "label": "p95 alert: 2 s",
+                "color": "RED",
+                "direction": "ABOVE",
+                "targetAxis": "Y1"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 21,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Instances by state",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/container/instance_count\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_MAX",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "resource.label.service_name",
+                        "metric.label.state"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "60s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${resource.labels.service_name} ${metric.labels.state}"
+              }
+            ],
+            "yAxis": {
+              "label": "instances",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "thresholds": [
+              {
+                "value": 10,
+                "label": "max-instances",
+                "color": "YELLOW",
+                "direction": "ABOVE",
+                "targetAxis": "Y1"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 37,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Container CPU utilisation p50 / p99",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/container/cpu/utilizations\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_PERCENTILE_50",
+                      "groupByFields": [
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "60s",
+                "targetAxis": "Y1",
+                "legendTemplate": "p50 ${resource.labels.service_name}"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/container/cpu/utilizations\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_PERCENTILE_99",
+                      "groupByFields": [
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "60s",
+                "targetAxis": "Y1",
+                "legendTemplate": "p99 ${resource.labels.service_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "fraction of limit",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 37,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Container memory utilisation p50 / p99",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/container/memory/utilizations\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_PERCENTILE_50",
+                      "groupByFields": [
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "60s",
+                "targetAxis": "Y1",
+                "legendTemplate": "p50 ${resource.labels.service_name}"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"run.googleapis.com/container/memory/utilizations\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=one_of(\"__SERVICE__\", \"__STAGING_SERVICE__\")",
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_PERCENTILE_99",
+                      "groupByFields": [
+                        "resource.label.service_name"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "LINE",
+                "minAlignmentPeriod": "60s",
+                "targetAxis": "Y1",
+                "legendTemplate": "p99 ${resource.labels.service_name}"
+              }
+            ],
+            "yAxis": {
+              "label": "fraction of limit",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 53,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "App-answered 5xx by route (__SERVICE__, semper_http_5xx)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/semper_http_5xx\" AND resource.type=\"cloud_run_revision\"",
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "perSeriesAligner": "ALIGN_DELTA",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "metric.label.routeTemplate",
+                        "metric.label.status"
+                      ]
+                    }
+                  }
+                },
+                "plotType": "STACKED_BAR",
+                "minAlignmentPeriod": "300s",
+                "targetAxis": "Y1",
+                "legendTemplate": "${metric.labels.status} ${metric.labels.routeTemplate}"
+              }
+            ],
+            "yAxis": {
+              "label": "responses / 5 min",
+              "scale": "LINEAR"
+            },
+            "chartOptions": {
+              "mode": "COLOR"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "labels": {
+    "app": "semper",
+    "managed_by": "ops-monitoring"
+  }
+}

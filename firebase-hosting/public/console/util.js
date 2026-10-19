@@ -144,15 +144,34 @@ export function errorDetail(detail) {
 /**
  * The staff desk's licence-list URL. Demo keys and revoked licences are
  * left out by the backend unless asked for, so a page holds the licences
- * anyone sold instead of one Demo key per account.
+ * anyone sold instead of one Demo key per account. A search is not a list:
+ * it is `licenceSearchBody`, sent as a POST, so the address searched for is
+ * never in a URL (TD-244).
  */
-export function licenceListPath({ limit, showDemo = false, showRevoked = false, pageToken = "", q = "" }) {
+export function licenceListPath({ limit, showDemo = false, showRevoked = false, pageToken = "" }) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (showDemo) params.set("include_demo", "true");
   if (!showRevoked) params.set("include_revoked", "false");
-  if (q) params.set("q", q);
-  else if (pageToken) params.set("page_token", pageToken);
+  if (pageToken) params.set("page_token", pageToken);
   return `/v1/admin/licenses?${params}`;
+}
+
+/**
+ * The JSON body of a licence search (`POST /v1/admin/licenses/search`):
+ * `{q, limit?, page_token?, include_demo, include_revoked}`. The text
+ * searched for is an address often enough that it belongs in a body, which
+ * no access log records, rather than in `?q=`, which every one does. The two
+ * flags are the table's toggles, as `licenceListPath` sends them: the
+ * backend leaves Demo keys out of a search unless asked, so a search with
+ * "Show Demo keys" ticked has to ask.
+ */
+export function licenceSearchBody({ q, limit, pageToken = "", showDemo = false, showRevoked = false }) {
+  const body = { q: String(q ?? "").trim() };
+  if (Number.isInteger(limit)) body.limit = limit;
+  if (pageToken) body.page_token = pageToken;
+  body.include_demo = Boolean(showDemo);
+  body.include_revoked = Boolean(showRevoked);
+  return JSON.stringify(body);
 }
 
 /**
@@ -365,4 +384,32 @@ export function placeholderRows(columns, count = 3) {
 export function retryRow(columns, message) {
   return `<tr><td colspan="${columns}" class="err">${esc(message)} ` +
     '<button class="secondary" data-retry>Retry</button></td></tr>';
+}
+
+/**
+ * A claim code as typed, tidied: letters upper-cased, and anything but
+ * letters, digits and dashes dropped (spaces, a pasted line break, a stray
+ * quote). Character by character, so tidying what lies before the caret
+ * says where the caret belongs afterwards. The server canonicalises again;
+ * this only keeps the field readable.
+ */
+export function normaliseClaimCode(text) {
+  return String(text ?? "").replace(/[^A-Za-z0-9-]/g, "").toUpperCase();
+}
+
+/** The longest claim code the page sends; anything longer is a paste gone wrong. */
+export const MAX_CLAIM_CODE = 64;
+
+/**
+ * Whether a tidied claim code is shaped like one: groups of letters and
+ * digits split by single dashes, at least eight of them in all, and no longer
+ * than `MAX_CLAIM_CODE`. A light check, to catch a half-pasted code before
+ * it costs an attempt against the rate limit; whether it is a real code is
+ * the server's to say.
+ */
+export function claimCodeShaped(code) {
+  const text = String(code ?? "");
+  return text.length <= MAX_CLAIM_CODE &&
+    /^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(text) &&
+    text.replace(/-/g, "").length >= 8;
 }

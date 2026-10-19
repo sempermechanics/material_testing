@@ -26,6 +26,9 @@ _ALLOWED = frozenset({
     "maxAttempts", "httpStatus", "count", "stage",
     "opClass", "routeTemplate", "fileCount", "frameCount", "folderMs",
     "appId", "appVersion", "licenseId", "action",
+    # `feature_paused`: which kill switch refused. `activation`: how a code
+    # was redeemed (`web` from the account page; absent from the app's route).
+    "switch", "via",
 })
 
 #: The largest versionCode Android allows (`Integer.MAX_VALUE`).
@@ -131,7 +134,7 @@ def classify_route(method: str, path: str) -> tuple[str, str]:
         return "admin", template
     # A licence's own lifecycle on the device: activate, seat checkout and
     # release, unbind. Institution desk traffic is its own class.
-    if template.startswith("/v1/licenses/"):
+    if template.startswith("/v1/licenses/") or template == "/v1/me/claim":
         return "license", template
     if template.startswith("/v1/institutions/"):
         return "institution", template

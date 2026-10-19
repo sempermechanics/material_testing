@@ -328,8 +328,30 @@ async def test_the_roster_exports_as_a_csv_that_imports_back(it, client):
     assert lines[2].startswith("'=cmd@uni-a.edu,invited,,")
     assert [a["action"] for a in it.audited] == ["INSTITUTION_ROSTER_EXPORT"]
 
-    again = await _import(client, it, r.text.replace("'=cmd", "=cmd"))
-    assert [x["outcome"] for x in again.json()["results"]] == ["exists", "exists"]
+    # The file as it was downloaded imports back: the guard is undone (TD-267).
+    again = await _import(client, it, r.text)
+    assert [(x["email"], x["outcome"]) for x in again.json()["results"]] == [
+        ("ana@uni-a.edu", "exists"), ("=cmd@uni-a.edu", "exists")]
+
+
+@pytest.mark.asyncio
+async def test_addresses_that_start_with_a_sign_survive_an_export_and_import(it, client):
+    """TD-267: `-a@` and `+b@` are valid local parts, which the export quotes
+    as `'-a@` and `'+b@`. Re-importing the file used to answer `invalid`."""
+    _account(it, "dash", "-a@uni-a.edu")
+    attempt_add(repo.add_institution_member, it.a, "-a@uni-a.edu")
+    attempt_add(repo.add_institution_member, it.a, "+b@uni-a.edu")
+
+    r = await client.get(f"{it.base}/seats/export", headers=it.bearer)
+    assert r.status_code == 200
+    cells = sorted(line.split(",", 1)[0] for line in r.text.splitlines()[1:])
+    assert cells == ["'+b@uni-a.edu", "'-a@uni-a.edu"]
+
+    again = await _import(client, it, r.text)
+    assert again.status_code == 200, again.text
+    assert sorted((x["email"], x["outcome"]) for x in again.json()["results"]) == [
+        ("+b@uni-a.edu", "exists"), ("-a@uni-a.edu", "exists")]
+    assert again.json()["counts"]["exists"] == 2
 
 
 def test_a_download_is_named_from_the_licence_id_alone():
@@ -520,10 +542,32 @@ def test_an_import_header_may_put_email_anywhere():
     assert [(r.row, r.email) for r in rows] == [(2, "a@x.edu"), (3, "")]
 
 
+@pytest.mark.parametrize("lead", ["=", "+", "-", "@", "\t", "\r"])
+def test_an_imported_cell_drops_the_guard_the_export_added(lead):
+    assert roster_io.undefused(roster_io._cell(f"{lead}x@y.edu")) == f"{lead}x@y.edu".strip()
+
+
+@pytest.mark.parametrize("address", ["'-a@x.edu", "'=a@x.edu", "'a@x.edu", "''a@x.edu", "o'neil@x.edu"])
+def test_an_address_with_its_own_leading_quote_survives_export_then_import(address):
+    # A `'` is a valid local-part character; the guard must not be mistaken
+    # for it, nor it for the guard.
+    assert roster_io.undefused(roster_io._cell(address)) == address
+
+
+def test_only_one_guard_quote_is_dropped_and_only_before_a_guarded_lead():
+    assert roster_io.undefused("''-a@x.edu") == "'-a@x.edu"
+    assert roster_io.undefused("'''-a@x.edu") == "''-a@x.edu"
+    assert roster_io.undefused("'a@x.edu") == "'a@x.edu"
+    assert roster_io.undefused("'") == "'"
+    assert roster_io.undefused("  '=a@x.edu ") == "=a@x.edu"
+    rows = roster_io.parse_import("email\n'-a@x.edu\n'+b@x.edu\n'=c@x.edu\n'@d\n")
+    assert [r.email for r in rows] == ["-a@x.edu", "+b@x.edu", "=c@x.edu", "@d"]
+
+
 def test_csv_cells_are_written_for_a_spreadsheet():
     assert roster_io._cell(None) == ""
     assert roster_io._cell(datetime(2026, 1, 2, tzinfo=timezone.utc)) == "2026-01-02T00:00:00Z"
-    for lead in ("=", "+", "-", "@", "\t"):
+    for lead in ("=", "+", "-", "@", "\t", "'"):
         assert roster_io._cell(f"{lead}x") == f"'{lead}x"
     assert roster_io._cell(3) == "3"
     assert roster_io.iso(None) == ""

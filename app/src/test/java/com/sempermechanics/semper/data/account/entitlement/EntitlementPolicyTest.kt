@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.data.account.entitlement
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -91,6 +92,72 @@ class EntitlementPolicyTest {
         assertEquals(25, EntitlementPolicy.cap(999, TokenBound(false, false, false, 25)))
         assertEquals(10, EntitlementPolicy.cap(10, TokenBound(true, true, true, 500)))
         assertEquals(Int.MAX_VALUE, EntitlementPolicy.cap(Int.MAX_VALUE, TokenBound(true, true, true, null)))
+    }
+
+    @Test
+    fun `with the token lapsed the shown ceiling is the demo cap that is enforced (TD-263)`() {
+        val late = DeviceTime(serverMs + 8 * DAY_MS, 1_000L + 8 * DAY_MS, 1)
+        val bound = EntitlementPolicy.bound(evaluate(sealed(), late).first, DEMO)
+        val serverMax = 999
+
+        val enforced = EntitlementPolicy.cap(serverMax, bound)
+        assertEquals(DEMO, enforced)
+        assertEquals(enforced, EntitlementPolicy.shownCap(serverMax, bound))
+    }
+
+    @Test
+    fun `the shown ceiling is the enforced one, or 0 while the server has reported none`() {
+        val bounds = listOf(
+            EntitlementPolicy.UNBOUNDED,
+            TokenBound(false, false, false, DEMO),
+            TokenBound(true, true, true, 500),
+            TokenBound(true, true, true, null),
+        )
+        bounds.forEach { bound ->
+            listOf(5, 25, 999).forEach { serverMax ->
+                val enforced = EntitlementPolicy.cap(serverMax, bound)
+                assertEquals("$bound $serverMax", enforced, EntitlementPolicy.shownCap(serverMax, bound))
+            }
+            assertEquals(0, EntitlementPolicy.shownCap(0, bound))
+        }
+    }
+
+    @Test
+    fun `a floating seat whose token ran past its lease needs the seat screen (TD-266)`() {
+        val pastLease = DeviceTime(serverMs + 8 * DAY_MS, 1_000L + 8 * DAY_MS, 1)
+        val graceOver = evaluate(sealed(), pastLease).first
+        assertEquals(TokenStatus.Lapsed("GRACE_OVER"), graceOver)
+        assertTrue(EntitlementPolicy.seatRequired(serverLicensed = true, graceOver))
+        assertTrue(EntitlementPolicy.seatRequired(serverLicensed = true, TokenStatus.Lapsed("EXPIRED")))
+    }
+
+    @Test
+    fun `the seat screen otherwise follows the server alone`() {
+        // No token (no pins, none sent, or one that does not verify): as before tokens.
+        assertFalse(EntitlementPolicy.seatRequired(serverLicensed = true, TokenStatus.NotUsed))
+        assertTrue(EntitlementPolicy.seatRequired(serverLicensed = false, TokenStatus.NotUsed))
+        val (valid, _) = evaluate(sealed())
+        assertFalse(EntitlementPolicy.seatRequired(serverLicensed = true, valid))
+        assertTrue(EntitlementPolicy.seatRequired(serverLicensed = false, valid))
+        // A rollback or an altered record is demo's limits, not a seat question.
+        assertFalse(EntitlementPolicy.seatRequired(serverLicensed = true, TokenStatus.Lapsed("ROLLBACK")))
+        assertFalse(EntitlementPolicy.seatRequired(serverLicensed = true, TokenStatus.Lapsed("TAMPERED")))
+    }
+
+    @Test
+    fun `only a key with no record and no seal in flight reads as tampering (TD-265)`() {
+        fun reading(hasRecord: Boolean, key: KeyPresence, sealing: Boolean = false) =
+            EntitlementPolicy.reading(hasRecord, key, sealing)
+
+        assertEquals(StoreReading.NOTHING, reading(false, KeyPresence.ABSENT))
+        assertEquals(StoreReading.NOTHING, reading(false, KeyPresence.ABSENT, sealing = true))
+        assertEquals(StoreReading.UNSEAL, reading(true, KeyPresence.PRESENT))
+        assertEquals(StoreReading.UNSEAL, reading(true, KeyPresence.PRESENT, sealing = true))
+        assertEquals("a lost key", StoreReading.DROP_RECORD, reading(true, KeyPresence.ABSENT))
+        assertEquals("a crash before the write", StoreReading.DROP_KEY, reading(false, KeyPresence.PRESENT, true))
+        assertEquals("a deleted record", StoreReading.TAMPERED, reading(false, KeyPresence.PRESENT))
+        assertEquals(StoreReading.NOTHING, reading(true, KeyPresence.UNREADABLE))
+        assertEquals(StoreReading.NOTHING, reading(false, KeyPresence.UNREADABLE))
     }
 
     @Test

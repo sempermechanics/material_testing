@@ -5,6 +5,7 @@
   "//licenses": "The staff desk lists licences newest first (createdAt DESC), filtered by mode unless Demo keys are shown and by status (an `in` filter) when revoked ones are hidden: repo/license_admin.list_licenses. One index per filter combination.",
   "//files": "The account export streams the caller's files ordered by session (where uid ==, order by sessionId) and merges them with the sessions: repo/sessions.iter_sessions_with_files.",
   "//audit_logs": "Institution IT read their own licence's audit log newest first, optionally within dates (where licenseId ==, ts range, order by ts DESC): audit.page_license_audit. `audit.record` stamps licenseId on licence, seat, invite and lease events from 2026-10-18; older events are not in that export.",
+  "//seats-uid": "Account erasure finds every seat an account held, on any licence, live or in a deleted licence's hold (where uid ==, as a collection group): repo/account._seats_of (TD-243). A collection-group query has no automatic index, so `seats.uid` and `deleted_seats.uid` enable the ascending index at COLLECTION_GROUP scope; each override restates the three COLLECTION-scope defaults, as the TTL overrides do. Until it is deployed the query fails and erasure blanks the current licence's seat only (`seatScanComplete: false`).",
   "indexes": [
     {
       "collectionGroup": "sessions",
@@ -154,6 +155,50 @@
         {
           "arrayConfig": "CONTAINS",
           "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "seats",
+      "fieldPath": "uid",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "deleted_seats",
+      "fieldPath": "uid",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
         }
       ]
     }

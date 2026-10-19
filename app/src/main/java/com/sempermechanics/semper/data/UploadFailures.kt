@@ -87,6 +87,12 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
                 UploadLog.retry("HTTP ${e.code} stale session — $detail", e.requestId)
             }
             UploadErrors.Kind.INTEGRITY -> integrityMismatch(e)
+            // The kill switch is on: a pause, not a failure. Keep the staged
+            // files and retry with WorkManager's backoff until it lifts.
+            UploadErrors.Kind.PAUSED -> {
+                Timber.i("Upload paused by the backend (%s); will retry", e.parsedDetail)
+                UploadLog.retry("HTTP ${e.code}: ${ApiErrors.FEATURE_PAUSED}", e.requestId)
+            }
             UploadErrors.Kind.TRANSIENT -> {
                 // Transient — keep the staged files so the retry resumes identically.
                 Timber.e("Upload HTTP %d — %s", e.code, e.parsedDetail)
@@ -150,7 +156,13 @@ internal class UploadFailures(private val run: UploadRun, private val stagingDir
     private fun quotaFull(e: ApiException): ListenableWorker.Result {
         Timber.e("Upload rejected (%d): %s", e.code, e.parsedDetail)
         run.abandon(stagingDir, analyticsReason = "quota")
-        AccountCache.setSessionLimitReached(context, true)
+        // The device's stop is its own: a re-check of the account's count
+        // would lift the account's and find room the next upload refuses.
+        if (ApiErrors.isCode(e.parsedDetail, ApiErrors.DEVICE_QUOTA_EXCEEDED)) {
+            AccountCache.setDeviceLimitReached(context, true)
+        } else {
+            AccountCache.setSessionLimitReached(context, true)
+        }
         // Android blocks a background activity start, so open it only while the
         // app is on screen; otherwise Home opens it from the gate (and can read
         // UPLOAD_FAIL_KIND).

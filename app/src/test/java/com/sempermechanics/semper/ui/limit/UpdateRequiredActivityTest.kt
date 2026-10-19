@@ -48,11 +48,31 @@ class UpdateRequiredActivityTest {
     }
 
     @Test
-    fun `Update opens this app's store listing`() {
+    fun `Update opens this app's store listing when Play installed it`() {
+        shadowOf(screen.packageManager).setInstallSourceInfo(screen.packageName, null, "com.android.vending")
+
         screen.findViewById<View>(R.id.btnUpdateApp).performClick()
         val started = shadowOf(screen).nextStartedActivity
         assertEquals(Intent.ACTION_VIEW, started.action)
         assertEquals("market://details?id=${screen.packageName}", started.dataString)
+    }
+
+    @Test
+    fun `Update opens the release download page on a sideloaded build`() {
+        // TD-268: no installer recorded (adb, or a downloaded APK) is not Play.
+        screen.findViewById<View>(R.id.btnUpdateApp).performClick()
+        val started = shadowOf(screen).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, started.action)
+        assertEquals(UpdateSource.RELEASES_URL, started.dataString)
+    }
+
+    @Test
+    fun `Update opens the release download page when another installer put the build there`() {
+        shadowOf(screen.packageManager)
+            .setInstallSourceInfo(screen.packageName, null, "com.google.android.packageinstaller")
+
+        screen.findViewById<View>(R.id.btnUpdateApp).performClick()
+        assertEquals(UpdateSource.RELEASES_URL, shadowOf(screen).nextStartedActivity.dataString)
     }
 
     @Test

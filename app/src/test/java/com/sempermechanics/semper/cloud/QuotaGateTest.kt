@@ -161,6 +161,37 @@ class QuotaGateTest {
     }
 
     @Test
+    fun `the device's stop outlives the account's fresh numbers (TD-279)`() {
+        // The device half of the demo cap refused an upload; the account's own
+        // count has room. A re-check that reconciles the account lifted the
+        // stop, reported room, and the next upload was refused again.
+        AppRemoteConfig.apply(ctx, fiveMax)
+        AccountCache.setDeviceLimitReached(ctx, true)
+        assertTrue(SessionQuota.blockedNow(ctx))
+
+        AccountCache.setQuota(ctx, used = 1, localCount = 1)
+
+        assertTrue("the account's numbers say nothing of the device's", SessionQuota.blockedNow(ctx))
+        assertTrue(SessionQuota.deviceStop(ctx))
+    }
+
+    @Test
+    fun `a delete on the phone or a licence lifts the device's stop`() {
+        AppRemoteConfig.apply(ctx, fiveMax)
+        val row = RestoreStart.newRow(ctx, "cloud-1", "local-1", "Steel plate", now = 0L)
+        assertTrue(SessionStore.upsert(ctx, row, allowOverLimit = true))
+        AccountCache.setDeviceLimitReached(ctx, true)
+
+        SessionStore.delete(ctx, "local-1")
+        assertFalse(SessionQuota.blockedNow(ctx))
+
+        // The server holds a licensed account to its own cap only.
+        AccountCache.setDeviceLimitReached(ctx, true)
+        AppRemoteConfig.apply(ctx, AppConfigDto(mode = "licensed", maxSessions = 30))
+        assertFalse(SessionQuota.deviceStop(ctx))
+    }
+
+    @Test
     fun `a forced stop survives a local count refresh`() {
         // Home's start and refresh, a run's pre-check and every save fold the
         // phone's count in; none of them brings fresh server numbers.

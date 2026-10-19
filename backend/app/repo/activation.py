@@ -59,7 +59,12 @@ def _activate_individual(user: dict, uid: str, email: str, device_id: str, lic: 
         # mismatch, as the request path leaves it unbound.
         bind_device_lock(ref, device_id, app)
         locked = (_get(ref).to_dict() or {}).get(lock_field) or ""
-    if locked != device_id:
+    # No device (a claim code from the web account page, `device_id` ""):
+    # nothing to compare and nothing bound. The account takes the licence and
+    # the lock stays as it is, to be checked or bound on the request path,
+    # as `claim_seat` already treats a seat claimed without a device. The app
+    # route always names its device, so it is checked as before.
+    if device_id and locked != device_id:
         raise Refusal(errors.LICENSE_DEVICE_MISMATCH)
     # The same transaction an invite or a staff mint attaches through: the
     # single-redeemer check, the licence's `redeemed` stamp and the account
@@ -96,7 +101,10 @@ def activate_license(uid: str, email: str, device_id: str, key: str,
       `maxSeats` when set. Re-entry from the same device is idempotent; from a
       different device it re-locks the seat only when no device is locked yet.
 
-    Either way the device is checked against `app`'s lock (ADR-010).
+    Either way the device is checked against `app`'s lock (ADR-010). An
+    empty `device_id` is a redemption with no device (the web claim,
+    `POST /v1/me/claim`): every other check applies, and no lock is compared
+    or bound.
     """
     user = _load_user(uid)
     if not user:

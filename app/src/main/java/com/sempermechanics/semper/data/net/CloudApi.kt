@@ -36,8 +36,6 @@ interface CloudApi {
 
     suspend fun registerDevice(idToken: String)
 
-    suspend fun activateLicense(idToken: String, key: String): AppConfigDto
-
     suspend fun checkoutLease(idToken: String): AppConfigDto
 
     suspend fun releaseLease(idToken: String): AppConfigDto

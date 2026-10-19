@@ -16,12 +16,6 @@
         android:restrictionType="string" />
 
     <restriction
-        android:key="enrollmentInvite"
-        android:title="@string/restrictions_invite_title"
-        android:description="@string/restrictions_invite_description"
-        android:restrictionType="string" />
-
-    <restriction
         android:key="cloudBackupAllowed"
         android:title="@string/restrictions_cloud_backup_title"
         android:description="@string/restrictions_cloud_backup_description"
