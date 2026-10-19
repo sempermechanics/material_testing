@@ -59,13 +59,15 @@ import java.io.IOException
  * no folder and no upload, and costs no quota; a run after a saved one is a
  * new analysis, which leaves the saved one byte for byte as it was whether it
  * is cancelled or saves; a cancelled sweep saves nothing. A stop that is not
- * a cancel still keeps its frames. The JVM has no engine, so the batch loop's own steps are driven
- * here as it takes them: [openRunSession] at its start, [keepDeformedFrame]
- * and a staged `.dat` per frame it reaches, then [discardCancelledBatch] or
- * [RunSession.commit] at its end, or [undoFailedBatch] when it throws before
- * that (the instrumented `EnginePipelineSmokeTest` runs the real loop). A
- * sweep is handed its runner's result ([endSweep]). The wizard takes what a
- * run learned from its outcome on Main ([applyRunOutcome]); the run itself
+ * a cancel still keeps its frames. The JVM has no engine, so the batch
+ * loop's own steps are driven here as it takes them: [openRunSession] at its
+ * start, [keepDeformedFrame] and a staged `.dat` per frame it reaches, then
+ * [discardCancelledBatch] or [RunSession.commit] at its end, or
+ * [undoFailedBatch] when it throws before that and [undoCommittedBatch] when
+ * it throws after, before the wizard follows its frames (the instrumented
+ * `EnginePipelineSmokeTest` runs the real loop). A sweep is handed its
+ * runner's result ([endSweep]). The wizard takes what a run learned from its
+ * outcome on Main ([applyRunOutcome]); the run itself
  * changes none of its fields.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -222,6 +224,61 @@ class CancelDiscardsRunTest {
         assertEquals(launched, vm.defFilePaths)
         assertFalse("no session folder", session.dir.exists())
         assertTrue("no Home row", SessionStore.list(ctx).isEmpty())
+    }
+
+    @Test
+    fun `a run that throws after its commit is undone too, and the wizard names files that exist`() {
+        val frames = importFrames(3)
+        val bytes = frames.map { it.readBytes() }
+        val launched = vm.defFilePaths
+        val session = openRunSession(ctx, vm.working, RunKind.BATCH)
+        // Frames 0 and 1 solved and were moved in, and the run committed them.
+        val resolved = solveUpTo(session, launched, reached = 2, tag = "committed").toMutableList()
+        session.commit()
+        SessionLayout(session.dir).fieldRanges.writeText("committed ranges")
+        // Re-run's keep then moved frame 2, which the loop stopped before, before it threw.
+        val kept = File(SessionLayout(session.dir).rerunFramesDir.apply { mkdirs() }, "def_2.png")
+        frames[2].renameTo(kept)
+        resolved[2] = kept.absolutePath
+        assertTrue("the commit moved the results in", SessionPaths.frameDat(session.dir, 1).isFile)
+        val failure = IllegalStateException("after the commit")
+
+        val thrown = assertThrows(IllegalStateException::class.java) {
+            vm.undoCommittedBatch(ctx, session, launched, resolved, failure)
+        }
+        idle()
+
+        assertSame("the run's own failure goes on up", failure, thrown)
+        assertEquals(launched, vm.defFilePaths)
+        assertTrue("every frame the wizard names exists", vm.defFilePaths.all { File(it).isFile })
+        frames.forEachIndexed { i, file -> assertArrayEquals("frame $i is back", bytes[i], file.readBytes()) }
+        assertFalse("no session folder", session.dir.exists())
+        assertTrue("no Home row", SessionStore.list(ctx).isEmpty())
+        assertEquals("the one analysis allowed is still free", RunAdmission.Admitted, vm.admitRun(ctx, 3))
+    }
+
+    @Test
+    fun `a committed run undone in a folder that saved nothing takes its results out and keeps the folder`() {
+        importFrames(2)
+        val first = openRunSession(ctx, vm.working, RunKind.BATCH)
+        vm.applyRunOutcome(ended(first, saved = false))
+        val launched = vm.defFilePaths
+        val next = openRunSession(ctx, vm.working, RunKind.BATCH)
+        assertEquals("the unsaved folder is written again", first.id, next.id)
+        val resolved = solveUpTo(next, launched, reached = 2, tag = "committed")
+        next.commit()
+        SessionLayout(next.dir).fieldRanges.writeText("committed ranges")
+
+        assertThrows(IOException::class.java) {
+            vm.undoCommittedBatch(ctx, next, launched, resolved, IOException("after the commit"))
+        }
+        idle()
+
+        assertTrue("a folder that was there before stays", next.dir.isDirectory)
+        assertFalse("its committed results go", SessionPaths.frameDat(next.dir, 0).exists())
+        assertFalse(SessionLayout(next.dir).fieldRanges.exists())
+        assertEquals(launched, vm.defFilePaths)
+        assertTrue(vm.defFilePaths.all { File(it).isFile })
     }
 
     @Test

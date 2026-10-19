@@ -21,7 +21,9 @@ import java.util.Locale
  * session's staging folder ([RunSession.staging]); what a batch run did move
  * is the deformed images it reached ([keepDeformedFrame]), which go back to
  * where it found them ([returnMovedFrames]). A batch run that throws before
- * its results are committed is undone the same way ([undoFailedBatch]).
+ * its results are committed is undone the same way ([undoFailedBatch]), and
+ * so is one that throws after, before the wizard follows its frames
+ * ([undoCommittedBatch]).
  */
 
 /**
@@ -91,6 +93,31 @@ internal fun AnalysisViewModel.undoFailedBatch(
     failure: Exception,
 ): Nothing {
     Timber.w(failure, "Batch run failed before its results were committed; undoing it")
+    discardCancelledBatch(appContext, session, launched, resolved)
+    throw failure
+}
+
+/**
+ * A batch run in [session] that threw after it committed its results but
+ * before the wizard followed its frames ([repointDeformedPathsOnMain]): in the
+ * "Saving…" post, the stale-frame prune, or Re-run's keep past the
+ * `IOException` it catches itself (TD-285). The commit had moved the frames
+ * into the session while the wizard still named [launched], so it is undone
+ * as one that threw before its commit is ([undoFailedBatch]), its committed
+ * results first ([RunSession.dropResults]): each image goes back from
+ * [resolved], or the wizard is pointed at where it stayed, and nothing of the
+ * run is kept. [failure] then goes on up as the run's outcome.
+ */
+@WorkerThread
+internal fun AnalysisViewModel.undoCommittedBatch(
+    appContext: Context,
+    session: RunSession,
+    launched: List<String>,
+    resolved: List<String>,
+    failure: Exception,
+): Nothing {
+    Timber.w(failure, "Batch run failed after its results were committed; undoing it")
+    session.dropResults()
     discardCancelledBatch(appContext, session, launched, resolved)
     throw failure
 }

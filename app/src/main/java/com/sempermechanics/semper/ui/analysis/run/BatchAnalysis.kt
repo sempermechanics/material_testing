@@ -160,7 +160,8 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
     // A run that throws before its results are committed (a full disk under
     // DicFieldIo.write, say) keeps nothing either: it is undone as a cancel is
     // (undoFailedBatch), so the frames it moved are back where the wizard
-    // reads them, rather than skipped by the next Compute and pruned.
+    // reads them, rather than skipped by the next Compute and pruned. One that
+    // throws after its commit is undone the same way below (undoCommittedBatch).
     try {
         for ((frameIndex, defPath) in frames.paths.withIndex()) {
             // A job cancelled with its view model is a cancel too: it keeps nothing
@@ -325,37 +326,46 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         return cancelledOutcome((System.currentTimeMillis() - run.startedAtMs).toInt())
     }
 
-    // Every frame solved: the overlay says so while the run saves.
-    if (stop == RunStop.Finished) {
-        onProgress(
-            BatchProgressUpdate(
-                percent = 100f,
-                status = "Saving…",
-                frameIndex = plannedFrames,
-                plannedFrames = plannedFrames,
-                framePercent = 100f,
-                perFrameConvergence = frameConvergence.copyOf(),
-            ),
-        )
+    // The frames are in the session now, and the wizard still names where they
+    // came from until it follows them below. A throw before then (the
+    // "Saving…" post, the prune, or Re-run's keep past its own IOException
+    // catch) is undone like one before the commit, its committed results
+    // included (undoCommittedBatch), so the wizard never names a moved frame.
+    try {
+        // Every frame solved: the overlay says so while the run saves.
+        if (stop == RunStop.Finished) {
+            onProgress(
+                BatchProgressUpdate(
+                    percent = 100f,
+                    status = "Saving…",
+                    frameIndex = plannedFrames,
+                    plannedFrames = plannedFrames,
+                    framePercent = 100f,
+                    perFrameConvergence = frameConvergence.copyOf(),
+                ),
+            )
+        }
+
+        // One entry per frame actually written above — matches what batchFiles will
+        // list on a later read, so SummaryAnimation.globalRanges's frame-count check
+        // accepts this cache. A partial or failed run's shorter list still writes
+        // correctly: it just describes fewer frames, consistent with fewer .dat files
+        // existing. Best-effort — a write failure here only costs the cache its
+        // speedup, never correctness (globalRanges falls back to decoding).
+        FieldRangesStore.writeBestEffort(batchDir, summaryFieldIndices, perFrameSummaryRanges)
+
+        // Images an earlier run left behind that this one no longer has. This is
+        // the wipe that used to run before the loop; done here it can never delete
+        // the run's own inputs.
+        val keptRawNames = persistedRawNames.filterTo(HashSet()) { it.isNotBlank() }
+        rawDeformedDir.listFiles()?.forEach { if (it.name !in keptRawNames) it.delete() }
+
+        // A run that will save keeps what Home's Re-run starts from, the frames it
+        // stopped before included, which the wizard then follows.
+        if (firstFrameValidPoints > 0) keepBatchRerun(batchDir, run.inputs, spec, resolvedDefPaths)
+    } catch (e: Exception) {
+        undoCommittedBatch(appContext, session, frames.paths, resolvedDefPaths, e)
     }
-
-    // One entry per frame actually written above — matches what batchFiles will
-    // list on a later read, so SummaryAnimation.globalRanges's frame-count check
-    // accepts this cache. A partial or failed run's shorter list still writes
-    // correctly: it just describes fewer frames, consistent with fewer .dat files
-    // existing. Best-effort — a write failure here only costs the cache its
-    // speedup, never correctness (globalRanges falls back to decoding).
-    FieldRangesStore.writeBestEffort(batchDir, summaryFieldIndices, perFrameSummaryRanges)
-
-    // Images an earlier run left behind that this one no longer has. This is
-    // the wipe that used to run before the loop; done here it can never delete
-    // the run's own inputs.
-    val keptRawNames = persistedRawNames.filterTo(HashSet()) { it.isNotBlank() }
-    rawDeformedDir.listFiles()?.forEach { if (it.name !in keptRawNames) it.delete() }
-
-    // A run that will save keeps what Home's Re-run starts from, the frames it
-    // stopped before included, which the wizard then follows.
-    if (firstFrameValidPoints > 0) keepBatchRerun(batchDir, run.inputs, spec, resolvedDefPaths)
 
     // On Main: the wizard's fields are not this thread's to write.
     repointDeformedPathsOnMain(resolvedDefPaths)

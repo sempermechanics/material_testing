@@ -326,10 +326,21 @@ internal class RunSession(
      */
     @WorkerThread
     fun commit() {
-        dir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
-        SessionLayout(dir).fieldRanges.delete()
+        dropResults()
         staging.listFiles()?.forEach { AtomicFiles.promote(it, File(dir, it.name)) }
         staging.deleteRecursively()
+    }
+
+    /**
+     * Deletes the session's committed results: its `.dat` files and the
+     * summary's field-range sidecar. [commit] makes way for a run's with it,
+     * and a run that throws after its commit takes its own back out with it
+     * (`undoCommittedBatch`).
+     */
+    @WorkerThread
+    fun dropResults() {
+        dir.listFiles { f -> f.extension == "dat" }?.forEach { it.delete() }
+        SessionLayout(dir).fieldRanges.delete()
     }
 }
 
