@@ -1,12 +1,12 @@
-// The public face of the heatmap renders: each entry point takes the field,
-// the grid and its optional bounds and cap, and there is one per render the
-// viewer, the report, the GIF and the tests call (plus generateFrameHeatmap,
-// the one choice between the two frame renders), hence TooManyFunctions too.
-@file:Suppress("LongParameterList", "TooManyFunctions")
+// The public face of the heatmap renders. One request type, two entry points
+// (a bitmap, or the index plane under it); generateFrameHeatmap keeps the
+// positional form the report's fusion pass calls, so that loop stays whole.
+@file:Suppress("LongParameterList")
 
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.HeatmapColorScale.JET_LUT
 import kotlin.math.max
 
@@ -32,7 +32,7 @@ object VisualizationEngine {
     /**
      * Scale factor that shrinks [imgW]×[imgH] so its longest edge is ≤ [maxEdge]
      * (1f when already within). This is the identical formula
-     * [generateHeatmapIndices] uses for its own downscale, so a caller that composes
+     * [indices] uses for its own downscale, so a caller that composes
      * at `imgW*scale × imgH*scale` lines up pixel-for-pixel with the capped heatmap.
      */
     fun cappedRenderScale(imgW: Int, imgH: Int, maxEdge: Int): Float {
@@ -83,7 +83,7 @@ object VisualizationEngine {
 
     /**
      * The displayed value range of several fields at once, in one pass over the
-     * points — the same percentile-clamped bounds [generateHeatmap] would pick
+     * points — the same percentile-clamped bounds [render] would pick
      * for each. Null for a field with no correlated points.
      *
      * Per-frame heatmaps use this. The summary GIF widens these same ends
@@ -101,70 +101,59 @@ object VisualizationEngine {
     ): Map<Int, Pair<Float, Float>?> = HeatmapColorScale.valueRanges(data, floatCount, valIndices, scratch)
 
     /**
-     * @param maxLongEdge when set and smaller than the image's longest edge, the
-     *   bitmap is generated at display scale (viewer scrub). Pass null / omit for
-     *   full-resolution PDF and share export.
+     * The heatmap [request] asks for: its index plane ([indices]) coloured
+     * with the jet ramp, and the range the colours were mapped against.
      */
-    fun generateHeatmap(
-        data: FloatArray,
-        imgW: Int,
-        imgH: Int,
-        valIndex: Int,
-        step: Int,
-        customMin: Float? = null, // Optional Custom Bounds
-        customMax: Float? = null,
-        maxLongEdge: Int? = null,
-    ): BakedHeatmap {
-        val plane = generateHeatmapIndices(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
+    fun render(request: HeatmapRequest): BakedHeatmap {
+        val plane = indices(request)
         return BakedHeatmap(HeatmapRenderer.toBitmap(plane), plane.min, plane.max)
     }
 
     /**
-     * The same render as [generateHeatmap], stopping one step earlier: one byte
-     * per pixel, holding an index into the jet ramp — or [TRANSPARENT_INDEX] where
-     * no correlated data covers the pixel. See [HeatmapRenderer.generateHeatmapIndices].
-     */
-    fun generateHeatmapIndices(
-        data: FloatArray,
-        imgW: Int,
-        imgH: Int,
-        valIndex: Int,
-        step: Int,
-        customMin: Float? = null,
-        customMax: Float? = null,
-        maxLongEdge: Int? = null,
-    ): IndexPlane =
-        HeatmapRenderer.generateHeatmapIndices(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
-
-    /**
-     * [generateHeatmap] in the deformed configuration: each point is drawn where
-     * it moved to, (x + u, y + v), so the map lies on that frame's own photo the
-     * way [generateHeatmap] lies on the reference. The colour range is taken
-     * over the same accepted values, so both renders share one scale.
+     * The same render as [render], stopping one step earlier: one byte per
+     * pixel, holding an index into the jet ramp — or [TRANSPARENT_INDEX] where
+     * no correlated data covers the pixel. The summary GIF encodes these
+     * directly, so its colours are the viewer's by construction.
      *
-     * Reached through [generateFrameHeatmap] by the viewer and by every export
-     * of a frame (ADR-011, TD-139).
+     * A [HeatmapRequest.displaced] request draws each point where it moved to,
+     * (x + u, y + v), so the map lies on that frame's own photo the way the
+     * plain render lies on the reference; the colour range is taken over the
+     * same accepted values, so both share one scale (ADR-011, TD-139). See
+     * [HeatmapRenderer.generateHeatmapIndices] and
+     * [DeformedHeatmap.generateDeformedHeatmapIndices].
      */
-    fun generateDeformedHeatmap(
-        data: FloatArray,
-        imgW: Int,
-        imgH: Int,
-        valIndex: Int,
-        step: Int,
-        customMin: Float? = null,
-        customMax: Float? = null,
-        maxLongEdge: Int? = null,
-    ): BakedHeatmap {
-        val plane = generateDeformedHeatmapIndices(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
-        return BakedHeatmap(HeatmapRenderer.toBitmap(plane), plane.min, plane.max)
+    fun indices(request: HeatmapRequest): IndexPlane = with(request) {
+        val customMin = bounds?.min
+        val customMax = bounds?.max
+        if (displaced) {
+            DeformedHeatmap.generateDeformedHeatmapIndices(
+                data,
+                size.width,
+                size.height,
+                valIndex,
+                step,
+                customMin,
+                customMax,
+                maxLongEdge,
+            )
+        } else {
+            HeatmapRenderer.generateHeatmapIndices(
+                data,
+                size.width,
+                size.height,
+                valIndex,
+                step,
+                customMin,
+                customMax,
+                maxLongEdge,
+            )
+        }
     }
 
     /**
-     * One frame's map as the viewer draws it: [generateDeformedHeatmap] when the
-     * frame is shown on its own photo ([displaced]), else [generateHeatmap] for
-     * the reference. The viewer, the PNG export and the report's field images
-     * all call this with the same choice, so what is exported is what was on
-     * screen (ADR-011, TD-139).
+     * [render] in the positional form the report's fusion pass
+     * ([ReportBuilder.buildReport]) calls, kept so that loop's body stays
+     * whole. Bounds apply only when both are set, as [ValueRange.custom] reads them.
      */
     fun generateFrameHeatmap(
         displaced: Boolean,
@@ -176,30 +165,15 @@ object VisualizationEngine {
         customMin: Float? = null,
         customMax: Float? = null,
         maxLongEdge: Int? = null,
-    ): BakedHeatmap = if (displaced) {
-        generateDeformedHeatmap(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
-    } else {
-        generateHeatmap(data, imgW, imgH, valIndex, step, customMin, customMax, maxLongEdge)
-    }
-
-    /** The index plane behind [generateDeformedHeatmap]. See [DeformedHeatmap.generateDeformedHeatmapIndices]. */
-    fun generateDeformedHeatmapIndices(
-        data: FloatArray,
-        imgW: Int,
-        imgH: Int,
-        valIndex: Int,
-        step: Int,
-        customMin: Float? = null,
-        customMax: Float? = null,
-        maxLongEdge: Int? = null,
-    ): IndexPlane = DeformedHeatmap.generateDeformedHeatmapIndices(
-        data,
-        imgW,
-        imgH,
-        valIndex,
-        step,
-        customMin,
-        customMax,
-        maxLongEdge,
+    ): BakedHeatmap = render(
+        HeatmapRequest(
+            data = data,
+            size = ImageSize(imgW, imgH),
+            valIndex = valIndex,
+            step = step,
+            bounds = ValueRange.custom(customMin, customMax),
+            maxLongEdge = maxLongEdge,
+            displaced = displaced,
+        ),
     )
 }

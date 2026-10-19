@@ -12,6 +12,7 @@ import androidx.core.graphics.scale
 import com.sempermechanics.semper.field.FieldKind
 import com.sempermechanics.semper.imaging.BitmapDecoder
 import com.sempermechanics.semper.imaging.ImageEncoder
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.viewer.share.ShareExportBuilder.Companion.HEATMAP_ALPHA
@@ -76,16 +77,15 @@ internal class FieldImageExport(
         var out: Bitmap? = null
         var done = false
         try {
-            val baked = VisualizationEngine.generateFrameHeatmap(
-                base.displaced,
-                data,
-                size.width,
-                size.height,
-                dataIndex,
-                s.stepAt(frameIndex),
-                null,
-                null,
-                maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
+            val baked = VisualizationEngine.render(
+                HeatmapRequest(
+                    data = data,
+                    size = size,
+                    valIndex = dataIndex,
+                    step = s.stepAt(frameIndex),
+                    maxLongEdge = VisualizationEngine.REPORT_MAX_EDGE,
+                    displaced = base.displaced,
+                ),
             )
             heatmap = baked.bitmap
             out = createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888)

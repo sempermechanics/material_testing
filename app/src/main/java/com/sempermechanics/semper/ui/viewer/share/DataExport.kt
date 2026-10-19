@@ -4,6 +4,7 @@ import android.content.res.Resources
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.AnalysisCsvWriter
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.PdfReportGenerator
@@ -65,7 +66,7 @@ internal class DataExport(
      * ranges itself (from the sidecar when there is one), rather than leaving
      * the fields out.
      */
-    private suspend fun readBounds(report: ExportReport): Map<Int, Pair<Float, Float>> {
+    private suspend fun readBounds(report: ExportReport): Map<Int, ValueRange> {
         val rangesFile = s.batchFiles.firstOrNull()?.parentFile?.let { File(it, FieldRangesStore.FILE_NAME) }
         report.step(resources, 0, s.batchFiles.size, R.string.share_progress_gif_ranges_fmt)
         return SummaryAnimation.globalRanges(s.batchFiles, rangesFile) { done, total ->

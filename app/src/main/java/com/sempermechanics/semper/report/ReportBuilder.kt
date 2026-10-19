@@ -18,6 +18,7 @@ import com.sempermechanics.semper.BuildConfig
 import com.sempermechanics.semper.data.DicUploadWorker
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.FieldKind
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.field.ValueRange
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -63,7 +64,7 @@ object ReportBuilder {
         val subsetSize: Int,
         val strainWindow: Int,
         val strainMethod: String,
-        val roiData: RoiData,
+        val roi: Roi,
         val engineStats: EngineStats,
         val referenceImageName: String,
         val deformedImageName: String,
@@ -303,7 +304,7 @@ object ReportBuilder {
                 stepSize = params.step,
                 strainWindow = params.strainWindow,
                 strainMethod = params.strainMethod,
-                roiData = params.roiData,
+                roi = params.roi,
                 referenceImage = own(baseImg.compressForPdf()),
                 deformedImage = own(params.defImgForCover.compressForPdf()),
                 referenceImageName = params.referenceImageName,
@@ -330,7 +331,7 @@ object ReportBuilder {
      * scale's ends instead), the image it was drawn on, whether MIN is
      * marked as well as MAX, and whether the markers go where their points
      * moved to ([displaced]: the image is the frame's own photo, under a
-     * [VisualizationEngine.generateDeformedHeatmap] map).
+     * [VisualizationEngine.render] map).
      */
     data class FieldAnnotation(
         val typeString: String,

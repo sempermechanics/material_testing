@@ -24,8 +24,8 @@ import kotlin.math.max
 /**
  * The reference-configuration heatmap: the point grid interpolated over the
  * reference image into an [IndexPlane], and any plane expanded into jet
- * colours. [VisualizationEngine.generateHeatmap] and
- * [VisualizationEngine.generateHeatmapIndices] are its public face.
+ * colours. [VisualizationEngine.render] and
+ * [VisualizationEngine.indices] are its public face.
  */
 internal object HeatmapRenderer {
 
@@ -48,7 +48,7 @@ internal object HeatmapRenderer {
     }
 
     /**
-     * The same render as [VisualizationEngine.generateHeatmap], stopping one step earlier: one byte
+     * The same render as [VisualizationEngine.render], stopping one step earlier: one byte
      * per pixel, holding an index into [JET_LUT] — or [TRANSPARENT_INDEX] where
      * no correlated data covers the pixel.
      *

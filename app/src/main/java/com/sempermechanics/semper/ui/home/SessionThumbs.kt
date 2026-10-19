@@ -11,7 +11,9 @@ import com.sempermechanics.semper.data.session.SessionPaths
 import com.sempermechanics.semper.data.session.SessionRecord
 import com.sempermechanics.semper.databinding.ItemSessionBinding
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
 import com.sempermechanics.semper.imaging.BitmapDecoder
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.common.media.ThumbnailLoader
 import com.sempermechanics.semper.util.AtomicFiles
@@ -151,13 +153,14 @@ internal object ResultThumbnail {
             data[i + DicResult.IDX_X] -= box.left
             data[i + DicResult.IDX_Y] -= box.top
         }
-        val heatmap = VisualizationEngine.generateHeatmap(
-            data,
-            box.width,
-            box.height,
-            DicResult.IDX_U,
-            step.coerceAtLeast(1),
-            maxLongEdge = edgePx * RENDER_OVERSAMPLE,
+        val heatmap = VisualizationEngine.render(
+            HeatmapRequest(
+                data = data,
+                size = ImageSize(box.width, box.height),
+                valIndex = DicResult.IDX_U,
+                step = step.coerceAtLeast(1),
+                maxLongEdge = edgePx * RENDER_OVERSAMPLE,
+            ),
         ).bitmap
         return squareCrop(heatmap, edgePx).also { heatmap.recycle() }
     }

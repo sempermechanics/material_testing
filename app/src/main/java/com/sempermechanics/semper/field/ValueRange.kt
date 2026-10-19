@@ -4,12 +4,13 @@ package com.sempermechanics.semper.field
  * A colour-scale range in a field's stored units: the auto p02/p98 span or
  * the user's custom bounds.
  *
- * Today this travels as `Pair<Float, Float>` (`VisualizationEngine.valueRanges`,
- * `computeSigmaClampedRange`, `clampSpan`, `FieldRangesStore`, the viewer's
- * `customBounds`, `SummaryAnimation.globalRanges`, `ShareCenter.summaryBounds`)
- * and as `customMin: Float?, customMax: Float?` parameter pairs. [min] is
- * `first`, [max] is `second`. No ordering is enforced: a stored range is
- * read back as it was written.
+ * The viewer's custom bounds, the summary animation's ranges
+ * (`SummaryAnimation.globalRanges`, `ShareCenter.Snapshot.summaryBounds`) and a
+ * heatmap request's bounds (`HeatmapRequest.bounds`) carry it. The engine's
+ * per-frame pass (`VisualizationEngine.valueRanges`) and its sidecar
+ * (`FieldRangesStore`) still hand out `Pair<Float, Float>`, which the batch
+ * run writes; [of] reads one. [min] is `first`, [max] is `second`. No ordering
+ * is enforced: a stored range is read back as it was written.
  */
 data class ValueRange(val min: Float, val max: Float) {
 

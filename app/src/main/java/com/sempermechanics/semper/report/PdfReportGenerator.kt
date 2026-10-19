@@ -206,8 +206,8 @@ object PdfReportGenerator {
         layout.advanceY(40f)
 
         layout.drawSectionHeader("Analysis Region (ROI)")
-        layout.drawKeyValue("Origin (X, Y):", "(${data.roiData.startX}, ${data.roiData.startY})")
-        layout.drawKeyValue("Dimensions:", "${data.roiData.width} x ${data.roiData.height} px")
+        layout.drawKeyValue("Origin (X, Y):", "(${data.roi.x}, ${data.roi.y})")
+        layout.drawKeyValue("Dimensions:", "${data.roi.w} x ${data.roi.h} px")
         layout.advanceY(40f)
 
         layout.drawSectionHeader("Analyzed Images")

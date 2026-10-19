@@ -10,6 +10,7 @@ import com.sempermechanics.semper.databinding.DialogCustomScaleBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.BakedHeatmap
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.common.SerialJob
@@ -141,16 +142,16 @@ internal class ViewerScaleController(private val host: ResultViewerActivity) {
             // Warm the stats/extrema off the main thread, next to the heatmap render,
             // so the scrub settle never pays the O(n)+sort on the UI thread.
             val metrics = viewModel.fieldMetricsFor(frameAtStart, index, data)
-            val heatmap = VisualizationEngine.generateFrameHeatmap(
-                displaced,
-                data,
-                size.width,
-                size.height,
-                index,
-                frameStep,
-                custom?.min,
-                custom?.max,
-                maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+            val heatmap = VisualizationEngine.render(
+                HeatmapRequest(
+                    data = data,
+                    size = size,
+                    valIndex = index,
+                    step = frameStep,
+                    bounds = custom,
+                    maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+                    displaced = displaced,
+                ),
             )
             host.scrubCache.putHeat(heatKey, heatmap)
 

@@ -1,6 +1,7 @@
 package com.sempermechanics.semper.results
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.fixtures.Goldens
 import com.sempermechanics.semper.ui.viewer.summary.SummaryAnimation
 import kotlinx.coroutines.runBlocking
@@ -70,7 +71,7 @@ class SummaryGifOracleTest {
                 backgroundColor = 0xFF101518.toInt(),
             ),
         )
-        val file = runBlocking { anim.build(dataIndex, label, bounds) }
+        val file = runBlocking { anim.build(dataIndex, label, ValueRange.of(bounds)) }
         assertNotNull("the $label animation was not built", file)
         return file!!.readBytes()
     }

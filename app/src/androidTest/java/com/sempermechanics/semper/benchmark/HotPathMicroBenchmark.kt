@@ -9,10 +9,12 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import androidx.test.platform.app.InstrumentationRegistry
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.GifEncoder
+import com.sempermechanics.semper.report.HeatmapRequest
 import com.sempermechanics.semper.report.ReportBuilder
-import com.sempermechanics.semper.report.RoiData
 import com.sempermechanics.semper.report.VisualizationEngine
 import com.sempermechanics.semper.ui.analysis.sweep.SweepStudy
 import com.sempermechanics.semper.ui.viewer.inspect.PointSpatialIndex
@@ -83,13 +85,14 @@ class HotPathMicroBenchmark {
 
     @Test
     fun generateHeatmap_oneFrame() = benchmarkRule.measureRepeated {
-        val (bmp, _, _) = VisualizationEngine.generateHeatmap(
-            oneFrame,
-            IMG_W,
-            IMG_H,
-            DicResult.IDX_EXX,
-            STEP,
-            maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+        val (bmp, _, _) = VisualizationEngine.render(
+            HeatmapRequest(
+                data = oneFrame,
+                size = ImageSize(IMG_W, IMG_H),
+                valIndex = DicResult.IDX_EXX,
+                step = STEP,
+                maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+            ),
         )
         bmp.recycle()
     }
@@ -102,13 +105,15 @@ class HotPathMicroBenchmark {
      */
     @Test
     fun generateDeformedHeatmap_oneFrame() = benchmarkRule.measureRepeated {
-        val (bmp, _, _) = VisualizationEngine.generateDeformedHeatmap(
-            displacedFrame,
-            IMG_W,
-            IMG_H,
-            DicResult.IDX_EXX,
-            STEP,
-            maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+        val (bmp, _, _) = VisualizationEngine.render(
+            HeatmapRequest(
+                data = displacedFrame,
+                size = ImageSize(IMG_W, IMG_H),
+                valIndex = DicResult.IDX_EXX,
+                step = STEP,
+                maxLongEdge = VisualizationEngine.DISPLAY_MAX_EDGE,
+                displaced = true,
+            ),
         )
         bmp.recycle()
     }
@@ -179,7 +184,7 @@ class HotPathMicroBenchmark {
             subsetSize = 41,
             strainWindow = 15,
             strainMethod = "VSG",
-            roiData = RoiData(0, 0, IMG_W, IMG_H),
+            roi = Roi(0, 0, IMG_W, IMG_H),
             engineStats = EngineStats.fromArray(FloatArray(EngineStats.SLOT_COUNT)),
             referenceImageName = "ref.png",
             deformedImageName = "def.png",

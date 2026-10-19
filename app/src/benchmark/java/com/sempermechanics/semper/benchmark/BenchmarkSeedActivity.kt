@@ -31,7 +31,7 @@ import java.nio.ByteOrder
  *
  * `framePhotos` (default false) seeds a separate session whose every frame has its own
  * photo in `raw_deformed/`, so the viewer draws each frame over it with
- * `VisualizationEngine.generateDeformedHeatmap` (ADR-011, TD-175). Its frames move by a
+ * `VisualizationEngine.render` of a displaced request (ADR-011, TD-175). Its frames move by a
  * moderate u = 0.02·x, v = 0.01·y px rather than the default frames' ~300 px drift, which
  * would warp most of the map off the canvas. The photos are one flat grey PNG, so their
  * decode is cheaper than a camera photo's. The default session, which the gated

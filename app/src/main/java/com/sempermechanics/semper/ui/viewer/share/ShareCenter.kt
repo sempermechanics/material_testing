@@ -16,6 +16,7 @@ import com.sempermechanics.semper.databinding.SheetShareBinding
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.FrameParams
 import com.sempermechanics.semper.field.ImageSize
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.ReportImageNames
 import com.sempermechanics.semper.ui.common.dialog.CrispToast
 import com.sempermechanics.semper.ui.common.dialog.inflateSheet
@@ -158,7 +159,7 @@ class ShareCenter(private val host: ResultViewerActivity) {
          * started (a fixed scale, else the sequence range); a field the range
          * pass had not reached yet is absent.
          */
-        val summaryBounds: Map<Int, Pair<Float, Float>>,
+        val summaryBounds: Map<Int, ValueRange>,
         /**
          * What a frame's report page needs from the viewer. Each frame of an
          * all-frames report builds its own cover — its parameters and its

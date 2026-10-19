@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.core.graphics.createBitmap
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.sempermechanics.semper.field.Roi
 import com.sempermechanics.semper.report.PdfReportGenerator.Progress
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -39,7 +40,7 @@ class PdfReportDeviceTest {
     private fun data() = ReportData(
         sessionId = "s1", specimenName = "steel", analysisDate = "2026-09-24",
         subsetSize = 21, stepSize = 5, strainWindow = 15, strainMethod = "VSG",
-        roiData = RoiData(16, 16, 600, 440),
+        roi = Roi(16, 16, 600, 440),
         referenceImage = bitmap(), deformedImage = bitmap(),
         referenceImageName = "ref.png", deformedImageName = "def.png",
         fieldResults = listOf("U", "V", "Exx", "Eyy", "Exy").map(::field),

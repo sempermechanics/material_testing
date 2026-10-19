@@ -262,13 +262,13 @@ Every export of a frame draws what the viewer draws for it
 (`FieldImageExport.renderAnnotated`) and the report's field images
 (`ReportBuilder.buildReport`, from `ViewerReportFactory` and the cloud bundle)
 look up the frame's own photo as the viewer does (`deformedImagePath`), decode it
-capped and once per frame, and draw on it with
-`VisualizationEngine.generateFrameHeatmap(displaced = true)`, the viewer's own
-render, with the MAX / MIN markers where their points moved to. A frame whose
+capped and once per frame, and draw on it with a displaced
+`HeatmapRequest` (`VisualizationEngine.render`; the report's fusion pass keeps
+its positional `generateFrameHeatmap` call), the viewer's own render, with the MAX / MIN markers where their points moved to. A frame whose
 photo is gone or does not decode falls back to the reference and the
 reference-position map, as the viewer does. The summary GIF has no photo (its
 palette is the jet ramp and the canvas colour), so `SummaryAnimation` draws
-every frame displaced (`generateDeformedHeatmapIndices`) in one box widened to
+every frame displaced (`VisualizationEngine.indices`) in one box widened to
 take in the whole sequence's movement; the viewer's summary slot shows that
 same GIF.
 

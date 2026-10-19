@@ -19,6 +19,7 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.sempermechanics.semper.R
 import com.sempermechanics.semper.data.session.CacheJanitor
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.ReportBuilder
 import com.sempermechanics.semper.ui.common.SerialJob
@@ -53,7 +54,7 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     private val cancelButton: View = host.binding.btnSummaryCancel
 
     /** Value range per field over the whole sequence; empty until the pass finishes. */
-    private var ranges: Map<Int, Pair<Float, Float>> = emptyMap()
+    private var ranges: Map<Int, ValueRange> = emptyMap()
     private val rangesJob = SerialJob()
     private val buildJob = SerialJob()
 
@@ -160,8 +161,8 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
     }
 
     /** Bounds for [dataIndex]: a user-set fixed scale wins, else the global range. */
-    fun boundsFor(dataIndex: Int): Pair<Float, Float>? =
-        host.customBoundsFor(dataIndex)?.toPair() ?: ranges[dataIndex]
+    fun boundsFor(dataIndex: Int): ValueRange? =
+        host.customBoundsFor(dataIndex) ?: ranges[dataIndex]
 
     /** The label the frame counter shows while the summary is up: how many frames it plays, "5 frames". */
     fun counterText(): String {
@@ -307,13 +308,13 @@ class ViewerSummaryController(private val host: ResultViewerActivity) {
 }
 
 /** Formats a field's animation bounds for the viewer's colour-scale labels. */
-internal fun ResultViewerActivity.refreshSummaryScaleLabels(dataIndex: Int, bounds: Pair<Float, Float>) {
+internal fun ResultViewerActivity.refreshSummaryScaleLabels(dataIndex: Int, bounds: ValueRange) {
     val multiplier = DicResult.strainMultiplier(dataIndex)
     val unit = getString(
         if (DicResult.isStrainFieldIndex(dataIndex)) R.string.scale_unit_strain else R.string.scale_unit_px,
     )
     binding.tvScaleMax.text =
-        getString(R.string.scale_max_fmt, ReportBuilder.formatMetric(bounds.second * multiplier), unit)
+        getString(R.string.scale_max_fmt, ReportBuilder.formatMetric(bounds.max * multiplier), unit)
     binding.tvScaleMin.text =
-        getString(R.string.scale_min_fmt, ReportBuilder.formatMetric(bounds.first * multiplier), unit)
+        getString(R.string.scale_min_fmt, ReportBuilder.formatMetric(bounds.min * multiplier), unit)
 }
