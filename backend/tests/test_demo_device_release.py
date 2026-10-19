@@ -122,7 +122,8 @@ async def test_released_over_http_then_the_new_phone_registers(client, monkeypat
     released = [r for r in audited if r["action"] == "ADMIN_DEVICE_RELEASE"]
     assert released[0]["target"] == {"type": "user", "id": "demo-1"}
     assert released[0]["detail"] == {"releasedDeviceId": "old-phone",
-                                     "releasedDeviceIdMaterialTesting": ""}
+                                     "releasedDeviceIdMaterialTesting": "",
+                                     "sessionsForgotten": 0}
 
     as_holder()
     old_phone = {"deviceId": "old-phone", "publicKeyPem": _ec_pem()}

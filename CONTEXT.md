@@ -136,8 +136,8 @@ Keep `-O3 -ffast-math` / OpenMP / LTO on release.
   **Which test?** offers 2D DIC (Semper's analysis: no load card, no test type recorded),
   Tensile and Bending; a fork change to a shared screen runs only for a lab test.
 - **Synced with `semperdic-app`** (forked at `bfe00e5`; `git log --merges
-  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `5b59cf3`,
-  2026-10-19, not yet merged or deployed: its #436–#447 (tip cards, the viewer's summary
+  --grep=semperdic-app`; rules in its `docs/ops/FORK_SYNC.md`). Last: `17d7bc8`,
+  2026-10-19, not deployed: its #454 (TD-269, TD-270, TD-276), #436–#447 (tip cards, the viewer's summary
   pill, Cancel keeps nothing, the run overlay, frame-jump focus, engine CI) and **Re-run
   as a copy** (its [ADR-022](docs/adr/ADR-022-rerun-as-copy.md)), which does not carry a
   lab test's type or loads yet (TD-280). Before: `8ba7081` (#133), `85650da` (#122:

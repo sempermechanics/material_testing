@@ -58,7 +58,8 @@ reachable from the environment this record was written in).
    modified APK can unlock it; that risk is accepted (TD-274).
 6. **The demo cap stays "stored at once"** (deleting an analysis frees its
    place), by the product owner's choice, and is now counted per device as well
-   as per account (TD-275, TD-276).
+   as per account (TD-275). A phone staff or IT take off an account stops
+   counting that account's analyses (TD-276, closed 2026-10-19).
 
 ### Entitlement sources
 
@@ -197,9 +198,10 @@ count closes the cheaper bypass, a fresh account on the same phone.
 - Share is enforced by the device. A patched APK can share without a licence;
   it gains no cloud access, since every cloud route checks the account.
 - The device cap keys on the registered device id, an app-scoped `ANDROID_ID`
-  (`data/account/DeviceKeys.kt:54-62`): a factory reset gives a new id, and a
-  phone handed on after a device release still counts the previous holder's
-  analyses (TD-276).
+  (`data/account/DeviceKeys.kt:54-62`): a factory reset gives a new id. A phone
+  released by staff or IT stops counting the previous holder's analyses
+  (`forget_device_sessions`, TD-276, closed 2026-10-19); one the holder moves
+  off themselves keeps them counted.
 - The hosted Terms keep fees "as stated in your order" for access arranged
   outside the app (`docs/legal/TERMS_OF_SERVICE.md:149-180`). Their wording was
   aligned on 2026-10-19 (account-anchored sources in 6.2, "no purchases in the
