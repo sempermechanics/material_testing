@@ -11,6 +11,7 @@
 package com.sempermechanics.semper.report
 
 import com.sempermechanics.semper.field.DicResult
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.HeatmapColorScale.computeSigmaClampedRange
 import com.sempermechanics.semper.report.VisualizationEngine.IndexPlane
 import com.sempermechanics.semper.report.VisualizationEngine.LAST_COLOR
@@ -73,7 +74,7 @@ internal object DeformedHeatmap {
         }
 
         val (minV, maxV) = if (customMin != null && customMax != null) {
-            customMin to customMax
+            ValueRange(customMin, customMax)
         } else {
             computeSigmaClampedRange(validValues, validCount, valIndex)
         }

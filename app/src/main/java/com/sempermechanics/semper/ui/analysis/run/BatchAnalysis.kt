@@ -18,6 +18,7 @@ import com.sempermechanics.semper.diagnostics.EngineDebug
 import com.sempermechanics.semper.diagnostics.SemperAnalytics
 import com.sempermechanics.semper.field.DicResult
 import com.sempermechanics.semper.field.RunStop
+import com.sempermechanics.semper.field.ValueRange
 import com.sempermechanics.semper.report.EngineStats
 import com.sempermechanics.semper.report.FieldRangesStore
 import com.sempermechanics.semper.report.VisualizationEngine
@@ -155,7 +156,7 @@ internal fun AnalysisViewModel.runBatchAnalysisBody(
         DicResult.IDX_EYY,
         DicResult.IDX_EXY,
     )
-    val perFrameSummaryRanges = mutableListOf<Map<Int, Pair<Float, Float>?>>()
+    val perFrameSummaryRanges = mutableListOf<Map<Int, ValueRange?>>()
 
     // A run that throws before its results are committed (a full disk under
     // DicFieldIo.write, say) keeps nothing either: it is undone as a cancel is

@@ -112,8 +112,8 @@ internal object HeatmapRenderer {
             maxV = customMax
         } else {
             val bounds = computeSigmaClampedRange(validValues, validCount, valIndex)
-            minV = bounds.first
-            maxV = bounds.second
+            minV = bounds.min
+            maxV = bounds.max
         }
 
         val range = if (maxV - minV == 0f) 0.0001f else maxV - minV

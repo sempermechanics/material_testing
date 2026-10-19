@@ -151,10 +151,10 @@ class SummaryAnimationTest {
 
         val exx = runBlocking { SummaryAnimation.globalRanges(files) }.getValue(DicResult.IDX_EXX)
 
-        assertEquals(minOf(early.first, late.first), exx.min, 0f)
-        assertEquals(maxOf(early.second, late.second), exx.max, 0f)
-        assertTrue("later frame should raise the sequence max", exx.max > early.second)
-        assertTrue("earlier frame should keep the sequence min", exx.min < late.first)
+        assertEquals(minOf(early.min, late.min), exx.min, 0f)
+        assertEquals(maxOf(early.max, late.max), exx.max, 0f)
+        assertTrue("later frame should raise the sequence max", exx.max > early.max)
+        assertTrue("earlier frame should keep the sequence min", exx.min < late.min)
     }
 
     @Test
@@ -272,9 +272,9 @@ class SummaryAnimationTest {
                 if (range != null) {
                     val seen = expected[valIndex]
                     expected[valIndex] = if (seen == null) {
-                        ValueRange.of(range)
+                        range
                     } else {
-                        ValueRange(minOf(seen.min, range.first), maxOf(seen.max, range.second))
+                        ValueRange(minOf(seen.min, range.min), maxOf(seen.max, range.max))
                     }
                 }
             }

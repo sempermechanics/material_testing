@@ -150,8 +150,8 @@ class VisualizationEngineTest {
         for (valIndex in fields) {
             val actual = requireNotNull(ranges[valIndex]) { "field=$valIndex missing" }
             val (mn, mx) = boxedSigmaClamp(data, valIndex)
-            assertEquals("min field=$valIndex", mn, actual.first, 0f)
-            assertEquals("max field=$valIndex", mx, actual.second, 0f)
+            assertEquals("min field=$valIndex", mn, actual.min, 0f)
+            assertEquals("max field=$valIndex", mx, actual.max, 0f)
         }
     }
 

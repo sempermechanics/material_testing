@@ -374,7 +374,7 @@ class SummaryAnimation(private val spec: Spec) {
 
             val spans = mutableMapOf<Int, ValueRange>()
             // Kept for the sidecar; null once a frame fails to decode.
-            var perFrame: MutableList<Map<Int, Pair<Float, Float>?>>? = ArrayList(total)
+            var perFrame: MutableList<Map<Int, ValueRange?>>? = ArrayList(total)
             // One frame at a time. The previous chain kept every ByteArray and
             // FloatArray alive until the pass finished — a heavy PLC band OOM'd
             // the 512 MB heap before the first GIF frame was built.
@@ -419,7 +419,7 @@ class SummaryAnimation(private val spec: Spec) {
         private fun saveRanges(
             rangesFile: File?,
             indices: IntArray,
-            perFrame: List<Map<Int, Pair<Float, Float>?>>,
+            perFrame: List<Map<Int, ValueRange?>>,
         ) {
             if (rangesFile == null || perFrame.isEmpty()) return
             runCatching {
@@ -427,12 +427,12 @@ class SummaryAnimation(private val spec: Spec) {
             }.onFailure { Timber.w(it, "Could not save summary field ranges") }
         }
 
-        /** [seen] widened to take in [range], a frame's (min, max) as the engine and the sidecar hold it. */
-        private fun widen(seen: ValueRange?, range: Pair<Float, Float>): ValueRange =
+        /** [seen] widened to take in [range], a frame's range as the engine and the sidecar hold it. */
+        private fun widen(seen: ValueRange?, range: ValueRange): ValueRange =
             if (seen == null) {
-                ValueRange.of(range)
+                range
             } else {
-                ValueRange(minOf(seen.min, range.first), maxOf(seen.max, range.second))
+                ValueRange(minOf(seen.min, range.min), maxOf(seen.max, range.max))
             }
     }
 }

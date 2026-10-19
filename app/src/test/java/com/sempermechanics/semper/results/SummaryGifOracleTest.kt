@@ -60,7 +60,7 @@ class SummaryGifOracleTest {
         File(dir, "frame_%04d.dat".format(f)).apply { writeBytes(buffer.array()) }
     }
 
-    private fun build(dataIndex: Int, label: String, bounds: Pair<Float, Float>): ByteArray {
+    private fun build(dataIndex: Int, label: String, bounds: ValueRange): ByteArray {
         val anim = SummaryAnimation(
             SummaryAnimation.Spec(
                 batchFiles = writeFrames(temp.newFolder()),
@@ -71,19 +71,19 @@ class SummaryGifOracleTest {
                 backgroundColor = 0xFF101518.toInt(),
             ),
         )
-        val file = runBlocking { anim.build(dataIndex, label, ValueRange.of(bounds)) }
+        val file = runBlocking { anim.build(dataIndex, label, bounds) }
         assertNotNull("the $label animation was not built", file)
         return file!!.readBytes()
     }
 
     @Test
     fun `the U summary GIF matches its golden`() {
-        Goldens.assertMatches("summary_u.gif", build(DicResult.IDX_U, "U", 0f to 2f))
+        Goldens.assertMatches("summary_u.gif", build(DicResult.IDX_U, "U", ValueRange(0f, 2f)))
     }
 
     @Test
     fun `the exx summary GIF matches its golden`() {
         // Bounds in the stored unit (strain), as the colour scale compares them.
-        Goldens.assertMatches("summary_exx.gif", build(DicResult.IDX_EXX, "Exx", -0.0015f to 0.0015f))
+        Goldens.assertMatches("summary_exx.gif", build(DicResult.IDX_EXX, "Exx", ValueRange(-0.0015f, 0.0015f)))
     }
 }

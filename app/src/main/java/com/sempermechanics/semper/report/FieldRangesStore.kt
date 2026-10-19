@@ -1,5 +1,6 @@
 package com.sempermechanics.semper.report
 
+import com.sempermechanics.semper.field.ValueRange
 import timber.log.Timber
 import java.io.File
 import java.nio.ByteBuffer
@@ -50,7 +51,7 @@ internal object FieldRangesStore {
         return HEADER_BYTES + INT_BYTES * fields + INT_BYTES * FLOATS_PER_FIELD * frames * fields
     }
 
-    fun write(file: File, fieldIndices: IntArray, perFrameRanges: List<Map<Int, Pair<Float, Float>?>>) {
+    fun write(file: File, fieldIndices: IntArray, perFrameRanges: List<Map<Int, ValueRange?>>) {
         val frameCount = perFrameRanges.size
         val fieldCount = fieldIndices.size
         val buffer = ByteBuffer.allocate(expectedBytes(frameCount, fieldCount).toInt())
@@ -61,8 +62,8 @@ internal object FieldRangesStore {
         for (frameRanges in perFrameRanges) {
             for (valIndex in fieldIndices) {
                 val range = frameRanges[valIndex]
-                buffer.putFloat(range?.first ?: Float.NaN)
-                buffer.putFloat(range?.second ?: Float.NaN)
+                buffer.putFloat(range?.min ?: Float.NaN)
+                buffer.putFloat(range?.max ?: Float.NaN)
             }
         }
         file.writeBytes(buffer.array())
@@ -74,7 +75,7 @@ internal object FieldRangesStore {
      * write only costs the cache its speedup, never correctness (the reader
      * falls back to decoding the frames).
      */
-    fun writeBestEffort(dir: File, fieldIndices: IntArray, perFrameRanges: List<Map<Int, Pair<Float, Float>?>>) {
+    fun writeBestEffort(dir: File, fieldIndices: IntArray, perFrameRanges: List<Map<Int, ValueRange?>>) {
         if (perFrameRanges.isEmpty()) return
         runCatching { write(File(dir, FILE_NAME), fieldIndices, perFrameRanges) }
             .onFailure { Timber.w(it, "Could not persist summary field ranges") }
@@ -88,7 +89,7 @@ internal object FieldRangesStore {
      * from the frames.
      */
     @Suppress("ReturnCount") // one guard clause per distinct "not a clean read" case
-    fun read(file: File, fieldIndices: IntArray): List<Map<Int, Pair<Float, Float>?>>? {
+    fun read(file: File, fieldIndices: IntArray): List<Map<Int, ValueRange?>>? {
         if (!file.isFile) return null
         val bytes = runCatching { file.readBytes() }.getOrNull() ?: return null
         if (bytes.size < HEADER_BYTES) return null
@@ -102,11 +103,11 @@ internal object FieldRangesStore {
         }
 
         return List(frameCount) {
-            val frameRanges = LinkedHashMap<Int, Pair<Float, Float>?>(fieldCount)
+            val frameRanges = LinkedHashMap<Int, ValueRange?>(fieldCount)
             for (valIndex in fieldIndices) {
                 val p02 = buffer.getFloat()
                 val p98 = buffer.getFloat()
-                frameRanges[valIndex] = if (p02.isNaN() || p98.isNaN()) null else p02 to p98
+                frameRanges[valIndex] = if (p02.isNaN() || p98.isNaN()) null else ValueRange(p02, p98)
             }
             frameRanges
         }

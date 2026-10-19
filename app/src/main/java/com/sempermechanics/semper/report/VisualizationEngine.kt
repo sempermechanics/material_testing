@@ -89,7 +89,7 @@ object VisualizationEngine {
      * Per-frame heatmaps use this. The summary GIF widens these same ends
      * across the batch: lowest scale-min, highest scale-max.
      */
-    fun valueRanges(data: FloatArray, valIndices: IntArray): Map<Int, Pair<Float, Float>?> =
+    fun valueRanges(data: FloatArray, valIndices: IntArray): Map<Int, ValueRange?> =
         valueRanges(data, data.size, valIndices, scratch = null)
 
     /** See [HeatmapColorScale.valueRanges]. */
@@ -98,7 +98,7 @@ object VisualizationEngine {
         floatCount: Int,
         valIndices: IntArray,
         scratch: Array<FloatArray>?,
-    ): Map<Int, Pair<Float, Float>?> = HeatmapColorScale.valueRanges(data, floatCount, valIndices, scratch)
+    ): Map<Int, ValueRange?> = HeatmapColorScale.valueRanges(data, floatCount, valIndices, scratch)
 
     /**
      * The heatmap [request] asks for: its index plane ([indices]) coloured
